@@ -1,6 +1,5 @@
 luajit
 buildvm
-buildvm_*.h
 lj_ffdef.h
 lj_libdef.h
 lj_recdef.h
