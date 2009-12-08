@@ -40,7 +40,7 @@
 #define LUA_JDIR	LUA_XROOT "share/luajit-2.0.0-beta2/"
 #define LUA_XPATH \
   ";" LUA_XROOT "share/lua/5.1/?.lua;" LUA_XROOT "share/lua/5.1/?/init.lua"
-#define LUA_XCPATH	LUA_XROOT "lib/lua/5.1/?.lua;"
+#define LUA_XCPATH	LUA_XROOT "lib/lua/5.1/?.so;"
 #else
 #define LUA_JDIR	LUA_ROOT "share/luajit-2.0.0-beta2/"
 #define LUA_XPATH

@@ -3650,7 +3650,6 @@ static void emit_asm_debug(BuildCtx *ctx)
 	".LEFDE1:\n\n", (int)ctx->codesz);
     break;
   case BUILD_machasm:
-    /* NYI: OSX ignores it. Something must be missing. */
     fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
     fprintf(ctx->fp,
 	"EH_frame1:\n"
@@ -3659,7 +3658,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"LSCIE1:\n"
 	"\t.long 0\n"
 	"\t.byte 0x1\n"
-	"\t.ascii \"zPR\"\n"
+	"\t.ascii \"zPR\\0\"\n"
 	"\t.byte 0x1\n"
 	"\t.byte 128-4\n"
 	"\t.byte 0x8\n"
