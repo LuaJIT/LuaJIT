@@ -6,6 +6,8 @@
 #ifndef _LJ_IROPT_H
 #define _LJ_IROPT_H
 
+#include <stdarg.h>
+
 #include "lj_obj.h"
 #include "lj_jit.h"
 
@@ -13,6 +15,7 @@
 /* IR emitter. */
 LJ_FUNC void LJ_FASTCALL lj_ir_growtop(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_ir_emit(jit_State *J);
+LJ_FUNC TRef lj_ir_call(jit_State *J, IRCallID id, ...);
 
 /* Save current IR in J->fold.ins, but do not emit it (yet). */
 static LJ_AINLINE void lj_ir_set_(jit_State *J, uint16_t ot, IRRef1 a, IRRef1 b)
@@ -83,6 +86,7 @@ LJ_FUNC void lj_ir_rollback(jit_State *J, IRRef ref);
 /* Emit IR instructions with on-the-fly optimizations. */
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fold(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_cse(jit_State *J);
+LJ_FUNC TRef LJ_FASTCALL lj_opt_cselim(jit_State *J, IRRef lim);
 
 /* Special return values for the fold functions. */
 enum {
@@ -106,7 +110,7 @@ LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_aload(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_hload(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_uload(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_fload(jit_State *J);
-LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_tlen(jit_State *J);
+LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_tab_len(jit_State *J);
 LJ_FUNC int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref);
 
 /* Dead-store elimination. */

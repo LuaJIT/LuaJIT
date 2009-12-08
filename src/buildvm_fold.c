@@ -107,6 +107,10 @@ static uint32_t nexttoken(char **pp, int allowlit, int allowany)
       for (i = 0; irfield_names[i]; i++)
 	if (!strcmp(irfield_names[i], p+5))
 	  return i;
+    } else if (allowlit && !strncmp(p, "IRCALL_", 7)) {
+      for (i = 0; ircall_names[i]; i++)
+	if (!strcmp(ircall_names[i], p+7))
+	  return i;
     } else if (allowany && !strcmp("any", p)) {
       return 0xff;
     } else {

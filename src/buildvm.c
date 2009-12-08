@@ -215,9 +215,16 @@ IRFPMDEF(FPMNAME)
 };
 
 const char *const irfield_names[] = {
-#define FLNAME(name, type, field)	#name,
+#define FLNAME(name, ofs)	#name,
 IRFLDEF(FLNAME)
 #undef FLNAME
+  NULL
+};
+
+const char *const ircall_names[] = {
+#define IRCALLNAME(name, nargs, kind, type, flags)	#name,
+IRCALLDEF(IRCALLNAME)
+#undef IRCALLNAME
   NULL
 };
 
@@ -267,6 +274,11 @@ static void emit_vmdef(BuildCtx *ctx)
     if (p) *p = '.';
     fprintf(ctx->fp, "\"%s\", ", buf);
   }
+  fprintf(ctx->fp, "}\n\n");
+
+  fprintf(ctx->fp, "ircall = {\n[0]=");
+  for (i = 0; ircall_names[i]; i++)
+    fprintf(ctx->fp, "\"%s\",\n", ircall_names[i]);
   fprintf(ctx->fp, "}\n\n");
 
   fprintf(ctx->fp, "traceerr = {\n[0]=");

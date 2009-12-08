@@ -370,7 +370,7 @@ TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc)
 TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
 {
   lua_Number n;
-  if (tvisstr(vc) && !lj_str_numconv(strVdata(vc), vc))
+  if (tvisstr(vc) && !lj_str_tonum(strV(vc), vc))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   n = numV(vc);
   /* Limit narrowing for pow to small exponents (or for two constants). */

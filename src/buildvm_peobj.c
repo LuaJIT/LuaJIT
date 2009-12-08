@@ -85,6 +85,7 @@ typedef struct PEsymaux {
 #define PEOBJ_RELOC_REL32	0x14  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x06
 #define PEOBJ_SYM_PREFIX	"_"
+#define PEOBJ_SYMF_PREFIX	"@"
 #elif LJ_TARGET_X64
 #define PEOBJ_ARCH_TARGET	0x8664
 #define PEOBJ_RELOC_REL32	0x04  /* MS: REL32, GNU: DISP32. */
@@ -260,7 +261,18 @@ void emit_peobj(BuildCtx *ctx)
 
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_TEXT);
     for (i = 0; ctx->extnames[i]; i++) {
-      sprintf(name, PEOBJ_SYM_PREFIX "%s", ctx->extnames[i]);
+      const char *sym = ctx->extnames[i];
+      const char *p = strchr(sym, '@');
+      if (p) {
+#ifdef PEOBJ_SYMF_PREFIX
+	sprintf(name, PEOBJ_SYMF_PREFIX "%s", sym);
+#else
+	strncpy(name, sym, p-sym);
+	name[p-sym] = '\0';
+#endif
+      } else {
+	sprintf(name, PEOBJ_SYM_PREFIX "%s", sym);
+      }
       emit_peobj_sym(ctx, name, 0,
 		     PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
     }

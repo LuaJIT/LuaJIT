@@ -310,7 +310,13 @@ static void loop_unroll(jit_State *J)
 /* Undo any partial changes made by the loop optimization. */
 static void loop_undo(jit_State *J, IRRef ins)
 {
+  ptrdiff_t i;
   lj_ir_rollback(J, ins);
+  for (i = 0; i < BPROP_SLOTS; i++) {  /* Remove backprop. cache entries. */
+    BPropEntry *bp = &J->bpropcache[i];
+    if (bp->val >= ins)
+      bp->key = 0;
+  }
   for (ins--; ins >= REF_FIRST; ins--) {  /* Remove flags. */
     IRIns *ir = IR(ins);
     irt_clearphi(ir->t);

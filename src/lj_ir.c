@@ -6,16 +6,22 @@
 #define lj_ir_c
 #define LUA_CORE
 
+/* For pointers to libc/libm functions. */
+#include <stdio.h>
+#include <math.h>
+
 #include "lj_obj.h"
 
 #if LJ_HASJIT
 
 #include "lj_gc.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
+#include "lj_lib.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -31,6 +37,17 @@ LJ_DATADEF const uint8_t lj_ir_mode[IR__MAX+1] = {
 IRDEF(IRMODE)
   0
 };
+
+/* C call info for CALL* instructions. */
+LJ_DATADEF const CCallInfo lj_ir_callinfo[] = {
+#define IRCALLCI(name, nargs, kind, type, flags) \
+  { (ASMFunction)name, \
+    (nargs)|(CCI_CALL_##kind)|(IRT_##type<<CCI_OTSHIFT)|(flags) },
+IRCALLDEF(IRCALLCI)
+#undef IRCALLCI
+  { NULL, 0 }
+};
+
 
 /* -- IR emitter ---------------------------------------------------------- */
 
@@ -90,6 +107,25 @@ TRef LJ_FASTCALL lj_ir_emit(jit_State *J)
   ir->op2 = fins->op2;
   J->guardemit.irt |= fins->t.irt;
   return TREF(ref, irt_t((ir->t = fins->t)));
+}
+
+/* Emit call to a C function. */
+TRef lj_ir_call(jit_State *J, IRCallID id, ...)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[id];
+  uint32_t n = CCI_NARGS(ci);
+  TRef tr = TREF_NIL;
+  va_list argp;
+  va_start(argp, id);
+  if ((ci->flags & CCI_L)) n--;
+  if (n > 0)
+    tr = va_arg(argp, IRRef);
+  while (n-- > 1)
+    tr = emitir(IRT(IR_CARG, IRT_NIL), tr, va_arg(argp, IRRef));
+  va_end(argp);
+  if (CCI_OP(ci) == IR_CALLS)
+    J->needsnap = 1;  /* Need snapshot after call with side effect. */
+  return emitir(CCI_OPTYPE(ci), tr, id);
 }
 
 /* -- Interning of constants ---------------------------------------------- */

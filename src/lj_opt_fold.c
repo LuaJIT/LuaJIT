@@ -282,21 +282,50 @@ LJFOLD(STRTO KGC)
 LJFOLDF(kfold_strto)
 {
   TValue n;
-  if (lj_str_numconv(strdata(ir_kstr(fleft)), &n))
+  if (lj_str_tonum(ir_kstr(fleft), &n))
     return lj_ir_knum(J, numV(&n));
   return FAILFOLD;
 }
 
-LJFOLD(SNEW STRREF KINT)
-LJFOLDF(kfold_snew)
+LJFOLD(SNEW KPTR KINT)
+LJFOLDF(kfold_snew_kptr)
+{
+  GCstr *s = lj_str_new(J->L, (const char *)ir_kptr(fleft), (size_t)fright->i);
+  return lj_ir_kstr(J, s);
+}
+
+LJFOLD(SNEW any KINT)
+LJFOLDF(kfold_snew_empty)
 {
   if (fright->i == 0)
     return lj_ir_kstr(J, lj_str_new(J->L, "", 0));
+  return NEXTFOLD;
+}
+
+LJFOLD(STRREF KGC KINT)
+LJFOLDF(kfold_strref)
+{
+  GCstr *str = ir_kstr(fleft);
+  lua_assert((MSize)fright->i < str->len);
+  return lj_ir_kptr(J, (char *)strdata(str) + fright->i);
+}
+
+LJFOLD(STRREF SNEW any)
+LJFOLDF(kfold_strref_snew)
+{
   PHIBARRIER(fleft);
-  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
-    const char *s = strdata(ir_kstr(IR(fleft->op1)));
-    int32_t ofs = IR(fleft->op2)->i;
-    return lj_ir_kstr(J, lj_str_new(J->L, s+ofs, (size_t)fright->i));
+  if (irref_isk(fins->op2) && fright->i == 0) {
+    return fleft->op1;  /* strref(snew(ptr, len), 0) ==> ptr */
+  } else {
+    /* Reassociate: strref(snew(strref(str, a), len), b) ==> strref(str, a+b) */
+    IRIns *ir = IR(fleft->op1);
+    IRRef1 str = ir->op1;  /* IRIns * is not valid across emitir. */
+    lua_assert(ir->o == IR_STRREF);
+    PHIBARRIER(ir);
+    fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2);  /* Clobbers fins! */
+    fins->op1 = str;
+    fins->ot = IRT(IR_STRREF, IRT_PTR);
+    return RETRYFOLD;
   }
   return NEXTFOLD;
 }
@@ -343,16 +372,13 @@ LJFOLDF(kfold_intcomp)
   }
 }
 
-LJFOLD(LT KGC KGC)
-LJFOLD(GE KGC KGC)
-LJFOLD(LE KGC KGC)
-LJFOLD(GT KGC KGC)
-LJFOLDF(kfold_strcomp)
+LJFOLD(CALLN CARG IRCALL_lj_str_cmp)
+LJFOLDF(kfold_strcmp)
 {
-  if (irt_isstr(fins->t)) {
-    GCstr *a = ir_kstr(fleft);
-    GCstr *b = ir_kstr(fright);
-    return CONDFOLD(lj_ir_strcmp(a, b, (IROp)fins->o));
+  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
+    GCstr *a = ir_kstr(IR(fleft->op1));
+    GCstr *b = ir_kstr(IR(fleft->op2));
+    return INTFOLD(lj_str_cmp(a, b));
   }
   return NEXTFOLD;
 }
@@ -1070,7 +1096,8 @@ LJFOLDF(merge_eqne_snew_kgc)
       uint16_t ot = (uint16_t)(len == 1 ? IRT(IR_XLOAD, IRT_I8) :
 			       len == 2 ? IRT(IR_XLOAD, IRT_U16) :
 			       IRTI(IR_XLOAD));
-      TRef tmp = emitir(ot, strref, len > 1 ? IRXLOAD_UNALIGNED : 0);
+      TRef tmp = emitir(ot, strref,
+			IRXLOAD_READONLY | (len > 1 ? IRXLOAD_UNALIGNED : 0));
       TRef val = lj_ir_kint(J, kfold_xload(IR(tref_ref(tmp)), strdata(kstr)));
       if (len == 3)
 	tmp = emitir(IRTI(IR_BAND), tmp,
@@ -1103,8 +1130,8 @@ LJFOLDX(lj_opt_fwd_hload)
 LJFOLD(ULOAD any)
 LJFOLDX(lj_opt_fwd_uload)
 
-LJFOLD(TLEN any)
-LJFOLDX(lj_opt_fwd_tlen)
+LJFOLD(CALLL any IRCALL_lj_tab_len)
+LJFOLDX(lj_opt_fwd_tab_len)
 
 /* Upvalue refs are really loads, but there are no corresponding stores.
 ** So CSE is ok for them, except for UREFO across a GC step (see below).
@@ -1194,10 +1221,20 @@ LJFOLDF(fload_tab_ah)
 
 /* Strings are immutable, so we can safely FOLD/CSE the related FLOAD. */
 LJFOLD(FLOAD KGC IRFL_STR_LEN)
-LJFOLDF(fload_str_len)
+LJFOLDF(fload_str_len_kgc)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
     return INTFOLD((int32_t)ir_kstr(fleft)->len);
+  return NEXTFOLD;
+}
+
+LJFOLD(FLOAD SNEW IRFL_STR_LEN)
+LJFOLDF(fload_str_len_snew)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
+    PHIBARRIER(fleft);
+    return fleft->op2;
+  }
   return NEXTFOLD;
 }
 
@@ -1216,20 +1253,28 @@ LJFOLDF(fwd_sload)
   return J->slot[fins->op1];
 }
 
-/* Strings are immutable, so we can safely FOLD/CSE an XLOAD of a string. */
-LJFOLD(XLOAD STRREF any)
-LJFOLDF(xload_str)
+LJFOLD(XLOAD KPTR any)
+LJFOLDF(xload_kptr)
 {
-  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
-    GCstr *str = ir_kstr(IR(fleft->op1));
-    int32_t ofs = IR(fleft->op2)->i;
-    lua_assert((MSize)ofs < str->len);
-    lua_assert((MSize)(ofs + (1<<((fins->op2>>8)&3))) <= str->len);
-    return INTFOLD(kfold_xload(fins, strdata(str)+ofs));
-  }
-  return CSEFOLD;
+  /* Only fold read-only integer loads for now. */
+  if ((fins->op2 & IRXLOAD_READONLY) && irt_isinteger(fins->t))
+    return INTFOLD(kfold_xload(fins, ir_kptr(fleft)));
+  return NEXTFOLD;
 }
-/* No XLOAD of non-strings (yet), so we don't need a (XLOAD any any) rule. */
+
+/* CSE for XLOAD depends on the type, but not on the IRXLOAD_* flags. */
+LJFOLD(XLOAD any any)
+LJFOLDF(fwd_xload)
+{
+  IRRef ref = J->chain[IR_XLOAD];
+  IRRef op1 = fins->op1;
+  while (ref > op1) {
+    if (IR(ref)->op1 == op1 && irt_sametype(IR(ref)->t, fins->t))
+      return ref;
+    ref = IR(ref)->prev;
+  }
+  return EMITFOLD;
+}
 
 /* -- Write barriers ------------------------------------------------------ */
 
@@ -1279,12 +1324,11 @@ LJFOLD(FSTORE any any)
 LJFOLDX(lj_opt_dse_fstore)
 
 LJFOLD(NEWREF any any)  /* Treated like a store. */
+LJFOLD(CALLS any any)
+LJFOLD(CALLL any any)  /* Safeguard fallback. */
 LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
-LJFOLDF(store_raw)
-{
-  return EMITFOLD;
-}
+LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */
 
@@ -1400,6 +1444,19 @@ TRef LJ_FASTCALL lj_opt_cse(jit_State *J)
     J->guardemit.irt |= fins->t.irt;
     return TREF(ref, irt_t((ir->t = fins->t)));
   }
+}
+
+/* CSE with explicit search limit. */
+TRef LJ_FASTCALL lj_opt_cselim(jit_State *J, IRRef lim)
+{
+  IRRef ref = J->chain[fins->o];
+  IRRef2 op12 = (IRRef2)fins->op1 + ((IRRef2)fins->op2 << 16);
+  while (ref > lim) {
+    if (IR(ref)->op12 == op12)
+      return ref;
+    ref = IR(ref)->prev;
+  }
+  return lj_ir_emit(J);
 }
 
 /* ------------------------------------------------------------------------ */

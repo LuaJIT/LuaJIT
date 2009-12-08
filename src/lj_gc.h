@@ -43,8 +43,8 @@ LJ_FUNC size_t lj_gc_separateudata(global_State *g, int all);
 LJ_FUNC void lj_gc_finalizeudata(lua_State *L);
 LJ_FUNC void lj_gc_freeall(global_State *g);
 LJ_FUNCA int lj_gc_step(lua_State *L);
-LJ_FUNCA void lj_gc_step_fixtop(lua_State *L);
-LJ_FUNCA void lj_gc_step_jit(lua_State *L, const BCIns *pc, MSize steps);
+LJ_FUNCA void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L);
+LJ_FUNC void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps);
 LJ_FUNC void lj_gc_fullgc(lua_State *L);
 
 /* GC check: drive collector forward if the GC threshold has been reached. */
@@ -58,7 +58,7 @@ LJ_FUNC void lj_gc_fullgc(lua_State *L);
 /* Write barriers. */
 LJ_FUNC void lj_gc_barrierback(global_State *g, GCtab *t);
 LJ_FUNC void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v);
-LJ_FUNCA void lj_gc_barrieruv(global_State *g, GCobj *o, GCobj *v);
+LJ_FUNCA void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv);
 LJ_FUNC void lj_gc_closeuv(global_State *g, GCupval *uv);
 LJ_FUNC void lj_gc_barriertrace(global_State *g, void *T);
 

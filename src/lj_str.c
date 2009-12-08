@@ -21,7 +21,7 @@
 /* -- String interning ---------------------------------------------------- */
 
 /* Ordered compare of strings. Assumes string data is 4-byte aligned. */
-int32_t lj_str_cmp(GCstr *a, GCstr *b)
+int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b)
 {
   MSize i, n = a->len > b->len ? b->len : a->len;
   for (i = 0; i < n; i += 4) {
@@ -119,8 +119,14 @@ void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s)
 
 /* -- Type conversions ---------------------------------------------------- */
 
+/* Convert string object to number. */
+int LJ_FASTCALL lj_str_tonum(GCstr *str, TValue *n)
+{
+  return lj_str_numconv(strdata(str), n);
+}
+
 /* Convert string to number. */
-int lj_str_numconv(const char *s, TValue *n)
+int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
 {
   lua_Number sign = 1;
   const uint8_t *p = (const uint8_t *)s;
@@ -167,7 +173,7 @@ parsedbl:
 }
 
 /* Convert number to string. */
-GCstr *lj_str_fromnum(lua_State *L, const lua_Number *np)
+GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
 {
   char s[LUAI_MAXNUMBER2STR];
   lua_Number n = *np;
@@ -176,7 +182,7 @@ GCstr *lj_str_fromnum(lua_State *L, const lua_Number *np)
 }
 
 /* Convert integer to string. */
-GCstr *lj_str_fromint(lua_State *L, int32_t k)
+GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k)
 {
   char s[1+10];
   char *p = s+sizeof(s);

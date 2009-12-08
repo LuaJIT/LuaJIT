@@ -183,7 +183,7 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
   int32_t base = lj_lib_optint(L, 2, 10);
   if (base == 10) {
     TValue *o = lj_lib_checkany(L, 1);
-    if (tvisnum(o) || (tvisstr(o) && lj_str_numconv(strVdata(o), o))) {
+    if (tvisnum(o) || (tvisstr(o) && lj_str_tonum(strV(o), o))) {
       setnumV(L->base-1, numV(o));
       return FFH_RES(1);
     }
@@ -206,6 +206,9 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
   return FFH_RES(1);
 }
 
+LJLIB_PUSH("nil")
+LJLIB_PUSH("false")
+LJLIB_PUSH("true")
 LJLIB_ASM(tostring)		LJLIB_REC(.)
 {
   TValue *o = lj_lib_checkany(L, 1);
@@ -218,12 +221,8 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
     GCstr *s;
     if (tvisnum(o)) {
       s = lj_str_fromnum(L, &o->n);
-    } else if (tvisnil(o)) {
-      s = lj_str_newlit(L, "nil");
-    } else if (tvisfalse(o)) {
-      s = lj_str_newlit(L, "false");
-    } else if (tvistrue(o)) {
-      s = lj_str_newlit(L, "true");
+    } else if (tvispri(o)) {
+      s = strV(lj_lib_upvalue(L, -itype(o)));
     } else {
       if (tvisfunc(o) && isffunc(funcV(o)))
 	lua_pushfstring(L, "function: fast#%d", funcV(o)->c.ffid);

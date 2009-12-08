@@ -315,13 +315,20 @@ typedef struct GCstr {
 /* Userdata object. Payload follows. */
 typedef struct GCudata {
   GCHeader;
-  uint8_t unused1;
+  uint8_t udtype;	/* Userdata type. */
   uint8_t unused2;
   GCRef env;		/* Should be at same offset in GCfunc. */
   MSize len;		/* Size of payload. */
   GCRef metatable;	/* Must be at same offset in GCtab. */
   uint32_t align1;	/* To force 8 byte alignment of the payload. */
 } GCudata;
+
+/* Userdata types. */
+enum {
+  UDTYPE_USERDATA,	/* Regular userdata. */
+  UDTYPE_IO_FILE,	/* I/O library FILE. */
+  UDTYPE__MAX
+};
 
 #define uddata(u)	((void *)((u)+1))
 #define sizeudata(u)	(sizeof(struct GCudata)+(u)->len)
@@ -496,7 +503,17 @@ MMDEF(MMENUM)
   MM_FAST = MM_eq
 } MMS;
 
-#define BASEMT_MAX	((~LJ_TNUMX)+1)
+/* GC root IDs. */
+typedef enum {
+  GCROOT_BASEMT,	/* Metatables for base types. */
+  GCROOT_BASEMT_NUM = ~LJ_TNUMX,  /* Last base metatable. */
+  GCROOT_IO_INPUT,	/* Userdata for default I/O input file. */
+  GCROOT_IO_OUTPUT,	/* Userdata for default I/O output file. */
+  GCROOT__MAX
+} GCRootID;
+
+#define basemt_it(g, it)	((g)->gcroot[GCROOT_BASEMT+~(it)])
+#define basemt_obj(g, o)	((g)->gcroot[GCROOT_BASEMT+itypemap(o)])
 
 typedef struct GCState {
   MSize total;		/* Memory currently allocated. */
@@ -544,7 +561,7 @@ typedef struct global_State {
   volatile int32_t vmstate;  /* VM state or current JIT code trace number. */
   GCRef jit_L;		/* Current JIT code lua_State or NULL. */
   MRef jit_base;	/* Current JIT code L->base. */
-  GCRef basemt[BASEMT_MAX];  /* Metatables for base types. */
+  GCRef gcroot[GCROOT__MAX];  /* GC roots. */
   GCRef mmname[MM_MAX];	/* Array holding metamethod names. */
 } global_State;
 

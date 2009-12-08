@@ -102,5 +102,6 @@ extern const char *const bc_names[];
 extern const char *const ir_names[];
 extern const char *const irfpm_names[];
 extern const char *const irfield_names[];
+extern const char *const ircall_names[];
 
 #endif

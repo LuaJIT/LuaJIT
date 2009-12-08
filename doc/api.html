@@ -319,7 +319,7 @@ enable it <b>after</b> running <tt>luaL_openlibs</tt>.
 </p>
 <p>
 LuaJIT already intercepts exception handling for systems using
-ELF/DWARF2 stack unwinding (e.g. Linux). This is a zero-cost mechanism
+DWARF2 stack unwinding (e.g. Linux, OSX). This is a zero-cost mechanism
 and always enabled. You don't need to use any wrapper functions,
 except when you want to get a more specific error message than
 <tt>"C++&nbsp;exception"</tt>.

@@ -1186,10 +1186,10 @@ static LJ_NOINLINE void *lj_alloc_realloc(void *msp, void *ptr, size_t nsize)
       size_t rsize = oldsize - nb;
       newp = oldp;
       if (rsize >= MIN_CHUNK_SIZE) {
-	mchunkptr remainder = chunk_plus_offset(newp, nb);
+	mchunkptr rem = chunk_plus_offset(newp, nb);
 	set_inuse(m, newp, nb);
-	set_inuse(m, remainder, rsize);
-	lj_alloc_free(m, chunk2mem(remainder));
+	set_inuse(m, rem, rsize);
+	lj_alloc_free(m, chunk2mem(rem));
       }
     } else if (next == m->top && oldsize + m->topsize > nb) {
       /* Expand into top */

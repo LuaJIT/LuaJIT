@@ -227,7 +227,7 @@ LUA_API int lua_isnumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  return (tvisnum(o) || (tvisstr(o) && lj_str_numconv(strVdata(o), &tmp)));
+  return (tvisnum(o) || (tvisstr(o) && lj_str_tonum(strV(o), &tmp)));
 }
 
 LUA_API int lua_isstring(lua_State *L, int idx)
@@ -307,7 +307,7 @@ LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
   TValue tmp;
   if (LJ_LIKELY(tvisnum(o)))
     return numV(o);
-  else if (tvisstr(o) && lj_str_numconv(strVdata(o), &tmp))
+  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
     return numV(&tmp);
   else
     return 0;
@@ -319,7 +319,7 @@ LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
   TValue tmp;
   if (tvisnum(o))
     return numV(o);
-  else if (!(tvisstr(o) && lj_str_numconv(strVdata(o), &tmp)))
+  else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
     lj_err_argt(L, idx, LUA_TNUMBER);
   return numV(&tmp);
 }
@@ -332,7 +332,7 @@ LUALIB_API lua_Number luaL_optnumber(lua_State *L, int idx, lua_Number def)
     return numV(o);
   else if (tvisnil(o))
     return def;
-  else if (!(tvisstr(o) && lj_str_numconv(strVdata(o), &tmp)))
+  else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
     lj_err_argt(L, idx, LUA_TNUMBER);
   return numV(&tmp);
 }
@@ -344,7 +344,7 @@ LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
   lua_Number n;
   if (LJ_LIKELY(tvisnum(o)))
     n = numV(o);
-  else if (tvisstr(o) && lj_str_numconv(strVdata(o), &tmp))
+  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
     n = numV(&tmp);
   else
     return 0;
@@ -362,7 +362,7 @@ LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int idx)
   lua_Number n;
   if (LJ_LIKELY(tvisnum(o)))
     n = numV(o);
-  else if (tvisstr(o) && lj_str_numconv(strVdata(o), &tmp))
+  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
     n = numV(&tmp);
   else
     lj_err_argt(L, idx, LUA_TNUMBER);
@@ -382,7 +382,7 @@ LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
     n = numV(o);
   else if (tvisnil(o))
     return def;
-  else if (tvisstr(o) && lj_str_numconv(strVdata(o), &tmp))
+  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
     n = numV(&tmp);
   else
     lj_err_argt(L, idx, LUA_TNUMBER);
@@ -753,7 +753,7 @@ LUA_API int lua_getmetatable(lua_State *L, int idx)
   else if (tvisudata(o))
     mt = tabref(udataV(o)->metatable);
   else
-    mt = tabref(G(L)->basemt[itypemap(o)]);
+    mt = tabref(basemt_obj(G(L), o));
   if (mt == NULL)
     return 0;
   settabV(L, L->top, mt);
@@ -941,12 +941,12 @@ LUA_API int lua_setmetatable(lua_State *L, int idx)
     if (lj_trace_flushall(L))
       lj_err_caller(L, LJ_ERR_NOGCMM);
     if (tvisbool(o)) {
-      /* NOBARRIER: g->basemt[] is a GC root. */
-      setgcref(g->basemt[~LJ_TTRUE], obj2gco(mt));
-      setgcref(g->basemt[~LJ_TFALSE], obj2gco(mt));
+      /* NOBARRIER: basemt is a GC root. */
+      setgcref(basemt_it(g, LJ_TTRUE), obj2gco(mt));
+      setgcref(basemt_it(g, LJ_TFALSE), obj2gco(mt));
     } else {
-      /* NOBARRIER: g->basemt[] is a GC root. */
-      setgcref(g->basemt[itypemap(o)], obj2gco(mt));
+      /* NOBARRIER: basemt is a GC root. */
+      setgcref(basemt_obj(g, o), obj2gco(mt));
     }
   }
   L->top--;

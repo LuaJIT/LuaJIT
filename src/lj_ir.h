@@ -8,6 +8,8 @@
 
 #include "lj_obj.h"
 
+/* -- IR instructions ----------------------------------------------------- */
+
 /* IR instruction definition. Order matters, see below. */
 #define IRDEF(_) \
   /* Miscellaneous ops. */ \
@@ -101,13 +103,12 @@
   _(USTORE,	S , ref, ref) \
   _(FSTORE,	S , ref, ref) \
   \
-  /* String ops. */ \
-  _(SNEW,	N , ref, ref) \
-  \
-  /* Table ops. */ \
+  /* Allocations. */ \
+  _(SNEW,	N , ref, ref) /* CSE is ok, so not marked as A. */ \
   _(TNEW,	A , lit, lit) \
   _(TDUP,	A , ref, ___) \
-  _(TLEN,	L , ref, ___) \
+  \
+  /* Write barriers. */ \
   _(TBAR,	S , ref, ___) \
   _(OBAR,	S , ref, ref) \
   \
@@ -117,6 +118,12 @@
   _(TOBIT,	N , ref, ref) \
   _(TOSTR,	N , ref, ___) \
   _(STRTO,	G , ref, ___) \
+  \
+  /* Calls. */ \
+  _(CALLN,	N , ref, lit) \
+  _(CALLL,	L , ref, lit) \
+  _(CALLS,	S , ref, lit) \
+  _(CARG,	N , ref, ref) \
   \
   /* End of list. */
 
@@ -144,6 +151,8 @@ LJ_STATIC_ASSERT((int)IR_HLOAD + IRDELTA_L2S == (int)IR_HSTORE);
 LJ_STATIC_ASSERT((int)IR_ULOAD + IRDELTA_L2S == (int)IR_USTORE);
 LJ_STATIC_ASSERT((int)IR_FLOAD + IRDELTA_L2S == (int)IR_FSTORE);
 
+/* -- Named IR literals --------------------------------------------------- */
+
 /* FPMATH sub-functions. ORDER FPM. */
 #define IRFPMDEF(_) \
   _(FLOOR) _(CEIL) _(TRUNC)  /* Must be first and in this order. */ \
@@ -158,20 +167,22 @@ IRFPMDEF(FPMENUM)
   IRFPM__MAX
 } IRFPMathOp;
 
-/* FLOAD field IDs. */
+/* FLOAD fields. */
 #define IRFLDEF(_) \
-  _(STR_LEN,	GCstr, len) \
-  _(FUNC_ENV,	GCfunc, l.env) \
-  _(TAB_META,	GCtab, metatable) \
-  _(TAB_ARRAY,	GCtab, array) \
-  _(TAB_NODE,	GCtab, node) \
-  _(TAB_ASIZE,	GCtab, asize) \
-  _(TAB_HMASK,	GCtab, hmask) \
-  _(TAB_NOMM,	GCtab, nomm) \
-  _(UDATA_META,	GCudata, metatable)
+  _(STR_LEN,	offsetof(GCstr, len)) \
+  _(FUNC_ENV,	offsetof(GCfunc, l.env)) \
+  _(TAB_META,	offsetof(GCtab, metatable)) \
+  _(TAB_ARRAY,	offsetof(GCtab, array)) \
+  _(TAB_NODE,	offsetof(GCtab, node)) \
+  _(TAB_ASIZE,	offsetof(GCtab, asize)) \
+  _(TAB_HMASK,	offsetof(GCtab, hmask)) \
+  _(TAB_NOMM,	offsetof(GCtab, nomm)) \
+  _(UDATA_META,	offsetof(GCudata, metatable)) \
+  _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
+  _(UDATA_FILE,	sizeof(GCudata))
 
 typedef enum {
-#define FLENUM(name, type, field)	IRFL_##name,
+#define FLENUM(name, ofs)	IRFL_##name,
 IRFLDEF(FLENUM)
 #undef FLENUM
   IRFL__MAX
@@ -183,13 +194,75 @@ IRFLDEF(FLENUM)
 #define IRSLOAD_PARENT		4	/* Coalesce with parent trace. */
 
 /* XLOAD mode, stored in op2. */
-#define IRXLOAD_UNALIGNED	1
+#define IRXLOAD_READONLY	1	/* Load from read-only data. */
+#define IRXLOAD_UNALIGNED	2	/* Unaligned load. */
 
 /* TOINT mode, stored in op2. Ordered by strength of the checks. */
 #define IRTOINT_CHECK		0	/* Number checked for integerness. */
 #define IRTOINT_INDEX		1	/* Checked + special backprop rules. */
 #define IRTOINT_ANY		2	/* Any FP number is ok. */
 #define IRTOINT_TOBIT		3	/* Cache only: TOBIT conversion. */
+
+/* C call info for CALL* instructions. */
+typedef struct CCallInfo {
+  ASMFunction func;		/* Function pointer. */
+  uint32_t flags;		/* Number of arguments and flags. */
+} CCallInfo;
+
+#define CCI_NARGS(ci)		((ci)->flags & 0xff)	/* Extract # of args. */
+#define CCI_NARGS_MAX		16		/* Max. # of args. */
+
+#define CCI_OTSHIFT		16
+#define CCI_OPTYPE(ci)		((ci)->flags >> CCI_OTSHIFT)  /* Get op/type. */
+#define CCI_OPSHIFT		24
+#define CCI_OP(ci)		((ci)->flags >> CCI_OPSHIFT)  /* Get op. */
+
+#define CCI_CALL_N		(IR_CALLN << CCI_OPSHIFT)
+#define CCI_CALL_L		(IR_CALLL << CCI_OPSHIFT)
+#define CCI_CALL_S		(IR_CALLS << CCI_OPSHIFT)
+#define CCI_CALL_FN		(CCI_CALL_N|CCI_FASTCALL)
+#define CCI_CALL_FL		(CCI_CALL_L|CCI_FASTCALL)
+#define CCI_CALL_FS		(CCI_CALL_S|CCI_FASTCALL)
+
+/* C call info flags. */
+#define CCI_L			0x0100	/* Implicit L arg. */
+#define CCI_CASTU64		0x0200	/* Cast u64 result to number. */
+#define CCI_NOFPRCLOBBER	0x0400	/* Does not clobber any FPRs. */
+#define CCI_FASTCALL		0x0800	/* Fastcall convention. */
+
+/* Function definitions for CALL* instructions. */
+#define IRCALLDEF(_) \
+  _(lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
+  _(lj_str_new,		3,   S, STR, CCI_L) \
+  _(lj_str_tonum,	2,  FN, INT, 0) \
+  _(lj_str_fromint,	2,  FN, STR, CCI_L) \
+  _(lj_str_fromnum,	2,  FN, STR, CCI_L) \
+  _(lj_tab_new1,	2,  FS, TAB, CCI_L) \
+  _(lj_tab_dup,		2,  FS, TAB, CCI_L) \
+  _(lj_tab_newkey,	3,   S, PTR, CCI_L) \
+  _(lj_tab_len,		1,  FL, INT, 0) \
+  _(lj_gc_step_jit,	2,  FS, NIL, CCI_L) \
+  _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
+  _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
+  _(sinh,		1,  N, NUM, 0) \
+  _(cosh,		1,  N, NUM, 0) \
+  _(tanh,		1,  N, NUM, 0) \
+  _(fputc,		2,  S, INT, 0) \
+  _(fwrite,		4,  S, INT, 0) \
+  _(fflush,		1,  S, INT, 0) \
+  \
+  /* End of list. */
+
+typedef enum {
+#define IRCALLENUM(name, nargs, kind, type, flags)	IRCALL_##name,
+IRCALLDEF(IRCALLENUM)
+#undef IRCALLENUM
+  IRCALL__MAX
+} IRCallID;
+
+LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
+
+/* -- IR operands --------------------------------------------------------- */
 
 /* IR operand mode (2 bit). */
 typedef enum {
@@ -226,6 +299,8 @@ typedef enum {
 #define IRMODE(name, m, m1, m2)	((IRM##m1)|((IRM##m2)<<2)|(IRM_##m)),
 
 LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
+
+/* -- IR instruction types ------------------------------------------------ */
 
 /* IR result type and flags (8 bit). */
 typedef enum {
@@ -314,6 +389,8 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 /* Stored combined IR opcode and type. */
 typedef uint16_t IROpT;
 
+/* -- IR references ------------------------------------------------------- */
+
 /* IR references. */
 typedef uint16_t IRRef1;	/* One stored reference. */
 typedef uint32_t IRRef2;	/* Two stored references. */
@@ -382,6 +459,8 @@ typedef uint32_t TRef;
 #define TREF_FALSE		(TREF_PRI(IRT_FALSE))
 #define TREF_TRUE		(TREF_PRI(IRT_TRUE))
 
+/* -- IR format ----------------------------------------------------------- */
+
 /* IR instruction format (64 bit).
 **
 **    16      16     8   8   8   8
@@ -425,5 +504,6 @@ typedef union IRIns {
 #define ir_ktab(ir)	(gco2tab(ir_kgc((ir))))
 #define ir_kfunc(ir)	(gco2func(ir_kgc((ir))))
 #define ir_knum(ir)	(mref((ir)->ptr, cTValue))
+#define ir_kptr(ir)	(mref((ir)->ptr, void))
 
 #endif

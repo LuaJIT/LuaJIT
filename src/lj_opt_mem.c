@@ -307,14 +307,7 @@ TRef LJ_FASTCALL lj_opt_fwd_uload(jit_State *J)
 
 conflict:
   /* Try to find a matching load. Below the conflicting store, if any. */
-  ref = J->chain[IR_ULOAD];
-  while (ref > lim) {
-    IRIns *load = IR(ref);
-    if (load->op1 == uref)
-      return ref;  /* Load forwarding. */
-    ref = load->prev;
-  }
-  return EMITFOLD;  /* Conflict or no match. */
+  return lj_opt_cselim(J, lim);
 }
 
 /* USTORE elimination. */
@@ -405,14 +398,7 @@ TRef LJ_FASTCALL lj_opt_fwd_fload(jit_State *J)
 
 conflict:
   /* Try to find a matching load. Below the conflicting store, if any. */
-  ref = J->chain[IR_FLOAD];
-  while (ref > lim) {
-    IRIns *load = IR(ref);
-    if (load->op1 == oref && load->op2 == fid)
-      return ref;  /* Load forwarding. */
-    ref = load->prev;
-  }
-  return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
+  return lj_opt_cselim(J, lim);
 }
 
 /* FSTORE elimination. */
@@ -458,10 +444,10 @@ doemit:
   return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
 }
 
-/* -- TLEN forwarding ----------------------------------------------------- */
+/* -- Forwarding of lj_tab_len -------------------------------------------- */
 
 /* This is rather simplistic right now, but better than nothing. */
-TRef LJ_FASTCALL lj_opt_fwd_tlen(jit_State *J)
+TRef LJ_FASTCALL lj_opt_fwd_tab_len(jit_State *J)
 {
   IRRef tab = fins->op1;  /* Table reference. */
   IRRef lim = tab;  /* Search limit. */
@@ -484,14 +470,7 @@ TRef LJ_FASTCALL lj_opt_fwd_tlen(jit_State *J)
   }
 
   /* Try to find a matching load. Below the conflicting store, if any. */
-  ref = J->chain[IR_TLEN];
-  while (ref > lim) {
-    IRIns *tlen = IR(ref);
-    if (tlen->op1 == tab)
-      return ref;  /* Load forwarding. */
-    ref = tlen->prev;
-  }
-  return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
+  return lj_opt_cselim(J, lim);
 }
 
 /* -- ASTORE/HSTORE previous type analysis -------------------------------- */

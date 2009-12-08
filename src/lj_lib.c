@@ -152,7 +152,7 @@ lua_Number lj_lib_checknum(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;
   if (!(o < L->top &&
-	(tvisnum(o) || (tvisstr(o) && lj_str_numconv(strVdata(o), o)))))
+	(tvisnum(o) || (tvisstr(o) && lj_str_tonum(strV(o), o)))))
     lj_err_argt(L, narg, LUA_TNUMBER);
   return numV(o);
 }

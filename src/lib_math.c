@@ -36,9 +36,9 @@ LJLIB_ASM_(math_tan)		LJLIB_REC(math_unary IRFPM_TAN)
 LJLIB_ASM_(math_asin)		LJLIB_REC(math_atrig FF_math_asin)
 LJLIB_ASM_(math_acos)		LJLIB_REC(math_atrig FF_math_acos)
 LJLIB_ASM_(math_atan)		LJLIB_REC(math_atrig FF_math_atan)
-LJLIB_ASM_(math_sinh)
-LJLIB_ASM_(math_cosh)
-LJLIB_ASM_(math_tanh)
+LJLIB_ASM_(math_sinh)		LJLIB_REC(math_htrig IRCALL_sinh)
+LJLIB_ASM_(math_cosh)		LJLIB_REC(math_htrig IRCALL_cosh)
+LJLIB_ASM_(math_tanh)		LJLIB_REC(math_htrig IRCALL_tanh)
 LJLIB_ASM_(math_frexp)
 LJLIB_ASM_(math_modf)		LJLIB_REC(.)
 
@@ -82,35 +82,33 @@ LJ_FUNCA double lj_wrapper_tanh(double x) { return tanh(x); }
 */
 
 /* PRNG state. */
-typedef struct TW223State {
+struct RandomState {
   uint64_t gen[4];	/* State of the 4 LFSR generators. */
   int valid;		/* State is valid. */
-} TW223State;
+};
 
 /* Union needed for bit-pattern conversion between uint64_t and double. */
 typedef union { uint64_t u64; double d; } U64double;
 
 /* Update generator i and compute a running xor of all states. */
 #define TW223_GEN(i, k, q, s) \
-  z = tw->gen[i]; \
+  z = rs->gen[i]; \
   z = (((z<<q)^z) >> (k-s)) ^ ((z&((uint64_t)(int64_t)-1 << (64-k)))<<s); \
-  r ^= z; tw->gen[i] = z;
+  r ^= z; rs->gen[i] = z;
 
 /* PRNG step function. Returns a double in the range 1.0 <= d < 2.0. */
-static LJ_NOINLINE double tw223_step(TW223State *tw)
+LJ_NOINLINE uint64_t LJ_FASTCALL lj_math_random_step(RandomState *rs)
 {
   uint64_t z, r = 0;
-  U64double u;
   TW223_GEN(0, 63, 31, 18)
   TW223_GEN(1, 58, 19, 28)
   TW223_GEN(2, 55, 24,  7)
   TW223_GEN(3, 47, 21,  8)
-  u.u64 = (r & (((uint64_t)1 << 52)-1)) | ((uint64_t)0x3ff << 52);
-  return u.d;
+  return (r & U64x(000fffff,ffffffff)) | U64x(3ff00000,00000000);
 }
 
 /* PRNG initialization function. */
-static void tw223_init(TW223State *tw, double d)
+static void random_init(RandomState *rs, double d)
 {
   uint32_t r = 0x11090601;  /* 64-k[i] as four 8 bit constants. */
   int i;
@@ -120,22 +118,24 @@ static void tw223_init(TW223State *tw, double d)
     r >>= 8;
     u.d = d = d * 3.14159265358979323846 + 2.7182818284590452354;
     if (u.u64 < m) u.u64 += m;  /* Ensure k[i] MSB of gen[i] are non-zero. */
-    tw->gen[i] = u.u64;
+    rs->gen[i] = u.u64;
   }
-  tw->valid = 1;
+  rs->valid = 1;
   for (i = 0; i < 10; i++)
-    tw223_step(tw);
+    lj_math_random_step(rs);
 }
 
 /* PRNG extract function. */
-LJLIB_PUSH(top-2)  /* Upvalue holds userdata with TW223State. */
-LJLIB_CF(math_random)
+LJLIB_PUSH(top-2)  /* Upvalue holds userdata with RandomState. */
+LJLIB_CF(math_random)		LJLIB_REC(.)
 {
   int n = cast_int(L->top - L->base);
-  TW223State *tw = (TW223State *)(uddata(udataV(lj_lib_upvalue(L, 1))));
+  RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
+  U64double u;
   double d;
-  if (LJ_UNLIKELY(!tw->valid)) tw223_init(tw, 0.0);
-  d = tw223_step(tw) - 1.0;
+  if (LJ_UNLIKELY(!rs->valid)) random_init(rs, 0.0);
+  u.u64 = lj_math_random_step(rs);
+  d = u.d - 1.0;
   if (n > 0) {
     double r1 = lj_lib_checknum(L, 1);
     if (n == 1) {
@@ -150,11 +150,11 @@ LJLIB_CF(math_random)
 }
 
 /* PRNG seed function. */
-LJLIB_PUSH(top-2)  /* Upvalue holds userdata with TW223State. */
+LJLIB_PUSH(top-2)  /* Upvalue holds userdata with RandomState. */
 LJLIB_CF(math_randomseed)
 {
-  TW223State *tw = (TW223State *)(uddata(udataV(lj_lib_upvalue(L, 1))));
-  tw223_init(tw, lj_lib_checknum(L, 1));
+  RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
+  random_init(rs, lj_lib_checknum(L, 1));
   return 0;
 }
 
@@ -164,9 +164,9 @@ LJLIB_CF(math_randomseed)
 
 LUALIB_API int luaopen_math(lua_State *L)
 {
-  TW223State *tw;
-  tw = (TW223State *)lua_newuserdata(L, sizeof(TW223State));
-  tw->valid = 0;  /* Use lazy initialization to save some time on startup. */
+  RandomState *rs;
+  rs = (RandomState *)lua_newuserdata(L, sizeof(RandomState));
+  rs->valid = 0;  /* Use lazy initialization to save some time on startup. */
   LJ_LIB_REG(L, math);
 #if defined(LUA_COMPAT_MOD)
   lua_getfield(L, -1, "fmod");

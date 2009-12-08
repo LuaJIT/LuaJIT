@@ -60,7 +60,7 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else if (tvisudata(o))
     mt = tabref(udataV(o)->metatable);
   else
-    mt = tabref(G(L)->basemt[itypemap(o)]);
+    mt = tabref(basemt_obj(G(L), o));
   if (mt) {
     cTValue *mo = lj_tab_getstr(mt, strref(G(L)->mmname[mm]));
     if (mo)
@@ -157,7 +157,7 @@ static cTValue *str2num(cTValue *o, TValue *n)
 {
   if (tvisnum(o))
     return o;
-  else if (tvisstr(o) && lj_str_numconv(strVdata(o), n))
+  else if (tvisstr(o) && lj_str_tonum(strV(o), n))
     return n;
   else
     return NULL;
@@ -295,7 +295,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     top = curr_top(L);
     setcont(top, ne ? lj_cont_condf : lj_cont_condt);
     copyTV(L, top+1, mo);
-    it = o1->gch.gct == ~LJ_TTAB ? LJ_TTAB : LJ_TUDATA;
+    it = ~o1->gch.gct;
     setgcV(L, top+2, &o1->gch, it);
     setgcV(L, top+3, &o2->gch, it);
     return top+2;  /* Trigger metamethod call. */

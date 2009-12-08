@@ -73,13 +73,13 @@ static void gc_mark(global_State *g, GCobj *o)
   }
 }
 
-/* Mark the base metatables. */
-static void gc_mark_basemt(global_State *g)
+/* Mark GC roots. */
+static void gc_mark_gcroot(global_State *g)
 {
-  int i;
-  for (i = 0; i < BASEMT_MAX; i++)
-    if (tabref(g->basemt[i]) != NULL)
-      gc_markobj(g, tabref(g->basemt[i]));
+  ptrdiff_t i;
+  for (i = 0; i < GCROOT__MAX; i++)
+    if (gcref(g->gcroot[i]) != NULL)
+      gc_markobj(g, gcref(g->gcroot[i]));
 }
 
 /* Start a GC cycle and mark the root set. */
@@ -91,7 +91,7 @@ static void gc_mark_start(global_State *g)
   gc_markobj(g, mainthread(g));
   gc_markobj(g, tabref(mainthread(g)->env));
   gc_marktv(g, &g->registrytv);
-  gc_mark_basemt(g);
+  gc_mark_gcroot(g);
   g->gc.state = GCSpropagate;
 }
 
@@ -541,7 +541,7 @@ static void atomic(global_State *g, lua_State *L)
   lua_assert(!iswhite(obj2gco(mainthread(g))));
   gc_markobj(g, L);  /* Mark running thread. */
   gc_mark_curtrace(g);  /* Mark current trace. */
-  gc_mark_basemt(g);  /* Mark base metatables (again). */
+  gc_mark_gcroot(g);  /* Mark GC roots (again). */
   gc_propagate_gray(g);  /* Propagate all of the above. */
 
   setgcrefr(g->gc.gray, g->gc.grayagain);  /* Empty the 2nd chance list. */
@@ -643,16 +643,15 @@ int lj_gc_step(lua_State *L)
 }
 
 /* Ditto, but fix the stack top first. */
-void lj_gc_step_fixtop(lua_State *L)
+void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L)
 {
   if (curr_funcisL(L)) L->top = curr_topL(L);
   lj_gc_step(L);
 }
 
 /* Perform multiple GC steps. Called from JIT-compiled code. */
-void lj_gc_step_jit(lua_State *L, const BCIns *pc, MSize steps)
+void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps)
 {
-  cframe_pc(cframe_raw(L->cframe)) = pc;
   L->top = curr_topL(L);
   while (steps-- > 0 && lj_gc_step(L) == 0)
     ;
@@ -711,17 +710,16 @@ void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v)
     makewhite(g, o);  /* Make it white to avoid the following barrier. */
 }
 
-/* The reason for duplicating this is that it needs to be visible from ASM. */
-void lj_gc_barrieruv(global_State *g, GCobj *o, GCobj *v)
+/* Specialized barrier for closed upvalue. Pass &uv->tv. */
+void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv)
 {
-  lua_assert(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));
-  lua_assert(g->gc.state != GCSfinalize && g->gc.state != GCSpause);
-  lua_assert(o->gch.gct == ~LJ_TUPVAL);
-  /* Preserve invariant during propagation. Otherwise it doesn't matter. */
+#define TV2MARKED(x) \
+  (*((uint8_t *)(x) - offsetof(GCupval, tv) + offsetof(GCupval, marked)))
   if (g->gc.state == GCSpropagate)
-    gc_mark(g, v);  /* Move frontier forward. */
+    gc_mark(g, gcV(tv));
   else
-    makewhite(g, o);  /* Make it white to avoid the following barrier. */
+    TV2MARKED(tv) = (TV2MARKED(tv) & cast_byte(~LJ_GC_COLORS)) | curwhite(g);
+#undef TV2MARKED
 }
 
 /* Close upvalue. Also needs a write barrier. */

@@ -32,6 +32,11 @@ enum {
 
   /* Calling conventions. */
   RID_RET = RID_EAX,
+#if LJ_64
+  RID_FPRET = RID_XMM0,
+#else
+  RID_RETHI = RID_EDX,
+#endif
 
   /* These definitions must match with the *.dasc file(s): */
   RID_BASE = RID_EDX,		/* Interpreter BASE. */
@@ -98,8 +103,8 @@ enum {
 };
 
 /* Spill slots are 32 bit wide. An even/odd pair is used for FPRs. */
-#define sps_scale(slot)	(4 * (int32_t)(slot))
-#define sps_adjust(as)	(sps_scale((as->evenspill-SPS_FIXED+3)&~3))
+#define sps_scale(slot)		(4 * (int32_t)(slot))
+#define sps_adjust(slot)	(sps_scale(((slot)-SPS_FIXED+3)&~3))
 
 /* -- Exit state ---------------------------------------------------------- */
 
@@ -185,6 +190,7 @@ typedef enum {
   XO_ARITHib =	XO_(80),
   XO_ARITHi =	XO_(81),
   XO_ARITHi8 =	XO_(83),
+  XO_ARITHiw8 =	XO_66(83),
   XO_SHIFTi =	XO_(c1),
   XO_SHIFT1 =	XO_(d1),
   XO_SHIFTcl =	XO_(d3),
@@ -216,6 +222,7 @@ typedef enum {
   XO_CVTSI2SD =	XO_f20f(2a),
   XO_CVTSD2SI =	XO_f20f(2d),
   XO_CVTTSD2SI=	XO_f20f(2c),
+  XO_MOVD =	XO_660f(6e),
   XO_MOVDto =	XO_660f(7e),
 
   XO_FLDq =	XO_(dd), XOg_FLDq = 0,

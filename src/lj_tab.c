@@ -160,8 +160,16 @@ GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits)
   return t;
 }
 
+GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize)
+{
+  GCtab *t = newtab(L, ahsize & 0xffffff, ahsize >> 24);
+  clearapart(t);
+  if (t->hmask > 0) clearhpart(t);
+  return t;
+}
+
 /* Duplicate a table. */
-GCtab *lj_tab_dup(lua_State *L, const GCtab *kt)
+GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)
 {
   GCtab *t;
   uint32_t asize, hmask;
@@ -334,8 +342,8 @@ static uint32_t counthash(const GCtab *t, uint32_t *bins, uint32_t *narray)
 static uint32_t bestasize(uint32_t bins[], uint32_t *narray)
 {
   uint32_t b, sum, na = 0, sz = 0, nn = *narray;
-  for (b = 0, sum = 0; (1u<<b) <= nn && sum != nn; b++)
-    if (bins[b] > 0 && (sum += bins[b]) >= (1u<<b)) {
+  for (b = 0, sum = 0; 2*nn > (1u<<b) && sum != nn; b++)
+    if (bins[b] > 0 && 2*(sum += bins[b]) > (1u<<b)) {
       sz = (2u<<b)+1;
       na = sum;
     }
@@ -599,7 +607,7 @@ static MSize unbound_search(GCtab *t, MSize j)
 ** Try to find a boundary in table `t'. A `boundary' is an integer index
 ** such that t[i] is non-nil and t[i+1] is nil (and 0 if t[1] is nil).
 */
-MSize lj_tab_len(GCtab *t)
+MSize LJ_FASTCALL lj_tab_len(GCtab *t)
 {
   MSize j = (MSize)t->asize;
   if (j > 1 && tvisnil(arrayslot(t, j-1))) {

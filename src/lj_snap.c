@@ -251,9 +251,9 @@ void lj_snap_restore(jit_State *J, void *exptr)
 	    GCfunc *fn = gco2func(gcref(T->ir[ir->op2].gcr));
 	    if (isluafunc(fn)) {
 	      TValue *fs;
-	      newbase = o+1;
-	      fs = newbase + funcproto(fn)->framesize;
+	      fs = o+1 + funcproto(fn)->framesize;
 	      if (fs > ntop) ntop = fs; /* Update top for newly added frames. */
+	      if (s != 0) newbase = o+1;
 	    }
 	  }
 	}
@@ -262,21 +262,17 @@ void lj_snap_restore(jit_State *J, void *exptr)
       setnilV(o);  /* Clear unreferenced slots of newly added frames. */
     }
   }
-  if (newbase) {  /* Clear remainder of newly added frames. */
-    L->base = newbase;
-    if (ntop >= L->maxstack) {  /* Need to grow the stack again. */
-      MSize need = (MSize)(ntop - o);
-      L->top = o;
-      lj_state_growstack(L, need);
-      o = L->top;
-      ntop = o + need;
-    }
-    L->top = curr_topL(L);
-    for (; o < ntop; o++)
-      setnilV(o);
-  } else {  /* Must not clear slots of existing frame. */
-    L->top = curr_topL(L);
+  if (newbase) L->base = newbase;
+  if (ntop >= L->maxstack) {  /* Need to grow the stack again. */
+    MSize need = (MSize)(ntop - o);
+    L->top = o;
+    lj_state_growstack(L, need);
+    o = L->top;
+    ntop = o + need;
   }
+  L->top = curr_topL(L);
+  for (; o < ntop; o++)  /* Clear remainder of newly added frames. */
+    setnilV(o);
   lua_assert(map + nslots == flinks-1);
   J->pc = (const BCIns *)(uintptr_t)(*--flinks);
 }

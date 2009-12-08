@@ -441,7 +441,7 @@ static int rec_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     mix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), ix->tab, IRFL_UDATA_META);
   } else {
     /* Specialize to base metatable. Must flush mcode in lua_setmetatable(). */
-    mt = tabref(J2G(J)->basemt[itypemap(&ix->tabv)]);
+    mt = tabref(basemt_obj(J2G(J), &ix->tabv));
     if (mt == NULL)
       return 0;  /* No metamethod. */
     mix.tab = lj_ir_ktab(J, mt);
@@ -855,7 +855,7 @@ typedef void (*RecordFunc)(jit_State *J, TRef *res, RecordFFData *rd);
 /* Get runtime value of int argument. */
 static int32_t argv2int(jit_State *J, TValue *o)
 {
-  if (tvisstr(o) && !lj_str_numconv(strVdata(o), o))
+  if (tvisstr(o) && !lj_str_tonum(strV(o), o))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   return lj_num2bit(numV(o));
 }
@@ -1017,6 +1017,8 @@ static void recff_tostring(jit_State *J, TRef *res, RecordFFData *rd)
       /* Otherwise res[0] already contains the result. */
     } else if (tref_isnumber(tr)) {
       res[0] = emitir(IRT(IR_TOSTR, IRT_STR), tr, 0);
+    } else if (tref_ispri(tr)) {
+      res[0] = lj_ir_kstr(J, strV(&rd->fn->c.upvalue[tref_type(tr)]));
     } else {
       recff_err_nyi(J, rd);
     }
@@ -1165,10 +1167,16 @@ static void recff_math_atrig(jit_State *J, TRef *res, RecordFFData *rd)
   res[0] = emitir(IRTN(IR_ATAN2), y, x);
 }
 
+static void recff_math_htrig(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  TRef tr = lj_ir_tonum(J, arg[0]);
+  res[0] = lj_ir_call(J, rd->data, tr);
+}
+
 static void recff_math_modf(jit_State *J, TRef *res, RecordFFData *rd)
 {
   TRef tr = arg[0];
-  if (tref_isinteger(arg[0])) {
+  if (tref_isinteger(tr)) {
     res[0] = tr;
     res[1] = lj_ir_kint(J, 0);
   } else {
@@ -1187,9 +1195,10 @@ static void recff_math_degrad(jit_State *J, TRef *res, RecordFFData *rd)
 
 static void recff_math_pow(jit_State *J, TRef *res, RecordFFData *rd)
 {
+  TRef tr = lj_ir_tonum(J, arg[0]);
   if (!tref_isnumber_str(arg[1]))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
-  res[0] = lj_opt_narrow_pow(J, lj_ir_tonum(J, arg[0]), arg[1], &rd->argv[1]);
+  res[0] = lj_opt_narrow_pow(J, tr, arg[1], &rd->argv[1]);
   UNUSED(rd);
 }
 
@@ -1200,6 +1209,32 @@ static void recff_math_minmax(jit_State *J, TRef *res, RecordFFData *rd)
   BCReg i;
   for (i = 1; arg[i]; i++)
     tr = emitir(IRTN(op), tr, lj_ir_tonum(J, arg[i]));
+  res[0] = tr;
+}
+
+static void recff_math_random(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  GCudata *ud = udataV(&rd->fn->c.upvalue[0]);
+  TRef tr, one;
+  lj_ir_kgc(J, obj2gco(ud), IRT_UDATA);  /* Prevent collection. */
+  tr = lj_ir_call(J, IRCALL_lj_math_random_step, lj_ir_kptr(J, uddata(ud)));
+  one = lj_ir_knum_one(J);
+  tr = emitir(IRTN(IR_SUB), tr, one);
+  if (arg[0]) {
+    TRef tr1 = lj_ir_tonum(J, arg[0]);
+    if (arg[1]) {  /* d = floor(d*(r2-r1+1.0)) + r1 */
+      TRef tr2 = lj_ir_tonum(J, arg[1]);
+      tr2 = emitir(IRTN(IR_SUB), tr2, tr1);
+      tr2 = emitir(IRTN(IR_ADD), tr2, one);
+      tr = emitir(IRTN(IR_MUL), tr, tr2);
+      tr = emitir(IRTN(IR_FPMATH), tr, IRFPM_FLOOR);
+      tr = emitir(IRTN(IR_ADD), tr, tr1);
+    } else {  /* d = floor(d*r1) + 1.0 */
+      tr = emitir(IRTN(IR_MUL), tr, tr1);
+      tr = emitir(IRTN(IR_FPMATH), tr, IRFPM_FLOOR);
+      tr = emitir(IRTN(IR_ADD), tr, one);
+    }
+  }
   res[0] = tr;
 }
 
@@ -1321,7 +1356,7 @@ static void recff_string_range(jit_State *J, TRef *res, RecordFFData *rd)
       for (i = 0; i < len; i++) {
 	TRef tmp = emitir(IRTI(IR_ADD), trstart, lj_ir_kint(J, i));
 	tmp = emitir(IRT(IR_STRREF, IRT_PTR), trstr, tmp);
-	res[i] = emitir(IRT(IR_XLOAD, IRT_U8), tmp, 0);
+	res[i] = emitir(IRT(IR_XLOAD, IRT_U8), tmp, IRXLOAD_READONLY);
       }
     } else {  /* Empty range or range underflow: return no results. */
       emitir(IRTGI(IR_LE), trend, trstart);
@@ -1335,7 +1370,7 @@ static void recff_string_range(jit_State *J, TRef *res, RecordFFData *rd)
 static void recff_table_getn(jit_State *J, TRef *res, RecordFFData *rd)
 {
   if (tref_istab(arg[0])) {
-    res[0] = emitir(IRTI(IR_TLEN), arg[0], 0);
+    res[0] = lj_ir_call(J, IRCALL_lj_tab_len, arg[0]);
   }  /* else: Interpreter will throw. */
   UNUSED(rd);
 }
@@ -1344,7 +1379,7 @@ static void recff_table_remove(jit_State *J, TRef *res, RecordFFData *rd)
 {
   if (tref_istab(arg[0])) {
     if (!arg[1] || tref_isnil(arg[1])) {  /* Simple pop: t[#t] = nil */
-      TRef trlen = emitir(IRTI(IR_TLEN), arg[0], 0);
+      TRef trlen = lj_ir_call(J, IRCALL_lj_tab_len, arg[0]);
       GCtab *t = tabV(&rd->argv[0]);
       MSize len = lj_tab_len(t);
       emitir(IRTGI(len ? IR_NE : IR_EQ), trlen, lj_ir_kint(J, 0));
@@ -1376,7 +1411,7 @@ static void recff_table_insert(jit_State *J, TRef *res, RecordFFData *rd)
   rd->nres = 0;
   if (tref_istab(arg[0]) && arg[1]) {
     if (!arg[2]) {  /* Simple push: t[#t+1] = v */
-      TRef trlen = emitir(IRTI(IR_TLEN), arg[0], 0);
+      TRef trlen = lj_ir_call(J, IRCALL_lj_tab_len, arg[0]);
       GCtab *t = tabV(&rd->argv[0]);
       RecordIndex ix;
       ix.tab = arg[0];
@@ -1390,6 +1425,62 @@ static void recff_table_insert(jit_State *J, TRef *res, RecordFFData *rd)
       recff_err_nyi(J, rd);
     }
   }  /* else: Interpreter will throw. */
+}
+
+/* -- I/O library fast functions ------------------------------------------ */
+
+/* Get FILE* for I/O function. Any I/O error aborts recording, so there's
+** no need to encode the alternate cases for any of the guards.
+*/
+static TRef recff_io_fp(jit_State *J, TRef *res, uint32_t id)
+{
+  TRef tr, ud, fp;
+  if (id) {  /* io.func() */
+    tr = lj_ir_kptr(J, &J2G(J)->gcroot[id]);
+    ud = emitir(IRT(IR_XLOAD, IRT_UDATA), tr, 0);
+  } else {  /* fp:method() */
+    ud = arg[0];
+    if (!tref_isudata(ud))
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+    tr = emitir(IRT(IR_FLOAD, IRT_U8), ud, IRFL_UDATA_UDTYPE);
+    emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
+  }
+  fp = emitir(IRT(IR_FLOAD, IRT_LIGHTUD), ud, IRFL_UDATA_FILE);
+  emitir(IRTG(IR_NE, IRT_LIGHTUD), fp, lj_ir_knull(J, IRT_LIGHTUD));
+  return fp;
+}
+
+static void recff_io_write(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  TRef fp = recff_io_fp(J, res, rd->data);
+  TRef zero = lj_ir_kint(J, 0);
+  TRef one = lj_ir_kint(J, 1);
+  ptrdiff_t i = rd->data == 0 ? 1 : 0;
+  for (; arg[i]; i++) {
+    TRef str = lj_ir_tostr(J, arg[i]);
+    TRef buf = emitir(IRT(IR_STRREF, IRT_PTR), str, zero);
+    TRef len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
+    if (tref_isk(len) && IR(tref_ref(len))->i == 1) {
+      TRef tr = emitir(IRT(IR_XLOAD, IRT_U8), buf, IRXLOAD_READONLY);
+      tr = lj_ir_call(J, IRCALL_fputc, tr, fp);
+      if (rd->cres != 0)  /* Check result only if requested. */
+	emitir(IRTGI(IR_NE), tr, lj_ir_kint(J, -1));
+    } else {
+      TRef tr = lj_ir_call(J, IRCALL_fwrite, buf, one, len, fp);
+      if (rd->cres != 0)  /* Check result only if requested. */
+	emitir(IRTGI(IR_EQ), tr, len);
+    }
+  }
+  res[0] = TREF_TRUE;
+}
+
+static void recff_io_flush(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  TRef fp = recff_io_fp(J, res, rd->data);
+  TRef tr = lj_ir_call(J, IRCALL_fflush, fp);
+  if (rd->cres != 0)  /* Check result only if requested. */
+    emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, 0));
+  res[0] = TREF_TRUE;
 }
 
 /* -- Record calls and returns -------------------------------------------- */
@@ -1696,6 +1787,9 @@ void lj_record_ins(jit_State *J)
 	if (!lj_ir_numcmp(numV(rav), numV(rcv), (IROp)irop)) irop ^= 1;
       } else if (ta == IRT_STR) {
 	if (!lj_ir_strcmp(strV(rav), strV(rcv), (IROp)irop)) irop ^= 1;
+	ra = lj_ir_call(J, IRCALL_lj_str_cmp, ra, rc);
+	rc = lj_ir_kint(J, 0);
+	ta = IRT_INT;
       } else {
 	rec_mm_comp(J, &ix, (int)op);
 	break;
@@ -1745,7 +1839,7 @@ void lj_record_ins(jit_State *J)
     if (tref_isstr(rc)) {
       rc = emitir(IRTI(IR_FLOAD), rc, IRFL_STR_LEN);
     } else if (tref_istab(rc)) {
-      rc = emitir(IRTI(IR_TLEN), rc, 0);
+      rc = lj_ir_call(J, IRCALL_lj_tab_len, rc);
     } else {
       ix.tab = rc;
       copyTV(J->L, &ix.tabv, &ix.keyv);
@@ -1879,8 +1973,6 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_CALL:
   callop:
-    if (rb == (TRef)(CALLRES_TAILCALL+1)) {  /* Tail call. */
-    }
     rec_call(J, ra, (int)(rb-1), (int)(rc-1));
     break;
 
@@ -2064,8 +2156,11 @@ static void rec_setup_side(jit_State *J, Trace *T)
 	BCReg j;
 	for (j = 0; j < s; j++)
 	  if (snap_ref(map[j]) == ref) {
-	    if (ir->o == IR_FRAME && irt_isfunc(ir->t))
+	    if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
+	      lua_assert(s != 0);
 	      J->baseslot = s+1;
+	      J->framedepth++;
+	    }
 	    tr = J->slot[j];
 	    goto dupslot;
 	  }
@@ -2078,8 +2173,10 @@ static void rec_setup_side(jit_State *J, Trace *T)
       case IR_KNUM: tr = lj_ir_knum_addr(J, ir_knum(ir)); break;
       case IR_FRAME:  /* Placeholder FRAMEs don't need a guard. */
 	if (irt_isfunc(ir->t)) {
-	  J->baseslot = s+1;
-	  J->framedepth++;
+	  if (s != 0) {
+	    J->baseslot = s+1;
+	    J->framedepth++;
+	  }
 	  tr = lj_ir_kfunc(J, ir_kfunc(&T->ir[ir->op2]));
 	  tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr);
 	} else {

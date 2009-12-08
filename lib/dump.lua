@@ -144,7 +144,7 @@ local colortype_ansi = {
   [0] = "%s",
   "%s",
   "%s",
-  "%s",
+  "\027[36m%s\027[m",
   "\027[32m%s\027[m",
   "%s",
   "\027[1m%s\027[m",
@@ -199,9 +199,9 @@ margin-right: 2em;
 span.irt_str { color: #00a000; }
 span.irt_thr, span.irt_fun { color: #404040; font-weight: bold; }
 span.irt_tab { color: #c00000; }
-span.irt_udt { color: #00c0c0; }
-span.irt_num { color: #0000c0; }
-span.irt_int { color: #c000c0; }
+span.irt_udt, span.irt_lud { color: #00c0c0; }
+span.irt_num { color: #4040c0; }
+span.irt_int, span.irt_i8, span.irt_u8, span.irt_i16, span.irt_u16 { color: #b040b0; }
 </style>
 ]]
 
@@ -210,7 +210,7 @@ local colorize, irtype
 -- Lookup table to convert some literals into names.
 local litname = {
   ["SLOAD "] = { [0] = "", "I", "R", "RI", "P", "PI", "PR", "PRI", },
-  ["XLOAD "] = { [0] = "", "unaligned", },
+  ["XLOAD "] = { [0] = "", "R", "U", "RU", },
   ["TOINT "] = { [0] = "check", "index", "", },
   ["FLOAD "] = vmdef.irfield,
   ["FREF  "] = vmdef.irfield,
@@ -313,6 +313,27 @@ local function ridsp_name(ridsp)
   return ""
 end
 
+-- Recursively gather CALL* args and dump them.
+local function dumpcallargs(tr, ins)
+  if ins < 0 then
+    out:write(formatk(tr, ins))
+  else
+    local m, ot, op1, op2 = traceir(tr, ins)
+    local oidx = 6*shr(ot, 8)
+    local op = sub(vmdef.irnames, oidx+1, oidx+6)
+    if op == "CARG  " then
+      dumpcallargs(tr, op1)
+      if op2 < 0 then
+	out:write(" ", formatk(tr, op2))
+      else
+	out:write(" ", format("%04d", op2))
+      end
+    else
+      out:write(format("%04d", ins))
+    end
+  end
+end
+
 -- Dump IR and interleaved snapshots.
 local function dump_ir(tr, dumpsnap, dumpreg)
   local info = traceinfo(tr)
@@ -348,7 +369,8 @@ local function dump_ir(tr, dumpsnap, dumpreg)
       else
 	out:write(format("%04d ------ LOOP ------------\n", ins))
       end
-    elseif op ~= "NOP   " and (dumpreg or op ~= "RENAME") then
+    elseif op ~= "NOP   " and op ~= "CARG  " and
+	   (dumpreg or op ~= "RENAME") then
       if dumpreg then
 	out:write(format("%04d %-5s ", ins, ridsp_name(ridsp)))
       else
@@ -359,7 +381,11 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 		       band(ot, 128) == 0 and " " or "+",
 		       irtype[t], op))
       local m1 = band(m, 3)
-      if m1 ~= 3 then -- op1 != IRMnone
+      if sub(op, 1, 4) == "CALL" then
+	out:write(format("%-10s  (", vmdef.ircall[op2]))
+	if op1 ~= -1 then dumpcallargs(tr, op1) end
+	out:write(")")
+      elseif m1 ~= 3 then -- op1 != IRMnone
 	if op1 < 0 then
 	  out:write(formatk(tr, op1))
 	else

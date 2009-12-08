@@ -88,6 +88,7 @@ typedef unsigned __int32 uintptr_t;
 #define checki8(x)	((x) == (int32_t)(int8_t)(x))
 #define checku8(x)	((x) == (int32_t)(uint8_t)(x))
 #define checki16(x)	((x) == (int32_t)(int16_t)(x))
+#define checku16(x)	((x) == (int32_t)(uint16_t)(x))
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */
 #define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(32-(n))))

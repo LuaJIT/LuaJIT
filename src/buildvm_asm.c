@@ -26,6 +26,14 @@ static void emit_asm_bytes(BuildCtx *ctx, uint8_t *p, int n)
 static void emit_asm_reloc(BuildCtx *ctx, BuildReloc *r)
 {
   const char *sym = ctx->extnames[r->sym];
+  const char *p = strchr(sym, '@');
+  char buf[80];
+  if (p) {
+    /* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
+    strncpy(buf, sym, p-sym);
+    buf[p-sym] = '\0';
+    sym = buf;
+  }
   switch (ctx->mode) {
   case BUILD_elfasm:
     if (r->type)

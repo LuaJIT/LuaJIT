@@ -317,6 +317,7 @@ GCstr *lj_parse_keepstr(LexState *ls, const char *str, size_t len)
   GCstr *s = lj_str_new(L, str, len);
   TValue *tv = lj_tab_setstr(L, ls->fs->kt, s);
   if (tvisnil(tv)) setboolV(tv, 1);  /* Anchor string to avoid GC. */
+  lj_gc_check(L);
   return s;
 }
 

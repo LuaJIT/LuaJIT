@@ -11,7 +11,7 @@
 #include "lj_obj.h"
 
 /* String interning. */
-LJ_FUNCA int32_t lj_str_cmp(GCstr *a, GCstr *b);
+LJ_FUNC int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b);
 LJ_FUNC void lj_str_resize(lua_State *L, MSize newmask);
 LJ_FUNCA GCstr *lj_str_new(lua_State *L, const char *str, size_t len);
 LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
@@ -20,9 +20,10 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 #define lj_str_newlit(L, s)	(lj_str_new(L, "" s, sizeof(s)-1))
 
 /* Type conversions. */
-LJ_FUNCA int lj_str_numconv(const char *s, TValue *n);
-LJ_FUNCA GCstr *lj_str_fromnum(lua_State *L, const lua_Number *np);
-LJ_FUNCA GCstr *lj_str_fromint(lua_State *L, int32_t k);
+LJ_FUNC int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n);
+LJ_FUNC int LJ_FASTCALL lj_str_tonum(GCstr *str, TValue *n);
+LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np);
+LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k);
 
 /* String formatting. */
 LJ_FUNC const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp);

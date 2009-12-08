@@ -30,7 +30,7 @@
 --   print(bc.line(foo, 2)) --> 0002    KSTR     1   1      ; "hello"
 --
 --   local out = {
---     -- Do something wich each line:
+--     -- Do something with each line:
 --     write = function(t, ...) io.write(...) end,
 --     close = function(t) end,
 --     flush = function(t) end,

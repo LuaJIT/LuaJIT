@@ -48,9 +48,26 @@ The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJI
 </p>
 <p>
 Please check the
-<a href="http://luajit.org/luajit_changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
+<a href="http://luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
 to see whether newer versions are available.
 </p>
+
+<div class="major" style="background: #d0d0d0;">
+<h2 id="snap">Development Snapshot</h2>
+<ul>
+<li>Add abstract C call handling to IR.</li>
+<li>Improve KNUM fuse vs. load heuristics.</li>
+<li>Drive the GC forward on string allocations in the parser.</li>
+<li>Compile various <tt>io.*()</tt> functions.</li>
+<li>Compile <tt>math.sinh()</tt>, <tt>math.cosh()</tt>, <tt>math.tanh()</tt>
+and <tt>math.random()</tt>.</li>
+<li>Fix <tt>lua_tocfunction()</tt>.</li>
+<li>Fix cutoff register in JMP bytecode for some conditional expressions.</li>
+<li>Fix PHI marking algorithm for references from variant slots.</li>
+<li>Fix <tt>package.cpath</tt> for non-default PREFIX.</li>
+<li>Fix DWARF2 frame unwind information for interpreter on OSX.</li>
+</ul>
+</div>
 
 <div class="major" style="background: #ffd0d0;">
 <h2 id="LuaJIT-2.0.0-beta2">LuaJIT 2.0.0-beta2 &mdash; 2009-11-09</h2>
@@ -59,14 +76,14 @@ to see whether newer versions are available.
 <li>Allow C++ exception conversion on all platforms
 using a wrapper function.</li>
 <li>Automatically catch C++ exceptions and rethrow Lua error
-(ELF/DWARF2 only).</li>
+(DWARF2 only).</li>
 <li>Check for the correct x87 FPU precision at strategic points.</li>
 <li>Always use wrappers for libm functions.</li>
 <li>Resurrect metamethod name strings before copying them.</li>
 <li>Mark current trace, even if compiler is idle.</li>
 <li>Ensure FILE metatable is created only once.</li>
 <li>Fix type comparisons when different integer types are involved.</li>
-<li>Fix getmetatable() recording.</li>
+<li>Fix <tt>getmetatable()</tt> recording.</li>
 <li>Fix TDUP with dead keys in template table.</li>
 <li><tt>jit.flush(tr)</tt> returns status.
 Prevent manual flush of a trace that's still linked.</li>
@@ -234,7 +251,7 @@ on a separate line.</li>
 
 <li>Added SSE, SSE2, SSE3 and SSSE3 support to DynASM.</li>
 <li>Miscellaneous doc changes. Added a section about
-<a href="luajit_install.html#embedding">embedding LuaJIT</a>.</li>
+<a href="install.html#embedding">embedding LuaJIT</a>.</li>
 </ul>
 <p>
 This release is in sync with Coco 1.1.0 (see the

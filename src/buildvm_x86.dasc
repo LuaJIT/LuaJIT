@@ -30,6 +30,9 @@
 |.define RD,		RC
 |.define RDL,		RCL
 |
+|.define FCARG1,	ecx		// Fastcall arguments.
+|.define FCARG2,	edx
+|
 |// Type definitions. Some of these are only used for documentation.
 |.type L,		lua_State
 |.type GL,		global_State
@@ -1066,7 +1069,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov RB, LJ_TNUMX
   |7:
   |  not RB
-  |  mov TAB:RB, [DISPATCH+RB*4+DISPATCH_GL(basemt)]
+  |  mov TAB:RB, [DISPATCH+RB*4+DISPATCH_GL(gcroot[GCROOT_BASEMT])]
   |  jmp <2
   |
   |.ffunc_2 setmetatable
@@ -1126,17 +1129,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp ->fff_res1
   |3:  // Handle numbers inline, unless a number base metatable is present.
   |  cmp dword [RA+4], LJ_TISNUM;  ja ->fff_fallback
-  |  cmp dword [DISPATCH+DISPATCH_GL(basemt)+4*(~LJ_TNUMX)], 0
+  |  cmp dword [DISPATCH+DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM])], 0
   |  jne ->fff_fallback
   |  ffgccheck				// Caveat: uses label 1.
   |  mov L:RB, SAVE_L
-  |  mov ARG1, L:RB
-  |  mov ARG2, RA
   |  mov L:RB->base, RA			// Add frame since C call can throw.
   |  mov [RA-4], PC
   |  mov SAVE_PC, PC			// Redundant (but a defined value).
   |  mov ARG3, BASE			// Save BASE.
-  |  call extern lj_str_fromnum		// (lua_State *L, lua_Number *np)
+  |  mov FCARG2, RA			// Caveat: FCARG2 == BASE
+  |  mov L:FCARG1, L:RB			// Caveat: FCARG1 == RA
+  |  call extern lj_str_fromnum@8	// (lua_State *L, lua_Number *np)
   |  // GCstr returned in eax (RC).
   |  mov RA, L:RB->base
   |  mov BASE, ARG3
@@ -1762,11 +1765,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc_1 table_getn
   |  cmp dword [RA+4], LJ_TTAB;  jne ->fff_fallback
-  |  mov TAB:RB, [RA]
-  |  mov ARG1, TAB:RB
-  |  mov RB, RA				// Save RA and BASE.
-  |  mov ARG2, BASE
-  |  call extern lj_tab_len		// (GCtab *t)
+  |  mov ARG2, BASE			// Save RA and BASE.
+  |  mov RB, RA
+  |  mov TAB:FCARG1, [RA]		// Caveat: FCARG1 == RA
+  |  call extern lj_tab_len@4		// LJ_FASTCALL (GCtab *t)
   |  // Length of table returned in eax (RC).
   |  mov ARG1, RC
   |  mov RA, RB				// Restore RA and BASE.
@@ -2512,10 +2514,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  ins_next
     |2:
     |  checktab RD, ->vmeta_len
-    |  mov TAB:RD, [BASE+RD*8]
-    |  mov ARG1, TAB:RD
+    |  mov TAB:FCARG1, [BASE+RD*8]
     |  mov RB, BASE			// Save BASE.
-    |  call extern lj_tab_len		// (GCtab *t)
+    |  call extern lj_tab_len@4		// (GCtab *t)
     |  // Length of table returned in eax (RC).
     |  mov ARG1, RC
     |  mov BASE, RB			// Restore BASE.
@@ -2665,66 +2666,63 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  ins_next
     break;
   case BC_USETV:
+#define TV2MARKOFS \
+ ((int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv))
     |  ins_AD	// RA = upvalue #, RD = src
-    |  // Really ugly code due to the lack of a 4th free register.
     |  mov LFUNC:RB, [BASE-8]
     |  mov UPVAL:RB, [LFUNC:RB+RA*4+offsetof(GCfuncL, uvptr)]
-    |  test byte UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
-    |  jnz >4
-    |1:
-    |  mov RA, [BASE+RD*8]
-    |2:
+    |  cmp byte UPVAL:RB->closed, 0
     |  mov RB, UPVAL:RB->v
+    |  mov RA, [BASE+RD*8]
     |  mov RD, [BASE+RD*8+4]
     |  mov [RB], RA
     |  mov [RB+4], RD
-    |3:
+    |  jz >1
+    |  // Check barrier for closed upvalue.
+    |  test byte [RB+TV2MARKOFS], LJ_GC_BLACK		// isblack(uv)
+    |  jnz >2
+    |1:
     |  ins_next
     |
-    |4:  // Upvalue is black. Check if new value is collectable and white.
-    |  mov RA, [BASE+RD*8+4]
-    |  sub RA, LJ_TISGCV
-    |  cmp RA, LJ_TISNUM - LJ_TISGCV			// tvisgcv(v)
+    |2:  // Upvalue is black. Check if new value is collectable and white.
+    |  sub RD, LJ_TISGCV
+    |  cmp RD, LJ_TISNUM - LJ_TISGCV			// tvisgcv(v)
     |  jbe <1
-    |  mov GCOBJ:RA, [BASE+RD*8]
     |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
-    |  jz <2
-    |  // Crossed a write barrier. So move the barrier forward.
-    |  mov ARG2, UPVAL:RB
-    |  mov ARG3, GCOBJ:RA
-    |  mov RB, UPVAL:RB->v
-    |  mov RD, [BASE+RD*8+4]
-    |  mov [RB], GCOBJ:RA
-    |  mov [RB+4], RD
-    |->BC_USETV_Z:
-    |  mov L:RB, SAVE_L
-    |  lea GL:RA, [DISPATCH+GG_DISP2G]
-    |  mov L:RB->base, BASE
-    |  mov ARG1, GL:RA
-    |  call extern lj_gc_barrieruv  // (global_State *g, GCobj *o, GCobj *v)
-    |  mov BASE, L:RB->base
-    |  jmp <3
+    |  jz <1
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  xchg FCARG2, RB			// Save BASE (FCARG2 == BASE).
+    |  lea GL:FCARG1, [DISPATCH+GG_DISP2G]
+    |  call extern lj_gc_barrieruv@8	// (global_State *g, TValue *tv)
+    |  mov BASE, RB			// Restore BASE.
+    |  jmp <1
     break;
+#undef TV2MARKOFS
   case BC_USETS:
     |  ins_AND	// RA = upvalue #, RD = str const (~)
     |  mov LFUNC:RB, [BASE-8]
-    |  mov GCOBJ:RD, [KBASE+RD*4]
     |  mov UPVAL:RB, [LFUNC:RB+RA*4+offsetof(GCfuncL, uvptr)]
-    |  mov RA, UPVAL:RB->v
-    |  mov dword [RA+4], LJ_TSTR
-    |  mov [RA], GCOBJ:RD
+    |  mov GCOBJ:RA, [KBASE+RD*4]
+    |  mov RD, UPVAL:RB->v
+    |  mov [RD], GCOBJ:RA
+    |  mov dword [RD+4], LJ_TSTR
     |  test byte UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
     |  jnz >2
     |1:
     |  ins_next
     |
-    |2:  // Upvalue is black. Check if string is white.
-    |  test byte GCOBJ:RD->gch.marked, LJ_GC_WHITES	// iswhite(str)
+    |2:  // Check if string is white and ensure upvalue is closed.
+    |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(str)
     |  jz <1
-    |  // Crossed a write barrier. So move the barrier forward.
-    |  mov ARG3, GCOBJ:RD
-    |  mov ARG2, UPVAL:RB
-    |  jmp ->BC_USETV_Z
+    |  cmp byte UPVAL:RB->closed, 0
+    |  jz <1
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  mov RB, BASE			// Save BASE (FCARG2 == BASE).
+    |  mov FCARG2, RD
+    |  lea GL:FCARG1, [DISPATCH+GG_DISP2G]
+    |  call extern lj_gc_barrieruv@8	// (global_State *g, TValue *tv)
+    |  mov BASE, RB			// Restore BASE.
+    |  jmp <1
     break;
   case BC_USETN:
     |  ins_AD	// RA = upvalue #, RD = num const
@@ -2808,23 +2806,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  mov dword [BASE+RA*8+4], LJ_TTAB
     |  ins_next
     |2:
-    |  call extern lj_gc_step_fixtop	// (lua_State *L)
-    |  mov ARG1, L:RB			// Args owned by callee. Set it again.
+    |  mov L:FCARG1, L:RB
+    |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
     |  jmp <1
     break;
   case BC_TDUP:
     |  ins_AND	// RA = dst, RD = table const (~) (holding template table)
-    |  mov TAB:RD, [KBASE+RD*4]
     |  mov L:RB, SAVE_L
-    |  mov ARG2, TAB:RD
-    |  mov ARG1, L:RB
     |  mov RA, [DISPATCH+DISPATCH_GL(gc.total)]
     |  mov SAVE_PC, PC
     |  cmp RA, [DISPATCH+DISPATCH_GL(gc.threshold)]
     |  mov L:RB->base, BASE
     |  jae >3
     |2:
-    |  call extern lj_tab_dup		// (lua_State *L, Table *kt)
+    |  mov TAB:FCARG2, [KBASE+RD*4]	// Caveat: FCARG2 == BASE
+    |  mov L:FCARG1, L:RB		// Caveat: FCARG1 == RA
+    |  call extern lj_tab_dup@8		// (lua_State *L, Table *kt)
     |  // Table * returned in eax (RC).
     |  mov BASE, L:RB->base
     |  movzx RA, PC_RA
@@ -2832,8 +2829,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  mov dword [BASE+RA*8+4], LJ_TTAB
     |  ins_next
     |3:
-    |  call extern lj_gc_step_fixtop	// (lua_State *L)
-    |  mov ARG1, L:RB			// Args owned by callee. Set it again.
+    |  mov L:FCARG1, L:RB
+    |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
+    |  movzx RD, PC_RD			// Need to reload RD.
+    |  not RD
     |  jmp <2
     break;
 
