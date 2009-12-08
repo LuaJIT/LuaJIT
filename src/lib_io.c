@@ -523,8 +523,11 @@ static void io_fenv_new(lua_State *L, int narr, lua_CFunction cls)
 
 LUALIB_API int luaopen_io(lua_State *L)
 {
-  LJ_LIB_REG_(L, NULL, io_method);
-  lua_setfield(L, LUA_REGISTRYINDEX, LUA_FILEHANDLE);
+  lua_getfield(L, LUA_REGISTRYINDEX, LUA_FILEHANDLE);
+  if (tvisnil(L->top-1)) {
+    LJ_LIB_REG_(L, NULL, io_method);
+    lua_setfield(L, LUA_REGISTRYINDEX, LUA_FILEHANDLE);
+  }
   io_fenv_new(L, 0, lj_cf_io_pipe_close);  /* top-3 */
   io_fenv_new(L, 2, lj_cf_io_file_close);  /* top-2 */
   LJ_LIB_REG(L, io);
@@ -532,7 +535,7 @@ LUALIB_API int luaopen_io(lua_State *L)
   io_std_new(L, stdin, IO_INPUT, "stdin");
   io_std_new(L, stdout, IO_OUTPUT, "stdout");
   io_std_new(L, stderr, 0, "stderr");
-  lua_pop(L, 1);
+  L->top--;
   return 1;
 }
 

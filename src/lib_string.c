@@ -16,6 +16,7 @@
 #include "lualib.h"
 
 #include "lj_obj.h"
+#include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_tab.h"
@@ -774,6 +775,7 @@ LJLIB_CF(string_format)
 LUALIB_API int luaopen_string(lua_State *L)
 {
   GCtab *mt;
+  GCstr *mmstr;
   LJ_LIB_REG(L, string);
 #if defined(LUA_COMPAT_GFIND)
   lua_getfield(L, -1, "gmatch");
@@ -782,8 +784,9 @@ LUALIB_API int luaopen_string(lua_State *L)
   mt = lj_tab_new(L, 0, 1);
   /* NOBARRIER: G(L)->mmname[] is a GC root. */
   setgcref(G(L)->basemt[~LJ_TSTR], obj2gco(mt));
-  settabV(L, lj_tab_setstr(L, mt, strref(G(L)->mmname[MM_index])),
-	      tabV(L->top-1));
+  mmstr = strref(G(L)->mmname[MM_index]);
+  if (isdead(G(L), obj2gco(mmstr))) flipwhite(obj2gco(mmstr));
+  settabV(L, lj_tab_setstr(L, mt, mmstr), tabV(L->top-1));
   mt->nomm = cast_byte(~(1u<<MM_index));
   return 1;
 }

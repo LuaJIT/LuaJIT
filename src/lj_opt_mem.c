@@ -519,8 +519,8 @@ int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref)
     } else if (irt_isnil(store->t)) {  /* Must check any nil store. */
       IRRef skref = IR(store->op1)->op2;
       IRRef xkref = IR(xref)->op2;
-      /* Same key type MAY alias. */
-      if (irt_sametype(IR(skref)->t, IR(xkref)->t)) {
+      /* Same key type MAY alias. Need ALOAD check due to multiple int types. */
+      if (loadop == IR_ALOAD || irt_sametype(IR(skref)->t, IR(xkref)->t)) {
 	if (skref == xkref || !irref_isk(skref) || !irref_isk(xkref))
 	  return 0;  /* A nil store with same const key or var key MAY alias. */
 	/* Different const keys CANNOT alias. */

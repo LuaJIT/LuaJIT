@@ -287,6 +287,35 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  lea RA, [BASE+RA*8]
   |  jmp <9
   |
+  |->gate_cwrap:			// Call gate for wrapped C functions.
+  |  // RA = new base, RB = CFUNC, RC = nargs+1, (BASE = old base), PC = return
+  |  mov [RA-4], PC
+  |  mov KBASE, CFUNC:RB->f
+  |  mov L:RB, SAVE_L
+  |  lea RC, [RA+NARGS:RC*8-8]
+  |  mov L:RB->base, RA
+  |  lea RA, [RC+8*LUA_MINSTACK]
+  |  mov ARG2, KBASE
+  |  mov ARG1, L:RB
+  |  mov L:RB->top, RC
+  |  cmp RA, L:RB->maxstack
+  |  ja ->gate_c_growstack		// Need to grow stack.
+  |  set_vmstate C
+  |  // (lua_State *L, lua_CFunction f)
+  |  call aword [DISPATCH+DISPATCH_GL(wrapf)]
+  |  set_vmstate INTERP
+  |  // nresults returned in eax (RD).
+  |  mov BASE, L:RB->base
+  |  lea RA, [BASE+RD*8]
+  |  neg RA
+  |  add RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
+  |->vm_returnc:
+  |  add RD, 1				// RD = nresults+1
+  |  mov NRESULTS, RD
+  |  test PC, FRAME_TYPE
+  |  jz ->BC_RET_Z			// Handle regular return to Lua.
+  |  jmp ->vm_return
+  |
   |->gate_c:				// Call gate for C functions.
   |  // RA = new base, RB = CFUNC, RC = nargs+1, (BASE = old base), PC = return
   |  mov [RA-4], PC
@@ -312,6 +341,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov NRESULTS, RD
   |  test PC, FRAME_TYPE
   |  jz ->BC_RET_Z			// Handle regular return to Lua.
+  |  // Fallthrough.
   |
   |//-- Return handling (non-inline) ---------------------------------------
   |
@@ -1455,7 +1485,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov ARG5, RA
   |  fstp FPARG1
   |  mov RB, BASE
-  |  call extern func
+  |  call extern lj_wrapper_ .. func
   |  mov RA, ARG5
   |  mov BASE, RB
   |  jmp ->fff_resn
@@ -3584,6 +3614,85 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
 	"\t.align 4\n"
 	".LEFDE0:\n\n", (int)ctx->codesz);
+    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
+    fprintf(ctx->fp,
+	".Lframe1:\n"
+	"\t.long .LECIE1-.LSCIE1\n"
+	".LSCIE1:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zPR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -4\n"
+	"\t.byte 0x8\n"
+	"\t.uleb128 6\n"			/* augmentation length */
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.long lj_err_unwind_dwarf-.\n"
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 0x4\n\t.uleb128 0x4\n"
+	"\t.byte 0x88\n\t.uleb128 0x1\n"
+	"\t.align 4\n"
+	".LECIE1:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .LASFDE1-.Lframe1\n"
+	"\t.long .Lbegin-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 0x30\n"	/* def_cfa_offset */
+	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
+	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
+	"\t.byte 0x86\n\t.uleb128 0x4\n"	/* offset esi */
+	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
+	"\t.align 4\n"
+	".LEFDE1:\n\n", (int)ctx->codesz);
+    break;
+  case BUILD_machasm:
+    /* NYI: OSX ignores it. Something must be missing. */
+    fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
+    fprintf(ctx->fp,
+	"EH_frame1:\n"
+	"\t.set L$set$0,LECIE1-LSCIE1\n"
+	"\t.long L$set$0\n"
+	"LSCIE1:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.ascii \"zPR\"\n"
+	"\t.byte 0x1\n"
+	"\t.byte 128-4\n"
+	"\t.byte 0x8\n"
+	"\t.byte 6\n"				/* augmentation length */
+	"\t.byte 0x9b\n"			/* indirect|pcrel|sdata4 */
+	"\t.long L_lj_err_unwind_dwarf$non_lazy_ptr-.\n"
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.byte 0x5\n\t.byte 0x4\n"  /* esp=5 on 32 bit MACH-O. */
+	"\t.byte 0x88\n\t.byte 0x1\n"
+	"\t.align 2\n"
+	"LECIE1:\n\n");
+    fprintf(ctx->fp,
+	"_lj_vm_asm_begin.eh:\n"
+	"LSFDE1:\n"
+	"\t.set L$set$1,LEFDE1-LASFDE1\n"
+	"\t.long L$set$1\n"
+	"LASFDE1:\n"
+	"\t.long LASFDE1-EH_frame1\n"
+	"\t.long _lj_vm_asm_begin-.\n"
+	"\t.long %d\n"
+	"\t.byte 0\n"				/* augmentation length */
+	"\t.byte 0xe\n\t.byte 0x30\n"		/* def_cfa_offset */
+	"\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
+	"\t.byte 0x87\n\t.byte 0x3\n"		/* offset edi */
+	"\t.byte 0x86\n\t.byte 0x4\n"		/* offset esi */
+	"\t.byte 0x83\n\t.byte 0x5\n"		/* offset ebx */
+	"\t.align 2\n"
+	"LEFDE1:\n\n", (int)ctx->codesz);
+      fprintf(ctx->fp,
+	"\t.non_lazy_symbol_pointer\n"
+	"L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
+	".indirect_symbol _lj_err_unwind_dwarf\n"
+	".long 0\n");
     break;
   default:  /* Difficult for other modes. */
     break;

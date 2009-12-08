@@ -34,13 +34,22 @@
   ".\\?.dll;" LUA_CDIR"?.dll;" LUA_CDIR"loadall.dll"
 #else
 #define LUA_ROOT	"/usr/local/"
-#define LUA_JDIR	LUA_ROOT "share/luajit-2.0.0-beta1/"
 #define LUA_LDIR	LUA_ROOT "share/lua/5.1/"
 #define LUA_CDIR	LUA_ROOT "lib/lua/5.1/"
+#ifdef LUA_XROOT
+#define LUA_JDIR	LUA_XROOT "share/luajit-2.0.0-beta2/"
+#define LUA_XPATH \
+  ";" LUA_XROOT "share/lua/5.1/?.lua;" LUA_XROOT "share/lua/5.1/?/init.lua"
+#define LUA_XCPATH	LUA_XROOT "lib/lua/5.1/?.lua;"
+#else
+#define LUA_JDIR	LUA_ROOT "share/luajit-2.0.0-beta2/"
+#define LUA_XPATH
+#define LUA_XCPATH
+#endif
 #define LUA_PATH_DEFAULT \
-  "./?.lua;" LUA_JDIR"?.lua;" LUA_LDIR"?.lua;" LUA_LDIR"?/init.lua;"
+  "./?.lua;" LUA_JDIR"?.lua;" LUA_LDIR"?.lua;" LUA_LDIR"?/init.lua" LUA_XPATH
 #define LUA_CPATH_DEFAULT \
-  "./?.so;" LUA_CDIR"?.so;" LUA_CDIR"loadall.so"
+  "./?.so;" LUA_CDIR"?.so;" LUA_XCPATH LUA_CDIR"loadall.so"
 #endif
 
 /* Environment variable names for path overrides and initialization code. */

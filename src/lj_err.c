@@ -676,6 +676,8 @@ LJ_NORET LJ_NOINLINE static void err_argmsg(lua_State *L, int narg,
 {
   const char *fname = "?";
   const char *ftype = getfuncname(L, L->base - 1, &fname);
+  if (narg < 0 && narg > LUA_REGISTRYINDEX)
+    narg = (L->top - L->base) + narg + 1;
   if (ftype && ftype[3] == 'h' && --narg == 0)  /* Check for "method". */
     msg = lj_str_pushf(L, err2msg(LJ_ERR_BADSELF), fname, msg);
   else
@@ -760,4 +762,48 @@ LUALIB_API int luaL_error(lua_State *L, const char *fmt, ...)
   lj_err_callermsg(L, msg);
   return 0;  /* unreachable */
 }
+
+/* -- C++ exception support ----------------------------------------------- */
+
+#if defined(__ELF__) || defined(__MACH__)
+typedef enum
+{
+  _URC_NO_REASON,
+  _URC_FOREIGN_EXCEPTION_CAUGHT,
+  _URC_FATAL_PHASE2_ERROR,
+  _URC_FATAL_PHASE1_ERROR,
+  _URC_NORMAL_STOP,
+  _URC_END_OF_STACK,
+  _URC_HANDLER_FOUND,
+  _URC_INSTALL_CONTEXT,
+  _URC_CONTINUE_UNWIND
+} _Unwind_Reason_Code;
+
+#define _UA_SEARCH_PHASE	1
+#define _UA_CLEANUP_PHASE	2
+#define _UA_HANDLER_FRAME	4
+#define _UA_FORCE_UNWIND	8
+#define _UA_END_OF_STACK	16
+
+extern void *_Unwind_GetCFA(void *ctx);
+extern void _Unwind_DeleteException(void *uex);
+
+/* DWARF2 personality handler referenced from .eh_frame. */
+LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions, uint64_t uexclass,
+				 void *uex, void *ctx)
+{
+  if (version != 1)
+    return _URC_FATAL_PHASE1_ERROR;
+  UNUSED(uexclass);
+  if ((actions & _UA_SEARCH_PHASE))
+    return _URC_HANDLER_FOUND;
+  if ((actions & _UA_HANDLER_FRAME)) {
+    void *cf = _Unwind_GetCFA(ctx);
+    lua_State *L = cframe_L(cf);
+    _Unwind_DeleteException(uex);
+    lj_err_msg(L, LJ_ERR_ERRCPP);
+  }
+  return _URC_CONTINUE_UNWIND;
+}
+#endif
 

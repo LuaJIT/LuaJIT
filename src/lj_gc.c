@@ -230,8 +230,7 @@ static void gc_traverse_trace(global_State *g, Trace *T)
 
 /* The current trace is a GC root while not anchored in the prototype (yet). */
 #define gc_mark_curtrace(g) \
-  { if (G2J(g)->state != LJ_TRACE_IDLE && G2J(g)->curtrace != 0) \
-    gc_traverse_trace(g, &G2J(g)->cur); }
+  { if (G2J(g)->curtrace != 0) gc_traverse_trace(g, &G2J(g)->cur); }
 #else
 #define gc_mark_curtrace(g)	UNUSED(g)
 #endif

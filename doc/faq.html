@@ -72,6 +72,7 @@ Search for: <a href="http://scholar.google.com/scholar?q=JIT+Compiler"><span cla
 Search for: <a href="http://scholar.google.com/scholar?q=Dynamic+Language+Optimizations"><span class="ext">&raquo;</span>&nbsp;Dynamic Language Optimizations</a><br>
 Search for: <a href="http://scholar.google.com/scholar?q=SSA+Form"><span class="ext">&raquo;</span>&nbsp;SSA Form</a><br>
 Search for: <a href="http://scholar.google.com/scholar?q=Linear+Scan+Register+Allocation"><span class="ext">&raquo;</span>&nbsp;Linear Scan Register Allocation</a><br>
+Here is a list of the <a href="http://article.gmane.org/gmane.comp.lang.lua.general/58908"><span class="ext">&raquo;</span>&nbsp;innovative features in LuaJIT</a>.<br>
 And, you know, reading the source is of course the only way to enlightenment. :-)
 </dd>
 </dl>
@@ -84,6 +85,28 @@ support the implicit <tt>arg</tt> parameter for old-style vararg
 functions from Lua 5.0.<br>Please convert your code to the
 <a href="http://www.lua.org/manual/5.1/manual.html#2.5.9"><span class="ext">&raquo;</span>&nbsp;Lua 5.1
 vararg syntax</a>.</dd>
+</dl>
+
+<dl>
+<dt>Q: Why do I get this error: "bad FPU precision"?<br>
+<dt>Q: I get weird behavior after initializing Direct3D.<br>
+<dt>Q: Some FPU operations crash after I load a Delphi DLL.<br>
+</dt>
+<dd>
+
+DirectX/Direct3D (up to version 9) sets the x87 FPU to single-precision
+mode by default. This violates the Windows ABI and interferes with the
+operation of many programs &mdash; LuaJIT is affected, too. Please make
+sure you always use the <tt>D3DCREATE_FPU_PRESERVE</tt> flag when
+initializing Direct3D.<br>
+
+Direct3D version 10 or higher do not show this behavior anymore.
+Consider testing your application with older versions, too.<br>
+
+Similarly, the Borland/Delphi runtime modifies the FPU control word and
+enables FP exceptions. Of course this violates the Windows ABI, too.
+Please check the Delphi docs for the Set8087CW method.
+
 </dl>
 
 <dl>

@@ -531,7 +531,7 @@ typedef struct global_State {
   uint8_t hookmask;	/* Hook mask. */
   uint8_t dispatchmode;	/* Dispatch mode. */
   uint8_t vmevmask;	/* VM event mask. */
-  uint8_t unused1;
+  uint8_t wrapmode;	/* Wrap mode. */
   GCRef mainthref;	/* Link to main thread. */
   TValue registrytv;	/* Anchor for registry. */
   TValue tmptv;		/* Temporary TValue. */
@@ -539,6 +539,7 @@ typedef struct global_State {
   int32_t hookcount;	/* Instruction hook countdown. */
   int32_t hookcstart;	/* Start count for instruction hook counter. */
   lua_Hook hookf;	/* Hook function. */
+  lua_CFunction wrapf;	/* Wrapper for C function calls. */
   lua_CFunction panic;	/* Called as a last resort for errors. */
   volatile int32_t vmstate;  /* VM state or current JIT code trace number. */
   GCRef jit_L;		/* Current JIT code lua_State or NULL. */

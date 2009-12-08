@@ -71,10 +71,7 @@ err:
     exit(1);
   }
   emit_asm_bytes(ctx, cp, n);
-  if (!strncmp(sym, LABEL_PREFIX, sizeof(LABEL_PREFIX)-1))
-    fprintf(ctx->fp, "\t%s _%s\n", opname, sym);
-  else
-    fprintf(ctx->fp, "\t%s _" LABEL_PREFIX "wrapper_%s\n", opname, sym);
+  fprintf(ctx->fp, "\t%s _%s\n", opname, sym);
 }
 
 /* Emit an assembler label. */
@@ -135,7 +132,7 @@ void emit_asm(BuildCtx *ctx)
   fprintf(ctx->fp, "\t.text\n");
   emit_asm_align(ctx, 4);
 
-  emit_asm_label(ctx, LABEL_ASM_BEGIN, 0, 1);
+  emit_asm_label(ctx, LABEL_ASM_BEGIN, 0, 0);
   if (ctx->mode == BUILD_elfasm)
     fprintf(ctx->fp, ".Lbegin:\n");
 

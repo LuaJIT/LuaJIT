@@ -264,7 +264,8 @@ void emit_peobj(BuildCtx *ctx)
       emit_peobj_sym(ctx, name, 0,
 		     PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
     }
-    emit_peobj_sym_func(ctx, PEOBJ_SYM_PREFIX LABEL_ASM_BEGIN, 0);
+    emit_peobj_sym(ctx, PEOBJ_SYM_PREFIX LABEL_ASM_BEGIN, 0,
+		   PEOBJ_SECT_TEXT, PEOBJ_TYPE_NULL, PEOBJ_SCL_EXTERN);
     for (i = nzsym; i < ctx->nsym; i++) {
       int pi = ctx->perm[i];
       if (pi >= ctx->npc) {

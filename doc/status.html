@@ -90,7 +90,22 @@ known incompatibilities with standard Lua:
 <ul>
 <li>
 The Lua <b>debug API</b> is missing a couple of features (call/return
-hooks) and shows slightly different behavior (no per-coroutine hooks).
+hooks) and shows slightly different behavior (no per-coroutine hooks,
+no tail call counting).
+</li>
+<li>
+<b>Bytecode</b> currently cannot be loaded or dumped. Note that
+the bytecode format differs from Lua&nbsp;5.1 &mdash; loading foreign
+bytecode is not supported at all.
+</li>
+<li>
+Some of the <b>configuration options</b> of Lua&nbsp;5.1 are not supported:
+<ul>
+<li>The <b>number type</b> cannot be changed (it's always a <tt>double</tt>).</li>
+<li>The stand-alone executable cannot be linked with <b>readline</b>
+to enable line editing. It's planned to add support for loading it
+on-demand.</li>
+</ul>
 </li>
 <li>
 Most other issues you're likely to find (e.g. with the existing test
@@ -105,7 +120,7 @@ demonstrable need is shown.
 <li>
 The <b>JIT compiler</b> is not complete (yet) and falls back to the
 interpreter in some cases. All of this works transparently, so unless
-you use -jv, you'll probably never notice (the interpreter is quite
+you use <tt>-jv</tt>, you'll probably never notice (the interpreter is quite
 fast, too). Here are the known issues:
 <ul>
 <li>
@@ -119,7 +134,7 @@ effort.
 </li>
 <li>
 <b>Recursion</b> is not traced yet. Often no trace will be generated at
-all or some unroll limit will catch it and aborts the trace.
+all or some unroll limit will catch it and abort the trace.
 </li>
 <li>
 The trace compiler currently does not back off specialization for

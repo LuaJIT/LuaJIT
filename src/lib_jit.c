@@ -73,8 +73,9 @@ LJLIB_CF(jit_flush)
 #if LJ_HASJIT
   if (L->base < L->top && (tvisnum(L->base) || tvisstr(L->base))) {
     int traceno = lj_lib_checkint(L, 1);
-    luaJIT_setmode(L, traceno, LUAJIT_MODE_FLUSH|LUAJIT_MODE_TRACE);
-    return 0;
+    setboolV(L->top-1,
+	     luaJIT_setmode(L, traceno, LUAJIT_MODE_FLUSH|LUAJIT_MODE_TRACE));
+    return 1;
   }
 #endif
   return setjitmode(L, LUAJIT_MODE_FLUSH);

@@ -138,7 +138,7 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
   fn->c.nupvalues = cast_byte(nelems);
   /* NOBARRIER: The GCfunc is new (marked white). */
   setgcref(fn->c.env, obj2gco(env));
-  fn->c.gate = lj_gate_c;
+  fn->c.gate = G(L)->wrapmode ? lj_gate_cwrap : lj_gate_c;
   return fn;
 }
 

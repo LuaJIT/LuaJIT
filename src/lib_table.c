@@ -74,21 +74,21 @@ LJLIB_CF(table_maxn)
   TValue *array = tvref(t->array);
   Node *node;
   lua_Number m = 0;
-  uint32_t i;
-  for (i = 0; i < t->asize; i++)
+  ptrdiff_t i;
+  for (i = (ptrdiff_t)t->asize - 1; i >= 0; i--)
     if (!tvisnil(&array[i])) {
-      m = (lua_Number)i;
+      m = (lua_Number)(int32_t)i;
       break;
     }
   node = noderef(t->node);
-  for (i = 0; i <= t->hmask; i++)
+  for (i = (ptrdiff_t)t->hmask; i >= 0; i--)
     if (tvisnum(&node[i].key) && numV(&node[i].key) > m)
       m = numV(&node[i].key);
   setnumV(L->top-1, m);
   return 1;
 }
 
-LJLIB_CF(table_insert)
+LJLIB_CF(table_insert)		LJLIB_REC(.)
 {
   GCtab *t = lj_lib_checktab(L, 1);
   int32_t n, i = (int32_t)lj_tab_len(t) + 1;
@@ -111,20 +111,20 @@ LJLIB_CF(table_insert)
   }
   {
     TValue *dst = lj_tab_setint(L, t, i);
-    copyTV(L, dst, L->top-1);
+    copyTV(L, dst, L->top-1);  /* Set new value. */
     lj_gc_barriert(L, t, dst);
   }
   return 0;
 }
 
-LJLIB_CF(table_remove)
+LJLIB_CF(table_remove)		LJLIB_REC(.)
 {
   GCtab *t = lj_lib_checktab(L, 1);
   int32_t e = (int32_t)lj_tab_len(t);
   int32_t pos = lj_lib_optint(L, 2, e);
-  if (!(1 <= pos && pos <= e))  /* position is outside bounds? */
-    return 0;  /* nothing to remove */
-  lua_rawgeti(L, 1, pos);
+  if (!(1 <= pos && pos <= e))  /* Nothing to remove? */
+    return 0;
+  lua_rawgeti(L, 1, pos);  /* Get previous value. */
   /* NOBARRIER: This just moves existing elements around. */
   for (; pos < e; pos++) {
     cTValue *src = lj_tab_getint(t, pos+1);
@@ -135,8 +135,8 @@ LJLIB_CF(table_remove)
       setnilV(dst);
     }
   }
-  setnilV(lj_tab_setint(L, t, e));
-  return 1;
+  setnilV(lj_tab_setint(L, t, e));  /* Remove (last) value. */
+  return 1;  /* Return previous value. */
 }
 
 LJLIB_CF(table_concat)

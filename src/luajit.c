@@ -55,16 +55,16 @@ static void laction(int i)
 static void print_usage(void)
 {
   fprintf(stderr,
-  "usage: %s [options] [script [args]].\n"
+  "usage: %s [options]... [script [args]...].\n"
   "Available options are:\n"
-  "  -e stat  execute string " LUA_QL("stat") "\n"
-  "  -l name  require library " LUA_QL("name") "\n"
-  "  -j cmd   perform LuaJIT control command\n"
-  "  -O[lvl]  set LuaJIT optimization level\n"
-  "  -i       enter interactive mode after executing " LUA_QL("script") "\n"
-  "  -v       show version information\n"
-  "  --       stop handling options\n"
-  "  -        execute stdin and stop handling options\n"
+  "  -e chunk  Execute string " LUA_QL("chunk") ".\n"
+  "  -l name   Require library " LUA_QL("name") ".\n"
+  "  -j cmd    Perform LuaJIT control command.\n"
+  "  -O[opt]   Control LuaJIT optimizations.\n"
+  "  -i        Enter interactive mode after executing " LUA_QL("script") ".\n"
+  "  -v        Show version information.\n"
+  "  --        Stop handling options.\n"
+  "  -         Execute stdin and stop handling options.\n"
   ,
   progname);
   fflush(stderr);
@@ -143,7 +143,7 @@ static void print_jit_status(lua_State *L)
   fputs(lua_toboolean(L, n) ? "JIT: ON" : "JIT: OFF", stderr);
   for (n++; (s = lua_tostring(L, n)); n++)
     fprintf(stderr, " %s", s);
-  fputs("\n", stdout);
+  fputs("\n", stderr);
 }
 
 static int getargs(lua_State *L, char **argv, int n)

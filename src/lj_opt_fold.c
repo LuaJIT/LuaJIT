@@ -138,7 +138,7 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
 /* Macros for the fold specs, so buildvm can recognize them. */
 #define LJFOLD(x)
 #define LJFOLDX(x)
-#define LJFOLDF(name)	static TRef LJ_FASTCALL name(jit_State *J)
+#define LJFOLDF(name)	static TRef LJ_FASTCALL fold_##name(jit_State *J)
 /* Note: They must be at the start of a line or buildvm ignores them! */
 
 /* Barrier to prevent using operands across PHIs. */
@@ -979,7 +979,7 @@ LJFOLDF(comm_equal)
   /* For non-numbers only: x == x ==> drop; x ~= x ==> fail */
   if (fins->op1 == fins->op2 && !irt_isnum(fins->t))
     return CONDFOLD(fins->o == IR_EQ);
-  return comm_swap(J);
+  return fold_comm_swap(J);
 }
 
 LJFOLD(LT any any)
@@ -1013,7 +1013,7 @@ LJFOLDF(comm_dup)
 {
   if (fins->op1 == fins->op2)  /* x o x ==> x */
     return LEFTFOLD;
-  return comm_swap(J);
+  return fold_comm_swap(J);
 }
 
 LJFOLD(BXOR any any)
@@ -1021,7 +1021,7 @@ LJFOLDF(comm_bxor)
 {
   if (fins->op1 == fins->op2)  /* i xor i ==> 0 */
     return INTFOLD(0);
-  return comm_swap(J);
+  return fold_comm_swap(J);
 }
 
 /* -- Simplification of compound expressions ------------------------------ */

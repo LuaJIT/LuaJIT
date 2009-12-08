@@ -153,8 +153,7 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
   case LUAJIT_MODE_TRACE:
     if (!(mode & LUAJIT_MODE_FLUSH))
       return 0;  /* Failed. */
-    lj_trace_flush(G2J(g), idx);
-    break;
+    return lj_trace_flush(G2J(g), idx);
 #else
   case LUAJIT_MODE_ENGINE:
   case LUAJIT_MODE_FUNC:
@@ -165,6 +164,20 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
       return 0;  /* Failed. */
     break;
 #endif
+  case LUAJIT_MODE_WRAPCFUNC:
+    if ((mode & LUAJIT_MODE_ON)) {
+      if (idx != 0) {
+	cTValue *tv = idx > 0 ? L->base + (idx-1) : L->top + idx;
+	if (tvislightud(tv) && lightudV(tv) != NULL)
+	  g->wrapf = (lua_CFunction)lightudV(tv);
+	else
+	  return 0;  /* Failed. */
+      }
+      g->wrapmode = 1;
+    } else {
+      g->wrapmode = 0;
+    }
+    break;
   default:
     return 0;  /* Failed. */
   }

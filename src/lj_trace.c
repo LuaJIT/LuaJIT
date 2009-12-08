@@ -191,47 +191,58 @@ static void trace_unpatch(jit_State *J, Trace *T)
   }
 }
 
-/* Flush a root trace and any attached side traces. */
-void lj_trace_flush(jit_State *J, TraceNo traceno)
+/* Free a root trace and any attached side traces. */
+static void trace_freeroot(jit_State *J, Trace *T, TraceNo traceno)
 {
-  Trace *T = NULL;
-  GCproto *pt;
-  if (traceno > 0 && traceno <= J->sizetrace)
-    T = J->trace[traceno];
-  if (T == NULL)
-    return;
-  pt = &gcref(T->startpt)->pt;
-  if (T->root == 0 && pt != NULL) {
-    TraceNo side;
-    /* First unpatch any modified bytecode. */
-    trace_unpatch(J, T);
-    /* Unlink root trace from chain anchored in prototype. */
-    if (pt->trace == traceno) {  /* Trace is first in chain. Easy. */
-      pt->trace = T->nextroot;
-    } else {  /* Otherwise search in chain of root traces. */
-      Trace *T2 = J->trace[pt->trace];
-      while (T2->nextroot != traceno) {
-	lua_assert(T2->nextroot != 0);
-	T2 = J->trace[T2->nextroot];
-      }
-      T2->nextroot = T->nextroot;  /* Unlink from chain. */
+  GCproto *pt = &gcref(T->startpt)->pt;
+  TraceNo side;
+  lua_assert(T->root == 0 && pt != NULL);
+  /* First unpatch any modified bytecode. */
+  trace_unpatch(J, T);
+  /* Unlink root trace from chain anchored in prototype. */
+  if (pt->trace == traceno) {  /* Trace is first in chain. Easy. */
+    pt->trace = T->nextroot;
+  } else {  /* Otherwise search in chain of root traces. */
+    Trace *T2 = J->trace[pt->trace];
+    while (T2->nextroot != traceno) {
+      lua_assert(T2->nextroot != 0);
+      T2 = J->trace[T2->nextroot];
     }
-    /* Free all side traces. */
-    for (side = T->nextside; side != 0; ) {
-      TraceNo next = J->trace[side]->nextside;
-      trace_free(J, side);
-      side = next;
+    T2->nextroot = T->nextroot;  /* Unlink from chain. */
+  }
+  /* Free all side traces. */
+  for (side = T->nextside; side != 0; ) {
+    TraceNo next = J->trace[side]->nextside;
+    trace_free(J, side);
+    side = next;
+  }
+  /* Now free the trace itself. */
+  trace_free(J, traceno);
+}
+
+/* Flush a root trace + side traces, if there are no links to it. */
+int lj_trace_flush(jit_State *J, TraceNo traceno)
+{
+  if (traceno > 0 && traceno < J->sizetrace) {
+    Trace *T = J->trace[traceno];
+    if (T && T->root == 0) {
+      ptrdiff_t i;
+      for (i = (ptrdiff_t)J->sizetrace-1; i > 0; i--)
+	if (i != (ptrdiff_t)traceno && J->trace[i] &&
+	    J->trace[i]->root != traceno && J->trace[i]->link == traceno)
+	  return 0;  /* Failed: existing link to trace. */
+      trace_freeroot(J, T, traceno);
+      return 1;  /* Ok. */
     }
-    /* Now free the trace itself. */
-    trace_free(J, traceno);
-  }  /* Flush for non-root traces is currently ignored. */
+  }
+  return 0;  /* Failed. */
 }
 
 /* Flush all traces associated with a prototype. */
 void lj_trace_flushproto(global_State *g, GCproto *pt)
 {
   while (pt->trace != 0)
-    lj_trace_flush(G2J(g), pt->trace);
+    trace_freeroot(G2J(g), G2J(g)->trace[pt->trace], pt->trace);
 }
 
 /* Flush all traces. */
@@ -241,8 +252,11 @@ int lj_trace_flushall(lua_State *L)
   ptrdiff_t i;
   if ((J2G(J)->hookmask & HOOK_GC))
     return 1;
-  for (i = (ptrdiff_t)J->sizetrace-1; i > 0; i--)
-    lj_trace_flush(J, (TraceNo)i);
+  for (i = (ptrdiff_t)J->sizetrace-1; i > 0; i--) {
+    Trace *T = J->trace[i];
+    if (T && T->root == 0)
+      trace_freeroot(J, T, (TraceNo)i);
+  }
 #ifdef LUA_USE_ASSERT
   for (i = 0; i < (ptrdiff_t)J->sizetrace; i++)
     lua_assert(J->trace[i] == NULL);

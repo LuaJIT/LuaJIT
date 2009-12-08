@@ -188,7 +188,12 @@ void emit_fold(BuildCtx *ctx)
       } else if ((p[0] == 'F' || p[0] == 'X') && p[1] == '(' && q) {
 	p += 2;
 	*q = '\0';
-	fprintf(ctx->fp, funcidx ? ",\n  %s" : "  %s", p);
+	if (funcidx)
+	  fprintf(ctx->fp, ",\n");
+	if (p[-2] == 'X')
+	  fprintf(ctx->fp, "  %s", p);
+	else
+	  fprintf(ctx->fp, "  fold_%s", p);
 	funcidx++;
       } else {
 	buf[strlen(buf)-1] = '\0';

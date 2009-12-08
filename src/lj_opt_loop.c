@@ -286,7 +286,7 @@ static void loop_unroll(jit_State *J)
 	if (!irt_sametype(t, irr->t)) {
 	  if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num case. */
 	    subst[ins] = tref_ref(emitir(IRTN(IR_TONUM), ref, 0));
-	  else
+	  else if (!(irt_isinteger(t) && irt_isinteger(irr->t)))
 	    lj_trace_err(J, LJ_TRERR_TYPEINS);
 	}
       }

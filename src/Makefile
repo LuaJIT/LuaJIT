@@ -8,10 +8,17 @@
 # Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
 ##############################################################################
 
+MAJVER=  2
+MINVER=  0
+RELVER=  0
+ABIVER=  5.1
+NODOTABIVER= 51
+
 ##############################################################################
 # Compiler options: change them as needed. This mainly affects the speed of
 # the JIT compiler itself, not the speed of the JIT compiled code.
 # Turn any of the optional settings on by removing the '#' in front of them.
+# You need to 'make clean' and 'make' again, if you change any options.
 #
 # Note: LuaJIT can only be compiled for x86, and not for x64 (yet)!
 #       In the meantime, the x86 binary runs fine under a x64 OS.
@@ -81,7 +88,26 @@ XCFLAGS=
 #XCFLAGS+= -DLUA_USE_ASSERT
 #
 ##############################################################################
+
+##############################################################################
+# Build mode: override the mode as needed. Default is mixed mode on POSIX.
+# On Windows this is the same as dynamic mode.
+#
+# Mixed mode creates a static + dynamic library and a statically linked luajit.
+BUILDMODE= mixed
+#
+# Static mode creates a static library and a statically linked luajit.
+#BUILDMODE= static
+#
+# Dynamic mode creates a dynamic library and a dynamically linked luajit.
+# Note: this executable will only run when the library is installed!
+#BUILDMODE= dynamic
+##############################################################################
 # You probably don't need to change anything below this line.
+##############################################################################
+
+##############################################################################
+# Flags and options for host and target.
 ##############################################################################
 
 CCOPTIONS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CFLAGS) $(XCFLAGS)
@@ -89,81 +115,115 @@ LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
 
 HOST_CC= $(CC)
 HOST_RM= rm -f
-HOST_XCFLAGS=
-HOST_XLDFLAGS=
-HOST_XLIBS=
-
-TARGET_CC= $(CC)
-TARGET_STRIP= strip
-TARGET_XCFLAGS= -D_FILE_OFFSET_BITS=64
-TARGET_XLDFLAGS=
-TARGET_XSHLDFLAGS= -shared
-TARGET_XLIBS=
-TARGET_ARCH= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET))
-TARGET_DISABLE= -U_FORTIFY_SOURCE
-ifneq (,$(findstring stack-protector,$(shell $(CC) -dumpspecs)))
-  TARGET_DISABLE+= -fno-stack-protector
-endif
-
-ifneq (,$(findstring Windows,$(OS)))
-  TARGET_SYS= Windows
-else
-  TARGET_SYS:= $(shell uname -s)
-  ifneq (,$(findstring CYGWIN,$(TARGET_SYS)))
-    TARGET_SYS= Windows
-  endif
-endif
-
-ifeq (Linux,$(TARGET_SYS))
-  TARGET_XLIBS= -ldl
-  TARGET_XLDFLAGS= -Wl,-E
-else
-ifeq (Windows,$(TARGET_SYS))
-  HOST_RM= del
-  TARGET_STRIP= strip --strip-unneeded
-else
-ifeq (Darwin,$(TARGET_SYS))
-  TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup
-  TARGET_STRIP= strip -x
-  export MACOSX_DEPLOYMENT_TARGET=10.3
-else
-  TARGET_XLDFLAGS= -Wl,-E
-endif
-endif
-endif
-
 # NOTE: The LuaJIT distribution comes with a pre-generated buildvm_*.h.
 # You DO NOT NEED an installed copy of (plain) Lua 5.1 to run DynASM unless
 # you want to MODIFY the corresponding *.dasc file. You can also use LuaJIT
 # itself (bootstrapped from the pre-generated file) to run DynASM of course.
-DASM_LUA= lua
+HOST_LUA= lua
 
-Q= @
-E= @echo
-#Q=
-#E= @:
-
-##############################################################################
-
-TARGET_CFLAGS= $(CCOPTIONS) $(TARGET_DISABLE) $(TARGET_XCFLAGS)
-TARGET_LDFLAGS= $(LDOPTIONS) $(TARGET_XLDFLAGS)
-TARGET_SHLDFLAGS= $(LDOPTIONS) $(TARGET_XSHLDFLAGS)
-TARGET_LIBS= -lm $(TARGET_XLIBS)
-ifneq (,$(CCDEBUG))
-  TARGET_STRIP= @:
-endif
-
+HOST_XCFLAGS=
+HOST_XLDFLAGS=
+HOST_XLIBS=
 HOST_CFLAGS= $(CCOPTIONS) $(HOST_XCFLAGS) $(TARGET_ARCH)
 HOST_LDFLAGS= $(LDOPTIONS) $(HOST_XLDFLAGS)
 HOST_LIBS= $(HOST_XLIBS)
 
+# Cross-compilation example: make CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+CROSS=
+STATIC_CC = $(CROSS)$(CC)
+DYNAMIC_CC = $(CROSS)$(CC) -fPIC
+TARGET_CC= $(STATIC_CC)
+TARGET_STCC= $(STATIC_CC)
+TARGET_DYNCC= $(DYNAMIC_CC)
+TARGET_LD= $(CROSS)$(CC)
+TARGET_AR= $(CROSS)ar rcus
+TARGET_STRIP= $(CROSS)strip
+
+TARGET_SONAME= libluajit-$(ABIVER).so.$(MAJVER)
+TARGET_DYLIBNAME= libluajit-$(NODOTABIVER).$(MAJVER).$(MINVER).$(RELVER).dylib
+TARGET_DLLNAME= lua$(NODOTABIVER).dll
+TARGET_XSHLDFLAGS= -shared -fPIC -Wl,-soname,$(TARGET_SONAME)
+TARGET_DYNXLDOPTS=
+
+TARGET_ARCH= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET))
+TARGET_DISABLE= -U_FORTIFY_SOURCE
+ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
+  TARGET_DISABLE+= -fno-stack-protector
+endif
+
+TARGET_XCFLAGS= -D_FILE_OFFSET_BITS=64
+TARGET_XLDFLAGS=
+TARGET_XLDOPTS=
+TARGET_XLIBS=
+TARGET_CFLAGS= $(CCOPTIONS) $(TARGET_DISABLE) $(TARGET_XCFLAGS)
+TARGET_LDFLAGS= $(LDOPTIONS) $(TARGET_XLDFLAGS) $(TARGET_XLDOPTS)
+TARGET_SHLDFLAGS= $(LDOPTIONS) $(TARGET_XSHLDFLAGS)
+TARGET_LIBS= -lm $(TARGET_XLIBS)
+
+ifneq (,$(PREFIX))
+ifneq (/usr/local,$(PREFIX))
+  TARGET_XCFLAGS+= -DLUA_XROOT=\"$(PREFIX)/\"
+  ifneq (/usr,$(PREFIX))
+    TARGET_DYNXLDOPTS= -Wl,-rpath,$(PREFIX)/lib
+  endif
+endif
+endif
+
+##############################################################################
+# System detection.
+##############################################################################
+
+ifneq (,$(findstring Windows,$(OS)))
+  HOST_SYS= Windows
+else
+  HOST_SYS:= $(shell uname -s)
+  ifneq (,$(findstring CYGWIN,$(TARGET_SYS)))
+    HOST_SYS= Windows
+  endif
+endif
+ifeq (Windows,$(HOST_SYS))
+  HOST_RM= del
+endif
+
+TARGET_SYS= $(HOST_SYS)
+ifeq (Windows,$(TARGET_SYS))
+  TARGET_STRIP+= --strip-unneeded
+  TARGET_XSHLDFLAGS= -shared
+  TARGET_DYNXLDOPTS=
+else
+ifeq (Darwin,$(TARGET_SYS))
+  export MACOSX_DEPLOYMENT_TARGET=10.4
+  TARGET_STRIP+= -x
+  TARGET_AR+= 2>/dev/null
+  TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
+  ifneq (,$(TARGET_DYNXLDOPTS))
+    TARGET_DYNXLDOPTS=
+    TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
+  endif
+else
+  TARGET_XLDFLAGS= -Wl,-E
+  ifeq (Linux,$(TARGET_SYS))
+    TARGET_XLIBS= -ldl
+  endif
+endif
+endif
+
+ifneq (,$(CCDEBUG))
+  TARGET_STRIP= @:
+endif
+
+##############################################################################
+# Files and pathnames.
+##############################################################################
+
 DASM_DIR= ../dynasm
-DASM= $(DASM_LUA) $(DASM_DIR)/dynasm.lua
+DASM= $(HOST_LUA) $(DASM_DIR)/dynasm.lua
 DASM_FLAGS=
 DASM_DISTFLAGS= -LN
 
 BUILDVM_O= buildvm.o buildvm_asm.o buildvm_peobj.o buildvm_lib.o buildvm_fold.o
 BUILDVM_T= buildvm
+BUILDVM_X= ./$(BUILDVM_T)
 
 HOST_O= $(BUILDVM_O)
 HOST_T= $(BUILDVM_T)
@@ -188,121 +248,91 @@ LJCORE_O= lj_gc.o lj_err.o lj_ctype.o lj_bc.o lj_obj.o \
 	  $(LJLIB_O) lib_init.o
 
 LJVMCORE_O= $(LJVM_O) $(LJCORE_O)
-
-# NYI: Need complete support for building as a shared library on POSIX.
-#      This is currently *only* suitable for MinGW and Cygwin, see below.
-LUAJIT_O= luajit.o
-LUAJIT_SO= luajit.so
-LUAJIT_T= luajit
+LJVMCORE_DYNO= $(LJVMCORE_O:.o=_dyn.o)
 
 LIB_VMDEF= ../lib/vmdef.lua
+LIB_VMDEFP= $(LIB_VMDEF)
 
-TARGET_DEP= $(LIB_VMDEF)
-TARGET_O= $(LJVMCORE_O) $(LUAJIT_O)
-TARGET_T= $(LUAJIT_T)
+LUAJIT_O= luajit.o
+LUAJIT_A= libluajit.a
+LUAJIT_SO= libluajit.so
+LUAJIT_T= luajit
 
-ALL_GEN= $(LJVM_S) lj_ffdef.h lj_libdef.h lj_recdef.h $(LIB_VMDEF) lj_folddef.h
+ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
+ALL_GEN= $(LJVM_S) lj_ffdef.h lj_libdef.h lj_recdef.h $(LIB_VMDEFP) lj_folddef.h
 ALL_DYNGEN= buildvm_x86.h
-WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest
-ALL_RM= $(LUAJIT_T) $(LUAJIT_SO) $(HOST_T) $(ALL_GEN) *.o $(WIN_RM)
-
-ifeq (Windows,$(TARGET_SYS))
-  LJVM_BOUT= $(LJVM_O)
-  LJVM_MODE= peobj
-  LIB_VMDEF= ..\lib\vmdef.lua
-  # Imported symbols are bound to a specific DLL name under Windows.
-  LUAJIT_SO= lua51.dll
-  LUAJIT_T= luajit.exe
-  BUILDVM_T= buildvm.exe
-  #
-  # You can comment out the following two lines to build a static executable.
-  # But then you won't be able to dynamically load any C modules, because
-  # they bind to lua51.dll.
-  #
-  TARGET_XCFLAGS+= -DLUA_BUILD_AS_DLL
-  TARGET_O= $(LUAJIT_SO) $(LUAJIT_O)
-endif
+WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
+ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
 
 ##############################################################################
+# Build mode handling.
+##############################################################################
 
-default: $(TARGET_T)
+# Mixed mode defaults.
+TARGET_O= $(LUAJIT_A)
+TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
+TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
 
-all:	$(TARGET_T)
+ifeq (Windows,$(HOST_SYS))
+  BUILDVM_T= buildvm.exe
+  LIB_VMDEFP= $(subst /,\\,$(LIB_VMDEF))
+endif
+ifeq (Windows,$(TARGET_SYS))
+  DYNAMIC_CC= $(STATIC_CC)
+  LJVM_BOUT= $(LJVM_O)
+  LJVM_MODE= peobj
+  LUAJIT_SO= $(TARGET_DLLNAME)
+  LUAJIT_T= luajit.exe
+  ifneq ($(HOST_SYS),$(TARGET_SYS))
+    HOST_XCFLAGS+= -malign-double
+  endif
+  # Mixed mode is not supported on Windows. And static mode doesn't work well.
+  # C modules cannot be loaded, because they bind to lua51.dll.
+  ifneq (static,$(BUILDMODE))
+    BUILDMODE= dynamic
+    TARGET_XCFLAGS+= -DLUA_BUILD_AS_DLL
+  endif
+endif
+
+ifeq (static,$(BUILDMODE))
+  TARGET_DYNCC= @:
+  TARGET_T= $(LUAJIT_T)
+  TARGET_DEP= $(LIB_VMDEF)
+else
+ifeq (dynamic,$(BUILDMODE))
+  TARGET_CC= $(DYNAMIC_CC)
+  TARGET_DYNCC= @:
+  LJVMCORE_DYNO= $(LJVMCORE_O)
+  TARGET_O= $(LUAJIT_SO)
+  TARGET_XLDOPTS= $(TARGET_DYNXLDOPTS)
+else
+ifeq (Darwin,$(TARGET_SYS))
+  TARGET_DYNCC= @:
+  LJVMCORE_DYNO= $(LJVMCORE_O)
+endif
+endif
+endif
+
+Q= @
+E= @echo
+#Q=
+#E= @:
+
+##############################################################################
+# Make targets.
+##############################################################################
+
+default all:	$(TARGET_T)
 
 amalg:
 	@grep "^[+|]" ljamalg.c
 	$(MAKE) all "LJCORE_O=ljamalg.o"
 
-MAKE_TARGETS= amalg
-
-##############################################################################
-
-buildvm_x86.h: buildvm_x86.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) -o $@ buildvm_x86.dasc
-
-$(BUILDVM_T): $(BUILDVM_O)
-	$(E) "HOSTLINK  $@"
-	$(Q)$(HOST_CC) $(HOST_LDFLAGS) -o $@ $(BUILDVM_O) $(HOST_LIBS)
-
-$(LJVM_BOUT): $(BUILDVM_T)
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m $(LJVM_MODE) -o $@
-
-lj_ffdef.h: $(BUILDVM_T) $(LJLIB_C)
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m ffdef -o $@ $(LJLIB_C)
-
-lj_libdef.h: $(BUILDVM_T) $(LJLIB_C)
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m libdef -o $@ $(LJLIB_C)
-
-lj_recdef.h: $(BUILDVM_T) $(LJLIB_C)
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m recdef -o $@ $(LJLIB_C)
-
-$(LIB_VMDEF): $(BUILDVM_T) $(LJLIB_C)
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m vmdef -o $@ $(LJLIB_C)
-
-lj_folddef.h: $(BUILDVM_T) lj_opt_fold.c
-	$(E) "BUILDVM   $@"
-	$(Q)./$(BUILDVM_T) -m folddef -o $@ lj_opt_fold.c
-
-$(LUAJIT_SO): $(LJVMCORE_O)
-	$(E) "LINK      $@"
-	$(Q)$(TARGET_CC) $(TARGET_SHLDFLAGS) -o $@ $(LJVMCORE_O) $(TARGET_LIBS)
-	$(Q)$(TARGET_STRIP) $@
-
-$(LUAJIT_T): $(TARGET_O) $(TARGET_DEP)
-	$(E) "LINK      $@"
-	$(Q)$(TARGET_CC) $(TARGET_LDFLAGS) -o $@ $(TARGET_O) $(TARGET_LIBS)
-	$(Q)$(TARGET_STRIP) $@
-	$(E) "OK        Successfully built LuaJIT"
-
-##############################################################################
-
-%.o: %.c
-	$(E) "CC        $@"
-	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
-
-%.o: %.s
-	$(E) "ASM       $@"
-	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
-
-$(HOST_O): %.o: %.c
-	$(E) "HOSTCC    $@"
-	$(Q)$(HOST_CC) $(HOST_CFLAGS) -c -o $@ $<
-
-include Makefile.dep
-
-##############################################################################
-
 clean:
 	$(HOST_RM) $(ALL_RM)
 
-cleaner:	clean
-	$(HOST_RM) $(ALL_DYNGEN)
+cleaner:
+	$(HOST_RM) $(ALL_RM) $(ALL_DYNGEN)
 
 distclean:	clean
 	$(E) "DYNASM    $@"
@@ -321,6 +351,86 @@ depend:
 	@test -s lj_folddef.h || $(HOST_RM) lj_folddef.h
 	@test -s buildvm_x86.h || $(HOST_RM) buildvm_x86.h
 
-.PHONY: default all $(MAKE_TARGETS) clean cleaner distclean depend
+.PHONY: default all amalg clean cleaner distclean depend
+
+##############################################################################
+# Rules for generated files.
+##############################################################################
+
+buildvm_x86.h: buildvm_x86.dasc
+	$(E) "DYNASM    $@"
+	$(Q)$(DASM) $(DASM_FLAGS) -o $@ buildvm_x86.dasc
+
+$(BUILDVM_T): $(BUILDVM_O)
+	$(E) "HOSTLINK  $@"
+	$(Q)$(HOST_CC) $(HOST_LDFLAGS) -o $@ $(BUILDVM_O) $(HOST_LIBS)
+
+$(LJVM_BOUT): $(BUILDVM_T)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m $(LJVM_MODE) -o $@
+
+lj_ffdef.h: $(BUILDVM_T) $(LJLIB_C)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m ffdef -o $@ $(LJLIB_C)
+
+lj_libdef.h: $(BUILDVM_T) $(LJLIB_C)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m libdef -o $@ $(LJLIB_C)
+
+lj_recdef.h: $(BUILDVM_T) $(LJLIB_C)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m recdef -o $@ $(LJLIB_C)
+
+$(LIB_VMDEF): $(BUILDVM_T) $(LJLIB_C)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m vmdef -o $(LIB_VMDEFP) $(LJLIB_C)
+
+lj_folddef.h: $(BUILDVM_T) lj_opt_fold.c
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m folddef -o $@ lj_opt_fold.c
+
+##############################################################################
+# Object file rules.
+##############################################################################
+
+%.o: %.c
+	$(E) "CC        $@"
+	$(Q)$(TARGET_DYNCC) $(TARGET_CFLAGS) -c -o $(@:.o=_dyn.o) $<
+	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
+
+%.o: %.s
+	$(E) "ASM       $@"
+	$(Q)$(TARGET_DYNCC) $(TARGET_CFLAGS) -c -o $(@:.o=_dyn.o) $<
+	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
+
+$(LUAJIT_O):
+	$(E) "CC        $@"
+	$(Q)$(TARGET_STCC) $(TARGET_CFLAGS) -c -o $@ $<
+
+$(HOST_O): %.o: %.c
+	$(E) "HOSTCC    $@"
+	$(Q)$(HOST_CC) $(HOST_CFLAGS) -c -o $@ $<
+
+include Makefile.dep
+
+##############################################################################
+# Target file rules.
+##############################################################################
+
+$(LUAJIT_A): $(LJVMCORE_O)
+	$(E) "AR        $@"
+	$(Q)$(TARGET_AR) $@ $(LJVMCORE_O)
+
+# The dependency on _O, but linking with _DYNO is intentional.
+$(LUAJIT_SO): $(LJVMCORE_O)
+	$(E) "DYNLINK   $@"
+	$(Q)$(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_LIBS)
+	$(Q)$(TARGET_STRIP) $@
+
+$(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
+	$(E) "LINK      $@"
+	$(Q)$(TARGET_LD) $(TARGET_LDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_LIBS)
+	$(Q)$(TARGET_STRIP) $@
+	$(E) "OK        Successfully built LuaJIT"
 
 ##############################################################################

@@ -8,6 +8,7 @@
 /* Basic error handling. */
 ERRDEF(ERRMEM,	"not enough memory")
 ERRDEF(ERRERR,	"error in error handling")
+ERRDEF(ERRCPP,	"C++ exception")
 
 /* Allocations. */
 ERRDEF(STROV,	"string length overflow")
@@ -56,6 +57,9 @@ ERRDEF(NOENV,	"no calling environment")
 ERRDEF(CYIELD,	"attempt to yield across C-call boundary")
 ERRDEF(BADLU,	"bad light userdata pointer")
 ERRDEF(NOGCMM,	"bad action while in __gc metamethod")
+#ifdef LUA_USE_WIN
+ERRDEF(BADFPU,	"bad FPU precision (use D3DCREATE_FPU_PRESERVE with DirectX)")
+#endif
 
 /* Standard library function errors. */
 ERRDEF(ASSERT,	"assertion failed!")

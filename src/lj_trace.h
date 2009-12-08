@@ -26,7 +26,7 @@ LJ_FUNC_NORET void lj_trace_err_info(jit_State *J, TraceError e);
 LJ_FUNC void lj_trace_freeproto(global_State *g, GCproto *pt);
 LJ_FUNC void lj_trace_reenableproto(GCproto *pt);
 LJ_FUNC void lj_trace_flushproto(global_State *g, GCproto *pt);
-LJ_FUNC void lj_trace_flush(jit_State *J, TraceNo traceno);
+LJ_FUNC int lj_trace_flush(jit_State *J, TraceNo traceno);
 LJ_FUNC int lj_trace_flushall(lua_State *L);
 LJ_FUNC void lj_trace_freestate(global_State *g);
 

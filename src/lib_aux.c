@@ -20,97 +20,6 @@
 #include "lj_err.h"
 #include "lj_lib.h"
 
-/* convert a stack index to positive */
-#define abs_index(L, i) \
-  ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
-
-/* -- Type checks --------------------------------------------------------- */
-
-LUALIB_API void luaL_checkstack(lua_State *L, int size, const char *msg)
-{
-  if (!lua_checkstack(L, size))
-    lj_err_callerv(L, LJ_ERR_STKOVM, msg);
-}
-
-LUALIB_API void luaL_checktype(lua_State *L, int narg, int tt)
-{
-  if (lua_type(L, narg) != tt)
-    lj_err_argt(L, narg, tt);
-}
-
-LUALIB_API void luaL_checkany(lua_State *L, int narg)
-{
-  lj_lib_checkany(L, narg);
-}
-
-LUALIB_API const char *luaL_checklstring(lua_State *L, int narg, size_t *len)
-{
-  GCstr *s = lj_lib_checkstr(L, narg);
-  if (len != NULL) *len = s->len;
-  return strdata(s);
-}
-
-LUALIB_API const char *luaL_optlstring(lua_State *L, int narg,
-				       const char *def, size_t *len)
-{
-  GCstr *s = lj_lib_optstr(L, narg);
-  if (s) {
-    if (len != NULL) *len = s->len;
-    return strdata(s);
-  }
-  if (len != NULL) *len = def ? strlen(def) : 0;
-  return def;
-}
-
-LUALIB_API lua_Number luaL_checknumber(lua_State *L, int narg)
-{
-  return lj_lib_checknum(L, narg);
-}
-
-LUALIB_API lua_Number luaL_optnumber(lua_State *L, int narg, lua_Number def)
-{
-  lj_lib_opt(L, narg,
-    return lj_lib_checknum(L, narg);
-  ,
-    return def;
-  )
-}
-
-LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int narg)
-{
-#if LJ_64
-  return (lua_Integer)lj_lib_checknum(L, narg);
-#else
-  return lj_lib_checkint(L, narg);
-#endif
-}
-
-LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int narg, lua_Integer def)
-{
-#if LJ_64
-  lj_lib_opt(L, narg,
-    return (lua_Integer)lj_lib_checknum(L, narg);
-  ,
-    return def;
-  )
-#else
-  return lj_lib_optint(L, narg, def);
-#endif
-}
-
-LUALIB_API int luaL_checkoption(lua_State *L, int narg, const char *def,
-				const char *const lst[])
-{
-  GCstr *s = lj_lib_optstr(L, narg);
-  const char *opt = s ? strdata(s) : def;
-  uint32_t i;
-  if (!opt) lj_err_argt(L, narg, LUA_TSTRING);
-  for (i = 0; lst[i]; i++)
-    if (strcmp(lst[i], opt) == 0)
-      return (int)i;
-  lj_err_argv(L, narg, LJ_ERR_INVOPTM, opt);
-}
-
 /* -- Module registration ------------------------------------------------- */
 
 LUALIB_API const char *luaL_findtable(lua_State *L, int idx,
@@ -149,6 +58,7 @@ static int libsize(const luaL_Reg *l)
 LUALIB_API void luaL_openlib(lua_State *L, const char *libname,
 			     const luaL_Reg *l, int nup)
 {
+  lj_lib_checkfpu(L);
   if (libname) {
     int size = libsize(l);
     /* check whether lib already exists */
@@ -284,6 +194,10 @@ LUALIB_API void luaL_buffinit(lua_State *L, luaL_Buffer *B)
 /* -- Reference management ------------------------------------------------ */
 
 #define FREELIST_REF	0
+
+/* Convert a stack index to an absolute index. */
+#define abs_index(L, i) \
+  ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
 
 LUALIB_API int luaL_ref(lua_State *L, int t)
 {

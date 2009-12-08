@@ -168,8 +168,8 @@ static int rec_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
 {
   int diff = !lj_obj_equal(av, bv);
   if (!tref_isk2(a, b)) {  /* Shortcut, also handles primitives. */
-    IRType ta = tref_type(a);
-    IRType tb = tref_type(b);
+    IRType ta = tref_isinteger(a) ? IRT_INT : tref_type(a);
+    IRType tb = tref_isinteger(b) ? IRT_INT : tref_type(b);
     if (ta != tb) {
       /* Widen mixed number/int comparisons to number/number comparison. */
       if (ta == IRT_INT && tb == IRT_NUM) {
@@ -447,7 +447,7 @@ static int rec_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     mix.tab = lj_ir_ktab(J, mt);
     goto nocheck;
   }
-  ix->mt = mix.tab;
+  ix->mt = mt ? mix.tab : TREF_NIL;
   emitir(IRTG(mt ? IR_NE : IR_EQ, IRT_TAB), mix.tab, lj_ir_knull(J, IRT_TAB));
 nocheck:
   if (mt) {
@@ -457,6 +457,8 @@ nocheck:
       copyTV(J->L, &ix->mobjv, mo);
     ix->mtv = mt;
     settabV(J->L, &mix.tabv, mt);
+    if (isdead(J2G(J), obj2gco(mmstr)))
+      flipwhite(obj2gco(mmstr));  /* Need same logic as lj_str_new(). */
     setstrV(J->L, &mix.keyv, mmstr);
     mix.key = lj_ir_kstr(J, mmstr);
     mix.val = 0;
@@ -880,7 +882,7 @@ static void recff_nyi(jit_State *J, TRef *res, RecordFFData *rd)
   lj_trace_err_info(J, LJ_TRERR_NYIFF);
 }
 
-LJ_NORET static void recff_err_ffu(jit_State *J, RecordFFData *rd)
+LJ_NORET static void recff_err_nyi(jit_State *J, RecordFFData *rd)
 {
   setfuncV(J->L, &J->errinfo, rd->fn);
   lj_trace_err_info(J, LJ_TRERR_NYIFFU);
@@ -986,7 +988,7 @@ static void recff_tonumber(jit_State *J, TRef *res, RecordFFData *rd)
     if (arg[1]) {
       TRef base = lj_ir_toint(J, arg[1]);
       if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
-	recff_err_ffu(J, rd);
+	recff_err_nyi(J, rd);
     }
     if (tref_isstr(tr))
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
@@ -1016,7 +1018,7 @@ static void recff_tostring(jit_State *J, TRef *res, RecordFFData *rd)
     } else if (tref_isnumber(tr)) {
       res[0] = emitir(IRT(IR_TOSTR, IRT_STR), tr, 0);
     } else {
-      recff_err_ffu(J, rd);
+      recff_err_nyi(J, rd);
     }
   }
 }
@@ -1338,6 +1340,58 @@ static void recff_table_getn(jit_State *J, TRef *res, RecordFFData *rd)
   UNUSED(rd);
 }
 
+static void recff_table_remove(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  if (tref_istab(arg[0])) {
+    if (!arg[1] || tref_isnil(arg[1])) {  /* Simple pop: t[#t] = nil */
+      TRef trlen = emitir(IRTI(IR_TLEN), arg[0], 0);
+      GCtab *t = tabV(&rd->argv[0]);
+      MSize len = lj_tab_len(t);
+      emitir(IRTGI(len ? IR_NE : IR_EQ), trlen, lj_ir_kint(J, 0));
+      if (len) {
+	RecordIndex ix;
+	ix.tab = arg[0];
+	ix.key = trlen;
+	settabV(J->L, &ix.tabv, t);
+	setintV(&ix.keyv, len);
+	ix.idxchain = 0;
+	if (rd->cres != 0) {  /* Specialize load only if result needed. */
+	  ix.val = 0;
+	  res[0] = rec_idx(J, &ix);  /* Load previous value. */
+	  /* Assumes ix.key/ix.tab is not modified for raw rec_idx(). */
+	}
+	ix.val = TREF_NIL;
+	rec_idx(J, &ix);  /* Remove value. */
+      } else {
+	rd->nres = 0;
+      }
+    } else {  /* Complex case: remove in the middle. */
+      recff_err_nyi(J, rd);
+    }
+  }  /* else: Interpreter will throw. */
+}
+
+static void recff_table_insert(jit_State *J, TRef *res, RecordFFData *rd)
+{
+  rd->nres = 0;
+  if (tref_istab(arg[0]) && arg[1]) {
+    if (!arg[2]) {  /* Simple push: t[#t+1] = v */
+      TRef trlen = emitir(IRTI(IR_TLEN), arg[0], 0);
+      GCtab *t = tabV(&rd->argv[0]);
+      RecordIndex ix;
+      ix.tab = arg[0];
+      ix.val = arg[1];
+      ix.key = emitir(IRTI(IR_ADD), trlen, lj_ir_kint(J, 1));
+      settabV(J->L, &ix.tabv, t);
+      setintV(&ix.keyv, lj_tab_len(t) + 1);
+      ix.idxchain = 0;
+      rec_idx(J, &ix);  /* Set new value. */
+    } else {  /* Complex case: insert in the middle. */
+      recff_err_nyi(J, rd);
+    }
+  }  /* else: Interpreter will throw. */
+}
+
 /* -- Record calls and returns -------------------------------------------- */
 
 #undef arg
@@ -1618,8 +1672,8 @@ void lj_record_ins(jit_State *J)
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
     /* Emit nothing for two numeric or string consts. */
     if (!(tref_isk2(ra,rc) && tref_isnumber_str(ra) && tref_isnumber_str(rc))) {
-      IRType ta = tref_type(ra);
-      IRType tc = tref_type(rc);
+      IRType ta = tref_isinteger(ra) ? IRT_INT : tref_type(ra);
+      IRType tc = tref_isinteger(rc) ? IRT_INT : tref_type(rc);
       int irop;
       if (ta != tc) {
 	/* Widen mixed number/int comparisons to number/number comparison. */

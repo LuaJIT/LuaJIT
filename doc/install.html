@@ -58,17 +58,15 @@ application under x64-based systems, too.
 <h2>Configuring LuaJIT</h2>
 <p>
 The standard configuration should work fine for most installations.
-Usually there is no need to tweak the settings, except when you want to
-install to a non-standard path. The following three files hold all
-user-configurable settings:
+Usually there is no need to tweak the settings. The following files
+hold all user-configurable settings:
 </p>
 <ul>
-<li><tt>src/luaconf.h</tt> sets some configuration variables, in
-particular the default paths for loading modules.</li>
-<li><tt>Makefile</tt> has settings for installing LuaJIT (POSIX
+<li><tt>src/luaconf.h</tt> sets some configuration variables.</li>
+<li><tt>Makefile</tt> has settings for <b>installing</b> LuaJIT (POSIX
 only).</li>
-<li><tt>src/Makefile</tt> has settings for compiling LuaJIT under POSIX,
-MinGW and Cygwin.</li>
+<li><tt>src/Makefile</tt> has settings for <b>compiling</b> LuaJIT
+under POSIX, MinGW and Cygwin.</li>
 <li><tt>src/msvcbuild.bat</tt> has settings for compiling LuaJIT with
 MSVC.</li>
 </ul>
@@ -97,9 +95,8 @@ terminal window and change to this directory. Now unpack the archive
 and change to the newly created directory:
 </p>
 <pre class="code">
-tar zxf LuaJIT-2.0.0-beta1.tar.gz
-cd LuaJIT-2.0.0-beta1
-</pre>
+tar zxf LuaJIT-2.0.0-beta2.tar.gz
+cd LuaJIT-2.0.0-beta2</pre>
 <h3>Building LuaJIT</h3>
 <p>
 The supplied Makefiles try to auto-detect the settings needed for your
@@ -109,6 +106,18 @@ which is probably the default on your system, anyway. Simply run:
 <pre class="code">
 make
 </pre>
+<p>
+By default modules are only searched under the prefix <tt>/usr/local</tt>.
+You can add an extra prefix to the search paths by appending the
+<tt>PREFIX</tt> option, e.g.:
+</p>
+<pre class="code">
+make PREFIX=/home/myself/lj2
+</pre>
+<p>
+Note for OSX: <tt>MACOSX_DEPLOYMENT_TARGET</tt> is set to <tt>10.4</tt>
+in <tt>src/Makefile</tt>. Change it, if you want to build on an older version.
+</p>
 <h3>Installing LuaJIT</h3>
 <p>
 The top-level Makefile installs LuaJIT by default under
@@ -124,20 +133,19 @@ sudo make install
 Otherwise specify the directory prefix as an absolute path, e.g.:
 </p>
 <pre class="code">
-sudo make install PREFIX=/opt/lj2
+make install PREFIX=/home/myself/lj2
 </pre>
 <p>
-But note that the installation prefix and the prefix for the module paths
-(configured in <tt>src/luaconf.h</tt>) must match.
+Obviously the prefixes given during build and installation need to be the same.
 </p>
 <p style="color: #c00000;">
 Note: to avoid overwriting a previous version, the beta test releases
 only install the LuaJIT executable under the versioned name (i.e.
-<tt>luajit-2.0.0-beta1</tt>). You probably want to create a symlink
+<tt>luajit-2.0.0-beta2</tt>). You probably want to create a symlink
 for convenience, with a command like this:
 </p>
 <pre class="code" style="color: #c00000;">
-sudo ln -sf luajit-2.0.0-beta1 /usr/local/bin/luajit
+sudo ln -sf luajit-2.0.0-beta2&nbsp;/usr/local/bin/luajit
 </pre>
 
 <h2 id="windows">Windows Systems</h2>
@@ -145,8 +153,8 @@ sudo ln -sf luajit-2.0.0-beta1 /usr/local/bin/luajit
 <p>
 Either install one of the open source SDKs
 (<a href="http://mingw.org/"><span class="ext">&raquo;</span>&nbsp;MinGW</a> or
-<a href="http://www.cygwin.com/"><span class="ext">&raquo;</span>&nbsp;Cygwin</a>) which come with modified
-versions of GCC plus the required development headers.
+<a href="http://www.cygwin.com/"><span class="ext">&raquo;</span>&nbsp;Cygwin</a>), which come with a modified
+GCC plus the required development headers.
 </p>
 <p>
 Or install Microsoft's Visual C++ (MSVC) &mdash; the freely downloadable
@@ -159,8 +167,8 @@ Next, download the source package and unpack it using an archive manager
 </p>
 <h3>Building with MSVC</h3>
 <p>
-Open a "Visual Studio .NET Command Prompt" and <tt>cd</tt> to the
-directory where you've unpacked the sources. Then run this command:
+Open a "Visual Studio .NET Command Prompt", <tt>cd</tt> to the
+directory where you've unpacked the sources and run these commands:
 </p>
 <pre class="code">
 cd src
@@ -176,14 +184,12 @@ are in your path. Then <tt>cd</tt> to the directory where
 you've unpacked the sources and run this command for MinGW:
 </p>
 <pre class="code">
-cd src
 mingw32-make
 </pre>
 <p>
 Or this command for Cygwin:
 </p>
 <pre class="code">
-cd src
 make
 </pre>
 <p>
@@ -191,10 +197,11 @@ Then follow the installation instructions below.
 </p>
 <h3>Installing LuaJIT</h3>
 <p>
-Copy <tt>luajit.exe</tt> and <tt>lua51.dll</tt>
-to a newly created directory (any location is ok). Add <tt>lua</tt>
-and <tt>lua\jit</tt> directories below it and copy all Lua files
-from the <tt>lib</tt> directory of the distribution to the latter directory.
+Copy <tt>luajit.exe</tt> and <tt>lua51.dll</tt> (built in the <tt>src</tt>
+directory) to a newly created directory (any location is ok).
+Add <tt>lua</tt> and <tt>lua\jit</tt> directories below it and copy
+all Lua files from the <tt>lib</tt> directory of the distribution
+to the latter directory.
 </p>
 <p>
 There are no hardcoded

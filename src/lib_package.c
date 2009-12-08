@@ -354,6 +354,7 @@ static int lj_cf_package_require(lua_State *L)
     lua_pushvalue(L, -1);  /* extra copy to be returned */
     lua_setfield(L, 2, name);  /* _LOADED[name] = true */
   }
+  lj_lib_checkfpu(L);
   return 1;
 }
 

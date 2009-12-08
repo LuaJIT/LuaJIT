@@ -46,6 +46,7 @@ LJ_ASMF void lj_vm_powi(void);
 LJ_ASMF void lj_gate_lf(void);
 LJ_ASMF void lj_gate_lv(void);
 LJ_ASMF void lj_gate_c(void);
+LJ_ASMF void lj_gate_cwrap(void);
 
 /* Continuations for metamethods. */
 LJ_ASMF void lj_cont_cat(void);  /* Continue with concatenation. */
@@ -55,12 +56,11 @@ LJ_ASMF void lj_cont_condt(void);  /* Branch if result is true. */
 LJ_ASMF void lj_cont_condf(void);  /* Branch if result is false. */
 
 /* Start of the ASM code. */
-LJ_ASMF void lj_vm_asm_begin(void);
+LJ_ASMF char lj_vm_asm_begin[];
 
 /* Opcode handler offsets, relative to lj_vm_asm_begin. */
 LJ_ASMF const uint16_t lj_vm_op_ofs[];
 
-#define makeasmfunc(ofs) \
-  ((ASMFunction)((char *)lj_vm_asm_begin + (ofs)))
+#define makeasmfunc(ofs)	((ASMFunction)(lj_vm_asm_begin + (ofs)))
 
 #endif

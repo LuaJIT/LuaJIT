@@ -69,11 +69,9 @@ LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
 LJLIB_PUSH(3.14159265358979323846) LJLIB_SET(pi)
 LJLIB_PUSH(1e310) LJLIB_SET(huge)
 
-#ifdef __MACH__
 LJ_FUNCA double lj_wrapper_sinh(double x) { return sinh(x); }
 LJ_FUNCA double lj_wrapper_cosh(double x) { return cosh(x); }
 LJ_FUNCA double lj_wrapper_tanh(double x) { return tanh(x); }
-#endif
 
 /* ------------------------------------------------------------------------ */
 
@@ -98,8 +96,8 @@ typedef union { uint64_t u64; double d; } U64double;
   z = (((z<<q)^z) >> (k-s)) ^ ((z&((uint64_t)(int64_t)-1 << (64-k)))<<s); \
   r ^= z; tw->gen[i] = z;
 
-/* PRNG step function. Returns a double in the range 0.0 <= d < 1.0. */
-static double tw223_step(TW223State *tw)
+/* PRNG step function. Returns a double in the range 1.0 <= d < 2.0. */
+static LJ_NOINLINE double tw223_step(TW223State *tw)
 {
   uint64_t z, r = 0;
   U64double u;
@@ -108,16 +106,7 @@ static double tw223_step(TW223State *tw)
   TW223_GEN(2, 55, 24,  7)
   TW223_GEN(3, 47, 21,  8)
   u.u64 = (r & (((uint64_t)1 << 52)-1)) | ((uint64_t)0x3ff << 52);
-#if defined(__GNUC__) && LJ_TARGET_X86 && __pic__
-  /* Compensate for unbelievable GCC pessimization. */
-  {
-    volatile U64double u1;
-    u1.u64 = (uint64_t)0x3f8 << 52;
-    return u.d - u1.d;
-  }
-#else
-  return u.d - 1.0;
-#endif
+  return u.d;
 }
 
 /* PRNG initialization function. */
@@ -146,7 +135,7 @@ LJLIB_CF(math_random)
   TW223State *tw = (TW223State *)(uddata(udataV(lj_lib_upvalue(L, 1))));
   double d;
   if (LJ_UNLIKELY(!tw->valid)) tw223_init(tw, 0.0);
-  d = tw223_step(tw);
+  d = tw223_step(tw) - 1.0;
   if (n > 0) {
     double r1 = lj_lib_checknum(L, 1);
     if (n == 1) {

@@ -30,9 +30,9 @@
 
 #include "lua.h"
 
-#define LUAJIT_VERSION		"LuaJIT 2.0.0-beta1"
+#define LUAJIT_VERSION		"LuaJIT 2.0.0-beta2"
 #define LUAJIT_VERSION_NUM	20000  /* Version 2.0.0 = 02.00.00. */
-#define LUAJIT_VERSION_SYM	luaJIT_version_2_0_0_beta1
+#define LUAJIT_VERSION_SYM	luaJIT_version_2_0_0_beta2
 #define LUAJIT_COPYRIGHT	"Copyright (C) 2005-2009 Mike Pall"
 #define LUAJIT_URL		"http://luajit.org/"
 
@@ -49,12 +49,14 @@ enum {
 
   LUAJIT_MODE_TRACE,		/* Flush a compiled trace. */
 
+  LUAJIT_MODE_WRAPCFUNC = 0x10,	/* Set wrapper mode for C function calls. */
+
   LUAJIT_MODE_MAX
 };
 
 /* Flags or'ed in to the mode. */
-#define LUAJIT_MODE_OFF		0x0000	/* Disable JIT compilation. */
-#define LUAJIT_MODE_ON		0x0100	/* (Re-)enable JIT compilation. */
+#define LUAJIT_MODE_OFF		0x0000	/* Turn feature off. */
+#define LUAJIT_MODE_ON		0x0100	/* Turn feature on. */
 #define LUAJIT_MODE_FLUSH	0x0200	/* Flush JIT-compiled code. */
 
 /* LuaJIT public C API. */

@@ -43,7 +43,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta1</strong>.<br>
+The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta2</strong>.<br>
 The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.5</strong>.
 </p>
 <p>
@@ -53,6 +53,36 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta2">LuaJIT 2.0.0-beta2 &mdash; 2009-11-09</h2>
+<ul>
+<li>Reorganize build system. Build static+shared library on POSIX.</li>
+<li>Allow C++ exception conversion on all platforms
+using a wrapper function.</li>
+<li>Automatically catch C++ exceptions and rethrow Lua error
+(ELF/DWARF2 only).</li>
+<li>Check for the correct x87 FPU precision at strategic points.</li>
+<li>Always use wrappers for libm functions.</li>
+<li>Resurrect metamethod name strings before copying them.</li>
+<li>Mark current trace, even if compiler is idle.</li>
+<li>Ensure FILE metatable is created only once.</li>
+<li>Fix type comparisons when different integer types are involved.</li>
+<li>Fix getmetatable() recording.</li>
+<li>Fix TDUP with dead keys in template table.</li>
+<li><tt>jit.flush(tr)</tt> returns status.
+Prevent manual flush of a trace that's still linked.</li>
+<li>Improve register allocation heuristics for invariant references.</li>
+<li>Compile the push/pop variants of <tt>table.insert()</tt> and
+<tt>table.remove()</tt>.</li>
+<li>Compatibility with MSVC <tt>link&nbsp/debug</tt>.</li>
+<li>Fix <tt>lua_iscfunction()</tt>.</li>
+<li>Fix <tt>math.random()</tt> when compiled with <tt>-fpic</tt> (OSX).</li>
+<li>Fix <tt>table.maxn()</tt>.</li>
+<li>Bump <tt>MACOSX_DEPLOYMENT_TARGET</tt> to <tt>10.4</tt></li>
+<li><tt>luaL_check*()</tt> and <tt>luaL_opt*()</tt> now support
+negative arguments, too.<br>
+This matches the behavior of Lua 5.1, but not the specification.</li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta1">LuaJIT 2.0.0-beta1 &mdash; 2009-10-31</h2>
 <ul>
 <li>This is the first public release of LuaJIT 2.0.</li>

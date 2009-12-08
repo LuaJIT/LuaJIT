@@ -738,11 +738,14 @@ static Reg ra_allocref(ASMState *as, IRRef ref, RegSet allow)
       }
       RA_DBGX((as, "hintmiss  $f $r", ref, r));
     }
-    /* Invariants should preferably get unused registers. */
-    if (ref < as->loopref && !irt_isphi(ir->t))
-      r = rset_pickbot(pick);
-    else
+    /* Invariants should preferably get unmodified registers. */
+    if (ref < as->loopref && !irt_isphi(ir->t)) {
+      if ((pick & ~as->modset))
+	pick &= ~as->modset;
+      r = rset_pickbot(pick);  /* Reduce conflicts with inverse allocation. */
+    } else {
       r = rset_picktop(pick);
+    }
   } else {
     r = ra_evict(as, allow);
   }
