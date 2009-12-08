@@ -636,6 +636,7 @@ static void invertjump(FuncState *fs, ExpDesc *e)
 
 static BCPos jumponcond(FuncState *fs, ExpDesc *e, int cond)
 {
+  BCPos pc;
   if (e->k == VRELOCABLE) {
     BCIns *i = bcptr(fs, e);
     if (bc_op(*i) == BC_NOT) {
@@ -648,9 +649,10 @@ static BCPos jumponcond(FuncState *fs, ExpDesc *e, int cond)
     reserveregs(fs, 1);
     discharge2reg(fs, e, fs->freereg-1);
   }
-  freeexp(fs, e);
   emitAD(fs, cond ? BC_ISTC : BC_ISFC, NO_REG, e->u.s.info);
-  return emit_jump(fs);
+  pc = emit_jump(fs);
+  freeexp(fs, e);
+  return pc;
 }
 
 static void goiftrue(FuncState *fs, ExpDesc *e)

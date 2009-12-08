@@ -486,8 +486,12 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
 LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
-  ASMFunction gate = funcV(o)->c.gate;
-  return (gate == lj_gate_c || gate == lj_gate_cwrap) ? funcV(o)->c.f : NULL;
+  if (tvisfunc(o)) {
+    ASMFunction gate = funcV(o)->c.gate;
+    if (gate == lj_gate_c || gate == lj_gate_cwrap)
+      return funcV(o)->c.f;
+  }
+  return NULL;
 }
 
 LUA_API void *lua_touserdata(lua_State *L, int idx)

@@ -131,15 +131,18 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
   nslots = J->baseslot+J->maxslot;
   for (i = 1; i < nslots; i++) {
     IRRef ref = tref_ref(J->slot[i]);
-    if (!irref_isk(ref) && ref != subst[ref]) {
+    while (!irref_isk(ref) && ref != subst[ref]) {
       IRIns *ir = IR(ref);
       irt_clearmark(ir->t);  /* Unmark potential uses, too. */
-      if (!irt_isphi(ir->t) && !irt_ispri(ir->t)) {
-	irt_setphi(ir->t);
-	if (nphi >= LJ_MAX_PHI)
-	  lj_trace_err(J, LJ_TRERR_PHIOV);
-	phi[nphi++] = (IRRef1)ref;
-      }
+      if (irt_isphi(ir->t) || irt_ispri(ir->t))
+	break;
+      irt_setphi(ir->t);
+      if (nphi >= LJ_MAX_PHI)
+	lj_trace_err(J, LJ_TRERR_PHIOV);
+      phi[nphi++] = (IRRef1)ref;
+      ref = subst[ref];
+      if (ref > invar)
+	break;
     }
   }
   /* Pass #4: emit PHI instructions or eliminate PHIs. */
