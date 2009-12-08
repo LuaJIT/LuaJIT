@@ -110,8 +110,19 @@ BUILDMODE= mixed
 # Flags and options for host and target.
 ##############################################################################
 
-CCOPTIONS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(CFLAGS) $(XCFLAGS)
+# You may also override the following variables at the make command line:
+#   CC       HOST_CC       STATIC_CC       DYNAMIC_CC
+#   CFLAGS   HOST_CFLAGS   TARGET_CFLAGS
+#   LDFLAGS  HOST_LDFLAGS  TARGET_LDFLAGS  TARGET_SHLDFLAGS
+#   LIBS     HOST_LIBS     TARGET_LIBS
+#   CROSS    HOST_SYS      TARGET_SYS
+#
+# Cross-compilation example: make CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+
+CCOPTIONS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(XCFLAGS) $(CFLAGS)
 LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
+
+TARGET_ARCH= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET))
 
 HOST_CC= $(CC)
 HOST_RM= rm -f
@@ -124,12 +135,10 @@ HOST_LUA= lua
 HOST_XCFLAGS=
 HOST_XLDFLAGS=
 HOST_XLIBS=
-HOST_CFLAGS= $(CCOPTIONS) $(HOST_XCFLAGS) $(TARGET_ARCH)
-HOST_LDFLAGS= $(LDOPTIONS) $(HOST_XLDFLAGS)
-HOST_LIBS= $(HOST_XLIBS)
+HOST_ACFLAGS= $(CCOPTIONS) $(HOST_XCFLAGS) $(TARGET_ARCH) $(HOST_CFLAGS)
+HOST_ALDFLAGS= $(LDOPTIONS) $(HOST_XLDFLAGS) $(HOST_LDFLAGS)
+HOST_ALIBS= $(HOST_XLIBS) $(LIBS) $(HOST_LIBS)
 
-# Cross-compilation example: make CROSS=i586-mingw32msvc- TARGET_SYS=Windows
-CROSS=
 STATIC_CC = $(CROSS)$(CC)
 DYNAMIC_CC = $(CROSS)$(CC) -fPIC
 TARGET_CC= $(STATIC_CC)
@@ -145,20 +154,17 @@ TARGET_DLLNAME= lua$(NODOTABIVER).dll
 TARGET_XSHLDFLAGS= -shared -fPIC -Wl,-soname,$(TARGET_SONAME)
 TARGET_DYNXLDOPTS=
 
-TARGET_ARCH= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET))
-TARGET_DISABLE= -U_FORTIFY_SOURCE
-ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
-  TARGET_DISABLE+= -fno-stack-protector
-endif
-
-TARGET_XCFLAGS= -D_FILE_OFFSET_BITS=64
+TARGET_XCFLAGS= -D_FILE_OFFSET_BITS=64 -U_FORTIFY_SOURCE
 TARGET_XLDFLAGS=
-TARGET_XLDOPTS=
-TARGET_XLIBS=
-TARGET_CFLAGS= $(CCOPTIONS) $(TARGET_DISABLE) $(TARGET_XCFLAGS)
-TARGET_LDFLAGS= $(LDOPTIONS) $(TARGET_XLDFLAGS) $(TARGET_XLDOPTS)
-TARGET_SHLDFLAGS= $(LDOPTIONS) $(TARGET_XSHLDFLAGS)
-TARGET_LIBS= -lm $(TARGET_XLIBS)
+TARGET_XLIBS= -lm
+TARGET_ACFLAGS= $(CCOPTIONS) $(TARGET_XCFLAGS) $(TARGET_ARCH) $(TARGET_CFLAGS)
+TARGET_ALDFLAGS= $(LDOPTIONS) $(TARGET_XLDFLAGS) $(TARGET_LDFLAGS)
+TARGET_ASHLDFLAGS= $(LDOPTIONS) $(TARGET_XSHLDFLAGS) $(TARGET_SHLDFLAGS)
+TARGET_ALIBS= $(TARGET_XLIBS) $(LIBS) $(TARGET_LIBS)
+
+ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
+  TARGET_XCFLAGS+= -fno-stack-protector
+endif
 
 ifneq (,$(PREFIX))
 ifneq (/usr/local,$(PREFIX))
@@ -201,9 +207,9 @@ ifeq (Darwin,$(TARGET_SYS))
     TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
   endif
 else
-  TARGET_XLDFLAGS= -Wl,-E
+  TARGET_XLDFLAGS+= -Wl,-E
   ifeq (Linux,$(TARGET_SYS))
-    TARGET_XLIBS= -ldl
+    TARGET_XLIBS+= -ldl
   endif
 endif
 endif
@@ -278,7 +284,7 @@ ifeq (Windows,$(HOST_SYS))
   LIB_VMDEFP= $(subst /,\\,$(LIB_VMDEF))
 endif
 ifeq (Windows,$(TARGET_SYS))
-  DYNAMIC_CC= $(STATIC_CC)
+  TARGET_DYNCC= $(STATIC_CC)
   LJVM_BOUT= $(LJVM_O)
   LJVM_MODE= peobj
   LUAJIT_SO= $(TARGET_DLLNAME)
@@ -303,11 +309,13 @@ ifeq (static,$(BUILDMODE))
   TARGET_DEP= $(LIB_VMDEF)
 else
 ifeq (dynamic,$(BUILDMODE))
-  TARGET_CC= $(DYNAMIC_CC)
+  ifneq (Windows,$(TARGET_SYS))
+    TARGET_CC= $(DYNAMIC_CC)
+  endif
   TARGET_DYNCC= @:
   LJVMCORE_DYNO= $(LJVMCORE_O)
   TARGET_O= $(LUAJIT_SO)
-  TARGET_XLDOPTS= $(TARGET_DYNXLDOPTS)
+  TARGET_XLDFLAGS+= $(TARGET_DYNXLDOPTS)
 else
 ifeq (Darwin,$(TARGET_SYS))
   TARGET_DYNCC= @:
@@ -347,7 +355,7 @@ depend:
 	@test -f lj_recdef.h || touch lj_recdef.h
 	@test -f lj_folddef.h || touch lj_folddef.h
 	@test -f buildvm_x86.h || touch buildvm_x86.h
-	@$(HOST_CC) $(HOST_CFLAGS) -MM *.c | sed "s|$(DASM_DIR)|\$$(DASM_DIR)|g" >Makefile.dep
+	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | sed "s|$(DASM_DIR)|\$$(DASM_DIR)|g" >Makefile.dep
 	@test -s lj_ffdef.h || $(HOST_RM) lj_ffdef.h
 	@test -s lj_libdef.h || $(HOST_RM) lj_libdef.h
 	@test -s lj_recdef.h || $(HOST_RM) lj_recdef.h
@@ -366,7 +374,7 @@ buildvm_x86.h: buildvm_x86.dasc
 
 $(BUILDVM_T): $(BUILDVM_O)
 	$(E) "HOSTLINK  $@"
-	$(Q)$(HOST_CC) $(HOST_LDFLAGS) -o $@ $(BUILDVM_O) $(HOST_LIBS)
+	$(Q)$(HOST_CC) $(HOST_ALDFLAGS) -o $@ $(BUILDVM_O) $(HOST_ALIBS)
 
 $(LJVM_BOUT): $(BUILDVM_T)
 	$(E) "BUILDVM   $@"
@@ -398,21 +406,21 @@ lj_folddef.h: $(BUILDVM_T) lj_opt_fold.c
 
 %.o: %.c
 	$(E) "CC        $@"
-	$(Q)$(TARGET_DYNCC) $(TARGET_CFLAGS) -c -o $(@:.o=_dyn.o) $<
-	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
+	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) -c -o $(@:.o=_dyn.o) $<
+	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) -c -o $@ $<
 
 %.o: %.s
 	$(E) "ASM       $@"
-	$(Q)$(TARGET_DYNCC) $(TARGET_CFLAGS) -c -o $(@:.o=_dyn.o) $<
-	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c -o $@ $<
+	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) -c -o $(@:.o=_dyn.o) $<
+	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) -c -o $@ $<
 
 $(LUAJIT_O):
 	$(E) "CC        $@"
-	$(Q)$(TARGET_STCC) $(TARGET_CFLAGS) -c -o $@ $<
+	$(Q)$(TARGET_STCC) $(TARGET_ACFLAGS) -c -o $@ $<
 
 $(HOST_O): %.o: %.c
 	$(E) "HOSTCC    $@"
-	$(Q)$(HOST_CC) $(HOST_CFLAGS) -c -o $@ $<
+	$(Q)$(HOST_CC) $(HOST_ACFLAGS) -c -o $@ $<
 
 include Makefile.dep
 
@@ -427,12 +435,12 @@ $(LUAJIT_A): $(LJVMCORE_O)
 # The dependency on _O, but linking with _DYNO is intentional.
 $(LUAJIT_SO): $(LJVMCORE_O)
 	$(E) "DYNLINK   $@"
-	$(Q)$(TARGET_LD) $(TARGET_SHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_LIBS)
+	$(Q)$(TARGET_LD) $(TARGET_ASHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_ALIBS)
 	$(Q)$(TARGET_STRIP) $@
 
 $(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
 	$(E) "LINK      $@"
-	$(Q)$(TARGET_LD) $(TARGET_LDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_LIBS)
+	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_ALIBS)
 	$(Q)$(TARGET_STRIP) $@
 	$(E) "OK        Successfully built LuaJIT"
 
