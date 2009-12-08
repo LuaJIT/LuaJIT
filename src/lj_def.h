@@ -1,0 +1,226 @@
+/*
+** LuaJIT common internal definitions.
+** Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
+*/
+
+#ifndef _LJ_DEF_H
+#define _LJ_DEF_H
+
+#include "lua.h"
+
+#ifdef _MSC_VER
+/* MSVC is stuck in the last century and doesn't have C99's stdint.h. */
+typedef __int8 int8_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
+typedef __int64 int64_t;
+typedef unsigned __int8 uint8_t;
+typedef unsigned __int16 uint16_t;
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
+#ifdef _WIN64
+typedef __int64 intptr_t;
+typedef unsigned __int64 uintptr_t;
+#else
+typedef __int32 intptr_t;
+typedef unsigned __int32 uintptr_t;
+#endif
+#else
+#include <stdint.h>
+#endif
+
+/* Needed everywhere. */
+#include <string.h>
+#include <stdlib.h>
+
+/* Various VM limits. */
+#define LJ_MAX_MEM	0x7fffff00	/* Max. total memory allocation. */
+#define LJ_MAX_ALLOC	LJ_MAX_MEM	/* Max. individual allocation length. */
+#define LJ_MAX_STR	LJ_MAX_MEM	/* Max. string length. */
+#define LJ_MAX_UDATA	LJ_MAX_MEM	/* Max. userdata length. */
+
+#define LJ_MAX_STRTAB	(1<<26)		/* Max. string table size. */
+#define LJ_MAX_HBITS	26		/* Max. hash bits. */
+#define LJ_MAX_ABITS	28		/* Max. bits of array key. */
+#define LJ_MAX_ASIZE	((1<<(LJ_MAX_ABITS-1))+1)  /* Max. array part size. */
+#define LJ_MAX_COLOSIZE	16		/* Max. elems for colocated array. */
+
+#define LJ_MAX_LINE	LJ_MAX_MEM	/* Max. source code line number. */
+#define LJ_MAX_XLEVEL	200		/* Max. syntactic nesting level. */
+#define LJ_MAX_BCINS	(1<<26)		/* Max. # of bytecode instructions. */
+#define LJ_MAX_SLOTS	250		/* Max. # of slots in a Lua func. */
+#define LJ_MAX_LOCVAR	200		/* Max. # of local variables. */
+#define LJ_MAX_UPVAL	60		/* Max. # of upvalues. */
+
+#define LJ_MAX_IDXCHAIN	100		/* __index/__newindex chain limit. */
+#define LJ_STACK_EXTRA	5		/* Extra stack space (metamethods). */
+
+/* Minimum table/buffer sizes. */
+#define LJ_MIN_GLOBAL	6		/* Min. global table size (hbits). */
+#define LJ_MIN_REGISTRY	2		/* Min. registry size (hbits). */
+#define LJ_MIN_STRTAB	256		/* Min. string table size (pow2). */
+#define LJ_MIN_SBUF	32		/* Min. string buffer length. */
+#define LJ_MIN_VECSZ	8		/* Min. size for growable vectors. */
+#define LJ_MIN_IRSZ	32		/* Min. size for growable IR. */
+#define LJ_MIN_KNUMSZ	16		/* Min. size for chained KNUM array. */
+
+/* JIT compiler limits. */
+#define LJ_MAX_JSLOTS	250		/* Max. # of stack slots for a trace. */
+#define LJ_MAX_PHI	32		/* Max. # of PHIs for a loop. */
+#define LJ_MAX_EXITSTUBGR	8	/* Max. # of exit stub groups. */
+
+/* Various macros. */
+#ifndef UNUSED
+#define UNUSED(x)	((void)(x))	/* to avoid warnings */
+#endif
+
+#ifndef cast
+#define cast(t, exp)	((t)(exp))
+#endif
+
+#define U64x(hi, lo)	(((uint64_t)0x##hi << 32) + (uint64_t)0x##lo)
+#define cast_byte(i)	cast(uint8_t, (i))
+#define cast_num(i)	cast(lua_Number, (i))
+#define cast_int(i)	cast(int, (i))
+#define i32ptr(p)	((int32_t)(intptr_t)(void *)(p))
+#define u32ptr(p)	((uint32_t)(intptr_t)(void *)(p))
+
+#define checki8(x)	((x) == (int32_t)(int8_t)(x))
+#define checku8(x)	((x) == (int32_t)(uint8_t)(x))
+#define checki16(x)	((x) == (int32_t)(int16_t)(x))
+
+/* Every half-decent C compiler transforms this into a rotate instruction. */
+#define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(32-(n))))
+#define lj_ror(x, n)	(((x)<<(32-(n))) | ((x)>>(n)))
+
+/* A really naive Bloom filter. But sufficient for our needs. */
+typedef uintptr_t BloomFilter;
+#define BLOOM_MASK	(8*sizeof(BloomFilter) - 1)
+#define bloombit(x)	((uintptr_t)1 << ((x) & BLOOM_MASK))
+#define bloomset(b, x)	((b) |= bloombit((x)))
+#define bloomtest(b, x)	((b) & bloombit((x)))
+
+#if defined(__GNUC__)
+
+#if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
+#error "sorry, need GCC 3.4 or newer"
+#endif
+
+#define LJ_NORET	__attribute__((noreturn))
+#define LJ_ALIGN(n)	__attribute__((aligned(n)))
+#define LJ_INLINE	inline
+#define LJ_AINLINE	inline __attribute__((always_inline))
+#define LJ_NOINLINE	__attribute__((noinline))
+
+#if defined(__ELF__) || defined(__MACH__)
+#define LJ_NOAPI	extern __attribute__((visibility("hidden")))
+#endif
+
+/* Note: it's only beneficial to use fastcall on x86 and then only for up to
+** two non-FP args. The amalgamated compile covers all LJ_FUNC cases. Only
+** indirect calls and related tail-called C functions are marked as fastcall.
+*/
+#if defined(__i386__)
+#define LJ_FASTCALL	__attribute__((fastcall))
+#endif
+
+#define LJ_LIKELY(x)	__builtin_expect(!!(x), 1)
+#define LJ_UNLIKELY(x)	__builtin_expect(!!(x), 0)
+
+#define lj_ffs(x)	((uint32_t)__builtin_ctz(x))
+/* Don't ask ... */
+#if defined(__INTEL_COMPILER) && (defined(__i386__) || defined(__x86_64__))
+static LJ_AINLINE uint32_t lj_fls(uint32_t x)
+{
+  uint32_t r; __asm__("bsrl %1, %0" : "=r" (r) : "rm" (x) : "cc"); return r;
+}
+#else
+#define lj_fls(x)	((uint32_t)(__builtin_clz(x)^31))
+#endif
+
+#if defined(__i386__) || defined(__x86_64__)
+static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
+{
+  uint32_t r; __asm__("bswap %0" : "=r" (r) : "0" (x)); return r;
+}
+#else
+#error "missing define for lj_bswap()"
+#endif
+
+#elif defined(_MSC_VER)
+
+#define LJ_NORET	__declspec(noreturn)
+#define LJ_ALIGN(n)	__declspec(align(n))
+#define LJ_INLINE	__inline
+#define LJ_AINLINE	__forceinline
+#define LJ_NOINLINE	__declspec(noinline)
+#if defined(_M_IX86)
+#define LJ_FASTCALL	__fastcall
+#endif
+
+static LJ_AINLINE uint32_t lj_ffs(uint32_t x)
+{
+  uint32_t r; _BitScanForward(&r, x); return r;
+}
+
+static LJ_AINLINE uint32_t lj_fls(uint32_t x)
+{
+  uint32_t r; _BitScanReverse(&r, x); return r;
+}
+
+#define lj_bswap(x)	(_byteswap_ulong((x)))
+
+#else
+#error "missing defines for your compiler"
+#endif
+
+/* Optional defines. */
+#ifndef LJ_FASTCALL
+#define LJ_FASTCALL
+#endif
+#ifndef LJ_NORET
+#define LJ_NORET
+#endif
+#ifndef LJ_NOAPI
+#define LJ_NOAPI	extern
+#endif
+#ifndef LJ_LIKELY
+#define LJ_LIKELY(x)	(x)
+#define LJ_UNLIKELY(x)	(x)
+#endif
+
+/* Attributes for internal functions. */
+#if defined(ljamalg_c)
+#define LJ_DATA		static
+#define LJ_DATADEF	static
+#define LJ_FUNC		static
+#define LJ_ASMF		LJ_NOAPI
+#define LJ_FUNCA	LJ_NOAPI
+#else
+#define LJ_DATA		LJ_NOAPI
+#define LJ_DATADEF
+#define LJ_FUNC		LJ_NOAPI
+#define LJ_ASMF		LJ_NOAPI
+#define LJ_FUNCA	LJ_NOAPI
+#endif
+#define LJ_FUNC_NORET	LJ_FUNC LJ_NORET
+#define LJ_FUNCA_NORET	LJ_FUNCA LJ_NORET
+#define LJ_ASMF_NORET	LJ_ASMF LJ_NORET
+
+/* Runtime assertions. */
+#ifdef lua_assert
+#define check_exp(c, e)		(lua_assert(c), (e))
+#define api_check(l, e)		lua_assert(e)
+#else
+#define lua_assert(c)		((void)0)
+#define check_exp(c, e)		(e)
+#define api_check		luai_apicheck
+#endif
+
+/* Static assertions. */
+#define LJ_ASSERT_NAME2(name, line)	name ## line
+#define LJ_ASSERT_NAME(line)		LJ_ASSERT_NAME2(lj_assert_, line)
+#define LJ_STATIC_ASSERT(cond) \
+  extern void LJ_ASSERT_NAME(__LINE__)(int STATIC_ASSERTION_FAILED[(cond)?1:-1])
+
+#endif

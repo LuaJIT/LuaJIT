@@ -1,0 +1,235 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>Status &amp; Roadmap</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2009, Mike Pall">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+<style type="text/css">
+ul li { padding-bottom: 0.3em; }
+</style>
+</head>
+<body>
+<div id="site">
+<a href="http://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1>Status &amp; Roadmap</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li><li>
+<a href="api.html">API Extensions</a>
+</li></ul>
+</li><li>
+<a class="current" href="status.html">Status</a>
+<ul><li>
+<a href="changes.html">Changes</a>
+</li></ul>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+The <span style="color: #0000c0;">LuaJIT 1.x</span> series represents
+the current <span style="color: #0000c0;">stable branch</span>. As of
+this writing there have been no open bugs since about a year. So, if
+you need a rock-solid VM, you are encouraged to fetch the latest
+release of LuaJIT 1.x from the <a href="http://luajit.org/download.html"><span class="ext">&raquo;</span>&nbsp;Download</a>
+page.
+</p>
+<p>
+<span style="color: #c00000;">LuaJIT 2.0</span> is the currently active
+<span style="color: #c00000;">development branch</span>.
+It has <b>Beta Test</b> status and is still undergoing
+substantial changes. It's expected to quickly mature within the next
+months. You should definitely start to evaluate it for new projects
+right now. But deploying it in production environments is not yet
+recommended.
+</p>
+
+<h2>Current Status</h2>
+<p>
+This is a list of the things you should know about the LuaJIT 2.0 beta test:
+</p>
+<ul>
+<li>
+The JIT compiler can only generate code for CPUs with <b>SSE2</b> at the
+moment. I.e. you need at least a P4, Core 2/i5/i7 or K8/K10 to use it. I
+plan to fix this during the beta phase and add support for emitting x87
+instructions to the backend.
+</li>
+<li>
+Obviously there will be many <b>bugs</b> in a VM which has been
+rewritten from the ground up. Please report your findings together with
+the circumstances needed to reproduce the bug. If possible reduce the
+problem down to a simple test cases.<br>
+There is no formal bug tracker at the moment. The best place for
+discussion is the
+<a href="http://www.lua.org/lua-l.html"><span class="ext">&raquo;</span>&nbsp;Lua mailing list</a>. Of course
+you may also send your bug report directly to me, especially when they
+contains lengthy debug output. Please check the
+<a href="contact.html">Contact</a> page for details.
+</li>
+<li>
+The VM is complete in the sense that it <b>should</b> run all Lua code
+just fine. It's considered a serious bug if the VM crashes or produces
+unexpected results &mdash; please report it. There are only very few
+known incompatibilities with standard Lua:
+<ul>
+<li>
+The Lua <b>debug API</b> is missing a couple of features (call/return
+hooks) and shows slightly different behavior (no per-coroutine hooks).
+</li>
+<li>
+Most other issues you're likely to find (e.g. with the existing test
+suites) are differences in the <b>implementation-defined</b> behavior.
+These either have a good reason (like early tail call resolving which
+may cause differences in error reporting), are arbitrary design choices
+or are due to quirks in the VM. The latter cases may get fixed if a
+demonstrable need is shown.
+</li>
+</ul>
+</li>
+<li>
+The <b>JIT compiler</b> is not complete (yet) and falls back to the
+interpreter in some cases. All of this works transparently, so unless
+you use -jv, you'll probably never notice (the interpreter is quite
+fast, too). Here are the known issues:
+<ul>
+<li>
+Many known issues cause a <b>NYI</b> (not yet implemented) trace abort
+message. E.g. for calls to vararg functions or many string library
+functions. Reporting these is only mildly useful, except if you have good
+example code that shows the problem. Obviously, reports accompanied with
+a patch to fix the issue are more than welcome. But please check back
+with me, before writing major improvements, to avoid duplication of
+effort.
+</li>
+<li>
+<b>Recursion</b> is not traced yet. Often no trace will be generated at
+all or some unroll limit will catch it and aborts the trace.
+</li>
+<li>
+The trace compiler currently does not back off specialization for
+function call dispatch. It should really fall back to specializing on
+the prototype, not the closure identity. This can lead to the so-called
+"trace explosion" problem with <b>closure-heavy programming</b>. The
+trace linking heuristics prevent this, but in the worst case this
+means the code always falls back to the interpreter.
+</li>
+<li>
+<b>Trace management</b> needs more tuning: better blacklisting of aborted
+traces, less drastic countermeasures against trace explosion and better
+heuristics in general.
+</li>
+<li>
+Some checks are missing in the JIT-compiled code for obscure situations
+with <b>open upvalues aliasing</b> one of the SSA slots later on (or
+vice versa). Bonus points, if you can find a real world test case for
+this.
+</li>
+</ul>
+</li>
+</ul>
+
+<h2>Roadmap</h2>
+<p>
+Rather than stating exact release dates (I'm well known for making
+spectacularly wrong guesses), this roadmap lists the general project
+plan, sorted by priority, as well as ideas for the future:
+</p>
+<ul>
+<li>
+The main goal right now is to stabilize LuaJIT 2.0 and get it out of
+beta test. <b>Correctness</b> has priority over completeness. This
+implies the first stable release will certainly NOT compile every
+library function call and will fall back to the interpreter from time
+to time. This is perfectly ok, since it still executes all Lua code,
+just not at the highest possible speed.
+</li>
+<li>
+The next step is to get it to compile more library functions and handle
+more cases where the compiler currently bails out. This doesn't mean it
+will compile every corner case. It's much more important that it
+performs well in a majority of use cases. Every compiler has to make
+these trade-offs &mdash; <b>completeness</b> just cannot be the
+overriding goal for a low-footprint, low-overhead JIT compiler.
+</li>
+<li>
+More <b>optimizations</b> will be added in parallel to the last step on
+an as-needed basis. Array-bounds-check (ABC) removal, sinking of stores
+to aggregates and sinking of allocations are high on the list. Faster
+handling of NEWREF and better alias analysis are desirable, too. More
+complex optimizations with less pay-off, such as value-range-propagation
+(VRP) will have to wait.
+</li>
+<li>
+LuaJIT 2.0 has been designed with <b>portability</b> in mind.
+Nonetheless, it compiles to native code and needs to be adapted to each
+architecture. Porting the compiler backend is probably the easier task,
+but a key element of its design is the fast interpreter, written in
+machine-specific assembler.<br>
+The code base and the internal structures are already prepared for
+easier porting to 64 bit architectures. The most likely next target is a
+port to <b>x64</b>, but this will have to wait until the x86 port
+stabilizes. Other ports will follow &mdash; companies which are
+interested in sponsoring a port to a particular architecture, please
+<a href="contact.html">contact me</a>.
+</li>
+<li>
+There are some planned <b>structural improvements</b> to the compiler,
+like compressed snapshot maps or generic handling of calls to helper
+methods. These are of lesser importance, unless other developments
+elevate their priority.
+</li>
+<li>
+<b>Documentation</b> about the <b>internals</b> of LuaJIT is still sorely
+missing. Although the source code is included and is IMHO well
+commented, many basic design decisions are in need of an explanation.
+The rather un-traditional compiler architecture and the many highly
+optimized data structures are a barrier for outside participation in
+the development. Alas, as I've repeatedly stated, I'm better at
+writing code than papers and I'm not in need of any academical merits.
+Someday I will find the time for it. :-)
+</li>
+<li>
+Producing good code for unbiased branches is a key problem for trace
+compilers. This is the main cause for "trace explosion".
+<b>Hyperblock scheduling</b> promises to solve this nicely at the
+price of a major redesign of the compiler. This would also pave the
+way for emitting predicated instructions, which is a prerequisite
+for efficient <b>vectorization</b>.
+</li>
+<li>
+Currently Lua is missing a standard library for access to <b>structured
+binary data</b> and <b>arrays/buffers</b> holding low-level data types.
+Allowing calls to arbitrary C functions (<b>FFI</b>) would obviate the
+need to write manual bindings. A variety of extension modules is floating
+around, with different scope and capabilities. Alas, none of them has been
+designed with a JIT compiler in mind.
+</li>
+</ul>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2009 Mike Pall
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>

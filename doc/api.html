@@ -1,0 +1,203 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>API Extensions</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2009, Mike Pall">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+</head>
+<body>
+<div id="site">
+<a href="http://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1>API Extensions</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li><li>
+<a class="current" href="api.html">API Extensions</a>
+</li></ul>
+</li><li>
+<a href="status.html">Status</a>
+<ul><li>
+<a href="changes.html">Changes</a>
+</li></ul>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+LuaJIT is fully upwards-compatible with Lua 5.1. It supports all
+<a href="http://www.lua.org/manual/5.1/manual.html#5"><span class="ext">&raquo;</span>&nbsp;standard Lua
+library functions</a> and the full set of
+<a href="http://www.lua.org/manual/5.1/manual.html#3"><span class="ext">&raquo;</span>&nbsp;Lua/C API
+functions</a>.
+</p>
+<p>
+LuaJIT is also fully ABI-compatible to Lua 5.1 at the linker/dynamic
+loader level. This means you can compile a C&nbsp;module against the
+standard Lua headers and load the same shared library from either Lua
+or LuaJIT.
+</p>
+
+<h2 id="bit"><tt>bit.*</tt> &mdash; Bitwise Operations</h2>
+<p>
+LuaJIT supports all bitwise operations as defined by
+<a href="http://bitop.luajit.org"><span class="ext">&raquo;</span>&nbsp;Lua BitOp</a>:
+</p>
+<pre class="code">
+bit.tobit  bit.tohex  bit.bnot    bit.band bit.bor  bit.bxor
+bit.lshift bit.rshift bit.arshift bit.rol  bit.ror  bit.bswap
+</pre>
+<p>
+This module is a LuaJIT built-in &mdash; you don't need to download or
+install Lua BitOp. The Lua BitOp site has full documentation for all
+<a href="http://bitop.luajit.org/api.html"><span class="ext">&raquo;</span>&nbsp;Lua BitOp API functions</a>.
+</p>
+<p>
+Please make sure to <tt>require</tt> the module before using any of
+its functions:
+</p>
+<pre class="code">
+local bit = require("bit")
+</pre>
+<p>
+An already installed Lua BitOp module is ignored by LuaJIT.
+This way you can use bit operations from both Lua and LuaJIT on a
+shared installation.
+</p>
+
+<h2 id="jit"><tt>jit.*</tt> &mdash; JIT compiler control</h2>
+<p>
+The functions in this built-in module control the behavior
+of the JIT compiler engine.
+</p>
+
+<h3 id="jit_onoff"><tt>jit.on()<br>
+jit.off()</tt></h3>
+<p>
+Turns the whole JIT compiler on (default) or off.
+</p>
+<p>
+These functions are typically used with the command line options
+<tt>-j on</tt> or <tt>-j off</tt>.
+</p>
+
+<h3 id="jit_flush"><tt>jit.flush()</tt></h3>
+<p>
+Flushes the whole cache of compiled code.
+</p>
+
+<h3 id="jit_flush_tr"><tt>jit.flush(tr)</tt></h3>
+<p>
+Flushes the code for the specified root trace and all of its
+side traces from the cache.
+</p>
+
+<h3 id="jit_onoff_func"><tt>jit.on(func|true [,true|false])<br>
+jit.off(func|true [,true|false])<br>
+jit.flush(func|true [,true|false])</tt></h3>
+<p>
+<tt>jit.on</tt> enables JIT compilation for a Lua function (this is
+the default).
+</p>
+<p>
+<tt>jit.off</tt> disables JIT compilation for a Lua function and
+flushes any already compiled code from the code cache.
+</p>
+<p>
+<tt>jit.flush</tt> flushes the code, but doesn't affect the
+enable/disable status.
+</p>
+<p>
+The current function, i.e. the Lua function calling this library
+function, can also be specified by passing <tt>true</tt> as the first
+argument.
+</p>
+<p>
+If the second argument is <tt>true</tt>, JIT compilation is also
+enabled, disabled or flushed recursively for all subfunctions of a
+function. With <tt>false</tt> only the subfunctions are affected.
+</p>
+<p>
+The <tt>jit.on</tt> and <tt>jit.off</tt> functions only set a flag
+which is checked when the function is about to be compiled. They do
+not trigger immediate compilation.
+</p>
+<p>
+Typical usage is <tt>jit.off(true, true)</tt> in the main chunk
+of a module to turn off JIT compilation for the whole module for
+debugging purposes.
+</p>
+
+<h3 id="jit_version"><tt>jit.version</tt></h3>
+<p>
+Contains the LuaJIT version string.
+</p>
+
+<h3 id="jit_version_num"><tt>jit.version_num</tt></h3>
+<p>
+Contains the version number of the LuaJIT core. Version xx.yy.zz
+is represented by the decimal number xxyyzz.
+</p>
+
+<h3 id="jit_arch"><tt>jit.arch</tt></h3>
+<p>
+Contains the target architecture name (CPU and optional ABI).
+</p>
+
+<h2 id="jit_opt"><tt>jit.opt.*</tt> &mdash; JIT compiler optimization control</h2>
+<p>
+This module provides the backend for the <tt>-O</tt> command line
+option.
+</p>
+<p>
+You can also use it programmatically, e.g.:
+</p>
+<pre class="code">
+jit.opt.start(2) -- same as -O2
+jit.opt.start("-dce")
+jit.opt.start("hotloop=10", "hotexit=2")
+</pre>
+<p>
+Unlike in LuaJIT 1.x, the module is built-in and
+<b>optimization is turned on by default!</b>
+It's no longer necessary to run <tt>require("jit.opt").start()</tt>,
+which was one of the ways to enable optimization.
+</p>
+
+<h2 id="jit_util"><tt>jit.util.*</tt> &mdash; JIT compiler introspection</h2>
+<p>
+This module holds functions to introspect the bytecode, generated
+traces, the IR and the generated machine code. The functionality
+provided by this module is still in flux and therefore undocumented.
+</p>
+<p>
+The debug modules <tt>-jbc</tt>, <tt>-jv</tt> and <tt>-jdump</tt> make
+extensive use of these functions. Please check out their source code,
+if you want to know more.
+</p>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2009 Mike Pall
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>

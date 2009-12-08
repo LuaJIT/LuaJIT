@@ -1,0 +1,216 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>Installation</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2009, Mike Pall">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+</head>
+<body>
+<div id="site">
+<a href="http://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1>Installation</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a class="current" href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li><li>
+<a href="api.html">API Extensions</a>
+</li></ul>
+</li><li>
+<a href="status.html">Status</a>
+<ul><li>
+<a href="changes.html">Changes</a>
+</li></ul>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+LuaJIT is only distributed as a source package. This page explains
+how to build and install LuaJIT with different operating systems
+and C&nbsp;compilers.
+</p>
+<p>
+For the impatient (on POSIX systems):
+</p>
+<pre class="code">
+make &amp;&amp; sudo make install
+</pre>
+<p>
+LuaJIT currently builds out-of-the box on all popular x86 systems
+(Linux, Windows, OSX etc.). It builds and runs fine as a 32&nbsp;bit
+application under x64-based systems, too.
+</p>
+
+<h2>Configuring LuaJIT</h2>
+<p>
+The standard configuration should work fine for most installations.
+Usually there is no need to tweak the settings, except when you want to
+install to a non-standard path. The following three files hold all
+user-configurable settings:
+</p>
+<ul>
+<li><tt>src/luaconf.h</tt> sets some configuration variables, in
+particular the default paths for loading modules.</li>
+<li><tt>Makefile</tt> has settings for installing LuaJIT (POSIX
+only).</li>
+<li><tt>src/Makefile</tt> has settings for compiling LuaJIT under POSIX,
+MinGW and Cygwin.</li>
+<li><tt>src/msvcbuild.bat</tt> has settings for compiling LuaJIT with
+MSVC.</li>
+</ul>
+<p>
+Please read the instructions given in these files, before changing
+any settings.
+</p>
+
+<h2 id="posix">POSIX Systems (Linux, OSX, *BSD etc.)</h2>
+<h3>Prerequisites</h3>
+<p>
+Depending on your distribution, you may need to install a package for
+GCC (GCC 3.4 or later required), the development headers and/or a
+complete SDK.
+</p>
+<p>
+E.g. on a current Debian/Ubuntu, install <tt>libc6-dev</tt>
+with the package manager. Currently LuaJIT only builds as a 32&nbsp;bit
+application, so you actually need to install <tt>libc6-dev-i386</tt>
+when building on an x64 OS.
+</p>
+<p>
+Download the current source package (pick the .tar.gz), if you haven't
+already done so. Move it to a directory of your choice, open a
+terminal window and change to this directory. Now unpack the archive
+and change to the newly created directory:
+</p>
+<pre class="code">
+tar zxf LuaJIT-2.0.0-beta1.tar.gz
+cd LuaJIT-2.0.0-beta1
+</pre>
+<h3>Building LuaJIT</h3>
+<p>
+The supplied Makefiles try to auto-detect the settings needed for your
+operating system and your compiler. They need to be run with GNU Make,
+which is probably the default on your system, anyway. Simply run:
+</p>
+<pre class="code">
+make
+</pre>
+<h3>Installing LuaJIT</h3>
+<p>
+The top-level Makefile installs LuaJIT by default under
+<tt>/usr/local</tt>, i.e. the executable ends up in
+<tt>/usr/local/bin</tt> and so on. You need to have root privileges
+to write to this path. So, assuming sudo is installed on your system,
+run the following command and enter your sudo password:
+</p>
+<pre class="code">
+sudo make install
+</pre>
+<p>
+Otherwise specify the directory prefix as an absolute path, e.g.:
+</p>
+<pre class="code">
+sudo make install PREFIX=/opt/lj2
+</pre>
+<p>
+But note that the installation prefix and the prefix for the module paths
+(configured in <tt>src/luaconf.h</tt>) must match.
+</p>
+<p style="color: #c00000;">
+Note: to avoid overwriting a previous version, the beta test releases
+only install the LuaJIT executable under the versioned name (i.e.
+<tt>luajit-2.0.0-beta1</tt>). You probably want to create a symlink
+for convenience, with a command like this:
+</p>
+<pre class="code" style="color: #c00000;">
+sudo ln -sf luajit-2.0.0-beta1 /usr/local/bin/luajit
+</pre>
+
+<h2 id="windows">Windows Systems</h2>
+<h3>Prerequisites</h3>
+<p>
+Either install one of the open source SDKs
+(<a href="http://mingw.org/"><span class="ext">&raquo;</span>&nbsp;MinGW</a> or
+<a href="http://www.cygwin.com/"><span class="ext">&raquo;</span>&nbsp;Cygwin</a>) which come with modified
+versions of GCC plus the required development headers.
+</p>
+<p>
+Or install Microsoft's Visual C++ (MSVC) &mdash; the freely downloadable
+<a href="http://www.microsoft.com/Express/VC/"><span class="ext">&raquo;</span>&nbsp;Express Edition</a>
+works just fine.
+</p>
+<p>
+Next, download the source package and unpack it using an archive manager
+(e.g. the Windows Explorer) to a directory of your choice.
+</p>
+<h3>Building with MSVC</h3>
+<p>
+Open a "Visual Studio .NET Command Prompt" and <tt>cd</tt> to the
+directory where you've unpacked the sources. Then run this command:
+</p>
+<pre class="code">
+cd src
+msvcbuild
+</pre>
+<p>
+Then follow the installation instructions below.
+</p>
+<h3>Building with MinGW or Cygwin</h3>
+<p>
+Open a command prompt window and make sure the MinGW or Cygwin programs
+are in your path. Then <tt>cd</tt> to the directory where
+you've unpacked the sources and run this command for MinGW:
+</p>
+<pre class="code">
+cd src
+mingw32-make
+</pre>
+<p>
+Or this command for Cygwin:
+</p>
+<pre class="code">
+cd src
+make
+</pre>
+<p>
+Then follow the installation instructions below.
+</p>
+<h3>Installing LuaJIT</h3>
+<p>
+Copy <tt>luajit.exe</tt> and <tt>lua51.dll</tt>
+to a newly created directory (any location is ok). Add <tt>lua</tt>
+and <tt>lua\jit</tt> directories below it and copy all Lua files
+from the <tt>lib</tt> directory of the distribution to the latter directory.
+</p>
+<p>
+There are no hardcoded
+absolute path names &mdash; all modules are loaded relative to the
+directory where <tt>luajit.exe</tt> is installed
+(see <tt>src/luaconf.h</tt>).
+</p>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2009 Mike Pall
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>

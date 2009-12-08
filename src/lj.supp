@@ -1,0 +1,6 @@
+# Valgrind suppression file for LuaJIT 2.x.
+{
+   Optimized string compare
+   Memcheck:Addr4
+   fun:lj_str_cmp
+}
