@@ -398,16 +398,6 @@ int main(int argc, char **argv)
   }
 
   switch (ctx->mode) {
-  case BUILD_asm:
-#if defined(__ELF__)
-    ctx->mode = BUILD_elfasm;
-#elif defined(__MACH__)
-    ctx->mode = BUILD_machasm;
-#else
-    fprintf(stderr,"Error: auto-guessing the system assembler failed\n");
-    return 1;
-#endif
-    /* fallthrough */
   case BUILD_elfasm:
   case BUILD_coffasm:
   case BUILD_machasm:

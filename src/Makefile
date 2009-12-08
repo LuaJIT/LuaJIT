@@ -231,7 +231,7 @@ HOST_T= $(BUILDVM_T)
 LJVM_S= lj_vm.s
 LJVM_O= lj_vm.o
 LJVM_BOUT= $(LJVM_S)
-LJVM_MODE= asm
+LJVM_MODE= elfasm
 
 LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o \
 	 lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o
@@ -292,6 +292,9 @@ ifeq (Windows,$(TARGET_SYS))
     BUILDMODE= dynamic
     TARGET_XCFLAGS+= -DLUA_BUILD_AS_DLL
   endif
+endif
+ifeq (Darwin,$(TARGET_SYS))
+  LJVM_MODE= machasm
 endif
 
 ifeq (static,$(BUILDMODE))

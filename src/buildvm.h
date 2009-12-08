@@ -49,7 +49,7 @@ struct dasm_State;
 #endif
 
 #define BUILDDEF(_) \
-  _(asm) _(elfasm) _(coffasm) _(machasm) BUILDDEFX(_) _(raw) \
+  _(elfasm) _(coffasm) _(machasm) BUILDDEFX(_) _(raw) \
   _(ffdef) _(libdef) _(recdef) _(vmdef) \
   _(folddef)
 
