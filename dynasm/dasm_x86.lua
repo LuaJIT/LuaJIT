@@ -1,17 +1,19 @@
 ------------------------------------------------------------------------------
--- DynASM x86 module.
+-- DynASM x86/x64 module.
 --
 -- Copyright (C) 2005-2009 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 
+local x64 = x64
+
 -- Module information:
 local _info = {
-  arch =	"x86",
-  description =	"DynASM x86 (i386) module",
+  arch =	x64 and "x64" or "x86",
+  description =	"DynASM x86/x64 module",
   version =	"1.2.1",
   vernum =	 10201,
-  release =	"2009-04-16",
+  release =	"2009-12-09",
   author =	"Mike Pall",
   license =	"MIT",
 }
@@ -261,9 +263,9 @@ local reg_list = {}		-- Canonical list of int. register names.
 local map_type = {}		-- Type name -> { ctype, reg }
 local ctypenum = 0		-- Type number (for _PTx macros).
 
-local addrsize = "d"		-- Size for address operands. !x64
+local addrsize = x64 and "q" or "d"	-- Size for address operands.
 
--- Helper function to fill register maps.
+-- Helper functions to fill register maps.
 local function mkrmap(sz, cl, names)
   local cname = format("@%s", sz)
   reg_list[#reg_list+1] = cname
@@ -275,33 +277,57 @@ local function mkrmap(sz, cl, names)
     map_reg_valid_base[cname] = true
     map_reg_valid_index[cname] = true
   end
-  for n,name in ipairs(names) do
-    local iname = format("@%s%x", sz, n-1)
-    reg_list[#reg_list+1] = iname
+  if names then
+    for n,name in ipairs(names) do
+      local iname = format("@%s%x", sz, n-1)
+      reg_list[#reg_list+1] = iname
+      map_archdef[name] = iname
+      map_reg_rev[iname] = name
+      map_reg_num[iname] = n-1
+      map_reg_opsize[iname] = sz
+      if sz == addrsize then
+	map_reg_valid_base[iname] = true
+	map_reg_valid_index[iname] = true
+      end
+    end
+  end
+  for i=0,(x64 and sz ~= "f") and 15 or 7 do
+    local iname = format("@%s%x", sz, i)
+    local name
+    if sz == "o" then name = format("xmm%d", i)
+    elseif sz == "f" then name = format("st%d", i)
+    else name = format("r%d%s", i, sz == addrsize and "" or sz) end
     map_archdef[name] = iname
-    map_reg_rev[iname] = name
-    map_reg_num[iname] = n-1
-    map_reg_opsize[iname] = sz
-    if sz == addrsize then
-      map_reg_valid_base[iname] = true
-      map_reg_valid_index[iname] = true
+    if not map_reg_rev[iname] then
+      reg_list[#reg_list+1] = iname
+      map_reg_rev[iname] = name
+      map_reg_num[iname] = i
+      map_reg_opsize[iname] = sz
+      if sz == addrsize then
+	map_reg_valid_base[iname] = true
+	map_reg_valid_index[iname] = true
+      end
     end
   end
   reg_list[#reg_list+1] = ""
 end
 
--- Integer registers (dword, word and byte sized).
+-- Integer registers (qword, dword, word and byte sized).
+if x64 then
+  mkrmap("q", "Rq", {"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"})
+end
 mkrmap("d", "Rd", {"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"})
-map_reg_valid_index[map_archdef.esp] = false
 mkrmap("w", "Rw", {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"})
 mkrmap("b", "Rb", {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"})
+-- !x64: ah, ch, dh, bh not valid with REX, r4b-r15b require REX
+map_reg_valid_index[map_archdef[x64 and "rsp" or "esp"]] = false
 map_archdef["Ra"] = "@"..addrsize
 
 -- FP registers (internally tword sized, but use "f" as operand size).
-mkrmap("f", "Rf", {"st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"})
+mkrmap("f", "Rf")
 
 -- SSE registers (oword sized, but qword and dword accessible).
-mkrmap("o", "xmm", {"xmm0","xmm1","xmm2","xmm3","xmm4","xmm5","xmm6","xmm7"})
+mkrmap("o", "xmm")
 
 -- Operand size prefixes to codes.
 local map_opsize = {
