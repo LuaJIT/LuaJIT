@@ -853,7 +853,7 @@ end
 --   Hex chars are accumulated to form the opcode (left to right).
 --   "n"       disables the standard opcode mods
 --             (otherwise: -1 for "b", o16 prefix for "w", rex.w for "q")
---   "W"       Force REX.W.
+--   "X"       Force REX.W.
 --   "r"/"R"   adds the reg. number from the 1st/2nd operand to the opcode.
 --   "m"/"M"   generates ModRM/SIB from the 1st/2nd operand.
 --             The spare 3 bits are either filled with the last hex digit or
@@ -1158,8 +1158,8 @@ local map_op = {
   cvtps2pd_2 =	"rro:0F5ArM|rx/oq:",
   cvtsd2si_2 =	"rr/do:F20F2DrM|rr/qo:|rx/dq:|rxq:",
   cvtsd2ss_2 =	"rro:F20F5ArM|rx/oq:",
-  cvtsi2sd_2 =	"rm/od:F20F2ArM|rm/oq:F20F2ArWM",
-  cvtsi2ss_2 =	"rm/od:F30F2ArM|rm/oq:F30F2ArWM",
+  cvtsi2sd_2 =	"rm/od:F20F2ArM|rm/oq:F20F2ArXM",
+  cvtsi2ss_2 =	"rm/od:F30F2ArM|rm/oq:F30F2ArXM",
   cvtss2sd_2 =	"rro:F30F5ArM|rx/od:",
   cvtss2si_2 =	"rr/do:F20F2CrM|rr/qo:|rxd:|rx/qd:",
   cvttpd2dq_2 =	"rmo:660FE6rM",
@@ -1172,7 +1172,7 @@ local map_op = {
   mfence_0 =	"0FAEF0",
   movapd_2 =	"rmo:660F28rM|mro:660F29Rm",
   movaps_2 =	"rmo:0F28rM|mro:0F29Rm",
-  movd_2 =	"rm/od:660F6ErM|rm/oq:660F6EWrM|mr/do:660F7ERm|mr/qo:",
+  movd_2 =	"rm/od:660F6ErM|rm/oq:660F6ErXM|mr/do:660F7ERm|mr/qo:",
   movdqa_2 =	"rmo:660F6FrM|mro:660F7FRm",
   movdqu_2 =	"rmo:F30F6FrM|mro:F30F7FRm",
   movhlps_2 =	"rro:0F12rM",
@@ -1319,7 +1319,7 @@ local map_op = {
   blendvps_3 =	"rmRo:660F3814rM",
   dppd_3 =	"rmio:660F3A41rMU",
   dpps_3 =	"rmio:660F3A40rMU",
-  extractps_3 =	"mri/do:660F3A17RmU|rri/qo:660F3A17RWmU",
+  extractps_3 =	"mri/do:660F3A17RmU|rri/qo:660F3A17RXmU",
   insertps_3 =	"rrio:660F3A41rMU|rxi/od:",
   movntdqa_2 =	"rmo:660F382ArM",
   mpsadbw_3 =	"rmio:660F3A42rMU",
@@ -1334,7 +1334,7 @@ local map_op = {
   phminposuw_2 = "rmo:660F3841rM",
   pinsrb_3 =	"rri/od:660F3A20nrMU|rxi/ob:",
   pinsrd_3 =	"rmi/od:660F3A22rMU",
-  pinsrq_3 =	"rmi/oq:660F3A22rWMU",
+  pinsrq_3 =	"rmi/oq:660F3A22rXMU",
   pmaxsb_2 =	"rmo:660F383CrM",
   pmaxsd_2 =	"rmo:660F383DrM",
   pmaxud_2 =	"rmo:660F383FrM",
@@ -1465,7 +1465,7 @@ local function dopattern(pat, args, sz, op)
       addin = nil
     elseif c == "n" then	-- Disable operand size mods for opcode.
       szov = nil
-    elseif c == "W" then	-- Force REX.W.
+    elseif c == "X" then	-- Force REX.W.
       rex = 8
     elseif c == "r" then	-- Merge 1st operand regno. into opcode.
       addin = args[1]; opcode = opcode + (addin.reg % 8)
