@@ -455,22 +455,29 @@ local function wputszarg(sz, n)
 end
 
 -- Put multi-byte opcode with operand-size dependent modifications.
-local function wputop(sz, op)
+local function wputop(sz, op, rex)
   local r
   if sz == "w" then wputb(102) end
   -- Needs >32 bit numbers, but only for crc32 eax, word [ebx]
   if op >= 4294967296 then r = op%4294967296 wputb((op-r)/4294967296) op = r end
   if op >= 16777216 then r = op % 16777216 wputb((op-r) / 16777216) op = r end
   if op >= 65536 then r = op % 65536 wputb((op-r) / 65536) op = r end
-  if op >= 256 then r = op % 256 wputb((op-r) / 256) op = r end
+  if op >= 256 then
+    r = op % 256
+    local b = (op-r) / 256
+    if b == 15 and rex ~= 0 then wputb(64 + rex % 15); rex = 0 end
+    wputb(b)
+    op = r
+  end
+  if rex ~= 0 then wputb(64 + rex % 15) end
   if sz == "b" then op = op - 1 end
   wputb(op)
 end
 
 -- Put ModRM or SIB formatted byte.
 local function wputmodrm(m, s, rm, vs, vrm)
-  assert(m < 4 and s < 8 and rm < 8, "bad modrm operands")
-  wputb(64*m + 8*s + rm)
+  assert(m < 4 and s < 16 and rm < 16, "bad modrm operands")
+  wputb(64*m + 8*(s%8) + (rm%8))
 end
 
 -- Put ModRM/SIB plus optional displacement.
@@ -513,7 +520,7 @@ local function wputmrmsib(t, imark, s, vsreg)
 
   local m
   if tdisp == "number" then -- Check displacement size at assembly time.
-    if disp == 0 and reg ~= 5 then -- [ebp] -> [ebp+0] (in SIB, too)
+    if disp == 0 and (reg%8) ~= 5 then -- [ebp] -> [ebp+0] (in SIB, too)
       if not vreg then m = 0 end -- Force DISP to allow [Rd(5)] -> [ebp+0]
     elseif disp >= -128 and disp <= 127 then m = 1
     else m = 2 end
@@ -522,7 +529,7 @@ local function wputmrmsib(t, imark, s, vsreg)
   end
 
   -- Index register present or esp as base register: need SIB encoding.
-  if xreg or reg == 4 then
+  if xreg or (reg%8) == 4 then
     wputmodrm(m or 2, s, 4) -- ModRM.
     if m == nil or imark then waction("MARK") end
     if vsreg then waction("VREG", vsreg); wputxb(2) end
@@ -814,7 +821,7 @@ end
 -- (e.g. for FP memory access operations).
 --
 -- The operand size match string starts right after the mode match
--- characters and ends before the ":". "dwb" is assumed, if empty.
+-- characters and ends before the ":". "dwb" or "qdwb" is assumed, if empty.
 -- The effective data size of the operation is matched against this list.
 --
 -- If only the regular "b", "w", "d", "q", "t" operand sizes are
@@ -836,7 +843,7 @@ end
 -- Every character after the ":" is part of the pattern string:
 --   Hex chars are accumulated to form the opcode (left to right).
 --   "n"       disables the standard opcode mods
---             (otherwise: -1 for "b", o16 prefix for "w")
+--             (otherwise: -1 for "b", o16 prefix for "w", rex.w for "q")
 --   "r"/"R"   adds the reg. number from the 1st/2nd operand to the opcode.
 --   "m"/"M"   generates ModRM/SIB from the 1st/2nd operand.
 --             The spare 3 bits are either filled with the last hex digit or
@@ -1040,15 +1047,15 @@ local map_op = {
   cpuid_0 =	"0FA2", -- P1+
 
   -- floating point ops
-  fst_1 =	"ff:DDD0r|xd:D92m|xq:DD2m",
-  fstp_1 =	"ff:DDD8r|xd:D93m|xq:DD3m|xt:DB7m",
-  fld_1 =	"ff:D9C0r|xd:D90m|xq:DD0m|xt:DB5m",
+  fst_1 =	"ff:DDD0r|xd:D92m|xq:nDD2m",
+  fstp_1 =	"ff:DDD8r|xd:D93m|xq:nDD3m|xt:DB7m",
+  fld_1 =	"ff:D9C0r|xd:D90m|xq:nDD0m|xt:DB5m",
 
   fpop_0 =	"DDD8", -- Alias for fstp st0.
 
   fist_1 =	"xw:nDF2m|xd:DB2m",
-  fistp_1 =	"xw:nDF3m|xd:DB3m|xq:DF7m",
-  fild_1 =	"xw:nDF0m|xd:DB0m|xq:DF5m",
+  fistp_1 =	"xw:nDF3m|xd:DB3m|xq:nDF7m",
+  fild_1 =	"xw:nDF0m|xd:DB0m|xq:nDF5m",
 
   fxch_0 =	"D9C9",
   fxch_1 =	"ff:D9C8r",
@@ -1154,19 +1161,19 @@ local map_op = {
   movdqa_2 =	"rmo:660F6FrM|mro:660F7FRm",
   movdqu_2 =	"rmo:F30F6FrM|mro:F30F7FRm",
   movhlps_2 =	"rro:0F12rM",
-  movhpd_2 =	"rx/oq:660F16rM|xr/qo:660F17Rm",
-  movhps_2 =	"rx/oq:0F16rM|xr/qo:0F17Rm",
+  movhpd_2 =	"rx/oq:660F16rM|xr/qo:n660F17Rm",
+  movhps_2 =	"rx/oq:0F16rM|xr/qo:n0F17Rm",
   movlhps_2 =	"rro:0F16rM",
-  movlpd_2 =	"rx/oq:660F12rM|xr/qo:660F13Rm",
-  movlps_2 =	"rx/oq:0F12rM|xr/qo:0F13Rm",
+  movlpd_2 =	"rx/oq:660F12rM|xr/qo:n660F13Rm",
+  movlps_2 =	"rx/oq:0F12rM|xr/qo:n0F13Rm",
   movmskpd_2 =	"rr/do:660F50rM",
   movmskps_2 =	"rr/do:0F50rM",
   movntdq_2 =	"xro:660FE7Rm",
   movnti_2 =	"xrd:0FC3Rm",
   movntpd_2 =	"xro:660F2BRm",
   movntps_2 =	"xro:0F2BRm",
-  movq_2 =	"rro:F30F7ErM|rx/oq:|xr/qo:660FD6Rm",
-  movsd_2 =	"rro:F20F10rM|rx/oq:|xr/qo:F20F11Rm",
+  movq_2 =	"rro:F30F7ErM|rx/oq:|xr/qo:n660FD6Rm",
+  movsd_2 =	"rro:F20F10rM|rx/oq:|xr/qo:nF20F11Rm",
   movss_2 =	"rro:F30F10rM|rx/od:|xr/do:F30F11Rm",
   movupd_2 =	"rmo:660F10rM|mro:660F11Rm",
   movups_2 =	"rmo:0F10rM|mro:0F11Rm",
@@ -1260,7 +1267,7 @@ local map_op = {
   xorps_2 =	"rmo:0F57rM",
 
   -- SSE3 ops
-  fisttp_1 =	"xw:nDF1m|xd:DB1m|xq:DD1m",
+  fisttp_1 =	"xw:nDF1m|xd:DB1m|xq:nDD1m",
   addsubpd_2 =	"rmo:660FD0rM",
   addsubps_2 =	"rmo:F20FD0rM",
   haddpd_2 =	"rmo:660F7CrM",
@@ -1356,7 +1363,7 @@ local map_op = {
   insertq_2 =	"rro:F20F79rM",
   insertq_4 =	"rriio:F20F78rMUU",
   lzcnt_2 =	"rmdw:F30FBDrM",
-  movntsd_2 =	"xr/qo:F20F2BRm",
+  movntsd_2 =	"xr/qo:nF20F2BRm",
   movntss_2 =	"xr/do:F30F2BRm",
   -- popcnt is also in SSE4.2
 }
@@ -1391,7 +1398,7 @@ for name,n in pairs{ add = 0, mul = 1, com = 2, comp = 3,
   local nc = 192 + n * 8
   local nr = nc + (n < 4 and 0 or (n % 2 == 0 and 8 or -8))
   local fn = "f"..name
-  map_op[fn.."_1"] = format("ff:D8%02Xr|xd:D8%Xm|xq:DC%Xm", nc, n, n)
+  map_op[fn.."_1"] = format("ff:D8%02Xr|xd:D8%Xm|xq:nDC%Xm", nc, n, n)
   if n == 2 or n == 3 then
     map_op[fn.."_2"] = format("Fff:D8%02XR|Fx2d:D8%XM|Fx2q:DC%XM", nc, n, n)
   else
@@ -1427,6 +1434,7 @@ local function dopattern(pat, args, sz, op)
   local opcode = 0
   local szov = sz
   local narg = 1
+  local rex = 0
 
   -- Limit number of section buffer positions used by a single dasm_put().
   -- A single opcode needs a maximum of 2 positions. !x64
@@ -1443,34 +1451,39 @@ local function dopattern(pat, args, sz, op)
     elseif c == "n" then	-- Disable operand size mods for opcode.
       szov = nil
     elseif c == "r" then	-- Merge 1st operand regno. into opcode.
-      addin = args[1]; opcode = opcode + addin.reg
+      addin = args[1]; opcode = opcode + (addin.reg % 8)
       if narg < 2 then narg = 2 end
     elseif c == "R" then	-- Merge 2nd operand regno. into opcode.
-      addin = args[2]; opcode = opcode + addin.reg
+      addin = args[2]; opcode = opcode + (addin.reg % 8)
       narg = 3
     elseif c == "m" or c == "M" then	-- Encode ModRM/SIB.
       local s
       if addin then
 	s = addin.reg
-	opcode = opcode - s	-- Undo regno opcode merge.
+	opcode = opcode - (s%8)	-- Undo regno opcode merge.
       else
 	s = opcode % 16		-- Undo last digit.
 	opcode = (opcode - s) / 16
       end
-      wputop(szov, opcode); opcode = nil
+      local nn = c == "m" and 1 or 2
+      local t = args[nn]
+      if narg <= nn then narg = nn + 1 end
+      local rex = szov == "q" and 8 or 0
+      if t.reg and t.reg > 7 then rex = rex + 1 end
+      if t.xreg and t.xreg > 7 then rex = rex + 2 end
+      if s > 7 then rex = rex + 4 end
+      wputop(szov, opcode, rex); opcode = nil
       local imark = (sub(pat, -1) == "I") -- Force a mark (ugly).
       -- Put ModRM/SIB with regno/last digit as spare.
-      local nn = c == "m" and 1 or 2
-      wputmrmsib(args[nn], imark, s, addin and addin.vreg)
-      if narg <= nn then narg = nn + 1 end
+      wputmrmsib(t, imark, s, addin and addin.vreg)
       addin = nil
     else
       if opcode then -- Flush opcode.
 	if addin and addin.reg == -1 then
-	  wputop(szov, opcode + 1)
+	  wputop(szov, opcode + 1, 0)
 	  waction("VREG", addin.vreg); wputxb(0)
 	else
-	  wputop(szov, opcode)
+	  wputop(szov, opcode, (addin and addin.reg > 7) and 4 or 0)
 	end
 	opcode = nil
       end
@@ -1583,7 +1596,7 @@ map_op[".template__"] = function(params, template, nparams)
 	end
       else -- Match common operand size.
 	local szp = sz
-	if szm == "" then szm = "dwb" end -- Default size match.
+	if szm == "" then szm = x64 and "qdwb" or "dwb" end -- Default sizes.
 	if prefix == "1" then szp = args[1].opsize; szmix = nil
 	elseif prefix == "2" then szp = args[2].opsize; szmix = nil end
 	if not szmix and (prefix == "." or match(szm, szp or "#")) then
