@@ -126,7 +126,7 @@ local map_opc2 = {
 "movUmx$","movUmy$","movUxm$","movUym$","movUmz$",nil,"movUzm$",nil,
 "movapsXrm||movapdXrm",
 "movapsXmr||movapdXmr",
-"cvtpi2psXrMm|cvtsi2ssXrVm|cvtpi2pdXrMm|cvtsi2sdXrVm",
+"cvtpi2psXrMm|cvtsi2ssXrVmt|cvtpi2pdXrMm|cvtsi2sdXrVmt",
 "movntpsXmr|movntssXmr|movntpdXmr|movntsdXmr",
 "cvttps2piMrXm|cvttss2siVrXm|cvttpd2piMrXm|cvttsd2siVrXm",
 "cvtps2piMrXm|cvtss2siVrXm|cvtpd2piMrXm|cvtsd2siVrXm",
