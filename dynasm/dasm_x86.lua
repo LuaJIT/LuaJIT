@@ -447,7 +447,7 @@ end
 
 -- Put operand-size dependent number or arg (defaults to dword).
 local function wputszarg(sz, n)
-  if not sz or sz == "d" then wputdarg(n)
+  if not sz or sz == "d" or sz == "q" then wputdarg(n)
   elseif sz == "w" then wputwarg(n)
   elseif sz == "b" then wputbarg(n)
   elseif sz == "s" then wputsbarg(n)
@@ -457,11 +457,20 @@ end
 -- Put multi-byte opcode with operand-size dependent modifications.
 local function wputop(sz, op, rex)
   local r
+  if rex ~= 0 and not x64 then werror("bad operand size") end
   if sz == "w" then wputb(102) end
   -- Needs >32 bit numbers, but only for crc32 eax, word [ebx]
   if op >= 4294967296 then r = op%4294967296 wputb((op-r)/4294967296) op = r end
   if op >= 16777216 then r = op % 16777216 wputb((op-r) / 16777216) op = r end
-  if op >= 65536 then r = op % 65536 wputb((op-r) / 65536) op = r end
+  if op >= 65536 then
+    if rex ~= 0 then
+      local opc3 = op - op % 256
+      if opc3 == 0x0f3a00 or opc3 == 0x0f3800 then
+	wputb(64 + rex % 15); rex = 0
+      end
+    end
+    r = op % 65536 wputb((op-r) / 65536) op = r
+  end
   if op >= 256 then
     r = op % 256
     local b = (op-r) / 256
@@ -844,6 +853,7 @@ end
 --   Hex chars are accumulated to form the opcode (left to right).
 --   "n"       disables the standard opcode mods
 --             (otherwise: -1 for "b", o16 prefix for "w", rex.w for "q")
+--   "W"       Force REX.W.
 --   "r"/"R"   adds the reg. number from the 1st/2nd operand to the opcode.
 --   "m"/"M"   generates ModRM/SIB from the 1st/2nd operand.
 --             The spare 3 bits are either filled with the last hex digit or
@@ -888,18 +898,20 @@ local map_op = {
   -- 38-3D: cmp...
   ds_0 =	"3E",
   -- 3F: *aas
-  inc_1 =	"rdw:40r|m:FF0m",
-  dec_1 =	"rdw:48r|m:FF1m",
-  push_1 =	"rdw:50r|mdw:FF6m|S.:6AS|ib:n6Ai|i.:68i",
-  pop_1 =	"rdw:58r|mdw:8F0m",
+  inc_1 =	x64 and "m:FF0m" or "rdw:40r|m:FF0m",
+  dec_1 =	x64 and "m:FF1m" or "rdw:48r|m:FF1m",
+  push_1 =	(x64 and "rqw:50r|mqw:FF6m" or "rdw:50r|mdw:FF6m").."|S.:6AS|ib:n6Ai|i.:68i",
+  pop_1 =	x64 and "rqw:58r|mqw:8F0m" or "rdw:58r|mdw:8F0m",
   -- 60: *pusha, *pushad, *pushaw
   -- 61: *popa, *popad, *popaw
   -- 62: *bound rdw,x
-  -- 63: *arpl mw,rw
+  -- 63: x86: *arpl mw,rw
+  movsxd_2 =	x64 and "rm/qd:63rM",
   fs_0 =	"64",
   gs_0 =	"65",
   o16_0 =	"66",
-  a16_0 =	"67",
+  a16_0 =	not x64 and "67" or nil,
+  a32_0 =	x64 and "67",
   -- 68: push idw
   -- 69: imul rdw,mdw,idw
   -- 6A: push ib
@@ -925,11 +937,13 @@ local map_op = {
   -- 8E: *mov seg,mdw
   -- 8F: pop mdw
   nop_0 =	"90",
-  xchg_2 =	"Rrdw:90R|rRdw:90r|rm:87rM|mr:87Rm",
+  xchg_2 =	"Rrqdw:90R|rRqdw:90r|rm:87rM|mr:87Rm",
   cbw_0 =	"6698",
   cwde_0 =	"98",
+  cdqe_0 =	"4898",
   cwd_0 =	"6699",
   cdq_0 =	"99",
+  cqo_0 =	"4899",
   -- 9A: *call iw:idw
   wait_0 =	"9B",
   fwait_0 =	"9B",
@@ -941,6 +955,7 @@ local map_op = {
   popfd_0 =	"9D",
   sahf_0 =	"9E",
   lahf_0 =	"9F",
+  -- !x64: mov with 64 bit immediate
   mov_2 =	"OR:A3o|RO:A1O|mr:89Rm|rm:8BrM|rib:nB0ri|ridw:B8ri|mi:C70mi",
   movsb_0 =	"A4",
   movsw_0 =	"66A5",
@@ -994,8 +1009,8 @@ local map_op = {
   -- E5: *in Rdw,ib
   -- E6: *out ib,Rb
   -- E7: *out ib,Rdw
-  call_1 =	"md:FF2m|J.:E8J",
-  jmp_1 =	"md:FF4m|J.:E9J", -- short: EB
+  call_1 =	x64 and "mq:FF2m|J.:E8J" or "md:FF2m|J.:E8J",
+  jmp_1 =	x64 and "mq:FF4m|J.:E9J" or "md:FF4m|J.:E9J", -- short: EB
   -- EA: *jmp iw:idw
   -- EB: jmp ib
   -- EC: *in Rb,dx
@@ -1029,19 +1044,19 @@ local map_op = {
   div_1 =	"m:F76m",
   idiv_1 =	"m:F77m",
 
-  imul_2 =	"rmdw:0FAFrM|rIdw:69rmI|rSdw:6BrmS|ridw:69rmi",
-  imul_3 =	"rmIdw:69rMI|rmSdw:6BrMS|rmidw:69rMi",
+  imul_2 =	"rmqdw:0FAFrM|rIqdw:69rmI|rSqdw:6BrmS|riqdw:69rmi",
+  imul_3 =	"rmIqdw:69rMI|rmSqdw:6BrMS|rmiqdw:69rMi",
 
-  movzx_2 =	"rm/db:0FB6rM|rm/wb:0FB6rM|rm/dw:0FB7rM",
-  movsx_2 =	"rm/db:0FBErM|rm/wb:0FBErM|rm/dw:0FBFrM",
+  movzx_2 =	"rm/db:0FB6rM|rm/qb:|rm/wb:0FB6rM|rm/dw:0FB7rM|rm/qw:",
+  movsx_2 =	"rm/db:0FBErM|rm/qb:|rm/wb:0FBErM|rm/dw:0FBFrM|rm/qw:",
 
-  bswap_1 =	"rd:0FC8r",
-  bsf_2 =	"rmdw:0FBCrM",
-  bsr_2 =	"rmdw:0FBDrM",
-  bt_2 =	"mrdw:0FA3Rm|midw:0FBA4mU",
-  btc_2 =	"mrdw:0FBBRm|midw:0FBA7mU",
-  btr_2 =	"mrdw:0FB3Rm|midw:0FBA6mU",
-  bts_2 =	"mrdw:0FABRm|midw:0FBA5mU",
+  bswap_1 =	"rqd:0FC8r",
+  bsf_2 =	"rmqdw:0FBCrM",
+  bsr_2 =	"rmqdw:0FBDrM",
+  bt_2 =	"mrqdw:0FA3Rm|miqdw:0FBA4mU",
+  btc_2 =	"mrqdw:0FBBRm|miqdw:0FBA7mU",
+  btr_2 =	"mrqdw:0FB3Rm|miqdw:0FBA6mU",
+  bts_2 =	"mrqdw:0FABRm|miqdw:0FBA5mU",
 
   rdtsc_0 =	"0F31", -- P1+
   cpuid_0 =	"0FA2", -- P1+
@@ -1141,23 +1156,23 @@ local map_op = {
   cvtpi2ps_2 =	"rx/oq:0F2ArM",
   cvtps2dq_2 =	"rmo:660F5BrM",
   cvtps2pd_2 =	"rro:0F5ArM|rx/oq:",
-  cvtsd2si_2 =	"rr/do:F20F2DrM|rx/dq:",
+  cvtsd2si_2 =	"rr/do:F20F2DrM|rr/qo:|rx/dq:|rxq:",
   cvtsd2ss_2 =	"rro:F20F5ArM|rx/oq:",
-  cvtsi2sd_2 =	"rm/od:F20F2ArM",
-  cvtsi2ss_2 =	"rm/od:F30F2ArM",
+  cvtsi2sd_2 =	"rm/od:F20F2ArM|rm/oq:F20F2ArWM",
+  cvtsi2ss_2 =	"rm/od:F30F2ArM|rm/oq:F30F2ArWM",
   cvtss2sd_2 =	"rro:F30F5ArM|rx/od:",
-  cvtss2si_2 =	"rr/do:F20F2CrM|rx/dd:",
+  cvtss2si_2 =	"rr/do:F20F2CrM|rr/qo:|rxd:|rx/qd:",
   cvttpd2dq_2 =	"rmo:660FE6rM",
   cvttps2dq_2 =	"rmo:F30F5BrM",
-  cvttsd2si_2 =	"rr/do:F20F2CrM|rx/dq:",
-  cvttss2si_2 =	"rr/do:F30F2CrM|rx/dd:",
+  cvttsd2si_2 =	"rr/do:F20F2CrM|rr/qo:|rx/dq:|rxq:",
+  cvttss2si_2 =	"rr/do:F30F2CrM|rr/qo:|rxd:|rx/qd:",
   ldmxcsr_1 =	"xd:0FAE2m",
   lfence_0 =	"0FAEE8",
   maskmovdqu_2 = "rro:660FF7rM",
   mfence_0 =	"0FAEF0",
   movapd_2 =	"rmo:660F28rM|mro:660F29Rm",
   movaps_2 =	"rmo:0F28rM|mro:0F29Rm",
-  movd_2 =	"rm/od:660F6ErM|mr/do:660F7ERm",
+  movd_2 =	"rm/od:660F6ErM|rm/oq:660F6EWrM|mr/do:660F7ERm|mr/qo:",
   movdqa_2 =	"rmo:660F6FrM|mro:660F7FRm",
   movdqu_2 =	"rmo:F30F6FrM|mro:F30F7FRm",
   movhlps_2 =	"rro:0F12rM",
@@ -1169,7 +1184,7 @@ local map_op = {
   movmskpd_2 =	"rr/do:660F50rM",
   movmskps_2 =	"rr/do:0F50rM",
   movntdq_2 =	"xro:660FE7Rm",
-  movnti_2 =	"xrd:0FC3Rm",
+  movnti_2 =	"xrqd:0FC3Rm",
   movntpd_2 =	"xro:660F2BRm",
   movntps_2 =	"xro:0F2BRm",
   movq_2 =	"rro:F30F7ErM|rx/oq:|xr/qo:n660FD6Rm",
@@ -1304,7 +1319,7 @@ local map_op = {
   blendvps_3 =	"rmRo:660F3814rM",
   dppd_3 =	"rmio:660F3A41rMU",
   dpps_3 =	"rmio:660F3A40rMU",
-  extractps_3 =	"mri/do:660F3A17RmU",
+  extractps_3 =	"mri/do:660F3A17RmU|rri/qo:660F3A17RWmU",
   insertps_3 =	"rrio:660F3A41rMU|rxi/od:",
   movntdqa_2 =	"rmo:660F382ArM",
   mpsadbw_3 =	"rmio:660F3A42rMU",
@@ -1312,14 +1327,14 @@ local map_op = {
   pblendvb_3 =	"rmRo:660F3810rM",
   pblendw_3 =	"rmio:660F3A0ErMU",
   pcmpeqq_2 =	"rmo:660F3829rM",
-  pextrb_3 =	"rri/do:660F3A14nRmU|xri/bo:",
+  pextrb_3 =	"rri/do:660F3A14nRmU|rri/qo:|xri/bo:",
   pextrd_3 =	"mri/do:660F3A16RmU",
-  -- x64: pextrq
+  pextrq_3 =	"mri/qo:660F3A16RmU",
   -- pextrw is SSE2, mem operand is SSE4.1 only
   phminposuw_2 = "rmo:660F3841rM",
-  pinsrb_3 =  "rri/od:660F3A20nrMU|rxi/ob:",
-  pinsrd_3 =  "rmi/od:660F3A22rMU",
-  -- x64: pinsrq
+  pinsrb_3 =	"rri/od:660F3A20nrMU|rxi/ob:",
+  pinsrd_3 =	"rmi/od:660F3A22rMU",
+  pinsrq_3 =	"rmi/oq:660F3A22rWMU",
   pmaxsb_2 =	"rmo:660F383CrM",
   pmaxsd_2 =	"rmo:660F383DrM",
   pmaxud_2 =	"rmo:660F383FrM",
@@ -1349,20 +1364,20 @@ local map_op = {
   roundss_3 =	"rrio:660F3A0ArMU|rxi/od:",
 
   -- SSE4.2 ops
-  crc32_2 =	"rmd:F20F38F1rM|rm/dw:66F20F38F1rM|rm/db:F20F38F0nrM",
+  crc32_2 =	"rmqd:F20F38F1rM|rm/dw:66F20F38F1rM|rm/db:F20F38F0rM|rm/qb:",
   pcmpestri_3 =	"rmio:660F3A61rMU",
   pcmpestrm_3 =	"rmio:660F3A60rMU",
   pcmpgtq_2 =	"rmo:660F3837rM",
   pcmpistri_3 =	"rmio:660F3A63rMU",
   pcmpistrm_3 =	"rmio:660F3A62rMU",
-  popcnt_2 =	"rmdw:F30FB8rM",
+  popcnt_2 =	"rmqdw:F30FB8rM",
 
   -- SSE4a
   extrq_2 =	"rro:660F79rM",
   extrq_3 =	"riio:660F780mUU",
   insertq_2 =	"rro:F20F79rM",
   insertq_4 =	"rriio:F20F78rMUU",
-  lzcnt_2 =	"rmdw:F30FBDrM",
+  lzcnt_2 =	"rmqdw:F30FBDrM",
   movntsd_2 =	"xr/qo:nF20F2BRm",
   movntss_2 =	"xr/do:F30F2BRm",
   -- popcnt is also in SSE4.2
@@ -1375,21 +1390,21 @@ for name,n in pairs{ add = 0, ["or"] = 1, adc = 2, sbb = 3,
 		     ["and"] = 4, sub = 5, xor = 6, cmp = 7 } do
   local n8 = n * 8
   map_op[name.."_2"] = format(
-    "mr:%02XRm|rm:%02XrM|mI1dw:81%XmI|mS1dw:83%XmS|Ri1dwb:%02Xri|mi1dwb:81%Xmi",
+    "mr:%02XRm|rm:%02XrM|mI1qdw:81%XmI|mS1qdw:83%XmS|Ri1qdwb:%02Xri|mi1qdwb:81%Xmi",
     1+n8, 3+n8, n, n, 5+n8, n)
 end
 
 -- Shift ops.
 for name,n in pairs{ rol = 0, ror = 1, rcl = 2, rcr = 3,
 		     shl = 4, shr = 5,          sar = 7, sal = 4 } do
-  map_op[name.."_2"] = format("m1:D1%Xm|mC1dwb:D3%Xm|mi:C1%XmU", n, n, n)
+  map_op[name.."_2"] = format("m1:D1%Xm|mC1qdwb:D3%Xm|mi:C1%XmU", n, n, n)
 end
 
 -- Conditional ops.
 for cc,n in pairs(map_cc) do
   map_op["j"..cc.."_1"] = format("J.:0F8%XJ", n) -- short: 7%X
   map_op["set"..cc.."_1"] = format("mb:n0F9%X2m", n)
-  map_op["cmov"..cc.."_2"] = format("rmdw:0F4%XrM", n) -- P6+
+  map_op["cmov"..cc.."_2"] = format("rmqdw:0F4%XrM", n) -- P6+
 end
 
 -- FP arithmetic ops.
@@ -1400,9 +1415,9 @@ for name,n in pairs{ add = 0, mul = 1, com = 2, comp = 3,
   local fn = "f"..name
   map_op[fn.."_1"] = format("ff:D8%02Xr|xd:D8%Xm|xq:nDC%Xm", nc, n, n)
   if n == 2 or n == 3 then
-    map_op[fn.."_2"] = format("Fff:D8%02XR|Fx2d:D8%XM|Fx2q:DC%XM", nc, n, n)
+    map_op[fn.."_2"] = format("Fff:D8%02XR|Fx2d:D8%XM|Fx2q:nDC%XM", nc, n, n)
   else
-    map_op[fn.."_2"] = format("Fff:D8%02XR|fFf:DC%02Xr|Fx2d:D8%XM|Fx2q:DC%XM", nc, nr, n, n)
+    map_op[fn.."_2"] = format("Fff:D8%02XR|fFf:DC%02Xr|Fx2d:D8%XM|Fx2q:nDC%XM", nc, nr, n, n)
     map_op[fn.."p_1"] = format("ff:DE%02Xr", nr)
     map_op[fn.."p_2"] = format("fFf:DE%02Xr", nr)
   end
@@ -1450,6 +1465,8 @@ local function dopattern(pat, args, sz, op)
       addin = nil
     elseif c == "n" then	-- Disable operand size mods for opcode.
       szov = nil
+    elseif c == "W" then	-- Force REX.W.
+      rex = 8
     elseif c == "r" then	-- Merge 1st operand regno. into opcode.
       addin = args[1]; opcode = opcode + (addin.reg % 8)
       if narg < 2 then narg = 2 end
@@ -1468,7 +1485,7 @@ local function dopattern(pat, args, sz, op)
       local nn = c == "m" and 1 or 2
       local t = args[nn]
       if narg <= nn then narg = nn + 1 end
-      local rex = szov == "q" and 8 or 0
+      if szov == "q" and rex == 0 then rex = rex + 8 end
       if t.reg and t.reg > 7 then rex = rex + 1 end
       if t.xreg and t.xreg > 7 then rex = rex + 2 end
       if s > 7 then rex = rex + 4 end
@@ -1479,11 +1496,13 @@ local function dopattern(pat, args, sz, op)
       addin = nil
     else
       if opcode then -- Flush opcode.
+	if szov == "q" and rex == 0 then rex = rex + 8 end
 	if addin and addin.reg == -1 then
-	  wputop(szov, opcode + 1, 0)
+	  wputop(szov, opcode + 1, rex)
 	  waction("VREG", addin.vreg); wputxb(0)
 	else
-	  wputop(szov, opcode, (addin and addin.reg > 7) and 4 or 0)
+	  if addin and addin.reg > 7 then rex = rex + 1 end
+	  wputop(szov, opcode, rex)
 	end
 	opcode = nil
       end
