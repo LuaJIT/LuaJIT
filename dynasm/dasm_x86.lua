@@ -13,7 +13,7 @@ local _info = {
   description =	"DynASM x86/x64 module",
   version =	"1.2.1",
   vernum =	 10201,
-  release =	"2009-12-09",
+  release =	"2009-12-13",
   author =	"Mike Pall",
   license =	"MIT",
 }
@@ -40,7 +40,7 @@ local action_names = {
   -- int arg, 1 buffer pos:
   "DISP",  "IMM_S", "IMM_B", "IMM_W", "IMM_D",  "IMM_WB", "IMM_DB",
   -- action arg (1 byte), int arg, 1 buffer pos (reg/num):
-  "VREG", "SPACE",
+  "VREG", "SPACE", -- !x64: VREG support NYI.
   -- ptrdiff_t arg, 1 buffer pos (address): !x64
   "SETLABEL", "REL_A",
   -- action arg (1 byte) or int arg, 2 buffer pos (link, offset):
@@ -518,8 +518,13 @@ local function wputmrmsib(t, imark, s, vsreg)
       wputmodrm(t.xsc, xreg, 5)
       if vxreg then waction("VREG", vxreg); wputxb(3) end
     else
-      -- Pure displacement.
-      wputmodrm(0, s, 5) -- [disp] -> (0, s, ebp)
+      -- Pure 32 bit displacement.
+      if x64 then
+	wputmodrm(0, s, 4) -- [disp] -> (0, s, esp) (0, esp, ebp)
+	wputmodrm(0, 4, 5)
+      else
+	wputmodrm(0, s, 5) -- [disp] -> (0, s, ebp)
+      end
       if imark then waction("MARK") end
       if vsreg then waction("VREG", vsreg); wputxb(2) end
     end
@@ -676,7 +681,7 @@ local function parseoperand(param)
       -- [disp]
       t.disp = toint(br)
       if t.disp then
-	t.mode = "xmO"
+	t.mode = x64 and "xm" or "xmO"
 	break
       end
 
@@ -686,7 +691,7 @@ local function parseoperand(param)
       reg, t.reg, tp = rtexpr(reg)
       if not t.reg then
 	-- [expr]
-	t.mode = "xmO"
+	t.mode = x64 and "xm" or "xmO"
 	t.disp = dispexpr("+"..br)
 	break
       end
@@ -955,7 +960,6 @@ local map_op = {
   popfd_0 =	"9D",
   sahf_0 =	"9E",
   lahf_0 =	"9F",
-  -- !x64: mov with 64 bit immediate
   mov_2 =	"OR:A3o|RO:A1O|mr:89Rm|rm:8BrM|rib:nB0ri|ridw:B8ri|mi:C70mi",
   movsb_0 =	"A4",
   movsw_0 =	"66A5",
@@ -1637,6 +1641,42 @@ map_op[".template__"] = function(params, template, nparams)
   end
 
   werror(msg.." in `"..opmodestr(params.op, args).."'")
+end
+
+------------------------------------------------------------------------------
+
+-- x64-specific opcode for 64 bit immediates and displacements.
+if x64 then
+  function map_op.mov64_2(params)
+    local opcode, op64, sz, rex
+    local op64 = match(params[1], "^%[%s*(.-)%s*%]$")
+    if op64 then
+      local a = parseoperand(params[2])
+      if a.mode ~= "rmR" then werror("bad operand mode") end
+      sz = a.opsize
+      rex = sz == "q" and 8 or 0
+      opcode = 0xa3
+    else
+      op64 = match(params[2], "^%[%s*(.-)%s*%]$")
+      local a = parseoperand(params[1])
+      if op64 then
+	if a.mode ~= "rmR" then werror("bad operand mode") end
+	sz = a.opsize
+	rex = sz == "q" and 8 or 0
+	opcode = 0xa1
+      else
+	if sub(a.mode, 1, 1) ~= "r" or a.opsize ~= "q" then
+	  werror("bad operand mode")
+	end
+	op64 = params[2]
+	opcode = 0xb8 + (a.reg%8) -- !x64: no VREG support.
+        rex = a.reg > 7 and 9 or 8
+      end
+    end
+    wputop(sz, opcode, rex)
+    waction("IMM_D", format("(unsigned int)(%s)", op64))
+    waction("IMM_D", format("(unsigned int)((%s)>>32)", op64))
+  end
 end
 
 ------------------------------------------------------------------------------
