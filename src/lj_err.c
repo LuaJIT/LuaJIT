@@ -204,7 +204,7 @@ static void err_chunkid(char *out, const char *src)
     strcpy(out, src);
   } else {  /* out = [string "string"] */
     size_t len; /* Length, up to first control char. */
-    for (len = 0; len < LUA_IDSIZE-11; len++)
+    for (len = 0; len < LUA_IDSIZE-12; len++)
       if (((const unsigned char *)src)[len] < ' ') break;
     strcpy(out, "[string \""); out += 9;
     if (src[len] != '\0') {  /* must truncate? */
