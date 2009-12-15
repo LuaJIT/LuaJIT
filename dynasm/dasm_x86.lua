@@ -1648,6 +1648,7 @@ end
 -- x64-specific opcode for 64 bit immediates and displacements.
 if x64 then
   function map_op.mov64_2(params)
+    if not params then return { "reg, imm", "reg, [disp]", "[disp], reg" } end
     local opcode, op64, sz, rex
     local op64 = match(params[1], "^%[%s*(.-)%s*%]$")
     if op64 then
