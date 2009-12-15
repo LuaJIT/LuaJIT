@@ -2,7 +2,11 @@
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
 |
+|.if X64
+|.arch x64
+|.else
 |.arch x86
+|.endif
 |.section code_op, code_sub
 |
 |.actionlist build_actionlist
@@ -30,8 +34,32 @@
 |.define RD,		RC
 |.define RDL,		RCL
 |
-|.define FCARG1,	ecx		// Fastcall arguments.
+|.if not X64
+|.define FCARG1,	ecx		// x86 fastcall arguments.
 |.define FCARG2,	edx
+|.elif X64WIN
+|.define CARG1,		rcx		// x64/WIN64 C call arguments.
+|.define CARG2,		rdx
+|.define CARG3,		r8
+|.define CARG4,		r9
+|.define CARG1d,	ecx
+|.define CARG2d,	edx
+|.define CARG3d,	r8d
+|.define CARG4d,	r9d
+|.else
+|.define CARG1,		rsi		// x64/POSIX C call arguments.
+|.define CARG2,		rdi
+|.define CARG3,		rdx
+|.define CARG4,		rcx
+|.define CARG5,		r8
+|.define CARG6,		r9
+|.define CARG1d,	esi
+|.define CARG2d,	edi
+|.define CARG3d,	edx
+|.define CARG4d,	ecx
+|.define CARG5d,	r8d
+|.define CARG6d,	r9d
+|.endif
 |
 |// Type definitions. Some of these are only used for documentation.
 |.type L,		lua_State
@@ -49,12 +77,26 @@
 |.type TRACE,		Trace
 |.type EXITINFO,	ExitInfo
 |
+|// x86/x64 portability macros
+|.macro push_eax; .if X64; push rax; .else; push eax; .endif; .endmacro
+|.macro pop_eax; .if X64; pop rax; .else; pop eax; .endif; .endmacro
+|
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.macro saveregs
-|  push ebp; push edi; push esi; push ebx
+|  .if X64
+|    .if X64WIN; push rdi; push rsi; .endif
+|    push rbp; push rbx; push r12; push r13; push r14; push r15
+|  .else
+|    push ebp; push edi; push esi; push ebx
+|  .endif
 |.endmacro
 |.macro restoreregs
-|  pop ebx; pop esi; pop edi; pop ebp
+|  .if X64
+|    pop r15; pop r14; pop r13; pop r12; pop rbx; pop rbp
+|    .if X64WIN; pop rsi; pop rdi; .endif
+|  .else
+|    pop ebx; pop esi; pop edi; pop ebp
+|  .endif
 |.endmacro
 |.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
 |
@@ -1567,9 +1609,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   ||if (cmov) {
   |  fucomi st1; cmovop st1; fpop1
   ||} else {
-  |  push eax
+  |  push_eax
   |  fucom st1; fnstsw ax; test ah, 1; nocmovop >2; fxch; 2: ; fpop
-  |  pop eax
+  |  pop_eax
   ||}
   |  add RB, 1
   |  jmp <1
@@ -2135,7 +2177,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   ||if (cmov) {
   |  fucomip st1
   ||} else {
-  |  push eax; fucomp st1; fnstsw ax; sahf; pop eax
+  |  push_eax; fucomp st1; fnstsw ax; sahf; pop_eax
   ||}
   |  jnz >8				// Branch for FP exponents.
   |  jp >9				// Branch for NaN exponent.
@@ -2145,7 +2187,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |// Arg2 (int) on C stack. No int/xmm regs modified.
   |// Caveat: needs 2 slots on x87 stack!
   |->vm_powi:
-  |  push eax
+  |  push_eax
   |  mov eax, [esp+8]
   |  cmp eax, 1; jle >6			// i<=1?
   |  // Now 1 < (unsigned)i <= 0x80000000.
@@ -2166,7 +2208,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |4:
   |  fmulp st1
   |5:
-  |  pop eax
+  |  pop_eax
   |  ret
   |6:
   |  je <5				// x^1 ==> x
@@ -2177,11 +2219,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp <1				// x^-i ==> (1/x)^i
   |7:
   |  fpop; fld1				// x^0 ==> 1
-  |  pop eax
+  |  pop_eax
   |  ret
   |
   |8:  // FP/FP power function x^y.
-  |  push eax
+  |  push_eax
   |  fst dword [esp+8]
   |  fxch
   |  fst dword [esp+12]
@@ -2189,7 +2231,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  cmp eax, 0xff000000; je >2			// x^+-Inf?
   |  mov eax, [esp+12]; shl eax, 1; je >4	// +-0^y?
   |  cmp eax, 0xff000000; je >4			// +-Inf^y?
-  |  pop eax
+  |  pop_eax
   |  fyl2x
   |  jmp ->vm_exp2raw
   |
@@ -2198,7 +2240,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   ||if (cmov) {
   |  fucomip st2
   ||} else {
-  |  push eax; fucomp st2; fnstsw ax; sahf; pop eax
+  |  push_eax; fucomp st2; fnstsw ax; sahf; pop_eax
   ||}
   |  je >1				// 1^NaN ==> 1
   |  fxch				// x^NaN ==> NaN
@@ -2219,13 +2261,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  ror eax, 1; xor eax, [esp+8]; jns >3	// |x|<>1, x^+-Inf ==> +Inf/0
   |  fxch
   |3:
-  |  fpop1; fabs; pop eax
+  |  fpop1; fabs; pop_eax
   |  ret
   |
   |4:  // Handle +-0^y or +-Inf^y.
   |  cmp dword [esp+8], 0; jge <3		// y >= 0, x^y ==> |x|
   |  fpop; fpop
-  |  test eax, eax; pop eax; jz >5		// y < 0, +-0^y ==> +Inf
+  |  test eax, eax; pop_eax; jz >5		// y < 0, +-0^y ==> +Inf
   |  fldz					// y < 0, +-Inf^y ==> 0
   |  ret
   |5:
@@ -2289,6 +2331,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |// int lj_vm_cpuid(uint32_t f, uint32_t res[4])
   |->vm_cpuid:
+  |.if X64
+  |  mov eax, CARG1d
+  |  .if X64WIN; push rsi; mov rsi, CARG2; .endif
+  |  push rbx
+  |  cpuid
+  |  mov [rsi], eax
+  |  mov [rsi+4], ebx
+  |  mov [rsi+8], ecx
+  |  mov [rsi+12], edx
+  |  pop rbx
+  |  .if X64WIN; pop rsi; .endif
+  |  ret
+  |.else
   |  pushfd
   |  pop edx
   |  mov ecx, edx
@@ -2313,6 +2368,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  pop edi
   |1:
   |  ret
+  |.endif
   |
   |//-----------------------------------------------------------------------
 }
