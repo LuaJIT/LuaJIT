@@ -370,8 +370,12 @@ map_coreop[".include_1"] = function(params)
   if fatal then wfatal("in include file") end
 end
 
--- Make .include initially available, too.
+-- Make .include and conditionals initially available, too.
 map_op[".include_1"] = map_coreop[".include_1"]
+map_op[".if_1"] = map_coreop[".if_1"]
+map_op[".elif_1"] = map_coreop[".elif_1"]
+map_op[".else_0"] = map_coreop[".else_0"]
+map_op[".endif_0"] = map_coreop[".endif_0"]
 
 ------------------------------------------------------------------------------
 
