@@ -82,23 +82,27 @@
 |.macro pop_eax; .if X64; pop rax; .else; pop eax; .endif; .endmacro
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
+|.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
 |.macro saveregs
 |  .if X64
 |    .if X64WIN; push rdi; push rsi; .endif
 |    push rbp; push rbx; push r12; push r13; push r14; push r15
+|    sub rsp, CFRAME_SPACE
 |  .else
 |    push ebp; push edi; push esi; push ebx
+|    sub esp, CFRAME_SPACE
 |  .endif
 |.endmacro
 |.macro restoreregs
 |  .if X64
+|    add rsp, CFRAME_SPACE
 |    pop r15; pop r14; pop r13; pop r12; pop rbx; pop rbp
 |    .if X64WIN; pop rsi; pop rdi; .endif
 |  .else
+|    add esp, CFRAME_SPACE
 |    pop ebx; pop esi; pop edi; pop ebp
 |  .endif
 |.endmacro
-|.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
 |
 |.define INARG_4,	aword [esp+aword*15]
 |.define INARG_3,	aword [esp+aword*14]
@@ -430,7 +434,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  xor eax, eax			// Ok return status for vm_pcall.
   |
   |->vm_leave_unw:
-  |  add esp, CFRAME_SPACE
   |  restoreregs
   |  ret
   |
@@ -550,7 +553,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  // (lua_State *L, StkId base, int nres1 = 0, ptrdiff_t ef = 0)
   |  saveregs
   |  mov PC, FRAME_C
-  |  sub esp, CFRAME_SPACE
   |  xor RD, RD
   |  mov L:RB, SAVE_L
   |  lea KBASE, [esp+CFRAME_RESUME]
@@ -590,7 +592,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov PC, FRAME_C
   |
   |1:  // Entry point for vm_pcall above (PC = ftype).
-  |  sub esp, CFRAME_SPACE
   |  mov L:RB, SAVE_L
   |  mov RA, INARG_BASE
   |
@@ -623,8 +624,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CPFunction cp, lua_CFunction func, void *ud)
   |  saveregs
-  |  sub esp, CFRAME_SPACE
-  |
   |  mov L:RB, SAVE_L
   |  mov RC, INARG_CP_UD
   |  mov RA, INARG_CP_FUNC
