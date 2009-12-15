@@ -273,7 +273,7 @@ local function mkrmap(sz, cl, names)
   map_reg_rev[cname] = cl
   map_reg_num[cname] = -1
   map_reg_opsize[cname] = sz
-  if sz == addrsize then
+  if sz == addrsize or sz == "d" then
     map_reg_valid_base[cname] = true
     map_reg_valid_index[cname] = true
   end
@@ -285,7 +285,7 @@ local function mkrmap(sz, cl, names)
       map_reg_rev[iname] = name
       map_reg_num[iname] = n-1
       map_reg_opsize[iname] = sz
-      if sz == addrsize then
+      if sz == addrsize or sz == "d" then
 	map_reg_valid_base[iname] = true
 	map_reg_valid_index[iname] = true
       end
@@ -303,7 +303,7 @@ local function mkrmap(sz, cl, names)
       map_reg_rev[iname] = name
       map_reg_num[iname] = i
       map_reg_opsize[iname] = sz
-      if sz == addrsize then
+      if sz == addrsize or sz == "d" then
 	map_reg_valid_base[iname] = true
 	map_reg_valid_index[iname] = true
       end
@@ -320,7 +320,8 @@ mkrmap("d", "Rd", {"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"})
 mkrmap("w", "Rw", {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"})
 mkrmap("b", "Rb", {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"})
 -- !x64: ah, ch, dh, bh not valid with REX, r4b-r15b require REX
-map_reg_valid_index[map_archdef[x64 and "rsp" or "esp"]] = false
+map_reg_valid_index[map_archdef.esp] = false
+if x64 then map_reg_valid_index[map_archdef.rsp] = false end
 map_archdef["Ra"] = "@"..addrsize
 
 -- FP registers (internally tword sized, but use "f" as operand size).
