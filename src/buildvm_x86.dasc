@@ -150,28 +150,28 @@
 |  pop rbx; pop rsi; pop rdi; pop rbp
 |.endmacro
 |
-|.define UNUSED1,	aword [esp+dword*26]
-|.define SAVE_PC,	dword [esp+dword*25]
-|.define SAVE_L,	dword [esp+dword*24]
-|.define SAVE_ERRF,	dword [esp+dword*23]
-|.define SAVE_NRES,	dword [esp+dword*22]
-|.define TMP2,		dword [esp+dword*21]
-|.define TMP1,		dword [esp+dword*20]
+|.define UNUSED1,	aword [rsp+dword*26]
+|.define SAVE_PC,	dword [rsp+dword*25]
+|.define SAVE_L,	dword [rsp+dword*24]
+|.define SAVE_ERRF,	dword [rsp+dword*23]
+|.define SAVE_NRES,	dword [rsp+dword*22]
+|.define TMP2,		dword [rsp+dword*21]
+|.define TMP1,		dword [rsp+dword*20]
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by interpreter
-|.define SAVE_RET,	aword [esp+aword*9]	//<-- rsp entering interpreter.
-|.define SAVE_R4,	aword [esp+aword*8]
-|.define SAVE_R3,	aword [esp+aword*7]
-|.define SAVE_R2,	aword [esp+aword*6]
-|.define SAVE_R1,	aword [esp+aword*5]	//<-- rsp after register saves.
-|.define SAVE_CFRAME,	aword [esp+aword*4]
-|.define CSAVE_4,	aword [esp+aword*3]
-|.define CSAVE_3,	aword [esp+aword*2]
-|.define CSAVE_2,	aword [esp+aword*1]
-|.define CSAVE_1,	aword [esp]		//<-- rsp while in interpreter.
+|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_R4,	aword [rsp+aword*8]
+|.define SAVE_R3,	aword [rsp+aword*7]
+|.define SAVE_R2,	aword [rsp+aword*6]
+|.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
+|.define SAVE_CFRAME,	aword [rsp+aword*4]
+|.define CSAVE_4,	aword [rsp+aword*3]
+|.define CSAVE_3,	aword [rsp+aword*2]
+|.define CSAVE_2,	aword [rsp+aword*1]
+|.define CSAVE_1,	aword [rsp]		//<-- rsp while in interpreter.
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
 |
 |// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [esp]
+|.define TMPQ,		qword [rsp]
 |.define NRESULTS,	TMP2
 |
 |//-----------------------------------------------------------------------
@@ -188,24 +188,24 @@
 |.endmacro
 |
 |//----- 16 byte aligned,
-|.define SAVE_RET,	aword [esp+aword*9]	//<-- rsp entering interpreter.
-|.define SAVE_R4,	aword [esp+aword*8]
-|.define SAVE_R3,	aword [esp+aword*7]
-|.define SAVE_R2,	aword [esp+aword*6]
-|.define SAVE_R1,	aword [esp+aword*5]	//<-- rsp after register saves.
-|.define SAVE_CFRAME,	aword [esp+aword*4]
-|.define UNUSED1,	aword [esp+aword*3]
+|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_R4,	aword [rsp+aword*8]
+|.define SAVE_R3,	aword [rsp+aword*7]
+|.define SAVE_R2,	aword [rsp+aword*6]
+|.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
+|.define SAVE_CFRAME,	aword [rsp+aword*4]
+|.define UNUSED1,	aword [rsp+aword*3]
 |//----- ^^^ awords above, vvv dwords below
-|.define SAVE_PC,	dword [esp+dword*5]
-|.define SAVE_L,	dword [esp+dword*4]
-|.define SAVE_ERRF,	dword [esp+dword*3]
-|.define SAVE_NRES,	dword [esp+dword*2]
-|.define TMP2,		dword [esp+dword*1]
-|.define TMP1,		dword [esp]		//<-- rsp while in interpreter.
+|.define SAVE_PC,	dword [rsp+dword*5]
+|.define SAVE_L,	dword [rsp+dword*4]
+|.define SAVE_ERRF,	dword [rsp+dword*3]
+|.define SAVE_NRES,	dword [rsp+dword*2]
+|.define TMP2,		dword [rsp+dword*1]
+|.define TMP1,		dword [rsp]		//<-- rsp while in interpreter.
 |//----- 16 byte aligned
 |
 |// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [esp]
+|.define TMPQ,		qword [rsp]
 |.define NRESULTS,	TMP2
 |
 |.endif
@@ -667,7 +667,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |2:  // Entry point for vm_cpcall below (RA = base, RB = L, PC = ftype).
   |  mov KBASE, L:RB->cframe		// Add our C frame to cframe chain.
   |  mov SAVE_CFRAME, KBASE		// Caveat: overlaps INARG_BASE!
-  |  mov SAVE_PC, esp			// Any value outside of bytecode is ok.
+  |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
   |  mov L:RB->cframe, esp
   |
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
@@ -697,7 +697,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov RC, INARG_CP_UD
   |  mov RA, INARG_CP_FUNC
   |  mov BASE, INARG_CP_CALL
-  |  mov SAVE_PC, esp			// Any value outside of bytecode is ok.
+  |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
   |
   |  // Caveat: INARG_P_* and INARG_CP_* overlap!
   |  mov KBASE, L:RB->stack		// Compute -savestack(L, L->top).
