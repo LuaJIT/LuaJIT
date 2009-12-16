@@ -786,7 +786,9 @@ local function parseoperand(param)
 	  if t.opsize == "f" then
 	    t.mode = t.reg == 0 and "fF" or "f"
 	  else
-	    if reg == "@w4" then wwarn("bad idea, try again with `esp'") end
+	    if reg == "@w4" or (x64 and reg == "@d4") then
+	      wwarn("bad idea, try again with `"..(x64 and "rsp'" or "esp'"))
+	    end
 	    t.mode = t.reg == 0 and "rmR" or (reg == "@b1" and "rmC" or "rm")
 	  end
 	  break
