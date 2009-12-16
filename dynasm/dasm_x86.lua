@@ -510,26 +510,36 @@ local function wputmrmsib(t, imark, s, vsreg)
   local tdisp = type(disp)
   -- No base register?
   if not reg then
+    local riprel = false
     if xreg then
       -- Indexed mode with index register only.
       -- [xreg*xsc+disp] -> (0, s, esp) (xsc, xreg, ebp)
       wputmodrm(0, s, 4)
-      if imark then waction("MARK") end
+      if imark == "I" then waction("MARK") end
       if vsreg then waction("VREG", vsreg); wputxb(2) end
       wputmodrm(t.xsc, xreg, 5)
       if vxreg then waction("VREG", vxreg); wputxb(3) end
     else
       -- Pure 32 bit displacement.
-      if x64 then
+      if x64 and tdisp ~= "table" then
 	wputmodrm(0, s, 4) -- [disp] -> (0, s, esp) (0, esp, ebp)
 	wputmodrm(0, 4, 5)
       else
-	wputmodrm(0, s, 5) -- [disp] -> (0, s, ebp)
+	riprel = x64
+	wputmodrm(0, s, 5) -- [disp|rip-label] -> (0, s, ebp)
       end
-      if imark then waction("MARK") end
+      if imark == "I" then waction("MARK") end
       if vsreg then waction("VREG", vsreg); wputxb(2) end
     end
-    wputdarg(disp)
+    if riprel then -- Emit rip-relative displacement.
+      if match("UWSiI", imark) then
+	werror("NYI: rip-relative displacement followed by immediate")
+      end
+      -- The previous byte in the action buffer cannot be 0xe9 or 0x80-0x8f.
+      wputlabel("REL_", disp[1], 2)
+    else
+      wputdarg(disp)
+    end
     return
   end
 
@@ -546,14 +556,14 @@ local function wputmrmsib(t, imark, s, vsreg)
   -- Index register present or esp as base register: need SIB encoding.
   if xreg or (reg%8) == 4 then
     wputmodrm(m or 2, s, 4) -- ModRM.
-    if m == nil or imark then waction("MARK") end
+    if m == nil or imark == "I" then waction("MARK") end
     if vsreg then waction("VREG", vsreg); wputxb(2) end
     wputmodrm(t.xsc or 0, xreg or 4, reg) -- SIB.
     if vxreg then waction("VREG", vxreg); wputxb(3) end
     if vreg then waction("VREG", vreg); wputxb(1) end
   else
     wputmodrm(m or 2, s, reg) -- ModRM.
-    if (imark and (m == 1 or m == 2)) or
+    if (imark == "I" and (m == 1 or m == 2)) or
        (m == nil and (vsreg or vreg)) then waction("MARK") end
     if vsreg then waction("VREG", vsreg); wputxb(2) end
     if vreg then waction("VREG", vreg); wputxb(1) end
@@ -1497,7 +1507,7 @@ local function dopattern(pat, args, sz, op)
       if t.xreg and t.xreg > 7 then rex = rex + 2 end
       if s > 7 then rex = rex + 4 end
       wputop(szov, opcode, rex); opcode = nil
-      local imark = (sub(pat, -1) == "I") -- Force a mark (ugly).
+      local imark = sub(pat, -1) -- Force a mark (ugly).
       -- Put ModRM/SIB with regno/last digit as spare.
       wputmrmsib(t, imark, s, addin and addin.vreg)
       addin = nil
