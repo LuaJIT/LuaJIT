@@ -19,8 +19,13 @@
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
 |.define BASE,		edx		// Not C callee-save, refetched anyway.
+|.if not X64 or X64WIN
 |.define KBASE,		edi		// Must be C callee-save.
 |.define PC,		esi		// Must be C callee-save.
+|.else
+|.define KBASE,		r13d		// Must be C callee-save.
+|.define PC,		r12d		// Must be C callee-save.
+|.endif
 |.define DISPATCH,	ebx		// Must be C callee-save.
 |
 |.define RA,		ecx
@@ -82,32 +87,23 @@
 |.macro pop_eax; .if X64; pop rax; .else; pop eax; .endif; .endmacro
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
+|//-----------------------------------------------------------------------
+|.if not X64		// x86 stack layout.
+|
 |.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
 |.macro saveregs
-|  .if X64
-|    .if X64WIN; push rdi; push rsi; .endif
-|    push rbp; push rbx; push r12; push r13; push r14; push r15
-|    sub rsp, CFRAME_SPACE
-|  .else
-|    push ebp; push edi; push esi; push ebx
-|    sub esp, CFRAME_SPACE
-|  .endif
+|  push ebp; push edi; push esi; push ebx
+|  sub esp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
-|  .if X64
-|    add rsp, CFRAME_SPACE
-|    pop r15; pop r14; pop r13; pop r12; pop rbx; pop rbp
-|    .if X64WIN; pop rsi; pop rdi; .endif
-|  .else
-|    add esp, CFRAME_SPACE
-|    pop ebx; pop esi; pop edi; pop ebp
-|  .endif
+|  add esp, CFRAME_SPACE
+|  pop ebx; pop esi; pop edi; pop ebp
 |.endmacro
 |
-|.define INARG_4,	aword [esp+aword*15]
-|.define INARG_3,	aword [esp+aword*14]
-|.define INARG_2,	aword [esp+aword*13]
-|.define INARG_1,	aword [esp+aword*12]
+|.define SAVE_ERRF,	aword [esp+aword*15]	// vm_pcall/vm_cpcall only.
+|.define SAVE_NRES,	aword [esp+aword*14]
+|.define SAVE_CFRAME,	aword [esp+aword*13]
+|.define SAVE_L,	aword [esp+aword*12]
 |//----- 16 byte aligned, ^^^ arguments from C caller
 |.define SAVE_RET,	aword [esp+aword*11]	//<-- esp entering interpreter.
 |.define SAVE_R4,	aword [esp+aword*10]
@@ -116,8 +112,8 @@
 |//----- 16 byte aligned
 |.define SAVE_R1,	aword [esp+aword*7]	//<-- esp after register saves.
 |.define SAVE_PC,	aword [esp+aword*6]
-|.define ARG6,		aword [esp+aword*5]
-|.define ARG5,		aword [esp+aword*4]
+|.define TMP2,		aword [esp+aword*5]
+|.define TMP1,		aword [esp+aword*4]
 |//----- 16 byte aligned
 |.define ARG4,		aword [esp+aword*3]
 |.define ARG3,		aword [esp+aword*2]
@@ -126,24 +122,93 @@
 |//----- 16 byte aligned, ^^^ arguments for C callee
 |
 |// FPARGx overlaps ARGx and ARG(x+1) on x86.
-|.define FPARG5,	qword [esp+qword*2]
 |.define FPARG3,	qword [esp+qword*1]
 |.define FPARG1,	qword [esp]
-|// NRESULTS overlaps ARG6 (and FPARG5)
-|.define NRESULTS,	ARG6
+|// TMPQ overlaps TMP1/TMP2. ARG5/NRESULTS overlap TMP1/TMP2 (and TMPQ).
+|.define TMPQ,		qword [esp+aword*4]
+|.define ARG5,		TMP1
+|.define NRESULTS,	TMP2
 |
 |// Arguments for vm_call and vm_pcall.
-|.define INARG_P_ERRF,	INARG_4			// vm_pcall only.
-|.define INARG_NRES,	INARG_3
-|.define INARG_BASE,	INARG_2
-|.define SAVE_L,	INARG_1
-|
-|.define SAVE_CFRAME,	INARG_BASE		// Overwrites INARG_BASE!
+|.define INARG_BASE,	SAVE_CFRAME		// Overwritten by SAVE_CFRAME!
 |
 |// Arguments for vm_cpcall.
-|.define INARG_CP_UD,	INARG_4
-|.define INARG_CP_FUNC,	INARG_3
-|.define INARG_CP_CALL,	INARG_2
+|.define INARG_CP_UD,	SAVE_ERRF
+|.define INARG_CP_FUNC,	SAVE_NRES
+|.define INARG_CP_CALL,	SAVE_CFRAME
+|
+|//-----------------------------------------------------------------------
+|.elif X64WIN		// x64/Windows stack layout
+|
+|.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
+|.macro saveregs
+|  push rbp; push rdi; push rsi; push rbx
+|  sub rsp, CFRAME_SPACE
+|.endmacro
+|.macro restoreregs
+|  add rsp, CFRAME_SPACE
+|  pop rbx; pop rsi; pop rdi; pop rbp
+|.endmacro
+|
+|.define UNUSED1,	aword [esp+dword*26]
+|.define SAVE_PC,	dword [esp+dword*25]
+|.define SAVE_L,	dword [esp+dword*24]
+|.define SAVE_ERRF,	dword [esp+dword*23]
+|.define SAVE_NRES,	dword [esp+dword*22]
+|.define TMP2,		dword [esp+dword*21]
+|.define TMP1,		dword [esp+dword*20]
+|//----- 16 byte aligned, ^^^ 32 byte register save area, owned by interpreter
+|.define SAVE_RET,	aword [esp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_R4,	aword [esp+aword*8]
+|.define SAVE_R3,	aword [esp+aword*7]
+|.define SAVE_R2,	aword [esp+aword*6]
+|.define SAVE_R1,	aword [esp+aword*5]	//<-- rsp after register saves.
+|.define SAVE_CFRAME,	aword [esp+aword*4]
+|.define CSAVE_4,	aword [esp+aword*3]
+|.define CSAVE_3,	aword [esp+aword*2]
+|.define CSAVE_2,	aword [esp+aword*1]
+|.define CSAVE_1,	aword [esp]		//<-- rsp while in interpreter.
+|//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
+|
+|// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
+|.define TMPQ,		qword [esp]
+|.define NRESULTS,	TMP2
+|
+|//-----------------------------------------------------------------------
+|.else			// x64/POSIX stack layout
+|
+|.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
+|.macro saveregs
+|  push rbp; push r12; push r13; push rbx
+|  sub rsp, CFRAME_SPACE
+|.endmacro
+|.macro restoreregs
+|  add rsp, CFRAME_SPACE
+|  pop rbx; pop r13; pop r12; pop rbp
+|.endmacro
+|
+|//----- 16 byte aligned,
+|.define SAVE_RET,	aword [esp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_R4,	aword [esp+aword*8]
+|.define SAVE_R3,	aword [esp+aword*7]
+|.define SAVE_R2,	aword [esp+aword*6]
+|.define SAVE_R1,	aword [esp+aword*5]	//<-- rsp after register saves.
+|.define SAVE_CFRAME,	aword [esp+aword*4]
+|.define UNUSED1,	aword [esp+aword*3]
+|//----- ^^^ awords above, vvv dwords below
+|.define SAVE_PC,	dword [esp+dword*5]
+|.define SAVE_L,	dword [esp+dword*4]
+|.define SAVE_ERRF,	dword [esp+dword*3]
+|.define SAVE_NRES,	dword [esp+dword*2]
+|.define TMP2,		dword [esp+dword*1]
+|.define TMP1,		dword [esp]		//<-- rsp while in interpreter.
+|//----- 16 byte aligned
+|
+|// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
+|.define TMPQ,		qword [esp]
+|.define NRESULTS,	TMP2
+|
+|.endif
 |
 |//-----------------------------------------------------------------------
 |
@@ -163,7 +228,11 @@
 |  movzx OP, RCL
 |  add PC, 4
 |  shr RC, 16
+|.if not X64
 |  jmp aword [DISPATCH+OP*4]
+|.else
+|  jmp aword [DISPATCH+OP*8]
+|.endif
 |.endmacro
 |
 |// Instruction footer.
@@ -420,7 +489,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, PC
   |3:
   |  mov RD, NRESULTS
-  |  mov RA, INARG_NRES			// RA = wanted nresults+1
+  |  mov RA, SAVE_NRES			// RA = wanted nresults+1
   |4:
   |  cmp RA, RD
   |  jne >6				// More/less results wanted?
@@ -633,8 +702,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  // Caveat: INARG_P_* and INARG_CP_* overlap!
   |  mov KBASE, L:RB->stack		// Compute -savestack(L, L->top).
   |  sub KBASE, L:RB->top
-  |  mov INARG_P_ERRF, 0		// No error function.
-  |  mov INARG_NRES, KBASE		// Neg. delta means cframe w/o frame.
+  |  mov SAVE_ERRF, 0			// No error function.
+  |  mov SAVE_NRES, KBASE		// Neg. delta means cframe w/o frame.
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
   |
   |  mov ARG3, RC
@@ -693,9 +762,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-- Table indexing metamethods -----------------------------------------
   |
   |->vmeta_tgets:
-  |  mov ARG5, RC			// RC = GCstr *
-  |  mov ARG6, LJ_TSTR
-  |  lea RC, ARG5			// Store temp. TValue in ARG5/ARG6.
+  |  mov TMP1, RC			// RC = GCstr *
+  |  mov TMP2, LJ_TSTR
+  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  cmp PC_OP, BC_GGET
   |  jne >1
   |  lea RA, [DISPATCH+DISPATCH_GL(tmptv)]  // Store fn->l.env in g->tmptv.
@@ -708,8 +777,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  movzx RC, PC_RC			// Ugly, cannot fild from a byte.
   |  mov ARG4, RC
   |  fild ARG4
-  |  fstp FPARG5
-  |  lea RC, ARG5			// Store temp. TValue in ARG5/ARG6.
+  |  fstp TMPQ
+  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  jmp >1
   |
   |->vmeta_tgetv:
@@ -751,9 +820,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets:
-  |  mov ARG5, RC			// RC = GCstr *
-  |  mov ARG6, LJ_TSTR
-  |  lea RC, ARG5			// Store temp. TValue in ARG5/ARG6.
+  |  mov TMP1, RC			// RC = GCstr *
+  |  mov TMP2, LJ_TSTR
+  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  cmp PC_OP, BC_GSET
   |  jne >1
   |  lea RA, [DISPATCH+DISPATCH_GL(tmptv)]  // Store fn->l.env in g->tmptv.
@@ -766,8 +835,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  movzx RC, PC_RC			// Ugly, cannot fild from a byte.
   |  mov ARG4, RC
   |  fild ARG4
-  |  fstp FPARG5
-  |  lea RC, ARG5			// Store temp. TValue in ARG5/ARG6.
+  |  fstp TMPQ
+  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  jmp >1
   |
   |->vmeta_tsetv:
@@ -930,8 +999,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |->vmeta_call:			// Resolve and call __call metamethod.
   |  // RA = new base, RC = nargs+1, BASE = old base, PC = return
-  |  mov ARG4, RA			// Save RA, RC for us.
-  |  mov ARG5, NARGS:RC
+  |  mov TMP2, RA			// Save RA, RC for us.
+  |  mov TMP1, NARGS:RC
   |  sub RA, 8
   |  lea RC, [RA+NARGS:RC*8]
   |  mov L:RB, SAVE_L
@@ -942,8 +1011,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, BASE		// This is the callers base!
   |  call extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
   |  mov BASE, L:RB->base
-  |  mov RA, ARG4
-  |  mov NARGS:RC, ARG5
+  |  mov RA, TMP2
+  |  mov NARGS:RC, TMP1
   |  mov LFUNC:RB, [RA-8]
   |  add NARGS:RC, 1
   |  // This is fragile. L->base must not move, KBASE must always be defined.
@@ -1137,13 +1206,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov ARG2, TAB:RC
   |  mov ARG1, L:RB
   |  mov RB, RA
-  |  mov ARG4, BASE			// Save BASE and RA.
+  |  mov TMP1, BASE			// Save BASE and RA.
   |  add RA, 8
   |  mov ARG3, RA
   |  call extern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
   |  // cTValue * returned in eax (RC).
   |  mov RA, RB
-  |  mov BASE, ARG4
+  |  mov BASE, TMP1
   |  mov RB, [RC]			// Copy table slot.
   |  mov RC, [RC+4]
   |  mov [RA-8], RB
@@ -1199,13 +1268,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, RA			// Add frame since C call can throw.
   |  mov [RA-4], PC
   |  mov SAVE_PC, PC			// Redundant (but a defined value).
-  |  mov ARG4, BASE			// Save BASE.
+  |  mov TMP1, BASE			// Save BASE.
   |  add RA, 8
   |  mov ARG3, RA
   |  call extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
   |  // Flag returned in eax (RC).
   |  mov RA, L:RB->base
-  |  mov BASE, ARG4
+  |  mov BASE, TMP1
   |  test RC, RC;  jz >3		// End of traversal?
   |  mov RB, [RA+8]			// Copy key and value to results.
   |  mov RC, [RA+12]
@@ -1526,11 +1595,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.macro math_extern, func
   |.ffunc_n math_ .. func
-  |  mov ARG5, RA
+  |  mov TMP1, RA
   |  fstp FPARG1
   |  mov RB, BASE
   |  call extern lj_wrapper_ .. func
-  |  mov RA, ARG5
+  |  mov RA, TMP1
   |  mov BASE, RB
   |  jmp ->fff_resn
   |.endmacro
@@ -1645,10 +1714,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  cmp NARGS:RC, 1+1;  jne ->fff_fallback	// *Exactly* 1 arg.
   |  cmp dword [RA+4], LJ_TISNUM;  ja ->fff_fallback
   |  fld qword [RA]
-  |  fistp ARG4
-  |  cmp ARG4, 255;  ja ->fff_fallback
-  |  lea RC, ARG4			// Little-endian.
-  |  mov ARG5, RA			// Save RA.
+  |  fistp TMP2
+  |  cmp TMP2, 255;  ja ->fff_fallback
+  |  lea RC, TMP2			// Little-endian.
+  |  mov TMP1, RA			// Save RA.
   |  mov ARG3, 1
   |  mov ARG2, RC
   |->fff_newstr:
@@ -1658,7 +1727,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, BASE
   |  call extern lj_str_new		// (lua_State *L, char *str, size_t l)
   |  // GCstr * returned in eax (RC).
-  |  mov RA, ARG5
+  |  mov RA, TMP1
   |  mov BASE, L:RB->base
   |  mov dword [RA-4], LJ_TSTR
   |  mov [RA-8], STR:RC
@@ -1666,13 +1735,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc string_sub
   |  ffgccheck
-  |  mov ARG5, RA			// Save RA.
-  |  mov ARG4, -1
+  |  mov TMP1, RA			// Save RA.
+  |  mov TMP2, -1
   |  cmp NARGS:RC, 1+2;  jb ->fff_fallback
   |  jna >1
   |  cmp dword [RA+20], LJ_TISNUM;  ja ->fff_fallback
   |  fld qword [RA+16]
-  |  fistp ARG4
+  |  fistp TMP2
   |1:
   |  cmp dword [RA+4], LJ_TSTR;  jne ->fff_fallback
   |  cmp dword [RA+12], LJ_TISNUM;  ja ->fff_fallback
@@ -1681,7 +1750,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov RB, STR:RB->len
   |  fld qword [RA+8]
   |  fistp ARG3
-  |  mov RC, ARG4
+  |  mov RC, TMP2
   |  cmp RB, RC				// len < end? (unsigned compare)
   |  jb >5
   |2:
@@ -1722,13 +1791,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc_2 string_rep			// Only handle the 1-char case inline.
   |  ffgccheck
-  |  mov ARG5, RA			// Save RA.
+  |  mov TMP1, RA			// Save RA.
   |  cmp dword [RA+4], LJ_TSTR;  jne ->fff_fallback
   |  cmp dword [RA+12], LJ_TISNUM;  ja ->fff_fallback
   |  mov STR:RB, [RA]
   |  fld qword [RA+8]
-  |  fistp ARG4
-  |  mov RC, ARG4
+  |  fistp TMP2
+  |  mov RC, TMP2
   |  test RC, RC
   |  jle ->fff_emptystr			// Count <= 0? (or non-int)
   |  cmp dword STR:RB->len, 1
@@ -1748,7 +1817,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc_1 string_reverse
   |  ffgccheck
-  |  mov ARG5, RA			// Save RA.
+  |  mov TMP1, RA			// Save RA.
   |  cmp dword [RA+4], LJ_TSTR;  jne ->fff_fallback
   |  mov STR:RB, [RA]
   |  mov RC, STR:RB->len
@@ -1756,7 +1825,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jz ->fff_emptystr			// Zero length string?
   |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
   |  add RB, #STR
-  |  mov ARG4, PC			// Need another temp register.
+  |  mov TMP2, PC			// Need another temp register.
   |  mov ARG3, RC
   |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
   |  mov ARG2, PC
@@ -1766,19 +1835,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  sub RC, 1
   |  mov [PC+RC], RAL
   |  jnz <1
-  |  mov PC, ARG4
+  |  mov PC, TMP2
   |  jmp ->fff_newstr
   |
   |.macro ffstring_case, name, lo, hi
   |  .ffunc_1 name
   |  ffgccheck
-  |  mov ARG5, RA			// Save RA.
+  |  mov TMP1, RA			// Save RA.
   |  cmp dword [RA+4], LJ_TSTR;  jne ->fff_fallback
   |  mov STR:RB, [RA]
   |  mov RC, STR:RB->len
   |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
   |  add RB, #STR
-  |  mov ARG4, PC			// Need another temp register.
+  |  mov TMP2, PC			// Need another temp register.
   |  mov ARG3, RC
   |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
   |  mov ARG2, PC
@@ -1795,7 +1864,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |3:
   |  sub RC, 1
   |  jns <1
-  |  mov PC, ARG4
+  |  mov PC, TMP2
   |  jmp ->fff_newstr
   |.endmacro
   |
@@ -1822,16 +1891,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).
   |
   |.ffunc_n bit_tobit
-  |  mov ARG5, TOBIT_BIAS
-  |  fadd ARG5
+  |  mov TMP1, TOBIT_BIAS
+  |  fadd TMP1
   |  fstp FPARG1			// 64 bit FP store.
   |  fild ARG1				// 32 bit integer load (s2lfwd ok).
   |  jmp ->fff_resn
   |
   |.macro .ffunc_bit, name
   |  .ffunc_n name
-  |  mov ARG5, TOBIT_BIAS
-  |  fadd ARG5
+  |  mov TMP1, TOBIT_BIAS
+  |  fadd TMP1
   |  fstp FPARG1
   |  mov RB, ARG1
   |.endmacro
@@ -1845,7 +1914,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jbe ->fff_resbit
   |  cmp dword [RC+4], LJ_TISNUM;  ja ->fff_fallback_bit_op
   |  fld qword [RC]
-  |  fadd ARG5
+  |  fadd TMP1
   |  fstp FPARG1
   |  ins RB, ARG1
   |  sub RC, 8
@@ -1873,10 +1942,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.macro .ffunc_bit_sh, name, ins
   |  .ffunc_nn name
-  |  mov ARG5, TOBIT_BIAS
-  |  fadd ARG5
+  |  mov TMP1, TOBIT_BIAS
+  |  fadd TMP1
   |  fstp FPARG3
-  |  fadd ARG5
+  |  fadd TMP1
   |  fstp FPARG1
   |  mov RC, RA				// Assumes RA is ecx.
   |  mov RA, ARG3
@@ -3121,9 +3190,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  test byte TAB:RA->nomm, 1<<MM_newindex
     |  jz ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
     |6:
-    |  mov ARG5, STR:RC
-    |  mov ARG6, LJ_TSTR
-    |  lea RC, ARG5			// Store temp. TValue in ARG5/ARG6.
+    |  mov TMP1, STR:RC
+    |  mov TMP2, LJ_TSTR
+    |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
     |  mov ARG4, TAB:RB			// Save TAB:RB for us.
     |  mov ARG2, TAB:RB
     |  mov L:RB, SAVE_L
@@ -3179,7 +3248,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
 
   case BC_TSETM:
     |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
-    |  mov ARG5, KBASE			// Need one more free register.
+    |  mov TMP1, KBASE			// Need one more free register.
     |  fld qword [KBASE+RD*8]
     |  fistp ARG4			// Const is guaranteed to be an int.
     |1:
@@ -3208,7 +3277,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  sub RD, 1
     |  jnz <3
     |4:
-    |  mov KBASE, ARG5
+    |  mov KBASE, TMP1
     |  ins_next
     |
     |5:  // Need to resize array part.
