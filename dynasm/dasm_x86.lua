@@ -258,6 +258,7 @@ local map_reg_num = {}		-- Int. register name -> register number.
 local map_reg_opsize = {}	-- Int. register name -> operand size.
 local map_reg_valid_base = {}	-- Int. register name -> valid base register?
 local map_reg_valid_index = {}	-- Int. register name -> valid index register?
+local map_reg_needrex = {}	-- Int. register name -> need rex vs. no rex.
 local reg_list = {}		-- Canonical list of int. register names.
 
 local map_type = {}		-- Type name -> { ctype, reg }
@@ -285,6 +286,7 @@ local function mkrmap(sz, cl, names)
       map_reg_rev[iname] = name
       map_reg_num[iname] = n-1
       map_reg_opsize[iname] = sz
+      if sz == "b" and n > 4 then map_reg_needrex[iname] = false end
       if sz == addrsize or sz == "d" then
 	map_reg_valid_base[iname] = true
 	map_reg_valid_index[iname] = true
@@ -292,7 +294,9 @@ local function mkrmap(sz, cl, names)
     end
   end
   for i=0,(x64 and sz ~= "f") and 15 or 7 do
-    local iname = format("@%s%x", sz, i)
+    local needrex = sz == "b" and i > 3
+    local iname = format("@%s%x%s", sz, i, needrex and "R" or "")
+    if needrex then map_reg_needrex[iname] = true end
     local name
     if sz == "o" then name = format("xmm%d", i)
     elseif sz == "f" then name = format("st%d", i)
@@ -319,7 +323,6 @@ end
 mkrmap("d", "Rd", {"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"})
 mkrmap("w", "Rw", {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"})
 mkrmap("b", "Rb", {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"})
--- !x64: ah, ch, dh, bh not valid with REX, r4b-r15b require REX
 map_reg_valid_index[map_archdef.esp] = false
 if x64 then map_reg_valid_index[map_archdef.rsp] = false end
 map_archdef["Ra"] = "@"..addrsize
@@ -467,7 +470,7 @@ local function wputop(sz, op, rex)
     if rex ~= 0 then
       local opc3 = op - op % 256
       if opc3 == 0x0f3a00 or opc3 == 0x0f3800 then
-	wputb(64 + rex % 15); rex = 0
+	wputb(64 + rex % 16); rex = 0
       end
     end
     r = op % 65536 wputb((op-r) / 65536) op = r
@@ -475,11 +478,11 @@ local function wputop(sz, op, rex)
   if op >= 256 then
     r = op % 256
     local b = (op-r) / 256
-    if b == 15 and rex ~= 0 then wputb(64 + rex % 15); rex = 0 end
+    if b == 15 and rex ~= 0 then wputb(64 + rex % 16); rex = 0 end
     wputb(b)
     op = r
   end
-  if rex ~= 0 then wputb(64 + rex % 15) end
+  if rex ~= 0 then wputb(64 + rex % 16) end
   if sz == "b" then op = op - 1 end
   wputb(op)
 end
@@ -801,6 +804,7 @@ local function parseoperand(param)
 	    end
 	    t.mode = t.reg == 0 and "rmR" or (reg == "@b1" and "rmC" or "rm")
 	  end
+	  t.needrex = map_reg_needrex[reg]
 	  break
 	end
 
@@ -1461,7 +1465,7 @@ end
 ------------------------------------------------------------------------------
 
 -- Process pattern string.
-local function dopattern(pat, args, sz, op)
+local function dopattern(pat, args, sz, op, needrex)
   local digit, addin
   local opcode = 0
   local szov = sz
@@ -1506,6 +1510,7 @@ local function dopattern(pat, args, sz, op)
       if t.reg and t.reg > 7 then rex = rex + 1 end
       if t.xreg and t.xreg > 7 then rex = rex + 2 end
       if s > 7 then rex = rex + 4 end
+      if needrex then rex = rex + 16 end
       wputop(szov, opcode, rex); opcode = nil
       local imark = sub(pat, -1) -- Force a mark (ugly).
       -- Put ModRM/SIB with regno/last digit as spare.
@@ -1514,6 +1519,7 @@ local function dopattern(pat, args, sz, op)
     else
       if opcode then -- Flush opcode.
 	if szov == "q" and rex == 0 then rex = rex + 8 end
+	if needrex then rex = rex + 16 end
 	if addin and addin.reg == -1 then
 	  wputop(szov, opcode + 1, rex)
 	  waction("VREG", addin.vreg); wputxb(0)
@@ -1602,17 +1608,25 @@ map_op[".template__"] = function(params, template, nparams)
 
   -- Zero-operand opcodes have no match part.
   if #params == 0 then
-    dopattern(template, args, "d", params.op)
+    dopattern(template, args, "d", params.op, nil)
     return
   end
 
   -- Determine common operand size (coerce undefined size) or flag as mixed.
-  local sz, szmix
+  local sz, szmix, needrex
   for i,p in ipairs(params) do
     args[i] = parseoperand(p)
     local nsz = args[i].opsize
     if nsz then
       if sz and sz ~= nsz then szmix = true else sz = nsz end
+    end
+    local nrex = args[i].needrex
+    if nrex ~= nil then
+      if needrex == nil then
+	needrex = nrex
+      elseif needrex ~= nrex then
+	werror("bad mix of byte-addressable registers")
+      end
     end
   end
 
@@ -1627,7 +1641,7 @@ map_op[".template__"] = function(params, template, nparams)
       if prefix == "/" then -- Match both operand sizes.
 	if args[1].opsize == sub(szm, 2, 2) and
 	   args[2].opsize == sub(szm, 3, 3) then
-	  dopattern(pat, args, sz, params.op) -- Process pattern string.
+	  dopattern(pat, args, sz, params.op, needrex) -- Process pattern.
 	  return
 	end
       else -- Match common operand size.
@@ -1636,7 +1650,7 @@ map_op[".template__"] = function(params, template, nparams)
 	if prefix == "1" then szp = args[1].opsize; szmix = nil
 	elseif prefix == "2" then szp = args[2].opsize; szmix = nil end
 	if not szmix and (prefix == "." or match(szm, szp or "#")) then
-	  dopattern(pat, args, szp, params.op) -- Process pattern string.
+	  dopattern(pat, args, szp, params.op, needrex) -- Process pattern.
 	  return
 	end
       end
