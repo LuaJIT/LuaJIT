@@ -1473,8 +1473,8 @@ local function dopattern(pat, args, sz, op, needrex)
   local rex = 0
 
   -- Limit number of section buffer positions used by a single dasm_put().
-  -- A single opcode needs a maximum of 2 positions. !x64
-  if secpos+2 > maxsecpos then wflush() end
+  -- A single opcode needs a maximum of 5 positions.
+  if secpos+5 > maxsecpos then wflush() end
 
   -- Process each character.
   for c in gmatch(pat.."|", ".") do
@@ -1676,6 +1676,7 @@ end
 if x64 then
   function map_op.mov64_2(params)
     if not params then return { "reg, imm", "reg, [disp]", "[disp], reg" } end
+    if secpos+2 > maxsecpos then wflush() end
     local opcode, op64, sz, rex
     local op64 = match(params[1], "^%[%s*(.-)%s*%]$")
     if op64 then
@@ -1724,6 +1725,7 @@ local function op_data(params)
     else
       wputszarg(sz, a.imm)
     end
+    if secpos+2 > maxsecpos then wflush() end
   end
 end
 
@@ -1768,6 +1770,7 @@ end
 -- Label pseudo-opcode (converted from trailing colon form).
 map_op[".label_2"] = function(params)
   if not params then return "[1-9] | ->global | =>pcexpr  [, addr]" end
+  if secpos+2 > maxsecpos then wflush() end
   local a = parseoperand(params[1])
   local mode, imm = a.mode, a.imm
   if type(imm) == "number" and (mode == "iJ" or (imm >= 1 and imm <= 9)) then
@@ -1783,9 +1786,9 @@ map_op[".label_2"] = function(params)
   -- SETLABEL must immediately follow LABEL_LG/LABEL_PC.
   local addr = params[2]
   if addr then
-    local a = parseoperand(params[2])
+    local a = parseoperand(addr)
     if a.mode == "iPJ" then
-      waction("SETLABEL", a.imm) -- !x64 (secpos)
+      waction("SETLABEL", a.imm)
     else
       werror("bad label assignment")
     end
@@ -1798,6 +1801,7 @@ map_op[".label_1"] = map_op[".label_2"]
 -- Alignment pseudo-opcode.
 map_op[".align_1"] = function(params)
   if not params then return "numpow2" end
+  if secpos+1 > maxsecpos then wflush() end
   local align = tonumber(params[1]) or map_opsizenum[map_opsize[params[1]]]
   if align then
     local x = align
@@ -1817,6 +1821,7 @@ end
 -- Spacing pseudo-opcode.
 map_op[".space_2"] = function(params)
   if not params then return "num [, filler]" end
+  if secpos+1 > maxsecpos then wflush() end
   waction("SPACE", params[1])
   local fill = params[2]
   if fill then
