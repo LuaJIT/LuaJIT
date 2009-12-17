@@ -955,7 +955,7 @@ local map_op = {
   -- 8A: mov r,mb
   -- 8B: mov r,mdw
   -- 8C: *mov mdw,seg
-  lea_2 =	"rxd:8DrM",
+  lea_2 =	"rxdq:8DrM",
   -- 8E: *mov seg,mdw
   -- 8F: pop mdw
   nop_0 =	"90",
