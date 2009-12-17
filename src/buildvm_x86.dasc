@@ -183,12 +183,12 @@
 |
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
 |.macro saveregs
-|  push rbp; push r12; push r13; push rbx
+|  push rbp; push r14; push r15; push rbx
 |  sub rsp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
-|  pop rbx; pop r13; pop r12; pop rbp
+|  pop rbx; pop r15; pop r14; pop rbp
 |.endmacro
 |
 |//----- 16 byte aligned,
