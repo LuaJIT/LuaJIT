@@ -24,9 +24,9 @@
 |.define KBASEa,	KBASE
 |.define PC,		esi		// Must be C callee-save.
 |.else
-|.define KBASE,		r13d		// Must be C callee-save.
-|.define KBASEa,	r13
-|.define PC,		r12d		// Must be C callee-save.
+|.define KBASE,		r15d		// Must be C callee-save.
+|.define KBASEa,	r15
+|.define PC,		r14d		// Must be C callee-save.
 |.endif
 |.define DISPATCH,	ebx		// Must be C callee-save.
 |
