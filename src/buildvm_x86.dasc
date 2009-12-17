@@ -21,14 +21,17 @@
 |.define BASE,		edx		// Not C callee-save, refetched anyway.
 |.if not X64 or X64WIN
 |.define KBASE,		edi		// Must be C callee-save.
+|.define KBASEa,	KBASE
 |.define PC,		esi		// Must be C callee-save.
 |.else
 |.define KBASE,		r13d		// Must be C callee-save.
+|.define KBASEa,	r13
 |.define PC,		r12d		// Must be C callee-save.
 |.endif
 |.define DISPATCH,	ebx		// Must be C callee-save.
 |
 |.define RA,		ecx
+|.if X64; .define RAa, rcx; .else; .define RAa, RA; .endif
 |.define RAL,		cl
 |.define RB,		ebp		// Must be ebp (C callee-save).
 |.define RC,		eax		// Must be eax (fcomparepp and others).
@@ -37,6 +40,7 @@
 |.define RCL,		al
 |.define OP,		RB
 |.define RD,		RC
+|.if X64; .define RDa, rax; .else; .define RDa, RD; .endif
 |.define RDL,		RCL
 |
 |.if not X64
@@ -133,9 +137,9 @@
 |.define INARG_BASE,	SAVE_CFRAME		// Overwritten by SAVE_CFRAME!
 |
 |// Arguments for vm_cpcall.
-|.define INARG_CP_UD,	SAVE_ERRF
-|.define INARG_CP_FUNC,	SAVE_NRES
-|.define INARG_CP_CALL,	SAVE_CFRAME
+|.define INARG_CP_CALL,	SAVE_ERRF
+|.define INARG_CP_UD,	SAVE_NRES
+|.define INARG_CP_FUNC,	SAVE_CFRAME
 |
 |//-----------------------------------------------------------------------
 |.elif X64WIN		// x64/Windows stack layout
@@ -408,15 +412,20 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |->gate_cwrap:			// Call gate for wrapped C functions.
   |  // RA = new base, RB = CFUNC, RC = nargs+1, (BASE = old base), PC = return
   |  mov [RA-4], PC
-  |  mov KBASE, CFUNC:RB->f
+  |  mov KBASEa, CFUNC:RB->f
   |  mov L:RB, SAVE_L
   |  lea RC, [RA+NARGS:RC*8-8]
   |  mov L:RB->base, RA
   |  lea RA, [RC+8*LUA_MINSTACK]
-  |  mov ARG2, KBASE
-  |  mov ARG1, L:RB
   |  mov L:RB->top, RC
   |  cmp RA, L:RB->maxstack
+  |.if X64
+  |  mov CARG2, KBASEa
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
+  |  mov ARG2, KBASEa
+  |  mov ARG1, L:RB
+  |.endif
   |  ja ->gate_c_growstack		// Need to grow stack.
   |  set_vmstate C
   |  // (lua_State *L, lua_CFunction f)
@@ -437,17 +446,21 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |->gate_c:				// Call gate for C functions.
   |  // RA = new base, RB = CFUNC, RC = nargs+1, (BASE = old base), PC = return
   |  mov [RA-4], PC
-  |  mov KBASE, CFUNC:RB->f
+  |  mov KBASEa, CFUNC:RB->f
   |  mov L:RB, SAVE_L
   |  lea RC, [RA+NARGS:RC*8-8]
   |  mov L:RB->base, RA
   |  lea RA, [RC+8*LUA_MINSTACK]
-  |  mov ARG1, L:RB
   |  mov L:RB->top, RC
   |  cmp RA, L:RB->maxstack
+  |.if X64
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
+  |  mov ARG1, L:RB
+  |.endif
   |  ja ->gate_c_growstack		// Need to grow stack.
   |  set_vmstate C
-  |  call KBASE				// (lua_State *L)
+  |  call KBASEa			// (lua_State *L)
   |  set_vmstate INTERP
   |  // nresults returned in eax (RD).
   |  mov BASE, L:RB->base
@@ -498,8 +511,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->top, BASE
   |
   |->vm_leave_cp:
-  |  mov RA, SAVE_CFRAME		// Restore previous C frame.
-  |  mov L:RB->cframe, RA
+  |  mov RAa, SAVE_CFRAME		// Restore previous C frame.
+  |  mov L:RB->cframe, RAa
   |  xor eax, eax			// Ok return status for vm_pcall.
   |
   |->vm_leave_unw:
@@ -530,27 +543,44 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  mov L:RB->top, BASE		// Save current top held in BASE (yes).
   |  mov NRESULTS, RD			// Need to fill only remainder with nil.
+  |.if X64
+  |  mov CARG2d, RA			// Caveat: CARG1d may be RA.
+  |  mov CARG1d, L:RB
+  |.else
   |  mov ARG2, RA			// Grow by wanted nresults+1.
   |  mov ARG1, L:RB
+  |.endif
   |  call extern lj_state_growstack	// (lua_State *L, int n)
   |  mov BASE, L:RB->top		// Need the (realloced) L->top in BASE.
   |  jmp <3
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  // (void *cframe, int errcode)
+  |.if X64
+  |  and CARG1, CFRAME_RAWMASK
+  |  mov eax, CARG2d			// Error return status for vm_pcall.
+  |  mov rsp, CARG1
+  |.else
   |  mov ecx, [esp+4]
   |  mov eax, [esp+8]			// Error return status for vm_pcall.
   |  and ecx, CFRAME_RAWMASK
   |  mov esp, ecx
+  |.endif
   |  mov L:RB, SAVE_L
   |  mov GL:RB, L:RB->glref
   |  mov dword GL:RB->vmstate, ~LJ_VMST_C
   |  jmp ->vm_leave_unw
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
+  |  // (void *cframe)
+  |.if X64
+  |  and CARG1, CFRAME_RAWMASK
+  |  mov rsp, CARG1
+  |.else
   |  mov ecx, [esp+4]
   |  and ecx, CFRAME_RAWMASK
   |  mov esp, ecx
+  |.endif
   |  mov L:RB, SAVE_L
   |  mov RA, -8				// Results start at BASE+RA = BASE-8.
   |  mov RD, 1+1			// Really 1+2 results, incr. later.
@@ -578,7 +608,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-- Grow stack on-demand -----------------------------------------------
   |
   |->gate_c_growstack:			// Grow stack for C function.
+  |.if X64
+  |  mov CARG2d, LUA_MINSTACK
+  |.else
   |  mov ARG2, LUA_MINSTACK
+  |.endif
   |  jmp >1
   |
   |->gate_lv_growstack:			// Grow stack for vararg Lua function.
@@ -598,8 +632,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, BASE
   |  mov L:RB->top, RC
   |  mov SAVE_PC, PC
+  |.if X64
+  |  mov CARG2d, RA
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
   |  mov ARG2, RA
   |  mov ARG1, L:RB
+  |.endif
   |1:
   |  // L:RB = L, L->base = new base, L->top = top
   |  // SAVE_PC = initial PC+1 (undefined for C functions)
@@ -619,18 +658,28 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-----------------------------------------------------------------------
   |
   |->vm_resume:				// Setup C frame and resume thread.
-  |  // (lua_State *L, StkId base, int nres1 = 0, ptrdiff_t ef = 0)
+  |  // (lua_State *L, TValue *base, int nres1 = 0, ptrdiff_t ef = 0)
   |  saveregs
+  |.if X64
+  |  mov L:RB, CARG1d			// Caveat: CARG1d may be RA.
+  |  mov SAVE_L, CARG1d
+  |  mov RA, CARG2d
+  |.else
+  |  mov L:RB, SAVE_L
+  |  mov RA, INARG_BASE			// Caveat: overlaps SAVE_CFRAME!
+  |.endif
   |  mov PC, FRAME_C
   |  xor RD, RD
-  |  mov L:RB, SAVE_L
   |  lea KBASE, [esp+CFRAME_RESUME]
-  |  mov RA, INARG_BASE
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  add DISPATCH, GG_G2DISP
   |  mov L:RB->cframe, KBASE
-  |  mov SAVE_CFRAME, RD		// Caveat: overlaps INARG_BASE!
   |  mov SAVE_PC, RD			// Any value outside of bytecode is ok.
+  |  mov SAVE_CFRAME, RDa
+  |.if X64
+  |  mov SAVE_NRES, RD
+  |  mov SAVE_ERRF, RD
+  |.endif
   |  cmp byte L:RB->status, RDL
   |  je >3				// Initial resume (like a call).
   |
@@ -650,25 +699,39 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp ->vm_return
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
-  |  // (lua_State *L, StkId base, int nres1, ptrdiff_t ef)
+  |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
   |  saveregs
   |  mov PC, FRAME_CP
+  |.if X64
+  |  mov SAVE_ERRF, CARG4d
+  |.endif
   |  jmp >1
   |
   |->vm_call:				// Setup C frame and enter VM.
-  |  // (lua_State *L, StkId base, int nres1)
+  |  // (lua_State *L, TValue *base, int nres1)
   |  saveregs
   |  mov PC, FRAME_C
   |
   |1:  // Entry point for vm_pcall above (PC = ftype).
+  |.if X64
+  |  mov SAVE_NRES, CARG3d
+  |  mov L:RB, CARG1d			// Caveat: CARG1d may be RA.
+  |  mov SAVE_L, CARG1d
+  |  mov RA, CARG2d
+  |.else
   |  mov L:RB, SAVE_L
-  |  mov RA, INARG_BASE
+  |  mov RA, INARG_BASE			// Caveat: overlaps SAVE_CFRAME!
+  |.endif
   |
   |2:  // Entry point for vm_cpcall below (RA = base, RB = L, PC = ftype).
-  |  mov KBASE, L:RB->cframe		// Add our C frame to cframe chain.
-  |  mov SAVE_CFRAME, KBASE		// Caveat: overlaps INARG_BASE!
+  |  mov KBASEa, L:RB->cframe		// Add our C frame to cframe chain.
+  |  mov SAVE_CFRAME, KBASEa
   |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
+  |.if X64
+  |  mov L:RB->cframe, rsp
+  |.else
   |  mov L:RB->cframe, esp
+  |.endif
   |
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  add DISPATCH, GG_G2DISP
@@ -691,31 +754,44 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  // RA = new base, RB = LFUNC/CFUNC, RC = nargs+1.
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
-  |  // (lua_State *L, lua_CPFunction cp, lua_CFunction func, void *ud)
+  |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
   |  saveregs
+  |.if X64
+  |  mov L:RB, CARG1d			// Caveat: CARG1d may be RA.
+  |  mov SAVE_L, CARG1d
+  |.else
   |  mov L:RB, SAVE_L
-  |  mov RC, INARG_CP_UD
+  |  // Caveat: INARG_CP_* and SAVE_CFRAME/SAVE_NRES/SAVE_ERRF overlap!
+  |  mov RC, INARG_CP_UD		// Get args before they are overwritten.
   |  mov RA, INARG_CP_FUNC
   |  mov BASE, INARG_CP_CALL
+  |.endif
   |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
   |
-  |  // Caveat: INARG_P_* and INARG_CP_* overlap!
   |  mov KBASE, L:RB->stack		// Compute -savestack(L, L->top).
   |  sub KBASE, L:RB->top
   |  mov SAVE_ERRF, 0			// No error function.
   |  mov SAVE_NRES, KBASE		// Neg. delta means cframe w/o frame.
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
   |
-  |  mov ARG3, RC
+  |.if X64
+  |  mov KBASEa, L:RB->cframe		// Add our C frame to cframe chain.
+  |  mov SAVE_CFRAME, KBASEa
+  |  mov L:RB->cframe, rsp
+  |
+  |  call CARG4			// (lua_State *L, lua_CFunction func, void *ud)
+  |.else
+  |  mov ARG3, RC			// Have to copy args downwards.
   |  mov ARG2, RA
   |  mov ARG1, L:RB
   |
   |  mov KBASE, L:RB->cframe		// Add our C frame to cframe chain.
-  |  mov SAVE_CFRAME, KBASE		// Caveat: overlaps INARG_CP_CALL!
+  |  mov SAVE_CFRAME, KBASE
   |  mov L:RB->cframe, esp
   |
   |  call BASE			// (lua_State *L, lua_CFunction func, void *ud)
-  |  // StkId (new base) or NULL returned in eax (RC).
+  |.endif
+  |  // TValue * (new base) or NULL returned in eax (RC).
   |  test RC, RC
   |  jz ->vm_leave_cp			// No base? Just remove C frame.
   |  mov RA, RC
@@ -737,11 +813,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov dword [RA+RD*8-4], LJ_TNIL	// Ensure one valid arg.
   |  mov RC, RA				// ... in [RC]
   |  mov PC, [RB-12]			// Restore PC from [cont|PC].
+  |  mov RA, dword [RB-16]
+  |.if X64
+  |  lea KBASEa, qword [=>0]
+  |  add RAa, KBASEa
+  |.endif
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov PROTO:KBASE, LFUNC:KBASE->pt
   |  mov KBASE, PROTO:KBASE->k
   |  // BASE = base, RC = result, RB = meta base
-  |  jmp dword [RB-16]			// Jump to continuation.
+  |  jmp RAa				// Jump to continuation.
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
   |  movzx RA, PC_RB
@@ -1028,7 +1109,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov ARG1, L:RB
   |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
-  |  call extern lj_meta_for	// (lua_State *L, StkId base)
+  |  call extern lj_meta_for	// (lua_State *L, TValue *base)
   |  mov BASE, L:RB->base
   |  mov RC, [PC-4]
   |  movzx RA, RCH
@@ -1447,7 +1528,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  xor RA, RA
   |  mov ARG4, RA
   |  mov ARG3, RA
-  |  call ->vm_resume			// (lua_State *L, StkId base, 0, 0)
+  |  call ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
   |  set_vmstate INTERP
   |
   |  mov L:RB, SAVE_L
@@ -2123,6 +2204,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |// The 16 bit exit number is stored with two (sign-extended) push imm8.
   |->vm_exit_handler:
 #if LJ_HASJIT
+  |.if X64
+  |  int3	// NYI
+  |.else
   |  push ebp; lea ebp, [esp+12]; push ebp
   |  push ebx; push edx; push ecx; push eax
   |  movzx RC, byte [ebp-4]		// Reconstruct exit number.
@@ -2159,6 +2243,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov BASE, L:RB->base
   |  mov PC, SAVE_PC
   |  mov SAVE_L, L:RB			// Needed for on-trace resume/yield.
+  |.endif
 #endif
   |->vm_exit_interp:
 #if LJ_HASJIT
@@ -2875,7 +2960,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  mov ARG2, RA
     |  mov ARG1, L:RB
     |  mov L:RB->base, BASE
-    |  call extern lj_func_closeuv	// (lua_State *L, StkId level)
+    |  call extern lj_func_closeuv	// (lua_State *L, TValue *level)
     |  mov BASE, L:RB->base
     |1:
     |  ins_next

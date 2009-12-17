@@ -534,7 +534,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 /* A bytecode instruction is about to be executed. Record it. */
 void lj_trace_ins(jit_State *J)
 {
-  while (lj_vm_cpcall(J->L, trace_state, NULL, (void *)J) != 0)
+  while (lj_vm_cpcall(J->L, NULL, (void *)J, trace_state) != 0)
     J->state = LJ_TRACE_ERR;
 }
 

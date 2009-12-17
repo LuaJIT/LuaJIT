@@ -336,7 +336,7 @@ static TValue *cploop_opt(lua_State *L, lua_CFunction dummy, void *ud)
 int lj_opt_loop(jit_State *J)
 {
   IRRef nins = J->cur.nins;
-  int errcode = lj_vm_cpcall(J->L, cploop_opt, NULL, J);
+  int errcode = lj_vm_cpcall(J->L, NULL, J, cploop_opt);
   if (LJ_UNLIKELY(errcode)) {
     lua_State *L = J->L;
     if (errcode == LUA_ERRRUN && tvisnum(L->top-1)) {  /* Trace error? */

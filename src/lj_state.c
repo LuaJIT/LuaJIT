@@ -188,7 +188,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   g->gc.stepmul = LUAI_GCMUL;
   lj_dispatch_init((GG_State *)L);
   L->status = LUA_ERRERR+1;  /* Avoid touching the stack upon memory error. */
-  if (lj_vm_cpcall(L, cpluaopen, NULL, NULL) != 0) {
+  if (lj_vm_cpcall(L, NULL, NULL, cpluaopen) != 0) {
     /* Memory allocation error: free partial state. */
     close_state(L);
     return NULL;
@@ -222,7 +222,7 @@ LUA_API void lua_close(lua_State *L)
     L->status = 0;
     L->cframe = NULL;
     L->base = L->top = L->stack + 1;
-  } while (lj_vm_cpcall(L, cpfinalize, NULL, NULL) != 0);
+  } while (lj_vm_cpcall(L, NULL, NULL, cpfinalize) != 0);
   close_state(L);
 }
 

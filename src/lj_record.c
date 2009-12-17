@@ -1101,7 +1101,7 @@ static void recff_xpcall(jit_State *J, TRef *res, RecordFFData *rd)
     /* Need to protect rec_call because the recorder may throw. */
     rx.parg = parg;
     rx.nargs = rd->nargs - 2;
-    errcode = lj_vm_cpcall(J->L, recff_xpcall_cp, NULL, &rx);
+    errcode = lj_vm_cpcall(J->L, NULL, &rx, recff_xpcall_cp);
     /* Always undo Lua stack swap to avoid confusing the interpreter. */
     rd->argv = restorestack(J->L, oargv);  /* Stack may have been resized. */
     copyTV(J->L, &rd->argv[0], &argv0);

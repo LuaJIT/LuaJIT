@@ -1034,7 +1034,7 @@ LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
 {
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
-  int status = lj_vm_cpcall(L, cpcall, func, ud);
+  int status = lj_vm_cpcall(L, func, ud, cpcall);
   if (status) hook_restore(g, oldh);
   return status;
 }
@@ -1106,7 +1106,7 @@ LUA_API int lua_load(lua_State *L, lua_Reader reader, void *data,
   ls.rdata = data;
   ls.chunkarg = chunkname ? chunkname : "?";
   lj_str_initbuf(L, &ls.sb);
-  status = lj_vm_cpcall(L, cpparser, NULL, &ls);
+  status = lj_vm_cpcall(L, NULL, &ls, cpparser);
   g = G(L);
   lj_str_freebuf(g, &ls.sb);
   lj_gc_check(L);
