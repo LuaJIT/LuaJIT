@@ -55,6 +55,8 @@
 |.define CARG2d,	edx
 |.define CARG3d,	r8d
 |.define CARG4d,	r9d
+|.define FCARG1,	CARG1d		// Upwards compatible to x86 fastcall.
+|.define FCARG2,	CARG2d
 |.else
 |.define CARG1,		rsi		// x64/POSIX C call arguments.
 |.define CARG2,		rdi
@@ -68,6 +70,8 @@
 |.define CARG4d,	ecx
 |.define CARG5d,	r8d
 |.define CARG6d,	r9d
+|.define FCARG1,	CARG1d		// Simulate x86 fastcall.
+|.define FCARG2,	CARG2d
 |.endif
 |
 |// Type definitions. Some of these are only used for documentation.
@@ -154,7 +158,7 @@
 |  pop rbx; pop rsi; pop rdi; pop rbp
 |.endmacro
 |
-|.define UNUSED1,	aword [rsp+dword*26]
+|.define SAVE_CFRAME,	aword [rsp+aword*13]
 |.define SAVE_PC,	dword [rsp+dword*25]
 |.define SAVE_L,	dword [rsp+dword*24]
 |.define SAVE_ERRF,	dword [rsp+dword*23]
@@ -167,7 +171,7 @@
 |.define SAVE_R3,	aword [rsp+aword*7]
 |.define SAVE_R2,	aword [rsp+aword*6]
 |.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
-|.define SAVE_CFRAME,	aword [rsp+aword*4]
+|.define ARG5,		aword [rsp+aword*4]
 |.define CSAVE_4,	aword [rsp+aword*3]
 |.define CSAVE_3,	aword [rsp+aword*2]
 |.define CSAVE_2,	aword [rsp+aword*1]
@@ -175,8 +179,9 @@
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
 |
 |// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [rsp]
+|.define TMPQ,		qword [rsp+aword*10]
 |.define NRESULTS,	TMP2
+|.define ARG5d,		dword [rsp+aword*4]
 |
 |//-----------------------------------------------------------------------
 |.else			// x64/POSIX stack layout
@@ -869,12 +874,20 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  movzx RB, PC_RB			// Reload TValue *t from RB.
   |  lea RB, [BASE+RB*8]
   |2:
+  |.if X64
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov CARG2d, RB
+  |  mov CARG3d, RC
+  |  mov L:RB, L:CARG1d
+  |.else
   |  mov ARG2, RB
   |  mov L:RB, SAVE_L
   |  mov ARG3, RC
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_tget		// (lua_State *L, TValue *o, TValue *k)
   |  // TValue * (finished) or NULL (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
@@ -927,12 +940,20 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  movzx RB, PC_RB			// Reload TValue *t from RB.
   |  lea RB, [BASE+RB*8]
   |2:
+  |.if X64
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov CARG2d, RB
+  |  mov CARG3d, RC
+  |  mov L:RB, L:CARG1d
+  |.else
   |  mov ARG2, RB
   |  mov L:RB, SAVE_L
   |  mov ARG3, RC
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_tset		// (lua_State *L, TValue *o, TValue *k)
   |  // TValue * (finished) or NULL (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
@@ -965,6 +986,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-- Comparison metamethods ---------------------------------------------
   |
   |->vmeta_comp:
+  |.if X64
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d == BASE.
+  |.if X64WIN
+  |  lea CARG3d, [BASE+RD*8]
+  |  lea CARG2d, [BASE+RA*8]
+  |.else
+  |  lea CARG2d, [BASE+RA*8]
+  |  lea CARG3d, [BASE+RD*8]
+  |.endif
+  |  mov CARG1d, L:RB			// Caveat: CARG1d/CARG4d == RA.
+  |  movzx CARG4d, PC_OP
+  |.else
   |  movzx RB, PC_OP
   |  lea RD, [BASE+RD*8]
   |  lea RA, [BASE+RA*8]
@@ -973,8 +1007,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov ARG3, RD
   |  mov ARG2, RA
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_comp	// (lua_State *L, TValue *o1, *o2, int op)
   |  // 0/1 or TValue * (metamethod) returned in eax (RC).
   |3:
@@ -1001,14 +1036,30 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp <4
   |
   |->vmeta_equal:
+  |  sub PC, 4
+  |.if X64WIN
+  |  mov CARG3d, RD
+  |  mov CARG4d, RB
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d == BASE.
+  |  mov CARG2d, RA
+  |  mov CARG1d, L:RB			// Caveat: CARG1d == RA.
+  |.elif X64
+  |  mov CARG2d, RA
+  |  mov CARG4d, RB			// Caveat: CARG4d == RA.
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG3d == BASE.
+  |  mov CARG3d, RD
+  |  mov CARG1d, L:RB
+  |.else
   |  mov ARG4, RB
   |  mov L:RB, SAVE_L
-  |  sub PC, 4
   |  mov ARG3, RD
   |  mov ARG2, RA
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_equal	// (lua_State *L, GCobj *o1, *o2, int ne)
   |  // 0/1 or TValue * (metamethod) returned in eax (RC).
   |  jmp <3
@@ -1036,6 +1087,24 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  lea RB, [BASE+RB*8]
   |2:
   |  lea RA, [BASE+RA*8]
+  |.if X64WIN
+  |  mov CARG3d, RB
+  |  mov CARG4d, RC
+  |  movzx RC, PC_OP
+  |  mov ARG5d, RC
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d == BASE.
+  |  mov CARG2d, RA
+  |  mov CARG1d, L:RB			// Caveat: CARG1d == RA.
+  |.elif X64
+  |  movzx CARG5d, PC_OP
+  |  mov CARG2d, RA
+  |  mov CARG4d, RC			// Caveat: CARG4d == RA.
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE		// Caveat: CARG3d == BASE.
+  |  mov CARG3d, RB
+  |  mov L:RB, L:CARG1d
+  |.else
   |  mov ARG3, RB
   |  mov L:RB, SAVE_L
   |  mov ARG4, RC
@@ -1043,8 +1112,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov ARG2, RA
   |  mov ARG5, RC
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_arith	// (lua_State *L, TValue *ra,*rb,*rc, BCReg op)
   |  // NULL (finished) or TValue * (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
@@ -1065,12 +1135,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp aword LFUNC:RB->gate
   |
   |->vmeta_len:
+  |.if X64
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d may be BASE.
+  |  lea CARG2d, [BASE+RD*8]
+  |  mov CARG1d, L:RB
+  |.else
   |  lea RD, [BASE+RD*8]
   |  mov L:RB, SAVE_L
   |  mov ARG2, RD
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_len		// (lua_State *L, TValue *o)
   |  // TValue * (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
@@ -1083,13 +1160,21 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov TMP2, RA			// Save RA, RC for us.
   |  mov TMP1, NARGS:RC
   |  sub RA, 8
+  |.if X64
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov CARG2d, RA
+  |  lea CARG3d, [RA+NARGS:RC*8]
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
   |  lea RC, [RA+NARGS:RC*8]
   |  mov L:RB, SAVE_L
   |  mov ARG2, RA
   |  mov ARG3, RC
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE		// This is the callers base!
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
   |  mov BASE, L:RB->base
   |  mov RA, TMP2
@@ -1104,11 +1189,18 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |//-- Argument coercion for 'for' statement ------------------------------
   |
   |->vmeta_for:
+  |.if X64
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d may be BASE.
+  |  mov CARG2d, RA
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
   |  mov L:RB, SAVE_L
   |  mov ARG2, RA
   |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_meta_for	// (lua_State *L, TValue *base)
   |  mov BASE, L:RB->base
   |  mov RC, [PC-4]
@@ -1184,7 +1276,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov [RA-8], RB
   |  sub RD, 2
   |  jz >2
-  |  mov ARG1, RA
+  |  mov TMP1, RA
   |1:
   |  add RA, 8
   |  mov RB, [RA+4]
@@ -1193,7 +1285,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov [RA-8], RB
   |  sub RD, 1
   |  jnz <1
-  |  mov RA, ARG1
+  |  mov RA, TMP1
   |2:
   |  mov RD, NRESULTS
   |  jmp ->fff_res_
@@ -1230,7 +1322,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov STR:RC, [DISPATCH+DISPATCH_GL(mmname)+4*MM_metatable]
   |  mov dword [RA-4], LJ_TTAB		// Store metatable as default result.
   |  mov [RA-8], TAB:RB
-  |  mov ARG1, RA			// Save result pointer.
+  |  mov TMP1, RA			// Save result pointer.
   |  mov RA, TAB:RB->hmask
   |  and RA, STR:RC->hash
   |  imul RA, #NODE
@@ -1249,7 +1341,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov RB, [RA+4]
   |  cmp RB, LJ_TNIL;  je ->fff_res1	// Dito for nil value.
   |  mov RC, [RA]
-  |  mov RA, ARG1			// Restore result pointer.
+  |  mov RA, TMP1			// Restore result pointer.
   |  mov [RA-4], RB			// Return value of mt.__metatable.
   |  mov [RA-8], RC
   |  jmp ->fff_res1
@@ -1282,6 +1374,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc_2 rawget
   |  cmp dword [RA+4], LJ_TTAB;  jne ->fff_fallback
+  |.if X64
+  |  mov TMP1, BASE			// Save BASE and RA.
+  |  mov RB, RA
+  |  mov CARG2d, [RA]
+  |  lea CARG3d, [RA+8]
+  |  mov CARG1d, SAVE_L			// Caveat: CARG1d may be RA.
+  |.else
   |  mov TAB:RC, [RA]
   |  mov L:RB, SAVE_L
   |  mov ARG2, TAB:RC
@@ -1290,6 +1389,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov TMP1, BASE			// Save BASE and RA.
   |  add RA, 8
   |  mov ARG3, RA
+  |.endif
   |  call extern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
   |  // cTValue * returned in eax (RC).
   |  mov RA, RB
@@ -1327,13 +1427,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, RA			// Add frame since C call can throw.
   |  mov [RA-4], PC
   |  mov SAVE_PC, PC			// Redundant (but a defined value).
-  |  mov ARG3, BASE			// Save BASE.
+  |  mov TMP1, BASE			// Save BASE.
   |  mov FCARG2, RA			// Caveat: FCARG2 == BASE
   |  mov L:FCARG1, L:RB			// Caveat: FCARG1 == RA
   |  call extern lj_str_fromnum@8	// (lua_State *L, lua_Number *np)
   |  // GCstr returned in eax (RC).
   |  mov RA, L:RB->base
-  |  mov BASE, ARG3
+  |  mov BASE, TMP1
   |  jmp <2
   |
   |//-- Base library: iterators -------------------------------------------
@@ -1342,16 +1442,26 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  je >2				// Missing 2nd arg?
   |1:
   |  cmp dword [RA+4], LJ_TTAB;  jne ->fff_fallback
+  |.if X64
+  |  mov CARG2d, [RA]
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, RA			// Add frame since C call can throw.
+  |  mov [RA-4], PC
+  |  mov TMP1, BASE			// Save BASE.
+  |  lea CARG3d, [RA+8]
+  |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
+  |.else
   |  mov TAB:RB, [RA]
   |  mov ARG2, TAB:RB
   |  mov L:RB, SAVE_L
   |  mov ARG1, L:RB
   |  mov L:RB->base, RA			// Add frame since C call can throw.
   |  mov [RA-4], PC
-  |  mov SAVE_PC, PC			// Redundant (but a defined value).
   |  mov TMP1, BASE			// Save BASE.
   |  add RA, 8
   |  mov ARG3, RA
+  |.endif
+  |  mov SAVE_PC, PC			// Redundant (but a defined value).
   |  call extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
   |  // Flag returned in eax (RC).
   |  mov RA, L:RB->base
@@ -1390,7 +1500,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  fld qword [RA+8]
   |  fld1
   |  faddp st1
-  |  fist ARG2
+  |  fist ARG2				// Caveat: used in getinth call, too.
   |  fstp qword [RA-8]
   |  mov TAB:RB, [RA]
   |  mov RC, ARG2
@@ -1406,13 +1516,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  jmp ->fff_res2
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  cmp dword TAB:RB->hmask, 0; je ->fff_res0
+  |.if X64
+  |  mov CARG1d, TAB:RB
+  |.else
   |  mov ARG1, TAB:RB
-  |  mov ARG3, BASE			// Save BASE and RA.
+  |.endif
+  |  mov TMP1, BASE			// Save BASE and RA.
   |  mov RB, RA
   |  call extern lj_tab_getinth		// (GCtab *t, int32_t key)
   |  // cTValue * or NULL returned in eax (RC).
   |  mov RA, RB
-  |  mov BASE, ARG3
+  |  mov BASE, TMP1
   |  test RC, RC
   |  jnz <1
   |->fff_res0:
@@ -1481,14 +1595,22 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |.endif
   |  mov [RA-4], PC
   |  mov SAVE_PC, PC
+  |.if X64
+  |  mov TMP1, L:RB
+  |.else
   |  mov ARG1, L:RB
+  |.endif
   |.if resume
   |  cmp dword [RA+4], LJ_TTHREAD;  jne <9
   |.endif
   |  cmp aword L:RB->cframe, 0; jne <9
   |  cmp byte L:RB->status, LUA_YIELD;  ja <9
   |  mov PC, L:RB->top
+  |.if X64
+  |  mov TMP2, PC
+  |.else
   |  mov ARG2, PC
+  |.endif
   |  je >1				// Status != LUA_YIELD (i.e. 0)?
   |  cmp PC, L:RB->base; je <9		// Check for presence of initial func.
   |1:
@@ -1506,7 +1628,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  add RA, 8				// Keep resumed thread in stack for GC.
   |.endif
   |  mov L:RB->top, RA
+  |.if X64
+  |  mov RB, TMP2
+  |.else
   |  mov RB, ARG2
+  |.endif
   |.if resume
   |  lea RA, [RA+NARGS:RC*8-24]		// RA = end of source for stack move.
   |.else
@@ -1525,14 +1651,23 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  cmp PC, RB
   |  jne <2
   |3:
+  |.if X64
+  |  mov CARG1d, TMP1
+  |  mov CARG2d, TMP2
+  |.else
   |  xor RA, RA
   |  mov ARG4, RA
   |  mov ARG3, RA
+  |.endif
   |  call ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
   |  set_vmstate INTERP
   |
   |  mov L:RB, SAVE_L
+  |.if X64
+  |  mov L:PC, TMP1
+  |.else
   |  mov L:PC, ARG1			// The callee doesn't modify SAVE_L.
+  |.endif
   |  mov BASE, L:RB->base
   |  cmp eax, LUA_YIELD
   |  ja >8
@@ -1590,8 +1725,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov RD, 1+2			// nresults+1 = 1 + false + error.
   |  jmp <7
   |.else
+  |.if X64
+  |  mov CARG2d, L:PC
+  |  mov CARG1d, L:RB
+  |.else
   |  mov ARG2, L:PC
   |  mov ARG1, L:RB
+  |.endif
   |  call extern lj_ffh_coroutine_wrap_err  // (lua_State *L, lua_State *co)
   |  // Error function does not return.
   |.endif
@@ -1599,8 +1739,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |9:  // Handle stack expansion on return from yield.
   |  mov L:RA, ARG1			// The callee doesn't modify SAVE_L.
   |  mov L:RA->top, KBASE		// Undo coroutine stack clearing.
+  |.if X64
+  |  mov CARG2d, PC
+  |  mov CARG1d, L:RB
+  |.else
   |  mov ARG2, PC
   |  mov ARG1, L:RB
+  |.endif
   |  call extern lj_state_growstack	// (lua_State *L, int n)
   |  mov BASE, L:RB->base
   |  jmp <4				// Retry the stack move.
@@ -1617,8 +1762,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov L:RB->base, RA
   |  lea RC, [RA+NARGS:RC*8-8]
   |  mov L:RB->top, RC
-  |  xor eax, eax
-  |  mov aword L:RB->cframe, eax
+  |  xor RD, RD
+  |  mov aword L:RB->cframe, RDa
   |  mov al, LUA_YIELD
   |  mov byte L:RB->status, al
   |  jmp ->vm_leave_unw
@@ -1706,7 +1851,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  cmp RB, 0x00200000; jb >4
   |1:
   |  shr RB, 21; sub RB, RC		// Extract and unbias exponent.
-  |  mov ARG1, RB; fild ARG1
+  |  mov TMP1, RB; fild TMP1
   |  mov RB, [RA-4]
   |  and RB, 0x800fffff			// Mask off exponent.
   |  or RB, 0x3fe00000			// Put mantissa in range [0.5,1) or 0.
@@ -1719,7 +1864,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  fldz; jmp <2
   |4:  // Handle denormals by multiplying with 2^54 and adjusting the bias.
   |  fld qword [RA]
-  |  mov ARG1, 0x5a800000; fmul ARG1	// x = x*2^54
+  |  mov TMP1, 0x5a800000; fmul TMP1	// x = x*2^54
   |  fstp qword [RA-8]
   |  mov RB, [RA-4]; mov RC, 1076; shl RB, 1; jmp <1
   |
@@ -1786,8 +1931,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  cmp dword STR:RB->len, 1
   |  jb ->fff_res0			// Return no results for empty string.
   |  movzx RB, byte STR:RB[1]
-  |  mov ARG1, RB
-  |  fild ARG1
+  |  mov TMP1, RB
+  |  fild TMP1
   |  jmp ->fff_resn
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
@@ -1956,14 +2101,14 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |
   |.ffunc_1 table_getn
   |  cmp dword [RA+4], LJ_TTAB;  jne ->fff_fallback
-  |  mov ARG2, BASE			// Save RA and BASE.
+  |  mov TMP1, BASE			// Save RA and BASE.
   |  mov RB, RA
   |  mov TAB:FCARG1, [RA]		// Caveat: FCARG1 == RA
   |  call extern lj_tab_len@4		// LJ_FASTCALL (GCtab *t)
   |  // Length of table returned in eax (RC).
   |  mov ARG1, RC
   |  mov RA, RB				// Restore RA and BASE.
-  |  mov BASE, ARG2
+  |  mov BASE, TMP1
   |  fild ARG1
   |  jmp ->fff_resn
   |
@@ -2106,7 +2251,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  mov SAVE_PC, PC			// Redundant (but a defined value).
   |  mov L:RB->base, RA
   |  lea RC, [RA+NARGS:RC*8-8]
+  |.if X64
+  |  mov CARG1d, L:RB
+  |.else
   |  mov ARG1, L:RB
+  |.endif
   |  mov L:RB->top, RC
   |  call extern lj_gc_step		// (lua_State *L)
   |  mov RA, L:RB->base
@@ -2152,12 +2301,20 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  test RDL, LUA_MASKLINE
   |  jz >5
   |1:
+  |.if X64
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov CARG3d, NRESULTS		// Dynamic top for *M instructions.
+  |  mov CARG2d, PC
+  |  mov CARG1d, L:RB
+  |.else
   |  mov L:RB, SAVE_L
   |  mov RD, NRESULTS			// Dynamic top for *M instructions.
   |  mov ARG3, RD
   |  mov L:RB->base, BASE
   |  mov ARG2, PC
   |  mov ARG1, L:RB
+  |.endif
   |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
   |  call extern lj_dispatch_ins  // (lua_State *L, BCIns *pc, int nres)
   |4:
@@ -2171,12 +2328,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
   |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE
+  |.if X64
+  |  mov CARG2d, PC
+  |  lea CARG1d, [DISPATCH+GG_DISP2J]
+  |.else
   |  lea RA, [DISPATCH+GG_DISP2J]
   |  mov ARG2, PC
   |  mov ARG1, RA
+  |.endif
   |  mov [DISPATCH+DISPATCH_J(L)], L:RB
   |  mov SAVE_PC, PC
-  |  mov L:RB->base, BASE
   |  call extern lj_trace_hot		// (jit_State *J, const BCIns *pc)
   |  jmp <4
 #endif
@@ -2184,12 +2346,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |->vm_hotcall:			// Hot call counter underflow.
 #if LJ_HASJIT
   |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE
+  |.if X64
+  |  mov CARG2d, PC
+  |  lea CARG1d, [DISPATCH+GG_DISP2J]
+  |.else
   |  lea RA, [DISPATCH+GG_DISP2J]
   |  mov ARG2, PC
   |  mov ARG1, RA
+  |.endif
   |  mov [DISPATCH+DISPATCH_J(L)], L:RB
   |  mov SAVE_PC, PC
-  |  mov L:RB->base, BASE
   |  call extern lj_trace_hot		// (jit_State *J, const BCIns *pc)
   |  mov BASE, L:RB->base
   |  // Dispatch the first instruction and optionally record it.
@@ -2900,7 +3067,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
     |  jz <1
     |  // Crossed a write barrier. Move the barrier forward.
+    |.if X64 and not X64WIN
+    |  mov FCARG2, RB
+    |  mov RB, BASE			// Save BASE.
+    |.else
     |  xchg FCARG2, RB			// Save BASE (FCARG2 == BASE).
+    |.endif
     |  lea GL:FCARG1, [DISPATCH+GG_DISP2G]
     |  call extern lj_gc_barrieruv@8	// (global_State *g, TValue *tv)
     |  mov BASE, RB			// Restore BASE.
