@@ -211,6 +211,9 @@ else
   ifeq (Linux,$(TARGET_SYS))
     TARGET_XLIBS+= -ldl
   endif
+  ifeq (GNU/kFreeBSD,$(TARGET_SYS))
+    TARGET_XLIBS+= -ldl
+  endif
 endif
 endif
 

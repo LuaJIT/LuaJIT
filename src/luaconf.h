@@ -15,7 +15,7 @@
 #define LUA_DL_DLL
 #elif defined(__linux__) || defined(__solaris__) || defined(__CYGWIN__) || \
       defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
-      (defined(__MACH__) && defined(__APPLE__))
+      defined(__FreeBSD_kernel__) || (defined(__MACH__) && defined(__APPLE__))
 #define LUA_USE_POSIX
 #define LUA_DL_DLOPEN
 #endif
