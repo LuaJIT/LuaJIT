@@ -322,6 +322,40 @@
 |.macro fdup; fld st0; .endmacro
 |.macro fpop1; fstp st1; .endmacro
 |
+|// Synthesize SSE FP constants.
+|.macro sseconst_sign, reg, tmp		// Synthesize sign mask.
+|.if X64
+|  mov64 tmp, U64x(80000000,00000000); movd reg, tmp
+|.else
+|  mov tmp, 0x80000000; movd xmm1, tmp; pshufd reg, reg, 0x51
+|.endif
+|.endmacro
+|
+|.macro sseconst_abs, reg, tmp		// Synthesize abs mask.
+|.if X64
+|  mov64 tmp, U64x(7fffffff,ffffffff); movd reg, tmp
+|.else
+|  pxor reg, reg; pcmpeqd reg, reg; psrlq reg, 1
+|.endif
+|.endmacro
+|
+|.macro sseconst_1, reg, tmp		// Synthesize 1.0.
+|.if X64
+|  mov64 tmp, U64x(3ff00000,00000000)
+|  movd reg, tmp
+|.else
+|  mov tmp, 0x3ff00000; movd reg, tmp; pshufd reg, reg, 0x51
+|.endif
+|.endmacro
+|
+|.macro sseconst_2p52, reg, tmp		// Synthesize 2^52.
+|.if X64
+|  mov64 tmp, U64x(43300000,00000000); movd reg, tmp
+|.else
+|  mov tmp, 0x43300000; movd reg, tmp; pshufd reg, reg, 0x51
+|.endif
+|.endmacro
+|
 |// Move table write barrier back. Overwrites reg.
 |.macro barrierback, tab, reg
 |  and byte tab->marked, cast_byte(~LJ_GC_BLACK)	// black2gray(tab)
@@ -334,7 +368,7 @@
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
 /* The .code_sub section should be last to help static branch prediction. */
-static void build_subroutines(BuildCtx *ctx, int cmov)
+static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
 {
   |.code_sub
   |
@@ -2454,21 +2488,51 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |  vm_round 0x0c00, 0xffff
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
-  |// Args/ret on x87 stack (y on top). No xmm registers modified.
-  |// Caveat: needs 3 slots on x87 stack! RC (eax) modified!
   |->vm_mod:
-  |  fld st1
-  |  fdiv st1
-  |  fnstcw word [esp+4]
-  |  mov ax, 0x0400
-  |  or ax, [esp+4]
-  |  and ax, 0xf7ff
-  |  mov [esp+6], ax
-  |  fldcw word [esp+6]
-  |  frndint
-  |  fldcw word [esp+4]
-  |  fmulp st1
-  |  fsubp st1
+  if (sse) {
+    |// Args in xmm0/xmm1, return value in xmm0.
+    |// Caveat: xmm0-xmm5 and RC (eax) modified!
+    |  movaps xmm5, xmm0
+    |  divsd xmm0, xmm1
+    |  sseconst_abs xmm2, RDa
+    |  sseconst_2p52 xmm3, RDa
+    |  movaps xmm4, xmm0
+    |  andpd xmm4, xmm2			// |x/y|
+    |  ucomisd xmm3, xmm4		// No truncation if 2^52 <= |x/y|.
+    |  jbe >1
+    |  andnpd xmm2, xmm0		// Isolate sign bit.
+    |  addsd xmm4, xmm3			// (|x/y| + 2^52) - 2^52
+    |  subsd xmm4, xmm3
+    |  orpd xmm4, xmm2			// Merge sign bit back in.
+    |  sseconst_1 xmm2, RDa
+    |  cmpsd xmm0, xmm4, 1		// x/y < result?
+    |  andpd xmm0, xmm2
+    |  subsd xmm4, xmm0			// If yes, subtract 1.0.
+    |  movaps xmm0, xmm5
+    |  mulsd xmm1, xmm4
+    |  subsd xmm0, xmm1
+    |  ret
+    |1:
+    |  mulsd xmm1, xmm0
+    |  movaps xmm0, xmm5
+    |  subsd xmm0, xmm1
+    |  ret
+  } else {
+    |// Args/ret on x87 stack (y on top). No xmm registers modified.
+    |// Caveat: needs 3 slots on x87 stack! RC (eax) modified!
+    |  fld st1
+    |  fdiv st1
+    |  fnstcw word [esp+4]
+    |  mov ax, 0x0400
+    |  or ax, [esp+4]
+    |  and ax, 0xf7ff
+    |  mov [esp+6], ax
+    |  fldcw word [esp+6]
+    |  frndint
+    |  fldcw word [esp+4]
+    |  fmulp st1
+    |  fsubp st1
+  }
   |  ret
   |
   |// FP exponentiation e^x and 2^x. Called by math.exp fast function and
@@ -2619,31 +2683,100 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
   |// and basic math functions. ORDER ARITH
   |->vm_foldarith:
-  |  mov eax, [esp+20]
-  |  fld qword [esp+4]
-  |  fld qword [esp+12]
-  |  cmp eax, 1; je >1; ja >2
-  |  faddp st1; ret
-  |1: ; fsubp st1; ret
-  |2: ; cmp eax, 3; je >1; ja >2
-  |  fmulp st1; ret
-  |1: ; fdivp st1; ret
-  |2: ; cmp eax, 5; jb ->vm_mod; je ->vm_pow
-  |  cmp eax, 7; je >1; ja >2
-  |  fpop; fchs; ret
-  |1: ; fpop; fabs; ret
-  |2: ; cmp eax, 9; je >1; ja >2
-  |  fpatan; ret
-  |1: ; fxch; fscale; fpop1; ret
-  |2: ; cmp eax, 11; je >1; ja >9
-  ||if (cmov) {
-  |  fucomi st1; fcmovnbe st1; fpop1; ret
-  |1: ; fucomi st1; fcmovbe st1; fpop1; ret
-  ||} else {
-  |  fucom st1; fnstsw ax; test ah, 1; jz >2; fxch; 2: ; fpop; ret
-  |1: ; fucom st1; fnstsw ax; test ah, 1; jnz >2; fxch; 2: ; fpop; ret
-  ||}
-  |9: ; int3					// Bad op.
+  if (sse) {
+    |.macro retxmm0; .if X64; ret; .else; jmp >7; .endif; .endmacro
+    |.macro retst0; .if X64; jmp >7; .else; ret; .endif; .endmacro
+    |
+    |.if X64WIN
+    |  .define foldop, CARG3d
+    |.elif X64
+    |  .define foldop, CARG1d
+    |.else
+    |  .define foldop, eax
+    |  mov foldop, [esp+20]
+    |  movsd xmm0, qword [esp+4]
+    |  movsd xmm1, qword [esp+12]
+    |.endif
+    |  cmp foldop, 1; je >1; ja >2
+    |  addsd xmm0, xmm1; retxmm0
+    |1: ; subsd xmm0, xmm1; retxmm0
+    |2: ; cmp foldop, 3; je >1; ja >2
+    |  mulsd xmm0, xmm1; retxmm0
+    |1: ; divsd xmm0, xmm1; retxmm0
+    |2: ; cmp foldop, 5
+    |.if X64
+    |  jb ->vm_mod; je ->vm_pow		// NYI: broken without SSE vm_pow.
+    |.else
+    |  je >1; ja >2
+    |  call ->vm_mod; retxmm0
+    |1: ; fld qword [esp+4]; fld qword [esp+12]; jmp ->vm_pow  // NYI
+    |2:
+    |.endif
+    |  cmp foldop, 7; je >1; ja >2
+    |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; retxmm0
+    |1:
+    |  sseconst_abs xmm1, RDa; andps xmm0, xmm1; retxmm0
+    |2: ; cmp foldop, 9; ja >2
+    |.if X64WIN
+    |  movsd qword [esp+8], xmm0	// Use scratch area.
+    |  movsd qword [esp+16], xmm1
+    |  fld qword [esp+8]
+    |  fld qword [esp+16]
+    |.elif X64
+    |  movsd qword [esp-8], xmm0	// Use red zone.
+    |  movsd qword [esp-16], xmm1
+    |  fld qword [esp-8]
+    |  fld qword [esp-16]
+    |.else
+    |  fld qword [esp+4]		// Reload from stack
+    |  fld qword [esp+12]
+    |.endif
+    |  je >1
+    |  fpatan; retst0
+    |1: ; fxch; fscale; fpop1; retst0
+    |2: ; cmp foldop, 11; je >1; ja >9
+    |  minsd xmm0, xmm1; retxmm0
+    |1: ; maxsd xmm0, xmm1; retxmm0
+    |9: ; int3				// Bad op.
+    |7:  // Move return value depending on calling convention.
+    |.if X64WIN
+    |  fstp qword [esp+8]		// Use scratch area.
+    |  movsd xmm0, qword [esp+8]
+    |.elif X64
+    |  fstp qword [esp-8]		// Use red zone.
+    |  movsd xmm0, qword [esp-8]
+    |.else
+    |  movsd qword [esp+4], xmm0	// Overwrite callee-owned args.
+    |  fld qword [esp+4]
+    |.endif
+    |  ret
+  } else {
+    |  mov eax, [esp+20]
+    |  fld qword [esp+4]
+    |  fld qword [esp+12]
+    |  cmp eax, 1; je >1; ja >2
+    |  faddp st1; ret
+    |1: ; fsubp st1; ret
+    |2: ; cmp eax, 3; je >1; ja >2
+    |  fmulp st1; ret
+    |1: ; fdivp st1; ret
+    |2: ; cmp eax, 5; jb ->vm_mod; je ->vm_pow
+    |  cmp eax, 7; je >1; ja >2
+    |  fpop; fchs; ret
+    |1: ; fpop; fabs; ret
+    |2: ; cmp eax, 9; je >1; ja >2
+    |  fpatan; ret
+    |1: ; fxch; fscale; fpop1; ret
+    |2: ; cmp eax, 11; je >1; ja >9
+    ||if (cmov) {
+    |  fucomi st1; fcmovnbe st1; fpop1; ret
+    |1: ; fucomi st1; fcmovbe st1; fpop1; ret
+    ||} else {
+    |  fucom st1; fnstsw ax; test ah, 1; jz >2; fxch; 2: ; fpop; ret
+    |1: ; fucom st1; fnstsw ax; test ah, 1; jnz >2; fxch; 2: ; fpop; ret
+    ||}
+    |9: ; int3				// Bad op.
+  }
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -2694,7 +2827,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov)
 }
 
 /* Generate the code for a single instruction. */
-static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
+static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 {
   int vk = 0;
   |// Note: aligning all instructions does not pay off.
@@ -2711,10 +2844,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  ins_AD
     |  checknum RA, ->vmeta_comp
     |  checknum RD, ->vmeta_comp
-    |  fld qword [BASE+RA*8]		// Reverse order, i.e like cmp D, A.
-    |  fld qword [BASE+RD*8]
-    |  add PC, 4
-    |  fcomparepp			// eax (RD) modified!
+    if (sse) {
+      |  movsd xmm0, qword [BASE+RD*8]
+      |  add PC, 4
+      |  ucomisd xmm0, qword [BASE+RA*8]
+    } else {
+      |  fld qword [BASE+RA*8]		// Reverse order, i.e like cmp D, A.
+      |  fld qword [BASE+RD*8]
+      |  add PC, 4
+      |  fcomparepp			// eax (RD) modified!
+    }
     |  // Unordered: all of ZF CF PF set, ordered: PF clear.
     |  // To preserve NaN semantics GE/GT branch on unordered, but LT/LE don't.
     switch (op) {
@@ -2746,9 +2885,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  add PC, 4
     |  cmp RB, LJ_TISNUM; ja >5
     |  checknum RA, >5
-    |  fld qword [BASE+RA*8]
-    |  fld qword [BASE+RD*8]
-    |  fcomparepp			// eax (RD) modified!
+    if (sse) {
+      |  movsd xmm0, qword [BASE+RD*8]
+      |  ucomisd xmm0, qword [BASE+RA*8]
+    } else {
+      |  fld qword [BASE+RA*8]
+      |  fld qword [BASE+RD*8]
+      |  fcomparepp			// eax (RD) modified!
+    }
   iseqne_fp:
     if (vk) {
       |  jp >2				// Unordered means not equal.
@@ -2820,9 +2964,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  ins_AD	// RA = src, RD = num const, JMP with RD = target
     |  add PC, 4
     |  checknum RA, >2
-    |  fld qword [BASE+RA*8]
-    |  fld qword [KBASE+RD*8]
-    |  fcomparepp			// eax (RD) modified!
+    if (sse) {
+      |  movsd xmm0, qword [KBASE+RD*8]
+      |  ucomisd xmm0, qword [BASE+RA*8]
+    } else {
+      |  fld qword [BASE+RA*8]
+      |  fld qword [KBASE+RD*8]
+      |  fcomparepp			// eax (RD) modified!
+    }
     goto iseqne_fp;
   case BC_ISEQP: case BC_ISNEP:
     vk = op == BC_ISEQP;
@@ -2875,18 +3024,32 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
   case BC_UNM:
     |  ins_AD	// RA = dst, RD = src
     |  checknum RD, ->vmeta_unm
-    |  fld qword [BASE+RD*8]
-    |  fchs
-    |  fstp qword [BASE+RA*8]
+    if (sse) {
+      |  movsd xmm0, qword [BASE+RD*8]
+      |  sseconst_sign xmm1, RDa
+      |  xorps xmm0, xmm1
+      |  movsd qword [BASE+RA*8], xmm0
+    } else {
+      |  fld qword [BASE+RD*8]
+      |  fchs
+      |  fstp qword [BASE+RA*8]
+    }
     |  ins_next
     break;
   case BC_LEN:
     |  ins_AD	// RA = dst, RD = src
     |  checkstr RD, >2
     |  mov STR:RD, [BASE+RD*8]
-    |  fild dword STR:RD->len
-    |1:
-    |  fstp qword [BASE+RA*8]
+    if (sse) {
+      |  xorps xmm0, xmm0
+      |  cvtsi2sd xmm0, dword STR:RD->len
+      |1:
+      |  movsd qword [BASE+RA*8], xmm0
+    } else {
+      |  fild dword STR:RD->len
+      |1:
+      |  fstp qword [BASE+RA*8]
+    }
     |  ins_next
     |2:
     |  checktab RD, ->vmeta_len
@@ -2894,72 +3057,108 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov)
     |  mov RB, BASE			// Save BASE.
     |  call extern lj_tab_len@4		// (GCtab *t)
     |  // Length of table returned in eax (RC).
-    |  mov ARG1, RC
-    |  mov BASE, RB			// Restore BASE.
-    |  fild ARG1
+    if (sse) {
+      |  cvtsi2sd xmm0, RC
+      |  mov BASE, RB			// Restore BASE.
+    } else {
+      |  mov ARG1, RC
+      |  mov BASE, RB			// Restore BASE.
+      |  fild ARG1
+    }
     |  movzx RA, PC_RA
     |  jmp <1
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
 
-    |.macro ins_arithpre, ins
+    |.macro ins_arithpre, ins, sseins, ssereg
     |  ins_ABC
     ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
     ||switch (vk) {
     ||case 0:
     |   checknum RB, ->vmeta_arith_vn
+    ||if (sse) {
+    |   movsd xmm0, qword [BASE+RB*8]
+    |   sseins ssereg, qword [KBASE+RC*8]
+    ||} else {
     |   fld qword [BASE+RB*8]
     |   ins qword [KBASE+RC*8]
+    ||}
     ||  break;
     ||case 1:
     |   checknum RB, ->vmeta_arith_nv
+    ||if (sse) {
+    |   movsd xmm0, qword [KBASE+RC*8]
+    |   sseins ssereg, qword [BASE+RB*8]
+    ||} else {
     |   fld qword [KBASE+RC*8]
     |   ins qword [BASE+RB*8]
+    ||}
     ||  break;
     ||default:
     |   checknum RB, ->vmeta_arith_vv
     |   checknum RC, ->vmeta_arith_vv
+    ||if (sse) {
+    |   movsd xmm0, qword [BASE+RB*8]
+    |   sseins ssereg, qword [BASE+RC*8]
+    ||} else {
     |   fld qword [BASE+RB*8]
     |   ins qword [BASE+RC*8]
+    ||}
     ||  break;
     ||}
     |.endmacro
     |
-    |.macro ins_arith, ins
-    |  ins_arithpre ins
+    |.macro ins_arithpost
+    ||if (sse) {
+    |  movsd qword [BASE+RA*8], xmm0
+    ||} else {
     |  fstp qword [BASE+RA*8]
+    ||}
+    |.endmacro
+    |
+    |.macro ins_arith, ins, sseins
+    |  ins_arithpre ins, sseins, xmm0
+    |  ins_arithpost
     |  ins_next
     |.endmacro
 
     |  // RA = dst, RB = src1 or num const, RC = src2 or num const
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
-    |  ins_arith fadd
+    |  ins_arith fadd, addsd
     break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
-    |  ins_arith fsub
+    |  ins_arith fsub, subsd
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
-    |  ins_arith fmul
+    |  ins_arith fmul, mulsd
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
-    |  ins_arith fdiv
+    |  ins_arith fdiv, divsd
     break;
   case BC_MODVN:
-    |  ins_arithpre fld
+    |  ins_arithpre fld, movsd, xmm1
     |->BC_MODVN_Z:
     |  call ->vm_mod
-    |  fstp qword [BASE+RA*8]
+    |  ins_arithpost
     |  ins_next
     break;
   case BC_MODNV: case BC_MODVV:
-    |  ins_arithpre fld
+    |  ins_arithpre fld, movsd, xmm1
     |  jmp ->BC_MODVN_Z			// Avoid 3 copies. It's slow anyway.
     break;
   case BC_POW:
-    |  ins_arithpre fld
-    |  call ->vm_pow
-    |  fstp qword [BASE+RA*8]
+    if (sse) {
+      sse = 0;  /* NYI: temporary workaround. */
+      |  ins_arithpre fld, movsd, xmm1
+      |  call ->vm_pow
+      |  ins_arithpost
+      sse = 1;
+    } else {
+      |  ins_arithpre fld, movsd, xmm1
+      |  call ->vm_pow
+      |  ins_arithpost
+    }
     |  ins_next
     break;
 
@@ -3945,17 +4144,21 @@ static int build_backend(BuildCtx *ctx)
 {
   int op;
   int cmov = 1;
+  int sse = 0;
 #ifdef LUAJIT_CPU_NOCMOV
   cmov = 0;
+#endif
+#ifdef LUAJIT_CPU_SSE2
+  sse = 1;
 #endif
 
   dasm_growpc(Dst, BC__MAX);
 
-  build_subroutines(ctx, cmov);
+  build_subroutines(ctx, cmov, sse);
 
   |.code_op
   for (op = 0; op < BC__MAX; op++)
-    build_ins(ctx, (BCOp)op, op, cmov);
+    build_ins(ctx, (BCOp)op, op, cmov, sse);
 
   return BC__MAX;
 }
