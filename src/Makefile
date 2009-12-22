@@ -62,6 +62,14 @@ XCFLAGS=
 # interpreter. Don't bother if your OS wouldn't run on them, anyway.
 #XCFLAGS+= -DLUAJIT_CPU_NOCMOV
 #
+# Use SSE2 instructions instead of x87 instructions in the x86 interpreter
+# (always enabled for x64). A pure interpreter built with this flag won't
+# run on older CPUs (before P4 or K8). There isn't much of a speed
+# difference, so this is not enabled by default.
+# The JIT compiler is not affected by this flag. It always uses runtime
+# CPU feature detection before emitting code for SSE2 up to SSE4.1.
+#XCFLAGS+= -DLUAJIT_CPU_SSE2
+#
 # Disable the JIT compiler, i.e. turn LuaJIT into a pure interpreter:
 #XCFLAGS+= -DLUAJIT_DISABLE_JIT
 #

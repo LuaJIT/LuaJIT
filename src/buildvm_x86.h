@@ -2290,7 +2290,7 @@ static int build_backend(BuildCtx *ctx)
 #ifdef LUAJIT_CPU_NOCMOV
   cmov = 0;
 #endif
-#ifdef LUAJIT_CPU_SSE2
+#if defined(LUAJIT_CPU_SSE2) || defined(LJ_TARGET_X64)
   sse = 1;
 #endif
 

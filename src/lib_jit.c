@@ -524,10 +524,11 @@ static uint32_t jit_cpudetect(lua_State *L)
   if (lj_vm_cpuid(0, vendor) && lj_vm_cpuid(1, features)) {
 #if !LJ_HASJIT
 #define JIT_F_CMOV	1
+#define JIT_F_SSE2	2
 #endif
     flags |= ((features[3] >> 15)&1) * JIT_F_CMOV;
-#if LJ_HASJIT
     flags |= ((features[3] >> 26)&1) * JIT_F_SSE2;
+#if LJ_HASJIT
     flags |= ((features[2] >> 19)&1) * JIT_F_SSE4_1;
     if (vendor[2] == 0x6c65746e) {  /* Intel. */
       if ((features[0] & 0x0ff00f00) == 0x00000f00)  /* P4. */
@@ -543,13 +544,20 @@ static uint32_t jit_cpudetect(lua_State *L)
     }
 #endif
   }
-#ifndef LUAJIT_CPU_NOCMOV
+  /* Check for required instruction set support on x86. */
+#if LJ_TARGET_X86
+#if !defined(LUAJIT_CPU_NOCMOV)
   if (!(flags & JIT_F_CMOV))
     luaL_error(L, "Ancient CPU lacks CMOV support (recompile with -DLUAJIT_CPU_NOCMOV)");
 #endif
-#if LJ_HASJIT
   if (!(flags & JIT_F_SSE2))
+#if defined(LUAJIT_CPU_SSE2)
+    luaL_error(L, "CPU does not support SSE2 (recompile without -DLUAJIT_CPU_SSE2)");
+#elif LJ_HASJIT
     luaL_error(L, "Sorry, SSE2 CPU support required for this beta release");
+#else
+    (void)0;
+#endif
 #endif
   UNUSED(L);
 #else
