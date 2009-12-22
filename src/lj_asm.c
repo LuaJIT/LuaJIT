@@ -2020,6 +2020,16 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
       as->mcp[0] = as->mcp[1]; as->mcp[1] = 0x0f;  /* Swap 0F and REX. */
     }
     *--as->mcp = 0x66;  /* 1st byte of ROUNDSD opcode. */
+  } else if (fpm <= IRFPM_TRUNC) {
+    /* The modified regs must match with the *.dasc implementation. */
+    RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
+    if (ra_hasreg(ir->r))
+      rset_clear(drop, ir->r);  /* Dest reg handled below. */
+    ra_evictset(as, drop);
+    ra_destreg(as, ir, RID_XMM0);
+    emit_call(as, fpm == IRFPM_FLOOR ? lj_vm_floor_sse :
+		  fpm == IRFPM_CEIL ? lj_vm_ceil_sse : lj_vm_trunc_sse);
+    ra_left(as, RID_XMM0, ir->op1);
   } else {
     int32_t ofs = sps_scale(ir->s);  /* Use spill slot or slots SPS_TEMP1/2. */
     Reg dest = ir->r;
@@ -3274,6 +3284,14 @@ static void asm_setup_regsp(ASMState *as, Trace *T)
     case IR_STRTO: case IR_OBAR:
       if (inloop)
 	as->modset = RSET_SCRATCH;
+      break;
+    case IR_FPMATH:
+      if (ir->op2 <= IRFPM_TRUNC && !(as->flags & JIT_F_SSE4_1)) {
+	ir->prev = REGSP_HINT(RID_XMM0);
+	if (inloop)
+	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
+	continue;
+      }
       break;
     /* Non-constant shift counts need to be in RID_ECX. */
     case IR_BSHL: case IR_BSHR: case IR_BSAR: case IR_BROL: case IR_BROR:
