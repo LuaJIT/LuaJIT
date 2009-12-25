@@ -1991,9 +1991,19 @@ static int fpmjoin_pow(ASMState *as, IRIns *ir)
     IRIns *irpp = IR(irp->op1);
     if (irpp == ir-2 && irpp->o == IR_FPMATH &&
 	irpp->op2 == IRFPM_LOG2 && !ra_used(irpp)) {
-      emit_call(as, lj_vm_pow);  /* st0 = lj_vm_pow(st1, st0) */
-      asm_x87load(as, irp->op2);
-      asm_x87load(as, irpp->op1);
+      /* The modified regs must match with the *.dasc implementation. */
+      RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM2+1)|RID2RSET(RID_EAX);
+      IRIns *irx;
+      if (ra_hasreg(ir->r))
+	rset_clear(drop, ir->r);  /* Dest reg handled below. */
+      ra_evictset(as, drop);
+      ra_destreg(as, ir, RID_XMM0);
+      emit_call(as, lj_vm_pow_sse);
+      irx = IR(irpp->op1);
+      if (ra_noreg(irx->r) && ra_gethint(irx->r) == RID_XMM1)
+	irx->r = RID_INIT;  /* Avoid allocating xmm1 for x. */
+      ra_left(as, RID_XMM0, irpp->op1);
+      ra_left(as, RID_XMM1, irp->op2);
       return 1;
     }
   }
@@ -2007,30 +2017,35 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
     Reg dest = ra_dest(as, ir, RSET_FPR);
     Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
     emit_mrm(as, XO_SQRTSD, dest, left);
-  } else if ((as->flags & JIT_F_SSE4_1) && fpm <= IRFPM_TRUNC) {
-    Reg dest = ra_dest(as, ir, RSET_FPR);
-    Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
-    /* Round down/up/trunc == 1001/1010/1011. */
-    emit_i8(as, 0x09 + fpm);
-    /* ROUNDSD has a 4-byte opcode which doesn't fit in x86Op. */
-    emit_mrm(as, XO_ROUNDSD, dest, left);
-    /* Let's pretend it's a 3-byte opcode, and compensate afterwards. */
-    /* This is atrocious, but the alternatives are much worse. */
-    if (LJ_64 && as->mcp[1] != (MCode)(XO_ROUNDSD >> 16)) {
-      as->mcp[0] = as->mcp[1]; as->mcp[1] = 0x0f;  /* Swap 0F and REX. */
-    }
-    *--as->mcp = 0x66;  /* 1st byte of ROUNDSD opcode. */
   } else if (fpm <= IRFPM_TRUNC) {
-    /* The modified regs must match with the *.dasc implementation. */
-    RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
-    if (ra_hasreg(ir->r))
-      rset_clear(drop, ir->r);  /* Dest reg handled below. */
-    ra_evictset(as, drop);
-    ra_destreg(as, ir, RID_XMM0);
-    emit_call(as, fpm == IRFPM_FLOOR ? lj_vm_floor_sse :
-		  fpm == IRFPM_CEIL ? lj_vm_ceil_sse : lj_vm_trunc_sse);
-    ra_left(as, RID_XMM0, ir->op1);
-  } else {
+    if (as->flags & JIT_F_SSE4_1) {  /* SSE4.1 has a rounding instruction. */
+      Reg dest = ra_dest(as, ir, RSET_FPR);
+      Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
+      /* ROUNDSD has a 4-byte opcode which doesn't fit in x86Op.
+      ** Let's pretend it's a 3-byte opcode, and compensate afterwards.
+      ** This is atrocious, but the alternatives are much worse.
+      */
+      /* Round down/up/trunc == 1001/1010/1011. */
+      emit_i8(as, 0x09 + fpm);
+      emit_mrm(as, XO_ROUNDSD, dest, left);
+      if (LJ_64 && as->mcp[1] != (MCode)(XO_ROUNDSD >> 16)) {
+	as->mcp[0] = as->mcp[1]; as->mcp[1] = 0x0f;  /* Swap 0F and REX. */
+      }
+      *--as->mcp = 0x66;  /* 1st byte of ROUNDSD opcode. */
+    } else {  /* Call helper functions for SSE2 variant. */
+      /* The modified regs must match with the *.dasc implementation. */
+      RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
+      if (ra_hasreg(ir->r))
+	rset_clear(drop, ir->r);  /* Dest reg handled below. */
+      ra_evictset(as, drop);
+      ra_destreg(as, ir, RID_XMM0);
+      emit_call(as, fpm == IRFPM_FLOOR ? lj_vm_floor_sse :
+		    fpm == IRFPM_CEIL ? lj_vm_ceil_sse : lj_vm_trunc_sse);
+      ra_left(as, RID_XMM0, ir->op1);
+    }
+  } else if (fpm == IRFPM_EXP2 && fpmjoin_pow(as, ir)) {
+    /* Rejoined to pow(). */
+  } else {  /* Handle x87 ops. */
     int32_t ofs = sps_scale(ir->s);  /* Use spill slot or slots SPS_TEMP1/2. */
     Reg dest = ir->r;
     if (ra_hasreg(dest)) {
@@ -2040,14 +2055,8 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
     }
     emit_rmro(as, XO_FSTPq, XOg_FSTPq, RID_ESP, ofs);
     switch (fpm) {  /* st0 = lj_vm_*(st0) */
-    case IRFPM_FLOOR: emit_call(as, lj_vm_floor); break;
-    case IRFPM_CEIL: emit_call(as, lj_vm_ceil); break;
-    case IRFPM_TRUNC: emit_call(as, lj_vm_trunc); break;
     case IRFPM_EXP: emit_call(as, lj_vm_exp); break;
-    case IRFPM_EXP2:
-      if (fpmjoin_pow(as, ir)) return;
-      emit_call(as, lj_vm_exp2);  /* st0 = lj_vm_exp2(st0) */
-      break;
+    case IRFPM_EXP2: emit_call(as, lj_vm_exp2); break;
     case IRFPM_SIN: emit_x87op(as, XI_FSIN); break;
     case IRFPM_COS: emit_x87op(as, XI_FCOS); break;
     case IRFPM_TAN: emit_x87op(as, XI_FPOP); emit_x87op(as, XI_FPTAN); break;
@@ -2063,10 +2072,6 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
 	emit_x87op(as, XI_FPATAN); asm_x87load(as, ir->op2); break;
       case IR_LDEXP:
 	emit_x87op(as, XI_FPOP1); emit_x87op(as, XI_FSCALE); break;
-      case IR_POWI:
-	emit_call(as, lj_vm_powi);  /* st0 = lj_vm_powi(st0, [esp]) */
-	emit_rmro(as, XO_MOVto, ra_alloc1(as, ir->op2, RSET_GPR), RID_ESP, 0);
-	break;
       default: lua_assert(0); break;
       }
       break;
@@ -2083,6 +2088,19 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
     default: break;
     }
   }
+}
+
+static void asm_powi(ASMState *as, IRIns *ir)
+{
+  /* The modified regs must match with the *.dasc implementation. */
+  RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
+  if (ra_hasreg(ir->r))
+    rset_clear(drop, ir->r);  /* Dest reg handled below. */
+  ra_evictset(as, drop);
+  ra_destreg(as, ir, RID_XMM0);
+  emit_call(as, lj_vm_powi_sse);
+  ra_left(as, RID_XMM0, ir->op1);
+  ra_left(as, RID_EAX, ir->op2);
 }
 
 /* Find out whether swapping operands might be beneficial. */
@@ -3132,9 +3150,10 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_MIN: asm_fparith(as, ir, XO_MINSD); break;
   case IR_MAX: asm_fparith(as, ir, XO_MAXSD); break;
 
-  case IR_FPMATH: case IR_ATAN2: case IR_LDEXP: case IR_POWI:
+  case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
     asm_fpmath(as, ir);
     break;
+  case IR_POWI: asm_powi(as, ir); break;
 
   /* Overflow-checking arithmetic ops. Note: don't use LEA here! */
   case IR_ADDOV: asm_intarith(as, ir, XOg_ADD); break;
@@ -3285,8 +3304,22 @@ static void asm_setup_regsp(ASMState *as, Trace *T)
       if (inloop)
 	as->modset = RSET_SCRATCH;
       break;
+    case IR_POWI:
+      ir->prev = REGSP_HINT(RID_XMM0);
+      if (inloop)
+	as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
+      continue;
     case IR_FPMATH:
-      if (ir->op2 <= IRFPM_TRUNC && !(as->flags & JIT_F_SSE4_1)) {
+      if (ir->op2 == IRFPM_EXP2) {  /* May be joined to lj_vm_pow_sse. */
+	ir->prev = REGSP_HINT(RID_XMM0);
+#if !LJ_64
+	if (as->evenspill < 4)  /* Leave room for 16 byte scratch area. */
+	  as->evenspill = 4;
+#endif
+	if (inloop)
+	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM2+1)|RID2RSET(RID_EAX);
+	continue;
+      } else if (ir->op2 <= IRFPM_TRUNC && !(as->flags & JIT_F_SSE4_1)) {
 	ir->prev = REGSP_HINT(RID_XMM0);
 	if (inloop)
 	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);

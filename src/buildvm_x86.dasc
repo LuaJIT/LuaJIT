@@ -96,10 +96,6 @@
 |.type TRACE,		Trace
 |.type EXITINFO,	ExitInfo
 |
-|// x86/x64 portability macros
-|.macro push_eax; .if X64; push rax; .else; push eax; .endif; .endmacro
-|.macro pop_eax; .if X64; pop rax; .else; pop eax; .endif; .endmacro
-|
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |//-----------------------------------------------------------------------
 |.if not X64		// x86 stack layout.
@@ -2072,10 +2068,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  fpop1
   |  jmp ->fff_resn
   |
-  if (0 && sse) {  // NYI
-    |.ffunc_nnsse math_pow;  call ->vm_pow;  jmp ->fff_resxmm0
+  if (sse) {
+    |.ffunc_nnsse math_pow;	call ->vm_pow;	jmp ->fff_resxmm0
   } else {
-    |.ffunc_nn math_pow;  call ->vm_pow;  jmp ->fff_resn
+    |.ffunc_nn math_pow;	call ->vm_pow;	jmp ->fff_resn
   }
   |
   |.macro math_minmax, name, cmovop, nocmovop, sseop
@@ -2091,6 +2087,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  add RB, 1
   |  jmp <1
   ||} else {
+  |.if not X64
   |.ffunc_n name
   |  mov RB, 2
   |1:
@@ -2101,12 +2098,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   ||if (cmov) {
   |  fucomi st1; cmovop st1; fpop1
   ||} else {
-  |  push_eax
+  |  push eax
   |  fucom st1; fnstsw ax; test ah, 1; nocmovop >2; fxch; 2: ; fpop
-  |  pop_eax
+  |  pop eax
   ||}
   |  add RB, 1
   |  jmp <1
+  |.endif
   ||}
   |.endmacro
   |
@@ -2842,19 +2840,29 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vm_exp:
   |  fldl2e; fmulp st1				// e^x ==> 2^(x*log2(e))
   |->vm_exp2:
-  |  fst dword [esp+4]				// Caveat: overwrites ARG1.
-  |  cmp dword [esp+4], 0x7f800000; je >1	// Special case: e^+Inf = +Inf
-  |  cmp dword [esp+4], 0xff800000; je >2	// Special case: e^-Inf = 0
+  |  .if X64WIN
+  |    .define expscratch, dword [rsp+8]	// Use scratch area.
+  |  .elif X64
+  |    .define expscratch, dword [rsp-8]	// Use red zone.
+  |  .else
+  |    .define expscratch, dword [esp+4]	// Needs 4 byte scratch area.
+  |  .endif
+  |  fst expscratch				// Caveat: overwrites ARG1.
+  |  cmp expscratch, 0x7f800000; je >1		// Special case: e^+Inf = +Inf
+  |  cmp expscratch, 0xff800000; je >2		// Special case: e^-Inf = 0
   |->vm_exp2raw:  // Entry point for vm_pow. Without +-Inf check.
-  |  fdup; frndint; fsub st1, st0; fxch	// Split into frac/int part.
+  |  fdup; frndint; fsub st1, st0; fxch		// Split into frac/int part.
   |  f2xm1; fld1; faddp st1; fscale; fpop1	// ==> (2^frac-1 +1) << int
   |1:
   |  ret
   |2:
   |  fpop; fldz; ret
   |
-  |// Generic power function x^y. Called by BC_POW, math.pow fast function
-  |// and vm_arith. Args/ret on x87 stack (y on top). No int/xmm regs modified.
+  |// Generic power function x^y. Called by BC_POW, math.pow fast function,
+  |// and vm_arith.
+  if (!sse) {
+  |.if not X64
+  |// Args/ret on x87 stack (y on top). RC (eax) modified.
   |// Caveat: needs 3 slots on x87 stack!
   |->vm_pow:
   |  fist dword [esp+4]			// Store/reload int before comparison.
@@ -2862,18 +2870,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   ||if (cmov) {
   |  fucomip st1
   ||} else {
-  |  push_eax; fucomp st1; fnstsw ax; sahf; pop_eax
+  |  fucomp st1; fnstsw ax; sahf
   ||}
   |  jnz >8				// Branch for FP exponents.
   |  jp >9				// Branch for NaN exponent.
   |  fpop				// Pop y and fallthrough to vm_powi.
   |
-  |// FP/int power function x^i. Called from JIT code. Arg1/ret on x87 stack.
-  |// Arg2 (int) on C stack. No int/xmm regs modified.
+  |// FP/int power function x^i. Arg1/ret on x87 stack.
+  |// Arg2 (int) on C stack. RC (eax) modified.
   |// Caveat: needs 2 slots on x87 stack!
-  |->vm_powi:
-  |  push_eax
-  |  mov eax, [esp+8]
+  |  mov eax, [esp+4]
   |  cmp eax, 1; jle >6			// i<=1?
   |  // Now 1 < (unsigned)i <= 0x80000000.
   |1:  // Handle leading zeros.
@@ -2893,7 +2899,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |4:
   |  fmulp st1
   |5:
-  |  pop_eax
   |  ret
   |6:
   |  je <5				// x^1 ==> x
@@ -2904,19 +2909,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp <1				// x^-i ==> (1/x)^i
   |7:
   |  fpop; fld1				// x^0 ==> 1
-  |  pop_eax
   |  ret
   |
   |8:  // FP/FP power function x^y.
-  |  push_eax
-  |  fst dword [esp+8]
+  |  fst dword [esp+4]
   |  fxch
-  |  fst dword [esp+12]
-  |  mov eax, [esp+8]; shl eax, 1
+  |  fst dword [esp+8]
+  |  mov eax, [esp+4]; shl eax, 1
   |  cmp eax, 0xff000000; je >2			// x^+-Inf?
-  |  mov eax, [esp+12]; shl eax, 1; je >4	// +-0^y?
+  |  mov eax, [esp+8]; shl eax, 1; je >4	// +-0^y?
   |  cmp eax, 0xff000000; je >4			// +-Inf^y?
-  |  pop_eax
   |  fyl2x
   |  jmp ->vm_exp2raw
   |
@@ -2925,7 +2927,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   ||if (cmov) {
   |  fucomip st2
   ||} else {
-  |  push_eax; fucomp st2; fnstsw ax; sahf; pop_eax
+  |  fucomp st2; fnstsw ax; sahf
   ||}
   |  je >1				// 1^NaN ==> 1
   |  fxch				// x^NaN ==> NaN
@@ -2943,41 +2945,205 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   ||}
   |  je >3					// +-1^+-Inf ==> 1
   |  fpop; fabs; fldz; mov eax, 0; setc al
-  |  ror eax, 1; xor eax, [esp+8]; jns >3	// |x|<>1, x^+-Inf ==> +Inf/0
+  |  ror eax, 1; xor eax, [esp+4]; jns >3	// |x|<>1, x^+-Inf ==> +Inf/0
   |  fxch
   |3:
-  |  fpop1; fabs; pop_eax
+  |  fpop1; fabs
   |  ret
   |
   |4:  // Handle +-0^y or +-Inf^y.
-  |  cmp dword [esp+8], 0; jge <3		// y >= 0, x^y ==> |x|
+  |  cmp dword [esp+4], 0; jge <3		// y >= 0, x^y ==> |x|
   |  fpop; fpop
-  |  test eax, eax; pop_eax; jz >5		// y < 0, +-0^y ==> +Inf
+  |  test eax, eax; jz >5			// y < 0, +-0^y ==> +Inf
   |  fldz					// y < 0, +-Inf^y ==> 0
   |  ret
   |5:
-  |  mov dword [esp+8], 0x7f800000		// Return +Inf.
-  |  fld dword [esp+8]
+  |  mov dword [esp+4], 0x7f800000		// Return +Inf.
+  |  fld dword [esp+4]
+  |  ret
+  |.endif
+  } else {
+    |->vm_pow:
+  }
+  |
+  |// Args in xmm0/xmm1. Ret in xmm0. xmm0-xmm2 and RC (eax) modified.
+  |// Needs 16 byte scratch area for x86. Also called from JIT code.
+  |->vm_pow_sse:
+  |  cvtsd2si eax, xmm1
+  |  cvtsi2sd xmm2, eax
+  |  ucomisd xmm1, xmm2
+  |  jnz >8				// Branch for FP exponents.
+  |  jp >9				// Branch for NaN exponent.
+  |  // Fallthrough to vm_powi_sse.
+  |
+  |// Args in xmm0/eax. Ret in xmm0. xmm0-xmm1 and eax modified.
+  |->vm_powi_sse:
+  |  cmp eax, 1; jle >6			// i<=1?
+  |  // Now 1 < (unsigned)i <= 0x80000000.
+  |1:  // Handle leading zeros.
+  |  test eax, 1; jnz >2
+  |  mulsd xmm0, xmm0
+  |  shr eax, 1
+  |  jmp <1
+  |2:
+  |  shr eax, 1; jz >5
+  |  movaps xmm1, xmm0
+  |3:  // Handle trailing bits.
+  |  mulsd xmm0, xmm0
+  |  shr eax, 1; jz >4
+  |  jnc <3
+  |  mulsd xmm1, xmm0
+  |  jmp <3
+  |4:
+  |  mulsd xmm0, xmm1
+  |5:
+  |  ret
+  |6:
+  |  je <5				// x^1 ==> x
+  |  jb >7
+  |  push RDa
+  |  sseconst_1 xmm1, RDa
+  |  divsd xmm1, xmm0
+  |  pop RDa
+  |  movaps xmm0, xmm1
+  |  neg eax
+  |  cmp eax, 1; je <5			// x^-1 ==> 1/x
+  |  jmp <1				// x^-i ==> (1/x)^i
+  |7:
+  |  sseconst_1 xmm0, RDa
+  |  ret
+  |
+  |8:  // FP/FP power function x^y.
+  |.if X64
+  |  movd rax, xmm1; shl rax, 1
+  |  ror rax, 32; cmp rax, 0xffe00000; je >2	// x^+-Inf?
+  |  movd rax, xmm0; shl rax, 1; je >4		// +-0^y?
+  |  ror rax, 32; cmp rax, 0xffe00000; je >5	// +-Inf^y?
+  |  .if X64WIN
+  |    movsd qword [rsp+16], xmm1		// Use scratch area.
+  |    movsd qword [rsp+8], xmm0
+  |    fld qword [rsp+16]
+  |    fld qword [rsp+8]
+  |  .else
+  |    movsd qword [rsp-16], xmm1		// Use red zone.
+  |    movsd qword [rsp-8], xmm0
+  |    fld qword [rsp-16]
+  |    fld qword [rsp-8]
+  |  .endif
+  |.else
+  |  movsd qword [esp+12], xmm1			// Needs 16 byte scratch area.
+  |  movsd qword [esp+4], xmm0
+  |  cmp dword [esp+12], 0; jne >1
+  |  mov eax, [esp+16]; shl eax, 1
+  |  cmp eax, 0xffe00000; je >2			// x^+-Inf?
+  |1:
+  |  cmp dword [esp+4], 0; jne >1
+  |  mov eax, [esp+8]; shl eax, 1; je >4	// +-0^y?
+  |  cmp eax, 0xffe00000; je >5			// +-Inf^y?
+  |1:
+  |  fld qword [esp+12]
+  |  fld qword [esp+4]
+  |.endif
+  |  fyl2x					// y*log2(x)
+  |  fdup; frndint; fsub st1, st0; fxch		// Split into frac/int part.
+  |  f2xm1; fld1; faddp st1; fscale; fpop1	// ==> (2^frac-1 +1) << int
+  |.if X64WIN
+  |  fstp qword [rsp+8]				// Use scratch area.
+  |  movsd xmm0, qword [rsp+8]
+  |.elif X64
+  |  fstp qword [rsp-8]				// Use red zone.
+  |  movsd xmm0, qword [rsp-8]
+  |.else
+  |  fstp qword [esp+4]				// Needs 8 byte scratch area.
+  |  movsd xmm0, qword [esp+4]
+  |.endif
+  |  ret
+  |
+  |9:  // Handle x^NaN.
+  |  sseconst_1 xmm2, RDa
+  |  ucomisd xmm0, xmm2; je >1			// 1^NaN ==> 1
+  |  movaps xmm0, xmm1				// x^NaN ==> NaN
+  |1:
+  |  ret
+  |
+  |2:  // Handle x^+-Inf.
+  |  sseconst_abs xmm2, RDa
+  |  andpd xmm0, xmm2				// |x|
+  |  sseconst_1 xmm2, RDa
+  |  ucomisd xmm0, xmm2; je <1			// +-1^+-Inf ==> 1
+  |  movmskpd eax, xmm1
+  |  xorps xmm0, xmm0
+  |  mov ah, al; setc al; xor al, ah; jne <1	// |x|<>1, x^+-Inf ==> +Inf/0
+  |3:
+  |  sseconst_hi xmm0, RDa, 7ff00000  // +Inf
+  |  ret
+  |
+  |4:  // Handle +-0^y.
+  |  movmskpd eax, xmm1; test eax, eax; jnz <3	// y < 0, +-0^y ==> +Inf
+  |  xorps xmm0, xmm0				// y >= 0, +-0^y ==> 0
+  |  ret
+  |
+  |5:  // Handle +-Inf^y.
+  |  movmskpd eax, xmm1; test eax, eax; jz <3	// y >= 0, +-Inf^y ==> +Inf
+  |  xorps xmm0, xmm0				// y < 0, +-Inf^y ==> 0
   |  ret
   |
   |// Callable from C: double lj_vm_foldfpm(double x, int fpm)
   |// Computes fpm(x) for extended math functions. ORDER FPM.
   |->vm_foldfpm:
   if (sse) {
-    |.if X64WIN
-    |  .define fpmop, CARG2d
-    |.elif X64
-    |  .define fpmop, CARG1d
-    |.else
-    |  .define fpmop, eax
-    |  mov fpmop, [esp+12]
-    |  movsd xmm0, qword [esp+4]
-    |.endif
     |.if X64
+    |
+    |  .if X64WIN
+    |    .define fpmop, CARG2d
+    |  .else
+    |    .define fpmop, CARG1d
+    |  .endif
     |  cmp fpmop, 1; jb ->vm_floor; je ->vm_ceil
     |  cmp fpmop, 3; jb ->vm_trunc; ja >2
     |  sqrtsd xmm0, xmm0; ret
-    |.else
+    |2:
+    |  .if X64WIN
+    |    movsd qword [rsp+8], xmm0	// Use scratch area.
+    |    fld qword [rsp+8]
+    |  .else
+    |    movsd qword [rsp-8], xmm0	// Use red zone.
+    |    fld qword [rsp-8]
+    |  .endif
+    |  cmp fpmop, 5; ja >2
+    |  .if X64WIN; pop rax; .endif
+    |  je >1
+    |  call ->vm_exp
+    |  .if X64WIN; push rax; .endif
+    |  jmp >7
+    |1:
+    |  call ->vm_exp2
+    |  .if X64WIN; push rax; .endif
+    |  jmp >7
+    |2: ; cmp fpmop, 7; je >1; ja >2
+    |  fldln2; fxch; fyl2x; jmp >7
+    |1: ; fld1; fxch; fyl2x; jmp >7
+    |2: ; cmp fpmop, 9; je >1; ja >2
+    |  fldlg2; fxch; fyl2x; jmp >7
+    |1: ; fsin; jmp >7
+    |2: ; cmp fpmop, 11; je >1; ja >9
+    |   fcos; jmp >7
+    |1: ; fptan; fpop
+    |7:
+    |  .if X64WIN
+    |    fstp qword [rsp+8]		// Use scratch area.
+    |    movsd xmm0, qword [rsp+8]
+    |  .else
+    |    fstp qword [rsp-8]		// Use red zone.
+    |    movsd xmm0, qword [rsp-8]
+    |  .endif
+    |  ret
+    |
+    |.else  // x86 calling convention.
+    |
+    |  .define fpmop, eax
+    |  mov fpmop, [esp+12]
+    |  movsd xmm0, qword [esp+4]
     |  cmp fpmop, 1; je >1; ja >2
     |  call ->vm_floor; jmp >7
     |1: ; call ->vm_ceil; jmp >7
@@ -2989,27 +3155,36 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  movsd qword [esp+4], xmm0	// Overwrite callee-owned args.
     |  fld qword [esp+4]
     |  ret
+    |2: ; fld qword [esp+4]
+    |  cmp fpmop, 5; jb ->vm_exp; je ->vm_exp2
+    |2: ; cmp fpmop, 7; je >1; ja >2
+    |  fldln2; fxch; fyl2x; ret
+    |1: ; fld1; fxch; fyl2x; ret
+    |2: ; cmp fpmop, 9; je >1; ja >2
+    |  fldlg2; fxch; fyl2x; ret
+    |1: ; fsin; ret
+    |2: ; cmp fpmop, 11; je >1; ja >9
+    |   fcos; ret
+    |1: ; fptan; fpop; ret
+    |
     |.endif
-    |2:
-    |  fld qword [esp+4]
   } else {
     |  mov fpmop, [esp+12]
     |  fld qword [esp+4]
     |  cmp fpmop, 1; jb ->vm_floor; je ->vm_ceil
     |  cmp fpmop, 3; jb ->vm_trunc; ja >2
     |  fsqrt; ret
-    |2:
+    |2: ; cmp fpmop, 5; jb ->vm_exp; je ->vm_exp2
+    |  cmp fpmop, 7; je >1; ja >2
+    |  fldln2; fxch; fyl2x; ret
+    |1: ; fld1; fxch; fyl2x; ret
+    |2: ; cmp fpmop, 9; je >1; ja >2
+    |  fldlg2; fxch; fyl2x; ret
+    |1: ; fsin; ret
+    |2: ; cmp fpmop, 11; je >1; ja >9
+    |   fcos; ret
+    |1: ; fptan; fpop; ret
   }
-  |  cmp fpmop, 5; jb ->vm_exp; je ->vm_exp2
-  |  cmp fpmop, 7; je >1; ja >2
-  |  fldln2; fxch; fyl2x; ret
-  |1: ; fld1; fxch; fyl2x; ret
-  |2: ; cmp fpmop, 9; je >1; ja >2
-  |  fldlg2; fxch; fyl2x; ret
-  |1: ; fsin; ret
-  |2: ; cmp fpmop, 11; je >1; ja >9
-  |   fcos; ret
-  |1: ; fptan; fpop; ret
   |9: ; int3					// Bad fpm.
   |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
@@ -3017,72 +3192,87 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |// and basic math functions. ORDER ARITH
   |->vm_foldarith:
   if (sse) {
-    |.macro retxmm0; .if X64; ret; .else; jmp >7; .endif; .endmacro
-    |.macro retst0; .if X64; jmp >7; .else; ret; .endif; .endmacro
+    |.if X64
     |
+    |  .if X64WIN
+    |    .define foldop, CARG3d
+    |  .else
+    |    .define foldop, CARG1d
+    |  .endif
+    |  cmp foldop, 1; je >1; ja >2
+    |  addsd xmm0, xmm1; ret
+    |1: ; subsd xmm0, xmm1; ret
+    |2: ; cmp foldop, 3; je >1; ja >2
+    |  mulsd xmm0, xmm1; ret
+    |1: ; divsd xmm0, xmm1; ret
+    |2: ; cmp foldop, 5; jb ->vm_mod; je ->vm_pow
+    |  cmp foldop, 7; je >1; ja >2
+    |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; ret
+    |1: ; sseconst_abs xmm1, RDa; andps xmm0, xmm1; ret
+    |2: ; cmp foldop, 9; ja >2
     |.if X64WIN
-    |  .define foldop, CARG3d
-    |.elif X64
-    |  .define foldop, CARG1d
+    |  movsd qword [rsp+8], xmm0	// Use scratch area.
+    |  movsd qword [rsp+16], xmm1
+    |  fld qword [rsp+8]
+    |  fld qword [rsp+16]
     |.else
+    |  movsd qword [rsp-8], xmm0	// Use red zone.
+    |  movsd qword [rsp-16], xmm1
+    |  fld qword [rsp-8]
+    |  fld qword [rsp-16]
+    |.endif
+    |  je >1
+    |  fpatan
+    |7:
+    |.if X64WIN
+    |  fstp qword [rsp+8]		// Use scratch area.
+    |  movsd xmm0, qword [rsp+8]
+    |.else
+    |  fstp qword [rsp-8]		// Use red zone.
+    |  movsd xmm0, qword [rsp-8]
+    |.endif
+    |  ret
+    |1: ; fxch; fscale; fpop1; jmp <7
+    |2: ; cmp foldop, 11; je >1; ja >9
+    |  minsd xmm0, xmm1; ret
+    |1: ; maxsd xmm0, xmm1; ret
+    |9: ; int3				// Bad op.
+    |
+    |.else  // x86 calling convention.
+    |
     |  .define foldop, eax
     |  mov foldop, [esp+20]
     |  movsd xmm0, qword [esp+4]
     |  movsd xmm1, qword [esp+12]
-    |.endif
     |  cmp foldop, 1; je >1; ja >2
-    |  addsd xmm0, xmm1; retxmm0
-    |1: ; subsd xmm0, xmm1; retxmm0
-    |2: ; cmp foldop, 3; je >1; ja >2
-    |  mulsd xmm0, xmm1; retxmm0
-    |1: ; divsd xmm0, xmm1; retxmm0
-    |2: ; cmp foldop, 5
-    |.if X64
-    |  jb ->vm_mod; je ->vm_pow		// NYI: broken without SSE vm_pow.
-    |.else
-    |  je >1; ja >2
-    |  call ->vm_mod; retxmm0
-    |1: ; fld qword [esp+4]; fld qword [esp+12]; jmp ->vm_pow  // NYI
-    |2:
-    |.endif
-    |  cmp foldop, 7; je >1; ja >2
-    |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; retxmm0
-    |1:
-    |  sseconst_abs xmm1, RDa; andps xmm0, xmm1; retxmm0
-    |2: ; cmp foldop, 9; ja >2
-    |.if X64WIN
-    |  movsd qword [esp+8], xmm0	// Use scratch area.
-    |  movsd qword [esp+16], xmm1
-    |  fld qword [esp+8]
-    |  fld qword [esp+16]
-    |.elif X64
-    |  movsd qword [esp-8], xmm0	// Use red zone.
-    |  movsd qword [esp-16], xmm1
-    |  fld qword [esp-8]
-    |  fld qword [esp-16]
-    |.else
-    |  fld qword [esp+4]		// Reload from stack
-    |  fld qword [esp+12]
-    |.endif
-    |  je >1
-    |  fpatan; retst0
-    |1: ; fxch; fscale; fpop1; retst0
-    |2: ; cmp foldop, 11; je >1; ja >9
-    |  minsd xmm0, xmm1; retxmm0
-    |1: ; maxsd xmm0, xmm1; retxmm0
-    |9: ; int3				// Bad op.
-    |7:  // Move return value depending on calling convention.
-    |.if X64WIN
-    |  fstp qword [esp+8]		// Use scratch area.
-    |  movsd xmm0, qword [esp+8]
-    |.elif X64
-    |  fstp qword [esp-8]		// Use red zone.
-    |  movsd xmm0, qword [esp-8]
-    |.else
+    |  addsd xmm0, xmm1
+    |7:
     |  movsd qword [esp+4], xmm0	// Overwrite callee-owned args.
     |  fld qword [esp+4]
-    |.endif
     |  ret
+    |1: ; subsd xmm0, xmm1; jmp <7
+    |2: ; cmp foldop, 3; je >1; ja >2
+    |  mulsd xmm0, xmm1; jmp <7
+    |1: ; divsd xmm0, xmm1; jmp <7
+    |2: ; cmp foldop, 5
+    |  je >1; ja >2
+    |  call ->vm_mod; jmp <7
+    |1: ; pop edx; call ->vm_pow; push edx; jmp <7  // Writes to scratch area.
+    |2: ; cmp foldop, 7; je >1; ja >2
+    |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; jmp <7
+    |1: ; sseconst_abs xmm1, RDa; andps xmm0, xmm1; jmp <7
+    |2: ; cmp foldop, 9; ja >2
+    |  fld qword [esp+4]		// Reload from stack
+    |  fld qword [esp+12]
+    |  je >1
+    |  fpatan; ret
+    |1: ; fxch; fscale; fpop1; ret
+    |2: ; cmp foldop, 11; je >1; ja >9
+    |  minsd xmm0, xmm1; jmp <7
+    |1: ; maxsd xmm0, xmm1; jmp <7
+    |9: ; int3				// Bad op.
+    |
+    |.endif
   } else {
     |  mov eax, [esp+20]
     |  fld qword [esp+4]
@@ -3483,17 +3673,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jmp ->BC_MODVN_Z			// Avoid 3 copies. It's slow anyway.
     break;
   case BC_POW:
-    if (sse) {
-      sse = 0;  /* NYI: temporary workaround. */
-      |  ins_arithpre fld, movsd, xmm1
-      |  call ->vm_pow
-      |  ins_arithpost
-      sse = 1;
-    } else {
-      |  ins_arithpre fld, movsd, xmm1
-      |  call ->vm_pow
-      |  ins_arithpost
-    }
+    |  ins_arithpre fld, movsd, xmm1
+    |  call ->vm_pow
+    |  ins_arithpost
     |  ins_next
     break;
 

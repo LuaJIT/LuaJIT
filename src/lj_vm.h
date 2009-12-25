@@ -34,16 +34,13 @@ LJ_ASMF void lj_vm_exit_handler(void);
 LJ_ASMF void lj_vm_exit_interp(void);
 
 /* Handlers callable from compiled code. */
-LJ_ASMF void lj_vm_floor(void);
-LJ_ASMF void lj_vm_ceil(void);
-LJ_ASMF void lj_vm_trunc(void);
 LJ_ASMF void lj_vm_floor_sse(void);
 LJ_ASMF void lj_vm_ceil_sse(void);
 LJ_ASMF void lj_vm_trunc_sse(void);
 LJ_ASMF void lj_vm_exp(void);
 LJ_ASMF void lj_vm_exp2(void);
-LJ_ASMF void lj_vm_pow(void);
-LJ_ASMF void lj_vm_powi(void);
+LJ_ASMF void lj_vm_pow_sse(void);
+LJ_ASMF void lj_vm_powi_sse(void);
 
 /* Call gates for functions. */
 LJ_ASMF void lj_gate_lf(void);
