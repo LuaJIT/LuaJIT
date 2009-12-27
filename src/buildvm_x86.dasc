@@ -863,12 +863,32 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  je ->cont_ra
   |  neg RA
   |  shr RA, 3
+  |.if X64WIN
+  |  mov CARG3d, RA
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE
+  |  mov CARG2d, [RC+4]
+  |  mov RC, [RC]
+  |  mov [RB+4], CARG2d
+  |  mov [RB], RC
+  |  mov CARG2d, RB
+  |.elif X64
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE
+  |  mov CARG3d, RA
+  |  mov RA, [RC+4]
+  |  mov RC, [RC]
+  |  mov [RB+4], RA
+  |  mov [RB], RC
+  |  mov CARG2d, RB
+  |.else
   |  mov ARG3, RA
   |  mov RA, [RC+4]
   |  mov RC, [RC]
   |  mov [RB+4], RA
   |  mov [RB], RC
   |  mov ARG2, RB
+  |.endif
   |  jmp ->BC_CAT_Z
   |
   |//-- Table indexing metamethods -----------------------------------------
@@ -3624,6 +3644,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_CAT:
     |  ins_ABC	// RA = dst, RB = src_start, RC = src_end
+    |.if X64
+    |  mov L:CARG1d, SAVE_L
+    |  mov L:CARG1d->base, BASE
+    |  lea CARG2d, [BASE+RC*8]
+    |  mov CARG3d, RC
+    |  sub CARG3d, RB
+    |->BC_CAT_Z:
+    |  mov L:RB, L:CARG1d
+    |.else
     |  lea RA, [BASE+RC*8]
     |  sub RC, RB
     |  mov ARG2, RA
@@ -3631,8 +3660,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |->BC_CAT_Z:
     |  mov L:RB, SAVE_L
     |  mov ARG1, L:RB
-    |  mov SAVE_PC, PC
     |  mov L:RB->base, BASE
+    |.endif
+    |  mov SAVE_PC, PC
     |  call extern lj_meta_cat		// (lua_State *L, TValue *top, int left)
     |  // NULL (finished) or TValue * (metamethod) returned in eax (RC).
     |  mov BASE, L:RB->base
@@ -3817,14 +3847,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FNEW:
     |  ins_AND	// RA = dst, RD = proto const (~) (holding function prototype)
+    |.if X64
+    |  mov L:RB, SAVE_L
+    |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+    |  mov CARG3d, [BASE-8]
+    |  mov CARG2d, [KBASE+RD*4]		// Fetch GCproto *.
+    |  mov CARG1d, L:RB
+    |.else
     |  mov LFUNC:RA, [BASE-8]
     |  mov PROTO:RD, [KBASE+RD*4]	// Fetch GCproto *.
     |  mov L:RB, SAVE_L
     |  mov ARG3, LFUNC:RA
     |  mov ARG2, PROTO:RD
-    |  mov SAVE_PC, PC
     |  mov ARG1, L:RB
     |  mov L:RB->base, BASE
+    |.endif
+    |  mov SAVE_PC, PC
     |  // (lua_State *L, GCproto *pt, GCfuncL *parent)
     |  call extern lj_func_newL_gc
     |  // GCfuncL * returned in eax (RC).
@@ -3839,23 +3877,40 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_TNEW:
     |  ins_AD	// RA = dst, RD = hbits|asize
+    |.if X64
+    |  mov L:CARG1d, SAVE_L
+    |1:
+    |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+    |  mov CARG3d, RD
+    |  and RD, 0x7ff
+    |  shr CARG3d, 11
+    |  cmp RD, 0x7ff
+    |  je >3
+    |2:
+    |  mov CARG2d, RD
+    |  mov RD, [DISPATCH+DISPATCH_GL(gc.total)]
+    |  mov L:RB, L:CARG1d
+    |  cmp RD, [DISPATCH+DISPATCH_GL(gc.threshold)]
+    |  mov SAVE_PC, PC
+    |  jae >5
+    |.else
     |  mov RB, RD
     |  and RD, 0x7ff
     |  shr RB, 11
-    |  cmp RD, 0x7ff			// Turn 0x7ff into 0x801.
-    |  sete RAL
+    |  cmp RD, 0x7ff
+    |  je >3
+    |2:
     |  mov ARG3, RB
-    |  add RD, RA
     |  mov L:RB, SAVE_L
-    |  add RD, RA
     |  mov ARG2, RD
     |  mov SAVE_PC, PC
-    |  mov RA, [DISPATCH+DISPATCH_GL(gc.total)]
+    |  mov RD, [DISPATCH+DISPATCH_GL(gc.total)]
     |  mov ARG1, L:RB
-    |  cmp RA, [DISPATCH+DISPATCH_GL(gc.threshold)]
+    |  cmp RD, [DISPATCH+DISPATCH_GL(gc.threshold)]
     |  mov L:RB->base, BASE
-    |  jae >2
+    |  jae >5
     |1:
+    |.endif
     |  call extern lj_tab_new  // (lua_State *L, int32_t asize, uint32_t hbits)
     |  // Table * returned in eax (RC).
     |  mov BASE, L:RB->base
@@ -3863,10 +3918,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov [BASE+RA*8], TAB:RC
     |  mov dword [BASE+RA*8+4], LJ_TTAB
     |  ins_next
-    |2:
+    |3:  // Turn 0x7ff into 0x801.
+    |  mov RD, 0x801
+    |  jmp <2
+    |5:
+    |.if X64
+    |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
+    |  movzx RD, PC_RD
+    |  mov L:CARG1d, L:RB
+    |  jmp <1
+    |.else
     |  mov L:FCARG1, L:RB
     |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
     |  jmp <1
+    |.endif
     break;
   case BC_TDUP:
     |  ins_AND	// RA = dst, RD = table const (~) (holding template table)
@@ -4144,14 +4209,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |6:
     |  mov TMP1, STR:RC
     |  mov TMP2, LJ_TSTR
-    |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
     |  mov TMP3, TAB:RB			// Save TAB:RB for us.
+    |.if X64
+    |  mov L:CARG1d, SAVE_L
+    |  mov L:CARG1d->base, BASE
+    |  lea CARG3, TMP1
+    |  mov CARG2d, TAB:RB
+    |  mov L:RB, L:CARG1d
+    |.else
+    |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
     |  mov ARG2, TAB:RB
     |  mov L:RB, SAVE_L
     |  mov ARG3, RC
     |  mov ARG1, L:RB
-    |  mov SAVE_PC, PC
     |  mov L:RB->base, BASE
+    |.endif
+    |  mov SAVE_PC, PC
     |  call extern lj_tab_newkey	// (lua_State *L, GCtab *t, TValue *k)
     |  // Handles write barrier for the new key. TValue * returned in eax (RC).
     |  mov BASE, L:RB->base
@@ -4245,12 +4318,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  ins_next
     |
     |5:  // Need to resize array part.
+    |.if X64
+    |  mov L:CARG1d, SAVE_L
+    |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+    |  mov CARG2d, TAB:RB
+    |  mov CARG3d, RD
+    |  mov L:RB, L:CARG1d
+    |.else
     |  mov ARG2, TAB:RB
     |  mov L:RB, SAVE_L
+    |  mov L:RB->base, BASE
     |  mov ARG3, RD
     |  mov ARG1, L:RB
+    |.endif
     |  mov SAVE_PC, PC
-    |  mov L:RB->base, BASE
     |  call extern lj_tab_reasize	// (lua_State *L, GCtab *t, int nasize)
     |  mov BASE, L:RB->base
     |  movzx RA, PC_RA			// Restore RA.
