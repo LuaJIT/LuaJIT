@@ -269,7 +269,7 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 }
 
 /* Helper for LEN. __len metamethod. */
-TValue *lj_meta_len(lua_State *L, cTValue *o)
+TValue * LJ_FASTCALL lj_meta_len(lua_State *L, cTValue *o)
 {
   cTValue *mo = lj_meta_lookup(L, o, MM_len);
   if (tvisnil(mo)) {
@@ -349,7 +349,7 @@ void lj_meta_call(lua_State *L, TValue *func, TValue *top)
 }
 
 /* Helper for FORI. Coercion. */
-void lj_meta_for(lua_State *L, TValue *base)
+void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *base)
 {
   if (!str2num(base, base)) lj_err_msg(L, LJ_ERR_FORINIT);
   if (!str2num(base+1, base+1)) lj_err_msg(L, LJ_ERR_FORLIM);

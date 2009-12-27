@@ -371,7 +371,7 @@ void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize)
 
 /* -- Table getters ------------------------------------------------------- */
 
-cTValue *lj_tab_getinth(GCtab *t, int32_t key)
+cTValue * LJ_FASTCALL lj_tab_getinth(GCtab *t, int32_t key)
 {
   TValue k;
   Node *n;

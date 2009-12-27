@@ -507,10 +507,11 @@ LJLIB_NOREG LJLIB_ASM(coroutine_wrap_aux)
 
 /* Inline declarations. */
 LJ_ASMF void lj_ff_coroutine_wrap_aux(void);
-LJ_FUNCA_NORET void lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co);
+LJ_FUNCA_NORET void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L,
+							  lua_State *co);
 
 /* Error handler, called from assembler VM. */
-void lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co)
+void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co)
 {
   co->top--; copyTV(L, L->top, co->top); L->top++;
   if (tvisstr(L->top-1))

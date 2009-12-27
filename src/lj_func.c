@@ -103,7 +103,7 @@ static GCupval *func_finduv(lua_State *L, TValue *slot)
 }
 
 /* Close all open upvalues pointing to some stack level or above. */
-void lj_func_closeuv(lua_State *L, TValue *level)
+void LJ_FASTCALL lj_func_closeuv(lua_State *L, TValue *level)
 {
   GCupval *uv;
   global_State *g = G(L);

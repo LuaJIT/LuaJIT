@@ -18,7 +18,7 @@ LJ_FUNCA void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize);
 
 /* Caveat: all getters except lj_tab_get() can return NULL! */
 
-LJ_FUNCA cTValue *lj_tab_getinth(GCtab *t, int32_t key);
+LJ_FUNCA cTValue * LJ_FASTCALL lj_tab_getinth(GCtab *t, int32_t key);
 LJ_FUNC cTValue *lj_tab_getstr(GCtab *t, GCstr *key);
 LJ_FUNCA cTValue *lj_tab_get(lua_State *L, GCtab *t, cTValue *key);
 

@@ -552,7 +552,7 @@ static void trace_new(jit_State *J)
 }
 
 /* A hotcount triggered. Start recording a root trace. */
-void lj_trace_hot(jit_State *J, const BCIns *pc)
+void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
   lua_State *L = J->L;
   L->top = curr_topL(L);  /* Only called from Lua and NRESULTS is not used. */
@@ -564,7 +564,7 @@ void lj_trace_hot(jit_State *J, const BCIns *pc)
 }
 
 /* A trace exited. Restore interpreter state and check for hot exits. */
-void *lj_trace_exit(jit_State *J, void *exptr)
+void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 {
   lua_State *L = J->L;
   void *cf;

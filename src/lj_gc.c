@@ -613,7 +613,7 @@ static size_t gc_onestep(lua_State *L)
 }
 
 /* Perform a limited amount of incremental GC steps. */
-int lj_gc_step(lua_State *L)
+int LJ_FASTCALL lj_gc_step(lua_State *L)
 {
   global_State *g = G(L);
   MSize lim;

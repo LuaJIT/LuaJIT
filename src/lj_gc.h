@@ -42,7 +42,7 @@ enum { GCSpause, GCSpropagate, GCSsweepstring, GCSsweep, GCSfinalize };
 LJ_FUNC size_t lj_gc_separateudata(global_State *g, int all);
 LJ_FUNC void lj_gc_finalizeudata(lua_State *L);
 LJ_FUNC void lj_gc_freeall(global_State *g);
-LJ_FUNCA int lj_gc_step(lua_State *L);
+LJ_FUNCA int LJ_FASTCALL lj_gc_step(lua_State *L);
 LJ_FUNCA void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L);
 LJ_FUNC void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps);
 LJ_FUNC void lj_gc_fullgc(lua_State *L);

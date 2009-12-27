@@ -85,7 +85,7 @@ void lj_state_shrinkstack(lua_State *L, MSize used)
 }
 
 /* Try to grow stack. */
-void lj_state_growstack(lua_State *L, MSize need)
+void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)
 {
   if (L->stacksize > LJ_STACK_MAXEX)  /* overflow while handling overflow? */
     lj_err_throw(L, LUA_ERRERR);
@@ -99,7 +99,7 @@ void lj_state_growstack(lua_State *L, MSize need)
   }
 }
 
-void lj_state_growstack1(lua_State *L)
+void LJ_FASTCALL lj_state_growstack1(lua_State *L)
 {
   lj_state_growstack(L, 1);
 }
