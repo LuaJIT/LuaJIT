@@ -137,6 +137,13 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #ifdef __linux__
 /* Need to define _GNU_SOURCE to get the mremap prototype. */
 #define CALL_MREMAP(addr, osz, nsz, mv) mremap((addr), (osz), (nsz), (mv))
+#define CALL_MREMAP_NOMOVE	0
+#define CALL_MREMAP_MAYMOVE	1
+#if LJ_64
+#define CALL_MREMAP_MV		CALL_MREMAP_NOMOVE
+#else
+#define CALL_MREMAP_MV		CALL_MREMAP_MAYMOVE
+#endif
 #endif
 
 #endif
@@ -612,7 +619,7 @@ static mchunkptr direct_resize(mchunkptr oldp, size_t nb)
     size_t oldmmsize = oldsize + offset + DIRECT_FOOT_PAD;
     size_t newmmsize = mmap_align(nb + SIX_SIZE_T_SIZES + CHUNK_ALIGN_MASK);
     char *cp = (char *)CALL_MREMAP((char *)oldp - offset,
-				   oldmmsize, newmmsize, 1);
+				   oldmmsize, newmmsize, CALL_MREMAP_MV);
     if (cp != CMFAIL) {
       mchunkptr newp = (mchunkptr)(cp + offset);
       size_t psize = newmmsize - offset - DIRECT_FOOT_PAD;
@@ -857,7 +864,7 @@ static int alloc_trim(mstate m, size_t pad)
 	  !has_segment_link(m, sp)) { /* can't shrink if pinned */
 	size_t newsize = sp->size - extra;
 	/* Prefer mremap, fall back to munmap */
-	if ((CALL_MREMAP(sp->base, sp->size, newsize, 0) != MFAIL) ||
+	if ((CALL_MREMAP(sp->base, sp->size, newsize, CALL_MREMAP_NOMOVE) != MFAIL) ||
 	    (CALL_MUNMAP(sp->base + newsize, extra) == 0)) {
 	  released = extra;
 	}
