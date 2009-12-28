@@ -2128,15 +2128,25 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fistp TMP2
     |  cmp TMP2, 255;  ja ->fff_fallback
   }
-  |  lea RC, TMP2			// Little-endian.
-  |  mov TMP1, RA			// Save RA.
+  |.if X64
+  |  mov TMP3, 1
+  |.else
   |  mov ARG3, 1
-  |  mov ARG2, RC
+  |.endif
+  |  lea RDa, TMP2			// Points to stack. Little-endian.
+  |  mov TMP1, RA			// Save RA.
   |->fff_newstr:
   |  mov L:RB, SAVE_L
-  |  mov ARG1, L:RB
-  |  mov SAVE_PC, PC
   |  mov L:RB->base, BASE
+  |.if X64
+  |  mov CARG3d, TMP3			// Zero-extended to size_t.
+  |  mov CARG2, RDa			// May be 64 bit ptr to stack.
+  |  mov CARG1d, L:RB
+  |.else
+  |  mov ARG2, RD
+  |  mov ARG1, L:RB
+  |.endif
+  |  mov SAVE_PC, PC
   |  call extern lj_str_new		// (lua_State *L, char *str, size_t l)
   |  // GCstr * returned in eax (RC).
   |  mov RA, TMP1
@@ -2163,33 +2173,36 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp dword [RA+4], LJ_TSTR;  jne ->fff_fallback
   |  cmp dword [RA+12], LJ_TISNUM;  ja ->fff_fallback
   |  mov STR:RB, [RA]
-  |  mov ARG2, STR:RB
+  |  mov TMP3, STR:RB
   |  mov RB, STR:RB->len
   if (sse) {
-    |  cvtsd2si RC, qword [RA+8]
-    |  mov ARG3, RC
+    |  cvtsd2si RA, qword [RA+8]
   } else {
     |.if not X64
     |  fld qword [RA+8]
     |  fistp ARG3
+    |  mov RA, ARG3
     |.endif
   }
   |  mov RC, TMP2
   |  cmp RB, RC				// len < end? (unsigned compare)
   |  jb >5
   |2:
-  |  mov RA, ARG3
   |  test RA, RA			// start <= 0?
   |  jle >7
   |3:
-  |  mov STR:RB, ARG2
+  |  mov STR:RB, TMP3
   |  sub RC, RA				// start > end?
   |  jl ->fff_emptystr
   |  lea RB, [STR:RB+RA+#STR-1]
   |  add RC, 1
   |4:
-  |  mov ARG2, RB
+  |.if X64
+  |  mov TMP3, RC
+  |.else
   |  mov ARG3, RC
+  |.endif
+  |  mov RD, RB
   |  jmp ->fff_newstr
   |
   |5:  // Negative end or overflow.
@@ -2234,13 +2247,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_2
   |  movzx RA, byte STR:RB[1]
   |  mov RB, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
+  |.if X64
+  |  mov TMP3, RC
+  |.else
   |  mov ARG3, RC
-  |  mov ARG2, RB
+  |.endif
   |1:  // Fill buffer with char. Yes, this is suboptimal code (do you care?).
   |  mov [RB], RAL
   |  add RB, 1
   |  sub RC, 1
   |  jnz <1
+  |  mov RD, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
   |  jmp ->fff_newstr
   |
   |.ffunc_1 string_reverse
@@ -2254,15 +2271,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
   |  add RB, #STR
   |  mov TMP2, PC			// Need another temp register.
+  |.if X64
+  |  mov TMP3, RC
+  |.else
   |  mov ARG3, RC
+  |.endif
   |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
-  |  mov ARG2, PC
   |1:
   |  movzx RA, byte [RB]
   |  add RB, 1
   |  sub RC, 1
   |  mov [PC+RC], RAL
   |  jnz <1
+  |  mov RD, PC
   |  mov PC, TMP2
   |  jmp ->fff_newstr
   |
@@ -2276,9 +2297,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
   |  add RB, #STR
   |  mov TMP2, PC			// Need another temp register.
+  |.if X64
+  |  mov TMP3, RC
+  |.else
   |  mov ARG3, RC
+  |.endif
   |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
-  |  mov ARG2, PC
   |  jmp >3
   |1:  // ASCII case conversion. Yes, this is suboptimal code (do you care?).
   |  movzx RA, byte [RB+RC]
@@ -2292,6 +2316,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |3:
   |  sub RC, 1
   |  jns <1
+  |  mov RD, PC
   |  mov PC, TMP2
   |  jmp ->fff_newstr
   |.endmacro
