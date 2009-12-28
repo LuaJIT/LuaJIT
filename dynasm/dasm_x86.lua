@@ -922,8 +922,9 @@ local map_op = {
   -- 3F: *aas
   inc_1 =	x64 and "m:FF0m" or "rdw:40r|m:FF0m",
   dec_1 =	x64 and "m:FF1m" or "rdw:48r|m:FF1m",
-  push_1 =	(x64 and "rqw:50r|mqw:FF6m" or "rdw:50r|mdw:FF6m").."|S.:6AS|ib:n6Ai|i.:68i",
-  pop_1 =	x64 and "rqw:58r|mqw:8F0m" or "rdw:58r|mdw:8F0m",
+  push_1 =	(x64 and "rq:n50r|rw:50r|mq:nFF6m|mw:FF6m" or
+			 "rdw:50r|mdw:FF6m").."|S.:6AS|ib:n6Ai|i.:68i",
+  pop_1 =	x64 and "rq:n58r|rw:58r|mq:n8F0m|mw:8F0m" or "rdw:58r|mdw:8F0m",
   -- 60: *pusha, *pushad, *pushaw
   -- 61: *popa, *popad, *popaw
   -- 62: *bound rdw,x
@@ -970,11 +971,11 @@ local map_op = {
   wait_0 =	"9B",
   fwait_0 =	"9B",
   pushf_0 =	"9C",
-  pushfw_0 =	"669C",
-  pushfd_0 =	"9C",
+  pushfd_0 =	not x64 and "9C",
+  pushfq_0 =	x64 and "9C",
   popf_0 =	"9D",
-  popfw_0 =	"669D",
-  popfd_0 =	"9D",
+  popfd_0 =	not x64 and "9D",
+  popfq_0 =	x64 and "9D",
   sahf_0 =	"9E",
   lahf_0 =	"9F",
   mov_2 =	"OR:A3o|RO:A1O|mr:89Rm|rm:8BrM|rib:nB0ri|ridw:B8ri|mi:C70mi",
@@ -1030,8 +1031,8 @@ local map_op = {
   -- E5: *in Rdw,ib
   -- E6: *out ib,Rb
   -- E7: *out ib,Rdw
-  call_1 =	x64 and "mq:FF2m|J.:E8J" or "md:FF2m|J.:E8J",
-  jmp_1 =	x64 and "mq:FF4m|J.:E9J" or "md:FF4m|J.:E9J", -- short: EB
+  call_1 =	x64 and "mq:nFF2m|J.:E8nJ" or "md:FF2m|J.:E8J",
+  jmp_1 =	x64 and "mq:nFF4m|J.:E9nJ" or "md:FF4m|J.:E9J", -- short: EB
   -- EA: *jmp iw:idw
   -- EB: jmp ib
   -- EC: *in Rb,dx
@@ -1423,7 +1424,7 @@ end
 
 -- Conditional ops.
 for cc,n in pairs(map_cc) do
-  map_op["j"..cc.."_1"] = format("J.:0F8%XJ", n) -- short: 7%X
+  map_op["j"..cc.."_1"] = format("J.:n0F8%XJ", n) -- short: 7%X
   map_op["set"..cc.."_1"] = format("mb:n0F9%X2m", n)
   map_op["cmov"..cc.."_2"] = format("rmqdw:0F4%XrM", n) -- P6+
 end
