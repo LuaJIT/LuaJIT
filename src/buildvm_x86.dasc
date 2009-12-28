@@ -66,14 +66,14 @@
 |.define FCARG1,	CARG1d		// Upwards compatible to x86 fastcall.
 |.define FCARG2,	CARG2d
 |.else
-|.define CARG1,		rsi		// x64/POSIX C call arguments.
-|.define CARG2,		rdi
+|.define CARG1,		rdi		// x64/POSIX C call arguments.
+|.define CARG2,		rsi
 |.define CARG3,		rdx
 |.define CARG4,		rcx
 |.define CARG5,		r8
 |.define CARG6,		r9
-|.define CARG1d,	esi
-|.define CARG2d,	edi
+|.define CARG1d,	edi
+|.define CARG2d,	esi
 |.define CARG3d,	edx
 |.define CARG4d,	ecx
 |.define CARG5d,	r8d
