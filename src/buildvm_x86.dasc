@@ -23,16 +23,18 @@
 |.define KBASE,		edi		// Must be C callee-save.
 |.define KBASEa,	KBASE
 |.define PC,		esi		// Must be C callee-save.
+|.define DISPATCH,	ebx		// Must be C callee-save.
 |.elif X64WIN
 |.define KBASE,		edi		// Must be C callee-save.
 |.define KBASEa,	rdi
 |.define PC,		esi		// Must be C callee-save.
+|.define DISPATCH,	ebx		// Must be C callee-save.
 |.else
 |.define KBASE,		r15d		// Must be C callee-save.
 |.define KBASEa,	r15
-|.define PC,		r14d		// Must be C callee-save.
+|.define PC,		ebx		// Must be C callee-save.
+|.define DISPATCH,	r14d		// Must be C callee-save.
 |.endif
-|.define DISPATCH,	ebx		// Must be C callee-save.
 |
 |.define RA,		ecx
 |.if X64; .define RAa, rcx; .else; .define RAa, RA; .endif

@@ -40,8 +40,13 @@ enum {
 
   /* These definitions must match with the *.dasc file(s): */
   RID_BASE = RID_EDX,		/* Interpreter BASE. */
+#if LJ_64 && !defined(_WIN64)
+  RID_PC = RID_EBX,		/* Interpreter PC. */
+  RID_DISPATCH = RID_R14D,	/* Interpreter DISPATCH table. */
+#else
   RID_PC = RID_ESI,		/* Interpreter PC. */
   RID_DISPATCH = RID_EBX,	/* Interpreter DISPATCH table. */
+#endif
 
   /* Register ranges [min, max) and number of registers. */
   RID_MIN_GPR = RID_EAX,
