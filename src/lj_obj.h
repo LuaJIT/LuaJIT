@@ -435,8 +435,8 @@ typedef union GCfunc {
 #define iscfunc(fn)	((fn)->c.ffid == FF_C)
 #define isffunc(fn)	((fn)->c.ffid > FF_C)
 #define funcproto(fn)	check_exp(isluafunc(fn), &gcref((fn)->l.pt)->pt)
-#define sizeCfunc(n)	(sizeof(GCfuncC) + sizeof(TValue)*((n)-1))
-#define sizeLfunc(n)	(sizeof(GCfuncL) + sizeof(TValue *)*((n)-1))
+#define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
+#define sizeLfunc(n)	(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n))
 
 /* -- Table object -------------------------------------------------------- */
 
