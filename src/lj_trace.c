@@ -572,7 +572,7 @@ void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   /* Restore interpreter state. */
   lj_snap_restore(J, exptr);
   cf = cframe_raw(L->cframe);
-  cframe_pc(cf) = J->pc;
+  setcframe_pc(cf, J->pc);
 
   lj_vmevent_send(L, TEXIT,
     ExitState *ex = (ExitState *)exptr;

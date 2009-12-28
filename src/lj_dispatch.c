@@ -264,8 +264,9 @@ void lj_dispatch_ins(lua_State *L, const BCIns *pc, uint32_t nres)
   GCproto *pt = funcproto(fn);
   BCReg slots = cur_topslot(pt, pc, nres);
   global_State *g = G(L);
-  const BCIns *oldpc = cframe_Lpc(L);
-  cframe_Lpc(L) = pc;
+  void *cf = cframe_raw(L->cframe);
+  const BCIns *oldpc = cframe_pc(cf);
+  setcframe_pc(cf, pc);
   L->top = L->base + slots;  /* Fix top. */
 #if LJ_HASJIT
   {

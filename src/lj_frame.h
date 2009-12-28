@@ -58,12 +58,28 @@ enum {
 
 /* These definitions must match with the arch-specific *.dasc files. */
 #if LJ_TARGET_X86
-#define CFRAME_OFS_ERRF		(15*sizeof(void *))
-#define CFRAME_OFS_NRES		(14*sizeof(void *))
-#define CFRAME_OFS_PREV		(13*sizeof(void *))
-#define CFRAME_OFS_L		(12*sizeof(void *))
-#define CFRAME_OFS_PC		(6*sizeof(void *))
-#define CFRAME_SIZE		(12*sizeof(void *))
+#define CFRAME_OFS_ERRF		(15*4)
+#define CFRAME_OFS_NRES		(14*4)
+#define CFRAME_OFS_PREV		(13*4)
+#define CFRAME_OFS_L		(12*4)
+#define CFRAME_OFS_PC		(6*4)
+#define CFRAME_SIZE		(12*4)
+#elif LJ_TARGET_X64
+#if _WIN64
+#define CFRAME_OFS_ERRF		(23*4)
+#define CFRAME_OFS_NRES		(22*4)
+#define CFRAME_OFS_PREV		(13*8)
+#define CFRAME_OFS_L		(24*4)
+#define CFRAME_OFS_PC		(25*4)
+#define CFRAME_SIZE		(10*8)
+#else
+#define CFRAME_OFS_ERRF		(3*4)
+#define CFRAME_OFS_NRES		(2*4)
+#define CFRAME_OFS_PREV		(4*8)
+#define CFRAME_OFS_L		(4*4)
+#define CFRAME_OFS_PC		(5*4)
+#define CFRAME_SIZE		(10*8)
+#endif
 #else
 #error "Missing CFRAME_* definitions for this architecture"
 #endif
@@ -72,11 +88,15 @@ enum {
 #define CFRAME_CANYIELD		((intptr_t)(CFRAME_RESUME))
 #define CFRAME_RAWMASK		(~CFRAME_CANYIELD)
 
-#define cframe_errfunc(cf)	(*(ptrdiff_t *)(((char *)cf)+CFRAME_OFS_ERRF))
-#define cframe_nres(cf)		(*(ptrdiff_t *)(((char *)cf)+CFRAME_OFS_NRES))
-#define cframe_prev(cf)		(*(void **)(((char *)cf)+CFRAME_OFS_PREV))
-#define cframe_L(cf)		(*(lua_State **)(((char *)cf)+CFRAME_OFS_L))
-#define cframe_pc(cf)		(*(const BCIns **)(((char *)cf)+CFRAME_OFS_PC))
+#define cframe_errfunc(cf)	(*(int32_t *)(((char *)(cf))+CFRAME_OFS_ERRF))
+#define cframe_nres(cf)		(*(int32_t *)(((char *)(cf))+CFRAME_OFS_NRES))
+#define cframe_prev(cf)		(*(void **)(((char *)(cf))+CFRAME_OFS_PREV))
+#define cframe_L(cf) \
+  (&gcref(*(GCRef *)(((char *)(cf))+CFRAME_OFS_L))->th)
+#define cframe_pc(cf) \
+  (mref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), const BCIns))
+#define setcframe_pc(cf, pc) \
+  (setmref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), (pc)))
 #define cframe_canyield(cf)	((intptr_t)(cf) & CFRAME_CANYIELD)
 #define cframe_raw(cf)		((void *)((intptr_t)(cf) & CFRAME_RAWMASK))
 #define cframe_Lpc(L)		cframe_pc(cframe_raw(L->cframe))
