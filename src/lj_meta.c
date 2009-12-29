@@ -295,7 +295,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     top = curr_top(L);
     setcont(top, ne ? lj_cont_condf : lj_cont_condt);
     copyTV(L, top+1, mo);
-    it = ~o1->gch.gct;
+    it = ~(int32_t)o1->gch.gct;
     setgcV(L, top+2, &o1->gch, it);
     setgcV(L, top+3, &o2->gch, it);
     return top+2;  /* Trigger metamethod call. */

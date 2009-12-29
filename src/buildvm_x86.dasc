@@ -37,19 +37,27 @@
 |.endif
 |
 |.define RA,		ecx
-|.if X64; .define RAa, rcx; .else; .define RAa, RA; .endif
 |.define RAL,		cl
 |.define RB,		ebp		// Must be ebp (C callee-save).
-|.if X64; .define RBa, rbp; .else; .define RBa, RB; .endif
 |.define RC,		eax		// Must be eax (fcomparepp and others).
 |.define RCW,		ax
 |.define RCH,		ah
 |.define RCL,		al
 |.define OP,		RB
 |.define RD,		RC
-|.if X64; .define RDa, rax; .else; .define RDa, RD; .endif
 |.define RDW,		RCW
 |.define RDL,		RCL
+|.if X64
+|.define RAa, rcx
+|.define RBa, rbp
+|.define RCa, rax
+|.define RDa, rax
+|.else
+|.define RAa, RA
+|.define RBa, RB
+|.define RCa, RC
+|.define RDa, RD
+|.endif
 |
 |.if not X64
 |.define FCARG1,	ecx		// x86 fastcall arguments.
@@ -237,7 +245,7 @@
 |.macro ins_ABC; movzx RB, RCH; movzx RC, RCL; .endmacro
 |.macro ins_AB_; movzx RB, RCH; .endmacro
 |.macro ins_A_C; movzx RC, RCL; .endmacro
-|.macro ins_AND; not RD; .endmacro
+|.macro ins_AND; not RDa; .endmacro
 |
 |// Instruction decode+dispatch. Carefully tuned (nope, lodsd is not faster).
 |.macro ins_NEXT
@@ -898,7 +906,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vmeta_tgets:
   |  mov TMP1, RC			// RC = GCstr *
   |  mov TMP2, LJ_TSTR
-  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  cmp PC_OP, BC_GGET
   |  jne >1
   |  lea RA, [DISPATCH+DISPATCH_GL(tmptv)]  // Store fn->l.env in g->tmptv.
@@ -919,7 +927,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fstp TMPQ
     |.endif
   }
-  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  jmp >1
   |
   |->vmeta_tgetv:
@@ -933,7 +941,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:CARG1d, SAVE_L
   |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
   |  mov CARG2d, RB
-  |  mov CARG3d, RC
+  |  mov CARG3, RCa			// May be 64 bit ptr to stack.
   |  mov L:RB, L:CARG1d
   |.else
   |  mov ARG2, RB
@@ -971,7 +979,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vmeta_tsets:
   |  mov TMP1, RC			// RC = GCstr *
   |  mov TMP2, LJ_TSTR
-  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  cmp PC_OP, BC_GSET
   |  jne >1
   |  lea RA, [DISPATCH+DISPATCH_GL(tmptv)]  // Store fn->l.env in g->tmptv.
@@ -992,7 +1000,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fstp TMPQ
     |.endif
   }
-  |  lea RC, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
   |  jmp >1
   |
   |->vmeta_tsetv:
@@ -1006,7 +1014,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:CARG1d, SAVE_L
   |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
   |  mov CARG2d, RB
-  |  mov CARG3d, RC
+  |  mov CARG3, RCa			// May be 64 bit ptr to stack.
   |  mov L:RB, L:CARG1d
   |.else
   |  mov ARG2, RB
@@ -1887,7 +1895,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |7:  // Non-standard return case.
   |  mov BASE, RA
-  |  mov RA, -8				// Results start at BASE+RA = BASE-8.
+  |  mov RAa, -8			// Results start at BASE+RA = BASE-8.
   |  jmp ->vm_return
   |
   if (sse) {
@@ -3906,8 +3914,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  ins_AD	// RA = dst, RD = hbits|asize
     |.if X64
     |  mov L:CARG1d, SAVE_L
-    |1:
     |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+    |1:
     |  mov CARG3d, RD
     |  and RD, 0x7ff
     |  shr CARG3d, 11
@@ -3982,7 +3990,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov L:FCARG1, L:RB
     |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
     |  movzx RD, PC_RD			// Need to reload RD.
-    |  not RD
+    |  not RDa
     |  jmp <2
     break;
 
@@ -4052,7 +4060,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
   case BC_TGETS:
     |  ins_ABC	// RA = dst, RB = table, RC = str const (~)
-    |  not RC
+    |  not RCa
     |  mov STR:RC, [KBASE+RC*4]
     |  checktab RB, ->vmeta_tgets
     |  mov TAB:RB, [BASE+RB*8]
@@ -4182,7 +4190,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
   case BC_TSETS:
     |  ins_ABC	// RA = src, RB = table, RC = str const (~)
-    |  not RC
+    |  not RCa
     |  mov STR:RC, [KBASE+RC*4]
     |  checktab RB, ->vmeta_tsets
     |  mov TAB:RB, [BASE+RB*8]
@@ -4427,7 +4435,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  test PC, FRAME_TYPE		// Lua frame below?
     |  jnz <4
     |  movzx RD, PC_RA			// Need to prepare BASE/KBASE.
-    |  not RD
+    |  not RDa
     |  lea BASE, [BASE+RD*8]
     |  mov LFUNC:KBASE, [BASE-8]
     |  mov PROTO:KBASE, LFUNC:KBASE->pt
@@ -4591,7 +4599,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       break;
     }
     |  movzx RA, PC_RA
-    |  not RA				// Note: ~RA = -(RA+1)
+    |  not RAa				// Note: ~RA = -(RA+1)
     |  lea BASE, [BASE+RA*8]		// base = base - (RA+1)*8
     |  mov LFUNC:KBASE, [BASE-8]
     |  mov PROTO:KBASE, LFUNC:KBASE->pt

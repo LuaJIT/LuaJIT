@@ -169,7 +169,7 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
   nuv = fn->l.nupvalues;
   base = L->base;
   for (i = 0; i < nuv; i++) {
-    int v = pt->uv[i];
+    ptrdiff_t v = pt->uv[i];
     GCupval *uv = v < 0 ? &gcref(puv[~v])->uv : func_finduv(L, base + v);
     setgcref(fn->l.uvptr[i], obj2gco(uv));
   }

@@ -224,14 +224,14 @@ LJLIB_CF(jit_util_funcbc)
 LJLIB_CF(jit_util_funck)
 {
   GCproto *pt = check_Lproto(L, 0);
-  MSize idx = (MSize)lj_lib_checkint(L, 2);
-  if ((int32_t)idx >= 0) {
-    if (idx < pt->sizekn) {
+  ptrdiff_t idx = (ptrdiff_t)lj_lib_checkint(L, 2);
+  if (idx >= 0) {
+    if (idx < (ptrdiff_t)pt->sizekn) {
       setnumV(L->top-1, pt->k.n[idx]);
       return 1;
     }
   } else {
-    if (~idx < pt->sizekgc) {
+    if (~idx < (ptrdiff_t)pt->sizekgc) {
       GCobj *gc = gcref(pt->k.gc[idx]);
       setgcV(L, L->top-1, &gc->gch, ~gc->gch.gct);
       return 1;

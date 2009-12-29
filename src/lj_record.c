@@ -1751,7 +1751,7 @@ void lj_record_ins(jit_State *J)
   case BCMpri: setitype(rcv, (int32_t)~rc); rc = TREF_PRI(IRT_NIL+rc); break;
   case BCMnum: { lua_Number n = J->pt->k.n[rc];
     setnumV(rcv, n); ix.key = rc = lj_ir_knumint(J, n); } break;
-  case BCMstr: { GCstr *s = strref(J->pt->k.gc[~rc]);
+  case BCMstr: { GCstr *s = strref(J->pt->k.gc[~(ptrdiff_t)rc]);
     setstrV(J->L, rcv, s); ix.key = rc = lj_ir_kstr(J, s); } break;
   default: break;  /* Handled later. */
   }
@@ -1943,7 +1943,7 @@ void lj_record_ins(jit_State *J)
     break;
   case BC_TDUP:
     rc = emitir(IRT(IR_TDUP, IRT_TAB),
-		lj_ir_ktab(J, tabref(J->pt->k.gc[~rc])), 0);
+		lj_ir_ktab(J, tabref(J->pt->k.gc[~(ptrdiff_t)rc])), 0);
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
