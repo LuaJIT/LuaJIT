@@ -165,22 +165,28 @@
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
 |.macro saveregs
 |  push rbp; push rdi; push rsi; push rbx
+|  push r15; push r14; push r13; push r12
 |  sub rsp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
+|  pop r12; pop r13; pop r14; pop r15
 |  pop rbx; pop rsi; pop rdi; pop rbp
 |.endmacro
 |
-|.define SAVE_CFRAME,	aword [rsp+aword*13]
-|.define SAVE_PC,	dword [rsp+dword*25]
-|.define SAVE_L,	dword [rsp+dword*24]
-|.define SAVE_ERRF,	dword [rsp+dword*23]
-|.define SAVE_NRES,	dword [rsp+dword*22]
-|.define TMP2,		dword [rsp+dword*21]
-|.define TMP1,		dword [rsp+dword*20]
+|.define SAVE_CFRAME,	aword [rsp+aword*17]
+|.define SAVE_PC,	dword [rsp+dword*33]
+|.define SAVE_L,	dword [rsp+dword*32]
+|.define SAVE_ERRF,	dword [rsp+dword*31]
+|.define SAVE_NRES,	dword [rsp+dword*30]
+|.define TMP2,		dword [rsp+dword*29]
+|.define TMP1,		dword [rsp+dword*28]
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by interpreter
-|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_RET,	aword [rsp+aword*13]	//<-- rsp entering interpreter.
+|.define SAVE_R8,	aword [rsp+aword*12]
+|.define SAVE_R7,	aword [rsp+aword*11]
+|.define SAVE_R6,	aword [rsp+aword*10]
+|.define SAVE_R5,	aword [rsp+aword*9]
 |.define SAVE_R4,	aword [rsp+aword*8]
 |.define SAVE_R3,	aword [rsp+aword*7]
 |.define SAVE_R2,	aword [rsp+aword*6]
@@ -204,16 +210,18 @@
 |
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
 |.macro saveregs
-|  push rbp; push r14; push r15; push rbx
+|  push rbp; push rbx; push r15; push r14; push r13; push r12
 |  sub rsp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
-|  pop rbx; pop r15; pop r14; pop rbp
+|  pop r12; pop r13; pop r14; pop r15; pop rbx; pop rbp
 |.endmacro
 |
 |//----- 16 byte aligned,
-|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
+|.define SAVE_RET,	aword [rsp+aword*11]	//<-- rsp entering interpreter.
+|.define SAVE_R6,	aword [rsp+aword*10]
+|.define SAVE_R5,	aword [rsp+aword*9]
 |.define SAVE_R4,	aword [rsp+aword*8]
 |.define SAVE_R3,	aword [rsp+aword*7]
 |.define SAVE_R2,	aword [rsp+aword*6]
