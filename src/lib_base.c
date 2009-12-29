@@ -354,14 +354,15 @@ LJLIB_CF(collectgarbage)
     "\4stop\7restart\7collect\5count\1\377\4step\10setpause\12setstepmul");
   int32_t data = lj_lib_optint(L, 2, 0);
   if (opt == LUA_GCCOUNT) {
-    setnumV(L->top-1, cast_num((int32_t)G(L)->gc.total)/1024.0);
+    setnumV(L->top, cast_num((int32_t)G(L)->gc.total)/1024.0);
   } else {
     int res = lua_gc(L, opt, data);
     if (opt == LUA_GCSTEP)
-      setboolV(L->top-1, res);
+      setboolV(L->top, res);
     else
-      setintV(L->top-1, res);
+      setintV(L->top, res);
   }
+  L->top++;
   return 1;
 }
 
