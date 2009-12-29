@@ -337,7 +337,7 @@ LJLIB_CF(dofile)
   if (luaL_loadfile(L, fname ? strdata(fname) : NULL) != 0)
     lua_error(L);
   lua_call(L, 0, LUA_MULTRET);
-  return (L->top - L->base) - 1;
+  return cast_int(L->top - L->base) - 1;
 }
 
 /* -- Base library: GC control -------------------------------------------- */

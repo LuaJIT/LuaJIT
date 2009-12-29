@@ -194,7 +194,7 @@ static int io_file_readchars(lua_State *L, FILE *fp, size_t n)
 
 static int io_file_read(lua_State *L, FILE *fp, int start)
 {
-  int ok, n, nargs = (L->top - L->base) - start;
+  int ok, n, nargs = cast_int(L->top - L->base) - start;
   clearerr(fp);
   if (nargs == 0) {
     ok = io_file_readline(L, fp);
@@ -242,7 +242,7 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
     } else if (tvisnum(tv)) {
       status = status && (fprintf(fp, LUA_NUMBER_FMT, numV(tv)) > 0);
     } else {
-      lj_lib_checkstr(L, tv-L->base+1);
+      lj_err_argt(L, cast_int(tv - L->base) + 1, LUA_TSTRING);
     }
   }
   return io_pushresult(L, status, NULL);
