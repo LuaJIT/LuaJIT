@@ -4832,6 +4832,17 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
+#if LJ_64
+#define SZPTR	"8"
+#define BSZPTR	"3"
+#define REG_SP	"0x7"
+#define REG_RA	"0x10"
+#else
+#define SZPTR	"4"
+#define BSZPTR	"2"
+#define REG_SP	"0x4"
+#define REG_RA	"0x8"
+#endif
   switch (ctx->mode) {
   case BUILD_elfasm:
     fprintf(ctx->fp, "\t.section .debug_frame,\"\",@progbits\n");
@@ -4843,11 +4854,11 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"
 	"\t.string \"\"\n"
 	"\t.uleb128 0x1\n"
-	"\t.sleb128 -4\n"
-	"\t.byte 0x8\n"
-	"\t.byte 0xc\n\t.uleb128 0x4\n\t.uleb128 0x4\n"
-	"\t.byte 0x88\n\t.uleb128 0x1\n"
-	"\t.align 4\n"
+	"\t.sleb128 -" SZPTR "\n"
+	"\t.byte " REG_RA "\n"
+	"\t.byte 0xc\n\t.uleb128 " REG_SP "\n\t.uleb128 " SZPTR "\n"
+	"\t.byte 0x80+" REG_RA "\n\t.uleb128 0x1\n"
+	"\t.align " SZPTR "\n"
 	".LECIE0:\n\n");
     fprintf(ctx->fp,
 	".LSFDE0:\n"
@@ -4856,13 +4867,22 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lframe0\n"
 	"\t.long .Lbegin\n"
 	"\t.long %d\n"
-	"\t.byte 0xe\n\t.uleb128 0x30\n"	/* def_cfa_offset */
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
+#if LJ_64
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
+	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
+	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
+	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
+#else
 	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
 	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
 	"\t.byte 0x86\n\t.uleb128 0x4\n"	/* offset esi */
 	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
-	"\t.align 4\n"
-	".LEFDE0:\n\n", (int)ctx->codesz);
+#endif
+	"\t.align " SZPTR "\n"
+	".LEFDE0:\n\n", (int)ctx->codesz, CFRAME_SIZE);
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
     fprintf(ctx->fp,
 	".Lframe1:\n"
@@ -4872,15 +4892,15 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"
 	"\t.string \"zPR\"\n"
 	"\t.uleb128 0x1\n"
-	"\t.sleb128 -4\n"
-	"\t.byte 0x8\n"
+	"\t.sleb128 -" SZPTR "\n"
+	"\t.byte " REG_RA "\n"
 	"\t.uleb128 6\n"			/* augmentation length */
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
 	"\t.long lj_err_unwind_dwarf-.\n"
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-	"\t.byte 0xc\n\t.uleb128 0x4\n\t.uleb128 0x4\n"
-	"\t.byte 0x88\n\t.uleb128 0x1\n"
-	"\t.align 4\n"
+	"\t.byte 0xc\n\t.uleb128 " REG_SP "\n\t.uleb128 " SZPTR "\n"
+	"\t.byte 0x80+" REG_RA "\n\t.uleb128 0x1\n"
+	"\t.align " SZPTR "\n"
 	".LECIE1:\n\n");
     fprintf(ctx->fp,
 	".LSFDE1:\n"
@@ -4890,13 +4910,22 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin-.\n"
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
-	"\t.byte 0xe\n\t.uleb128 0x30\n"	/* def_cfa_offset */
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
+#if LJ_64
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
+	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
+	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
+	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
+#else
 	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
 	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
 	"\t.byte 0x86\n\t.uleb128 0x4\n"	/* offset esi */
 	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
-	"\t.align 4\n"
-	".LEFDE1:\n\n", (int)ctx->codesz);
+#endif
+	"\t.align " SZPTR "\n"
+	".LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
     break;
   case BUILD_machasm:
     fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
@@ -4909,15 +4938,19 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"
 	"\t.ascii \"zPR\\0\"\n"
 	"\t.byte 0x1\n"
-	"\t.byte 128-4\n"
-	"\t.byte 0x8\n"
+	"\t.byte 128-" SZPTR "\n"
+	"\t.byte " REG_RA "\n"
 	"\t.byte 6\n"				/* augmentation length */
 	"\t.byte 0x9b\n"			/* indirect|pcrel|sdata4 */
 	"\t.long L_lj_err_unwind_dwarf$non_lazy_ptr-.\n"
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+#if LJ_64
+	"\t.byte 0xc\n\t.byte " REG_SP "\n\t.byte " SZPTR "\n"
+#else
 	"\t.byte 0xc\n\t.byte 0x5\n\t.byte 0x4\n"  /* esp=5 on 32 bit MACH-O. */
-	"\t.byte 0x88\n\t.byte 0x1\n"
-	"\t.align 2\n"
+#endif
+	"\t.byte 0x80+" REG_RA "\n\t.byte 0x1\n"
+	"\t.align " BSZPTR "\n"
 	"LECIE1:\n\n");
     fprintf(ctx->fp,
 	"_lj_vm_asm_begin.eh:\n"
@@ -4929,13 +4962,22 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long _lj_vm_asm_begin-.\n"
 	"\t.long %d\n"
 	"\t.byte 0\n"				/* augmentation length */
-	"\t.byte 0xe\n\t.byte 0x30\n"		/* def_cfa_offset */
+	"\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
+#if LJ_64
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
+	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
+	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
+	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
+#else
 	"\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
 	"\t.byte 0x87\n\t.byte 0x3\n"		/* offset edi */
 	"\t.byte 0x86\n\t.byte 0x4\n"		/* offset esi */
 	"\t.byte 0x83\n\t.byte 0x5\n"		/* offset ebx */
-	"\t.align 2\n"
-	"LEFDE1:\n\n", (int)ctx->codesz);
+#endif
+	"\t.align " BSZPTR "\n"
+	"LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
       fprintf(ctx->fp,
 	"\t.non_lazy_symbol_pointer\n"
 	"L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
