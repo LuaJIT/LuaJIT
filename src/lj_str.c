@@ -64,7 +64,7 @@ void lj_str_resize(lua_State *L, MSize newmask)
       p = next;
     }
   }
-  lj_mem_freevec(g, g->strhash, g->strmask+1, GCstr *);
+  lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
   g->strmask = newmask;
   g->strhash = newhash;
 }

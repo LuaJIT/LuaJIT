@@ -1140,7 +1140,7 @@ static void collectk(FuncState *fs, GCproto *pt)
   checklimitgt(fs, fs->nkn, BCMAX_D+1, "constants");
   checklimitgt(fs, fs->nkgc, BCMAX_D+1, "constants");
   nkgc = round_nkgc(fs->nkgc);
-  sizek = (MSize)(nkgc*sizeof(MRef) + fs->nkn*sizeof(lua_Number));
+  sizek = (MSize)(nkgc*sizeof(GCRef) + fs->nkn*sizeof(lua_Number));
   kstart = lj_mem_newt(fs->L, sizek, GCRef);
   if (nkgc) setgcrefnull(kstart[0]);  /* May be uninitialized otherwise. */
   pt->k.gc = kstart + nkgc;

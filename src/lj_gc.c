@@ -327,7 +327,7 @@ static size_t propagatemark(global_State *g)
     GCproto *pt = gco2pt(o);
     gc_traverse_proto(g, pt);
     return sizeof(GCproto) + sizeof(BCIns) * pt->sizebc +
-			     sizeof(GCobj *) * pt->sizekgc +
+			     sizeof(GCRef) * pt->sizekgc +
 			     sizeof(lua_Number) * pt->sizekn +
 			     sizeof(int16_t) * pt->sizeuv +
 			     sizeof(int32_t) * pt->sizelineinfo +

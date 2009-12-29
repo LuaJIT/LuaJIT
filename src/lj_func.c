@@ -47,7 +47,7 @@ GCproto *lj_func_newproto(lua_State *L)
 void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 {
   MSize nkgc = round_nkgc(pt->sizekgc);
-  MSize sizek = nkgc*(MSize)sizeof(GCobj *) +
+  MSize sizek = nkgc*(MSize)sizeof(GCRef) +
 		pt->sizekn*(MSize)sizeof(lua_Number);
   lj_mem_free(g, pt->k.gc - nkgc, sizek);
   lj_mem_freevec(g, pt->bc, pt->sizebc, BCIns);

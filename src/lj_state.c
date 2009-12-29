@@ -150,7 +150,7 @@ static void close_state(lua_State *L)
     lua_assert(gcref(g->gc.root) == obj2gco(L));
     lua_assert(g->strnum == 0);
     lj_trace_freestate(g);
-    lj_mem_freevec(g, g->strhash, g->strmask+1, GCstr *);
+    lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
     lj_str_freebuf(g, &g->tmpbuf);
     lj_mem_freevec(g, L->stack, L->stacksize, TValue);
     lua_assert(g->gc.total == sizeof(GG_State));
