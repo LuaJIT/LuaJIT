@@ -3022,9 +3022,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |8:  // FP/FP power function x^y.
   |.if X64
   |  movd rax, xmm1; shl rax, 1
-  |  ror rax, 32; cmp rax, 0xffe00000; je >2	// x^+-Inf?
+  |  rol rax, 12; cmp rax, 0xffe; je >2		// x^+-Inf?
   |  movd rax, xmm0; shl rax, 1; je >4		// +-0^y?
-  |  ror rax, 32; cmp rax, 0xffe00000; je >5	// +-Inf^y?
+  |  rol rax, 12; cmp rax, 0xffe; je >5		// +-Inf^y?
   |  .if X64WIN
   |    movsd qword [rsp+16], xmm1		// Use scratch area.
   |    movsd qword [rsp+8], xmm0
