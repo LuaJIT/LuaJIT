@@ -129,7 +129,7 @@ static void emit_peobj_sym(BuildCtx *ctx, const char *name, uint32_t value,
     memset(sym.n.name+len, 0, 8-len);
   } else {
     sym.n.nameref[0] = 0;
-    sym.n.nameref[1] = strtabofs;
+    sym.n.nameref[1] = (uint32_t)strtabofs;
     memcpy(strtab + strtabofs, name, len);
     strtab[strtabofs+len] = 0;
     strtabofs += len+1;
@@ -225,6 +225,9 @@ void emit_peobj(BuildCtx *ctx)
   for (nzsym = 0; ctx->sym_ofs[ctx->perm[nzsym]] < 0; nzsym++) ;
   for (relocsyms = 0; ctx->extnames[relocsyms]; relocsyms++) ;
   pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+(ctx->nsym-nzsym)+1 + relocsyms;
+#if !LJ_HASJIT
+  pehdr.nsyms -= 7;
+#endif
 
   /* Write PE object header and all sections. */
   owrite(ctx, &pehdr, sizeof(PEheader));
@@ -306,7 +309,7 @@ void emit_peobj(BuildCtx *ctx)
       break;
     /* 2nd pass: alloc strtab, write syms and copy strings. */
     strtab = (char *)malloc(strtabofs);
-    *(uint32_t *)strtab = strtabofs;
+    *(uint32_t *)strtab = (uint32_t)strtabofs;
   }
 
   /* Write string table. */
