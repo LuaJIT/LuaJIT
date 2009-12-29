@@ -202,7 +202,7 @@
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
 |
 |// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [rsp+aword*10]
+|.define TMPQ,		qword [rsp+aword*14]
 |.define NRESULTS,	TMP2
 |.define TMPa,		ARG5
 |.define ARG5d,		dword [rsp+aword*4]
@@ -938,7 +938,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fstp TMPQ
     |.endif
   }
-  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMPQ			// Store temp. TValue in TMPQ.
   |  jmp >1
   |
   |->vmeta_tgetv:
@@ -1011,7 +1011,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fstp TMPQ
     |.endif
   }
-  |  lea RCa, TMP1			// Store temp. TValue in TMP1/TMP2.
+  |  lea RCa, TMPQ			// Store temp. TValue in TMPQ.
   |  jmp >1
   |
   |->vmeta_tsetv:
@@ -1534,11 +1534,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |1:
   |  cmp dword [RA+4], LJ_TTAB;  jne ->fff_fallback
   |.if X64
+  |  mov TMP1, BASE			// Save BASE.
   |  mov CARG2d, [RA]
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, RA			// Add frame since C call can throw.
   |  mov [RA-4], PC
-  |  mov TMP1, BASE			// Save BASE.
   |  lea CARG3d, [RA+8]
   |  mov CARG1d, L:RB			// Caveat: CARG1d may be RA.
   |.else
@@ -2648,6 +2648,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
+  |.if X64
+  |  int3	// NYI
+  |.else
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, BASE
   |  mov FCARG2, PC
@@ -2656,10 +2659,14 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov SAVE_PC, PC
   |  call extern lj_trace_hot@8		// (jit_State *J, const BCIns *pc)
   |  jmp <4
+  |.endif
 #endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
 #if LJ_HASJIT
+  |.if X64
+  |  int3	// NYI
+  |.else
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, BASE
   |  mov FCARG2, PC
@@ -2670,6 +2677,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov BASE, L:RB->base
   |  // Dispatch the first instruction and optionally record it.
   |  ins_next
+  |.endif
 #endif
   |
   |//-----------------------------------------------------------------------
