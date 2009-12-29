@@ -23,16 +23,19 @@
 |.define KBASE,		edi		// Must be C callee-save.
 |.define KBASEa,	KBASE
 |.define PC,		esi		// Must be C callee-save.
+|.define PCa,		PC
 |.define DISPATCH,	ebx		// Must be C callee-save.
 |.elif X64WIN
 |.define KBASE,		edi		// Must be C callee-save.
 |.define KBASEa,	rdi
 |.define PC,		esi		// Must be C callee-save.
+|.define PCa,		rsi
 |.define DISPATCH,	ebx		// Must be C callee-save.
 |.else
 |.define KBASE,		r15d		// Must be C callee-save.
 |.define KBASEa,	r15
 |.define PC,		ebx		// Must be C callee-save.
+|.define PCa,		rbx
 |.define DISPATCH,	r14d		// Must be C callee-save.
 |.endif
 |
@@ -262,10 +265,10 @@
 |  movzx OP, RCL
 |  add PC, 4
 |  shr RC, 16
-|.if not X64
-|  jmp aword [DISPATCH+OP*4]
-|.else
+|.if X64
 |  jmp aword [DISPATCH+OP*8]
+|.else
+|  jmp aword [DISPATCH+OP*4]
 |.endif
 |.endmacro
 |
@@ -640,7 +643,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov esp, ecx
   |.endif
   |  mov L:RB, SAVE_L
-  |  mov RA, -8				// Results start at BASE+RA = BASE-8.
+  |  mov RAa, -8			// Results start at BASE+RA = BASE-8.
   |  mov RD, 1+1			// Really 1+2 results, incr. later.
   |  mov BASE, L:RB->base
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
@@ -657,7 +660,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // Return from pcall or xpcall fast func.
   |  and PC, -8
   |  sub BASE, PC			// Restore caller base.
-  |  lea RA, [RA+PC-8]			// Rebase RA and prepend one result.
+  |  lea RAa, [RA+PC-8]			// Rebase RA and prepend one result.
   |  mov PC, [BASE-4]			// Fetch PC of previous frame.
   |  // Prepending may overwrite the pcall frame, so do it at the end.
   |  mov dword [BASE+RA+4], LJ_TTRUE	// Prepend true to results.
@@ -719,10 +722,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |  mov PC, FRAME_C
   |  xor RD, RD
-  |  lea KBASE, [esp+CFRAME_RESUME]
+  |  lea KBASEa, [esp+CFRAME_RESUME]
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  add DISPATCH, GG_G2DISP
-  |  mov L:RB->cframe, KBASE
+  |  mov L:RB->cframe, KBASEa
   |  mov SAVE_PC, RD			// Any value outside of bytecode is ok.
   |  mov SAVE_CFRAME, RDa
   |.if X64
@@ -1270,7 +1273,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  movzx RA, RCH
   |  movzx OP, RCL
   |  shr RC, 16
+  |.if X64
+  |  jmp aword [DISPATCH+OP*8+GG_DISP_STATIC*8]	// Retry FORI or JFORI.
+  |.else
   |  jmp aword [DISPATCH+OP*4+GG_DISP_STATIC*4]	// Retry FORI or JFORI.
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
@@ -1738,7 +1745,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.else
   |  lea RA, [RA+NARGS:RC*8-16]		// RA = end of source for stack move.
   |.endif
-  |  sub RA, PC				// Relative to PC.
+  |  sub RAa, PCa			// Relative to PC.
   |
   |  cmp PC, RB
   |  je >3
@@ -1784,7 +1791,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  ja >9				// Need to grow stack?
   |
   |  mov RB, BASE
-  |  sub RB, RA
+  |  sub RBa, RAa
   |5:  // Move results from coroutine.
   |  mov RD, [RA]
   |  mov [RA+RB], RD
@@ -1804,7 +1811,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, SAVE_PC
   |  mov NRESULTS, RD
   |.if resume
-  |  mov RA, -8
+  |  mov RAa, -8
   |.else
   |  xor RA, RA
   |.endif
@@ -2633,7 +2640,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |5:
   |  movzx OP, PC_OP
   |  movzx RD, PC_RD
+  |.if X64
+  |  jmp aword [DISPATCH+OP*8+GG_DISP_STATIC*8]	// Re-dispatch to static ins.
+  |.else
   |  jmp aword [DISPATCH+OP*4+GG_DISP_STATIC*4]	// Re-dispatch to static ins.
+  |.endif
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
