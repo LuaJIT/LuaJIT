@@ -147,12 +147,12 @@
 |// FPARGx overlaps ARGx and ARG(x+1) on x86.
 |.define FPARG3,	qword [esp+qword*1]
 |.define FPARG1,	qword [esp]
-|// TMPQ overlaps TMP1/TMP2. ARG5/NRESULTS overlap TMP1/TMP2 (and TMPQ).
+|// TMPQ overlaps TMP1/TMP2. ARG5/MULTRES overlap TMP1/TMP2 (and TMPQ).
 |.define TMPQ,		qword [esp+aword*4]
 |.define TMP3,		ARG4
 |.define ARG5,		TMP1
 |.define TMPa,		TMP1
-|.define NRESULTS,	TMP2
+|.define MULTRES,	TMP2
 |
 |// Arguments for vm_call and vm_pcall.
 |.define INARG_BASE,	SAVE_CFRAME		// Overwritten by SAVE_CFRAME!
@@ -201,9 +201,9 @@
 |.define CSAVE_1,	aword [rsp]		//<-- rsp while in interpreter.
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
 |
-|// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
+|// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
 |.define TMPQ,		qword [rsp+aword*14]
-|.define NRESULTS,	TMP2
+|.define MULTRES,	TMP2
 |.define TMPa,		ARG5
 |.define ARG5d,		dword [rsp+aword*4]
 |.define TMP3,		ARG5d
@@ -240,10 +240,10 @@
 |.define TMP1,		dword [rsp]		//<-- rsp while in interpreter.
 |//----- 16 byte aligned
 |
-|// TMPQ overlaps TMP1/TMP2. NRESULTS overlaps TMP2 (and TMPQ).
+|// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
 |.define TMPQ,		qword [rsp]
 |.define TMP3,		dword [rsp+aword*3]
-|.define NRESULTS,	TMP2
+|.define MULTRES,	TMP2
 |
 |.endif
 |
@@ -504,7 +504,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  add RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
   |->vm_returnc:
   |  add RD, 1				// RD = nresults+1
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |  test PC, FRAME_TYPE
   |  jz ->BC_RET_Z			// Handle regular return to Lua.
   |  jmp ->vm_return
@@ -535,7 +535,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  add RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
   |->vm_returnc:
   |  add RD, 1				// RD = nresults+1
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |  test PC, FRAME_TYPE
   |  jz ->BC_RET_Z			// Handle regular return to Lua.
   |  // Fallthrough.
@@ -543,7 +543,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |//-- Return handling (non-inline) ---------------------------------------
   |
   |->vm_return:
-  |  // BASE = base, RA = resultofs, RD = nresults+1 (= NRESULTS), PC = return
+  |  // BASE = base, RA = resultofs, RD = nresults+1 (= MULTRES), PC = return
   |  test PC, FRAME_C
   |  jz ->vm_returnp
   |
@@ -567,7 +567,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, PC
   |3:
-  |  mov RD, NRESULTS
+  |  mov RD, MULTRES
   |  mov RA, SAVE_NRES			// RA = wanted nresults+1
   |4:
   |  cmp RA, RD
@@ -608,7 +608,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // - The GC shrinks the stack in between.
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  mov L:RB->top, BASE		// Save current top held in BASE (yes).
-  |  mov NRESULTS, RD			// Need to fill only remainder with nil.
+  |  mov MULTRES, RD			// Need to fill only remainder with nil.
   |  mov FCARG2, RA
   |  mov FCARG1, L:RB
   |  call extern lj_state_growstack@8	// (lua_State *L, int n)
@@ -649,7 +649,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, [BASE-4]			// Fetch PC of previous frame.
   |  mov dword [BASE-4], LJ_TFALSE	// Prepend false to error message.
   |  set_vmstate INTERP
-  |  jmp ->vm_returnc			// Increments RD/NRESULTS and returns.
+  |  jmp ->vm_returnc			// Increments RD/MULTRES and returns.
   |
   |->vm_returnp:
   |  test PC, FRAME_P
@@ -662,7 +662,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, [BASE-4]			// Fetch PC of previous frame.
   |  // Prepending may overwrite the pcall frame, so do it at the end.
   |  mov dword [BASE+RA+4], LJ_TTRUE	// Prepend true to results.
-  |  jmp ->vm_returnc			// Increments RD/NRESULTS and returns.
+  |  jmp ->vm_returnc			// Increments RD/MULTRES and returns.
   |
   |//-- Grow stack on-demand -----------------------------------------------
   |
@@ -743,7 +743,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  add RD, 1				// RD = nresults+1
   |  sub RA, BASE			// RA = resultofs
   |  mov PC, [BASE-4]
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |  test PC, FRAME_TYPE
   |  jz ->BC_RET_Z
   |  jmp ->vm_return
@@ -855,7 +855,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
-  |  // BASE = meta base, RA = resultofs, RD = nresults+1 (also in NRESULTS)
+  |  // BASE = meta base, RA = resultofs, RD = nresults+1 (also in MULTRES)
   |  add RA, BASE
   |  and PC, -8
   |  mov RB, BASE
@@ -1356,7 +1356,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.ffunc_1 assert
   |  mov RB, [RA+4]
   |  cmp RB, LJ_TISTRUECOND;  jae ->fff_fallback
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |  mov [RA-4], RB
   |  mov RB, [RA]
   |  mov [RA-8], RB
@@ -1373,7 +1373,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jnz <1
   |  mov RA, TMP1
   |2:
-  |  mov RD, NRESULTS
+  |  mov RD, MULTRES
   |  jmp ->fff_res_
   |
   |.ffunc_1 type
@@ -1807,7 +1807,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |7:
   |  mov PC, SAVE_PC
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |.if resume
   |  mov RAa, -8
   |.else
@@ -1891,7 +1891,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->fff_res1:
   |  mov RD, 1+1
   |->fff_res:
-  |  mov NRESULTS, RD
+  |  mov MULTRES, RD
   |->fff_res_:
   |  test PC, FRAME_TYPE
   |  jnz >7
@@ -2528,7 +2528,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov ARG1, L:RB
   |.endif
   |  call aword CFUNC:RC->f		// (lua_State *L)
-  |  // Either throws an error or recovers and returns 0 or NRESULTS (+1).
+  |  // Either throws an error or recovers and returns 0 or MULTRES (+1).
   |  test RC, RC;  jnz >3
   |1:  // Returned 0: retry fast path.
   |  mov RA, L:RB->base
@@ -2547,7 +2547,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jne ->vmeta_call
   |  jmp aword LFUNC:RB->gate		// Retry the call.
   |
-  |3:  // Returned NRESULTS (already in RC/RD).
+  |3:  // Returned MULTRES (already in RC/RD).
   |  mov RA, L:RB->base
   |  mov BASE, TMP1			// Restore old BASE.
   |  add BASE, RA
@@ -2638,7 +2638,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->cont_hook:				// Continue from hook yield.
   |  add PC, 4
   |  mov RA, [RB-24]
-  |  mov NRESULTS, RA			// Restore NRESULTS for *M ins.
+  |  mov MULTRES, RA			// Restore MULTRES for *M ins.
   |  jmp <4
   |
   |->vm_hotloop:			// Hot loop counter underflow.
@@ -4345,7 +4345,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jnz >7
     |2:
-    |  mov RD, NRESULTS
+    |  mov RD, MULTRES
     if (sse) {
       |  cvtsd2si KBASE, xmm0		// Const is guaranteed to be an int.
     } else {
@@ -4404,7 +4404,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_CALL: case BC_CALLM:
     |  ins_A_C	// RA = base, (RB = nresults+1,) RC = nargs+1 | extra_nargs
     if (op == BC_CALLM) {
-      |  add NARGS:RC, NRESULTS
+      |  add NARGS:RC, MULTRES
     }
     |  lea RA, [BASE+RA*8+8]
     |  mov LFUNC:RB, [RA-8]
@@ -4415,7 +4415,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_CALLMT:
     |  ins_AD	// RA = base, RD = extra_nargs
-    |  add NARGS:RD, NRESULTS
+    |  add NARGS:RD, MULTRES
     |  // Fall through. Assumes BC_CALLMT follows and ins_AD is a no-op.
     break;
   case BC_CALLT:
@@ -4431,7 +4431,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jnz >7
     |1:
     |  mov [BASE-8], LFUNC:RB		// Copy function down, reloaded below.
-    |  mov NRESULTS, NARGS:RD
+    |  mov MULTRES, NARGS:RD
     |  sub NARGS:RD, 1
     |  jz >3
     |2:
@@ -4450,7 +4450,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  cmp byte LFUNC:RB->ffid, 1	// (> FF_C) Calling a fast function?
     |  ja >5
     |4:
-    |  mov NARGS:RD, NRESULTS
+    |  mov NARGS:RD, MULTRES
     |  jmp aword LFUNC:RB->gate
     |
     |5:  // Tailcall to a fast function.
@@ -4530,14 +4530,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  ins_next
     |
     |5:  // Copy all varargs.
-    |  mov NRESULTS, 1			// NRESULTS = 0+1
+    |  mov MULTRES, 1			// MULTRES = 0+1
     |  mov RC, BASE
     |  sub RC, KBASE
     |  jbe <3				// No vararg slots?
     |  mov RB, RC
     |  shr RB, 3
     |  add RB, 1
-    |  mov NRESULTS, RB			// NRESULTS = #varargs+1
+    |  mov MULTRES, RB			// MULTRES = #varargs+1
     |  mov L:RB, SAVE_L
     |  add RC, RA
     |  cmp RC, L:RB->maxstack
@@ -4558,7 +4558,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov L:RB->top, RA
     |  mov SAVE_PC, PC
     |  sub KBASE, BASE			// Need delta, because BASE may change.
-    |  mov FCARG2, NRESULTS
+    |  mov FCARG2, MULTRES
     |  sub FCARG2, 1
     |  mov FCARG1, L:RB
     |  call extern lj_state_growstack@8	// (lua_State *L, int n)
@@ -4572,7 +4572,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_RETM:
     |  ins_AD	// RA = results, RD = extra_nresults
-    |  add RD, NRESULTS			// NRESULTS >=1, so RD >=1.
+    |  add RD, MULTRES			// MULTRES >=1, so RD >=1.
     |  // Fall through. Assumes BC_RET follows and ins_AD is a no-op.
     break;
 
@@ -4583,7 +4583,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     }
     |1:
     |  mov PC, [BASE-4]
-    |  mov NRESULTS, RD			// Save nresults+1.
+    |  mov MULTRES, RD			// Save nresults+1.
     |  test PC, FRAME_TYPE		// Check frame type marker.
     |  jnz >7				// Not returning to a fixarg Lua func?
     switch (op) {
@@ -4601,7 +4601,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  sub RD, 1
       |  jnz <2
       |3:
-      |  mov RD, NRESULTS		// Note: NRESULTS may be >255.
+      |  mov RD, MULTRES		// Note: MULTRES may be >255.
       |  movzx RB, PC_RB		// So cannot compare with RDL!
       |5:
       |  cmp RB, RD			// More results expected?
