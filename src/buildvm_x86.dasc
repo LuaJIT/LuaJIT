@@ -618,13 +618,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  // (void *cframe, int errcode)
   |.if X64
-  |  and CARG1, CFRAME_RAWMASK
   |  mov eax, CARG2d			// Error return status for vm_pcall.
   |  mov rsp, CARG1
   |.else
   |  mov ecx, [esp+4]
   |  mov eax, [esp+8]			// Error return status for vm_pcall.
-  |  and ecx, CFRAME_RAWMASK
   |  mov esp, ecx
   |.endif
   |  mov L:RB, SAVE_L
@@ -2618,24 +2616,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  test RDL, LUA_MASKLINE
   |  jz >5
   |1:
-  |.if X64
   |  mov L:RB, SAVE_L
-  |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
-  |  mov CARG3d, NRESULTS		// Dynamic top for *M instructions.
-  |  mov CARG2d, PC
-  |  mov CARG1d, L:RB
-  |.else
-  |  mov L:RB, SAVE_L
-  |  mov RD, NRESULTS			// Dynamic top for *M instructions.
-  |  mov ARG3, RD
   |  mov L:RB->base, BASE
-  |  mov ARG2, PC
-  |  mov ARG1, L:RB
-  |.endif
+  |  mov FCARG2, PC			// Caveat: FCARG2 == BASE
+  |  mov FCARG1, L:RB
   |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
-  |  call extern lj_dispatch_ins  // (lua_State *L, BCIns *pc, int nres)
-  |4:
+  |  call extern lj_dispatch_ins@8	// (lua_State *L, BCIns *pc)
+  |3:
   |  mov BASE, L:RB->base
+  |4:
   |  movzx RA, PC_RA
   |5:
   |  movzx OP, PC_OP
@@ -2645,6 +2634,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.else
   |  jmp aword [DISPATCH+OP*4+GG_DISP_STATIC*4]	// Re-dispatch to static ins.
   |.endif
+  |
+  |->cont_hook:				// Continue from hook yield.
+  |  add PC, 4
+  |  mov RA, [RB-24]
+  |  mov NRESULTS, RA			// Restore NRESULTS for *M ins.
+  |  jmp <4
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
@@ -2658,7 +2653,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov [DISPATCH+DISPATCH_J(L)], L:RB
   |  mov SAVE_PC, PC
   |  call extern lj_trace_hot@8		// (jit_State *J, const BCIns *pc)
-  |  jmp <4
+  |  jmp <3
   |.endif
 #endif
   |

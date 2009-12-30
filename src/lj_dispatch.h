@@ -59,6 +59,6 @@ LJ_FUNC void lj_dispatch_init(GG_State *GG);
 LJ_FUNC void lj_dispatch_update(global_State *g);
 
 /* Instruction dispatch callback for instr/line hooks or when recording. */
-LJ_FUNCA void lj_dispatch_ins(lua_State *L, const BCIns *pc, uint32_t nres);
+LJ_FUNCA void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc);
 
 #endif

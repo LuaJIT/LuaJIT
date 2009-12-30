@@ -470,7 +470,7 @@ uncaught:
   L->cframe = NULL;
   if (cframe_canyield(cf)) {  /* Resume? */
     unwindstack(L, L->top, errcode);
-    lj_vm_unwind_c(cf, errcode);
+    lj_vm_unwind_c(cframe_raw(cf), errcode);
   }
   /* Better rethrow on main thread than panic. */
   {

@@ -63,6 +63,7 @@ enum {
 #define CFRAME_OFS_PREV		(13*4)
 #define CFRAME_OFS_L		(12*4)
 #define CFRAME_OFS_PC		(6*4)
+#define CFRAME_OFS_MULTRES	(5*4)
 #define CFRAME_SIZE		(12*4)
 #elif LJ_TARGET_X64
 #if _WIN64
@@ -71,6 +72,7 @@ enum {
 #define CFRAME_OFS_L		(32*4)
 #define CFRAME_OFS_ERRF		(31*4)
 #define CFRAME_OFS_NRES		(30*4)
+#define CFRAME_OFS_MULTRES	(29*4)
 #define CFRAME_SIZE		(14*8)
 #else
 #define CFRAME_OFS_PREV		(4*8)
@@ -78,6 +80,7 @@ enum {
 #define CFRAME_OFS_L		(4*4)
 #define CFRAME_OFS_ERRF		(3*4)
 #define CFRAME_OFS_NRES		(2*4)
+#define CFRAME_OFS_MULTRES	(1*4)
 #define CFRAME_SIZE		(12*8)
 #endif
 #else
@@ -91,6 +94,7 @@ enum {
 #define cframe_errfunc(cf)	(*(int32_t *)(((char *)(cf))+CFRAME_OFS_ERRF))
 #define cframe_nres(cf)		(*(int32_t *)(((char *)(cf))+CFRAME_OFS_NRES))
 #define cframe_prev(cf)		(*(void **)(((char *)(cf))+CFRAME_OFS_PREV))
+#define cframe_multres(cf)  (*(uint32_t *)(((char *)(cf))+CFRAME_OFS_MULTRES))
 #define cframe_L(cf) \
   (&gcref(*(GCRef *)(((char *)(cf))+CFRAME_OFS_L))->th)
 #define cframe_pc(cf) \

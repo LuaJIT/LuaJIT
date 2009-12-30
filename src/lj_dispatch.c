@@ -258,15 +258,16 @@ static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
 }
 
 /* Instruction dispatch callback for instr/line hooks or when recording. */
-void lj_dispatch_ins(lua_State *L, const BCIns *pc, uint32_t nres)
+void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 {
   GCfunc *fn = curr_func(L);
   GCproto *pt = funcproto(fn);
-  BCReg slots = cur_topslot(pt, pc, nres);
-  global_State *g = G(L);
   void *cf = cframe_raw(L->cframe);
   const BCIns *oldpc = cframe_pc(cf);
+  global_State *g = G(L);
+  BCReg slots;
   setcframe_pc(cf, pc);
+  slots = cur_topslot(pt, pc, cframe_multres(cf));
   L->top = L->base + slots;  /* Fix top. */
 #if LJ_HASJIT
   {

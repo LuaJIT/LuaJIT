@@ -1056,19 +1056,32 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
 LUA_API int lua_yield(lua_State *L, int nresults)
 {
   void *cf = L->cframe;
-  cTValue *f;
-  if (!cframe_canyield(cf))
-    lj_err_msg(L, LJ_ERR_CYIELD);
-  f = L->top - nresults;
-  if (f > L->base) {
-    TValue *t = L->base;
-    while (--nresults >= 0) copyTV(L, t++, f++);
-    L->top = t;
+  global_State *g = G(L);
+  if (cframe_canyield(cf)) {
+    cf = cframe_raw(cf);
+    if (!hook_active(g)) {  /* Regular yield: move results down if needed. */
+      cTValue *f = L->top - nresults;
+      if (f > L->base) {
+	TValue *t = L->base;
+	while (--nresults >= 0) copyTV(L, t++, f++);
+	L->top = t;
+      }
+    } else {  /* Yield from hook: add a pseudo-frame. */
+      TValue *top = L->top;
+      hook_leave(g);
+      top->u64 = cframe_multres(cf);
+      setcont(top+1, lj_cont_hook);
+      setframe_pc(top+1, cframe_pc(cf)-1);
+      setframe_gc(top+2, obj2gco(L));
+      top[2].fr.tp.ftsz = cast_int((char *)(top+3)-(char *)L->base)+FRAME_CONT;
+      L->top = L->base = top+3;
+    }
+    L->cframe = NULL;
+    L->status = LUA_YIELD;
+    lj_vm_unwind_c(cf, LUA_YIELD);
   }
-  L->cframe = NULL;
-  L->status = LUA_YIELD;
-  lj_vm_unwind_c(cf, LUA_YIELD);
-  return -1;  /* unreachable */
+  lj_err_msg(L, LJ_ERR_CYIELD);
+  return 0;  /* unreachable */
 }
 
 LUA_API int lua_resume(lua_State *L, int nargs)
