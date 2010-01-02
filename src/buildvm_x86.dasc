@@ -213,18 +213,16 @@
 |
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
 |.macro saveregs
-|  push rbp; push rbx; push r15; push r14; push r13; push r12
+|  push rbp; push rbx; push r15; push r14
 |  sub rsp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
-|  pop r12; pop r13; pop r14; pop r15; pop rbx; pop rbp
+|  pop r14; pop r15; pop rbx; pop rbp
 |.endmacro
 |
 |//----- 16 byte aligned,
-|.define SAVE_RET,	aword [rsp+aword*11]	//<-- rsp entering interpreter.
-|.define SAVE_R6,	aword [rsp+aword*10]
-|.define SAVE_R5,	aword [rsp+aword*9]
+|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
 |.define SAVE_R4,	aword [rsp+aword*8]
 |.define SAVE_R3,	aword [rsp+aword*7]
 |.define SAVE_R2,	aword [rsp+aword*6]
@@ -621,10 +619,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov eax, CARG2d			// Error return status for vm_pcall.
   |  mov rsp, CARG1
   |.else
-  |  mov ecx, [esp+4]
-  |  mov eax, [esp+8]			// Error return status for vm_pcall.
-  |  mov esp, ecx
+  |  mov eax, FCARG2			// Error return status for vm_pcall.
+  |  mov esp, FCARG1
   |.endif
+  |->vm_unwind_c_eh:			// Landing pad for external unwinder.
   |  mov L:RB, SAVE_L
   |  mov GL:RB, L:RB->glref
   |  mov dword GL:RB->vmstate, ~LJ_VMST_C
@@ -636,10 +634,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  and CARG1, CFRAME_RAWMASK
   |  mov rsp, CARG1
   |.else
-  |  mov ecx, [esp+4]
-  |  and ecx, CFRAME_RAWMASK
-  |  mov esp, ecx
+  |  and FCARG1, CFRAME_RAWMASK
+  |  mov esp, FCARG1
   |.endif
+  |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  mov L:RB, SAVE_L
   |  mov RAa, -8			// Results start at BASE+RA = BASE-8.
   |  mov RD, 1+1			// Really 1+2 results, incr. later.
@@ -718,7 +716,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB, SAVE_L
   |  mov RA, INARG_BASE			// Caveat: overlaps SAVE_CFRAME!
   |.endif
-  |  mov PC, FRAME_C
+  |  mov PC, FRAME_CP
   |  xor RD, RD
   |  lea KBASEa, [esp+CFRAME_RESUME]
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
@@ -4689,7 +4687,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 	|  movsd FOR_IDX, xmm0
 	|  test RB, RB; js >3
       } else {
-        |  jl >3
+	|  jl >3
       }
       |  ucomisd xmm1, xmm0
       |1:
@@ -4876,8 +4874,6 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
 	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
 	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
-	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
-	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
 #else
 	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
 	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
@@ -4919,8 +4915,6 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
 	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
 	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
-	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
-	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
 #else
 	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
 	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
@@ -4971,8 +4965,6 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
 	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
 	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
-	"\t.byte 0x8d\n\t.uleb128 0x6\n"	/* offset r13 */
-	"\t.byte 0x8c\n\t.uleb128 0x7\n"	/* offset r12 */
 #else
 	"\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
 	"\t.byte 0x87\n\t.byte 0x3\n"		/* offset edi */

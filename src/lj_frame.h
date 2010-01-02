@@ -81,7 +81,7 @@ enum {
 #define CFRAME_OFS_ERRF		(3*4)
 #define CFRAME_OFS_NRES		(2*4)
 #define CFRAME_OFS_MULTRES	(1*4)
-#define CFRAME_SIZE		(12*8)
+#define CFRAME_SIZE		(10*8)
 #endif
 #else
 #error "Missing CFRAME_* definitions for this architecture"

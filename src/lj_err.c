@@ -20,6 +20,63 @@
 #include "lj_trace.h"
 #include "lj_vm.h"
 
+/*
+** LuaJIT can either use internal or external frame unwinding:
+**
+** - Internal frame unwinding (INT) is free-standing and doesn't require
+**   any OS or library support.
+**
+** - External frame unwinding (EXT) uses the system-provided unwind handler.
+**
+** Pros and Cons:
+**
+** - EXT requires unwind tables for *all* functions on the C stack between
+**   the pcall/catch and the error/throw. This is the default on x64,
+**   but needs to be manually enabled on x86 for non-C++ code.
+**
+** - INT is faster when actually throwing errors (but this happens rarely).
+**   Setting up error handlers is zero-cost in any case.
+**
+** - EXT provides full interoperability with C++ exceptions. You can throw
+**   Lua errors or C++ exceptions through a mix of Lua frames and C++ frames.
+**   C++ destructors are called as needed. C++ exceptions caught by pcall
+**   are converted to the string "C++ exception". Lua errors can be caught
+**   with catch (...) in C++.
+**
+** - INT has only limited support for automatically catching C++ exceptions
+**   on POSIX systems using DWARF2 stack unwinding. Other systems may use
+**   the wrapper function feature. Lua errors thrown through C++ frames
+**   cannot be caught by C++ code and C++ destructors are not run.
+**
+** INT is the default on x86 systems, EXT is the default on x64 systems.
+**
+** EXT can only be manually enabled on POSIX/x86 systems using DWARF2 stack
+** unwinding with -DLUAJIT_UNWIND_EXTERNAL. *All* C code must be compiled
+** with -funwind-tables (or -fexceptions). This includes LuaJIT itself (set
+** TARGET_CFLAGS), all of your C/Lua binding code, all loadable C modules
+** and all C libraries that have callbacks which may be used to call back
+** into Lua. C++ code must *not* be compiled with -fno-exceptions.
+**
+** EXT cannot be enabled on WIN32 since system exceptions use code-driven SEH.
+** EXT is mandatory on WIN64 since the calling convention has an abundance
+** of callee-saved registers (rbx, rbp, rsi, rdi, r12-r15, xmm6-xmm15).
+** EXT is mandatory on POSIX/x64 since the interpreter doesn't save r12/r13.
+*/
+
+#if defined(__ELF__) || defined(__MACH__)
+#if LJ_TARGET_X86
+#ifdef LUAJIT_UNWIND_EXTERNAL
+#define LJ_UNWIND_EXT	1
+#endif
+#elif LJ_TARGET_X64
+#define LJ_UNWIND_EXT	1
+#endif
+#elif defined(LUA_USE_WIN)
+#if LJ_TARGET_X64
+#define LJ_UNWIND_EXT	1
+#endif
+#endif
+
 /* -- Error messages ------------------------------------------------------ */
 
 /* Error message strings. */
@@ -374,7 +431,233 @@ LUA_API int lua_getstack(lua_State *L, int level, lua_Debug *ar)
   }
 }
 
+/* -- Internal frame unwinding -------------------------------------------- */
+
+/* Unwind Lua stack and move error message to new top. */
+LJ_NOINLINE static void unwindstack(lua_State *L, TValue *top)
+{
+  lj_func_closeuv(L, top);
+  if (top < L->top-1) {
+    copyTV(L, top, L->top-1);
+    L->top = top+1;
+  }
+  lj_state_relimitstack(L);
+}
+
+/* Unwind until stop frame. Optionally cleanup frames. */
+static void *err_unwind(lua_State *L, void *stopcf, int errcode)
+{
+  TValue *frame = L->base-1;
+  void *cf = L->cframe;
+  while (cf) {
+    int32_t nres = cframe_nres(cframe_raw(cf));
+    if (nres < 0) {  /* C frame without Lua frame? */
+      TValue *top = restorestack(L, -nres);
+      if (frame < top) {  /* Frame reached? */
+	if (errcode) {
+	  L->cframe = cframe_prev(cf);
+	  L->base = frame+1;
+	  unwindstack(L, top);
+	}
+	return cf;
+      }
+    }
+    if (frame <= L->stack)
+      break;
+    switch (frame_typep(frame)) {
+    case FRAME_LUA:  /* Lua frame. */
+    case FRAME_LUAP:
+      frame = frame_prevl(frame);
+      break;
+    case FRAME_C:  /* C frame. */
+#if LJ_UNWIND_EXT
+      if (errcode) {
+	L->cframe = cframe_prev(cf);
+	L->base = frame_prevd(frame) + 1;
+	unwindstack(L, frame);
+      } else if (cf != stopcf) {
+	cf = cframe_prev(cf);
+	frame = frame_prevd(frame);
+	break;
+      }
+      return NULL;  /* Continue unwinding. */
+#else
+      UNUSED(stopcf);
+      cf = cframe_prev(cf);
+      frame = frame_prevd(frame);
+      break;
+#endif
+    case FRAME_CP:  /* Protected C frame. */
+      if (cframe_canyield(cf)) {  /* Resume? */
+	if (errcode) {
+	  L->cframe = NULL;
+	  L->status = cast_byte(errcode);
+	}
+	return cframe_raw(cf);
+      }
+      if (errcode) {
+	L->cframe = cframe_prev(cf);
+	L->base = frame_prevd(frame) + 1;
+	unwindstack(L, frame);
+      }
+      return cf;
+    case FRAME_CONT:  /* Continuation frame. */
+    case FRAME_VARG:  /* Vararg frame. */
+      frame = frame_prevd(frame);
+      break;
+    case FRAME_PCALL:  /* FF pcall() frame. */
+      if (errcode)
+	hook_leave(G(L));
+      /* fallthrough */
+    case FRAME_PCALLH:  /* FF pcall() frame inside hook. */
+      if (errcode) {
+	L->cframe = cf;
+	L->base = frame_prevd(frame) + 1;
+	unwindstack(L, L->base);
+	return NULL;  /* Call special handler. */
+      }
+      return cf;
+    }
+  }
+  /* No C frame. */
+  if (errcode) {
+    L->cframe = NULL;
+    L->base = L->stack+1;
+    unwindstack(L, L->base);
+    if (G(L)->panic)
+      G(L)->panic(L);
+    exit(EXIT_FAILURE);
+  }
+  return L;  /* Anything not-NULL will do. */
+}
+
+/* -- External frame unwinding -------------------------------------------- */
+
+#if defined(__ELF__) || defined(__MACH__)
+
+#include <unwind.h>
+
+#define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
+#define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (_Unwind_Exception_Class)(c))
+#define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
+#define LJ_UEXCLASS_ERRCODE(cl)	(cast_int((cl) & 0xff))
+
+/* DWARF2 personality handler referenced from interpreter .eh_frame. */
+LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
+  _Unwind_Exception_Class uexclass, struct _Unwind_Exception *uex,
+  struct _Unwind_Context *ctx)
+{
+  void *cf;
+  lua_State *L;
+  if (version != 1)
+    return _URC_FATAL_PHASE1_ERROR;
+  UNUSED(uexclass);
+  cf = (void *)_Unwind_GetCFA(ctx);
+  L = cframe_L(cf);
+  if ((actions & _UA_SEARCH_PHASE)) {
+#if LJ_UNWIND_EXT
+    if (err_unwind(L, cf, 0) == NULL)
+      return _URC_CONTINUE_UNWIND;
+#endif
+    if (!LJ_UEXCLASS_CHECK(uexclass)) {
+      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+    }
+    return _URC_HANDLER_FOUND;
+  }
+  if ((actions & _UA_CLEANUP_PHASE)) {
+    int errcode;
+    if (LJ_UEXCLASS_CHECK(uexclass)) {
+      errcode = LJ_UEXCLASS_ERRCODE(uexclass);
+    } else {
+      if ((actions & _UA_HANDLER_FRAME))
+	_Unwind_DeleteException(uex);
+      errcode = LUA_ERRRUN;
+    }
+#if LJ_UNWIND_EXT
+    if (err_unwind(L, cf, errcode)) {
+      _Unwind_SetGR(ctx, 0, errcode);
+      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_c_eh);
+      return _URC_INSTALL_CONTEXT;
+    } else if ((actions & _UA_HANDLER_FRAME)) {
+      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_ff_eh);
+      return _URC_INSTALL_CONTEXT;
+    }
+#else
+    /* This is not the proper way to escape from the unwinder. We get away
+    ** with it on x86 because the interpreter restores all callee-saved regs.
+    */
+    lj_err_throw(L, errcode);
+#endif
+  }
+  return _URC_CONTINUE_UNWIND;
+}
+
+#if LJ_UNWIND_EXT
+/* NYI: this is not thread-safe. */
+static struct _Unwind_Exception static_uex;
+
+/* Raise DWARF2 exception. */
+static void err_raise_ext(int errcode)
+{
+  static_uex.exception_class = LJ_UEXCLASS_MAKE(errcode);
+  static_uex.exception_cleanup = NULL;
+  _Unwind_RaiseException(&static_uex);
+}
+#endif
+
+#elif defined(_WIN64)
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#define LJ_EXCODE		((DWORD)0x024c4a00)
+#define LJ_EXCODE_MAKE(c)	(LJ_EXCODE | (DWORD)(c))
+#define LJ_EXCODE_CHECK(cl)	(((cl) ^ LJ_EXCODE) <= 0xff)
+#define LJ_EXCODE_ERRCODE(cl)	(cast_int((cl) & 0xff))
+
+/* NYI: Win64 exception handler for interpreter frame. */
+
+/* Raise Windows exception. */
+static void err_raise_ext(int errcode)
+{
+  RaiseException(LJ_EXCODE_MAKE(errcode), 0, 0, NULL);
+}
+
+#endif
+
 /* -- Error handling ------------------------------------------------------ */
+
+/* Throw error. Find catch frame, unwind stack and continue. */
+LJ_NOINLINE void lj_err_throw(lua_State *L, int errcode)
+{
+  global_State *g = G(L);
+  lj_trace_abort(g);
+  setgcrefnull(g->jit_L);
+  L->status = 0;
+#if LJ_UNWIND_EXT
+  err_raise_ext(errcode);
+  /*
+  ** A return from this function signals a corrupt C stack that cannot be
+  ** unwound. We have no choice but to call the panic function and exit.
+  **
+  ** Usually this is caused by a C function without unwind information.
+  ** This should never happen on x64, but may happen on x86 if you've
+  ** manually enabled LUAJIT_UNWIND_EXTERNAL and forgot to recompile *every*
+  ** non-C++ file with -funwind-tables.
+  */
+  if (G(L)->panic)
+    G(L)->panic(L);
+#else
+  {
+    void *cf = err_unwind(L, NULL, errcode);
+    if (cf)
+      lj_vm_unwind_c(cf, errcode);
+    else
+      lj_vm_unwind_ff(cframe_raw(L->cframe));
+  }
+#endif
+  exit(EXIT_FAILURE);
+}
 
 /* Return string object for error message. */
 LJ_NOINLINE GCstr *lj_err_str(lua_State *L, ErrMsg em)
@@ -382,107 +665,13 @@ LJ_NOINLINE GCstr *lj_err_str(lua_State *L, ErrMsg em)
   return lj_str_newz(L, err2msg(em));
 }
 
-/* Unwind Lua stack and add error message on top. */
-LJ_NOINLINE static void unwindstack(lua_State *L, TValue *top, int errcode)
+/* Out-of-memory error. */
+LJ_NOINLINE void lj_err_mem(lua_State *L)
 {
-  lj_func_closeuv(L, top);
-  switch (errcode) {
-  case LUA_ERRMEM:
-    setstrV(L, top, lj_err_str(L, LJ_ERR_ERRMEM));
-    break;
-  case LUA_ERRERR:
-    setstrV(L, top, lj_err_str(L, LJ_ERR_ERRERR));
-    break;
-  case LUA_ERRSYNTAX:
-  case LUA_ERRRUN:
-    copyTV(L, top, L->top - 1);
-    break;
-  default:
-    lua_assert(0);
-    break;
-  }
-  L->top = top+1;
-  lj_state_relimitstack(L);
-}
-
-/* Throw error. Find catch frame, unwind stack and continue. */
-LJ_NOINLINE void lj_err_throw(lua_State *L, int errcode)
-{
-  TValue *frame = L->base-1;
-  void *cf = L->cframe;
-  global_State *g = G(L);
-  if (L->status == LUA_ERRERR+1) {  /* Don't touch the stack during lua_open. */
-    lj_vm_unwind_c(cf, errcode);
-    goto uncaught;  /* unreachable */
-  }
-  lj_trace_abort(g);
-  setgcrefnull(g->jit_L);
-  L->status = 0;
-  while (cf) {
-    if (cframe_nres(cframe_raw(cf)) < 0) {  /* cframe without frame? */
-      TValue *top = restorestack(L, -cframe_nres(cf));
-      if (frame < top) {
-	L->cframe = cframe_prev(cf);
-	L->base = frame+1;
-	unwindstack(L, top, errcode);
-	lj_vm_unwind_c(cf, errcode);
-	goto uncaught;  /* unreachable */
-      }
-    }
-    if (frame <= L->stack)
-      break;
-    switch (frame_typep(frame)) {
-    case FRAME_LUA:
-    case FRAME_LUAP:
-      frame = frame_prevl(frame);
-      break;
-    case FRAME_C:
-      if (cframe_canyield(cf)) goto uncaught;
-      cf = cframe_prev(cf);
-      /* fallthrough */
-    case FRAME_CONT:
-    case FRAME_VARG:
-      frame = frame_prevd(frame);
-      break;
-    case FRAME_CP:
-      L->cframe = cframe_prev(cf);
-      L->base = frame_prevd(frame) + 1;
-      unwindstack(L, frame, errcode);
-      lj_vm_unwind_c(cf, errcode);
-      goto uncaught;  /* unreachable */
-    case FRAME_PCALL:
-      hook_leave(g);
-      /* fallthrough */
-    case FRAME_PCALLH:
-      L->cframe = cf;
-      L->base = frame_prevd(frame) + 1;
-      unwindstack(L, L->base, errcode);
-      lj_vm_unwind_ff(cf);
-      goto uncaught;  /* unreachable */
-    default:
-      lua_assert(0);
-      goto uncaught;
-    }
-  }
-  /* No catch frame found. Must be a resume or an unprotected error. */
-uncaught:
-  L->status = cast_byte(errcode);
-  L->cframe = NULL;
-  if (cframe_canyield(cf)) {  /* Resume? */
-    unwindstack(L, L->top, errcode);
-    lj_vm_unwind_c(cframe_raw(cf), errcode);
-  }
-  /* Better rethrow on main thread than panic. */
-  {
-    if (L != mainthread(g))
-      lj_err_throw(mainthread(g), errcode);
-    if (g->panic) {
-      L->base = L->stack+1;
-      unwindstack(L, L->base, errcode);
-      g->panic(L);
-    }
-  }
-  exit(EXIT_FAILURE);
+  if (L->status == LUA_ERRERR+1)  /* Don't touch the stack during lua_open. */
+    lj_vm_unwind_c(L->cframe, LUA_ERRMEM);
+  setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));
+  lj_err_throw(L, LUA_ERRMEM);
 }
 
 /* Find error function for runtime errors. Requires an extra stack traversal. */
@@ -507,7 +696,6 @@ static ptrdiff_t finderrfunc(lua_State *L)
       frame = frame_prevl(frame);
       break;
     case FRAME_C:
-      if (cframe_canyield(cf)) return 0;
       cf = cframe_prev(cf);
       /* fallthrough */
     case FRAME_CONT:
@@ -515,6 +703,7 @@ static ptrdiff_t finderrfunc(lua_State *L)
       frame = frame_prevd(frame);
       break;
     case FRAME_CP:
+      if (cframe_canyield(cf)) return 0;
       if (cframe_errfunc(cf) >= 0)
 	return cframe_errfunc(cf);
       frame = frame_prevd(frame);
@@ -540,8 +729,10 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
     TValue *errfunc = restorestack(L, ef);
     TValue *top = L->top;
     lj_trace_abort(G(L));
-    if (!tvisfunc(errfunc) || L->status == LUA_ERRERR)
+    if (!tvisfunc(errfunc) || L->status == LUA_ERRERR) {
+      setstrV(L, top-1, lj_err_str(L, LJ_ERR_ERRERR));
       lj_err_throw(L, LUA_ERRERR);
+    }
     L->status = LUA_ERRERR;
     copyTV(L, top, top-1);
     copyTV(L, top-1, errfunc);
@@ -762,48 +953,4 @@ LUALIB_API int luaL_error(lua_State *L, const char *fmt, ...)
   lj_err_callermsg(L, msg);
   return 0;  /* unreachable */
 }
-
-/* -- C++ exception support ----------------------------------------------- */
-
-#if defined(__ELF__) || defined(__MACH__)
-typedef enum
-{
-  _URC_NO_REASON,
-  _URC_FOREIGN_EXCEPTION_CAUGHT,
-  _URC_FATAL_PHASE2_ERROR,
-  _URC_FATAL_PHASE1_ERROR,
-  _URC_NORMAL_STOP,
-  _URC_END_OF_STACK,
-  _URC_HANDLER_FOUND,
-  _URC_INSTALL_CONTEXT,
-  _URC_CONTINUE_UNWIND
-} _Unwind_Reason_Code;
-
-#define _UA_SEARCH_PHASE	1
-#define _UA_CLEANUP_PHASE	2
-#define _UA_HANDLER_FRAME	4
-#define _UA_FORCE_UNWIND	8
-#define _UA_END_OF_STACK	16
-
-extern void *_Unwind_GetCFA(void *ctx);
-extern void _Unwind_DeleteException(void *uex);
-
-/* DWARF2 personality handler referenced from .eh_frame. */
-LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions, uint64_t uexclass,
-				 void *uex, void *ctx)
-{
-  if (version != 1)
-    return _URC_FATAL_PHASE1_ERROR;
-  UNUSED(uexclass);
-  if ((actions & _UA_SEARCH_PHASE))
-    return _URC_HANDLER_FOUND;
-  if ((actions & _UA_HANDLER_FRAME)) {
-    void *cf = _Unwind_GetCFA(ctx);
-    lua_State *L = cframe_L(cf);
-    _Unwind_DeleteException(uex);
-    lj_err_msg(L, LJ_ERR_ERRCPP);
-  }
-  return _URC_CONTINUE_UNWIND;
-}
-#endif
 
