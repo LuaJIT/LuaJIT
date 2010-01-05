@@ -67,13 +67,13 @@ enum {
 #define CFRAME_SIZE		(12*4)
 #elif LJ_TARGET_X64
 #if _WIN64
-#define CFRAME_OFS_PREV		(17*8)
-#define CFRAME_OFS_PC		(33*4)
-#define CFRAME_OFS_L		(32*4)
-#define CFRAME_OFS_ERRF		(31*4)
-#define CFRAME_OFS_NRES		(30*4)
-#define CFRAME_OFS_MULTRES	(29*4)
-#define CFRAME_SIZE		(14*8)
+#define CFRAME_OFS_PREV		(13*8)
+#define CFRAME_OFS_PC		(25*4)
+#define CFRAME_OFS_L		(24*4)
+#define CFRAME_OFS_ERRF		(23*4)
+#define CFRAME_OFS_NRES		(22*4)
+#define CFRAME_OFS_MULTRES	(21*4)
+#define CFRAME_SIZE		(10*8)
 #else
 #define CFRAME_OFS_PREV		(4*8)
 #define CFRAME_OFS_PC		(5*4)
@@ -88,8 +88,8 @@ enum {
 #endif
 
 #define CFRAME_RESUME		1
-#define CFRAME_CANYIELD		((intptr_t)(CFRAME_RESUME))
-#define CFRAME_RAWMASK		(~CFRAME_CANYIELD)
+#define CFRAME_UNWIND_FF	2  /* Only used in unwinder. */
+#define CFRAME_RAWMASK		(~(intptr_t)(CFRAME_RESUME|CFRAME_UNWIND_FF))
 
 #define cframe_errfunc(cf)	(*(int32_t *)(((char *)(cf))+CFRAME_OFS_ERRF))
 #define cframe_nres(cf)		(*(int32_t *)(((char *)(cf))+CFRAME_OFS_NRES))
@@ -101,7 +101,8 @@ enum {
   (mref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), const BCIns))
 #define setcframe_pc(cf, pc) \
   (setmref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), (pc)))
-#define cframe_canyield(cf)	((intptr_t)(cf) & CFRAME_CANYIELD)
+#define cframe_canyield(cf)	((intptr_t)(cf) & CFRAME_RESUME)
+#define cframe_unwind_ff(cf)	((intptr_t)(cf) & CFRAME_UNWIND_FF)
 #define cframe_raw(cf)		((void *)((intptr_t)(cf) & CFRAME_RAWMASK))
 #define cframe_Lpc(L)		cframe_pc(cframe_raw(L->cframe))
 

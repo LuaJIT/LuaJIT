@@ -168,28 +168,22 @@
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
 |.macro saveregs
 |  push rbp; push rdi; push rsi; push rbx
-|  push r15; push r14; push r13; push r12
 |  sub rsp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
-|  pop r12; pop r13; pop r14; pop r15
 |  pop rbx; pop rsi; pop rdi; pop rbp
 |.endmacro
 |
-|.define SAVE_CFRAME,	aword [rsp+aword*17]
-|.define SAVE_PC,	dword [rsp+dword*33]
-|.define SAVE_L,	dword [rsp+dword*32]
-|.define SAVE_ERRF,	dword [rsp+dword*31]
-|.define SAVE_NRES,	dword [rsp+dword*30]
-|.define TMP2,		dword [rsp+dword*29]
-|.define TMP1,		dword [rsp+dword*28]
+|.define SAVE_CFRAME,	aword [rsp+aword*13]
+|.define SAVE_PC,	dword [rsp+dword*25]
+|.define SAVE_L,	dword [rsp+dword*24]
+|.define SAVE_ERRF,	dword [rsp+dword*23]
+|.define SAVE_NRES,	dword [rsp+dword*22]
+|.define TMP2,		dword [rsp+dword*21]
+|.define TMP1,		dword [rsp+dword*20]
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by interpreter
-|.define SAVE_RET,	aword [rsp+aword*13]	//<-- rsp entering interpreter.
-|.define SAVE_R8,	aword [rsp+aword*12]
-|.define SAVE_R7,	aword [rsp+aword*11]
-|.define SAVE_R6,	aword [rsp+aword*10]
-|.define SAVE_R5,	aword [rsp+aword*9]
+|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
 |.define SAVE_R4,	aword [rsp+aword*8]
 |.define SAVE_R3,	aword [rsp+aword*7]
 |.define SAVE_R2,	aword [rsp+aword*6]
@@ -202,7 +196,7 @@
 |//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
 |
 |// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [rsp+aword*14]
+|.define TMPQ,		qword [rsp+aword*10]
 |.define MULTRES,	TMP2
 |.define TMPa,		ARG5
 |.define ARG5d,		dword [rsp+aword*4]
@@ -861,10 +855,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov dword [RA+RD*8-4], LJ_TNIL	// Ensure one valid arg.
   |  mov RC, RA				// ... in [RC]
   |  mov PC, [RB-12]			// Restore PC from [cont|PC].
-  |  mov RA, dword [RB-16]
   |.if X64
+  |  movsxd RAa, dword [RB-16]		// May be negative on WIN64 with debug.
   |  lea KBASEa, qword [=>0]
   |  add RAa, KBASEa
+  |.else
+  |  mov RA, dword [RB-16]
   |.endif
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov PROTO:KBASE, LFUNC:KBASE->pt
@@ -1854,7 +1850,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.ffunc coroutine_yield
   |  mov L:RB, SAVE_L
   |  mov [RA-4], PC
-  |  test aword L:RB->cframe, CFRAME_CANYIELD
+  |  test aword L:RB->cframe, CFRAME_RESUME
   |  jz ->fff_fallback
   |  mov L:RB->base, RA
   |  lea RC, [RA+NARGS:RC*8-8]

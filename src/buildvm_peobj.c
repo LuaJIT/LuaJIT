@@ -90,6 +90,7 @@ typedef struct PEsymaux {
 #define PEOBJ_ARCH_TARGET	0x8664
 #define PEOBJ_RELOC_REL32	0x04  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x02
+#define PEOBJ_RELOC_ADDR32NB	0x03
 #define PEOBJ_SYM_PREFIX	""
 #endif
 
@@ -98,7 +99,10 @@ enum {
   PEOBJ_SECT_ABS = -2,
   PEOBJ_SECT_UNDEF = -1,
   PEOBJ_SECT_TEXT,
-  /* TODO: add .pdata/.xdata for x64. */
+#if LJ_TARGET_X64
+  PEOBJ_SECT_PDATA,
+  PEOBJ_SECT_XDATA,
+#endif
   PEOBJ_SECT_RDATA,
   PEOBJ_SECT_RDATA_Z,
   PEOBJ_NSECTIONS
@@ -196,6 +200,24 @@ void emit_peobj(BuildCtx *ctx)
   /* Flags: 60 = read+execute, 50 = align16, 20 = code. */
   pesect[PEOBJ_SECT_TEXT].flags = 0x60500020;
 
+#if LJ_TARGET_X64
+  memcpy(pesect[PEOBJ_SECT_PDATA].name, ".pdata", sizeof(".pdata")-1);
+  pesect[PEOBJ_SECT_PDATA].ofs = sofs;
+  sofs += (pesect[PEOBJ_SECT_PDATA].size = 3*4);
+  pesect[PEOBJ_SECT_PDATA].relocofs = sofs;
+  sofs += (pesect[PEOBJ_SECT_PDATA].nreloc = 3) * PEOBJ_RELOC_SIZE;
+  /* Flags: 40 = read, 30 = align4, 40 = initialized data. */
+  pesect[PEOBJ_SECT_PDATA].flags = 0x40300040;
+
+  memcpy(pesect[PEOBJ_SECT_XDATA].name, ".xdata", sizeof(".xdata")-1);
+  pesect[PEOBJ_SECT_XDATA].ofs = sofs;
+  sofs += (pesect[PEOBJ_SECT_XDATA].size = 8*2+4);  /* See below. */
+  pesect[PEOBJ_SECT_XDATA].relocofs = sofs;
+  sofs += (pesect[PEOBJ_SECT_XDATA].nreloc = 1) * PEOBJ_RELOC_SIZE;
+  /* Flags: 40 = read, 30 = align4, 40 = initialized data. */
+  pesect[PEOBJ_SECT_XDATA].flags = 0x40300040;
+#endif
+
   memcpy(pesect[PEOBJ_SECT_RDATA].name, ".rdata", sizeof(".rdata")-1);
   pesect[PEOBJ_SECT_RDATA].ofs = sofs;
   sofs += (pesect[PEOBJ_SECT_RDATA].size = ctx->npc*sizeof(uint16_t));
@@ -228,6 +250,9 @@ void emit_peobj(BuildCtx *ctx)
 #if !LJ_HASJIT
   pehdr.nsyms -= 7;
 #endif
+#if LJ_TARGET_X64
+  pehdr.nsyms += 1;  /* Symbol for lj_err_unwind_win64. */
+#endif
 
   /* Write PE object header and all sections. */
   owrite(ctx, &pehdr, sizeof(PEheader));
@@ -242,6 +267,41 @@ void emit_peobj(BuildCtx *ctx)
     reloc.type = ctx->reloc[i].type ? PEOBJ_RELOC_REL32 : PEOBJ_RELOC_DIR32;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }
+
+#if LJ_TARGET_X64
+  { /* Write .pdata section. */
+    uint32_t pdata[3];  /* Start of .text, end of .text and .xdata. */
+    PEreloc reloc;
+    pdata[0] = 0; pdata[1] = (uint32_t)ctx->codesz; pdata[2] = 0;
+    owrite(ctx, &pdata, sizeof(pdata));
+    reloc.vaddr = 0; reloc.symidx = 1+2+relocsyms+2+2+1;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+    reloc.vaddr = 4; reloc.symidx = 1+2+relocsyms+2+2+1;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+    reloc.vaddr = 8; reloc.symidx = 1+2+relocsyms+2;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+  }
+  { /* Write .xdata section. */
+    uint16_t xdata[8+2];
+    PEreloc reloc;
+    xdata[0] = 0x01|0x08|0x10;  /* Ver. 1, uhander/ehandler, prolog size 0. */
+    xdata[1] = 5;  /* Number of unwind codes, no frame pointer. */
+    xdata[2] = 0x4200;  /* Stack offset 4*8+8 = aword*5. */
+    xdata[3] = 0x3000;  /* Push rbx. */
+    xdata[4] = 0x6000;  /* Push rsi. */
+    xdata[5] = 0x7000;  /* Push rdi. */
+    xdata[6] = 0x5000;  /* Push rbp. */
+    xdata[7] = 0;  /* Alignment. */
+    xdata[8] = xdata[9] = 0;  /* Relocated address of exception handler. */
+    owrite(ctx, &xdata, sizeof(xdata));
+    reloc.vaddr = sizeof(xdata)-4; reloc.symidx = 1+2+relocsyms+2+2;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+  }
+#endif
 
   /* Write .rdata section. */
   for (i = 0; i < ctx->npc; i++) {
@@ -279,6 +339,14 @@ void emit_peobj(BuildCtx *ctx)
       emit_peobj_sym(ctx, name, 0,
 		     PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
     }
+
+#if LJ_TARGET_X64
+    emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_PDATA);
+    emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_XDATA);
+    emit_peobj_sym(ctx, PEOBJ_SYM_PREFIX "lj_err_unwind_win64", 0,
+		   PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
+#endif
+
     emit_peobj_sym(ctx, PEOBJ_SYM_PREFIX LABEL_ASM_BEGIN, 0,
 		   PEOBJ_SECT_TEXT, PEOBJ_TYPE_NULL, PEOBJ_SCL_EXTERN);
     for (i = nzsym; i < ctx->nsym; i++) {

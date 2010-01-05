@@ -1177,7 +1177,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   dasm_put(Dst, 3443, Dt1(->top), Dt1(->base), Dt8(->upvalue[0].gcr), Dt1(->cframe), Dt1(->status), LUA_YIELD, Dt1(->top), Dt1(->base));
   dasm_put(Dst, 3523, Dt1(->maxstack), Dt1(->top), Dt1(->base), Dt1(->top), DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base));
   dasm_put(Dst, 3631, LUA_YIELD, Dt1(->base), Dt1(->top), Dt1(->top), Dt1(->maxstack), FRAME_TYPE);
-  dasm_put(Dst, 3727, Dt1(->top), Dt1(->base), Dt1(->cframe), CFRAME_CANYIELD, Dt1(->base), Dt1(->top), Dt1(->cframe), LUA_YIELD, Dt1(->status));
+  dasm_put(Dst, 3727, Dt1(->top), Dt1(->base), Dt1(->cframe), CFRAME_RESUME, Dt1(->base), Dt1(->top), Dt1(->cframe), LUA_YIELD, Dt1(->status));
   if (sse) {
     dasm_put(Dst, 3813, 1+1, LJ_TISNUM);
   } else {

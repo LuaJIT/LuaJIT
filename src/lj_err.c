@@ -493,7 +493,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	  L->cframe = NULL;
 	  L->status = cast_byte(errcode);
 	}
-	return cframe_raw(cf);
+	return cf;
       }
       if (errcode) {
 	L->cframe = cframe_prev(cf);
@@ -514,9 +514,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	L->cframe = cf;
 	L->base = frame_prevd(frame) + 1;
 	unwindstack(L, L->base);
-	return NULL;  /* Call special handler. */
       }
-      return cf;
+      return (void *)((intptr_t)cf | CFRAME_UNWIND_FF);
     }
   }
   /* No C frame. */
@@ -528,7 +527,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       G(L)->panic(L);
     exit(EXIT_FAILURE);
   }
-  return L;  /* Anything not-NULL will do. */
+  return L;  /* Anything non-NULL will do. */
 }
 
 /* -- External frame unwinding -------------------------------------------- */
@@ -574,12 +573,12 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
       errcode = LUA_ERRRUN;
     }
 #if LJ_UNWIND_EXT
-    if (err_unwind(L, cf, errcode)) {
+    cf = err_unwind(L, cf, errcode);
+    if (cf) {
       _Unwind_SetGR(ctx, 0, errcode);
-      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_c_eh);
-      return _URC_INSTALL_CONTEXT;
-    } else if ((actions & _UA_HANDLER_FRAME)) {
-      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_ff_eh);
+      _Unwind_SetIP(ctx, (_Unwind_Ptr)(cframe_unwind_ff(cf) ?
+				       lj_vm_unwind_ff_eh :
+				       lj_vm_unwind_c_eh));
       return _URC_INSTALL_CONTEXT;
     }
 #else
@@ -607,20 +606,89 @@ static void err_raise_ext(int errcode)
 
 #elif defined(_WIN64)
 
+/*
+** Someone in Redmond owes me several days of my life. A lot of this is
+** undocumented or just plain wrong on MSDN. Some of it can be gathered
+** from 3rd party docs or must be found by trial-and-error. They really
+** don't want you to write your own language-specific exception handler
+** or to interact gracefully with MSVC. :-(
+**
+** Apparently MSVC doesn't call C++ destructors for foreign exceptions
+** unless you compile your C++ code with /EHa. Unfortunately this means
+** catch (...) also catches things like access violations. The use of
+** _set_se_translator doesn't really help, because it requires /EHa, too.
+*/
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#define LJ_EXCODE		((DWORD)0x024c4a00)
+/* Taken from: http://www.nynaeve.net/?p=99 */
+typedef struct UndocumentedDispatcherContext {
+  ULONG64 ControlPc;
+  ULONG64 ImageBase;
+  PRUNTIME_FUNCTION FunctionEntry;
+  ULONG64 EstablisherFrame;
+  ULONG64 TargetIp;
+  PCONTEXT ContextRecord;
+  PEXCEPTION_ROUTINE LanguageHandler;
+  PVOID HandlerData;
+  PUNWIND_HISTORY_TABLE HistoryTable;
+  ULONG ScopeIndex;
+  ULONG Fill0;
+} UndocumentedDispatcherContext;
+
+#ifdef _MSC_VER
+/* Another wild guess. */
+extern __DestructExceptionObject(EXCEPTION_RECORD *rec, int nothrow);
+#endif
+
+#define LJ_MSVC_EXCODE		((DWORD)0xe06d7363)
+
+#define LJ_EXCODE		((DWORD)0xe24c4a00)
 #define LJ_EXCODE_MAKE(c)	(LJ_EXCODE | (DWORD)(c))
 #define LJ_EXCODE_CHECK(cl)	(((cl) ^ LJ_EXCODE) <= 0xff)
 #define LJ_EXCODE_ERRCODE(cl)	(cast_int((cl) & 0xff))
 
-/* NYI: Win64 exception handler for interpreter frame. */
+/* Win64 exception handler for interpreter frame. */
+LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win64(EXCEPTION_RECORD *rec,
+  void *cf, CONTEXT *ctx, UndocumentedDispatcherContext *dispatch)
+{
+  lua_State *L = cframe_L(cf);
+  if ((rec->ExceptionFlags & 6)) {  /* EH_UNWINDING|EH_EXIT_UNWIND */
+    err_unwind(L, cf, 1);  /* Unwind internal frames. */
+  } else {
+    void *cf2 = err_unwind(L, cf, 0);
+    if (cf2) {  /* We catch it, so start unwinding the upper frames. */
+      int errcode;
+      if (LJ_EXCODE_CHECK(rec->ExceptionCode)) {
+	errcode = LJ_EXCODE_ERRCODE(rec->ExceptionCode);
+      } else if (rec->ExceptionCode == LJ_MSVC_EXCODE) {
+#ifdef _MSC_VER
+	__DestructExceptionObject(rec, 1);
+#endif
+	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+	errcode = LUA_ERRRUN;
+      } else {  /* Don't catch access violations etc. */
+	return ExceptionContinueSearch;
+      }
+      /* Unwind the stack and call all handlers for all lower C frames
+      ** (including ourselves) again with EH_UNWINDING set. Then set
+      ** rsp = cf, rax = errcode and jump to the specified target.
+      */
+      RtlUnwindEx(cf, (void *)(cframe_unwind_ff(cf2) ?
+			       lj_vm_unwind_ff_eh :
+			       lj_vm_unwind_c_eh),
+		  rec, (void *)errcode, ctx, dispatch->HistoryTable);
+      /* RtlUnwindEx should never return. */
+    }
+  }
+  return ExceptionContinueSearch;
+}
 
 /* Raise Windows exception. */
 static void err_raise_ext(int errcode)
 {
-  RaiseException(LJ_EXCODE_MAKE(errcode), 0, 0, NULL);
+  RaiseException(LJ_EXCODE_MAKE(errcode), 1 /* EH_NONCONTINUABLE */, 0, NULL);
 }
 
 #endif
@@ -650,10 +718,10 @@ LJ_NOINLINE void lj_err_throw(lua_State *L, int errcode)
 #else
   {
     void *cf = err_unwind(L, NULL, errcode);
-    if (cf)
-      lj_vm_unwind_c(cf, errcode);
+    if (cframe_unwind_ff(cf))
+      lj_vm_unwind_ff(cframe_raw(cf));
     else
-      lj_vm_unwind_ff(cframe_raw(L->cframe));
+      lj_vm_unwind_c(cframe_raw(cf), errcode);
   }
 #endif
   exit(EXIT_FAILURE);
