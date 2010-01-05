@@ -613,7 +613,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov BASE, L:RB->top		// Need the (realloced) L->top in BASE.
   |  jmp <3
   |
-  |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
+  |->vm_unwind_c@8:			// Unwind C stack, return from vm_pcall.
   |  // (void *cframe, int errcode)
   |.if X64
   |  mov eax, CARG2d			// Error return status for vm_pcall.
@@ -628,7 +628,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov dword GL:RB->vmstate, ~LJ_VMST_C
   |  jmp ->vm_leave_unw
   |
-  |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
+  |->vm_unwind_ff@4:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
   |.if X64
   |  and CARG1, CFRAME_RAWMASK

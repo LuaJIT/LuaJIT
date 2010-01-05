@@ -284,8 +284,18 @@ void emit_peobj(BuildCtx *ctx)
     for (i = nzsym; i < ctx->nsym; i++) {
       int pi = ctx->perm[i];
       if (pi >= ctx->npc) {
-	sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX "%s",
-		ctx->globnames[pi-ctx->npc]);
+	const char *sym = ctx->globnames[pi-ctx->npc];
+	const char *p = strchr(sym, '@');
+	if (p) {
+#ifdef PEOBJ_SYMF_PREFIX
+	  sprintf(name, PEOBJ_SYMF_PREFIX LABEL_PREFIX "%s", sym);
+#else
+	  sprintf(name, LABEL_PREFIX "%s", sym);
+	  name[p+sizeof(LABEL_PREFIX)] = '\0';
+#endif
+	} else {
+	  sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX "%s", sym);
+	}
 	emit_peobj_sym_func(ctx, name, ctx->sym_ofs[pi]);
 #if LJ_HASJIT
       } else {

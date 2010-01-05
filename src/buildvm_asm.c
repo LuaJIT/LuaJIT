@@ -156,7 +156,11 @@ void emit_asm(BuildCtx *ctx)
     int size = (int)(next - prev);
     int32_t stop = next;
     if (pi >= ctx->npc) {
+      char *p;
       sprintf(name, LABEL_PREFIX "%s", ctx->globnames[pi-ctx->npc]);
+      /* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
+      p = strchr(name, '@');
+      if (p) *p = '\0';
       emit_asm_label(ctx, name, size, 1);
 #if LJ_HASJIT
     } else {
