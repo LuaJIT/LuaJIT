@@ -173,7 +173,7 @@ end
 -- Global label name -> global label number. With auto assignment on 1st use.
 local next_global = 10
 local map_global = setmetatable({}, { __index = function(t, name)
-  if not match(name, "^[%a_][%w_]*$") then werror("bad global label") end
+  if not match(name, "^[%a_][%w_@]*$") then werror("bad global label") end
   local n = next_global
   if n > 246 then werror("too many global labels") end
   next_global = n + 1
@@ -198,7 +198,7 @@ local function writeglobals(out, prefix)
   for name, n in pairs(map_global) do t[n] = name end
   out:write("enum {\n")
   for i=10,next_global-1 do
-    out:write("  ", prefix, t[i], ",\n")
+    out:write("  ", prefix, gsub(t[i], "@.*", ""), ",\n")
   end
   out:write("  ", prefix, "_MAX\n};\n")
 end
