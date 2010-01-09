@@ -812,7 +812,7 @@ static const char *aux_upvalue(cTValue *f, uint32_t idx, TValue **val)
   if (isluafunc(fn)) {
     GCproto *pt = funcproto(fn);
     if (idx < pt->sizeuvname) {
-      *val = gcref(fn->l.uvptr[idx])->uv.v;
+      *val = uvval(&gcref(fn->l.uvptr[idx])->uv);
       return strdata(pt->uvname[idx]);
     }
   } else {

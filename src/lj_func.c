@@ -76,9 +76,9 @@ static GCupval *func_finduv(lua_State *L, TValue *slot)
   GCupval *p;
   GCupval *uv;
   /* Search the sorted list of open upvalues. */
-  while (gcref(*pp) != NULL && (p = gco2uv(gcref(*pp)))->v >= slot) {
-    lua_assert(!p->closed && p->v != &p->tv);
-    if (p->v == slot) {  /* Found open upvalue pointing to same slot? */
+  while (gcref(*pp) != NULL && uvval((p = gco2uv(gcref(*pp)))) >= slot) {
+    lua_assert(!p->closed && uvval(p) != &p->tv);
+    if (uvval(p) == slot) {  /* Found open upvalue pointing to same slot? */
       if (isdead(g, obj2gco(p)))  /* Resurrect it, if it's dead. */
 	flipwhite(obj2gco(p));
       return p;
@@ -90,7 +90,7 @@ static GCupval *func_finduv(lua_State *L, TValue *slot)
   newwhite(g, uv);
   uv->gct = ~LJ_TUPVAL;
   uv->closed = 0;  /* Still open. */
-  uv->v = slot;  /* Pointing to the stack slot. */
+  setmref(uv->v, slot);  /* Pointing to the stack slot. */
   /* NOBARRIER: The GCupval is new (marked white) and open. */
   setgcrefr(uv->nextgc, *pp);  /* Insert into sorted list of open upvalues. */
   setgcref(*pp, obj2gco(uv));
@@ -108,9 +108,9 @@ void LJ_FASTCALL lj_func_closeuv(lua_State *L, TValue *level)
   GCupval *uv;
   global_State *g = G(L);
   while (gcref(L->openupval) != NULL &&
-	 (uv = gco2uv(gcref(L->openupval)))->v >= level) {
+	 uvval((uv = gco2uv(gcref(L->openupval)))) >= level) {
     GCobj *o = obj2gco(uv);
-    lua_assert(!isblack(o) && !uv->closed && uv->v != &uv->tv);
+    lua_assert(!isblack(o) && !uv->closed && uvval(uv) != &uv->tv);
     setgcrefr(L->openupval, uv->nextgc);  /* No longer in open list. */
     if (isdead(g, o)) {
       lj_func_freeuv(g, uv);

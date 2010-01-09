@@ -1702,7 +1702,7 @@ static void asm_uref(ASMState *as, IRIns *ir)
     Reg dest = ra_dest(as, ir, RSET_GPR);
     if (irref_isk(ir->op1)) {
       GCfunc *fn = ir_kfunc(IR(ir->op1));
-      TValue **v = &gcref(fn->l.uvptr[ir->op2])->uv.v;
+      MRef *v = &gcref(fn->l.uvptr[ir->op2])->uv.v;
       emit_rma(as, XO_MOV, dest, v);
     } else {
       Reg uv = ra_scratch(as, RSET_GPR);

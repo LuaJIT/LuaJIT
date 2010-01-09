@@ -396,14 +396,13 @@ typedef struct GCupval {
       GCRef next;
     };
   };
-  TValue *v;		/* Points to stack slot (open) or above (closed). */
-#if LJ_32
-  int32_t unusedv;	/* For consistent alignment (32 bit only). */
-#endif
+  MRef v;		/* Points to stack slot (open) or above (closed). */
+  int32_t unusedv;	/* For consistent alignment. */
 } GCupval;
 
 #define uvprev(uv_)	(&gcref((uv_)->prev)->uv)
 #define uvnext(uv_)	(&gcref((uv_)->next)->uv)
+#define uvval(uv_)	(mref((uv_)->v, TValue))
 
 /* -- Function object (closures) ------------------------------------------ */
 

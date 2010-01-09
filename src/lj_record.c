@@ -790,8 +790,8 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   int needbarrier = 0;
   if (!uvp->closed) {
     /* In current stack? */
-    if (uvp->v >= J->L->stack && uvp->v < J->L->maxstack) {
-      int32_t slot = (int32_t)(uvp->v - (J->L->base - J->baseslot));
+    if (uvval(uvp) >= J->L->stack && uvval(uvp) < J->L->maxstack) {
+      int32_t slot = (int32_t)(uvval(uvp) - (J->L->base - J->baseslot));
       if (slot >= 0) {  /* Aliases an SSA slot? */
 	slot -= (int32_t)J->baseslot;  /* Note: slot number may be negative! */
 	/* NYI: add IR to guard that it's still aliasing the same slot. */
@@ -810,7 +810,7 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
     uref = tref_ref(emitir(IRTG(IR_UREFC, IRT_PTR), fn, uv));
   }
   if (val == 0) {  /* Upvalue load */
-    IRType t = itype2irt(uvp->v);
+    IRType t = itype2irt(uvval(uvp));
     TRef res = emitir(IRTG(IR_ULOAD, t), uref, 0);
     if (irtype_ispri(t)) res = TREF_PRI(t);  /* Canonicalize primitive refs. */
     return res;

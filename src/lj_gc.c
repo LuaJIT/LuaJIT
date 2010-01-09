@@ -62,7 +62,7 @@ static void gc_mark(global_State *g, GCobj *o)
     gc_markobj(g, tabref(gco2ud(o)->env));
   } else if (LJ_UNLIKELY(o->gch.gct == ~LJ_TUPVAL)) {
     GCupval *uv = gco2uv(o);
-    gc_marktv(g, uv->v);
+    gc_marktv(g, uvval(uv));
     if (uv->closed)
       gray2black(o);  /* Closed upvalues are never gray. */
   } else if (o->gch.gct != ~LJ_TSTR) {
@@ -102,7 +102,7 @@ static void gc_mark_uv(global_State *g)
   for (uv = uvnext(&g->uvhead); uv != &g->uvhead; uv = uvnext(uv)) {
     lua_assert(uvprev(uvnext(uv)) == uv && uvnext(uvprev(uv)) == uv);
     if (isgray(obj2gco(uv)))
-      gc_marktv(g, uv->v);
+      gc_marktv(g, uvval(uv));
   }
 }
 
@@ -727,16 +727,16 @@ void lj_gc_closeuv(global_State *g, GCupval *uv)
 {
   GCobj *o = obj2gco(uv);
   /* Copy stack slot to upvalue itself and point to the copy. */
-  copyTV(mainthread(g), &uv->tv, uv->v);
-  uv->v = &uv->tv;
+  copyTV(mainthread(g), &uv->tv, uvval(uv));
+  setmref(uv->v, &uv->tv);
   uv->closed = 1;
   setgcrefr(o->gch.nextgc, g->gc.root);
   setgcref(g->gc.root, o);
   if (isgray(o)) {  /* A closed upvalue is never gray, so fix this. */
     if (g->gc.state == GCSpropagate) {
       gray2black(o);  /* Make it black and preserve invariant. */
-      if (tviswhite(uv->v))
-	lj_gc_barrierf(g, o, gcV(uv->v));
+      if (tviswhite(&uv->tv))
+	lj_gc_barrierf(g, o, gcV(&uv->tv));
     } else {
       makewhite(g, o);  /* Make it white, i.e. sweep the upvalue. */
       lua_assert(g->gc.state != GCSfinalize && g->gc.state != GCSpause);
