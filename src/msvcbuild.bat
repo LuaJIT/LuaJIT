@@ -1,5 +1,5 @@
 @rem Script to build LuaJIT with MSVC.
-@rem Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
+@rem Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 @rem
 @rem Open a "Visual Studio .NET Command Prompt", cd to this directory
 @rem and run this script.

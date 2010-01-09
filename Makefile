@@ -9,7 +9,7 @@
 # For MinGW and Cygwin, cd to src and run make with the Makefile there.
 # NYI: add wininstall.bat
 #
-# Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
+# Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 ##############################################################################
 
 MAJVER=  2

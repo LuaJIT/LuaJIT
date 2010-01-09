@@ -1,6 +1,6 @@
 /*
 ** JIT library.
-** Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lib_jit_c

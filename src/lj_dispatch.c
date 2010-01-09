@@ -1,6 +1,6 @@
 /*
 ** Instruction dispatch handling.
-** Copyright (C) 2005-2009 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_dispatch_c
