@@ -1146,12 +1146,12 @@ LJFOLDF(cse_uref)
   if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
     IRRef ref = J->chain[fins->o];
     GCfunc *fn = ir_kfunc(fleft);
-    GCupval *uv = gco2uv(gcref(fn->l.uvptr[fins->op2]));
+    GCupval *uv = gco2uv(gcref(fn->l.uvptr[(fins->op2 >> 8)]));
     while (ref > 0) {
       IRIns *ir = IR(ref);
       if (irref_isk(ir->op1)) {
 	GCfunc *fn2 = ir_kfunc(IR(ir->op1));
-	if (gco2uv(gcref(fn2->l.uvptr[ir->op2])) == uv) {
+	if (gco2uv(gcref(fn2->l.uvptr[(ir->op2 >> 8)])) == uv) {
 	  if (fins->o == IR_UREFO && gcstep_barrier(J, ref))
 	    break;
 	  return ref;

@@ -397,6 +397,8 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 	    local litn = litname[op]
 	    if litn and litn[op2] then
 	      out:write("  ", litn[op2])
+	    elseif op == "UREFO " or op == "UREFC " then
+	      out:write(format("  #%-3d", shr(op2, 8)))
 	    else
 	      out:write(format("  #%-3d", op2))
 	    end

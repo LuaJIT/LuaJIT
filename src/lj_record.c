@@ -781,6 +781,15 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 
 /* -- Upvalue access ------------------------------------------------------ */
 
+/* Shrink disambiguation hash into an 8 bit value. */
+static uint32_t shrink_dhash(uint32_t lo, uint32_t hi)
+{
+  lo ^= hi; hi = lj_rol(hi, 14);
+  lo -= hi; hi = lj_rol(hi, 5);
+  hi ^= lo; hi -= lj_rol(lo, 27);
+  return (hi & 0xff);
+}
+
 /* Record upvalue load/store. */
 static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 {
@@ -788,6 +797,8 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   TRef fn = getcurrf(J);
   IRRef uref;
   int needbarrier = 0;
+  /* Note: this effectively limits LJ_MAX_UPVAL to 127. */
+  uv = (uv << 8) | shrink_dhash(uvp->dhash, uvp->dhash-0x04c11db7);
   if (!uvp->closed) {
     /* In current stack? */
     if (uvval(uvp) >= J->L->stack && uvval(uvp) < J->L->maxstack) {

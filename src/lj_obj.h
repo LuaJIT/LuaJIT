@@ -397,7 +397,7 @@ typedef struct GCupval {
     };
   };
   MRef v;		/* Points to stack slot (open) or above (closed). */
-  int32_t unusedv;	/* For consistent alignment. */
+  uint32_t dhash;	/* Disambiguation hash: dh1 != dh2 => cannot alias. */
 } GCupval;
 
 #define uvprev(uv_)	(&gcref((uv_)->prev)->uv)

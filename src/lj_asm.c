@@ -1105,7 +1105,7 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
     case IR_UREFC:
       if (irref_isk(ir->op1)) {
 	GCfunc *fn = ir_kfunc(IR(ir->op1));
-	GCupval *uv = &gcref(fn->l.uvptr[ir->op2])->uv;
+	GCupval *uv = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv;
 	as->mrm.ofs = ptr2addr(&uv->tv);
 	as->mrm.base = as->mrm.idx = RID_NONE;
 	return;
@@ -1702,7 +1702,7 @@ static void asm_uref(ASMState *as, IRIns *ir)
     Reg dest = ra_dest(as, ir, RSET_GPR);
     if (irref_isk(ir->op1)) {
       GCfunc *fn = ir_kfunc(IR(ir->op1));
-      MRef *v = &gcref(fn->l.uvptr[ir->op2])->uv.v;
+      MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
       emit_rma(as, XO_MOV, dest, v);
     } else {
       Reg uv = ra_scratch(as, RSET_GPR);
@@ -1716,7 +1716,7 @@ static void asm_uref(ASMState *as, IRIns *ir)
 	emit_rmro(as, XO_MOV, dest, uv, offsetof(GCupval, v));
       }
       emit_rmro(as, XO_MOV, uv, func,
-		(int32_t)offsetof(GCfuncL, uvptr) + 4*(int32_t)ir->op2);
+		(int32_t)offsetof(GCfuncL, uvptr) + 4*(int32_t)(ir->op2 >> 8));
     }
   }
 }

@@ -277,12 +277,17 @@ static AliasRet aa_uref(IRIns *refa, IRIns *refb)
 {
   if (refa->o != refb->o)
     return ALIAS_NO;  /* Different UREFx type. */
-  if (refa->op1 != refb->op1)
-    return ALIAS_MAY;  /* Different function. */
-  else if (refa->op2 == refb->op2)
-    return ALIAS_MUST;  /* Same function, same upvalue idx. */
-  else
-    return ALIAS_NO;  /* Same function, different upvalue idx. */
+  if (refa->op1 == refb->op1) {  /* Same function. */
+    if (refa->op2 == refb->op2)
+      return ALIAS_MUST;  /* Same function, same upvalue idx. */
+    else
+      return ALIAS_NO;  /* Same function, different upvalue idx. */
+  } else {  /* Different functions, check disambiguation hash values. */
+    if (((refa->op2 ^ refb->op2) & 0xff))
+      return ALIAS_NO;  /* Upvalues with different hash values cannot alias. */
+    else
+      return ALIAS_MAY;  /* No conclusion can be drawn for same hash value. */
+  }
 }
 
 /* ULOAD forwarding. */
