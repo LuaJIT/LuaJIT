@@ -329,7 +329,7 @@ static size_t propagatemark(global_State *g)
     return sizeof(GCproto) + sizeof(BCIns) * pt->sizebc +
 			     sizeof(GCRef) * pt->sizekgc +
 			     sizeof(lua_Number) * pt->sizekn +
-			     sizeof(int16_t) * pt->sizeuv +
+			     sizeof(uint16_t) * pt->sizeuv +
 			     sizeof(int32_t) * pt->sizelineinfo +
 			     sizeof(VarInfo) * pt->sizevarinfo +
 			     sizeof(GCstr *) * pt->sizeuvname;

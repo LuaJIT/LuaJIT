@@ -358,7 +358,7 @@ typedef struct GCproto {
   GCRef gclist;
   ProtoK k;		/* Split constant array (points to the middle). */
   BCIns *bc;		/* Array of bytecode instructions. */
-  int16_t *uv;		/* Upvalue list. local >= 0. parent uv < 0. */
+  uint16_t *uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
   MSize sizekgc;	/* Number of collectable constants. */
   MSize sizekn;		/* Number of lua_Number constants. */
   uint8_t sizeuv;	/* Number of upvalues. */

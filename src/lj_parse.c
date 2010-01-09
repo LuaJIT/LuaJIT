@@ -1014,7 +1014,7 @@ static uint32_t indexupvalue(FuncState *fs, GCstr *name, ExpDesc *v)
   uint32_t i;
   GCproto *pt = fs->pt;
   for (i = 0; i < fs->nuv; i++) {
-    if (fs->upvalues[i].k == v->k && fs->upvalues[i].info == v->u.s.info) {
+    if (fs->upvalues[i].info == v->u.s.info && fs->upvalues[i].k == v->k) {
       lua_assert(pt->uvname[i] == name);
       return i;
     }
@@ -1171,12 +1171,12 @@ static void collectk(FuncState *fs, GCproto *pt)
 static void collectuv(FuncState *fs, GCproto *pt)
 {
   uint32_t i;
-  pt->uv = lj_mem_newvec(fs->L, fs->nuv, int16_t);
+  pt->uv = lj_mem_newvec(fs->L, fs->nuv, uint16_t);
   pt->sizeuv = fs->nuv;
   for (i = 0; i < pt->sizeuv; i++) {
     uint32_t v = fs->upvalues[i].info;
-    if (fs->upvalues[i].k == VUPVAL) v = ~v;
-    pt->uv[i] = (int16_t)v;
+    if (fs->upvalues[i].k == VLOCAL) v |= 0x8000;
+    pt->uv[i] = (uint16_t)v;
   }
 }
 

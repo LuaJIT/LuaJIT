@@ -51,7 +51,7 @@ void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 		pt->sizekn*(MSize)sizeof(lua_Number);
   lj_mem_free(g, pt->k.gc - nkgc, sizek);
   lj_mem_freevec(g, pt->bc, pt->sizebc, BCIns);
-  lj_mem_freevec(g, pt->uv, pt->sizeuv, int16_t);
+  lj_mem_freevec(g, pt->uv, pt->sizeuv, uint16_t);
   lj_mem_freevec(g, pt->lineinfo, pt->sizelineinfo, int32_t);
   lj_mem_freevec(g, pt->varinfo, pt->sizevarinfo, struct VarInfo);
   lj_mem_freevec(g, pt->uvname, pt->sizeuvname, GCstr *);
@@ -170,7 +170,12 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
   base = L->base;
   for (i = 0; i < nuv; i++) {
     ptrdiff_t v = pt->uv[i];
-    GCupval *uv = v < 0 ? &gcref(puv[~v])->uv : func_finduv(L, base + v);
+    GCupval *uv;
+    if ((v & 0x8000)) {
+      uv = func_finduv(L, base + (v & 0xff));
+    } else {
+      uv = &gcref(puv[v])->uv;
+    }
     setgcref(fn->l.uvptr[i], obj2gco(uv));
   }
   return fn;
