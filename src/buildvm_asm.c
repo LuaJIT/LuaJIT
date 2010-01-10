@@ -23,27 +23,18 @@ static void emit_asm_bytes(BuildCtx *ctx, uint8_t *p, int n)
 }
 
 /* Emit relocation */
-static void emit_asm_reloc(BuildCtx *ctx, BuildReloc *r)
+static void emit_asm_reloc(BuildCtx *ctx, int type, const char *sym)
 {
-  const char *sym = ctx->extnames[r->sym];
-  const char *p = strchr(sym, '@');
-  char buf[80];
-  if (p) {
-    /* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
-    strncpy(buf, sym, p-sym);
-    buf[p-sym] = '\0';
-    sym = buf;
-  }
   switch (ctx->mode) {
   case BUILD_elfasm:
-    if (r->type)
+    if (type)
       fprintf(ctx->fp, "\t.long %s-.-4\n", sym);
     else
       fprintf(ctx->fp, "\t.long %s\n", sym);
     break;
   case BUILD_coffasm:
     fprintf(ctx->fp, "\t.def _%s; .scl 3; .type 32; .endef\n", sym);
-    if (r->type)
+    if (type)
       fprintf(ctx->fp, "\t.long _%s-.-4\n", sym);
     else
       fprintf(ctx->fp, "\t.long _%s\n", sym);
@@ -173,13 +164,21 @@ void emit_asm(BuildCtx *ctx)
       emit_asm_label(ctx, name, size, 1);
     }
     while (rel < ctx->nreloc && ctx->reloc[rel].ofs < stop) {
-      int n = ctx->reloc[rel].ofs - prev;
-      if (ctx->mode == BUILD_machasm && ctx->reloc[rel].type != 0) {
-	emit_asm_reloc_mach(ctx, ctx->code+prev, n,
-			    ctx->extnames[ctx->reloc[rel].sym]);
+      BuildReloc *r = &ctx->reloc[rel];
+      int n = r->ofs - prev;
+      const char *sym = ctx->extnames[r->sym];
+      const char *p = strchr(sym, '@');
+      if (p) {
+	/* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
+	strncpy(name, sym, p-sym);
+	name[p-sym] = '\0';
+	sym = name;
+      }
+      if (ctx->mode == BUILD_machasm && r->type != 0) {
+	emit_asm_reloc_mach(ctx, ctx->code+prev, n, sym);
       } else {
 	emit_asm_bytes(ctx, ctx->code+prev, n);
-	emit_asm_reloc(ctx, &ctx->reloc[rel]);
+	emit_asm_reloc(ctx, r->type, sym);
       }
       prev += n+4;
       rel++;
