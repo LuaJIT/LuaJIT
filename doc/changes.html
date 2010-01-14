@@ -55,6 +55,9 @@ to see whether newer versions are available.
 <div class="major" style="background: #d0d0d0;">
 <h2 id="snap">Development Snapshot</h2>
 <ul>
+<li>Build of preliminary x64 interpreter can be enabled with
+<tt>make "CC=gcc -m64"</tt>.
+Only works on Linux/x64. Does not work on WIN64 or OSX/x64 (yet).</li>
 <li>Implement yield from C hooks.</li>
 <li>Add abstract C call handling to IR.</li>
 <li>Improve KNUM fuse vs. load heuristics.</li>

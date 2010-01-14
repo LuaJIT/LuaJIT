@@ -67,9 +67,15 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #define DASM_ALIGNED_WRITES	1
 
 /* Embed architecture-specific DynASM encoder and backend. */
-#if LJ_TARGET_X86
+#if LJ_TARGET_X86ORX64
 #include "../dynasm/dasm_x86.h"
+#if LJ_32
 #include "buildvm_x86.h"
+#elif defined(_WIN64)
+#include "buildvm_x64win.h"
+#else
+#include "buildvm_x64.h"
+#endif
 #else
 #error "No support for this architecture (yet)"
 #endif

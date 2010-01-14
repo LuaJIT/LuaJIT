@@ -134,10 +134,10 @@ TARGET_ARCH= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET))
 
 HOST_CC= $(CC)
 HOST_RM= rm -f
-# NOTE: The LuaJIT distribution comes with a pre-generated buildvm_*.h.
+# NOTE: The LuaJIT distribution comes with pre-generated buildvm_*.h files.
 # You DO NOT NEED an installed copy of (plain) Lua 5.1 to run DynASM unless
 # you want to MODIFY the corresponding *.dasc file. You can also use LuaJIT
-# itself (bootstrapped from the pre-generated file) to run DynASM of course.
+# itself (bootstrapped from a pre-generated file) to run DynASM of course.
 HOST_LUA= lua
 
 HOST_XCFLAGS=
@@ -237,6 +237,9 @@ DASM_DIR= ../dynasm
 DASM= $(HOST_LUA) $(DASM_DIR)/dynasm.lua
 DASM_FLAGS=
 DASM_DISTFLAGS= -LN
+DASM_FLAGS_X86=
+DASM_FLAGS_X64= -D X64
+DASM_FLAGS_X64WIN= -D X64 -D X64WIN
 
 BUILDVM_O= buildvm.o buildvm_asm.o buildvm_peobj.o buildvm_lib.o buildvm_fold.o
 BUILDVM_T= buildvm
@@ -277,7 +280,7 @@ LUAJIT_T= luajit
 
 ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
 ALL_GEN= $(LJVM_S) lj_ffdef.h lj_libdef.h lj_recdef.h $(LIB_VMDEFP) lj_folddef.h
-ALL_DYNGEN= buildvm_x86.h
+ALL_DYNGEN= buildvm_*.h
 WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
 ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
 
@@ -358,7 +361,9 @@ cleaner:
 
 distclean:	clean
 	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_DISTFLAGS) -o buildvm_x86.h buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X86) -o buildvm_x86.h buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64) -o buildvm_x64.h buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64WIN) -o buildvm_x64win.h buildvm_x86.dasc
 
 depend:
 	@test -f lj_ffdef.h || touch lj_ffdef.h
@@ -366,12 +371,16 @@ depend:
 	@test -f lj_recdef.h || touch lj_recdef.h
 	@test -f lj_folddef.h || touch lj_folddef.h
 	@test -f buildvm_x86.h || touch buildvm_x86.h
+	@test -f buildvm_x64.h || touch buildvm_x64.h
+	@test -f buildvm_x64win.h || touch buildvm_x64win.h
 	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | sed "s|$(DASM_DIR)|\$$(DASM_DIR)|g" >Makefile.dep
 	@test -s lj_ffdef.h || $(HOST_RM) lj_ffdef.h
 	@test -s lj_libdef.h || $(HOST_RM) lj_libdef.h
 	@test -s lj_recdef.h || $(HOST_RM) lj_recdef.h
 	@test -s lj_folddef.h || $(HOST_RM) lj_folddef.h
 	@test -s buildvm_x86.h || $(HOST_RM) buildvm_x86.h
+	@test -s buildvm_x64.h || $(HOST_RM) buildvm_x64.h
+	@test -s buildvm_x64win.h || $(HOST_RM) buildvm_x64win.h
 
 .PHONY: default all amalg clean cleaner distclean depend
 
@@ -381,7 +390,17 @@ depend:
 
 buildvm_x86.h: buildvm_x86.dasc
 	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) -o $@ buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X86) -o $@ buildvm_x86.dasc
+
+buildvm_x64.h: buildvm_x86.dasc
+	$(E) "DYNASM    $@"
+	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64) -o $@ buildvm_x86.dasc
+
+buildvm_x64win.h: buildvm_x86.dasc
+	$(E) "DYNASM    $@"
+	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64WIN) -o $@ buildvm_x86.dasc
+
+buildvm.o: buildvm_x86.h buildvm_x64.h buildvm_x64win.h
 
 $(BUILDVM_T): $(BUILDVM_O)
 	$(E) "HOSTLINK  $@"
