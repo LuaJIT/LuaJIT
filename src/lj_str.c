@@ -259,12 +259,16 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
 #define FMTP_CHARS	(2*sizeof(ptrdiff_t))
       char buff[2+FMTP_CHARS];
       ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
-      int i;
+      ptrdiff_t i, lasti = 2+FMTP_CHARS;
+#if LJ_64
+      if ((p >> 32) == 0)  /* Shorten output for true 32 bit pointers. */
+	lasti = 2+2*4;
+#endif
       buff[0] = '0';
       buff[1] = 'x';
-      for (i = 2+FMTP_CHARS-1; i >= 2; i--, p >>= 4)
+      for (i = lasti-1; i >= 2; i--, p >>= 4)
 	buff[i] = "0123456789abcdef"[(p & 15)];
-      addstr(L, sb, buff, 2+FMTP_CHARS);
+      addstr(L, sb, buff, lasti);
       break;
       }
     case '%':
