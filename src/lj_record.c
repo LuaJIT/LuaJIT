@@ -2033,7 +2033,7 @@ void lj_record_ins(jit_State *J)
   case BC_IFORL:
   case BC_IITERL:
   case BC_ILOOP:
-    lj_trace_err_info(J, LJ_TRERR_LBLACKL);
+    lj_trace_err(J, LJ_TRERR_LBLACKL);
     break;
 
   case BC_JMP:
