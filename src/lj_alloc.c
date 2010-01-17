@@ -74,18 +74,54 @@
 
 #ifdef LUA_USE_WIN
 
-#if LJ_64
-#error "missing support for WIN64 to allocate in lower 2G"
-#endif
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+#if LJ_64
+
+/* Undocumented, but hey, that's what we all love so much about Windows. */
+typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG zbits,
+		       size_t *size, ULONG alloctype, ULONG prot);
+static PNTAVM ntavm;
+
+/* Number of top bits of the lower 32 bits of an address that must be zero.
+** Apparently 0 gives us full 64 bit addresses and 1 gives us the lower 2GB.
+*/
+#define NTAVM_ZEROBITS		1
+
+static void INIT_MMAP(void)
+{
+  ntavm = (PNTAVM)GetProcAddress(GetModuleHandle("ntdll.dll"),
+				 "NtAllocateVirtualMemory");
+}
+
+/* Win64 32 bit MMAP via NtAllocateVirtualMemory. */
+static LJ_AINLINE void *CALL_MMAP(size_t size)
+{
+  void *ptr = NULL;
+  long st = ntavm(INVALID_HANDLE_VALUE, &ptr, NTAVM_ZEROBITS, &size,
+		  MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  return st == 0 ? ptr : MFAIL;
+}
+
+/* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
+static LJ_AINLINE void *DIRECT_MMAP(size_t size)
+{
+  void *ptr = NULL;
+  long st = ntavm(INVALID_HANDLE_VALUE, &ptr, NTAVM_ZEROBITS, &size,
+		  MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, PAGE_READWRITE);
+  return st == 0 ? ptr : MFAIL;
+}
+
+#else
+
+#define INIT_MMAP()		((void)0)
 
 /* Win32 MMAP via VirtualAlloc */
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
   void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-  return (ptr != 0)? ptr: MFAIL;
+  return ptr ? ptr : MFAIL;
 }
 
 /* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
@@ -93,8 +129,10 @@ static LJ_AINLINE void *DIRECT_MMAP(size_t size)
 {
   void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN,
 			   PAGE_READWRITE);
-  return (ptr != 0)? ptr: MFAIL;
+  return ptr ? ptr : MFAIL;
 }
+
+#endif
 
 /* This function supports releasing coalesed segments */
 static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
@@ -130,6 +168,7 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS)
 #endif
 
+#define INIT_MMAP()		((void)0)
 #define CALL_MMAP(s)		mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
 #define DIRECT_MMAP(s)		CALL_MMAP(s)
 #define CALL_MUNMAP(a, s)	munmap((a), (s))
@@ -989,7 +1028,9 @@ static void *tmalloc_small(mstate m, size_t nb)
 void *lj_alloc_create(void)
 {
   size_t tsize = DEFAULT_GRANULARITY;
-  char *tbase = (char *)(CALL_MMAP(tsize));
+  char *tbase;
+  INIT_MMAP();
+  tbase = (char *)(CALL_MMAP(tsize));
   if (tbase != CMFAIL) {
     size_t msize = pad_request(sizeof(struct malloc_state));
     mchunkptr mn;
