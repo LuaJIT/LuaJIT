@@ -359,7 +359,7 @@ void emit_peobj(BuildCtx *ctx)
 	  sprintf(name, PEOBJ_SYMF_PREFIX LABEL_PREFIX "%s", sym);
 #else
 	  sprintf(name, LABEL_PREFIX "%s", sym);
-	  name[(p-sym)+sizeof(LABEL_PREFIX)] = '\0';
+	  name[(p-sym)+sizeof(LABEL_PREFIX)-1] = '\0';
 #endif
 	} else {
 	  sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX "%s", sym);
