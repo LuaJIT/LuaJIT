@@ -1,8 +1,15 @@
 @rem Script to build LuaJIT with MSVC.
 @rem Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 @rem
-@rem Open a "Visual Studio .NET Command Prompt", cd to this directory
-@rem and run this script.
+@rem Either open a "Visual Studio .NET Command Prompt"
+@rem (Note that the Express Edition does not contain an x64 compiler)
+@rem -or-
+@rem Open a "Windows SDK Command Shell" and set the compiler environment:
+@rem     setenv /release /x86
+@rem   -or-
+@rem     setenv /release /x64
+@rem
+@rem Then cd to this directory and run this script.
 
 @if not defined INCLUDE goto :FAIL
 
@@ -16,6 +23,8 @@
 
 if not exist buildvm_x86.h^
   %DASM% -LN -o buildvm_x86.h buildvm_x86.dasc
+if not exist buildvm_x64win.h^
+  %DASM% -LN -D X64 -D X64WIN -o buildvm_x64win.h buildvm_x86.dasc
 
 %LJCOMPILE% /I "." /I %DASMDIR% buildvm*.c
 %LJLINK% /out:buildvm.exe buildvm*.obj
