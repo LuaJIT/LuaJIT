@@ -268,7 +268,7 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       buff[1] = 'x';
       for (i = lasti-1; i >= 2; i--, p >>= 4)
 	buff[i] = "0123456789abcdef"[(p & 15)];
-      addstr(L, sb, buff, lasti);
+      addstr(L, sb, buff, (MSize)lasti);
       break;
       }
     case '%':
