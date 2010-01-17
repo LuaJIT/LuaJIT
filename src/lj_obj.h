@@ -152,7 +152,7 @@ typedef const TValue cTValue;
 **                  ---MSW---.---LSW---
 ** primitive types |  itype  |         |
 ** lightuserdata   |  itype  |  void * |  (32 bit platforms)
-** lightuserdata   |fffc|    void *    |  (64 bit platforms, 48 bit pointers)
+** lightuserdata   |ffff|    void *    |  (64 bit platforms, 47 bit pointers)
 ** GC objects      |  itype  |  GCRef  |
 ** number           -------double------
 **
@@ -177,7 +177,7 @@ typedef const TValue cTValue;
 #define LJ_TNUMX		(-13)
 
 #if LJ_64
-#define LJ_TISNUM		((uint32_t)0xfff80000)
+#define LJ_TISNUM		((uint32_t)0xfffeffff)
 #else
 #define LJ_TISNUM		((uint32_t)LJ_TNUMX)
 #endif
@@ -196,7 +196,7 @@ typedef const TValue cTValue;
 #define tvistrue(o)	(itype(o) == LJ_TTRUE)
 #define tvisbool(o)	(tvisfalse(o) || tvistrue(o))
 #if LJ_64
-#define tvislightud(o)	((itype(o) >> 16) == LJ_TLIGHTUD)
+#define tvislightud(o)	((itype(o) >> 15) == -2)
 #else
 #define tvislightud(o)	(itype(o) == LJ_TLIGHTUD)
 #endif
@@ -234,7 +234,7 @@ typedef const TValue cTValue;
 #define boolV(o)	check_exp(tvisbool(o), (LJ_TFALSE - (o)->it))
 #if LJ_64
 #define lightudV(o)	check_exp(tvislightud(o), \
-			  (void *)((o)->u64 & U64x(0000ffff,ffffffff)))
+			  (void *)((o)->u64 & U64x(00007fff,ffffffff)))
 #else
 #define lightudV(o)	check_exp(tvislightud(o), gcrefp((o)->gcr, void))
 #endif
@@ -254,9 +254,9 @@ typedef const TValue cTValue;
 
 #if LJ_64
 #define checklightudptr(L, p) \
-  (((uint64_t)(p) >> 48) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
+  (((uint64_t)(p) >> 47) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
 #define setlightudV(o, x) \
-  ((o)->u64 = (uint64_t)(x) | (((uint64_t)LJ_TLIGHTUD) << 48))
+  ((o)->u64 = (uint64_t)(x) | (((uint64_t)0xffff) << 48))
 #define setcont(o, x) \
   ((o)->u64 = (uint64_t)(x) - (uint64_t)lj_vm_asm_begin)
 #else
