@@ -54,6 +54,17 @@ LuaJIT currently builds out-of-the box on all popular x86 systems
 (Linux, Windows, OSX etc.). It builds and runs fine as a 32&nbsp;bit
 application under x64-based systems, too.
 </p>
+<p class="indent" style="color: #00a000;">
+The x64 port of LuaJIT is still experimental and not enabled by default.
+It only contains the interpreter and only builds on Linux/x64 and WIN64
+right now. If you want to give it a try, follow the special build instructions
+below.
+</p>
+<p class="indent" style="color: #00a000;">
+Note that the pure interpreter is quite a bit faster than Lua, but of
+course not as fast as the x86 JIT compiler. Work on the x64 JIT compiler
+is still ongoing.
+</p>
 
 <h2>Configuring LuaJIT</h2>
 <p>
@@ -84,8 +95,8 @@ complete SDK.
 </p>
 <p>
 E.g. on a current Debian/Ubuntu, install <tt>libc6-dev</tt>
-with the package manager. Currently LuaJIT only builds as a 32&nbsp;bit
-application, so you actually need to install <tt>libc6-dev-i386</tt>
+with the package manager. Currently LuaJIT builds as a 32&nbsp;bit
+application by default, so you actually need to install <tt>libc6-dev-i386</tt>
 when building on an x64 OS.
 </p>
 <p>
@@ -106,6 +117,15 @@ which is probably the default on your system, anyway. Simply run:
 <pre class="code">
 make
 </pre>
+<div style="color: #00a000;">
+<p>
+You can force a build of the x64 interpreter on Linux/x64 with the
+following command:
+</p>
+<pre class="code">
+make CC="gcc -m64"
+</pre>
+</div>
 <p>
 By default modules are only searched under the prefix <tt>/usr/local</tt>.
 You can add an extra prefix to the search paths by appending the
@@ -122,7 +142,7 @@ in <tt>src/Makefile</tt>. Change it, if you want to build on an older version.
 <p>
 The top-level Makefile installs LuaJIT by default under
 <tt>/usr/local</tt>, i.e. the executable ends up in
-<tt>/usr/local/bin</tt> and so on. You need to have root privileges
+<tt>/usr/local/bin</tt> and so on. You need root privileges
 to write to this path. So, assuming sudo is installed on your system,
 run the following command and enter your sudo password:
 </p>
@@ -157,9 +177,15 @@ Either install one of the open source SDKs
 GCC plus the required development headers.
 </p>
 <p>
-Or install Microsoft's Visual C++ (MSVC) &mdash; the freely downloadable
+Or install Microsoft's Visual C++ (MSVC). The freely downloadable
 <a href="http://www.microsoft.com/Express/VC/"><span class="ext">&raquo;</span>&nbsp;Express Edition</a>
-works just fine.
+works just fine, but only contains an x86 compiler.
+</p>
+<p>
+The freely downloadable
+<a href="http://msdn.microsoft.com/en-us/windowsserver/bb980924.aspx"><span class="ext">&raquo;</span>&nbsp;Windows SDK</a>
+only comes with command line tools, but this is all you need to build LuaJIT.
+It contains x86 and x64 compilers.
 </p>
 <p>
 Next, download the source package and unpack it using an archive manager
@@ -169,6 +195,32 @@ Next, download the source package and unpack it using an archive manager
 <p>
 Open a "Visual Studio .NET Command Prompt", <tt>cd</tt> to the
 directory where you've unpacked the sources and run these commands:
+</p>
+<pre class="code">
+cd src
+msvcbuild
+</pre>
+<p>
+Then follow the installation instructions below.
+</p>
+<h3>Building with the Windows SDK</h3>
+<p>
+Open a "Windows SDK Command Shell" and select the x86 compiler:
+</p>
+<pre class="code">
+setenv /release /x86
+</pre>
+<div style="color: #00a000;">
+<p>
+Or select the x64 compiler (this only builds the interpreter right now):
+</p>
+<pre class="code">
+setenv /release /x64
+</pre>
+</div>
+<p>
+Then <tt>cd</tt> to the directory where you've unpacked the sources
+and run these commands:
 </p>
 <pre class="code">
 cd src
