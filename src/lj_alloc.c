@@ -203,7 +203,7 @@ struct malloc_chunk {
 typedef struct malloc_chunk  mchunk;
 typedef struct malloc_chunk *mchunkptr;
 typedef struct malloc_chunk *sbinptr;  /* The type of bins of chunks */
-typedef unsigned int bindex_t;         /* Described below */
+typedef size_t bindex_t;               /* Described below */
 typedef unsigned int binmap_t;         /* Described below */
 typedef unsigned int flag_t;           /* The type of various bit flag sets */
 
@@ -416,7 +416,7 @@ static int has_segment_link(mstate m, msegmentptr ss)
 /* assign tree index for size S to variable I */
 #define compute_tree_index(S, I)\
 {\
-  unsigned int X = S >> TREEBIN_SHIFT;\
+  unsigned int X = (unsigned int)(S >> TREEBIN_SHIFT);\
   if (X == 0) {\
     I = 0;\
   } else if (X > 0xFFFF) {\
