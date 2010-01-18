@@ -313,6 +313,10 @@ LUALIB_API int luaL_loadstring(lua_State *L, const char *s)
 
 #ifdef LUAJIT_USE_SYSMALLOC
 
+#if LJ_64
+#error "Must use builtin allocator for 64 bit target"
+#endif
+
 static void *mem_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 {
   (void)ud;

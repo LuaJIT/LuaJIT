@@ -163,7 +163,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   GG_State *GG = cast(GG_State *, f(ud, NULL, 0, sizeof(GG_State)));
   lua_State *L = &GG->L;
   global_State *g = &GG->g;
-  if (GG == NULL) return NULL;
+  if (GG == NULL || !checkptr32(GG)) return NULL;
   memset(GG, 0, sizeof(GG_State));
   L->gct = ~LJ_TTHREAD;
   L->marked = LJ_GC_WHITE0 | LJ_GC_FIXED | LJ_GC_SFIXED;  /* Prevent free. */
