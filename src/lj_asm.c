@@ -2423,9 +2423,9 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
+	  emit_rr(as, XO_TEST, left, left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
-	  emit_rr(as, XO_TEST, left, left);
 	} else {
 	  x86Op xo;
 	  if (checki8(imm)) {
