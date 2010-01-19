@@ -1852,6 +1852,8 @@ static void asm_sload(ASMState *as, IRIns *ir)
   IRType1 t = ir->t;
   Reg base;
   lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
+  lua_assert(!irt_isguard(ir->t) ==
+	     !((ir->op2 & IRSLOAD_TYPECHECK) || irt_isint(t)));
   if (irt_isint(t)) {
     Reg left = ra_scratch(as, RSET_FPR);
     asm_tointg(as, ir, left);  /* Frees dest reg. Do this before base alloc. */
@@ -1865,11 +1867,11 @@ static void asm_sload(ASMState *as, IRIns *ir)
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
     emit_movrmro(as, dest, base, ofs);
   } else {
-    if (!irt_isguard(ir->t))
+    if (!(ir->op2 & IRSLOAD_TYPECHECK))
       return;  /* No type check: avoid base alloc. */
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
   }
-  if (irt_isguard(ir->t)) {
+  if ((ir->op2 & IRSLOAD_TYPECHECK)) {
     /* Need type check, even if the load result is unused. */
     asm_guardcc(as, irt_isnum(t) ? CC_A : CC_NE);
     emit_i8(as, ~irt_type(t));

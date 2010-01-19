@@ -125,7 +125,7 @@ static void rec_check_slots(jit_State *J)
 /* Specialize a slot to a specific type. Note: slot can be negative! */
 static TRef sloadt(jit_State *J, int32_t slot, IRType t, int mode)
 {
-  /* No guard, since none of the callers need a type-checking SLOAD. */
+  /* Caller may set IRT_GUARD in t. */
   TRef ref = emitir_raw(IRT(IR_SLOAD, t), (int32_t)J->baseslot+slot, mode);
   J->base[slot] = ref;
   return ref;
@@ -135,7 +135,8 @@ static TRef sloadt(jit_State *J, int32_t slot, IRType t, int mode)
 static TRef sload(jit_State *J, int32_t slot)
 {
   IRType t = itype2irt(&J->L->base[slot]);
-  TRef ref = emitir_raw(IRTG(IR_SLOAD, t), (int32_t)J->baseslot+slot, 0);
+  TRef ref = emitir_raw(IRTG(IR_SLOAD, t), (int32_t)J->baseslot+slot,
+			IRSLOAD_TYPECHECK);
   if (irtype_ispri(t)) ref = TREF_PRI(t);  /* Canonicalize primitive refs. */
   J->base[slot] = ref;
   return ref;
@@ -251,8 +252,9 @@ static TRef fori_arg(jit_State *J, const BCIns *pc, BCReg slot, IRType t)
   }
   if (J->base[slot])
     return J->base[slot];
-  else
-    return sloadt(J, (int32_t)slot, t, IRSLOAD_READONLY|IRSLOAD_INHERIT);
+  if (t == IRT_INT)
+    t |= IRT_GUARD;
+  return sloadt(J, (int32_t)slot, t, IRSLOAD_READONLY|IRSLOAD_INHERIT);
 }
 
 /* Simulate the runtime behavior of the FOR loop iterator.
@@ -2107,6 +2109,8 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
     k = (int32_t)(dir ? 0x7fffffff : 0x80000000) - k;
     emitir(IRTGI(dir ? IR_LE : IR_GE), stop, lj_ir_kint(J, k));
   }
+  if (t == IRT_INT)
+    t |= IRT_GUARD;
   J->base[ra+FORL_EXT] = sloadt(J, (int32_t)(ra+FORL_IDX), t, IRSLOAD_INHERIT);
   J->maxslot = ra+FORL_EXT+1;
 }
@@ -2195,7 +2199,7 @@ static void rec_setup_side(jit_State *J, Trace *T)
 	  tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr);
 	}
 	break;
-      case IR_SLOAD:  /* Inherited SLOADs don't need a guard. */
+      case IR_SLOAD:  /* Inherited SLOADs don't need a guard or type check. */
 	tr = emitir_raw(ir->ot & ~IRT_GUARD, s,
 	       (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
 	break;

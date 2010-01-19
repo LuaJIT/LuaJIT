@@ -192,6 +192,7 @@ IRFLDEF(FLENUM)
 #define IRSLOAD_INHERIT		1	/* Inherited by exits/side traces. */
 #define IRSLOAD_READONLY	2	/* Read-only, omit slot store. */
 #define IRSLOAD_PARENT		4	/* Coalesce with parent trace. */
+#define IRSLOAD_TYPECHECK	8	/* Needs type check. */
 
 /* XLOAD mode, stored in op2. */
 #define IRXLOAD_READONLY	1	/* Load from read-only data. */
