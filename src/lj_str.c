@@ -37,7 +37,7 @@ int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b)
 	va >>= 32+(i<<3); vb >>= 32+(i<<3);
 	if (va == vb) break;
       }
-      return (int32_t)(va - vb);
+      return va < vb ? -1 : 1;
     }
   }
   return (int32_t)(a->len - b->len);
