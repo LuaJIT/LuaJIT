@@ -63,7 +63,7 @@
 ** EXT is mandatory on POSIX/x64 since the interpreter doesn't save r12/r13.
 */
 
-#if defined(__ELF__) || defined(__MACH__)
+#if defined(__GNUC__)
 #if LJ_TARGET_X86
 #ifdef LUAJIT_UNWIND_EXTERNAL
 #define LJ_UNWIND_EXT	1
@@ -532,7 +532,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__ELF__) || defined(__MACH__)
+#if defined(__GNUC__)
 
 #include <unwind.h>
 

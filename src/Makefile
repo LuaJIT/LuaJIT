@@ -299,8 +299,7 @@ ifeq (Windows,$(HOST_SYS))
 endif
 ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
-  LJVM_BOUT= $(LJVM_O)
-  LJVM_MODE= peobj
+  LJVM_MODE= coffasm
   LUAJIT_SO= $(TARGET_DLLNAME)
   LUAJIT_T= luajit.exe
   ifneq ($(HOST_SYS),$(TARGET_SYS))

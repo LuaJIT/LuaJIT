@@ -4920,6 +4920,51 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align " SZPTR "\n"
 	".LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
     break;
+  case BUILD_coffasm:
+    fprintf(ctx->fp, "\t.section .eh_frame,\"dr\"\n");
+    fprintf(ctx->fp,
+      "\t.def %slj_err_unwind_dwarf; .scl 2; .type 32; .endef\n",
+      LJ_32 ? "_" : "");
+    fprintf(ctx->fp,
+	"Lframe1:\n"
+	"\t.long LECIE1-LSCIE1\n"
+	"LSCIE1:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zP\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -" SZPTR "\n"
+	"\t.byte " REG_RA "\n"
+	"\t.uleb128 5\n"			/* augmentation length */
+	"\t.byte 0x00\n"			/* absptr */
+	"\t.long %slj_err_unwind_dwarf\n"
+	"\t.byte 0xc\n\t.uleb128 " REG_SP "\n\t.uleb128 " SZPTR "\n"
+	"\t.byte 0x80+" REG_RA "\n\t.uleb128 0x1\n"
+	"\t.align " SZPTR "\n"
+	"LECIE1:\n\n", LJ_32 ? "_" : "");
+    fprintf(ctx->fp,
+	"LSFDE1:\n"
+	"\t.long LEFDE1-LASFDE1\n"
+	"LASFDE1:\n"
+	"\t.long LASFDE1-Lframe1\n"
+	"\t.long %slj_vm_asm_begin\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
+#if LJ_64
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
+	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
+#else
+	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
+	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
+	"\t.byte 0x86\n\t.uleb128 0x4\n"	/* offset esi */
+	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
+#endif
+	"\t.align " SZPTR "\n"
+	"LEFDE1:\n\n", LJ_32 ? "_" : "", (int)ctx->codesz, CFRAME_SIZE);
+    break;
   case BUILD_machasm:
     fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
     fprintf(ctx->fp,

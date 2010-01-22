@@ -33,14 +33,14 @@ static void emit_asm_reloc(BuildCtx *ctx, int type, const char *sym)
       fprintf(ctx->fp, "\t.long %s\n", sym);
     break;
   case BUILD_coffasm:
-    fprintf(ctx->fp, "\t.def _%s; .scl 3; .type 32; .endef\n", sym);
+    fprintf(ctx->fp, "\t.def %s; .scl 3; .type 32; .endef\n", sym);
     if (type)
-      fprintf(ctx->fp, "\t.long _%s-.-4\n", sym);
+      fprintf(ctx->fp, "\t.long %s-.-4\n", sym);
     else
-      fprintf(ctx->fp, "\t.long _%s\n", sym);
+      fprintf(ctx->fp, "\t.long %s\n", sym);
     break;
   default:  /* BUILD_machasm for relative relocations handled below. */
-    fprintf(ctx->fp, "\t.long _%s\n", sym);
+    fprintf(ctx->fp, "\t.long %s\n", sym);
     break;
   }
 }
@@ -70,7 +70,7 @@ err:
     exit(1);
   }
   emit_asm_bytes(ctx, cp, n);
-  fprintf(ctx->fp, "\t%s _%s\n", opname, sym);
+  fprintf(ctx->fp, "\t%s %s\n", opname, sym);
 }
 
 /* Emit an assembler label. */
@@ -87,15 +87,15 @@ static void emit_asm_label(BuildCtx *ctx, const char *name, int size, int isfunc
       name, name, name, isfunc ? "function" : "object", name, size, name);
     break;
   case BUILD_coffasm:
-    fprintf(ctx->fp, "\n\t.globl _%s\n", name);
+    fprintf(ctx->fp, "\n\t.globl %s\n", name);
     if (isfunc)
-      fprintf(ctx->fp, "\t.def _%s; .scl 3; .type 32; .endef\n", name);
-    fprintf(ctx->fp, "_%s:\n", name);
+      fprintf(ctx->fp, "\t.def %s; .scl 3; .type 32; .endef\n", name);
+    fprintf(ctx->fp, "%s:\n", name);
     break;
   case BUILD_machasm:
     fprintf(ctx->fp,
-      "\n\t.private_extern _%s\n"
-      "_%s:\n", name, name);
+      "\n\t.private_extern %s\n"
+      "%s:\n", name, name);
     break;
   default:
     break;
@@ -126,13 +126,22 @@ void emit_asm(BuildCtx *ctx)
   char name[80];
   int32_t prev;
   int i, pi, rel;
+#if LJ_64
+  const char *symprefix = ctx->mode == BUILD_machasm ? "_" : "";
+  int keepfc = 0;
+#else
+  const char *symprefix = ctx->mode != BUILD_elfasm ? "_" : "";
+  /* Keep fastcall suffix for COFF on WIN32. */
+  int keepfc = (ctx->mode == BUILD_coffasm);
+#endif
 
   fprintf(ctx->fp, "\t.file \"buildvm_%s.dasc\"\n", ctx->dasm_arch);
   fprintf(ctx->fp, "\t.text\n");
   emit_asm_align(ctx, 4);
 
-  emit_asm_label(ctx, LABEL_ASM_BEGIN, 0, 0);
-  if (ctx->mode == BUILD_elfasm)
+  sprintf(name, "%s" LABEL_ASM_BEGIN, symprefix);
+  emit_asm_label(ctx, name, 0, 0);
+  if (ctx->mode != BUILD_machasm)
     fprintf(ctx->fp, ".Lbegin:\n");
 
   i = 0;
@@ -148,10 +157,10 @@ void emit_asm(BuildCtx *ctx)
     int32_t stop = next;
     if (pi >= ctx->npc) {
       char *p;
-      sprintf(name, LABEL_PREFIX "%s", ctx->globnames[pi-ctx->npc]);
-      /* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
+      sprintf(name, "%s" LABEL_PREFIX "%s", symprefix,
+	      ctx->globnames[pi-ctx->npc]);
       p = strchr(name, '@');
-      if (p) *p = '\0';
+      if (p) { if (keepfc) name[0] = '@'; else *p = '\0'; }
       emit_asm_label(ctx, name, size, 1);
 #if LJ_HASJIT
     } else {
@@ -160,25 +169,21 @@ void emit_asm(BuildCtx *ctx)
 		 pi == BC_JLOOP || pi == BC_IFORL || pi == BC_IITERL ||
 		 pi == BC_ILOOP)) {
 #endif
-      sprintf(name, LABEL_PREFIX_BC "%s", bc_names[pi]);
+      sprintf(name, "%s" LABEL_PREFIX_BC "%s", symprefix, bc_names[pi]);
       emit_asm_label(ctx, name, size, 1);
     }
     while (rel < ctx->nreloc && ctx->reloc[rel].ofs < stop) {
       BuildReloc *r = &ctx->reloc[rel];
       int n = r->ofs - prev;
-      const char *sym = ctx->extnames[r->sym];
-      const char *p = strchr(sym, '@');
-      if (p) {
-	/* Always strip fastcall suffix. Wrong for (unused) COFF on Win32. */
-	strncpy(name, sym, p-sym);
-	name[p-sym] = '\0';
-	sym = name;
-      }
+      char *p;
+      sprintf(name, "%s%s", symprefix, ctx->extnames[r->sym]);
+      p = strchr(name, '@');
+      if (p) { if (keepfc) name[0] = '@'; else *p = '\0'; }
       if (ctx->mode == BUILD_machasm && r->type != 0) {
-	emit_asm_reloc_mach(ctx, ctx->code+prev, n, sym);
+	emit_asm_reloc_mach(ctx, ctx->code+prev, n, name);
       } else {
 	emit_asm_bytes(ctx, ctx->code+prev, n);
-	emit_asm_reloc(ctx, r->type, sym);
+	emit_asm_reloc(ctx, r->type, name);
       }
       prev += n+4;
       rel++;
@@ -203,7 +208,8 @@ void emit_asm(BuildCtx *ctx)
   }
   emit_asm_align(ctx, 5);
 
-  emit_asm_label(ctx, LABEL_OP_OFS, 2*ctx->npc, 0);
+  sprintf(name, "%s" LABEL_OP_OFS, symprefix);
+  emit_asm_label(ctx, name, 2*ctx->npc, 0);
   for (i = 0; i < ctx->npc; i++)
     fprintf(ctx->fp, "\t.short %d\n", ctx->sym_ofs[i]);
 
