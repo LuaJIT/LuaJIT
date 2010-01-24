@@ -18,6 +18,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_state.h"
 #include "lj_lib.h"
 
 /* -- Module registration ------------------------------------------------- */
@@ -349,8 +350,21 @@ static int panic(lua_State *L)
 
 LUALIB_API lua_State *luaL_newstate(void)
 {
+#if LJ_64
+  lua_State *L = lj_state_newstate(mem_alloc, mem_create());
+#else
   lua_State *L = lua_newstate(mem_alloc, mem_create());
+#endif
   if (L) G(L)->panic = panic;
   return L;
 }
+
+#if LJ_64
+LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
+{
+  UNUSED(f); UNUSED(ud);
+  fprintf(stderr, "Must use luaL_newstate() for 64 bit target\n");
+  return NULL;
+}
+#endif
 

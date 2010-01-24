@@ -158,7 +158,11 @@ static void close_state(lua_State *L)
   }
 }
 
+#if LJ_64
+lua_State *lj_state_newstate(lua_Alloc f, void *ud)
+#else
 LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
+#endif
 {
   GG_State *GG = cast(GG_State *, f(ud, NULL, 0, sizeof(GG_State)));
   lua_State *L = &GG->L;
