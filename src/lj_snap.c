@@ -259,8 +259,8 @@ void lj_snap_restore(jit_State *J, void *exptr)
 	  }
 	}
       }
-    } else if (newbase) {
-      setnilV(o);  /* Clear unreferenced slots of newly added frames. */
+    } else {
+      lua_assert(!newbase);
     }
   }
   if (newbase) L->base = newbase;

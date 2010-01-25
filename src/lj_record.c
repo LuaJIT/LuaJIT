@@ -426,7 +426,7 @@ static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 #endif
   J->base[top] = emitir(IRTG(IR_FRAME, IRT_PTR), trcont, trcont);
   for (s = J->maxslot; s < top; s++)
-    J->base[s] = 0;
+    J->base[s] = TREF_NIL;
   return top+1;
 }
 

@@ -3045,8 +3045,8 @@ static void asm_tail_sync(ASMState *as)
 	}
 	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
       }
-    } else if (s > secondbase) {
-      emit_movmroi(as, RID_BASE, ofs+4, LJ_TNIL);
+    } else {
+      lua_assert(!(s > secondbase));
     }
     checkmclim(as);
   }
