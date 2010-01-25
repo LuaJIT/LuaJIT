@@ -23,7 +23,7 @@ static void dce_marksnap(jit_State *J)
   SnapNo i, nsnap = J->cur.nsnap;
   for (i = 0; i < nsnap; i++) {
     SnapShot *snap = &J->cur.snap[i];
-    IRRef2 *map = &J->cur.snapmap[snap->mapofs];
+    SnapEntry *map = &J->cur.snapmap[snap->mapofs];
     BCReg s, nslots = snap->nslots;
     for (s = 0; s < nslots; s++) {
       IRRef ref = snap_ref(map[s]);

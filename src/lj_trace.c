@@ -88,7 +88,7 @@ static Trace *trace_save(jit_State *J, Trace *T)
   size_t szins = (T->nins-T->nk)*sizeof(IRIns);
   size_t sz = sztr + szins +
 	      T->nsnap*sizeof(SnapShot) +
-	      T->nsnapmap*sizeof(IRRef2);
+	      T->nsnapmap*sizeof(SnapEntry);
   Trace *T2 = lj_mem_newt(J->L, (MSize)sz, Trace);
   char *p = (char *)T2 + sztr;
   memcpy(T2, T, sizeof(Trace));
@@ -96,7 +96,7 @@ static Trace *trace_save(jit_State *J, Trace *T)
   memcpy(p, T->ir+T->nk, szins);
   p += szins;
   TRACE_COPYELEM(snap, nsnap, SnapShot)
-  TRACE_COPYELEM(snapmap, nsnapmap, IRRef2)
+  TRACE_COPYELEM(snapmap, nsnapmap, SnapEntry)
   lj_gc_barriertrace(J2G(J), T);
   return T2;
 }
@@ -118,7 +118,7 @@ static void trace_free(jit_State *J, TraceNo traceno)
     J->trace[traceno] = NULL;
     lj_mem_free(J2G(J), T,
       ((sizeof(Trace)+7)&~7) + (T->nins-T->nk)*sizeof(IRIns) +
-      T->nsnap*sizeof(SnapShot) + T->nsnapmap*sizeof(IRRef2));
+      T->nsnap*sizeof(SnapShot) + T->nsnapmap*sizeof(SnapEntry));
   }
 }
 
@@ -284,7 +284,7 @@ void lj_trace_freestate(global_State *g)
 #endif
   lj_mcode_free(J);
   lj_ir_knum_freeall(J);
-  lj_mem_freevec(g, J->snapmapbuf, J->sizesnapmap, IRRef2);
+  lj_mem_freevec(g, J->snapmapbuf, J->sizesnapmap, SnapEntry);
   lj_mem_freevec(g, J->snapbuf, J->sizesnap, SnapShot);
   lj_mem_freevec(g, J->irbuf + J->irbotlim, J->irtoplim - J->irbotlim, IRIns);
   lj_mem_freevec(g, J->trace, J->sizetrace, Trace *);

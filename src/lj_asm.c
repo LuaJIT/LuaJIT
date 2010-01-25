@@ -925,7 +925,7 @@ static int asm_snap_canremat(ASMState *as)
 static void asm_snap_alloc(ASMState *as)
 {
   SnapShot *snap = &as->T->snap[as->snapno];
-  IRRef2 *map = &as->T->snapmap[snap->mapofs];
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
   BCReg s, nslots = snap->nslots;
   for (s = 0; s < nslots; s++) {
     IRRef ref = snap_ref(map[s]);
@@ -959,7 +959,7 @@ static void asm_snap_alloc(ASMState *as)
 static int asm_snap_checkrename(ASMState *as, IRRef ren)
 {
   SnapShot *snap = &as->T->snap[as->snapno];
-  IRRef2 *map = &as->T->snapmap[snap->mapofs];
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
   BCReg s, nslots = snap->nslots;
   for (s = 0; s < nslots; s++) {
     IRRef ref = snap_ref(map[s]);
@@ -2463,7 +2463,7 @@ static void asm_gc_sync(ASMState *as, SnapShot *snap, Reg base)
   ** only. This avoids register allocation state unification.
   */
   RegSet allow = rset_exclude(RSET_SCRATCH & RSET_GPR, base);
-  IRRef2 *map = &as->T->snapmap[snap->mapofs];
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
   BCReg s, nslots = snap->nslots;
   for (s = 0; s < nslots; s++) {
     IRRef ref = snap_ref(map[s]);
@@ -2965,8 +2965,8 @@ static void asm_tail_sync(ASMState *as)
 {
   SnapShot *snap = &as->T->snap[as->T->nsnap-1];  /* Last snapshot. */
   BCReg s, nslots = snap->nslots;
-  IRRef2 *map = &as->T->snapmap[snap->mapofs];
-  IRRef2 *flinks = map + nslots + snap->nframelinks;
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
+  SnapEntry *flinks = map + nslots + snap->nframelinks;
   BCReg newbase = 0;
   BCReg secondbase = ~(BCReg)0;
   BCReg topslot = 0;

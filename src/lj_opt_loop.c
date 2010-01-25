@@ -170,7 +170,7 @@ static void loop_unroll(jit_State *J)
   uint32_t nphi = 0;
   IRRef1 *subst;
   SnapShot *osnap, *snap;
-  IRRef2 *loopmap;
+  SnapEntry *loopmap;
   BCReg loopslots;
   MSize nsnap, nsnapmap;
   IRRef ins, invar, osnapref;
@@ -198,9 +198,9 @@ static void loop_unroll(jit_State *J)
   }
   nsnapmap = J->cur.nsnapmap;  /* Use temp. copy to avoid undo. */
   if (LJ_UNLIKELY(nsnapmap*2 > J->sizesnapmap)) {
-    J->snapmapbuf = (IRRef2 *)lj_mem_realloc(J->L, J->snapmapbuf,
-					     J->sizesnapmap*sizeof(IRRef2),
-					     2*J->sizesnapmap*sizeof(IRRef2));
+    J->snapmapbuf = (SnapEntry *)lj_mem_realloc(J->L, J->snapmapbuf,
+		      J->sizesnapmap*sizeof(SnapEntry),
+		      2*J->sizesnapmap*sizeof(SnapEntry));
     J->cur.snapmap = J->snapmapbuf;
     J->sizesnapmap *= 2;
   }
@@ -223,7 +223,7 @@ static void loop_unroll(jit_State *J)
 
     /* Copy-substitute snapshot. */
     if (ins >= osnapref) {
-      IRRef2 *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
+      SnapEntry *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
       BCReg s, nslots;
       uint32_t nmapofs, nframelinks;
       if (irt_isguard(J->guardemit)) {  /* Guard inbetween? */

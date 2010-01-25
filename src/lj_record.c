@@ -2158,7 +2158,7 @@ static const BCIns *rec_setup_root(jit_State *J)
 static void rec_setup_side(jit_State *J, Trace *T)
 {
   SnapShot *snap = &T->snap[J->exitno];
-  IRRef2 *map = &T->snapmap[snap->mapofs];
+  SnapEntry *map = &T->snapmap[snap->mapofs];
   BCReg s, nslots = snap->nslots;
   BloomFilter seen = 0;
   for (s = 0; s < nslots; s++) {

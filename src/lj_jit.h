@@ -119,8 +119,10 @@ typedef struct SnapShot {
 } SnapShot;
 
 #define SNAPCOUNT_DONE	255	/* Already compiled and linked a side trace. */
-#define snap_ref(sn)	((IRRef)(IRRef1)(sn))
-#define snap_ridsp(sn)	((sn) >> 16)
+
+/* Snapshot entry. */
+typedef uint32_t SnapEntry;
+#define snap_ref(sn)		((sn) & 0xffff)
 
 /* Snapshot and exit numbers. */
 typedef uint32_t SnapNo;
@@ -138,7 +140,7 @@ typedef struct Trace {
   IRRef nins;		/* Next IR instruction. Biased with REF_BIAS. */
   IRRef nk;		/* Lowest IR constant. Biased with REF_BIAS. */
   SnapShot *snap;	/* Snapshot array. */
-  IRRef2 *snapmap;	/* Snapshot map. */
+  SnapEntry *snapmap;	/* Snapshot map. */
   uint16_t nsnap;	/* Number of snapshots. */
   uint16_t nsnapmap;	/* Number of snapshot map elements. */
   GCRef startpt;	/* Starting prototype. */
@@ -223,7 +225,7 @@ typedef struct jit_State {
   IRRef loopref;	/* Last loop reference or ref of final LOOP (or 0). */
 
   SnapShot *snapbuf;	/* Temp. snapshot buffer. */
-  IRRef2 *snapmapbuf;	/* Temp. snapshot map buffer. */
+  SnapEntry *snapmapbuf;  /* Temp. snapshot map buffer. */
   MSize sizesnap;	/* Size of temp. snapshot buffer. */
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
 

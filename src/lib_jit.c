@@ -331,7 +331,7 @@ LJLIB_CF(jit_util_tracesnap)
   SnapNo sn = (SnapNo)lj_lib_checkint(L, 2);
   if (T && sn < T->nsnap) {
     SnapShot *snap = &T->snap[sn];
-    IRRef2 *map = &T->snapmap[snap->mapofs];
+    SnapEntry *map = &T->snapmap[snap->mapofs];
     BCReg s, nslots = snap->nslots;
     GCtab *t;
     lua_createtable(L, nslots ? (int)nslots : 1, 0);

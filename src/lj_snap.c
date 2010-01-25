@@ -32,7 +32,7 @@
 */
 
 /* Add all modified slots to the snapshot. */
-static void snapshot_slots(jit_State *J, IRRef2 *map, BCReg nslots)
+static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 {
   BCReg s;
   for (s = 0; s < nslots; s++) {
@@ -42,12 +42,13 @@ static void snapshot_slots(jit_State *J, IRRef2 *map, BCReg nslots)
       if (ir->o == IR_SLOAD && ir->op1 == s && !(ir->op2 & IRSLOAD_INHERIT))
 	ref = 0;
     }
-    map[s] = (IRRef2)ref;
+    map[s] = (SnapEntry)ref;
   }
+  return nslots;
 }
 
 /* Add frame links at the end of the snapshot. */
-static MSize snapshot_framelinks(jit_State *J, IRRef2 *map)
+static MSize snapshot_framelinks(jit_State *J, SnapEntry *map)
 {
   cTValue *frame = J->L->base - 1;
   cTValue *lim = J->L->base - J->baseslot;
@@ -76,7 +77,7 @@ static void snapshot_stack(jit_State *J, SnapShot *snap, MSize nsnapmap)
 {
   BCReg nslots = J->baseslot + J->maxslot;
   MSize nsm, nframelinks;
-  IRRef2 *p;
+  SnapEntry *p;
   /* Conservative estimate. Continuation frames need 2 slots. */
   nsm = nsnapmap + nslots + (uint32_t)J->framedepth*2+1;
   if (LJ_UNLIKELY(nsm > J->sizesnapmap)) {  /* Need to grow snapshot map? */
@@ -84,13 +85,13 @@ static void snapshot_stack(jit_State *J, SnapShot *snap, MSize nsnapmap)
       nsm = 2*J->sizesnapmap;
     else if (nsm < 64)
       nsm = 64;
-    J->snapmapbuf = (IRRef2 *)lj_mem_realloc(J->L, J->snapmapbuf,
-		      J->sizesnapmap*sizeof(IRRef2), nsm*sizeof(IRRef2));
+    J->snapmapbuf = (SnapEntry *)lj_mem_realloc(J->L, J->snapmapbuf,
+		      J->sizesnapmap*sizeof(SnapEntry), nsm*sizeof(SnapEntry));
     J->cur.snapmap = J->snapmapbuf;
     J->sizesnapmap = nsm;
   }
   p = &J->cur.snapmap[nsnapmap];
-  snapshot_slots(J, p, nslots);
+  nslots = snapshot_slots(J, p, nslots);
   nframelinks = snapshot_framelinks(J, p + nslots);
   J->cur.nsnapmap = (uint16_t)(nsnapmap + nslots + nframelinks);
   snap->mapofs = (uint16_t)nsnapmap;
@@ -130,8 +131,8 @@ void lj_snap_shrink(jit_State *J)
 {
   BCReg nslots = J->baseslot + J->maxslot;
   SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
-  IRRef2 *oflinks = &J->cur.snapmap[snap->mapofs + snap->nslots];
-  IRRef2 *nflinks = &J->cur.snapmap[snap->mapofs + nslots];
+  SnapEntry *oflinks = &J->cur.snapmap[snap->mapofs + snap->nslots];
+  SnapEntry *nflinks = &J->cur.snapmap[snap->mapofs + nslots];
   uint32_t s, nframelinks = snap->nframelinks;
   lua_assert(nslots < snap->nslots);
   snap->nslots = (uint8_t)nslots;
@@ -171,7 +172,7 @@ void lj_snap_regspmap(uint16_t *rsmap, Trace *T, SnapNo snapno)
 {
   SnapShot *snap = &T->snap[snapno];
   BCReg s, nslots = snap->nslots;
-  IRRef2 *map = &T->snapmap[snap->mapofs];
+  SnapEntry *map = &T->snapmap[snap->mapofs];
   BloomFilter rfilt = snap_renamefilter(T, snapno);
   for (s = 0; s < nslots; s++) {
     IRRef ref = snap_ref(map[s]);
@@ -193,8 +194,8 @@ void lj_snap_restore(jit_State *J, void *exptr)
   Trace *T = J->trace[J->parent];
   SnapShot *snap = &T->snap[snapno];
   BCReg s, nslots = snap->nslots;
-  IRRef2 *map = &T->snapmap[snap->mapofs];
-  IRRef2 *flinks = map + nslots + snap->nframelinks;
+  SnapEntry *map = &T->snapmap[snap->mapofs];
+  SnapEntry *flinks = map + nslots + snap->nframelinks;
   TValue *o, *newbase, *ntop;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
   lua_State *L = J->L;
