@@ -1941,6 +1941,7 @@ static void asm_obar(ASMState *as, IRIns *ir)
   Reg obj;
   /* No need for other object barriers (yet). */
   lua_assert(IR(ir->op1)->o == IR_UREFC);
+  ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   args[0] = ASMREF_TMP1;
   args[1] = ir->op1;
