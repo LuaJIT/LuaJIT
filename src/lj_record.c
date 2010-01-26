@@ -1696,7 +1696,7 @@ static void optstate_comp(jit_State *J, int cond)
   const BCIns *npc = J->pc + 2 + (cond ? bc_j(jmpins) : 0);
   SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
   /* Avoid re-recording the comparison in side traces. */
-  J->cur.snapmap[snap->mapofs + snap->nslots] = u32ptr(npc);
+  J->cur.snapmap[snap->mapofs + snap->nent] = SNAP_MKPC(npc);
   J->needsnap = 1;
   /* Shrink last snapshot if possible. */
   if (bc_a(jmpins) < J->maxslot) {
@@ -2159,61 +2159,62 @@ static void rec_setup_side(jit_State *J, Trace *T)
 {
   SnapShot *snap = &T->snap[J->exitno];
   SnapEntry *map = &T->snapmap[snap->mapofs];
-  BCReg s, nslots = snap->nslots;
+  MSize n, nent = snap->nent;
   BloomFilter seen = 0;
-  for (s = 0; s < nslots; s++) {
-    IRRef ref = snap_ref(map[s]);
-    if (ref) {
-      IRIns *ir = &T->ir[ref];
-      TRef tr = 0;
-      /* The bloom filter avoids O(nslots^2) overhead for de-duping slots. */
-      if (bloomtest(seen, ref)) {
-	BCReg j;
-	for (j = 0; j < s; j++)
-	  if (snap_ref(map[j]) == ref) {
-	    if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
-	      lua_assert(s != 0);
-	      J->baseslot = s+1;
-	      J->framedepth++;
-	    }
-	    tr = J->slot[j];
-	    goto dupslot;
-	  }
-      }
-      bloomset(seen, ref);
-      switch ((IROp)ir->o) {
-      case IR_KPRI: tr = TREF_PRI(irt_type(ir->t)); break;
-      case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
-      case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
-      case IR_KNUM: tr = lj_ir_knum_addr(J, ir_knum(ir)); break;
-      case IR_FRAME:  /* Placeholder FRAMEs don't need a guard. */
-	if (irt_isfunc(ir->t)) {
-	  if (s != 0) {
+  /* Emit IR for slots inherited from parent snapshot. */
+  for (n = 0; n < nent; n++) {
+    IRRef ref = snap_ref(map[n]);
+    BCReg s = snap_slot(map[n]);
+    IRIns *ir = &T->ir[ref];
+    TRef tr;
+    /* The bloom filter avoids O(nent^2) overhead for de-duping slots. */
+    if (bloomtest(seen, ref)) {
+      MSize j;
+      for (j = 0; j < n; j++)
+	if (snap_ref(map[j]) == ref) {
+	  tr = J->slot[snap_slot(map[j])];
+	  if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
+	    lua_assert(s != 0);
 	    J->baseslot = s+1;
 	    J->framedepth++;
 	  }
-	  tr = lj_ir_kfunc(J, ir_kfunc(&T->ir[ir->op2]));
-	  tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr);
-	} else {
-	  tr = lj_ir_kptr(J, mref(T->ir[ir->op2].ptr, void));
-	  tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr);
+	  goto dupslot;
 	}
-	break;
-      case IR_SLOAD:  /* Inherited SLOADs don't need a guard or type check. */
-	tr = emitir_raw(ir->ot & ~IRT_GUARD, s,
-	       (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
-	break;
-      default:  /* Parent refs are already typed and don't need a guard. */
-	tr = emitir_raw(IRT(IR_SLOAD, irt_type(ir->t)), s,
-			IRSLOAD_INHERIT|IRSLOAD_PARENT);
-	break;
-      }
-    dupslot:
-      J->slot[s] = tr;
     }
+    bloomset(seen, ref);
+    switch ((IROp)ir->o) {
+    /* Only have to deal with constants that can occur in stack slots. */
+    case IR_KPRI: tr = TREF_PRI(irt_type(ir->t)); break;
+    case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
+    case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
+    case IR_KNUM: tr = lj_ir_knum_addr(J, ir_knum(ir)); break;
+    case IR_FRAME:  /* Placeholder FRAMEs don't need a guard. */
+      if (irt_isfunc(ir->t)) {
+	if (s != 0) {
+	  J->baseslot = s+1;
+	  J->framedepth++;
+	}
+	tr = lj_ir_kfunc(J, ir_kfunc(&T->ir[ir->op2]));
+	tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr);
+      } else {
+	tr = lj_ir_kptr(J, mref(T->ir[ir->op2].ptr, void));
+	tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr);
+      }
+      break;
+    case IR_SLOAD:  /* Inherited SLOADs don't need a guard or type check. */
+      tr = emitir_raw(ir->ot & ~IRT_GUARD, s,
+	     (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
+      break;
+    default:  /* Parent refs are already typed and don't need a guard. */
+      tr = emitir_raw(IRT(IR_SLOAD, irt_type(ir->t)), s,
+		      IRSLOAD_INHERIT|IRSLOAD_PARENT);
+      break;
+    }
+  dupslot:
+    J->slot[s] = tr;
   }
   J->base = J->slot + J->baseslot;
-  J->maxslot = nslots - J->baseslot;
+  J->maxslot = snap->nslots - J->baseslot;
   lj_snap_add(J);
 }
 
@@ -2259,7 +2260,7 @@ void lj_record_setup(jit_State *J)
     J->cur.root = (uint16_t)root;
     J->cur.startins = BCINS_AD(BC_JMP, 0, 0);
     /* Check whether we could at least potentially form an extra loop. */
-    if (J->exitno == 0 && T->snap[0].nslots == 1 && T->snapmap[0] == 0) {
+    if (J->exitno == 0 && T->snap[0].nent == 0) {
       /* We can narrow a FORL for some side traces, too. */
       if (J->pc > J->pt->bc && bc_op(J->pc[-1]) == BC_JFORI &&
 	  bc_d(J->pc[bc_j(J->pc[-1])-1]) == root) {

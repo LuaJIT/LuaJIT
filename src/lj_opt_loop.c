@@ -10,7 +10,6 @@
 
 #if LJ_HASJIT
 
-#include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_ir.h"
@@ -163,21 +162,69 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
 
 /* -- Loop unrolling using copy-substitution ------------------------------ */
 
+/* Copy-substitute snapshot. */
+static void loop_subst_snap(jit_State *J, SnapShot *osnap,
+			    SnapEntry *loopmap, IRRef1 *subst)
+{
+  SnapEntry *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
+  MSize nmapofs, nframelinks;
+  MSize on, ln, nn, onent = osnap->nent;
+  BCReg nslots = osnap->nslots;
+  SnapShot *snap = &J->cur.snap[J->cur.nsnap];
+  if (irt_isguard(J->guardemit)) {  /* Guard inbetween? */
+    nmapofs = J->cur.nsnapmap;
+    J->cur.nsnap++;  /* Add new snapshot. */
+  } else {  /* Otherwise overwrite previous snapshot. */
+    snap--;
+    nmapofs = snap->mapofs;
+  }
+  J->guardemit.irt = 0;
+  nframelinks = osnap->nframelinks;
+  /* Setup new snapshot. */
+  snap->mapofs = (uint16_t)nmapofs;
+  snap->ref = (IRRef1)J->cur.nins;
+  snap->nframelinks = (uint8_t)nframelinks;
+  snap->nslots = nslots;
+  snap->count = 0;
+  nmap = &J->cur.snapmap[nmapofs];
+  /* Substitute snapshot slots. */
+  on = ln = nn = 0;
+  while (on < onent) {
+    SnapEntry osn = omap[on], lsn = loopmap[ln];
+    if (snap_slot(lsn) < snap_slot(osn)) {  /* Copy slot from loop map. */
+      nmap[nn++] = lsn;
+      ln++;
+    } else {  /* Copy substituted slot from snapshot map. */
+      if (snap_slot(lsn) == snap_slot(osn)) ln++;  /* Shadowed loop slot. */
+      if (!irref_isk(snap_ref(osn)))
+	osn = snap_setref(osn, subst[snap_ref(osn)]);
+      nmap[nn++] = osn;
+      on++;
+    }
+  }
+  while (snap_slot(loopmap[ln]) < nslots)  /* Copy remaining loop slots. */
+    nmap[nn++] = loopmap[ln++];
+  snap->nent = (uint8_t)nn;
+  J->cur.nsnapmap = (uint16_t)(nmapofs + nn + nframelinks);
+  omap += onent;
+  nmap += nn;
+  for (nn = 0; nn < nframelinks; nn++)  /* Copy frame links. */
+    nmap[nn] = omap[nn];
+}
+
 /* Unroll loop. */
 static void loop_unroll(jit_State *J)
 {
   IRRef1 phi[LJ_MAX_PHI];
   uint32_t nphi = 0;
   IRRef1 *subst;
-  SnapShot *osnap, *snap;
-  SnapEntry *loopmap;
-  BCReg loopslots;
-  MSize nsnap, nsnapmap;
-  IRRef ins, invar, osnapref;
+  SnapShot *osnap;
+  SnapEntry *loopmap, *psentinel;
+  IRRef ins, invar;
 
   /* Use temp buffer for substitution table.
   ** Only non-constant refs in [REF_BIAS,invar) are valid indexes.
-  ** Note: don't call into the VM or run the GC or the buffer may be gone.
+  ** Caveat: don't call into the VM or run the GC or the buffer may be gone.
   */
   invar = J->cur.nins;
   subst = (IRRef1 *)lj_str_needbuf(J->L, &G(J->L)->tmpbuf,
@@ -187,80 +234,37 @@ static void loop_unroll(jit_State *J)
   /* LOOP separates the pre-roll from the loop body. */
   emitir_raw(IRTG(IR_LOOP, IRT_NIL), 0, 0);
 
-  /* Ensure size for copy-substituted snapshots (minus #0 and loop snapshot). */
-  nsnap = J->cur.nsnap;
-  if (LJ_UNLIKELY(2*nsnap-2 > J->sizesnap)) {
-    MSize maxsnap = (MSize)J->param[JIT_P_maxsnap];
-    if (2*nsnap-2 > maxsnap)
-      lj_trace_err(J, LJ_TRERR_SNAPOV);
-    lj_mem_growvec(J->L, J->snapbuf, J->sizesnap, maxsnap, SnapShot);
-    J->cur.snap = J->snapbuf;
-  }
-  nsnapmap = J->cur.nsnapmap;  /* Use temp. copy to avoid undo. */
-  if (LJ_UNLIKELY(nsnapmap*2 > J->sizesnapmap)) {
-    J->snapmapbuf = (SnapEntry *)lj_mem_realloc(J->L, J->snapmapbuf,
-		      J->sizesnapmap*sizeof(SnapEntry),
-		      2*J->sizesnapmap*sizeof(SnapEntry));
-    J->cur.snapmap = J->snapmapbuf;
-    J->sizesnapmap *= 2;
-  }
+  /* Grow snapshot buffer and map for copy-substituted snapshots.
+  ** Need up to twice the number of snapshots minus #0 and loop snapshot.
+  ** Need up to twice the number of entries plus fallback substitutions
+  ** from the loop snapshot entries for each new snapshot.
+  ** Caveat: both calls may reallocate J->cur.snap and J->cur.snapmap!
+  */
+  {
+    MSize nsnap = J->cur.nsnap;
+    SnapShot *loopsnap;
+    lj_snap_grow_buf(J, 2*nsnap-2);
+    lj_snap_grow_map(J, J->cur.nsnapmap*2+(nsnap-2)*J->cur.snap[nsnap-1].nent);
 
-  /* The loop snapshot is used for fallback substitutions. */
-  snap = &J->cur.snap[nsnap-1];
-  loopmap = &J->cur.snapmap[snap->mapofs];
-  loopslots = snap->nslots;
-  /* The PC of snapshot #0 and the loop snapshot must match. */
-  lua_assert(loopmap[loopslots] == J->cur.snapmap[J->cur.snap[0].nslots]);
+    /* The loop snapshot is used for fallback substitutions. */
+    loopsnap = &J->cur.snap[nsnap-1];
+    loopmap = &J->cur.snapmap[loopsnap->mapofs];
+    /* The PC of snapshot #0 and the loop snapshot must match. */
+    psentinel = &loopmap[loopsnap->nent];
+    lua_assert(*psentinel == J->cur.snapmap[J->cur.snap[0].nent]);
+    *psentinel = SNAP(255, 0, 0);  /* Replace PC with temporary sentinel. */
+  }
 
   /* Start substitution with snapshot #1 (#0 is empty for root traces). */
   osnap = &J->cur.snap[1];
-  osnapref = osnap->ref;
 
   /* Copy and substitute all recorded instructions and snapshots. */
   for (ins = REF_FIRST; ins < invar; ins++) {
     IRIns *ir;
     IRRef op1, op2;
 
-    /* Copy-substitute snapshot. */
-    if (ins >= osnapref) {
-      SnapEntry *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
-      BCReg s, nslots;
-      uint32_t nmapofs, nframelinks;
-      if (irt_isguard(J->guardemit)) {  /* Guard inbetween? */
-	nmapofs = nsnapmap;
-	snap++;  /* Add new snapshot. */
-      } else {
-	nmapofs = snap->mapofs;  /* Overwrite previous snapshot. */
-      }
-      J->guardemit.irt = 0;
-      nslots = osnap->nslots;
-      nframelinks = osnap->nframelinks;
-      snap->mapofs = (uint16_t)nmapofs;
-      snap->ref = (IRRef1)J->cur.nins;
-      snap->nslots = (uint8_t)nslots;
-      snap->nframelinks = (uint8_t)nframelinks;
-      snap->count = 0;
-      osnap++;
-      osnapref = osnap->ref;
-      nsnapmap = nmapofs + nslots + nframelinks;
-      nmap = &J->cur.snapmap[nmapofs];
-      /* Substitute snapshot slots. */
-      for (s = 0; s < nslots; s++) {
-	IRRef ref = snap_ref(omap[s]);
-	if (ref) {
-	  if (!irref_isk(ref))
-	    ref = subst[ref];
-	} else if (s < loopslots) {
-	  ref = loopmap[s];
-	}
-	nmap[s] = ref;
-      }
-      /* Copy frame links. */
-      nmap += nslots;
-      omap += nslots;
-      for (s = 0; s < nframelinks; s++)
-	nmap[s] = omap[s];
-    }
+    if (ins >= osnap->ref)  /* Instruction belongs to next snapshot? */
+      loop_subst_snap(J, osnap++, loopmap, subst);  /* Copy-substitute it. */
 
     /* Substitute instruction operands. */
     ir = IR(ins);
@@ -295,22 +299,24 @@ static void loop_unroll(jit_State *J)
       }
     }
   }
-  if (irt_isguard(J->guardemit)) {  /* Guard inbetween? */
-    J->cur.nsnapmap = (uint16_t)nsnapmap;
-    snap++;
-  } else {
-    J->cur.nsnapmap = (uint16_t)snap->mapofs;  /* Last snapshot is redundant. */
-  }
-  J->cur.nsnap = (uint16_t)(snap - J->cur.snap);
+  if (!irt_isguard(J->guardemit))  /* Drop redundant snapshot. */
+    J->cur.nsnapmap = (uint16_t)J->cur.snap[--J->cur.nsnap].mapofs;
   lua_assert(J->cur.nsnapmap <= J->sizesnapmap);
+  *psentinel = J->cur.snapmap[J->cur.snap[0].nent];  /* Restore PC. */
 
   loop_emit_phi(J, subst, phi, nphi);
 }
 
 /* Undo any partial changes made by the loop optimization. */
-static void loop_undo(jit_State *J, IRRef ins)
+static void loop_undo(jit_State *J, IRRef ins, MSize nsnap)
 {
   ptrdiff_t i;
+  SnapShot *snap = &J->cur.snap[nsnap-1];
+  SnapEntry *map = J->cur.snapmap;
+  map[snap->mapofs + snap->nent] = map[J->cur.snap[0].nent];  /* Restore PC. */
+  J->cur.nsnapmap = (uint16_t)(snap->mapofs + snap->nent + snap->nframelinks);
+  J->cur.nsnap = nsnap;
+  J->guardemit.irt = 0;
   lj_ir_rollback(J, ins);
   for (i = 0; i < BPROP_SLOTS; i++) {  /* Remove backprop. cache entries. */
     BPropEntry *bp = &J->bpropcache[i];
@@ -336,6 +342,7 @@ static TValue *cploop_opt(lua_State *L, lua_CFunction dummy, void *ud)
 int lj_opt_loop(jit_State *J)
 {
   IRRef nins = J->cur.nins;
+  MSize nsnap = J->cur.nsnap;
   int errcode = lj_vm_cpcall(J->L, NULL, J, cploop_opt);
   if (LJ_UNLIKELY(errcode)) {
     lua_State *L = J->L;
@@ -348,8 +355,7 @@ int lj_opt_loop(jit_State *J)
 	if (--J->instunroll < 0)  /* But do not unroll forever. */
 	  break;
 	L->top--;  /* Remove error object. */
-	J->guardemit.irt = 0;
-	loop_undo(J, nins);
+	loop_undo(J, nins, nsnap);
 	return 1;  /* Loop optimization failed, continue recording. */
       default:
 	break;

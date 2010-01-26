@@ -926,9 +926,9 @@ static void asm_snap_alloc(ASMState *as)
 {
   SnapShot *snap = &as->T->snap[as->snapno];
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  BCReg s, nslots = snap->nslots;
-  for (s = 0; s < nslots; s++) {
-    IRRef ref = snap_ref(map[s]);
+  MSize n, nent = snap->nent;
+  for (n = 0; n < nent; n++) {
+    IRRef ref = snap_ref(map[n]);
     if (!irref_isk(ref)) {
       IRIns *ir = IR(ref);
       if (!ra_used(ir) && ir->o != IR_FRAME) {
@@ -960,9 +960,9 @@ static int asm_snap_checkrename(ASMState *as, IRRef ren)
 {
   SnapShot *snap = &as->T->snap[as->snapno];
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  BCReg s, nslots = snap->nslots;
-  for (s = 0; s < nslots; s++) {
-    IRRef ref = snap_ref(map[s]);
+  MSize n, nent = snap->nent;
+  for (n = 0; n < nent; n++) {
+    IRRef ref = snap_ref(map[n]);
     if (ref == ren) {
       IRIns *ir = IR(ref);
       ra_spill(as, ir);  /* Register renamed, so force a spill slot. */
@@ -2465,18 +2465,17 @@ static void asm_gc_sync(ASMState *as, SnapShot *snap, Reg base)
   */
   RegSet allow = rset_exclude(RSET_SCRATCH & RSET_GPR, base);
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  BCReg s, nslots = snap->nslots;
-  for (s = 0; s < nslots; s++) {
-    IRRef ref = snap_ref(map[s]);
+  MSize n, nent = snap->nent;
+  for (n = 0; n < nent; n++) {
+    IRRef ref = snap_ref(map[n]);
     if (!irref_isk(ref)) {
+      int32_t ofs = 8*(int32_t)(snap_slot(map[n])-1);
       IRIns *ir = IR(ref);
       if (ir->o == IR_FRAME) {
 	/* NYI: sync the frame, bump base, set topslot, clear new slots. */
 	lj_trace_err(as->J, LJ_TRERR_NYIGCF);
-      } else if (irt_isgcv(ir->t) &&
-	       !(ir->o == IR_SLOAD && ir->op1 < nslots && map[ir->op1] == 0)) {
+      } else if (irt_isgcv(ir->t)) {
 	Reg src = ra_alloc1(as, ref, allow);
-	int32_t ofs = 8*(int32_t)(s-1);
 	emit_movtomro(as, src, base, ofs);
 	emit_movmroi(as, base, ofs+4, irt_toitype(ir->t));
 	checkmclim(as);
@@ -2504,7 +2503,7 @@ static void asm_gc_check(ASMState *as, SnapShot *snap)
   emit_loadi(as, tmp, (int32_t)as->gcsteps);
   /* We don't know spadj yet, so get the C frame from L->cframe. */
   emit_movmroi(as, tmp, CFRAME_OFS_PC,
-	       (int32_t)as->T->snapmap[snap->mapofs+snap->nslots]);
+	       (int32_t)as->T->snapmap[snap->mapofs+snap->nent]);
   emit_gri(as, XG_ARITHi(XOg_AND), tmp, CFRAME_RAWMASK);
   lstate = IR(ASMREF_L)->r;
   emit_movrmro(as, tmp, lstate, offsetof(lua_State, cframe));
@@ -2965,19 +2964,19 @@ static void asm_head_side(ASMState *as)
 static void asm_tail_sync(ASMState *as)
 {
   SnapShot *snap = &as->T->snap[as->T->nsnap-1];  /* Last snapshot. */
-  BCReg s, nslots = snap->nslots;
+  MSize n, nent = snap->nent;
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nslots + snap->nframelinks;
+  SnapEntry *flinks = map + nent + snap->nframelinks;
   BCReg newbase = 0;
-  BCReg secondbase = ~(BCReg)0;
-  BCReg topslot = 0;
+  BCReg nslots, topslot = 0;
 
   checkmclim(as);
   ra_allocref(as, REF_BASE, RID2RSET(RID_BASE));
 
   /* Must check all frames to find topslot (outer can be larger than inner). */
-  for (s = 0; s < nslots; s++) {
-    IRRef ref = snap_ref(map[s]);
+  for (n = 0; n < nent; n++) {
+    IRRef ref = snap_ref(map[n]);
+    BCReg s = snap_slot(map[n]);
     if (!irref_isk(ref)) {
       IRIns *ir = IR(ref);
       if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
@@ -2985,10 +2984,7 @@ static void asm_tail_sync(ASMState *as)
 	if (isluafunc(fn)) {
 	  BCReg fs = s + funcproto(fn)->framesize;
 	  if (fs > topslot) topslot = fs;
-	  if (s != 0) {
-	    newbase = s;
-	    if (secondbase == ~(BCReg)0) secondbase = s;
-	  }
+	  newbase = s;
 	}
       }
     }
@@ -2998,7 +2994,7 @@ static void asm_tail_sync(ASMState *as)
   if (as->T->link == TRACE_INTERP) {
     /* Setup fixed registers for exit to interpreter. */
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
-    emit_loadi(as, RID_PC, (int32_t)map[nslots]);
+    emit_loadi(as, RID_PC, (int32_t)map[nent]);
   } else if (newbase) {
     /* Save modified BASE for linking to trace with higher start frame. */
     emit_setgl(as, RID_BASE, jit_base);
@@ -3007,51 +3003,50 @@ static void asm_tail_sync(ASMState *as)
   emit_addptr(as, RID_BASE, 8*(int32_t)newbase);
 
   /* Clear stack slots of newly added frames. */
+  nslots = snap->nslots;
   if (nslots <= topslot) {
     if (nslots < topslot) {
+      BCReg s;
       for (s = nslots; s <= topslot; s++) {
-	emit_movtomro(as, RID_EAX, RID_BASE, 8*(int32_t)s-4);
+	emit_movtomro(as, RID_EAX, RID_BASE, 8*((int32_t)s-1)+4);
 	checkmclim(as);
       }
       emit_loadi(as, RID_EAX, LJ_TNIL);
     } else {
-      emit_movmroi(as, RID_BASE, 8*(int32_t)nslots-4, LJ_TNIL);
+      emit_movmroi(as, RID_BASE, 8*((int32_t)nslots-1)+4, LJ_TNIL);
     }
   }
 
   /* Store the value of all modified slots to the Lua stack. */
-  for (s = 0; s < nslots; s++) {
+  for (n = 0; n < nent; n++) {
+    BCReg s = snap_slot(map[n]);
     int32_t ofs = 8*((int32_t)s-1);
-    IRRef ref = snap_ref(map[s]);
-    if (ref) {
-      IRIns *ir = IR(ref);
-      /* No need to restore readonly slots and unmodified non-parent slots. */
-      if (ir->o == IR_SLOAD && ir->op1 == s &&
-	  (ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
-	continue;
-      if (irt_isnum(ir->t)) {
-	Reg src = ra_alloc1(as, ref, RSET_FPR);
-	emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
-      } else if (ir->o == IR_FRAME) {
-	emit_movmroi(as, RID_BASE, ofs, ptr2addr(ir_kgc(IR(ir->op2))));
-	if (s != 0)  /* Do not overwrite link to previous frame. */
-	  emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*--flinks));
-      } else {
-	lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
-	if (!irref_isk(ref)) {
-	  Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
-	  emit_movtomro(as, src, RID_BASE, ofs);
-	} else if (!irt_ispri(ir->t)) {
-	  emit_movmroi(as, RID_BASE, ofs, ir->i);
-	}
-	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
-      }
+    IRRef ref = snap_ref(map[n]);
+    IRIns *ir = IR(ref);
+    /* No need to restore readonly slots and unmodified non-parent slots. */
+    if (ir->o == IR_SLOAD && ir->op1 == s &&
+	(ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
+      continue;
+    if (irt_isnum(ir->t)) {
+      Reg src = ra_alloc1(as, ref, RSET_FPR);
+      emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
+    } else if (ir->o == IR_FRAME) {
+      emit_movmroi(as, RID_BASE, ofs, ptr2addr(ir_kgc(IR(ir->op2))));
+      if (s != 0)  /* Do not overwrite link to previous frame. */
+	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*--flinks));
     } else {
-      lua_assert(!(s > secondbase));
+      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
+      if (!irref_isk(ref)) {
+	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
+	emit_movtomro(as, src, RID_BASE, ofs);
+      } else if (!irt_ispri(ir->t)) {
+	emit_movmroi(as, RID_BASE, ofs, ir->i);
+      }
+      emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
     }
     checkmclim(as);
   }
-  lua_assert(map + nslots == flinks-1);
+  lua_assert(map + nent == flinks-1);
 }
 
 /* Fixup the tail code. */

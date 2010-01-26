@@ -24,9 +24,9 @@ static void dce_marksnap(jit_State *J)
   for (i = 0; i < nsnap; i++) {
     SnapShot *snap = &J->cur.snap[i];
     SnapEntry *map = &J->cur.snapmap[snap->mapofs];
-    BCReg s, nslots = snap->nslots;
-    for (s = 0; s < nslots; s++) {
-      IRRef ref = snap_ref(map[s]);
+    MSize n, nent = snap->nent;
+    for (n = 0; n < nent; n++) {
+      IRRef ref = snap_ref(map[n]);
       if (!irref_isk(ref))
 	irt_setmark(IR(ref)->t);
     }

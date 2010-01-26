@@ -332,18 +332,25 @@ LJLIB_CF(jit_util_tracesnap)
   if (T && sn < T->nsnap) {
     SnapShot *snap = &T->snap[sn];
     SnapEntry *map = &T->snapmap[snap->mapofs];
-    BCReg s, nslots = snap->nslots;
+    MSize n, nent = snap->nent;
+    BCReg nslots = snap->nslots;
     GCtab *t;
     lua_createtable(L, nslots ? (int)nslots : 1, 0);
     t = tabV(L->top-1);
     setintV(lj_tab_setint(L, t, 0), (int32_t)snap->ref - REF_BIAS);
-    for (s = 0; s < nslots; s++) {
-      TValue *o = lj_tab_setint(L, t, (int32_t)(s+1));
-      IRRef ref = snap_ref(map[s]);
-      if (ref)
-	setintV(o, (int32_t)ref - REF_BIAS);
-      else
+    /* NYI: get rid of this and expose the compressed slot map. */
+    {
+      BCReg s;
+      for (s = 0; s < nslots; s++) {
+	TValue *o = lj_tab_setint(L, t, (int32_t)(s+1));
 	setboolV(o, 0);
+      }
+    }
+    for (n = 0; n < nent; n++) {
+      BCReg s = snap_slot(map[n]);
+      IRRef ref = snap_ref(map[n]);
+      TValue *o = lj_tab_setint(L, t, (int32_t)(s+1));
+      setintV(o, (int32_t)ref - REF_BIAS);
     }
     return 1;
   }

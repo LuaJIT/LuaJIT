@@ -161,8 +161,8 @@ void lj_trace_reenableproto(GCproto *pt)
 static void trace_unpatch(jit_State *J, Trace *T)
 {
   BCOp op = bc_op(T->startins);
-  uint32_t pcofs = T->snap[0].mapofs + T->snap[0].nslots;
-  BCIns *pc = ((BCIns *)(uintptr_t)T->snapmap[pcofs]) - 1;
+  MSize pcofs = T->snap[0].mapofs + T->snap[0].nent;
+  BCIns *pc = ((BCIns *)snap_pc(T->snapmap[pcofs])) - 1;
   switch (op) {
   case BC_FORL:
     lua_assert(bc_op(*pc) == BC_JFORI);
@@ -352,7 +352,6 @@ static void trace_start(jit_State *J)
   J->cur.ir = J->irbuf;
   J->cur.snap = J->snapbuf;
   J->cur.snapmap = J->snapmapbuf;
-  /* J->cur.nsnapmap = 0; */
   J->mergesnap = 0;
   J->needsnap = 0;
   J->guardemit.irt = 0;

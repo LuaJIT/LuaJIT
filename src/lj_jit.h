@@ -112,17 +112,27 @@ typedef uint8_t MCode;
 typedef struct SnapShot {
   uint16_t mapofs;	/* Offset into snapshot map. */
   IRRef1 ref;		/* First IR ref for this snapshot. */
-  uint8_t nslots;	/* Number of stack slots. */
+  uint8_t nslots;	/* Number of valid slots. */
+  uint8_t nent;		/* Number of compressed entries. */
   uint8_t nframelinks;	/* Number of frame links. */
   uint8_t count;	/* Count of taken exits for this snapshot. */
-  uint8_t unused1;
 } SnapShot;
 
 #define SNAPCOUNT_DONE	255	/* Already compiled and linked a side trace. */
 
-/* Snapshot entry. */
+/* Compressed snapshot entry. */
 typedef uint32_t SnapEntry;
+
+#define SNAP_FRAME		0x010000	/* Slot has frame link. */
+
+#define SNAP(slot, flags, ref)	((SnapEntry)((slot) << 24) + (flags) + (ref))
+#define SNAP_MKPC(pc)		((SnapEntry)u32ptr(pc))
+#define SNAP_MKFTSZ(ftsz)	((SnapEntry)(ftsz))
 #define snap_ref(sn)		((sn) & 0xffff)
+#define snap_slot(sn)		((BCReg)((sn) >> 24))
+#define snap_isframe(sn)	((sn) & SNAP_FRAME)
+#define snap_pc(sn)		((const BCIns *)(uintptr_t)(sn))
+#define snap_setref(sn, ref)	(((sn) & 0xffff0000) | (ref))
 
 /* Snapshot and exit numbers. */
 typedef uint32_t SnapNo;
