@@ -166,16 +166,6 @@
 #define NARROW_MAX_BACKPROP	100
 #define NARROW_MAX_STACK	256
 
-/* Context used for narrowing of type conversions. */
-typedef struct NarrowConv {
-  jit_State *J;		/* JIT compiler state. */
-  IRRef2 *sp;		/* Current stack pointer. */
-  IRRef2 *maxsp;	/* Maximum stack pointer minus redzone. */
-  int lim;		/* Limit on the number of emitted conversions. */
-  IRRef mode;		/* Conversion mode (IRTOINT_*). */
-  IRRef2 stack[NARROW_MAX_STACK];  /* Stack holding the stack-machine code. */
-} NarrowConv;
-
 /* The stack machine has a 32 bit instruction format: [IROpT | IRRef1]
 ** The lower 16 bits hold a reference (or 0). The upper 16 bits hold
 ** the IR opcode + type or one of the following special opcodes:
@@ -185,6 +175,22 @@ enum {
   NARROW_CONV,		/* Push conversion of ref. */
   NARROW_INT		/* Push KINT ref. The next code holds an int32_t. */
 };
+
+typedef uint32_t NarrowIns;
+
+#define NARROWINS(op, ref)	(((op) << 16) + (ref))
+#define narrow_op(ins)		((IROpT)((ins) >> 16))
+#define narrow_ref(ins)		((IRRef1)(ins))
+
+/* Context used for narrowing of type conversions. */
+typedef struct NarrowConv {
+  jit_State *J;		/* JIT compiler state. */
+  NarrowIns *sp;	/* Current stack pointer. */
+  NarrowIns *maxsp;	/* Maximum stack pointer minus redzone. */
+  int lim;		/* Limit on the number of emitted conversions. */
+  IRRef mode;		/* Conversion mode (IRTOINT_*). */
+  NarrowIns stack[NARROW_MAX_STACK];  /* Stack holding stack-machine code. */
+} NarrowConv;
 
 /* Lookup a reference in the backpropagation cache. */
 static IRRef narrow_bpc_get(jit_State *J, IRRef1 key, IRRef mode)
@@ -218,22 +224,22 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
 
   /* Check the easy cases first. */
   if (ir->o == IR_TONUM) {  /* Undo inverse conversion. */
-    *nc->sp++ = IRREF2(ir->op1, NARROW_REF);
+    *nc->sp++ = NARROWINS(NARROW_REF, ir->op1);
     return 0;
   } else if (ir->o == IR_KNUM) {  /* Narrow FP constant. */
     lua_Number n = ir_knum(ir)->n;
     if (nc->mode == IRTOINT_TOBIT) {  /* Allows a wider range of constants. */
       int64_t k64 = (int64_t)n;
       if (n == cast_num(k64)) {  /* Only if constant doesn't lose precision. */
-	*nc->sp++ = IRREF2(0, NARROW_INT);
-	*nc->sp++ = (IRRef2)k64;  /* But always truncate to 32 bits. */
+	*nc->sp++ = NARROWINS(NARROW_INT, 0);
+	*nc->sp++ = (NarrowIns)k64;  /* But always truncate to 32 bits. */
 	return 0;
       }
     } else {
       int32_t k = lj_num2int(n);
       if (n == cast_num(k)) {  /* Only if constant is really an integer. */
-	*nc->sp++ = IRREF2(0, NARROW_INT);
-	*nc->sp++ = (IRRef2)k;
+	*nc->sp++ = NARROWINS(NARROW_INT, 0);
+	*nc->sp++ = (NarrowIns)k;
 	return 0;
       }
     }
@@ -244,7 +250,7 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   for (cref = J->chain[fins->o]; cref > ref; cref = IR(cref)->prev)
     if (IR(cref)->op1 == ref &&
 	irt_isguard(IR(cref)->t) >= irt_isguard(fins->t)) {
-      *nc->sp++ = IRREF2(cref, NARROW_REF);
+      *nc->sp++ = NARROWINS(NARROW_REF, cref);
       return 0;  /* Already there, no additional conversion needed. */
     }
 
@@ -256,15 +262,15 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
       mode = IRTOINT_CHECK;  /* Inner conversions need a stronger check. */
     bpref = narrow_bpc_get(nc->J, (IRRef1)ref, mode);
     if (bpref) {
-      *nc->sp++ = IRREF2(bpref, NARROW_REF);
+      *nc->sp++ = NARROWINS(NARROW_REF, bpref);
       return 0;
     }
     if (++depth < NARROW_MAX_BACKPROP && nc->sp < nc->maxsp) {
-      IRRef2 *savesp = nc->sp;
+      NarrowIns *savesp = nc->sp;
       int count = narrow_conv_backprop(nc, ir->op1, depth);
       count += narrow_conv_backprop(nc, ir->op2, depth);
       if (count <= nc->lim) {  /* Limit total number of conversions. */
-	*nc->sp++ = IRREF2(ref, IRTI(ir->o));
+	*nc->sp++ = NARROWINS(IRTI(ir->o), ref);
 	return count;
       }
       nc->sp = savesp;  /* Too many conversions, need to backtrack. */
@@ -272,7 +278,7 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   }
 
   /* Otherwise add a conversion. */
-  *nc->sp++ = IRREF2(ref, NARROW_CONV);
+  *nc->sp++ = NARROWINS(NARROW_CONV, ref);
   return 1;
 }
 
@@ -283,12 +289,12 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
   IROpT guardot = irt_isguard(fins->t) ? IRTG(IR_ADDOV-IR_ADD, 0) : 0;
   IROpT convot = fins->ot;
   IRRef1 convop2 = fins->op2;
-  IRRef2 *next = nc->stack;  /* List of instructions from backpropagation. */
-  IRRef2 *last = nc->sp;
-  IRRef2 *sp = nc->stack;  /* Recycle the stack to store operands. */
+  NarrowIns *next = nc->stack;  /* List of instructions from backpropagation. */
+  NarrowIns *last = nc->sp;
+  NarrowIns *sp = nc->stack;  /* Recycle the stack to store operands. */
   while (next < last) {  /* Simple stack machine to process the ins. list. */
-    IRRef2 ref = *next++;
-    IROpT op = ref >> 16;
+    NarrowIns ref = *next++;
+    IROpT op = narrow_op(ref);
     if (op == NARROW_REF) {
       *sp++ = ref;
     } else if (op == NARROW_CONV) {
@@ -302,14 +308,15 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
       sp--;
       /* Omit some overflow checks for array indexing. See comments above. */
       if (mode == IRTOINT_INDEX) {
-	if (next == last && irref_isk((IRRef1)sp[0]) &&
-	  (uint32_t)IR((IRRef1)sp[0])->i + 0x40000000 < 0x80000000)
+	if (next == last && irref_isk(narrow_ref(sp[0])) &&
+	  (uint32_t)IR(narrow_ref(sp[0]))->i + 0x40000000 < 0x80000000)
 	  guardot = 0;
 	else
 	  mode = IRTOINT_CHECK;  /* Otherwise cache a stronger check. */
       }
       sp[-1] = emitir(op+guardot, sp[-1], sp[0]);
-      narrow_bpc_set(J, (IRRef1)ref, (IRRef1)sp[-1], mode);  /* Add to cache. */
+      /* Add to cache. */
+      narrow_bpc_set(J, narrow_ref(ref), narrow_ref(sp[-1]), mode);
     }
   }
   lua_assert(sp == nc->stack+1);
