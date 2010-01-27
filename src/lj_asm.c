@@ -931,7 +931,7 @@ static void asm_snap_alloc(ASMState *as)
     IRRef ref = snap_ref(map[n]);
     if (!irref_isk(ref)) {
       IRIns *ir = IR(ref);
-      if (!ra_used(ir) && ir->o != IR_FRAME) {
+      if (!ra_used(ir)) {
 	RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
 	/* Not a var-to-invar ref and got a free register (or a remat)? */
 	if ((!iscrossref(as, ref) || irt_isphi(ir->t)) &&
@@ -2831,27 +2831,25 @@ static void asm_head_side(ASMState *as)
   /* Scan all parent SLOADs and collect register dependencies. */
   for (i = as->curins; i > REF_BASE; i--) {
     IRIns *ir = IR(i);
-    lua_assert((ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_PARENT)) ||
-	       ir->o == IR_FRAME);
-    if (ir->o == IR_SLOAD) {
-      RegSP rs = as->parentmap[ir->op1];
-      if (ra_hasreg(ir->r)) {
-	rset_clear(allow, ir->r);
-	if (ra_hasspill(ir->s))
-	  ra_save(as, ir, ir->r);
-      } else if (ra_hasspill(ir->s)) {
-	irt_setmark(ir->t);
-	pass2 = 1;
-      }
-      if (ir->r == rs) {  /* Coalesce matching registers right now. */
-	ra_free(as, ir->r);
-      } else if (ra_hasspill(regsp_spill(rs))) {
-	if (ra_hasreg(ir->r))
-	  pass3 = 1;
-      } else if (ra_used(ir)) {
-	sloadins[rs] = (IRRef1)i;
-	rset_set(live, rs);  /* Block live parent register. */
-      }
+    RegSP rs;
+    lua_assert(ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_PARENT));
+    rs = as->parentmap[ir->op1];
+    if (ra_hasreg(ir->r)) {
+      rset_clear(allow, ir->r);
+      if (ra_hasspill(ir->s))
+	ra_save(as, ir, ir->r);
+    } else if (ra_hasspill(ir->s)) {
+      irt_setmark(ir->t);
+      pass2 = 1;
+    }
+    if (ir->r == rs) {  /* Coalesce matching registers right now. */
+      ra_free(as, ir->r);
+    } else if (ra_hasspill(regsp_spill(rs))) {
+      if (ra_hasreg(ir->r))
+	pass3 = 1;
+    } else if (ra_used(ir)) {
+      sloadins[rs] = (IRRef1)i;
+      rset_set(live, rs);  /* Block live parent register. */
     }
   }
 
@@ -2979,8 +2977,7 @@ static void asm_tail_sync(ASMState *as)
     SnapEntry sn = map[n];
     if ((sn & SNAP_FRAME)) {
       IRIns *ir = IR(snap_ref(sn));
-      GCfunc *fn = ir_kfunc(IR(ir->op2));
-      lua_assert(ir->o == IR_FRAME && irt_isfunc(ir->t));
+      GCfunc *fn = ir_kfunc(ir);
       if (isluafunc(fn)) {
 	BCReg s = snap_slot(sn);
 	BCReg fs = s + funcproto(fn)->framesize;
@@ -3019,9 +3016,10 @@ static void asm_tail_sync(ASMState *as)
 
   /* Store the value of all modified slots to the Lua stack. */
   for (n = 0; n < nent; n++) {
-    BCReg s = snap_slot(map[n]);
+    SnapEntry sn = map[n];
+    BCReg s = snap_slot(sn);
     int32_t ofs = 8*((int32_t)s-1);
-    IRRef ref = snap_ref(map[n]);
+    IRRef ref = snap_ref(sn);
     IRIns *ir = IR(ref);
     /* No need to restore readonly slots and unmodified non-parent slots. */
     if (ir->o == IR_SLOAD && ir->op1 == s &&
@@ -3030,10 +3028,6 @@ static void asm_tail_sync(ASMState *as)
     if (irt_isnum(ir->t)) {
       Reg src = ra_alloc1(as, ref, RSET_FPR);
       emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
-    } else if (ir->o == IR_FRAME) {
-      emit_movmroi(as, RID_BASE, ofs, ptr2addr(ir_kgc(IR(ir->op2))));
-      if (s != 0)  /* Do not overwrite link to previous frame. */
-	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*--flinks));
     } else {
       lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
       if (!irref_isk(ref)) {
@@ -3042,7 +3036,10 @@ static void asm_tail_sync(ASMState *as)
       } else if (!irt_ispri(ir->t)) {
 	emit_movmroi(as, RID_BASE, ofs, ir->i);
       }
-      emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
+      if (!(sn & (SNAP_CONT|SNAP_FRAME)))
+	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
+      else if (s != 0)  /* Do not overwrite link to previous frame. */
+	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*--flinks));
     }
     checkmclim(as);
   }
@@ -3110,10 +3107,6 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_ULE: asm_comp(as, ir, CC_A,  CC_A,  VCC_U); break;
   case IR_ABC:
   case IR_UGT: asm_comp(as, ir, CC_BE, CC_BE, VCC_U|VCC_PS); break;
-
-  case IR_FRAME:
-    if (ir->op1 == ir->op2) break;  /* No check needed for placeholder. */
-    /* fallthrough */
   case IR_EQ:  asm_comp(as, ir, CC_NE, CC_NE, VCC_P); break;
   case IR_NE:  asm_comp(as, ir, CC_E,  CC_E,  VCC_U|VCC_P); break;
 
@@ -3271,10 +3264,6 @@ static void asm_setup_regsp(ASMState *as, Trace *T)
 	  continue;
 	}
       }
-      break;
-    case IR_FRAME:
-      if (i == as->stopins+1 && ir->op1 == ir->op2)
-	as->stopins++;
       break;
     case IR_CALLN: case IR_CALLL: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];

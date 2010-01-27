@@ -148,15 +148,10 @@ static TRef sload(jit_State *J, int32_t slot)
 /* Get TRef for current function. */
 static TRef getcurrf(jit_State *J)
 {
-  if (J->base[-1]) {
-    IRIns *ir = IR(tref_ref(J->base[-1]));
-    if (ir->o == IR_FRAME)  /* Shortcut if already specialized. */
-      return TREF(ir->op2, IRT_FUNC);  /* Return TRef of KFUNC. */
+  if (J->base[-1])
     return J->base[-1];
-  } else {
-    lua_assert(J->baseslot == 1);
-    return sloadt(J, -1, IRT_FUNC, IRSLOAD_READONLY);
-  }
+  lua_assert(J->baseslot == 1);
+  return sloadt(J, -1, IRT_FUNC, IRSLOAD_READONLY);
 }
 
 /* Compare for raw object equality.
@@ -424,7 +419,7 @@ static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 #else
   trcont = lj_ir_kptr(J, (void *)cont);
 #endif
-  J->base[top] = emitir(IRTG(IR_FRAME, IRT_PTR), trcont, trcont) | TREF_CONT;
+  J->base[top] = trcont | TREF_CONT;
   for (s = J->maxslot; s < top; s++)
     J->base[s] = TREF_NIL;
   return top+1;
@@ -1586,7 +1581,7 @@ static void check_call_unroll(jit_State *J, GCfunc *fn)
 static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
 {
   RecordFFData rd;
-  TRef *res = &J->base[func];
+  TRef trfunc, *res = &J->base[func];
   TValue *tv = &J->L->base[func];
 
   if (tref_isfunc(res[0])) {  /* Regular function call. */
@@ -1608,7 +1603,9 @@ static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
   }
 
   /* Specialize to the runtime value of the called function. */
-  res[0] = emitir(IRTG(IR_FRAME, IRT_FUNC), res[0], lj_ir_kfunc(J, rd.fn)) | TREF_FRAME;
+  trfunc = lj_ir_kfunc(J, rd.fn);
+  emitir(IRTG(IR_EQ, IRT_FUNC), res[0], trfunc);
+  res[0] = trfunc | TREF_FRAME;
 
   if (isluafunc(rd.fn)) {  /* Record call to Lua function. */
     GCproto *pt = funcproto(rd.fn);
@@ -2175,12 +2172,7 @@ static void rec_setup_side(jit_State *J, Trace *T)
       for (j = 0; j < n; j++)
 	if (snap_ref(map[j]) == ref) {
 	  tr = J->slot[snap_slot(map[j])];
-	  if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
-	    lua_assert(s != 0);
-	    J->baseslot = s+1;
-	    J->framedepth++;
-	  }
-	  goto dupslot;
+	  goto setslot;
 	}
     }
     bloomset(seen, ref);
@@ -2190,30 +2182,24 @@ static void rec_setup_side(jit_State *J, Trace *T)
     case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
     case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
     case IR_KNUM: tr = lj_ir_knum_addr(J, ir_knum(ir)); break;
-    case IR_FRAME:  /* Placeholder FRAMEs don't need a guard. */
-      if (irt_isfunc(ir->t)) {
-	if (s != 0) {
-	  J->baseslot = s+1;
-	  J->framedepth++;
-	}
-	tr = lj_ir_kfunc(J, ir_kfunc(&T->ir[ir->op2]));
-	tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr) | TREF_FRAME;
-      } else {
-	tr = lj_ir_kptr(J, mref(T->ir[ir->op2].ptr, void));
-	tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr) | TREF_CONT;
-      }
-      break;
-    case IR_SLOAD:  /* Inherited SLOADs don't need a guard or type check. */
+    case IR_KPTR:  tr = lj_ir_kptr(J, ir_kptr(ir)); break;  /* Continuation. */
+    /* Inherited SLOADs don't need a guard or type check. */
+    case IR_SLOAD:
       tr = emitir_raw(ir->ot & ~IRT_GUARD, s,
 	     (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
       break;
-    default:  /* Parent refs are already typed and don't need a guard. */
+    /* Parent refs are already typed and don't need a guard. */
+    default:
       tr = emitir_raw(IRT(IR_SLOAD, irt_type(ir->t)), s,
 		      IRSLOAD_INHERIT|IRSLOAD_PARENT);
       break;
     }
-  dupslot:
-    J->slot[s] = tr;
+  setslot:
+    J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
+    if ((sn & SNAP_FRAME) && s != 0) {
+      J->baseslot = s+1;
+      J->framedepth++;
+    }
   }
   J->base = J->slot + J->baseslot;
   J->maxslot = snap->nslots - J->baseslot;

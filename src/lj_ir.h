@@ -34,7 +34,7 @@
   _(NE,		GC, ref, ref) \
   \
   _(ABC,	G , ref, ref) \
-  _(FRAME,	G , ref, ref) \
+  _(UNUSED,	G , ref, ref) /* Placeholder. */ \
   \
   _(LT,		G , ref, ref) \
   _(GE,		G , ref, ref) \
@@ -511,11 +511,11 @@ typedef union IRIns {
   MRef ptr;		/* Pointer constant (overlaps op12). */
 } IRIns;
 
-#define ir_kgc(ir)	(gcref((ir)->gcr))
+#define ir_kgc(ir)	check_exp((ir)->o == IR_KGC, gcref((ir)->gcr))
 #define ir_kstr(ir)	(gco2str(ir_kgc((ir))))
 #define ir_ktab(ir)	(gco2tab(ir_kgc((ir))))
 #define ir_kfunc(ir)	(gco2func(ir_kgc((ir))))
-#define ir_knum(ir)	(mref((ir)->ptr, cTValue))
-#define ir_kptr(ir)	(mref((ir)->ptr, void))
+#define ir_knum(ir)	check_exp((ir)->o == IR_KNUM, mref((ir)->ptr, cTValue))
+#define ir_kptr(ir)	check_exp((ir)->o == IR_KPTR, mref((ir)->ptr, void))
 
 #endif

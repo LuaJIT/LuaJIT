@@ -211,6 +211,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
   SnapEntry *flinks = map + nent + snap->nframelinks;
+  int32_t ftsz0;
   BCReg nslots = snap->nslots;
   TValue *frame;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
@@ -224,6 +225,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
 
   /* Fill stack slots with data from the registers and spill slots. */
   frame = L->base-1;
+  ftsz0 = frame_ftsz(frame);  /* Preserve link to previous frame in slot #0. */
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
     IRRef ref = snap_ref(sn);
@@ -232,42 +234,11 @@ void lj_snap_restore(jit_State *J, void *exptr)
     IRIns *ir = &T->ir[ref];
     if (irref_isk(ref)) {  /* Restore constant slot. */
       lj_ir_kvalue(L, o, ir);
-    } else {
-      IRType1 t = ir->t;
-      RegSP rs = ir->prev;
-      if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
-	rs = snap_renameref(T, snapno, ref, rs);
-      if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
-	int32_t *sps = &ex->spill[regsp_spill(rs)];
-	if (irt_isinteger(t)) {
-	  setintV(o, *sps);
-	} else if (irt_isnum(t)) {
-	  o->u64 = *(uint64_t *)sps;
-	} else {
-	  lua_assert(!irt_ispri(t));  /* PRI refs never have a spill slot. */
-	  setgcrefi(o->gcr, *sps);
-	  setitype(o, irt_toitype(t));
-	}
-      } else if (ra_hasreg(regsp_reg(rs))) {  /* Restore from register. */
-	Reg r = regsp_reg(rs);
-	if (irt_isinteger(t)) {
-	  setintV(o, ex->gpr[r-RID_MIN_GPR]);
-	} else if (irt_isnum(t)) {
-	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
-	} else {
-	  if (!irt_ispri(t))
-	    setgcrefi(o->gcr, ex->gpr[r-RID_MIN_GPR]);
-	  setitype(o, irt_toitype(t));
-	}
-      } else {  /* Restore frame slot. */
-	lua_assert((sn & (SNAP_CONT|SNAP_FRAME)));
-	lua_assert(ir->o == IR_FRAME);
-	/* This works for both PTR and FUNC IR_FRAME. */
-	setgcrefp(o->fr.func, mref(T->ir[ir->op2].ptr, void));
-	if (s != 0)  /* Do not overwrite link to previous frame. */
-	  o->fr.tp.ftsz = (int32_t)*--flinks;
-	if (irt_isfunc(ir->t)) {
-	  GCfunc *fn = gco2func(gcref(T->ir[ir->op2].gcr));
+      if ((sn & (SNAP_CONT|SNAP_FRAME))) {
+	/* Overwrite tag with frame link. */
+	o->fr.tp.ftsz = s != 0 ? (int32_t)*--flinks : ftsz0;
+	if ((sn & SNAP_FRAME)) {
+	  GCfunc *fn = ir_kfunc(ir);
 	  if (isluafunc(fn)) {
 	    MSize framesize = funcproto(fn)->framesize;
 	    TValue *fs;
@@ -285,6 +256,36 @@ void lj_snap_restore(jit_State *J, void *exptr)
 	    while (o < fs)  /* Clear slots of newly added frames. */
 	      setnilV(o++);
 	  }
+	}
+      }
+    } else {
+      IRType1 t = ir->t;
+      RegSP rs = ir->prev;
+      lua_assert(!(sn & (SNAP_CONT|SNAP_FRAME)));
+      if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
+	rs = snap_renameref(T, snapno, ref, rs);
+      if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
+	int32_t *sps = &ex->spill[regsp_spill(rs)];
+	if (irt_isinteger(t)) {
+	  setintV(o, *sps);
+	} else if (irt_isnum(t)) {
+	  o->u64 = *(uint64_t *)sps;
+	} else {
+	  lua_assert(!irt_ispri(t));  /* PRI refs never have a spill slot. */
+	  setgcrefi(o->gcr, *sps);
+	  setitype(o, irt_toitype(t));
+	}
+      } else {  /* Restore from register. */
+	Reg r = regsp_reg(rs);
+	lua_assert(ra_hasreg(r));
+	if (irt_isinteger(t)) {
+	  setintV(o, ex->gpr[r-RID_MIN_GPR]);
+	} else if (irt_isnum(t)) {
+	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
+	} else {
+	  if (!irt_ispri(t))
+	    setgcrefi(o->gcr, ex->gpr[r-RID_MIN_GPR]);
+	  setitype(o, irt_toitype(t));
 	}
       }
     }
