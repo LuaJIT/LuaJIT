@@ -266,24 +266,21 @@ local function formatk(tr, idx)
 end
 
 local function printsnap(tr, snap)
-  for i=1,#snap do
-    local ref = snap[i]
-    if not ref then
-      out:write("---- ")
-    elseif ref < 0 then
-      out:write(formatk(tr, ref), " ")
-    else
-      local m, ot, op1, op2 = traceir(tr, ref)
-      local t = band(ot, 15)
-      local sep = " "
-      if t == 8 then
-	local oidx = 6*shr(ot, 8)
-	local op = sub(vmdef.irnames, oidx+1, oidx+6)
-	if op == "FRAME " then
-	  sep = "|"
-	end
+  local n = 2
+  for s=0,snap[1] do
+    local sn = snap[n]
+    if shr(sn, 24) == s then
+      n = n + 1
+      local ref = band(sn, 0xffff) - 0x8000 -- REF_BIAS
+      if ref < 0 then
+	out:write(formatk(tr, ref))
+      else
+	local m, ot, op1, op2 = traceir(tr, ref)
+	out:write(colorize(format("%04d", ref), band(ot, 15)))
       end
-      out:write(colorize(format("%04d", ref), t), sep)
+      out:write(band(sn, 0x10000) == 0 and " " or "|") -- SNAP_FRAME
+    else
+      out:write("---- ")
     end
   end
   out:write("]\n")
