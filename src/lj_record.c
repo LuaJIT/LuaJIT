@@ -1510,12 +1510,13 @@ static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
   J->tailcalled = 0;
   while (frame_ispcall(frame)) {
     BCReg cbase = (BCReg)frame_delta(frame);
+    if (J->framedepth-- <= 0)
+      lj_trace_err(J, LJ_TRERR_NYIRETL);
     lua_assert(J->baseslot > 1);
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
     *--res = TREF_TRUE;  /* Prepend true to results. */
     gotresults++;
-    J->framedepth--;
     frame = frame_prevd(frame);
   }
   if (J->framedepth-- <= 0)
