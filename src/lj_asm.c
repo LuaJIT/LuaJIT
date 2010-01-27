@@ -2655,7 +2655,7 @@ static void asm_phi_fixup(ASMState *as)
 /* Setup right PHI reference. */
 static void asm_phi(ASMState *as, IRIns *ir)
 {
-  RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
+  RegSet allow = (irt_isnum(ir->t) ? RSET_FPR : RSET_GPR) & ~as->phiset;
   RegSet afree = (as->freeset & allow);
   IRIns *irl = IR(ir->op1);
   IRIns *irr = IR(ir->op2);
