@@ -123,9 +123,14 @@ typedef struct SnapShot {
 /* Compressed snapshot entry. */
 typedef uint32_t SnapEntry;
 
-#define SNAP_FRAME		0x010000	/* Slot has frame link. */
+#define SNAP_FRAME		0x010000	/* Frame slot. */
+#define SNAP_CONT		0x020000	/* Continuation slot. */
+LJ_STATIC_ASSERT(SNAP_FRAME == TREF_FRAME);
+LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 
-#define SNAP(slot, flags, ref)	((SnapEntry)((slot) << 24) + (flags) + (ref))
+#define SNAP(slot, flags, ref)	(((SnapEntry)(slot) << 24) + (flags) + (ref))
+#define SNAP_TR(slot, tr) \
+  (((SnapEntry)(slot) << 24) + ((tr) & (TREF_CONT|TREF_FRAME|TREF_REFMASK)))
 #define SNAP_MKPC(pc)		((SnapEntry)u32ptr(pc))
 #define SNAP_MKFTSZ(ftsz)	((SnapEntry)(ftsz))
 #define snap_ref(sn)		((sn) & 0xffff)

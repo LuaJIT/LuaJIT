@@ -422,18 +422,29 @@ enum {
 
 #define irref_isk(ref)		((ref) < REF_BIAS)
 
-/* Tagged IR references. */
+/* Tagged IR references (32 bit).
+**
+** +-------+-------+---------------+
+** |  irt  | flags |      ref      |
+** +-------+-------+---------------+
+**
+** The tag holds a copy of the IRType and speeds up IR type checks.
+*/
 typedef uint32_t TRef;
 
-#define TREF(ref, t)		(cast(TRef, (ref) + ((t)<<16)))
+#define TREF_REFMASK		0x0000ffff
+#define TREF_FRAME		0x00010000
+#define TREF_CONT		0x00020000
 
-#define tref_ref(tr)		(cast(IRRef1, (tr)))
-#define tref_t(tr)		(cast(IRType, (tr)>>16))
-#define tref_type(tr)		(cast(IRType, ((tr)>>16) & IRT_TYPE))
+#define TREF(ref, t)		((TRef)((ref) + ((t)<<24)))
+
+#define tref_ref(tr)		((IRRef1)(tr))
+#define tref_t(tr)		((IRType)((tr)>>24))
+#define tref_type(tr)		((IRType)(((tr)>>24) & IRT_TYPE))
 #define tref_typerange(tr, first, last) \
-  ((((tr)>>16) & IRT_TYPE) - (TRef)(first) <= (TRef)(last-first))
+  ((((tr)>>24) & IRT_TYPE) - (TRef)(first) <= (TRef)(last-first))
 
-#define tref_istype(tr, t)	(((tr) & (IRT_TYPE<<16)) == ((t)<<16))
+#define tref_istype(tr, t)	(((tr) & (IRT_TYPE<<24)) == ((t)<<24))
 #define tref_isnil(tr)		(tref_istype((tr), IRT_NIL))
 #define tref_isfalse(tr)	(tref_istype((tr), IRT_FALSE))
 #define tref_istrue(tr)		(tref_istype((tr), IRT_TRUE))

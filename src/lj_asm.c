@@ -2467,14 +2467,15 @@ static void asm_gc_sync(ASMState *as, SnapShot *snap, Reg base)
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
   MSize n, nent = snap->nent;
   for (n = 0; n < nent; n++) {
-    IRRef ref = snap_ref(map[n]);
+    SnapEntry sn = map[n];
+    IRRef ref = snap_ref(sn);
+    /* NYI: sync the frame, bump base, set topslot, clear new slots. */
+    if ((sn & (SNAP_CONT|SNAP_FRAME)))
+      lj_trace_err(as->J, LJ_TRERR_NYIGCF);
     if (!irref_isk(ref)) {
-      int32_t ofs = 8*(int32_t)(snap_slot(map[n])-1);
       IRIns *ir = IR(ref);
-      if (ir->o == IR_FRAME) {
-	/* NYI: sync the frame, bump base, set topslot, clear new slots. */
-	lj_trace_err(as->J, LJ_TRERR_NYIGCF);
-      } else if (irt_isgcv(ir->t)) {
+      if (irt_isgcv(ir->t)) {
+	int32_t ofs = 8*(int32_t)(snap_slot(sn)-1);
 	Reg src = ra_alloc1(as, ref, allow);
 	emit_movtomro(as, src, base, ofs);
 	emit_movmroi(as, base, ofs+4, irt_toitype(ir->t));
@@ -2975,17 +2976,16 @@ static void asm_tail_sync(ASMState *as)
 
   /* Must check all frames to find topslot (outer can be larger than inner). */
   for (n = 0; n < nent; n++) {
-    IRRef ref = snap_ref(map[n]);
-    BCReg s = snap_slot(map[n]);
-    if (!irref_isk(ref)) {
-      IRIns *ir = IR(ref);
-      if (ir->o == IR_FRAME && irt_isfunc(ir->t)) {
-	GCfunc *fn = ir_kfunc(IR(ir->op2));
-	if (isluafunc(fn)) {
-	  BCReg fs = s + funcproto(fn)->framesize;
-	  if (fs > topslot) topslot = fs;
-	  newbase = s;
-	}
+    SnapEntry sn = map[n];
+    if ((sn & SNAP_FRAME)) {
+      IRIns *ir = IR(snap_ref(sn));
+      GCfunc *fn = ir_kfunc(IR(ir->op2));
+      lua_assert(ir->o == IR_FRAME && irt_isfunc(ir->t));
+      if (isluafunc(fn)) {
+	BCReg s = snap_slot(sn);
+	BCReg fs = s + funcproto(fn)->framesize;
+	if (fs > topslot) topslot = fs;
+	newbase = s;
       }
     }
   }

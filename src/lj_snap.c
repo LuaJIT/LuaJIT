@@ -50,20 +50,19 @@ void lj_snap_grow_map_(jit_State *J, MSize need)
 
 /* -- Snapshot generation ------------------------------------------------- */
 
-/* NYI: IR_FRAME should be eliminated, too. */
-
 /* Add all modified slots to the snapshot. */
 static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 {
   BCReg s;
   MSize n = 0;
   for (s = 0; s < nslots; s++) {
-    IRRef ref = tref_ref(J->slot[s]);
+    TRef tr = J->slot[s];
+    IRRef ref = tref_ref(tr);
     if (ref) {
       IRIns *ir = IR(ref);
       if (!(ir->o == IR_SLOAD && ir->op1 == s &&
 	    !(ir->op2 & IRSLOAD_INHERIT)))
-	map[n++] = SNAP(s, ir->o == IR_FRAME ? SNAP_FRAME : 0, ref);
+	map[n++] = SNAP_TR(s, tr);
     }
   }
   return n;
@@ -226,8 +225,9 @@ void lj_snap_restore(jit_State *J, void *exptr)
   /* Fill stack slots with data from the registers and spill slots. */
   frame = L->base-1;
   for (n = 0; n < nent; n++) {
-    IRRef ref = snap_ref(map[n]);
-    BCReg s = snap_slot(map[n]);
+    SnapEntry sn = map[n];
+    IRRef ref = snap_ref(sn);
+    BCReg s = snap_slot(sn);
     TValue *o = &frame[s];  /* Stack slots are relative to start frame. */
     IRIns *ir = &T->ir[ref];
     if (irref_isk(ref)) {  /* Restore constant slot. */
@@ -260,6 +260,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
 	  setitype(o, irt_toitype(t));
 	}
       } else {  /* Restore frame slot. */
+	lua_assert((sn & (SNAP_CONT|SNAP_FRAME)));
 	lua_assert(ir->o == IR_FRAME);
 	/* This works for both PTR and FUNC IR_FRAME. */
 	setgcrefp(o->fr.func, mref(T->ir[ir->op2].ptr, void));

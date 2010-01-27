@@ -424,7 +424,7 @@ static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 #else
   trcont = lj_ir_kptr(J, (void *)cont);
 #endif
-  J->base[top] = emitir(IRTG(IR_FRAME, IRT_PTR), trcont, trcont);
+  J->base[top] = emitir(IRTG(IR_FRAME, IRT_PTR), trcont, trcont) | TREF_CONT;
   for (s = J->maxslot; s < top; s++)
     J->base[s] = TREF_NIL;
   return top+1;
@@ -1608,7 +1608,7 @@ static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
   }
 
   /* Specialize to the runtime value of the called function. */
-  res[0] = emitir(IRTG(IR_FRAME, IRT_FUNC), res[0], lj_ir_kfunc(J, rd.fn));
+  res[0] = emitir(IRTG(IR_FRAME, IRT_FUNC), res[0], lj_ir_kfunc(J, rd.fn)) | TREF_FRAME;
 
   if (isluafunc(rd.fn)) {  /* Record call to Lua function. */
     GCproto *pt = funcproto(rd.fn);
@@ -2164,8 +2164,9 @@ static void rec_setup_side(jit_State *J, Trace *T)
   BloomFilter seen = 0;
   /* Emit IR for slots inherited from parent snapshot. */
   for (n = 0; n < nent; n++) {
-    IRRef ref = snap_ref(map[n]);
-    BCReg s = snap_slot(map[n]);
+    SnapEntry sn = map[n];
+    IRRef ref = snap_ref(sn);
+    BCReg s = snap_slot(sn);
     IRIns *ir = &T->ir[ref];
     TRef tr;
     /* The bloom filter avoids O(nent^2) overhead for de-duping slots. */
@@ -2196,10 +2197,10 @@ static void rec_setup_side(jit_State *J, Trace *T)
 	  J->framedepth++;
 	}
 	tr = lj_ir_kfunc(J, ir_kfunc(&T->ir[ir->op2]));
-	tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr);
+	tr = emitir_raw(IRT(IR_FRAME, IRT_FUNC), tr, tr) | TREF_FRAME;
       } else {
 	tr = lj_ir_kptr(J, mref(T->ir[ir->op2].ptr, void));
-	tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr);
+	tr = emitir_raw(IRT(IR_FRAME, IRT_PTR), tr, tr) | TREF_CONT;
       }
       break;
     case IR_SLOAD:  /* Inherited SLOADs don't need a guard or type check. */
