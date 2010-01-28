@@ -267,7 +267,7 @@ end
 
 local function printsnap(tr, snap)
   local n = 2
-  for s=0,snap[1] do
+  for s=0,snap[1]-1 do
     local sn = snap[n]
     if shr(sn, 24) == s then
       n = n + 1
