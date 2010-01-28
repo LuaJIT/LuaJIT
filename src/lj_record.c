@@ -1539,7 +1539,7 @@ static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
     if (cont == lj_cont_ra) {
       /* Copy result to destination slot. */
       BCReg dst = bc_a(*J->pc);
-      J->base[dst] = res[0];
+      J->base[dst] = gotresults ? res[0] : TREF_NIL;
       if (dst > J->maxslot) J->maxslot = dst+1;
     } else if (cont == lj_cont_nop) {
       /* Nothing to do here. */
