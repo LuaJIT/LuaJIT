@@ -540,26 +540,26 @@ void lj_trace_ins(jit_State *J)
 /* Start recording a new trace. */
 static void trace_new(jit_State *J)
 {
-  /* Only start a new trace if not inside __gc call or vmevent. */
-  if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
-    lua_assert(J->state == LJ_TRACE_IDLE);
-    J->state = LJ_TRACE_START;
-    J->fn = curr_func(J->L);
-    J->pt = funcproto(J->fn);
-    lj_trace_ins(J);
-  }
+  lua_assert(J->state == LJ_TRACE_IDLE);
+  J->state = LJ_TRACE_START;
+  J->fn = curr_func(J->L);
+  J->pt = funcproto(J->fn);
+  lj_trace_ins(J);
 }
 
 /* A hotcount triggered. Start recording a root trace. */
 void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
-  lua_State *L = J->L;
-  L->top = curr_topL(L);  /* Only called from Lua and NRESULTS is not used. */
   hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]+1);  /* Reset hotcount. */
-  J->parent = 0;  /* Root trace. */
-  J->exitno = 0;
-  J->pc = pc-1;  /* The interpreter bytecode PC is offset by 1. */
-  trace_new(J);
+  /* Only start a new trace if not inside __gc call or vmevent. */
+  if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
+    lua_State *L = J->L;
+    L->top = curr_topL(L);  /* Only called from Lua and NRESULTS is not used. */
+    J->parent = 0;  /* Root trace. */
+    J->exitno = 0;
+    J->pc = pc-1;  /* The interpreter bytecode PC is offset by 1. */
+    trace_new(J);
+  }
 }
 
 /* A trace exited. Restore interpreter state and check for hot exits. */
@@ -593,7 +593,8 @@ void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 
   {  /* Check for a hot exit. */
     SnapShot *snap = &J->trace[J->parent]->snap[J->exitno];
-    if (snap->count != SNAPCOUNT_DONE &&
+    if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT)) &&
+	snap->count != SNAPCOUNT_DONE &&
 	++snap->count >= J->param[JIT_P_hotexit])
       trace_new(J);  /* Start recording a side trace. */
   }
