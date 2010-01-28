@@ -1533,6 +1533,7 @@ static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
     J->pc = frame_contpc(frame)-1;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
+    J->maxslot = cbase-2;
     if (cont == lj_cont_ra) {
       /* Copy result to destination slot. */
       BCReg dst = bc_a(*J->pc);
