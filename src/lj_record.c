@@ -1529,13 +1529,10 @@ static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
     J->base -= cbase+1;
   } else if (frame_iscont(frame)) {
     ASMFunction cont = frame_contf(frame);
-    BCReg i, cbase = (BCReg)frame_delta(frame);
+    BCReg cbase = (BCReg)frame_delta(frame);
     J->pc = frame_contpc(frame)-1;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
-    /* Shrink maxslot as much as possible after return from continuation. */
-    for (i = cbase-2; i > 0 && J->base[i] == 0; i--) ;
-    J->maxslot = i;
     if (cont == lj_cont_ra) {
       /* Copy result to destination slot. */
       BCReg dst = bc_a(*J->pc);
