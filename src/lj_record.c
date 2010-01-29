@@ -368,7 +368,8 @@ static int innerloopleft(jit_State *J, const BCIns *pc)
 static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
 {
   if (J->parent == 0) {
-    if (pc == J->startpc && J->framedepth == 0) {  /* Same loop? */
+    if (pc == J->startpc && J->framedepth == 0 && !J->chain[IR_RETF]) {
+      /* Same loop? */
       if (ev == LOOPEV_LEAVE)  /* Must loop back to form a root trace. */
 	lj_trace_err(J, LJ_TRERR_LLEAVE);
       rec_stop(J, J->curtrace);  /* Root trace forms a loop. */
