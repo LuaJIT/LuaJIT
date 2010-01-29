@@ -34,7 +34,7 @@
   _(NE,		GC, ref, ref) \
   \
   _(ABC,	G , ref, ref) \
-  _(UNUSED,	G , ref, ref) /* Placeholder. */ \
+  _(RETF,	G , ref, ref) \
   \
   _(LT,		G , ref, ref) \
   _(GE,		G , ref, ref) \

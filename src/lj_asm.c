@@ -1369,6 +1369,22 @@ static void asm_call(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
 }
 
+/* -- Returns ------------------------------------------------------------- */
+
+/* Return to lower frame. Guard that it goes to the right spot. */
+static void asm_retf(ASMState *as, IRIns *ir)
+{
+  Reg base = ra_alloc1(as, REF_BASE, RSET_GPR);
+  void *pc = ir_kptr(IR(ir->op2));
+  int32_t delta = 1+bc_a(*((const BCIns *)pc - 1));
+  as->topslot -= (BCReg)delta;
+  if ((int32_t)as->topslot < 0) as->topslot = 0;
+  emit_setgl(as, base, jit_base);
+  emit_addptr(as, base, -8*delta);
+  asm_guardcc(as, CC_NE);
+  emit_gmroi(as, XG_ARITHi(XOg_CMP), base, -4, ptr2addr(pc));
+}
+
 /* -- Type conversions ---------------------------------------------------- */
 
 static void asm_tonum(ASMState *as, IRIns *ir)
@@ -2795,14 +2811,14 @@ static void asm_head_base(ASMState *as)
 ** Stack overflow is rare, so let the regular exit handling fix this up.
 ** This is done in the context of the *parent* trace and parent exitno!
 */
-static void asm_checkstack(ASMState *as, RegSet allow)
+static void asm_checkstack(ASMState *as, BCReg topslot, RegSet allow)
 {
   /* Try to get an unused temp. register, otherwise spill/restore eax. */
   Reg r = allow ? rset_pickbot(allow) : RID_EAX;
   emit_jcc(as, CC_B, exitstub_addr(as->J, as->J->exitno));
   if (allow == RSET_EMPTY)  /* Restore temp. register. */
     emit_rmro(as, XO_MOV, r, RID_ESP, sps_scale(SPS_TEMP1));
-  emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*as->topslot));
+  emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*topslot));
   emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE, ptr2addr(&J2G(as->J)->jit_base));
   emit_rmro(as, XO_MOV, r, r, offsetof(lua_State, maxstack));
   emit_getgl(as, r, jit_L);
@@ -2952,7 +2968,7 @@ static void asm_head_side(ASMState *as)
 
   /* Check Lua stack size if frames have been added. */
   if (as->topslot)
-    asm_checkstack(as, allow & RSET_GPR);
+    asm_checkstack(as, as->topslot, allow & RSET_GPR);
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
@@ -3109,6 +3125,8 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_UGT: asm_comp(as, ir, CC_BE, CC_BE, VCC_U|VCC_PS); break;
   case IR_EQ:  asm_comp(as, ir, CC_NE, CC_NE, VCC_P); break;
   case IR_NE:  asm_comp(as, ir, CC_E,  CC_E,  VCC_U|VCC_P); break;
+
+  case IR_RETF: asm_retf(as, ir); break;
 
   /* Bit ops. */
   case IR_BNOT: asm_bitnot(as, ir); break;

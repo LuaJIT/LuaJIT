@@ -64,7 +64,7 @@ enum {
 
 /* Forward declarations. */
 static TRef rec_idx(jit_State *J, RecordIndex *ix);
-static int rec_call(jit_State *J, BCReg func, int cres, int nargs);
+static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs);
 
 /* -- Sanity checks ------------------------------------------------------- */
 
@@ -848,9 +848,9 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 typedef struct RecordFFData {
   TValue *argv;		/* Runtime argument values. */
   GCfunc *fn;		/* The currently recorded function. */
-  int nargs;		/* Number of passed arguments. */
-  int nres;		/* Number of returned results (defaults to 1). */
-  int cres;		/* Wanted number of call results. */
+  ptrdiff_t nargs;	/* Number of passed arguments. */
+  ptrdiff_t nres;	/* Number of returned results (defaults to 1). */
+  ptrdiff_t cres;	/* Wanted number of call results. */
   uint32_t data;	/* Per-ffid auxiliary data (opcode, literal etc.). */
 } RecordFFData;
 
@@ -909,10 +909,10 @@ static void recff_c(jit_State *J, TRef *res, RecordFFData *rd)
 static void recff_assert(jit_State *J, TRef *res, RecordFFData *rd)
 {
   /* Arguments already specialized. The interpreter throws for nil/false. */
-  BCReg i;
+  ptrdiff_t i;
   for (i = 0; arg[i]; i++)  /* Need to pass through all arguments. */
     res[i] = arg[i];
-  rd->nres = (int)i;
+  rd->nres = i;
   UNUSED(J);
 }
 
@@ -1067,7 +1067,7 @@ static void recff_pcall(jit_State *J, TRef *res, RecordFFData *rd)
     BCReg parg = (BCReg)(arg - J->base);
     if (rec_call(J, parg, CALLRES_MULTI, rd->nargs - 1)) {  /* Resolved call. */
       res[0] = TREF_TRUE;  /* Prepend true result. No need to move results. */
-      rd->nres = (int)((J->maxslot - parg) + 1);
+      rd->nres = (ptrdiff_t)J->maxslot - (ptrdiff_t)parg + 1;
     } else {  /* Propagate pending call. */
       rd->cres = CALLRES_PENDING;
     }
@@ -1076,8 +1076,8 @@ static void recff_pcall(jit_State *J, TRef *res, RecordFFData *rd)
 
 /* Struct to pass context across lj_vm_cpcall. */
 typedef struct RecordXpcall {
+  ptrdiff_t nargs;
   BCReg parg;
-  int nargs;
   int resolved;
 } RecordXpcall;
 
@@ -1117,7 +1117,7 @@ static void recff_xpcall(jit_State *J, TRef *res, RecordFFData *rd)
     if (errcode)
       lj_err_throw(J->L, errcode);  /* Propagate errors. */
     if (rx.resolved) {  /* Resolved call. */
-      int i, nres = (int)(J->maxslot - parg);
+      ptrdiff_t i, nres = (ptrdiff_t)J->maxslot - (ptrdiff_t)parg;
       rd->nres = nres + 1;
       res[0] = TREF_TRUE;  /* Prepend true result. */
       for (i = 1; i <= nres; i++)  /* Move results down. */
@@ -1354,7 +1354,7 @@ static void recff_string_range(jit_State *J, TRef *res, RecordFFData *rd)
       res[0] = lj_ir_kstr(J, lj_str_new(J->L, strdata(str), 0));
     }
   } else {  /* Return string.byte result(s). */
-    int32_t i, len = end - start;
+    ptrdiff_t i, len = end - start;
     if (len > 0) {
       TRef trslen = emitir(IRTI(IR_SUB), trend, trstart);
       emitir(IRTGI(IR_EQ), trslen, lj_ir_kint(J, len));
@@ -1498,46 +1498,63 @@ static void recff_io_flush(jit_State *J, TRef *res, RecordFFData *rd)
 #include "lj_recdef.h"
 
 /* Record return. */
-static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
+static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
   TValue *frame = J->L->base - 1;
-  TRef *res = J->base + rbase;
+  ptrdiff_t i;
+  for (i = 0; i < gotresults; i++)
+    getslot(J, rbase+i);  /* Ensure all results have a reference. */
   J->tailcalled = 0;
-  while (frame_ispcall(frame)) {
+  while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
     BCReg cbase = (BCReg)frame_delta(frame);
     if (J->framedepth-- <= 0)
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lua_assert(J->baseslot > 1);
+    J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
+    gotresults++;
+    rbase += cbase;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
-    *--res = TREF_TRUE;  /* Prepend true to results. */
-    gotresults++;
     frame = frame_prevd(frame);
   }
-  if (J->framedepth-- <= 0)
-    lj_trace_err(J, LJ_TRERR_NYIRETL);
-  lua_assert(J->baseslot > 1);
-  if (frame_islua(frame)) {
-    BCIns callins = *(J->pc = frame_pc(frame)-1);
-    ptrdiff_t nresults = bc_b(callins) ? (int)bc_b(callins)-1 : gotresults;
+  if (frame_islua(frame)) {  /* Return to Lua frame. */
+    BCIns callins = *(frame_pc(frame)-1);
+    ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
     BCReg cbase = bc_a(callins);
-    int i;
-    for (i = 0; i < nresults; i++)
-      J->base[i-1] = i < gotresults ? res[i] : TREF_NIL;
+    for (i = 0; i < nresults; i++)  /* Adjust results. */
+      J->base[i-1] = i < gotresults ? J->base[rbase+i] : TREF_NIL;
     J->maxslot = cbase+(BCReg)nresults;
-    J->baseslot -= cbase+1;
-    J->base -= cbase+1;
-  } else if (frame_iscont(frame)) {
+    if (J->framedepth > 0) {  /* Return to a frame that is part of the trace. */
+      J->framedepth--;
+      lua_assert(J->baseslot > cbase+1);
+      J->baseslot -= cbase+1;
+      J->base -= cbase+1;
+    } else if (J->parent == 0) {
+      /* Return to lower frame would leave the loop in a root trace. */
+      lj_trace_err(J, LJ_TRERR_LLEAVE);
+    } else {  /* Return to lower frame. Guard for the target we return to. */
+      GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
+      TRef trpt = lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);
+      TRef trpc = lj_ir_kptr(J, (void *)frame_pc(frame));
+      emitir(IRTG(IR_RETF, IRT_PTR), trpt, trpc);
+      J->needsnap = 1;
+      lua_assert(J->baseslot == 1);
+      /* Shift result slots up and clear the slots of the new frame below. */
+      memmove(J->base + cbase, J->base-1, sizeof(TRef)*nresults);
+      memset(J->base-1, 0, sizeof(TRef)*(cbase+1));
+    }
+  } else if (frame_iscont(frame)) {  /* Return to continuation frame. */
     ASMFunction cont = frame_contf(frame);
     BCReg cbase = (BCReg)frame_delta(frame);
-    J->pc = frame_contpc(frame)-1;
+    if (J->framedepth-- <= 0)
+      lj_trace_err(J, LJ_TRERR_NYIRETL);
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
     J->maxslot = cbase-2;
     if (cont == lj_cont_ra) {
       /* Copy result to destination slot. */
-      BCReg dst = bc_a(*J->pc);
-      J->base[dst] = gotresults ? res[0] : TREF_NIL;
+      BCReg dst = bc_a(*(frame_contpc(frame)-1));
+      J->base[dst] = gotresults ? J->base[cbase+rbase] : TREF_NIL;
       if (dst > J->maxslot) J->maxslot = dst+1;
     } else if (cont == lj_cont_nop) {
       /* Nothing to do here. */
@@ -1548,7 +1565,7 @@ static void rec_ret(jit_State *J, BCReg rbase, int gotresults)
       lua_assert(cont == lj_cont_condf || cont == lj_cont_condt);
     }
   } else {
-    lua_assert(0);
+    lj_trace_err(J, LJ_TRERR_NYIRETL);  /* NYI: handle return to C frame. */
   }
   lua_assert(J->baseslot >= 1);
 }
@@ -1576,7 +1593,7 @@ static void check_call_unroll(jit_State *J, GCfunc *fn)
 }
 
 /* Record call. Returns 0 for pending calls and 1 for resolved calls. */
-static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
+static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
 {
   RecordFFData rd;
   TRef trfunc, *res = &J->base[func];
@@ -1587,7 +1604,7 @@ static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
     rd.argv = tv+1;
   } else {  /* Otherwise resolve __call metamethod for called object. */
     RecordIndex ix;
-    int i;
+    ptrdiff_t i;
     ix.tab = res[0];
     copyTV(J->L, &ix.tabv, tv);
     if (!rec_mm_lookup(J, &ix, MM_call) || !tref_isfunc(ix.mobj))
@@ -1619,7 +1636,7 @@ static int rec_call(jit_State *J, BCReg func, int cres, int nargs)
     }
     check_call_unroll(J, rd.fn);
     if (cres == CALLRES_TAILCALL) {
-      int i;
+      ptrdiff_t i;
       /* Tailcalls can form a loop, so count towards the loop unroll limit. */
       if (++J->tailcalled > J->loopunroll)
 	lj_trace_err(J, LJ_TRERR_LUNROLL);
@@ -1982,7 +1999,7 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_CALL:
   callop:
-    rec_call(J, ra, (int)(rb-1), (int)(rc-1));
+    rec_call(J, ra, (ptrdiff_t)rb-1, (ptrdiff_t)rc-1);
     break;
 
   /* -- Returns ----------------------------------------------------------- */
@@ -1992,7 +2009,7 @@ void lj_record_ins(jit_State *J)
     rc = (BCReg)(J->L->top - J->L->base) - ra + 1;
     /* fallthrough */
   case BC_RET: case BC_RET0: case BC_RET1:
-    rec_ret(J, ra, (int)(rc-1));
+    rec_ret(J, ra, (ptrdiff_t)rc-1);
     break;
 
   /* -- Loops and branches ------------------------------------------------ */
