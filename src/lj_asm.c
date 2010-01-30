@@ -666,7 +666,7 @@ static Reg ra_restore(ASMState *as, IRRef ref)
 }
 
 /* Save a register to a spill slot. */
-static LJ_AINLINE void ra_save(ASMState *as, IRIns *ir, Reg r)
+static void ra_save(ASMState *as, IRIns *ir, Reg r)
 {
   RA_DBGX((as, "save      $i $r", ir, r));
   emit_rmro(as, r < RID_MAX_GPR ? XO_MOVto : XO_MOVSDto,
@@ -710,7 +710,7 @@ static Reg ra_evict(ASMState *as, RegSet allow)
 }
 
 /* Pick any register (marked as free). Evict on-demand. */
-static LJ_AINLINE Reg ra_pick(ASMState *as, RegSet allow)
+static Reg ra_pick(ASMState *as, RegSet allow)
 {
   RegSet pick = as->freeset & allow;
   if (!pick)
@@ -720,7 +720,7 @@ static LJ_AINLINE Reg ra_pick(ASMState *as, RegSet allow)
 }
 
 /* Get a scratch register (marked as free). */
-static LJ_AINLINE Reg ra_scratch(ASMState *as, RegSet allow)
+static Reg ra_scratch(ASMState *as, RegSet allow)
 {
   Reg r = ra_pick(as, allow);
   ra_modified(as, r);
@@ -785,7 +785,7 @@ found:
 }
 
 /* Allocate a register on-demand. */
-static LJ_INLINE Reg ra_alloc1(ASMState *as, IRRef ref, RegSet allow)
+static Reg ra_alloc1(ASMState *as, IRRef ref, RegSet allow)
 {
   Reg r = IR(ref)->r;
   /* Note: allow is ignored if the register is already allocated. */
