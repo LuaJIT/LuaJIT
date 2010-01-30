@@ -42,6 +42,7 @@ typedef struct ASMState {
 
   RegSet freeset;	/* Set of free registers. */
   RegSet modset;	/* Set of registers modified inside the loop. */
+  RegSet weakset;	/* Set of weakly referenced registers. */
   RegSet phiset;	/* Set of PHI registers. */
 
   uint32_t flags;	/* Copy of JIT compiler flags. */
@@ -565,6 +566,8 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 
 #define ra_free(as, r)		rset_set(as->freeset, (r))
 #define ra_modified(as, r)	rset_set(as->modset, (r))
+#define ra_weak(as, r)		rset_set(as->weakset, (r))
+#define ra_noweak(as, r)	rset_clear(as->weakset, (r))
 
 #define ra_used(ir)		(ra_hasreg((ir)->r) || ra_hasspill((ir)->s))
 
@@ -574,6 +577,7 @@ static void ra_setup(ASMState *as)
   /* Initially all regs (except the stack pointer) are free for use. */
   as->freeset = RSET_ALL;
   as->modset = RSET_EMPTY;
+  as->weakset = RSET_EMPTY;
   as->phiset = RSET_EMPTY;
   memset(as->phireg, 0, sizeof(as->phireg));
   memset(as->cost, 0, sizeof(as->cost));
@@ -647,13 +651,16 @@ static Reg ra_restore(ASMState *as, IRRef ref)
   if (irref_isk(ref) || ref == REF_BASE) {
     return ra_rematk(as, ir);
   } else {
+    int32_t ofs = ra_spill(as, ir);  /* Force a spill slot. */
     Reg r = ir->r;
     lua_assert(ra_hasreg(r));
-    ra_free(as, r);
-    ra_modified(as, r);
     ra_sethint(ir->r, r);  /* Keep hint. */
-    RA_DBGX((as, "restore   $i $r", ir, r));
-    emit_movrmro(as, r, RID_ESP, ra_spill(as, ir));  /* Force a spill. */
+    ra_free(as, r);
+    if (!rset_test(as->weakset, r)) {  /* Only restore non-weak references. */
+      ra_modified(as, r);
+      RA_DBGX((as, "restore   $i $r", ir, r));
+      emit_movrmro(as, r, RID_ESP, ofs);
+    }
     return r;
   }
 }
@@ -673,7 +680,9 @@ static LJ_AINLINE void ra_save(ASMState *as, IRIns *ir, Reg r)
 /* Evict the register with the lowest cost, forcing a restore. */
 static Reg ra_evict(ASMState *as, RegSet allow)
 {
+  IRRef ref;
   RegCost cost = ~(RegCost)0;
+  lua_assert(allow != RSET_EMPTY);
   if (allow < RID2RSET(RID_MAX_GPR)) {
     MINCOST(RID_EAX);MINCOST(RID_ECX);MINCOST(RID_EDX);MINCOST(RID_EBX);
     MINCOST(RID_EBP);MINCOST(RID_ESI);MINCOST(RID_EDI);
@@ -689,9 +698,15 @@ static Reg ra_evict(ASMState *as, RegSet allow)
     MINCOST(RID_XMM12);MINCOST(RID_XMM13);MINCOST(RID_XMM14);MINCOST(RID_XMM15);
 #endif
   }
-  lua_assert(allow != RSET_EMPTY);
-  lua_assert(regcost_ref(cost) >= as->T->nk && regcost_ref(cost) < as->T->nins);
-  return ra_restore(as, regcost_ref(cost));
+  ref = regcost_ref(cost);
+  lua_assert(ref >= as->T->nk && ref < as->T->nins);
+  /* Preferably pick any weak ref instead of a non-weak, non-const ref. */
+  if (!irref_isk(ref) && (as->weakset & allow)) {
+    IRIns *ir = IR(ref);
+    if (!rset_test(as->weakset, ir->r))
+      ref = regcost_ref(as->cost[rset_pickbot((as->weakset & allow))]);
+  }
+  return ra_restore(as, ref);
 }
 
 /* Pick any register (marked as free). Evict on-demand. */
@@ -764,6 +779,7 @@ found:
   RA_DBGX((as, "alloc     $f $r", ref, r));
   ir->r = (uint8_t)r;
   rset_clear(as->freeset, r);
+  ra_noweak(as, r);
   as->cost[r] = REGCOST_REF_T(ref, irt_t(ir->t));
   return r;
 }
@@ -774,6 +790,7 @@ static LJ_INLINE Reg ra_alloc1(ASMState *as, IRRef ref, RegSet allow)
   Reg r = IR(ref)->r;
   /* Note: allow is ignored if the register is already allocated. */
   if (ra_noreg(r)) r = ra_allocref(as, ref, allow);
+  ra_noweak(as, r);
   return r;
 }
 
@@ -787,6 +804,7 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   lua_assert(!rset_test(as->freeset, down) && rset_test(as->freeset, up));
   rset_set(as->freeset, down);  /* 'down' is free ... */
   rset_clear(as->freeset, up);  /* ... and 'up' is now allocated. */
+  ra_noweak(as, up);
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
   emit_movrr(as, down, up);  /* Backwards code generation needs inverse move. */
   if (!ra_hasspill(IR(ref)->s)) {  /* Add the rename to the IR. */
@@ -852,6 +870,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
       ra_sethint(ir->r, dest);  /* Propagate register hint. */
     left = ra_allocref(as, lref, dest < RID_MAX_GPR ? RSET_GPR : RSET_FPR);
   }
+  ra_noweak(as, left);
   /* Move needed for true 3-operand instruction: y=a+b ==> y=a; y+=b. */
   if (dest != left) {
     /* Use register renaming if dest is the PHI reg. */
@@ -933,11 +952,12 @@ static void asm_snap_alloc(ASMState *as)
       IRIns *ir = IR(ref);
       if (!ra_used(ir)) {
 	RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
-	/* Not a var-to-invar ref and got a free register (or a remat)? */
-	if ((!iscrossref(as, ref) || irt_isphi(ir->t)) &&
-	    ((as->freeset & allow) ||
-	     (allow == RSET_FPR && asm_snap_canremat(as)))) {
-	  ra_allocref(as, ref, allow);  /* Allocate a register. */
+	/* Get a weak register if we have a free one or can rematerialize. */
+	if ((as->freeset & allow) ||
+	    (allow == RSET_FPR && asm_snap_canremat(as))) {
+	  Reg r = ra_allocref(as, ref, allow);  /* Allocate a register. */
+	  if (!irt_isphi(ir->t))
+	    ra_weak(as, r);  /* But mark it as weakly referenced. */
 	  checkmclim(as);
 	  RA_DBGX((as, "snapreg   $f $r", ref, ir->r));
 	} else {
@@ -1185,7 +1205,10 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 {
   IRIns *ir = IR(ref);
   if (ra_hasreg(ir->r)) {
-    if (allow != RSET_EMPTY) return ir->r;  /* Fast path. */
+    if (allow != RSET_EMPTY) {  /* Fast path. */
+      ra_noweak(as, ir->r);
+      return ir->r;
+    }
   fusespill:
     /* Force a spill if only memory operands are allowed (asm_x87load). */
     as->mrm.base = RID_ESP;
@@ -1275,10 +1298,12 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	} else {
 	  lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
 	  allow &= ~RID2RSET(r);
-	  if (ra_hasreg(ir->r))
+	  if (ra_hasreg(ir->r)) {
+	    ra_noweak(as, ir->r);
 	    emit_movrr(as, r, ir->r);
-	  else
+	  } else {
 	    ra_allocref(as, args[n], RID2RSET(r));
+	  }
 	}
       } else {
 	if (args[n] < ASMREF_TMP1) {
@@ -2151,8 +2176,10 @@ static void asm_fparith(ASMState *as, IRIns *ir, x86Op xo)
   RegSet allow = RSET_FPR;
   Reg dest;
   Reg right = IR(rref)->r;
-  if (ra_hasreg(right))
+  if (ra_hasreg(right)) {
     rset_clear(allow, right);
+    ra_noweak(as, right);
+  }
   dest = ra_dest(as, ir, allow);
   if (lref == rref) {
     right = dest;
@@ -2177,8 +2204,10 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
     as->mcp += (LJ_64 && *as->mcp != XI_TEST) ? 3 : 2;
   }
   right = IR(rref)->r;
-  if (ra_hasreg(right))
+  if (ra_hasreg(right)) {
     rset_clear(allow, right);
+    ra_noweak(as, right);
+  }
   dest = ra_dest(as, ir, allow);
   if (lref == rref) {
     right = dest;
@@ -2225,6 +2254,7 @@ static int asm_lea(ASMState *as, IRIns *ir)
   as->mrm.ofs = 0;
   if (ra_hasreg(irl->r)) {
     rset_clear(allow, irl->r);
+    ra_noweak(as, irl->r);
     as->mrm.base = irl->r;
     if (irref_isk(ir->op2) || ra_hasreg(irr->r)) {
       /* The PHI renaming logic does a better job in some cases. */
@@ -2236,6 +2266,7 @@ static int asm_lea(ASMState *as, IRIns *ir)
 	as->mrm.ofs = irr->i;
       } else {
 	rset_clear(allow, irr->r);
+	ra_noweak(as, irr->r);
 	as->mrm.idx = irr->r;
       }
     } else if (irr->o == IR_ADD && mayfuse(as, ir->op2) &&
@@ -2322,8 +2353,10 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
     }
     dest = ra_dest(as, ir, allow);
     emit_rr(as, XO_SHIFTcl, (Reg)xs, dest);
-    if (right != RID_ECX)
+    if (right != RID_ECX) {
+      ra_noweak(as, right);
       emit_rr(as, XO_MOV, RID_ECX, right);
+    }
   }
   ra_left(as, dest, ir->op1);
   /*
