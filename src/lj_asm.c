@@ -2807,7 +2807,7 @@ static void asm_const_remat(ASMState *as)
   while (work) {
     Reg r = rset_pickbot(work);
     IRRef ref = regcost_ref(as->cost[r]);
-    if (irref_isk(ref) || ref == REF_BASE) {
+    if (irref_isk(ref)) {
       ra_rematk(as, IR(ref));
       checkmclim(as);
     }
@@ -2815,36 +2815,36 @@ static void asm_const_remat(ASMState *as)
   }
 }
 
+/* Coalesce BASE register for a root trace. */
+static void asm_head_root_base(ASMState *as)
+{
+  IRIns *ir = IR(REF_BASE);
+  Reg r = ir->r;
+  if (ra_hasreg(r)) {
+    ra_free(as, r);
+    if (rset_test(as->modset, r))
+      ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
+    if (r != RID_BASE)
+      emit_rr(as, XO_MOV, r, RID_BASE);
+  }
+}
+
 /* Head of a root trace. */
 static void asm_head_root(ASMState *as)
 {
   int32_t spadj;
+  asm_head_root_base(as);
   emit_setgli(as, vmstate, (int32_t)as->J->curtrace);
   spadj = sps_adjust(as->evenspill);
   as->T->spadjust = (uint16_t)spadj;
   emit_addptr(as, RID_ESP, -spadj);
 }
 
-/* Handle BASE coalescing for a root trace. */
-static void asm_head_base(ASMState *as)
-{
-  IRIns *ir = IR(REF_BASE);
-  Reg r = ir->r;
-  lua_assert(!ra_hasspill(ir->s));
-  if (ra_hasreg(r)) {
-    ra_free(as, r);
-    if (r != RID_BASE) {
-      ra_scratch(as, RID2RSET(RID_BASE));
-      emit_rr(as, XO_MOV, r, RID_BASE);
-    }
-  }
-}
-
 /* Check Lua stack size for overflow at the start of a side trace.
 ** Stack overflow is rare, so let the regular exit handling fix this up.
 ** This is done in the context of the *parent* trace and parent exitno!
 */
-static void asm_checkstack(ASMState *as, BCReg topslot, RegSet allow)
+static void asm_checkstack(ASMState *as, BCReg topslot, Reg pbase, RegSet allow)
 {
   /* Try to get an unused temp. register, otherwise spill/restore eax. */
   Reg r = allow ? rset_pickbot(allow) : RID_EAX;
@@ -2852,11 +2852,36 @@ static void asm_checkstack(ASMState *as, BCReg topslot, RegSet allow)
   if (allow == RSET_EMPTY)  /* Restore temp. register. */
     emit_rmro(as, XO_MOV, r, RID_ESP, sps_scale(SPS_TEMP1));
   emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*topslot));
-  emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE, ptr2addr(&J2G(as->J)->jit_base));
+  if (ra_hasreg(pbase) && pbase != r)
+    emit_rr(as, XO_ARITH(XOg_SUB), r, pbase);
+  else
+    emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE,
+	      ptr2addr(&J2G(as->J)->jit_base));
   emit_rmro(as, XO_MOV, r, r, offsetof(lua_State, maxstack));
   emit_getgl(as, r, jit_L);
   if (allow == RSET_EMPTY)  /* Spill temp. register. */
     emit_rmro(as, XO_MOVto, r, RID_ESP, sps_scale(SPS_TEMP1));
+}
+
+/* Coalesce or reload BASE register for a side trace. */
+static RegSet asm_head_side_base(ASMState *as, Reg pbase, RegSet allow)
+{
+  IRIns *ir = IR(REF_BASE);
+  Reg r = ir->r;
+  if (ra_hasreg(r)) {
+    ra_free(as, r);
+    if (rset_test(as->modset, r))
+      ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
+    if (pbase == r) {
+      rset_clear(allow, r);  /* Mark same BASE register as coalesced. */
+    } else if (ra_hasreg(pbase) && rset_test(as->freeset, pbase)) {
+      rset_clear(allow, pbase);
+      emit_rr(as, XO_MOV, r, pbase);  /* Move from coalesced parent register. */
+    } else {
+      emit_getgl(as, r, jit_base);  /* Otherwise reload BASE. */
+    }
+  }
+  return allow;
 }
 
 /* Head of a side trace.
@@ -2872,10 +2897,13 @@ static void asm_head_side(ASMState *as)
   IRRef1 sloadins[RID_MAX];
   RegSet allow = RSET_ALL;  /* Inverse of all coalesced registers. */
   RegSet live = RSET_EMPTY;  /* Live parent registers. */
+  Reg pbase = as->parent->ir[REF_BASE].r;  /* Parent base register (if any). */
   int32_t spadj, spdelta;
   int pass2 = 0;
   int pass3 = 0;
   IRRef i;
+
+  allow = asm_head_side_base(as, pbase, allow);
 
   /* Scan all parent SLOADs and collect register dependencies. */
   for (i = as->curins; i > REF_BASE; i--) {
@@ -3001,7 +3029,7 @@ static void asm_head_side(ASMState *as)
 
   /* Check Lua stack size if frames have been added. */
   if (as->topslot)
-    asm_checkstack(as, as->topslot, allow & RSET_GPR);
+    asm_checkstack(as, as->topslot, pbase, allow & RSET_GPR);
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
@@ -3464,8 +3492,6 @@ void lj_asm_trace(jit_State *J, Trace *T)
   checkmclim(as);
   if (as->gcsteps)
     asm_gc_check(as, &as->T->snap[0]);
-  if (!J->parent)
-    asm_head_base(as);
   asm_const_remat(as);
   if (J->parent)
     asm_head_side(as);
