@@ -551,8 +551,9 @@ static void trace_new(jit_State *J)
 void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
   hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]+1);  /* Reset hotcount. */
-  /* Only start a new trace if not inside __gc call or vmevent. */
-  if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
+  /* Only start a new trace if not recording or inside __gc call or vmevent. */
+  if (J->state == LJ_TRACE_IDLE &&
+      !(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
     lua_State *L = J->L;
     L->top = curr_topL(L);  /* Only called from Lua and NRESULTS is not used. */
     J->parent = 0;  /* Root trace. */
