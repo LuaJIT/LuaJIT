@@ -401,7 +401,7 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
     lj_trace_err(J, LJ_TRERR_LINNER);
   } else if (ev != LOOPEV_LEAVE) {  /* Side trace enters a compiled loop. */
     J->instunroll = 0;  /* Cannot continue across a compiled loop op. */
-    if (J->pc == J->startpc && J->framedepth == 0)
+    if (J->pc == J->startpc && J->framedepth == 0 && !J->chain[IR_RETF])
       lnk = J->curtrace;  /* Can form an extra loop. */
     rec_stop(J, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
