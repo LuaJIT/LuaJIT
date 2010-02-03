@@ -231,6 +231,7 @@ typedef struct jit_State {
   int32_t loopunroll;	/* Unroll counter for loop ops in side traces. */
   int32_t tailcalled;	/* Number of successive tailcalls. */
   int32_t framedepth;	/* Current frame depth. */
+  int32_t retdepth;	/* Return frame depth (count of RETF). */
 
   MRef knum;		/* Pointer to chained array of KNUM constants. */
 

@@ -209,7 +209,8 @@ static void rec_stop(jit_State *J, TraceNo lnk)
 {
   lj_trace_end(J);
   J->cur.link = (uint16_t)lnk;
-  if (lnk == J->curtrace) {  /* Looping back? */
+  /* Looping back at the same stack level? */
+  if (lnk == J->curtrace && J->framedepth + J->retdepth == 0) {
     if ((J->flags & JIT_F_OPT_LOOP))  /* Shall we try to create a loop? */
       goto nocanon;  /* Do not canonicalize or we lose the narrowing. */
     if (J->cur.root)  /* Otherwise ensure we always link to the root trace. */
@@ -368,7 +369,7 @@ static int innerloopleft(jit_State *J, const BCIns *pc)
 static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
 {
   if (J->parent == 0) {
-    if (pc == J->startpc && J->framedepth == 0 && !J->chain[IR_RETF]) {
+    if (pc == J->startpc && J->framedepth + J->retdepth == 0) {
       /* Same loop? */
       if (ev == LOOPEV_LEAVE)  /* Must loop back to form a root trace. */
 	lj_trace_err(J, LJ_TRERR_LLEAVE);
@@ -401,7 +402,7 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
     lj_trace_err(J, LJ_TRERR_LINNER);
   } else if (ev != LOOPEV_LEAVE) {  /* Side trace enters a compiled loop. */
     J->instunroll = 0;  /* Cannot continue across a compiled loop op. */
-    if (J->pc == J->startpc && J->framedepth == 0 && !J->chain[IR_RETF])
+    if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
       lnk = J->curtrace;  /* Can form an extra loop. */
     rec_stop(J, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
@@ -1538,6 +1539,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       TRef trpt = lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);
       TRef trpc = lj_ir_kptr(J, (void *)frame_pc(frame));
       emitir(IRTG(IR_RETF, IRT_PTR), trpt, trpc);
+      J->retdepth++;
       J->needsnap = 1;
       lua_assert(J->baseslot == 1);
       /* Shift result slots up and clear the slots of the new frame below. */
@@ -1584,8 +1586,9 @@ static void check_call_unroll(jit_State *J, GCfunc *fn)
       frame = frame_prevd(frame);
     frame = frame_prev(frame);
   }
-  if (frame_func(first) == fn && bc_op(J->cur.startins) == BC_CALL) {
-    if (count >= J->param[JIT_P_recunroll])
+  if (bc_op(J->cur.startins) == BC_CALL &&
+      funcproto(fn) == &gcref(J->cur.startpt)->pt) {
+    if (count + J->tailcalled >= J->param[JIT_P_recunroll])
       lj_trace_err(J, LJ_TRERR_NYIRECU);
   } else {
     if (count >= J->param[JIT_P_callunroll])
@@ -2236,6 +2239,7 @@ void lj_record_setup(jit_State *J)
   J->base = J->slot + J->baseslot;
   J->maxslot = 0;
   J->framedepth = 0;
+  J->retdepth = 0;
 
   J->instunroll = J->param[JIT_P_instunroll];
   J->loopunroll = J->param[JIT_P_loopunroll];

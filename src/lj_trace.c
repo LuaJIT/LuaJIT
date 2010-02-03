@@ -491,7 +491,8 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 
     case LJ_TRACE_END:
       J->loopref = 0;
-      if ((J->flags & JIT_F_OPT_LOOP) && J->cur.link == J->curtrace) {
+      if ((J->flags & JIT_F_OPT_LOOP) &&
+	  J->cur.link == J->curtrace && J->framedepth + J->retdepth == 0) {
 	setvmstate(J2G(J), OPT);
 	lj_opt_dce(J);
 	if (lj_opt_loop(J)) {  /* Loop optimization failed? */
