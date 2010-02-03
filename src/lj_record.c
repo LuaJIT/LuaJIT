@@ -1576,22 +1576,18 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 /* Check unroll limits for calls. */
 static void check_call_unroll(jit_State *J, GCfunc *fn)
 {
-  TValue *first = J->L->base - J->baseslot;
-  TValue *frame = J->L->base - 1;
-  int count = 0;
-  while (frame > first) {
-    if (frame_func(frame) == fn)
+  IRRef fref = tref_ref(J->base[-1]);
+  int32_t count = 0;
+  ptrdiff_t s;
+  for (s = (ptrdiff_t)J->baseslot - 1; s > 0; s--)
+    if ((J->slot[s] & TREF_FRAME) && tref_ref(J->slot[s]) == fref)
       count++;
-    if (frame_isvarg(frame))
-      frame = frame_prevd(frame);
-    frame = frame_prev(frame);
-  }
   if (bc_op(J->cur.startins) == BC_CALL &&
       funcproto(fn) == &gcref(J->cur.startpt)->pt) {
-    if (count + J->tailcalled >= J->param[JIT_P_recunroll])
+    if (count + J->tailcalled > J->param[JIT_P_recunroll])
       lj_trace_err(J, LJ_TRERR_NYIRECU);
   } else {
-    if (count >= J->param[JIT_P_callunroll])
+    if (count > J->param[JIT_P_callunroll])
       lj_trace_err(J, LJ_TRERR_CUNROLL);
   }
 }
@@ -1625,6 +1621,7 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
   trfunc = lj_ir_kfunc(J, rd.fn);
   emitir(IRTG(IR_EQ, IRT_FUNC), res[0], trfunc);
   res[0] = trfunc | TREF_FRAME;
+  J->framedepth++;
 
   if (isluafunc(rd.fn)) {  /* Record call to Lua function. */
     GCproto *pt = funcproto(rd.fn);
@@ -1638,7 +1635,6 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
       if (rd.fn->l.gate != lj_gate_lf)
 	lj_trace_err(J, LJ_TRERR_NYILNKF);
     }
-    check_call_unroll(J, rd.fn);
     if (cres == CALLRES_TAILCALL) {
       ptrdiff_t i;
       /* Tailcalls can form a loop, so count towards the loop unroll limit. */
@@ -1646,11 +1642,11 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
 	lj_trace_err(J, LJ_TRERR_LUNROLL);
       for (i = 0; i <= nargs; i++)  /* Move func + args down. */
 	J->base[i-1] = res[i];
+      J->framedepth--;
       /* Note: the new FRAME is now at J->base[-1] (even for slot #0). */
     } else {  /* Regular call. */
       J->base += func+1;
       J->baseslot += func+1;
-      J->framedepth++;
     }
     if (J->baseslot + pt->framesize >= LJ_MAX_JSLOTS)
       lj_trace_err(J, LJ_TRERR_STACKOV);
@@ -1659,6 +1655,7 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
       J->base[nargs++] = TREF_NIL;
     /* The remaining slots should never be read before they are written. */
     J->maxslot = pt->numparams;
+    check_call_unroll(J, rd.fn);
     return 0;  /* No result yet. */
   } else {  /* Record call to C function or fast function. */
     uint32_t m = 0;
@@ -1670,6 +1667,7 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
     rd.cres = cres;
     rd.nres = 1;  /* Default is one result. */
     (recff_func[m >> 8])(J, res, &rd);  /* Call recff_* handler. */
+    J->framedepth--;
     cres = rd.cres;
     if (cres >= 0) {
       /* Caller takes fixed number of results: local a,b = f() */
