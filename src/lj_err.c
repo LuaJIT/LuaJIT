@@ -120,7 +120,7 @@ static BCPos currentpc(lua_State *L, GCfunc *fn, cTValue *nextframe)
       ins = cframe_pc(cf);
     }
   }
-  return (BCPos)((ins - funcproto(fn)->bc) - 1);
+  return proto_bcpos(funcproto(fn), ins) - 1;
 }
 
 static BCLine currentline(lua_State *L, GCfunc *fn, cTValue *nextframe)
@@ -149,9 +149,9 @@ static const char *getobjname(GCproto *pt, const BCIns *ip, BCReg slot,
 {
   const char *lname;
 restart:
-  lname = getvarname(pt, (BCPos)(ip - pt->bc), slot);
+  lname = getvarname(pt, proto_bcpos(pt, ip), slot);
   if (lname != NULL) { *name = lname; return "local"; }
-  while (--ip >= pt->bc) {
+  while (--ip >= proto_bc(pt)) {
     BCIns ins = *ip;
     BCOp op = bc_op(ins);
     BCReg ra = bc_a(ins);
@@ -164,11 +164,11 @@ restart:
 	if (ra == slot) { slot = bc_d(ins); goto restart; }
 	break;
       case BC_GGET:
-	*name = strdata(gco2str(gcref(pt->k.gc[~(ptrdiff_t)bc_d(ins)])));
+	*name = strdata(gco2str(proto_kgc(pt, ~(ptrdiff_t)bc_d(ins))));
 	return "global";
       case BC_TGETS:
-	*name = strdata(gco2str(gcref(pt->k.gc[~(ptrdiff_t)bc_c(ins)])));
-	if (ip > pt->bc) {
+	*name = strdata(gco2str(proto_kgc(pt, ~(ptrdiff_t)bc_c(ins))));
+	if (ip > proto_bc(pt)) {
 	  BCIns insp = ip[-1];
 	  if (bc_op(insp) == BC_MOV && bc_a(insp) == ra+1 &&
 	      bc_d(insp) == bc_b(ins))
@@ -201,7 +201,7 @@ static const char *getfuncname(lua_State *L, TValue *frame, const char **name)
   if (pc == ~(BCPos)0)
     return NULL;
   lua_assert(pc < funcproto(fn)->sizebc);
-  ip = &funcproto(fn)->bc[pc];
+  ip = &proto_bc(funcproto(fn))[pc];
   mm = bcmode_mm(bc_op(*ip));
   if (mm == MM_call) {
     BCReg slot = bc_a(*ip);

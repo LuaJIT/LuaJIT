@@ -335,12 +335,6 @@ enum {
 
 /* -- Prototype object ---------------------------------------------------- */
 
-/* Split constant array. Collectables are below, numbers above pointer. */
-typedef union ProtoK {
-  lua_Number *n;	/* Numbers. */
-  GCRef *gc;		/* Collectable objects (strings/table/proto). */
-} ProtoK;
-
 #define SCALE_NUM_GCO	((int32_t)sizeof(lua_Number)/sizeof(GCRef))
 #define round_nkgc(n)	(((n) + SCALE_NUM_GCO-1) & ~(SCALE_NUM_GCO-1))
 
@@ -356,8 +350,8 @@ typedef struct GCproto {
   uint8_t framesize;	/* Fixed frame size. */
   MSize sizebc;		/* Number of bytecode instructions. */
   GCRef gclist;
-  ProtoK k;		/* Split constant array (points to the middle). */
-  BCIns *bc;		/* Array of bytecode instructions. */
+  MRef k;		/* Split constant array (points to the middle). */
+  MRef bc;		/* Array of bytecode instructions. */
   uint16_t *uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
   MSize sizekgc;	/* Number of collectable constants. */
   MSize sizekn;		/* Number of lua_Number constants. */
@@ -382,6 +376,18 @@ typedef struct GCproto {
 #define PROTO_FIXUP_RETURN	0x08
 #define PROTO_NO_JIT		0x10
 #define PROTO_HAS_ILOOP		0x20
+
+#define proto_kgc(pt, idx) \
+  check_exp((uintptr_t)(intptr_t)(idx) >= (uintptr_t)-(intptr_t)(pt)->sizekgc, \
+	    gcref(mref((pt)->k, GCRef)[(idx)]))
+#define proto_knum(pt, idx) \
+  check_exp((uintptr_t)(idx) < (pt)->sizekn, mref((pt)->k, lua_Number)[(idx)])
+#define proto_bc(pt)		(mref((pt)->bc, BCIns))
+#define proto_ins(pt, pos) \
+  check_exp((uintptr_t)(pos) < (pt)->sizebc, proto_bc(pt)[(pos)])
+#define proto_insptr(pt, pos) \
+  check_exp((uintptr_t)(pos) < (pt)->sizebc, &proto_bc(pt)[(pos)])
+#define proto_bcpos(pt, pc)	((BCPos)((pc) - proto_bc(pt)))
 
 /* -- Upvalue object ------------------------------------------------------ */
 

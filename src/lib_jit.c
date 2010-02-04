@@ -209,7 +209,7 @@ LJLIB_CF(jit_util_funcbc)
   GCproto *pt = check_Lproto(L, 0);
   BCPos pc = (BCPos)lj_lib_checkint(L, 2) - 1;
   if (pc < pt->sizebc) {
-    BCIns ins = pt->bc[pc];
+    BCIns ins = proto_ins(pt, pc);
     BCOp op = bc_op(ins);
     lua_assert(op < BC__MAX);
     setintV(L->top, ins);
@@ -227,12 +227,12 @@ LJLIB_CF(jit_util_funck)
   ptrdiff_t idx = (ptrdiff_t)lj_lib_checkint(L, 2);
   if (idx >= 0) {
     if (idx < (ptrdiff_t)pt->sizekn) {
-      setnumV(L->top-1, pt->k.n[idx]);
+      setnumV(L->top-1, proto_knum(pt, idx));
       return 1;
     }
   } else {
     if (~idx < (ptrdiff_t)pt->sizekgc) {
-      GCobj *gc = gcref(pt->k.gc[idx]);
+      GCobj *gc = proto_kgc(pt, idx);
       setgcV(L, L->top-1, &gc->gch, ~gc->gch.gct);
       return 1;
     }

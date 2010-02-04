@@ -152,7 +152,7 @@ LJ_NORET static void err_limit(FuncState *fs, uint32_t limit, const char *what)
 
 static BCPos getjump(FuncState *fs, BCPos pc)
 {
-  ptrdiff_t delta = bc_j(fs->pt->bc[pc]);
+  ptrdiff_t delta = bc_j(proto_ins(fs->pt, pc));
   if ((BCPos)delta == NO_JMP)
     return NO_JMP;
   else
@@ -162,7 +162,7 @@ static BCPos getjump(FuncState *fs, BCPos pc)
 static int need_value(FuncState *fs, BCPos list)
 {
   for (; list != NO_JMP; list = getjump(fs, list)) {
-    BCOp op = bc_op(fs->pt->bc[list >= 1 ? list-1 : list]);
+    BCOp op = bc_op(proto_ins(fs->pt, list >= 1 ? list-1 : list));
     if (!(op == BC_ISTC || op == BC_ISFC)) return 1;
   }
   return 0;  /* Not found. */
@@ -170,7 +170,7 @@ static int need_value(FuncState *fs, BCPos list)
 
 static int patchtestreg(FuncState *fs, BCPos pc, BCReg reg)
 {
-  BCIns *i = &fs->pt->bc[pc >= 1 ? pc-1 : pc];
+  BCIns *i = proto_insptr(fs->pt, pc >= 1 ? pc-1 : pc);
   BCOp op = bc_op(*i);
   if (!(op == BC_ISTC || op == BC_ISFC))
     return 0;  /* cannot patch other instructions */
@@ -191,7 +191,7 @@ static void removevalues(FuncState *fs, BCPos list)
 
 static void fixjump(FuncState *fs, BCPos pc, BCPos dest)
 {
-  BCIns *jmp = &fs->pt->bc[pc];
+  BCIns *jmp = proto_insptr(fs->pt, pc);
   BCPos offset = dest-(pc+1)+BCBIAS_J;
   lua_assert(dest != NO_JMP);
   if (offset > BCMAX_D)
@@ -251,11 +251,14 @@ static BCPos emitINS(FuncState *fs, BCIns i)
   fs->jpc = NO_JMP;
   pt = fs->pt;
   if (LJ_UNLIKELY(fs->pc >= pt->sizebc)) {
+    BCIns *bc;
     checklimit(fs, fs->pc, LJ_MAX_BCINS, "bytecode instructions");
-    lj_mem_growvec(fs->L, pt->bc, pt->sizebc, LJ_MAX_BCINS, BCIns);
+    bc = proto_bc(pt);
+    lj_mem_growvec(fs->L, bc, pt->sizebc, LJ_MAX_BCINS, BCIns);
+    setmref(pt->bc, bc);
     lj_mem_growvec(fs->L, pt->lineinfo, pt->sizelineinfo, LJ_MAX_BCINS, BCLine);
   }
-  pt->bc[fs->pc] = i;
+  *proto_insptr(pt, fs->pc) = i;
   pt->lineinfo[fs->pc] = fs->ls->lastline;
   return fs->pc++;
 }
@@ -264,15 +267,16 @@ static BCPos emitINS(FuncState *fs, BCIns i)
 #define emitAD(fs, o, a, d)	emitINS(fs, BCINS_AD(o, a, d))
 #define emitAJ(fs, o, a, j)	emitINS(fs, BCINS_AJ(o, a, j))
 
-#define bcptr(fs, e)		(&(fs)->pt->bc[(e)->u.s.info])
+#define bcptr(fs, e)		(proto_insptr((fs)->pt, (e)->u.s.info))
 
 static BCPos emit_jump(FuncState *fs)
 {
   BCPos jpc = fs->jpc;  /* save list of jumps to here */
   BCPos j = fs->pc - 1;
   fs->jpc = NO_JMP;
-  if ((int32_t)j >= (int32_t)fs->lasttarget && bc_op(fs->pt->bc[j]) == BC_UCLO)
-    setbc_j(&fs->pt->bc[j], NO_JMP);
+  if ((int32_t)j >= (int32_t)fs->lasttarget &&
+      bc_op(proto_ins(fs->pt, j)) == BC_UCLO)
+    setbc_j(proto_insptr(fs->pt, j), NO_JMP);
   else
     j = emitAJ(fs, BC_JMP, fs->freereg, NO_JMP);
   concatjumps(fs, &j, jpc);  /* keep them on hold */
@@ -334,7 +338,7 @@ static void nilK(FuncState *fs, BCReg from, BCReg n)
   BCIns *pr;
   if (fs->pc > fs->lasttarget) {  /* no jumps to current position? */
     BCReg pfrom, pto;
-    pr = &fs->pt->bc[fs->pc-1];
+    pr = proto_insptr(fs->pt, fs->pc-1);
     pfrom = bc_a(*pr);
     switch (bc_op(*pr)) {
     case BC_KPRI:
@@ -1136,21 +1140,22 @@ static void collectk(FuncState *fs, GCproto *pt)
   Node *node;
   BCReg nkgc;
   MSize i, hmask, sizek;
-  GCRef *kstart;
+  GCRef *kptr;
   checklimitgt(fs, fs->nkn, BCMAX_D+1, "constants");
   checklimitgt(fs, fs->nkgc, BCMAX_D+1, "constants");
   nkgc = round_nkgc(fs->nkgc);
   sizek = (MSize)(nkgc*sizeof(GCRef) + fs->nkn*sizeof(lua_Number));
-  kstart = lj_mem_newt(fs->L, sizek, GCRef);
-  if (nkgc) setgcrefnull(kstart[0]);  /* May be uninitialized otherwise. */
-  pt->k.gc = kstart + nkgc;
+  kptr = lj_mem_newt(fs->L, sizek, GCRef);
+  if (nkgc) setgcrefnull(kptr[0]);  /* May be uninitialized otherwise. */
+  kptr += nkgc;
+  setmref(pt->k, kptr);
   pt->sizekn = fs->nkn;
   pt->sizekgc = fs->nkgc;
   kt = fs->kt;
   array = tvref(kt->array);
   for (i = 0; i < kt->asize; i++)
     if (tvisnum(&array[i]))
-      pt->k.n[array[i].u32.lo] = cast_num(i);
+      ((lua_Number *)kptr)[array[i].u32.lo] = cast_num(i);
   node = noderef(kt->node);
   hmask = kt->hmask;
   for (i = 0; i <= hmask; i++) {
@@ -1158,10 +1163,10 @@ static void collectk(FuncState *fs, GCproto *pt)
     if (tvisnum(&n->val)) {
       ptrdiff_t kidx = (ptrdiff_t)n->val.u32.lo;
       if (tvisnum(&n->key)) {
-	pt->k.n[kidx] = numV(&n->key);
+	((lua_Number *)kptr)[kidx] = numV(&n->key);
       } else {
 	GCobj *o = gcV(&n->key);
-	setgcref(pt->k.gc[~kidx], o);
+	setgcref(kptr[~kidx], o);
 	lj_gc_objbarrier(fs->L, pt, o);
       }
     }
@@ -1184,7 +1189,7 @@ static void finalret(FuncState *fs, GCproto *pt)
 {
   BCPos lastpc = fs->pc;
   if (lastpc > fs->lasttarget) {
-    switch (bc_op(pt->bc[lastpc-1])) {
+    switch (bc_op(proto_ins(pt, lastpc-1))) {
     case BC_CALLMT: case BC_CALLT:
     case BC_RETM: case BC_RET: case BC_RET0: case BC_RET1:
       goto suppress_return;  /* already got a return */
@@ -1195,21 +1200,22 @@ static void finalret(FuncState *fs, GCproto *pt)
     emitAJ(fs, BC_UCLO, 0, 0);
   emitAD(fs, BC_RET0, 0, 1);  /* final return */
 suppress_return:
-  /* may need to fixup returns encoded before first function was created */
+  /* May need to fixup returns encoded before first function was created. */
   if (fs->pt->flags & PROTO_FIXUP_RETURN) {
     BCPos pc;
     for (pc = 0; pc < lastpc; pc++) {
-      BCIns i = pt->bc[pc];
+      BCIns i = proto_ins(pt, pc);
       BCPos offset;
       switch (bc_op(i)) {
       case BC_CALLMT: case BC_CALLT:
       case BC_RETM: case BC_RET: case BC_RET0: case BC_RET1:
-	offset = emitINS(fs, i)-(pc+1)+BCBIAS_J;  /* copy return ins */
+	offset = emitINS(fs, i)-(pc+1)+BCBIAS_J;  /* Copy return ins. */
 	if (offset > BCMAX_D)
 	  err_syntax(fs->ls, LJ_ERR_XFIXUP);
-	pt->bc[pc] = BCINS_AD(BC_UCLO, 0, offset);  /* replace w/ UCLO+branch */
+	/* Replace with UCLO plus branch. */
+	*proto_insptr(pt, pc) = BCINS_AD(BC_UCLO, 0, offset);
 	break;
-      case BC_UCLO: return;  /* we're done */
+      case BC_UCLO: return;  /* We're done. */
       default: break;
       }
     }
@@ -1221,9 +1227,12 @@ static void close_func(LexState *ls)
   lua_State *L = ls->L;
   FuncState *fs = ls->fs;
   GCproto *pt = fs->pt;
+  BCIns *bc;
   removevars(ls, 0);
   finalret(fs, pt);
-  lj_mem_reallocvec(L, pt->bc, pt->sizebc, fs->pc, BCIns);
+  bc = proto_bc(pt);
+  lj_mem_reallocvec(L, bc, pt->sizebc, fs->pc, BCIns);
+  setmref(pt->bc, bc);
   pt->sizebc = fs->pc;
   collectk(fs, pt);
   collectuv(fs, pt);
@@ -1336,7 +1345,7 @@ static void constructor(LexState *ls, ExpDesc *e)
 	BCReg kidx;
 	t = lj_tab_new(fs->L, 0, 0);
 	kidx = gcK(fs, obj2gco(t), LJ_TTAB);
-	fs->pt->bc[pc] = BCINS_AD(BC_TDUP, freg-1, kidx);
+	*proto_insptr(fs->pt, pc) = BCINS_AD(BC_TDUP, freg-1, kidx);
       }
       vcall = 0;
       kexp2tv(&k, &key);
@@ -1353,7 +1362,7 @@ static void constructor(LexState *ls, ExpDesc *e)
   }
   checkmatch(ls, '}', '{', line);
   if (vcall) {
-    BCIns *i = &fs->pt->bc[fs->pc-1];
+    BCIns *i = proto_insptr(fs->pt, fs->pc-1);
     ExpDesc en;
     lua_assert(bc_a(*i)==freg && bc_op(*i) == (narr>256?BC_TSETV:BC_TSETB));
     init_exp(&en, VKNUM, 0);
@@ -1373,7 +1382,7 @@ static void constructor(LexState *ls, ExpDesc *e)
     if (!needarr) narr = 0;
     else if (narr < 3) narr = 3;
     else if (narr > 0x7ff) narr = 0x7ff;
-    setbc_d(&fs->pt->bc[pc], (uint32_t)narr | (hsize2hbits(nhash) << 11));
+    setbc_d(proto_insptr(fs->pt, pc), (uint32_t)narr|(hsize2hbits(nhash)<<11));
   }
 }
 

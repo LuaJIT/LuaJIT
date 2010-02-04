@@ -263,7 +263,7 @@ static TRef fori_arg(jit_State *J, const BCIns *pc, BCReg slot, IRType t)
 	else
 	  return lj_ir_knum(J, cast_num(k));
       } else if (bc_op(ins) == BC_KNUM) {
-	lua_Number n = J->pt->k.n[bc_d(ins)];
+	lua_Number n = proto_knum(J->pt, bc_d(ins));
 	if (t == IRT_INT)
 	  return lj_ir_kint(J, lj_num2int(n));
 	else
@@ -1816,7 +1816,7 @@ void lj_record_ins(jit_State *J)
   case BCMnone: rb = 0; rc = bc_d(ins); break;  /* Upgrade rc to 'rd'. */
   case BCMvar:
     copyTV(J->L, rbv, &lbase[rb]); ix.tab = rb = getslot(J, rb); break;
-  case BCMnum: { lua_Number n = J->pt->k.n[rb];
+  case BCMnum: { lua_Number n = proto_knum(J->pt, rb);
     setnumV(rbv, n); ix.tab = rb = lj_ir_knumint(J, n); } break;
   default: break;  /* Handled later. */
   }
@@ -1824,9 +1824,9 @@ void lj_record_ins(jit_State *J)
   case BCMvar:
     copyTV(J->L, rcv, &lbase[rc]); ix.key = rc = getslot(J, rc); break;
   case BCMpri: setitype(rcv, (int32_t)~rc); rc = TREF_PRI(IRT_NIL+rc); break;
-  case BCMnum: { lua_Number n = J->pt->k.n[rc];
+  case BCMnum: { lua_Number n = proto_knum(J->pt, rc);
     setnumV(rcv, n); ix.key = rc = lj_ir_knumint(J, n); } break;
-  case BCMstr: { GCstr *s = strref(J->pt->k.gc[~(ptrdiff_t)rc]);
+  case BCMstr: { GCstr *s = gco2str(proto_kgc(J->pt, ~(ptrdiff_t)rc));
     setstrV(J->L, rcv, s); ix.key = rc = lj_ir_kstr(J, s); } break;
   default: break;  /* Handled later. */
   }
@@ -2018,7 +2018,7 @@ void lj_record_ins(jit_State *J)
     break;
   case BC_TDUP:
     rc = emitir(IRT(IR_TDUP, IRT_TAB),
-		lj_ir_ktab(J, tabref(J->pt->k.gc[~(ptrdiff_t)rc])), 0);
+		lj_ir_ktab(J, gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)rc))), 0);
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
@@ -2315,7 +2315,7 @@ void lj_record_setup(jit_State *J)
     /* Check whether we could at least potentially form an extra loop. */
     if (J->exitno == 0 && T->snap[0].nent == 0) {
       /* We can narrow a FORL for some side traces, too. */
-      if (J->pc > J->pt->bc && bc_op(J->pc[-1]) == BC_JFORI &&
+      if (J->pc > proto_bc(J->pt) && bc_op(J->pc[-1]) == BC_JFORI &&
 	  bc_d(J->pc[bc_j(J->pc[-1])-1]) == root) {
 	lj_snap_add(J);
 	rec_setup_forl(J, J->pc-1);
@@ -2332,7 +2332,7 @@ void lj_record_setup(jit_State *J)
       rec_stop(J, TRACE_INTERP);
   } else {  /* Root trace. */
     J->cur.root = 0;
-    if (J->pc >= J->pt->bc) {  /* Not a hot CALL? */
+    if (J->pc >= proto_bc(J->pt)) {  /* Not a hot CALL? */
       J->cur.startins = *J->pc;
       J->pc = rec_setup_root(J);
       /* Note: the loop instruction itself is recorded at the end and not

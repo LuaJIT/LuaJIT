@@ -26,8 +26,8 @@ GCproto *lj_func_newproto(lua_State *L)
   pt->sizeuv = 0;
   pt->flags = 0;
   pt->trace = 0;
-  pt->k.n = NULL;
-  pt->bc = NULL;
+  setmref(pt->k, NULL);
+  setmref(pt->bc, NULL);
   pt->uv = NULL;
   pt->sizebc = 0;
   pt->sizekgc = 0;
@@ -49,8 +49,8 @@ void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
   MSize nkgc = round_nkgc(pt->sizekgc);
   MSize sizek = nkgc*(MSize)sizeof(GCRef) +
 		pt->sizekn*(MSize)sizeof(lua_Number);
-  lj_mem_free(g, pt->k.gc - nkgc, sizek);
-  lj_mem_freevec(g, pt->bc, pt->sizebc, BCIns);
+  lj_mem_free(g, mref(pt->k, GCRef) - nkgc, sizek);
+  lj_mem_freevec(g, proto_bc(pt), pt->sizebc, BCIns);
   lj_mem_freevec(g, pt->uv, pt->sizeuv, uint16_t);
   lj_mem_freevec(g, pt->lineinfo, pt->sizelineinfo, int32_t);
   lj_mem_freevec(g, pt->varinfo, pt->sizevarinfo, struct VarInfo);

@@ -146,7 +146,7 @@ void lj_trace_freeproto(global_State *g, GCproto *pt)
 void lj_trace_reenableproto(GCproto *pt)
 {
   if ((pt->flags & PROTO_HAS_ILOOP)) {
-    BCIns *bc = pt->bc;
+    BCIns *bc = proto_bc(pt);
     BCPos i, sizebc = pt->sizebc;;
     pt->flags &= ~PROTO_HAS_ILOOP;
     for (i = 0; i < sizebc; i++) {
@@ -323,7 +323,7 @@ static void trace_start(jit_State *J)
 
   if ((J->pt->flags & PROTO_NO_JIT)) {  /* JIT disabled for this proto? */
     if (J->parent == 0) {
-      if (J->pc >= J->pt->bc) {
+      if (J->pc >= proto_bc(J->pt)) {
 	/* Lazy bytecode patching to disable hotcount events. */
 	setbc_op(J->pc, (int)bc_op(*J->pc)+(int)BC_ILOOP-(int)BC_LOOP);
 	J->pt->flags |= PROTO_HAS_ILOOP;
@@ -361,7 +361,7 @@ static void trace_start(jit_State *J)
     setstrV(L, L->top++, lj_str_newlit(L, "start"));
     setintV(L->top++, J->curtrace);
     setfuncV(L, L->top++, J->fn);
-    setintV(L->top++, J->pc - J->pt->bc + 1);
+    setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
     if (J->parent) {
       setintV(L->top++, J->parent);
       setintV(L->top++, J->exitno);
@@ -444,7 +444,7 @@ static int trace_abort(jit_State *J)
       setstrV(L, L->top++, lj_str_newlit(L, "abort"));
       setintV(L->top++, J->curtrace);
       setfuncV(L, L->top++, J->fn);
-      setintV(L->top++, J->pc - J->pt->bc + 1);
+      setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
       copyTV(L, L->top++, restorestack(L, errobj));
       copyTV(L, L->top++, &J->errinfo);
     );
@@ -478,7 +478,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       lj_vmevent_send(L, RECORD,
 	setintV(L->top++, J->curtrace);
 	setfuncV(L, L->top++, J->fn);
-	setintV(L->top++, J->pc - J->pt->bc + 1);
+	setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
 	setintV(L->top++, J->framedepth);
 	if (bcmode_mm(bc_op(*J->pc)) == MM_call) {
 	  cTValue *o = &L->base[bc_a(*J->pc)];

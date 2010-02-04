@@ -117,7 +117,7 @@ static void setptmode_all(global_State *g, GCproto *pt, int mode)
 {
   ptrdiff_t i;
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++) {
-    GCobj *o = gcref(pt->k.gc[i]);
+    GCobj *o = proto_kgc(pt, i);
     if (o->gch.gct == ~LJ_TPROTO) {
       setptmode(g, gco2pt(o), mode);
       setptmode_all(g, gco2pt(o), mode);
@@ -302,8 +302,8 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
     callhook(L, LUA_HOOKCOUNT, -1);
   }
   if ((g->hookmask & LUA_MASKLINE) && pt->lineinfo) {
-    BCPos npc = (BCPos)(pc - pt->bc)-1;
-    BCPos opc = (BCPos)(oldpc - pt->bc)-1;
+    BCPos npc = proto_bcpos(pt, pc) - 1;
+    BCPos opc = proto_bcpos(pt, oldpc) - 1;
     BCLine line = pt->lineinfo[npc];
     if (npc == 0 || pc <= oldpc ||
 	opc >= pt->sizebc || line != pt->lineinfo[opc]) {

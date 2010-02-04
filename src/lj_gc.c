@@ -254,7 +254,7 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
   if (pt->chunkname)
     gc_mark_str(pt->chunkname);
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++)  /* Mark collectable consts. */
-    gc_markobj(g, gcref(pt->k.gc[i]));
+    gc_markobj(g, proto_kgc(pt, i));
   for (i = 0; i < (ptrdiff_t)pt->sizeuvname; i++)  /* Mark upvalue names. */
     if (pt->uvname[i])
       gc_mark_str(pt->uvname[i]);
