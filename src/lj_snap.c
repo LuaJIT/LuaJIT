@@ -68,49 +68,26 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
   return n;
 }
 
-/* Add frame links at the end of the snapshot. */
-static MSize snapshot_framelinks(jit_State *J, SnapEntry *map)
-{
-  cTValue *frame = J->L->base - 1;
-  cTValue *lim = J->L->base - J->baseslot;
-  MSize f = 0;
-  map[f++] = SNAP_MKPC(J->pc);  /* The current PC is always the first entry. */
-  while (frame > lim) {  /* Backwards traversal of all frames above base. */
-    if (frame_islua(frame)) {
-      map[f++] = SNAP_MKPC(frame_pc(frame));
-      frame = frame_prevl(frame);
-    } else if (frame_ispcall(frame)) {
-      map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
-      frame = frame_prevd(frame);
-    } else if (frame_iscont(frame)) {
-      map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
-      map[f++] = SNAP_MKPC(frame_contpc(frame));
-      frame = frame_prevd(frame);
-    } else {
-      lua_assert(0);
-    }
-  }
-  return f;
-}
-
 /* Take a snapshot of the current stack. */
 static void snapshot_stack(jit_State *J, SnapShot *snap, MSize nsnapmap)
 {
   BCReg nslots = J->baseslot + J->maxslot;
-  MSize nent, nframelinks;
+  MSize nent;
   SnapEntry *p;
-  /* Conservative estimate. Continuation frames need 2 slots. */
-  lj_snap_grow_map(J, nsnapmap + nslots + (MSize)J->framedepth*2+1);
+  /* Conservative estimate. */
+  lj_snap_grow_map(J, nsnapmap + nslots + (MSize)J->framedepth+1);
   p = &J->cur.snapmap[nsnapmap];
   nent = snapshot_slots(J, p, nslots);
-  nframelinks = snapshot_framelinks(J, p + nent);
-  J->cur.nsnapmap = (uint16_t)(nsnapmap + nent + nframelinks);
   snap->mapofs = (uint16_t)nsnapmap;
   snap->ref = (IRRef1)J->cur.nins;
   snap->nent = (uint8_t)nent;
-  snap->nframelinks = (uint8_t)nframelinks;
+  snap->depth = (uint8_t)J->framedepth;
   snap->nslots = (uint8_t)nslots;
   snap->count = 0;
+  J->cur.nsnapmap = (uint16_t)(nsnapmap + nent + 1 + J->framedepth);
+  /* Add frame links at the end of the snapshot. */
+  p[nent] = SNAP_MKPC(J->pc);  /* The current PC is always the first entry. */
+  memcpy(&p[nent+1], J->frame, sizeof(SnapEntry)*(size_t)J->framedepth);
 }
 
 /* Add or merge a snapshot. */
@@ -141,14 +118,14 @@ void lj_snap_shrink(jit_State *J)
   lua_assert(nslots < snap->nslots);
   snap->nslots = (uint8_t)nslots;
   if (nent > 0 && snap_slot(map[nent-1]) >= nslots) {
-    MSize s, delta, nframelinks = snap->nframelinks;
+    MSize s, delta, depth = snap->depth;
     for (nent--; nent > 0 && snap_slot(map[nent-1]) >= nslots; nent--)
       ;
     delta = snap->nent - nent;
     snap->nent = (uint8_t)nent;
-    J->cur.nsnapmap = (uint16_t)(snap->mapofs + nent + nframelinks);
+    J->cur.nsnapmap = (uint16_t)(snap->mapofs + nent + 1 + depth);
     map += nent;
-    for (s = 0; s < nframelinks; s++)  /* Move frame links down. */
+    for (s = 0; s <= depth; s++)  /* Move PC + frame links down. */
       map[s] = map[s+delta];
   }
 }
@@ -210,7 +187,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nent + snap->nframelinks;
+  SnapEntry *flinks = map + nent;
   int32_t ftsz0;
   BCReg nslots = snap->nslots;
   TValue *frame;
@@ -224,6 +201,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
   }
 
   /* Fill stack slots with data from the registers and spill slots. */
+  J->pc = snap_pc(*flinks++);
   frame = L->base-1;
   ftsz0 = frame_ftsz(frame);  /* Preserve link to previous frame in slot #0. */
   for (n = 0; n < nent; n++) {
@@ -236,7 +214,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
       lj_ir_kvalue(L, o, ir);
       if ((sn & (SNAP_CONT|SNAP_FRAME))) {
 	/* Overwrite tag with frame link. */
-	o->fr.tp.ftsz = s != 0 ? (int32_t)*--flinks : ftsz0;
+	o->fr.tp.ftsz = s != 0 ? (int32_t)*flinks++ : ftsz0;
 	if ((sn & SNAP_FRAME)) {
 	  GCfunc *fn = ir_kfunc(ir);
 	  if (isluafunc(fn)) {
@@ -291,8 +269,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
     }
   }
   L->top = curr_topL(L);
-  J->pc = snap_pc(*--flinks);
-  lua_assert(map + nent == flinks);
+  lua_assert(map + nent + 1 + snap->depth == flinks);
 }
 
 #undef IR

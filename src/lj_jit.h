@@ -114,7 +114,7 @@ typedef struct SnapShot {
   IRRef1 ref;		/* First IR ref for this snapshot. */
   uint8_t nslots;	/* Number of valid slots. */
   uint8_t nent;		/* Number of compressed entries. */
-  uint8_t nframelinks;	/* Number of frame links. */
+  uint8_t depth;	/* Number of frame links. */
   uint8_t count;	/* Count of taken exits for this snapshot. */
 } SnapShot;
 
@@ -252,6 +252,7 @@ typedef struct jit_State {
 
   IRRef1 chain[IR__MAX];  /* IR instruction skip-list chain anchors. */
   TRef slot[LJ_MAX_JSLOTS+LJ_STACK_EXTRA];  /* Stack slot map. */
+  SnapEntry frame[LJ_MAX_JFRAME+2];  /* Frame link stack. */
 
   int32_t param[JIT_P__MAX];  /* JIT engine parameters. */
 

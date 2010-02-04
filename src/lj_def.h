@@ -66,6 +66,7 @@ typedef unsigned __int32 uintptr_t;
 
 /* JIT compiler limits. */
 #define LJ_MAX_JSLOTS	250		/* Max. # of stack slots for a trace. */
+#define LJ_MAX_JFRAME	20		/* Max. # of frames for a trace. */
 #define LJ_MAX_PHI	32		/* Max. # of PHIs for a loop. */
 #define LJ_MAX_EXITSTUBGR	8	/* Max. # of exit stub groups. */
 

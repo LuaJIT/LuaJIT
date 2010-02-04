@@ -101,20 +101,45 @@ static void rec_check_ir(jit_State *J)
   }
 }
 
+/* Compare frame stack of the recorder and the VM. */
+static void rec_check_frames(jit_State *J)
+{
+  cTValue *frame = J->L->base - 1;
+  cTValue *lim = J->L->base - J->baseslot;
+  int32_t depth = J->framedepth;
+  while (frame > lim) {
+    depth--;
+    lua_assert(depth >= 0);
+    lua_assert((SnapEntry)frame_ftsz(frame) == J->frame[depth]);
+    if (frame_iscont(frame)) {
+      depth--;
+      lua_assert(depth >= 0);
+      lua_assert((SnapEntry)frame_ftsz(frame-1) == J->frame[depth]);
+    }
+    frame = frame_prev(frame);
+  }
+  lua_assert(depth == 0);
+}
+
 /* Sanity check the slots. */
 static void rec_check_slots(jit_State *J)
 {
   BCReg s, nslots = J->baseslot + J->maxslot;
+  int32_t depth;
   lua_assert(J->baseslot >= 1 && J->baseslot < LJ_MAX_JSLOTS);
   lua_assert(nslots < LJ_MAX_JSLOTS);
   for (s = 0; s < nslots; s++) {
     TRef tr = J->slot[s];
+    if (s != 0 && (tr & (TREF_CONT|TREF_FRAME)))
+      depth++;
     if (tr) {
       IRRef ref = tref_ref(tr);
       lua_assert(ref >= J->cur.nk && ref < J->cur.nins);
       lua_assert(irt_t(IR(ref)->t) == tref_t(tr));
     }
   }
+  lua_assert(J->framedepth == depth);
+  rec_check_frames(J);
 }
 #endif
 
@@ -854,6 +879,7 @@ typedef struct RecordFFData {
   ptrdiff_t nres;	/* Number of returned results (defaults to 1). */
   ptrdiff_t cres;	/* Wanted number of call results. */
   uint32_t data;	/* Per-ffid auxiliary data (opcode, literal etc.). */
+  int metacall;		/* True if function was resolved via __call. */
 } RecordFFData;
 
 /* Type of handler to record a fast function. */
@@ -1020,9 +1046,14 @@ static void recff_tostring(jit_State *J, TRef *res, RecordFFData *rd)
     ix.tab = tr;
     copyTV(J->L, &ix.tabv, &rd->argv[0]);
     if (rec_mm_lookup(J, &ix, MM_tostring)) {  /* Has __tostring metamethod? */
+      if (rd->metacall)  /* Must not use kludge. */
+	recff_err_nyi(J, rd);
       res[0] = ix.mobj;
-      copyTV(J->L, rd->argv - 1, &ix.mobjv);
-      if (!rec_call(J, (BCReg)(res - J->base), 1, 1))  /* Pending call? */
+      copyTV(J->L, rd->argv - 1, &ix.mobjv);  /* Kludge. */
+      J->framedepth--;
+      if (rec_call(J, (BCReg)(res - J->base), 1, 1))
+	J->framedepth++;
+      else
 	rd->cres = CALLRES_PENDING;
       /* Otherwise res[0] already contains the result. */
     } else if (tref_isnumber(tr)) {
@@ -1067,6 +1098,8 @@ static void recff_pcall(jit_State *J, TRef *res, RecordFFData *rd)
 {
   if (rd->nargs >= 1) {
     BCReg parg = (BCReg)(arg - J->base);
+    J->pc = (const BCIns *)(sizeof(TValue) - 4 +
+			    (hook_active(J2G(J)) ? FRAME_PCALLH : FRAME_PCALL));
     if (rec_call(J, parg, CALLRES_MULTI, rd->nargs - 1)) {  /* Resolved call. */
       res[0] = TREF_TRUE;  /* Prepend true result. No need to move results. */
       rd->nres = (ptrdiff_t)J->maxslot - (ptrdiff_t)parg + 1;
@@ -1108,6 +1141,8 @@ static void recff_xpcall(jit_State *J, TRef *res, RecordFFData *rd)
     copyTV(J->L, &rd->argv[0], &argv1);
     copyTV(J->L, &rd->argv[1], &argv0);
     oargv = savestack(J->L, rd->argv);
+    J->pc = (const BCIns *)(2*sizeof(TValue) - 4 +
+			    (hook_active(J2G(J)) ? FRAME_PCALLH : FRAME_PCALL));
     /* Need to protect rec_call because the recorder may throw. */
     rx.parg = parg;
     rx.nargs = rd->nargs - 2;
@@ -1549,7 +1584,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   } else if (frame_iscont(frame)) {  /* Return to continuation frame. */
     ASMFunction cont = frame_contf(frame);
     BCReg cbase = (BCReg)frame_delta(frame);
-    if (J->framedepth-- <= 0)
+    if ((J->framedepth -= 2) <= 0)
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
@@ -1602,6 +1637,7 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
   if (tref_isfunc(res[0])) {  /* Regular function call. */
     rd.fn = funcV(tv);
     rd.argv = tv+1;
+    rd.metacall = 0;
   } else {  /* Otherwise resolve __call metamethod for called object. */
     RecordIndex ix;
     ptrdiff_t i;
@@ -1615,13 +1651,21 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
     res[0] = ix.mobj;
     rd.fn = funcV(&ix.mobjv);
     rd.argv = tv;  /* The called object is the 1st arg. */
+    rd.metacall = 1;
   }
 
   /* Specialize to the runtime value of the called function. */
   trfunc = lj_ir_kfunc(J, rd.fn);
   emitir(IRTG(IR_EQ, IRT_FUNC), res[0], trfunc);
   res[0] = trfunc | TREF_FRAME;
-  J->framedepth++;
+
+  /* Add frame links. */
+  J->frame[J->framedepth++] = SNAP_MKPC(J->pc+1);
+  if (cres == CALLRES_CONT)  /* Continuations need an extra frame stack slot. */
+    J->frame[J->framedepth++] = SNAP_MKFTSZ((func+1)*sizeof(TValue)+FRAME_CONT);
+    /* NYI: func is wrong if any fast function ever sets up a continuation. */
+  if (J->framedepth > LJ_MAX_JFRAME)
+    lj_trace_err(J, LJ_TRERR_STACKOV);
 
   if (isluafunc(rd.fn)) {  /* Record call to Lua function. */
     GCproto *pt = funcproto(rd.fn);
@@ -1659,6 +1703,7 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
     return 0;  /* No result yet. */
   } else {  /* Record call to C function or fast function. */
     uint32_t m = 0;
+    BCReg oldmaxslot = J->maxslot;
     res[1+nargs] = 0;
     rd.nargs = nargs;
     if (rd.fn->c.ffid < sizeof(recff_idmap)/sizeof(recff_idmap[0]))
@@ -1682,10 +1727,12 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
       rec_ret(J, func, rd.nres);
     } else if (cres == CALLRES_CONT) {
       /* Note: immediately resolved continuations must not change J->maxslot. */
+      J->maxslot = oldmaxslot;
+      J->framedepth--;
       res[rd.nres] = TREF_NIL;  /* Turn 0 results into nil result. */
     } else {
-      J->framedepth++;
       lua_assert(cres == CALLRES_PENDING);
+      J->framedepth++;
       return 0;  /* Pending call, no result yet. */
     }
     return 1;  /* Result resolved immediately. */
@@ -2213,13 +2260,13 @@ static void rec_setup_side(jit_State *J, Trace *T)
     }
   setslot:
     J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
-    if ((sn & SNAP_FRAME) && s != 0) {
+    if ((sn & SNAP_FRAME) && s != 0)
       J->baseslot = s+1;
-      J->framedepth++;
-    }
   }
   J->base = J->slot + J->baseslot;
   J->maxslot = snap->nslots - J->baseslot;
+  J->framedepth = snap->depth;  /* Copy frames from snapshot. */
+  memcpy(J->frame, &map[nent+1], sizeof(SnapEntry)*(size_t)snap->depth);
   lj_snap_add(J);
 }
 

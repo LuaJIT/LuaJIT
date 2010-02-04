@@ -167,7 +167,7 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
 			    SnapEntry *loopmap, IRRef1 *subst)
 {
   SnapEntry *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
-  MSize nmapofs, nframelinks;
+  MSize nmapofs, depth;
   MSize on, ln, nn, onent = osnap->nent;
   BCReg nslots = osnap->nslots;
   SnapShot *snap = &J->cur.snap[J->cur.nsnap];
@@ -179,11 +179,11 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
     nmapofs = snap->mapofs;
   }
   J->guardemit.irt = 0;
-  nframelinks = osnap->nframelinks;
+  depth = osnap->depth;
   /* Setup new snapshot. */
   snap->mapofs = (uint16_t)nmapofs;
   snap->ref = (IRRef1)J->cur.nins;
-  snap->nframelinks = (uint8_t)nframelinks;
+  snap->depth = (uint8_t)depth;
   snap->nslots = nslots;
   snap->count = 0;
   nmap = &J->cur.snapmap[nmapofs];
@@ -205,10 +205,10 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
   while (snap_slot(loopmap[ln]) < nslots)  /* Copy remaining loop slots. */
     nmap[nn++] = loopmap[ln++];
   snap->nent = (uint8_t)nn;
-  J->cur.nsnapmap = (uint16_t)(nmapofs + nn + nframelinks);
+  J->cur.nsnapmap = (uint16_t)(nmapofs + nn + 1 + depth);
   omap += onent;
   nmap += nn;
-  for (nn = 0; nn < nframelinks; nn++)  /* Copy frame links. */
+  for (nn = 0; nn <= depth; nn++)  /* Copy PC + frame links. */
     nmap[nn] = omap[nn];
 }
 
@@ -314,7 +314,7 @@ static void loop_undo(jit_State *J, IRRef ins, MSize nsnap)
   SnapShot *snap = &J->cur.snap[nsnap-1];
   SnapEntry *map = J->cur.snapmap;
   map[snap->mapofs + snap->nent] = map[J->cur.snap[0].nent];  /* Restore PC. */
-  J->cur.nsnapmap = (uint16_t)(snap->mapofs + snap->nent + snap->nframelinks);
+  J->cur.nsnapmap = (uint16_t)(snap->mapofs + snap->nent + 1 + snap->depth);
   J->cur.nsnap = nsnap;
   J->guardemit.irt = 0;
   lj_ir_rollback(J, ins);
