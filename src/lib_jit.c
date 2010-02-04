@@ -437,9 +437,6 @@ static int jitopt_flag(jit_State *J, const char *str)
   return 0;  /* No match. */
 }
 
-/* Forward declaration. */
-static void jit_init_hotcount(jit_State *J);
-
 /* Parse optimization parameter. */
 static int jitopt_param(jit_State *J, const char *str)
 {
@@ -453,7 +450,7 @@ static int jitopt_param(jit_State *J, const char *str)
 	lj_str_numconv(&str[len+1], &tv)) {
       J->param[i] = lj_num2int(tv.n);
       if (i == JIT_P_hotloop)
-	jit_init_hotcount(J);
+	lj_dispatch_init_hotcount(J2G(J));
       return 1;  /* Ok. */
     }
     lst += 1+len;
@@ -498,16 +495,6 @@ JIT_PARAMDEF(JIT_PARAMINIT)
 #undef JIT_PARAMINIT
   0
 };
-
-/* Initialize hotcount table. */
-static void jit_init_hotcount(jit_State *J)
-{
-  HotCount start = (HotCount)J->param[JIT_P_hotloop];
-  HotCount *hotcount = J2GG(J)->hotcount;
-  uint32_t i;
-  for (i = 0; i < HOTCOUNT_SIZE; i++)
-    hotcount[i] = start;
-}
 #endif
 
 /* Arch-dependent CPU detection. */
@@ -570,7 +557,6 @@ static void jit_init(lua_State *L)
   jit_State *J = L2J(L);
   J->flags = flags | JIT_F_ON | JIT_F_OPT_DEFAULT;
   memcpy(J->param, jit_param_default, sizeof(J->param));
-  jit_init_hotcount(J);
   lj_dispatch_update(G(L));
 #else
   UNUSED(flags);

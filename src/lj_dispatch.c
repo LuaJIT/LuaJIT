@@ -34,6 +34,18 @@ void lj_dispatch_init(GG_State *GG)
   disp[BC_LOOP] = disp[BC_ILOOP];
 }
 
+#if LJ_HASJIT
+/* Initialize hotcount table. */
+void lj_dispatch_init_hotcount(global_State *g)
+{
+  HotCount start = (HotCount)G2J(g)->param[JIT_P_hotloop];
+  HotCount *hotcount = G2GG(g)->hotcount;
+  uint32_t i;
+  for (i = 0; i < HOTCOUNT_SIZE; i++)
+    hotcount[i] = start;
+}
+#endif
+
 /* Update dispatch table depending on various flags. */
 void lj_dispatch_update(global_State *g)
 {
@@ -77,6 +89,10 @@ void lj_dispatch_update(global_State *g)
       disp[BC_ITERL] = f_iterl;
       disp[BC_LOOP] = f_loop;
     }
+#if LJ_HASJIT
+    if ((mode & 1) && !(oldmode & 1))  /* JIT off to on transition. */
+      lj_dispatch_init_hotcount(g);
+#endif
   }
 }
 
