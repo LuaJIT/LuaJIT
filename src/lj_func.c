@@ -28,7 +28,7 @@ GCproto *lj_func_newproto(lua_State *L)
   pt->trace = 0;
   setmref(pt->k, NULL);
   setmref(pt->bc, NULL);
-  pt->uv = NULL;
+  setmref(pt->uv, NULL);
   pt->sizebc = 0;
   pt->sizekgc = 0;
   pt->sizekn = 0;
@@ -39,8 +39,8 @@ GCproto *lj_func_newproto(lua_State *L)
   pt->lastlinedefined = 0;
   pt->lineinfo = NULL;
   pt->varinfo = NULL;
-  pt->uvname = NULL;
-  pt->chunkname = NULL;
+  setmref(pt->uvname, NULL);
+  setgcrefnull(pt->chunkname);
   return pt;
 }
 
@@ -51,10 +51,10 @@ void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 		pt->sizekn*(MSize)sizeof(lua_Number);
   lj_mem_free(g, mref(pt->k, GCRef) - nkgc, sizek);
   lj_mem_freevec(g, proto_bc(pt), pt->sizebc, BCIns);
-  lj_mem_freevec(g, pt->uv, pt->sizeuv, uint16_t);
+  lj_mem_freevec(g, proto_uv(pt), pt->sizeuv, uint16_t);
   lj_mem_freevec(g, pt->lineinfo, pt->sizelineinfo, int32_t);
   lj_mem_freevec(g, pt->varinfo, pt->sizevarinfo, struct VarInfo);
-  lj_mem_freevec(g, pt->uvname, pt->sizeuvname, GCstr *);
+  lj_mem_freevec(g, mref(pt->uvname, GCRef), pt->sizeuvname, GCRef);
   lj_trace_freeproto(g, pt);
   lj_mem_freet(g, pt);
 }
@@ -169,7 +169,7 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
   nuv = fn->l.nupvalues;
   base = L->base;
   for (i = 0; i < nuv; i++) {
-    uint32_t v = pt->uv[i];
+    uint32_t v = proto_uv(pt)[i];
     GCupval *uv;
     if ((v & 0x8000)) {
       uv = func_finduv(L, base + (v & 0xff));

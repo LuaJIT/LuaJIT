@@ -352,7 +352,7 @@ typedef struct GCproto {
   GCRef gclist;
   MRef k;		/* Split constant array (points to the middle). */
   MRef bc;		/* Array of bytecode instructions. */
-  uint16_t *uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
+  MRef uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
   MSize sizekgc;	/* Number of collectable constants. */
   MSize sizekn;		/* Number of lua_Number constants. */
   uint8_t sizeuv;	/* Number of upvalues. */
@@ -366,8 +366,8 @@ typedef struct GCproto {
   BCLine lastlinedefined;  /* Last line of the function definition. */
   BCLine *lineinfo;	/* Map from bytecode instructions to source lines. */
   struct VarInfo *varinfo;  /* Names and extents of local variables. */
-  GCstr **uvname;	/* Upvalue names. */
-  GCstr *chunkname;	/* Name of the chunk this function was defined in. */
+  MRef uvname;		/* Array of upvalue names (GCRef of GCstr). */
+  GCRef chunkname;	/* Name of the chunk this function was defined in. */
 } GCproto;
 
 #define PROTO_IS_VARARG		0x01
@@ -388,6 +388,11 @@ typedef struct GCproto {
 #define proto_insptr(pt, pos) \
   check_exp((uintptr_t)(pos) < (pt)->sizebc, &proto_bc(pt)[(pos)])
 #define proto_bcpos(pt, pc)	((BCPos)((pc) - proto_bc(pt)))
+#define proto_uv(pt)		(mref((pt)->uv, uint16_t))
+#define proto_uvname(pt, idx) \
+  check_exp((uintptr_t)(idx) < (pt)->sizeuvname, \
+	    gcref(mref((pt)->uvname, GCRef)[(idx)]))
+#define proto_chunkname(pt)	(gco2str(gcref((pt)->chunkname)))
 
 /* -- Upvalue object ------------------------------------------------------ */
 

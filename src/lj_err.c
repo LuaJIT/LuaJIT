@@ -176,7 +176,8 @@ restart:
 	}
 	return "field";
       case BC_UGET:
-	*name = pt->uvname ? strdata(pt->uvname[bc_d(ins)]) : "?";
+	*name = mref(pt->uvname, GCRef) ?
+		strdata(gco2str(proto_uvname(pt,bc_d(ins)))) : "?";
 	return "upvalue";
       default:
 	return NULL;
@@ -217,7 +218,7 @@ static const char *getfuncname(lua_State *L, TValue *frame, const char **name)
 
 void lj_err_pushloc(lua_State *L, GCproto *pt, BCPos pc)
 {
-  GCstr *name = pt->chunkname;
+  GCstr *name = proto_chunkname(pt);
   if (name) {
     const char *s = strdata(name);
     MSize i, len = name->len;
@@ -344,7 +345,7 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     switch (*what) {
     case 'S':
       if (isluafunc(fn)) {
-	ar->source = strdata(funcproto(fn)->chunkname);
+	ar->source = strdata(proto_chunkname(funcproto(fn)));
 	ar->linedefined = cast_int(funcproto(fn)->linedefined);
 	ar->lastlinedefined = cast_int(funcproto(fn)->lastlinedefined);
 	ar->what = (ar->linedefined == 0) ? "main" : "Lua";
@@ -819,7 +820,7 @@ LJ_NOINLINE static void err_loc(lua_State *L, const char *msg,
     if (isluafunc(fn)) {
       char buff[LUA_IDSIZE];
       BCLine line = currentline(L, fn, nextframe);
-      err_chunkid(buff, strdata(funcproto(fn)->chunkname));
+      err_chunkid(buff, strdata(proto_chunkname(funcproto(fn))));
       lj_str_pushf(L, "%s:%d: %s", buff, line, msg);
       return;
     }

@@ -251,13 +251,13 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
   }
 #endif
   /* GC during prototype creation could cause NULL fields. */
-  if (pt->chunkname)
-    gc_mark_str(pt->chunkname);
+  if (gcref(pt->chunkname))
+    gc_mark_str(proto_chunkname(pt));
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++)  /* Mark collectable consts. */
     gc_markobj(g, proto_kgc(pt, i));
   for (i = 0; i < (ptrdiff_t)pt->sizeuvname; i++)  /* Mark upvalue names. */
-    if (pt->uvname[i])
-      gc_mark_str(pt->uvname[i]);
+    if (proto_uvname(pt, i))
+      gc_mark_str(gco2str(proto_uvname(pt, i)));
   for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
     if (pt->varinfo[i].name)
       gc_mark_str(pt->varinfo[i].name);
@@ -332,7 +332,7 @@ static size_t propagatemark(global_State *g)
 			     sizeof(uint16_t) * pt->sizeuv +
 			     sizeof(int32_t) * pt->sizelineinfo +
 			     sizeof(VarInfo) * pt->sizevarinfo +
-			     sizeof(GCstr *) * pt->sizeuvname;
+			     sizeof(GCRef) * pt->sizeuvname;
   } else {
     lua_State *th = gco2th(o);
     setgcrefr(th->gclist, g->gc.grayagain);

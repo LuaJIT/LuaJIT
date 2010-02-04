@@ -813,7 +813,7 @@ static const char *aux_upvalue(cTValue *f, uint32_t idx, TValue **val)
     GCproto *pt = funcproto(fn);
     if (idx < pt->sizeuvname) {
       *val = uvval(&gcref(fn->l.uvptr[idx])->uv);
-      return strdata(pt->uvname[idx]);
+      return strdata(gco2str(proto_uvname(pt, idx)));
     }
   } else {
     if (idx < fn->c.nupvalues) {

@@ -1017,20 +1017,23 @@ static uint32_t indexupvalue(FuncState *fs, GCstr *name, ExpDesc *v)
 {
   uint32_t i;
   GCproto *pt = fs->pt;
+  GCRef *uvname;
   for (i = 0; i < fs->nuv; i++) {
     if (fs->upvalues[i].info == v->u.s.info && fs->upvalues[i].k == v->k) {
-      lua_assert(pt->uvname[i] == name);
+      lua_assert(gco2str(proto_uvname(pt, i)) == name);
       return i;
     }
   }
   /* Not found, create a new upvalue for this name. */
+  uvname = mref(pt->uvname, GCRef);
   if (LJ_UNLIKELY(fs->nuv >= pt->sizeuvname)) {
     MSize oldsize = pt->sizeuvname;
     checklimit(fs, fs->nuv, LJ_MAX_UPVAL, "upvalues");
-    lj_mem_growvec(fs->L, pt->uvname, pt->sizeuvname, LJ_MAX_UPVAL, GCstr *);
-    while (oldsize < pt->sizeuvname) pt->uvname[oldsize++] = NULL;
+    lj_mem_growvec(fs->L, uvname, pt->sizeuvname, LJ_MAX_UPVAL, GCRef);
+    setmref(pt->uvname, uvname);
+    while (oldsize < pt->sizeuvname) setgcrefnull(uvname[oldsize++]);
   }
-  pt->uvname[fs->nuv] = name;
+  setgcref(uvname[fs->nuv], obj2gco(name));
   lj_gc_objbarrier(fs->L, pt, name);
   lua_assert(v->k == VLOCAL || v->k == VUPVAL);
   fs->upvalues[fs->nuv].k = cast_byte(v->k);
@@ -1123,7 +1126,7 @@ static void open_func(LexState *ls, FuncState *fs)
   fs->nactvar = 0;
   fs->nuv = 0;
   fs->bl = NULL;
-  pt->chunkname = ls->chunkname;
+  setgcref(pt->chunkname, obj2gco(ls->chunkname));
   pt->framesize = 2;  /* registers 0/1 are always valid */
   fs->kt = lj_tab_new(L, 0, 0);
   /* anchor table of constants and prototype (to avoid being collected) */
@@ -1176,12 +1179,13 @@ static void collectk(FuncState *fs, GCproto *pt)
 static void collectuv(FuncState *fs, GCproto *pt)
 {
   uint32_t i;
-  pt->uv = lj_mem_newvec(fs->L, fs->nuv, uint16_t);
+  uint16_t *uv = lj_mem_newvec(fs->L, fs->nuv, uint16_t);
+  setmref(pt->uv, uv);
   pt->sizeuv = fs->nuv;
   for (i = 0; i < pt->sizeuv; i++) {
     uint32_t v = fs->upvalues[i].info;
     if (fs->upvalues[i].k == VLOCAL) v |= 0x8000;
-    pt->uv[i] = (uint16_t)v;
+    uv[i] = (uint16_t)v;
   }
 }
 
@@ -1228,6 +1232,7 @@ static void close_func(LexState *ls)
   FuncState *fs = ls->fs;
   GCproto *pt = fs->pt;
   BCIns *bc;
+  GCRef *uvname;
   removevars(ls, 0);
   finalret(fs, pt);
   bc = proto_bc(pt);
@@ -1240,7 +1245,9 @@ static void close_func(LexState *ls)
   pt->sizelineinfo = fs->pc;
   lj_mem_reallocvec(L, pt->varinfo, pt->sizevarinfo, fs->nlocvars, VarInfo);
   pt->sizevarinfo = fs->nlocvars;
-  lj_mem_reallocvec(L, pt->uvname, pt->sizeuvname, fs->nuv, GCstr *);
+  uvname = mref(pt->uvname, GCRef);
+  lj_mem_reallocvec(L, uvname, pt->sizeuvname, fs->nuv, GCRef);
+  setmref(pt->uvname, uvname);
   pt->sizeuvname = fs->nuv;
   lua_assert(fs->bl == NULL);
   lj_vmevent_send(L, BC,

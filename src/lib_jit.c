@@ -188,7 +188,7 @@ LJLIB_CF(jit_util_funcinfo)
       setintfield(L, t, "currentline", pt->lineinfo ? pt->lineinfo[pc-1] : 0);
     lua_pushboolean(L, (pt->flags & PROTO_IS_VARARG));
     lua_setfield(L, -2, "isvararg");
-    setstrV(L, L->top++, pt->chunkname);
+    setstrV(L, L->top++, proto_chunkname(pt));
     lua_setfield(L, -2, "source");
     lj_err_pushloc(L, pt, pc);
     lua_setfield(L, -2, "loc");
@@ -246,7 +246,7 @@ LJLIB_CF(jit_util_funcuvname)
   GCproto *pt = check_Lproto(L, 0);
   uint32_t idx = (uint32_t)lj_lib_checkint(L, 2);
   if (idx < pt->sizeuvname) {
-    setstrV(L, L->top-1, pt->uvname[idx]);
+    setstrV(L, L->top-1, gco2str(proto_uvname(pt, idx)));
     return 1;
   }
   return 0;

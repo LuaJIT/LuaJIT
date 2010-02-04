@@ -709,7 +709,7 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
     ctx.lineno = pt->lineinfo ? pt->lineinfo[proto_bcpos(pt, startpc)] : 0;
   else
     ctx.lineno = pt->linedefined;
-  ctx.filename = strdata(pt->chunkname);
+  ctx.filename = strdata(proto_chunkname(pt));
   if (*ctx.filename == '@' || *ctx.filename == '=')
     ctx.filename++;
   else
