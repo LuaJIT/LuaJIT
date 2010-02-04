@@ -34,7 +34,7 @@
   _(NE,		GC, ref, ref) \
   \
   _(ABC,	G , ref, ref) \
-  _(RETF,	G , ref, ref) \
+  _(RETF,	SG, ref, ref) \
   \
   _(LT,		G , ref, ref) \
   _(GE,		G , ref, ref) \
@@ -288,6 +288,7 @@ typedef enum {
 #define IRM_GC			(IRM_G|IRM_C)
 #define IRM_RG			(IRM_R|IRM_G)
 #define IRM_LG			(IRM_L|IRM_G)
+#define IRM_SG			(IRM_S|IRM_G)
 
 #define irm_op1(m)		(cast(IRMode, (m)&3))
 #define irm_op2(m)		(cast(IRMode, ((m)>>2)&3))
