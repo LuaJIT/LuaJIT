@@ -364,7 +364,7 @@ typedef struct GCproto {
   MSize sizeuvname;	/* Size of upvalue names array (may be 0). */
   BCLine linedefined;	/* First line of the function definition. */
   BCLine lastlinedefined;  /* Last line of the function definition. */
-  BCLine *lineinfo;	/* Map from bytecode instructions to source lines. */
+  MRef lineinfo;	/* Map from bytecode instructions to source lines. */
   struct VarInfo *varinfo;  /* Names and extents of local variables. */
   MRef uvname;		/* Array of upvalue names (GCRef of GCstr). */
   GCRef chunkname;	/* Name of the chunk this function was defined in. */
@@ -393,6 +393,9 @@ typedef struct GCproto {
   check_exp((uintptr_t)(idx) < (pt)->sizeuvname, \
 	    gcref(mref((pt)->uvname, GCRef)[(idx)]))
 #define proto_chunkname(pt)	(gco2str(gcref((pt)->chunkname)))
+#define proto_lineinfo(pt)	(mref((pt)->lineinfo, BCLine))
+#define proto_line(pt, pos) \
+  check_exp((uintptr_t)(pos) < (pt)->sizebc, proto_lineinfo(pt)[(pos)])
 
 /* -- Upvalue object ------------------------------------------------------ */
 

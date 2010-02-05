@@ -330,7 +330,7 @@ static size_t propagatemark(global_State *g)
 			     sizeof(GCRef) * pt->sizekgc +
 			     sizeof(lua_Number) * pt->sizekn +
 			     sizeof(uint16_t) * pt->sizeuv +
-			     sizeof(int32_t) * pt->sizelineinfo +
+			     sizeof(BCLine) * pt->sizelineinfo +
 			     sizeof(VarInfo) * pt->sizevarinfo +
 			     sizeof(GCRef) * pt->sizeuvname;
   } else {

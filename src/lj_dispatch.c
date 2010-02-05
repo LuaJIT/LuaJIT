@@ -301,12 +301,12 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
     g->hookcount = g->hookcstart;
     callhook(L, LUA_HOOKCOUNT, -1);
   }
-  if ((g->hookmask & LUA_MASKLINE) && pt->lineinfo) {
+  if ((g->hookmask & LUA_MASKLINE) && proto_lineinfo(pt)) {
     BCPos npc = proto_bcpos(pt, pc) - 1;
     BCPos opc = proto_bcpos(pt, oldpc) - 1;
-    BCLine line = pt->lineinfo[npc];
+    BCLine line = proto_line(pt, npc);
     if (npc == 0 || pc <= oldpc ||
-	opc >= pt->sizebc || line != pt->lineinfo[opc]) {
+	opc >= pt->sizebc || line != proto_line(pt, opc)) {
       L->top = L->base + slots;  /* Fix top again after instruction hook. */
       callhook(L, LUA_HOOKLINE, line);
     }

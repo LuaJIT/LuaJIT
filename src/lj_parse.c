@@ -247,19 +247,22 @@ static void patchlist(FuncState *fs, BCPos list, BCPos target)
 static BCPos emitINS(FuncState *fs, BCIns i)
 {
   GCproto *pt;
+  BCIns *bc;
+  BCLine *lineinfo;
   patchlistaux(fs, fs->jpc, fs->pc, NO_REG, fs->pc);
   fs->jpc = NO_JMP;
   pt = fs->pt;
+  bc = proto_bc(pt);
+  lineinfo = proto_lineinfo(pt);
   if (LJ_UNLIKELY(fs->pc >= pt->sizebc)) {
-    BCIns *bc;
     checklimit(fs, fs->pc, LJ_MAX_BCINS, "bytecode instructions");
-    bc = proto_bc(pt);
     lj_mem_growvec(fs->L, bc, pt->sizebc, LJ_MAX_BCINS, BCIns);
     setmref(pt->bc, bc);
-    lj_mem_growvec(fs->L, pt->lineinfo, pt->sizelineinfo, LJ_MAX_BCINS, BCLine);
+    lj_mem_growvec(fs->L, lineinfo, pt->sizelineinfo, LJ_MAX_BCINS, BCLine);
+    setmref(pt->lineinfo, lineinfo);
   }
-  *proto_insptr(pt, fs->pc) = i;
-  pt->lineinfo[fs->pc] = fs->ls->lastline;
+  bc[fs->pc] = i;
+  lineinfo[fs->pc] = fs->ls->lastline;
   return fs->pc++;
 }
 
@@ -1233,6 +1236,7 @@ static void close_func(LexState *ls)
   GCproto *pt = fs->pt;
   BCIns *bc;
   GCRef *uvname;
+  BCLine *lineinfo;
   removevars(ls, 0);
   finalret(fs, pt);
   bc = proto_bc(pt);
@@ -1241,7 +1245,9 @@ static void close_func(LexState *ls)
   pt->sizebc = fs->pc;
   collectk(fs, pt);
   collectuv(fs, pt);
-  lj_mem_reallocvec(L, pt->lineinfo, pt->sizelineinfo, fs->pc, BCLine);
+  lineinfo = proto_lineinfo(pt);
+  lj_mem_reallocvec(L, lineinfo, pt->sizelineinfo, fs->pc, BCLine);
+  setmref(pt->lineinfo, lineinfo);
   pt->sizelineinfo = fs->pc;
   lj_mem_reallocvec(L, pt->varinfo, pt->sizevarinfo, fs->nlocvars, VarInfo);
   pt->sizevarinfo = fs->nlocvars;
@@ -1509,7 +1515,7 @@ static void funcargs(LexState *ls, ExpDesc *e)
   }
   init_exp(e, VCALL, emitINS(fs, ins));
   e->u.s.aux = base;
-  fs->pt->lineinfo[fs->pc - 1] = line;
+  proto_lineinfo(fs->pt)[fs->pc - 1] = line;
   fs->freereg = base+1;  /* call removes function and arguments and leaves
 			    (unless changed) one result */
 }
@@ -1929,9 +1935,9 @@ static void forbody(LexState *ls, BCReg base, BCLine line, BCReg nvars,
     fixjump(fs, loop, fs->pc);
     emitABC(fs, BC_ITERC, base+3, nvars+1, 2+1);
     loopend = emitAJ(fs, BC_ITERL, base+3, NO_JMP);
-    fs->pt->lineinfo[loopend-1] = line;
+    proto_lineinfo(fs->pt)[loopend-1] = line;
   }
-  fs->pt->lineinfo[loopend] = line;  /* pretend last op starts the loop */
+  proto_lineinfo(fs->pt)[loopend] = line;  /* pretend last op starts the loop */
   fixjump(fs, loopend, loop+1);
 }
 
@@ -2091,7 +2097,7 @@ static void funcstat(LexState *ls, BCLine line)
   body(ls, &b, needself, line);
   fs = ls->fs;
   storevar(fs, &v, &b);
-  fs->pt->lineinfo[fs->pc - 1] = line;
+  proto_lineinfo(fs->pt)[fs->pc - 1] = line;
 }
 
 static void exprstat(LexState *ls)

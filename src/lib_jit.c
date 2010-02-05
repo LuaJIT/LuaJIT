@@ -184,8 +184,9 @@ LJLIB_CF(jit_util_funcinfo)
     setintfield(L, t, "gcconsts", (int32_t)pt->sizekgc);
     setintfield(L, t, "nconsts", (int32_t)pt->sizekn);
     setintfield(L, t, "upvalues", (int32_t)pt->sizeuv);
-    if (pc > 0)
-      setintfield(L, t, "currentline", pt->lineinfo ? pt->lineinfo[pc-1] : 0);
+    if (pc-1 < pt->sizebc)
+      setintfield(L, t, "currentline",
+		  proto_lineinfo(pt) ? proto_line(pt, pc-1) : 0);
     lua_pushboolean(L, (pt->flags & PROTO_IS_VARARG));
     lua_setfield(L, -2, "isvararg");
     setstrV(L, L->top++, proto_chunkname(pt));

@@ -129,7 +129,7 @@ static BCLine currentline(lua_State *L, GCfunc *fn, cTValue *nextframe)
   if (pc != ~(BCPos)0) {
     GCproto *pt = funcproto(fn);
     lua_assert(pc < pt->sizebc);
-    return pt->lineinfo ? pt->lineinfo[pc] : 0;
+    return proto_lineinfo(pt) ? proto_line(pt, pc) : 0;
   } else {
     return -1;
   }
@@ -224,7 +224,7 @@ void lj_err_pushloc(lua_State *L, GCproto *pt, BCPos pc)
     MSize i, len = name->len;
     BCLine line;
     if (pc)
-      line = pt->lineinfo ? pt->lineinfo[pc-1] : 0;
+      line = proto_lineinfo(pt) ? proto_line(pt, pc-1) : 0;
     else
       line = pt->linedefined;
     if (*s == '@') {
@@ -377,10 +377,12 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     case 'L':
       if (isluafunc(fn)) {
 	GCtab *t = lj_tab_new(L, 0, 0);
-	BCLine *lineinfo = funcproto(fn)->lineinfo;
-	uint32_t i, szl = funcproto(fn)->sizelineinfo;
-	for (i = 0; i < szl; i++)
-	  setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
+	BCLine *lineinfo = proto_lineinfo(funcproto(fn));
+	if (lineinfo) {
+	  uint32_t i, szl = funcproto(fn)->sizelineinfo;
+	  for (i = 0; i < szl; i++)
+	    setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
+	}
 	settabV(L, L->top, t);
       } else {
 	setnilV(L->top);
