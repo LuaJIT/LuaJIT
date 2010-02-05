@@ -193,26 +193,6 @@ void emit_asm(BuildCtx *ctx)
     pi = ni;
   }
 
-  switch (ctx->mode) {
-  case BUILD_elfasm:
-    fprintf(ctx->fp, "\n\t.section .rodata\n");
-    break;
-  case BUILD_coffasm:
-    fprintf(ctx->fp, "\n\t.section .rdata,\"dr\"\n");
-    break;
-  case BUILD_machasm:
-    fprintf(ctx->fp, "\n\t.const\n");
-    break;
-  default:
-    break;
-  }
-  emit_asm_align(ctx, 5);
-
-  sprintf(name, "%s" LABEL_OP_OFS, symprefix);
-  emit_asm_label(ctx, name, 2*ctx->npc, 0);
-  for (i = 0; i < ctx->npc; i++)
-    fprintf(ctx->fp, "\t.short %d\n", ctx->sym_ofs[i]);
-
   fprintf(ctx->fp, "\n");
   switch (ctx->mode) {
   case BUILD_elfasm:

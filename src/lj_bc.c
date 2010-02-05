@@ -15,3 +15,5 @@ BCDEF(BCMODE)
   0
 };
 
+#include "lj_bcdef.h"
+

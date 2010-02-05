@@ -231,5 +231,6 @@ typedef enum {
   (BCM##ma|(BCM##mb<<3)|(BCM##mc<<7)|(MM_##mm<<11)),
 
 LJ_DATA const uint16_t lj_bc_mode[BC__MAX+1];
+LJ_DATA const uint16_t lj_bc_ofs[BC__MAX+1];
 
 #endif

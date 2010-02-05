@@ -279,7 +279,8 @@ LUAJIT_SO= libluajit.so
 LUAJIT_T= luajit
 
 ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
-ALL_GEN= $(LJVM_S) lj_ffdef.h lj_libdef.h lj_recdef.h $(LIB_VMDEFP) lj_folddef.h
+ALL_GEN= $(LJVM_S) lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h \
+	 $(LIB_VMDEFP) lj_folddef.h
 ALL_DYNGEN= buildvm_*.h
 WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
 ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
@@ -365,6 +366,7 @@ distclean:	clean
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64WIN) -o buildvm_x64win.h buildvm_x86.dasc
 
 depend:
+	@test -f lj_bcdef.h || touch lj_bcdef.h
 	@test -f lj_ffdef.h || touch lj_ffdef.h
 	@test -f lj_libdef.h || touch lj_libdef.h
 	@test -f lj_recdef.h || touch lj_recdef.h
@@ -373,6 +375,7 @@ depend:
 	@test -f buildvm_x64.h || touch buildvm_x64.h
 	@test -f buildvm_x64win.h || touch buildvm_x64win.h
 	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | sed "s|$(DASM_DIR)|\$$(DASM_DIR)|g" >Makefile.dep
+	@test -s lj_bcdef.h || $(HOST_RM) lj_bcdef.h
 	@test -s lj_ffdef.h || $(HOST_RM) lj_ffdef.h
 	@test -s lj_libdef.h || $(HOST_RM) lj_libdef.h
 	@test -s lj_recdef.h || $(HOST_RM) lj_recdef.h
@@ -408,6 +411,10 @@ $(BUILDVM_T): $(BUILDVM_O)
 $(LJVM_BOUT): $(BUILDVM_T)
 	$(E) "BUILDVM   $@"
 	$(Q)$(BUILDVM_X) -m $(LJVM_MODE) -o $@
+
+lj_bcdef.h: $(BUILDVM_T)
+	$(E) "BUILDVM   $@"
+	$(Q)$(BUILDVM_X) -m bcdef -o $@
 
 lj_ffdef.h: $(BUILDVM_T) $(LJLIB_C)
 	$(E) "BUILDVM   $@"

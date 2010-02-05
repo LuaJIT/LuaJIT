@@ -36,7 +36,6 @@
 
 /* Extra labels. */
 #define LABEL_ASM_BEGIN		LABEL_PREFIX "vm_asm_begin"
-#define LABEL_OP_OFS		LABEL_PREFIX "vm_op_ofs"
 
 /* Forward declaration. */
 struct dasm_State;
@@ -50,7 +49,7 @@ struct dasm_State;
 
 #define BUILDDEF(_) \
   _(elfasm) _(coffasm) _(machasm) BUILDDEFX(_) _(raw) \
-  _(ffdef) _(libdef) _(recdef) _(vmdef) \
+  _(bcdef) _(ffdef) _(libdef) _(recdef) _(vmdef) \
   _(folddef)
 
 typedef enum {

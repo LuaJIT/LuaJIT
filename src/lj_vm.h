@@ -61,9 +61,7 @@ LJ_ASMF void lj_cont_hook(void);  /* Continue from hook yield. */
 /* Start of the ASM code. */
 LJ_ASMF char lj_vm_asm_begin[];
 
-/* Opcode handler offsets, relative to lj_vm_asm_begin. */
-LJ_ASMF const uint16_t lj_vm_op_ofs[];
-
+/* Bytecode offsets are relative to lj_vm_asm_begin. */
 #define makeasmfunc(ofs)	((ASMFunction)(lj_vm_asm_begin + (ofs)))
 
 #endif

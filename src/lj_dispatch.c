@@ -27,7 +27,7 @@ void lj_dispatch_init(GG_State *GG)
   uint32_t i;
   ASMFunction *disp = GG->dispatch;
   for (i = 0; i < BC__MAX; i++)
-    disp[GG_DISP_STATIC+i] = disp[i] = makeasmfunc(lj_vm_op_ofs[i]);
+    disp[GG_DISP_STATIC+i] = disp[i] = makeasmfunc(lj_bc_ofs[i]);
   /* The JIT engine is off by default. luaopen_jit() turns it on. */
   disp[BC_FORL] = disp[BC_IFORL];
   disp[BC_ITERL] = disp[BC_IITERL];
@@ -61,9 +61,9 @@ void lj_dispatch_update(global_State *g)
     ASMFunction f_forl, f_iterl, f_loop;
     g->dispatchmode = mode;
     if ((mode & 5) == 1) {  /* Hotcount if JIT is on, but not when recording. */
-      f_forl = makeasmfunc(lj_vm_op_ofs[BC_FORL]);
-      f_iterl = makeasmfunc(lj_vm_op_ofs[BC_ITERL]);
-      f_loop = makeasmfunc(lj_vm_op_ofs[BC_LOOP]);
+      f_forl = makeasmfunc(lj_bc_ofs[BC_FORL]);
+      f_iterl = makeasmfunc(lj_bc_ofs[BC_ITERL]);
+      f_loop = makeasmfunc(lj_bc_ofs[BC_LOOP]);
     } else {  /* Otherwise use the non-hotcounting instructions. */
       f_forl = disp[GG_DISP_STATIC+BC_IFORL];
       f_iterl = disp[GG_DISP_STATIC+BC_IITERL];

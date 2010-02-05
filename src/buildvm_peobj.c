@@ -103,7 +103,6 @@ enum {
   PEOBJ_SECT_PDATA,
   PEOBJ_SECT_XDATA,
 #endif
-  PEOBJ_SECT_RDATA,
   PEOBJ_SECT_RDATA_Z,
   PEOBJ_NSECTIONS
 };
@@ -168,9 +167,6 @@ static void emit_peobj_sym_sect(BuildCtx *ctx, PEsection *pesect, int sect)
 #define emit_peobj_sym_func(ctx, name, ofs) \
   emit_peobj_sym(ctx, name, (uint32_t)(ofs), \
 		 PEOBJ_SECT_TEXT, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN)
-#define emit_peobj_sym_rdata(ctx, name, ofs) \
-  emit_peobj_sym(ctx, name, (uint32_t)(ofs), \
-		 PEOBJ_SECT_RDATA, PEOBJ_TYPE_NULL, PEOBJ_SCL_EXTERN)
 
 /* Emit Windows PE object file. */
 void emit_peobj(BuildCtx *ctx)
@@ -218,12 +214,6 @@ void emit_peobj(BuildCtx *ctx)
   pesect[PEOBJ_SECT_XDATA].flags = 0x40300040;
 #endif
 
-  memcpy(pesect[PEOBJ_SECT_RDATA].name, ".rdata", sizeof(".rdata")-1);
-  pesect[PEOBJ_SECT_RDATA].ofs = sofs;
-  sofs += (pesect[PEOBJ_SECT_RDATA].size = ctx->npc*sizeof(uint16_t));
-  /* Flags: 40 = read, 30 = align4, 40 = initialized data. */
-  pesect[PEOBJ_SECT_RDATA].flags = 0x40300040;
-
   memcpy(pesect[PEOBJ_SECT_RDATA_Z].name, ".rdata$Z", sizeof(".rdata$Z")-1);
   pesect[PEOBJ_SECT_RDATA_Z].ofs = sofs;
   sofs += (pesect[PEOBJ_SECT_RDATA_Z].size = (uint32_t)strlen(ctx->dasm_ident)+1);
@@ -240,13 +230,13 @@ void emit_peobj(BuildCtx *ctx)
 
   /* Compute the size of the symbol table:
   ** @feat.00 + nsections*2
-  ** + asm_start + (nsyms-nzsym) + op_ofs
+  ** + asm_start + (nsyms-nzsym)
   ** + relocsyms
   */
   /* Skip _Z syms. */
   for (nzsym = 0; ctx->sym_ofs[ctx->perm[nzsym]] < 0; nzsym++) ;
   for (relocsyms = 0; ctx->extnames[relocsyms]; relocsyms++) ;
-  pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+(ctx->nsym-nzsym)+1 + relocsyms;
+  pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+(ctx->nsym-nzsym) + relocsyms;
 #if !LJ_HASJIT
   pehdr.nsyms -= 7;
 #endif
@@ -302,12 +292,6 @@ void emit_peobj(BuildCtx *ctx)
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }
 #endif
-
-  /* Write .rdata section. */
-  for (i = 0; i < ctx->npc; i++) {
-    uint16_t pcofs = (uint16_t)ctx->sym_ofs[i];
-    owrite(ctx, &pcofs, 2);
-  }
 
   /* Write .rdata$Z section. */
   owrite(ctx, ctx->dasm_ident, strlen(ctx->dasm_ident)+1);
@@ -377,9 +361,6 @@ void emit_peobj(BuildCtx *ctx)
 	emit_peobj_sym_func(ctx, name, ctx->sym_ofs[pi]);
       }
     }
-
-    emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_RDATA);
-    emit_peobj_sym_rdata(ctx, PEOBJ_SYM_PREFIX LABEL_OP_OFS, 0);
 
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_RDATA_Z);
 
