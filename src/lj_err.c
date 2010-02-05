@@ -138,9 +138,9 @@ static BCLine currentline(lua_State *L, GCfunc *fn, cTValue *nextframe)
 static const char *getvarname(const GCproto *pt, BCPos pc, BCReg slot)
 {
   MSize i;
-  for (i = 0; i < pt->sizevarinfo && pt->varinfo[i].startpc <= pc; i++)
-    if (pc < pt->varinfo[i].endpc && slot-- == 0)
-      return strdata(pt->varinfo[i].name);
+  for (i = 0; i < pt->sizevarinfo && proto_varinfo(pt)[i].startpc <= pc; i++)
+    if (pc < proto_varinfo(pt)[i].endpc && slot-- == 0)
+      return strdata(gco2str(gcref(proto_varinfo(pt)[i].name)));
   return NULL;
 }
 

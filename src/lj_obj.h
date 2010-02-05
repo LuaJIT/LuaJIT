@@ -339,7 +339,7 @@ enum {
 #define round_nkgc(n)	(((n) + SCALE_NUM_GCO-1) & ~(SCALE_NUM_GCO-1))
 
 typedef struct VarInfo {
-  GCstr *name;		/* Local variable name. */
+  GCRef name;		/* Local variable name. */
   BCPos startpc;	/* First point where the local variable is active. */
   BCPos endpc;		/* First point where the local variable is dead. */
 } VarInfo;
@@ -365,7 +365,7 @@ typedef struct GCproto {
   BCLine linedefined;	/* First line of the function definition. */
   BCLine lastlinedefined;  /* Last line of the function definition. */
   MRef lineinfo;	/* Map from bytecode instructions to source lines. */
-  struct VarInfo *varinfo;  /* Names and extents of local variables. */
+  MRef varinfo;		/* Names and extents of local variables. */
   MRef uvname;		/* Array of upvalue names (GCRef of GCstr). */
   GCRef chunkname;	/* Name of the chunk this function was defined in. */
 } GCproto;
@@ -396,6 +396,7 @@ typedef struct GCproto {
 #define proto_lineinfo(pt)	(mref((pt)->lineinfo, BCLine))
 #define proto_line(pt, pos) \
   check_exp((uintptr_t)(pos) < (pt)->sizebc, proto_lineinfo(pt)[(pos)])
+#define proto_varinfo(pt)	(mref((pt)->varinfo, VarInfo))
 
 /* -- Upvalue object ------------------------------------------------------ */
 

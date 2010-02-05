@@ -259,8 +259,8 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
     if (proto_uvname(pt, i))
       gc_mark_str(gco2str(proto_uvname(pt, i)));
   for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
-    if (pt->varinfo[i].name)
-      gc_mark_str(pt->varinfo[i].name);
+    if (gcref(proto_varinfo(pt)[i].name))
+      gc_mark_str(gco2str(gcref(proto_varinfo(pt)[i].name)));
 }
 
 /* Traverse the frame structure of a stack. */

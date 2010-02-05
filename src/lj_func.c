@@ -38,7 +38,7 @@ GCproto *lj_func_newproto(lua_State *L)
   pt->linedefined = 0;
   pt->lastlinedefined = 0;
   setmref(pt->lineinfo, NULL);
-  pt->varinfo = NULL;
+  setmref(pt->varinfo, NULL);
   setmref(pt->uvname, NULL);
   setgcrefnull(pt->chunkname);
   return pt;
@@ -53,7 +53,7 @@ void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
   lj_mem_freevec(g, proto_bc(pt), pt->sizebc, BCIns);
   lj_mem_freevec(g, proto_uv(pt), pt->sizeuv, uint16_t);
   lj_mem_freevec(g, proto_lineinfo(pt), pt->sizelineinfo, BCLine);
-  lj_mem_freevec(g, pt->varinfo, pt->sizevarinfo, struct VarInfo);
+  lj_mem_freevec(g, proto_varinfo(pt), pt->sizevarinfo, VarInfo);
   lj_mem_freevec(g, mref(pt->uvname, GCRef), pt->sizeuvname, GCRef);
   lj_trace_freeproto(g, pt);
   lj_mem_freet(g, pt);

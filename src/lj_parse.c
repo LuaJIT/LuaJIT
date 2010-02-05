@@ -974,19 +974,21 @@ static void checkname(LexState *ls, ExpDesc *e)
 
 /* -- Variable handling --------------------------------------------------- */
 
-#define getlocvar(fs, i)	((fs)->pt->varinfo[(fs)->actvar[(i)]])
+#define getlocvar(fs, i)	(proto_varinfo((fs)->pt)[(fs)->actvar[(i)]])
 
 static BCReg registerlocalvar(LexState *ls, GCstr *name)
 {
   FuncState *fs = ls->fs;
   GCproto *pt = fs->pt;
+  VarInfo *varinfo = proto_varinfo(pt);
   if (LJ_UNLIKELY(fs->nlocvars >= pt->sizevarinfo)) {
     MSize oldsize = pt->sizevarinfo;
     checklimit(fs, fs->nlocvars, 32767, "local variables");
-    lj_mem_growvec(fs->L, pt->varinfo, pt->sizevarinfo, 32767, VarInfo);
-    while (oldsize < pt->sizevarinfo) pt->varinfo[oldsize++].name = NULL;
+    lj_mem_growvec(fs->L, varinfo, pt->sizevarinfo, 32767, VarInfo);
+    setmref(pt->varinfo, varinfo);
+    while (oldsize < pt->sizevarinfo) setgcrefnull(varinfo[oldsize++].name);
   }
-  pt->varinfo[fs->nlocvars].name = name;
+  setgcref(varinfo[fs->nlocvars].name, obj2gco(name));
   lj_gc_objbarrier(ls->L, pt, name);
   return fs->nlocvars++;
 }
@@ -1048,7 +1050,7 @@ static BCReg searchvar(FuncState *fs, GCstr *n)
 {
   int i;
   for (i = fs->nactvar-1; i >= 0; i--) {
-    if (n == getlocvar(fs, i).name)
+    if (n == gco2str(gcref(getlocvar(fs, i).name)))
       return (BCReg)i;
   }
   return (BCReg)-1;  /* Not found. */
@@ -1237,6 +1239,7 @@ static void close_func(LexState *ls)
   BCIns *bc;
   GCRef *uvname;
   BCLine *lineinfo;
+  VarInfo *varinfo;
   removevars(ls, 0);
   finalret(fs, pt);
   bc = proto_bc(pt);
@@ -1249,7 +1252,9 @@ static void close_func(LexState *ls)
   lj_mem_reallocvec(L, lineinfo, pt->sizelineinfo, fs->pc, BCLine);
   setmref(pt->lineinfo, lineinfo);
   pt->sizelineinfo = fs->pc;
-  lj_mem_reallocvec(L, pt->varinfo, pt->sizevarinfo, fs->nlocvars, VarInfo);
+  varinfo = proto_varinfo(pt);
+  lj_mem_reallocvec(L, varinfo, pt->sizevarinfo, fs->nlocvars, VarInfo);
+  setmref(pt->varinfo, varinfo);
   pt->sizevarinfo = fs->nlocvars;
   uvname = mref(pt->uvname, GCRef);
   lj_mem_reallocvec(L, uvname, pt->sizeuvname, fs->nuv, GCRef);
