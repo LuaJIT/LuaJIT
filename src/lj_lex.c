@@ -301,12 +301,16 @@ static int llex(LexState *ls, TValue *tv)
 
 /* -- Lexer API ----------------------------------------------------------- */
 
-void lj_lex_start(lua_State *L, LexState *ls)
+/* Setup lexer state. */
+void lj_lex_setup(lua_State *L, LexState *ls)
 {
   ls->L = L;
   ls->fs = NULL;
   ls->n = 0;
   ls->p = NULL;
+  ls->vstack = NULL;
+  ls->sizevstack = 0;
+  ls->vtop = 0;
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
@@ -333,6 +337,14 @@ void lj_lex_start(lua_State *L, LexState *ls)
   ** Do this last since next() calls the reader which may call the GC.
   */
   ls->chunkname = lj_str_newz(L, ls->chunkarg);
+}
+
+/* Cleanup lexer state. */
+void lj_lex_cleanup(lua_State *L, LexState *ls)
+{
+  global_State *g = G(L);
+  lj_mem_freevec(g, ls->vstack, ls->sizevstack, VarInfo);
+  lj_str_freebuf(g, &ls->sb);
 }
 
 void lj_lex_next(LexState *ls)

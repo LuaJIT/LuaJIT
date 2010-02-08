@@ -1102,7 +1102,7 @@ static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
   GCfunc *fn;
   UNUSED(dummy);
   cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */
-  lj_lex_start(L, ls);
+  lj_lex_setup(L, ls);
   fn = lj_func_newL(L, lj_parse(ls), tabref(L->env));
   /* Parser may realloc stack. Don't combine above/below into one statement. */
   setfuncV(L, L->top++, fn);
@@ -1114,14 +1114,12 @@ LUA_API int lua_load(lua_State *L, lua_Reader reader, void *data,
 {
   LexState ls;
   int status;
-  global_State *g;
   ls.rfunc = reader;
   ls.rdata = data;
   ls.chunkarg = chunkname ? chunkname : "?";
   lj_str_initbuf(L, &ls.sb);
   status = lj_vm_cpcall(L, NULL, &ls, cpparser);
-  g = G(L);
-  lj_str_freebuf(g, &ls.sb);
+  lj_lex_cleanup(L, &ls);
   lj_gc_check(L);
   return status;
 }

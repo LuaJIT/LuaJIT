@@ -88,11 +88,15 @@ typedef struct FuncScope {
   uint8_t isbreakable;		/* Scope is a loop and allows a break. */
 } FuncScope;
 
-/* Upvalue type and location. */
-typedef struct UVLoc {
-  uint8_t k;			/* Upvalue type (ExpKind). */
-  uint8_t info;			/* Upvalue location (BCReg or uvidx). */
-} UVLoc;
+/* Index into variable stack. */
+typedef uint16_t VarIndex;
+#define LJ_MAX_VSTACK		65536
+
+/* Upvalue map. */
+typedef struct UVMap {
+  VarIndex vidx;		/* Varinfo index. */
+  uint16_t slot;		/* Slot or parent upvalue index. */
+} UVMap;
 
 /* Per-function state. */
 typedef struct FuncState {
@@ -108,13 +112,13 @@ typedef struct FuncState {
   BCReg freereg;		/* First free register. */
   BCReg nkn, nkgc;		/* Number of lua_Number/GCobj constants */
   BCLine linedefined;		/* First line of the function definition. */
-  MSize nvarinfo;		/* Number of entries in varinfo. */
+  MSize vbase;			/* Base of variable stack for this function. */
   uint8_t nactvar;		/* Number of active local variables. */
   uint8_t flags;		/* Prototype flags. */
   uint8_t framesize;		/* Fixed frame size. */
   uint8_t nuv;			/* Number of upvalues */
-  uint16_t varmap[LJ_MAX_LOCVAR];  /* Map from register to varinfo index. */
-  UVLoc uvloc[LJ_MAX_UPVAL];	/* Upvalue type and location. */
+  VarIndex varmap[LJ_MAX_LOCVAR];  /* Map from register to variable idx. */
+  UVMap uvloc[LJ_MAX_UPVAL];	/* Map from upvalue to variable idx and slot. */
 } FuncState;
 
 /* Binary and unary operators. ORDER OPR */
@@ -924,28 +928,27 @@ static GCstr *lex_str(LexState *ls)
 
 /* -- Variable handling --------------------------------------------------- */
 
-#define var_get(fs, i)	(proto_varinfo((fs)->pt)[(fs)->varmap[(i)]])
+#define var_get(ls, fs, i)	((ls)->vstack[(fs)->varmap[(i)]])
 
 /* Define a new local variable. */
 static void var_new(LexState *ls, BCReg n, GCstr *name)
 {
   FuncState *fs = ls->fs;
-  GCproto *pt = fs->pt;
-  VarInfo *varinfo = proto_varinfo(pt);
+  MSize vtop = ls->vtop;
   checklimit(fs, fs->nactvar+n, LJ_MAX_LOCVAR, "local variables");
-  if (LJ_UNLIKELY(fs->nvarinfo >= pt->sizevarinfo)) {
-    MSize oldsize = pt->sizevarinfo;
-    checklimit(fs, fs->nvarinfo, 32767, "local variables");
-    lj_mem_growvec(fs->L, varinfo, pt->sizevarinfo, 32767, VarInfo);
-    setmref(pt->varinfo, varinfo);
-    while (oldsize < pt->sizevarinfo) setgcrefnull(varinfo[oldsize++].name);
+  if (LJ_UNLIKELY(vtop >= ls->sizevstack)) {
+    if (ls->sizevstack >= LJ_MAX_VSTACK)
+      lj_lex_error(ls, 0, LJ_ERR_XLIMC, LJ_MAX_VSTACK);
+    lj_mem_growvec(ls->L, ls->vstack, ls->sizevstack, LJ_MAX_VSTACK, VarInfo);
   }
-  setgcref(varinfo[fs->nvarinfo].name, obj2gco(name));
-  lj_gc_objbarrier(ls->L, pt, name);
-  fs->varmap[fs->nactvar+n] = (uint16_t)(fs->nvarinfo++);
+  lua_assert(lj_tab_getstr(fs->kt, name) != NULL);
+  /* NOBARRIER: name is anchored in fs->kt and ls->vstack is not a GCobj. */
+  setgcref(ls->vstack[vtop].name, obj2gco(name));
+  fs->varmap[fs->nactvar+n] = (uint16_t)vtop;
+  ls->vtop = vtop+1;
 }
 
-#define var_new_lit(ls, v, n) \
+#define var_new_lit(ls, n, v) \
   var_new(ls, (n), lj_parse_keepstr(ls, "" v, sizeof(v)-1))
 
 /* Add local variables. */
@@ -954,7 +957,7 @@ static void var_add(LexState *ls, BCReg nvars)
   FuncState *fs = ls->fs;
   fs->nactvar = cast_byte(fs->nactvar + nvars);
   for (; nvars; nvars--)
-    var_get(fs, fs->nactvar - nvars).startpc = fs->pc;
+    var_get(ls, fs, fs->nactvar - nvars).startpc = fs->pc;
 }
 
 /* Remove local variables. */
@@ -962,7 +965,7 @@ static void var_remove(LexState *ls, BCReg tolevel)
 {
   FuncState *fs = ls->fs;
   while (fs->nactvar > tolevel)
-    var_get(fs, --fs->nactvar).endpc = fs->pc;
+    var_get(ls, fs, --fs->nactvar).endpc = fs->pc;
 }
 
 /* Lookup local variable name. */
@@ -970,46 +973,33 @@ static BCReg var_lookup_local(FuncState *fs, GCstr *n)
 {
   int i;
   for (i = fs->nactvar-1; i >= 0; i--) {
-    if (n == gco2str(gcref(var_get(fs, i).name)))
+    if (n == gco2str(gcref(var_get(fs->ls, fs, i).name)))
       return (BCReg)i;
   }
   return (BCReg)-1;  /* Not found. */
 }
 
-/* Lookup upvalue name. */
-static uint32_t var_lookup_uv(FuncState *fs, GCstr *name, ExpDesc *v)
+/* Lookup or add upvalue index. */
+static MSize var_lookup_uv(FuncState *fs, MSize vidx, ExpDesc *e)
 {
-  uint32_t i;
-  GCproto *pt = fs->pt;
-  GCRef *uvname;
-  for (i = 0; i < fs->nuv; i++) {
-    if (fs->uvloc[i].info == v->u.s.info && fs->uvloc[i].k == v->k) {
-      lua_assert(gco2str(proto_uvname(pt, i)) == name);
-      return i;
-    }
-  }
-  /* Not found, create a new upvalue for this name. */
-  uvname = mref(pt->uvname, GCRef);
-  if (LJ_UNLIKELY(fs->nuv >= pt->sizeuvname)) {
-    MSize oldsize = pt->sizeuvname;
-    checklimit(fs, fs->nuv, LJ_MAX_UPVAL, "upvalues");
-    lj_mem_growvec(fs->L, uvname, pt->sizeuvname, LJ_MAX_UPVAL, GCRef);
-    setmref(pt->uvname, uvname);
-    while (oldsize < pt->sizeuvname) setgcrefnull(uvname[oldsize++]);
-  }
-  setgcref(uvname[fs->nuv], obj2gco(name));
-  lj_gc_objbarrier(fs->L, pt, name);
-  lua_assert(v->k == VLOCAL || v->k == VUPVAL);
-  fs->uvloc[fs->nuv].k = cast_byte(v->k);
-  fs->uvloc[fs->nuv].info = cast_byte(v->u.s.info);
-  return fs->nuv++;
+  MSize i, n = fs->nuv;
+  for (i = 0; i < n; i++)
+    if (fs->uvloc[i].vidx == vidx)
+      return i;  /* Already exists. */
+  /* Otherwise create a new one. */
+  checklimit(fs, fs->nuv, LJ_MAX_UPVAL, "upvalues");
+  lua_assert(e->k == VLOCAL || e->k == VUPVAL);
+  fs->uvloc[n].vidx = (uint16_t)vidx;
+  fs->uvloc[n].slot = (uint16_t)(e->u.s.info | (e->k == VLOCAL ? 0x8000 : 0));
+  fs->nuv = n+1;
+  return n;
 }
 
 /* Forward declaration. */
 static void scope_uvmark(FuncState *fs, BCReg level);
 
 /* Recursively lookup variables in enclosing functions. */
-static int var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
+static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
 {
   if (fs) {
     BCReg reg = var_lookup_local(fs, name);
@@ -1017,17 +1007,20 @@ static int var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
       expr_init(e, VLOCAL, reg);
       if (!first)
 	scope_uvmark(fs, reg);  /* Scope now has an upvalue. */
-      return 1;
-    } else if (var_lookup_(fs->prev, name, e, 0)) {  /* In outer function? */
-      e->u.s.info = var_lookup_uv(fs, name, e);  /* Make it an upvalue here. */
-      e->k = VUPVAL;
-      return 1;
+      return (MSize)fs->varmap[reg];
+    } else {
+      MSize vidx = var_lookup_(fs->prev, name, e, 0);  /* Var in outer func? */
+      if ((int32_t)vidx >= 0) {  /* Yes, make it an upvalue here. */
+	e->u.s.info = (uint8_t)var_lookup_uv(fs, vidx, e);
+	e->k = VUPVAL;
+	return vidx;
+      }
     }
   } else {  /* Not found in any function, must be a global. */
     expr_init(e, VGLOBAL, 0);
     e->u.sval = name;
   }
-  return 0;  /* Global. */
+  return (MSize)-1;  /* Global. */
 }
 
 /* Lookup variable name. */
@@ -1080,15 +1073,12 @@ static void fs_fixup_k(FuncState *fs, GCproto *pt)
 /* Fixup upvalues for prototype. */
 static void fs_fixup_uv(FuncState *fs, GCproto *pt)
 {
-  uint32_t i;
-  uint16_t *uv = lj_mem_newvec(fs->L, fs->nuv, uint16_t);
+  MSize i, n = fs->nuv;
+  uint16_t *uv = lj_mem_newvec(fs->L, n, uint16_t);
   setmref(pt->uv, uv);
-  pt->sizeuv = fs->nuv;
-  for (i = 0; i < pt->sizeuv; i++) {
-    uint32_t v = fs->uvloc[i].info;
-    if (fs->uvloc[i].k == VLOCAL) v |= 0x8000;
-    uv[i] = (uint16_t)v;
-  }
+  pt->sizeuv = n;
+  for (i = 0; i < n; i++)
+    uv[i] = fs->uvloc[i].slot;
 }
 
 /* Check if bytecode op returns. */
@@ -1143,9 +1133,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   FuncState *fs = ls->fs;
   GCproto *pt = fs->pt;
   BCIns *bc;
-  GCRef *uvname;
   BCLine *lineinfo;
-  VarInfo *varinfo;
 
   /* Apply final fixups. */
   var_remove(ls, 0);
@@ -1156,21 +1144,31 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   lj_mem_reallocvec(L, bc, pt->sizebc, fs->pc, BCIns);
   setmref(pt->bc, bc);
   pt->sizebc = fs->pc;
+
   fs_fixup_k(fs, pt);
   fs_fixup_uv(fs, pt);
+
   lineinfo = proto_lineinfo(pt);
   lj_mem_reallocvec(L, lineinfo, pt->sizelineinfo, fs->pc, BCLine);
   setmref(pt->lineinfo, lineinfo);
   pt->sizelineinfo = fs->pc;
-  varinfo = proto_varinfo(pt);
-  lj_mem_reallocvec(L, varinfo, pt->sizevarinfo, fs->nvarinfo, VarInfo);
-  setmref(pt->varinfo, varinfo);
-  pt->sizevarinfo = fs->nvarinfo;
-  uvname = mref(pt->uvname, GCRef);
-  lj_mem_reallocvec(L, uvname, pt->sizeuvname, fs->nuv, GCRef);
-  setmref(pt->uvname, uvname);
-  pt->sizeuvname = fs->nuv;
-  lua_assert(fs->bl == NULL);
+
+  {
+    MSize n = ls->vtop - fs->vbase;
+    VarInfo *vi = lj_mem_newvec(L, n, VarInfo);
+    memcpy(vi, &ls->vstack[fs->vbase], n*sizeof(VarInfo));
+    setmref(pt->varinfo, vi);
+    pt->sizevarinfo = n;
+  }
+
+  {
+    MSize i, n = fs->nuv;
+    GCRef *uvname = lj_mem_newvec(L, n, GCRef);
+    for (i = 0; i < n; i++)
+      setgcref(uvname[i], gcref(ls->vstack[fs->uvloc[i].vidx].name));
+    setmref(pt->uvname, uvname);
+    pt->sizeuvname = n;
+  }
 
   /* Initialize prototype fields. */
   pt->flags = fs->flags;
@@ -1182,7 +1180,9 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
     setprotoV(L, L->top++, pt);
   );
 
-  /* Remove FuncState from list. Pop const table and prototype. */
+  /* Remove VarInfo and FuncState. Pop const table and prototype. */
+  lua_assert(fs->bl == NULL);
+  ls->vtop = fs->vbase;
   ls->fs = fs->prev;
   L->top -= 2;
   lua_assert(ls->fs != NULL || ls->token == TK_eof);
@@ -1202,6 +1202,7 @@ static void fs_init(LexState *ls, FuncState *fs, BCLine line)
   fs->pt = pt;
   fs->prev = ls->fs; ls->fs = fs;  /* Append to list. */
   fs->ls = ls;
+  fs->vbase = ls->vtop;
   fs->L = L;
   fs->pc = 0;
   fs->lasttarget = 0;
@@ -1209,7 +1210,6 @@ static void fs_init(LexState *ls, FuncState *fs, BCLine line)
   fs->freereg = 0;
   fs->nkgc = 0;
   fs->nkn = 0;
-  fs->nvarinfo = 0;
   fs->nactvar = 0;
   fs->nuv = 0;
   fs->bl = NULL;
@@ -1382,7 +1382,7 @@ static void parse_params(LexState *ls, int needself)
   BCReg nparams = 0;
   lex_check(ls, '(');
   if (needself) {
-    var_new_lit(ls, "self", 0);
+    var_new_lit(ls, 0, "self");
     var_add(ls, 1);
   }
   if (ls->token != ')') {
@@ -1921,7 +1921,7 @@ static void parse_local(LexState *ls)
     parse_body(ls, &b, 0, ls->linenumber);
     bcemit_store(fs, &v, &b);
     /* The upvalue is in scope, but the local is only valid after the store. */
-    var_get(fs, fs->nactvar - 1).startpc = fs->pc;
+    var_get(ls, fs, fs->nactvar - 1).startpc = fs->pc;
   } else {  /* Local variable declaration. */
     ExpDesc e;
     BCReg nexps, nvars = 0;
@@ -2045,9 +2045,9 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
   FuncState *fs = ls->fs;
   BCReg base = fs->freereg;
   /* Hidden control variables. */
-  var_new_lit(ls, "(for index)", FORL_IDX);
-  var_new_lit(ls, "(for limit)", FORL_STOP);
-  var_new_lit(ls, "(for step)", FORL_STEP);
+  var_new_lit(ls, FORL_IDX, "(for index)");
+  var_new_lit(ls, FORL_STOP, "(for limit)");
+  var_new_lit(ls, FORL_STEP, "(for step)");
   /* Visible copy of index variable. */
   var_new(ls, FORL_EXT, varname);
   lex_check(ls, '=');
@@ -2072,9 +2072,9 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   BCLine line;
   BCReg base = fs->freereg;
   /* Hidden control variables. */
-  var_new_lit(ls, "(for generator)", nvars++);
-  var_new_lit(ls, "(for state)", nvars++);
-  var_new_lit(ls, "(for control)", nvars++);
+  var_new_lit(ls, nvars++, "(for generator)");
+  var_new_lit(ls, nvars++, "(for state)");
+  var_new_lit(ls, nvars++, "(for control)");
   /* Visible variables returned from iterator. */
   var_new(ls, nvars++, indexname);
   while (lex_opt(ls, ','))
