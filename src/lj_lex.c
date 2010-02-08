@@ -311,6 +311,8 @@ void lj_lex_setup(lua_State *L, LexState *ls)
   ls->vstack = NULL;
   ls->sizevstack = 0;
   ls->vtop = 0;
+  ls->bcstack = NULL;
+  ls->sizebcstack = 0;
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
@@ -339,6 +341,7 @@ void lj_lex_setup(lua_State *L, LexState *ls)
 void lj_lex_cleanup(lua_State *L, LexState *ls)
 {
   global_State *g = G(L);
+  lj_mem_freevec(g, ls->bcstack, ls->sizebcstack, BCInsLine);
   lj_mem_freevec(g, ls->vstack, ls->sizevstack, VarInfo);
   lj_str_freebuf(g, &ls->sb);
 }

@@ -110,11 +110,14 @@ typedef struct FuncState {
   BCPos lasttarget;		/* Bytecode position of last jump target. */
   BCPos jpc;			/* Pending jump list to next bytecode. */
   BCReg freereg;		/* First free register. */
+  BCReg nactvar;		/* Number of active local variables. */
   BCReg nkn, nkgc;		/* Number of lua_Number/GCobj constants */
   BCLine linedefined;		/* First line of the function definition. */
+  BCInsLine *bcbase;		/* Base of bytecode stack. */
+  BCPos bclim;			/* Limit of bytecode stack. */
   MSize vbase;			/* Base of variable stack for this function. */
-  uint8_t nactvar;		/* Number of active local variables. */
   uint8_t flags;		/* Prototype flags. */
+  uint8_t numparams;		/* Number of active local variables. */
   uint8_t framesize;		/* Fixed frame size. */
   uint8_t nuv;			/* Number of upvalues */
   VarIndex varmap[LJ_MAX_LOCVAR];  /* Map from register to variable idx. */
@@ -217,7 +220,7 @@ GCstr *lj_parse_keepstr(LexState *ls, const char *str, size_t len)
 /* Get next element in jump list. */
 static BCPos jmp_next(FuncState *fs, BCPos pc)
 {
-  ptrdiff_t delta = bc_j(proto_ins(fs->pt, pc));
+  ptrdiff_t delta = bc_j(fs->bcbase[pc].ins);
   if ((BCPos)delta == NO_JMP)
     return NO_JMP;
   else
@@ -228,7 +231,7 @@ static BCPos jmp_next(FuncState *fs, BCPos pc)
 static int jmp_novalue(FuncState *fs, BCPos list)
 {
   for (; list != NO_JMP; list = jmp_next(fs, list)) {
-    BCOp op = bc_op(proto_ins(fs->pt, list >= 1 ? list-1 : list));
+    BCOp op = bc_op(fs->bcbase[list >= 1 ? list-1 : list].ins);
     if (!(op == BC_ISTC || op == BC_ISFC)) return 1;
   }
   return 0;
@@ -237,15 +240,15 @@ static int jmp_novalue(FuncState *fs, BCPos list)
 /* Patch register of test instructions. */
 static int jmp_patchtestreg(FuncState *fs, BCPos pc, BCReg reg)
 {
-  BCIns *i = proto_insptr(fs->pt, pc >= 1 ? pc-1 : pc);
-  BCOp op = bc_op(*i);
+  BCIns *ip = &fs->bcbase[pc >= 1 ? pc-1 : pc].ins;
+  BCOp op = bc_op(*ip);
   if (!(op == BC_ISTC || op == BC_ISFC))
     return 0;  /* Cannot patch other instructions. */
-  if (reg != NO_REG && reg != bc_d(*i)) {
-    setbc_a(i, reg);
+  if (reg != NO_REG && reg != bc_d(*ip)) {
+    setbc_a(ip, reg);
   } else {  /* Nothing to store or already in the right register. */
-    setbc_op(i, op+(BC_IST-BC_ISTC));
-    setbc_a(i, 0);
+    setbc_op(ip, op+(BC_IST-BC_ISTC));
+    setbc_a(ip, 0);
   }
   return 1;
 }
@@ -260,7 +263,7 @@ static void jmp_dropval(FuncState *fs, BCPos list)
 /* Patch jump instruction to target. */
 static void jmp_patchins(FuncState *fs, BCPos pc, BCPos dest)
 {
-  BCIns *jmp = proto_insptr(fs->pt, pc);
+  BCIns *jmp = &fs->bcbase[pc].ins;
   BCPos offset = dest-(pc+1)+BCBIAS_J;
   lua_assert(dest != NO_JMP);
   if (offset > BCMAX_D)
@@ -355,33 +358,30 @@ static void expr_free(FuncState *fs, ExpDesc *e)
 /* -- Bytecode emitter ---------------------------------------------------- */
 
 /* Emit bytecode instruction. */
-static BCPos bcemit_INS(FuncState *fs, BCIns i)
+static BCPos bcemit_INS(FuncState *fs, BCIns ins)
 {
-  GCproto *pt;
-  BCIns *bc;
-  BCLine *lineinfo;
-  jmp_patchval(fs, fs->jpc, fs->pc, NO_REG, fs->pc);
+  BCPos pc = fs->pc;
+  LexState *ls = fs->ls;
+  jmp_patchval(fs, fs->jpc, pc, NO_REG, pc);
   fs->jpc = NO_JMP;
-  pt = fs->pt;
-  bc = proto_bc(pt);
-  lineinfo = proto_lineinfo(pt);
-  if (LJ_UNLIKELY(fs->pc >= pt->sizebc)) {
-    checklimit(fs, fs->pc, LJ_MAX_BCINS, "bytecode instructions");
-    lj_mem_growvec(fs->L, bc, pt->sizebc, LJ_MAX_BCINS, BCIns);
-    setmref(pt->bc, bc);
-    lj_mem_growvec(fs->L, lineinfo, pt->sizelineinfo, LJ_MAX_BCINS, BCLine);
-    setmref(pt->lineinfo, lineinfo);
+  if (LJ_UNLIKELY(pc >= fs->bclim)) {
+    ptrdiff_t base = fs->bcbase - ls->bcstack;
+    checklimit(fs, ls->sizebcstack, LJ_MAX_BCINS, "bytecode instructions");
+    lj_mem_growvec(fs->L, ls->bcstack, ls->sizebcstack, LJ_MAX_BCINS,BCInsLine);
+    fs->bclim = (BCPos)(ls->sizebcstack - base);
+    fs->bcbase = ls->bcstack + base;
   }
-  bc[fs->pc] = i;
-  lineinfo[fs->pc] = fs->ls->lastline;
-  return fs->pc++;
+  fs->bcbase[pc].ins = ins;
+  fs->bcbase[pc].line = ls->lastline;
+  fs->pc = pc+1;
+  return pc;
 }
 
 #define bcemit_ABC(fs, o, a, b, c)	bcemit_INS(fs, BCINS_ABC(o, a, b, c))
 #define bcemit_AD(fs, o, a, d)		bcemit_INS(fs, BCINS_AD(o, a, d))
 #define bcemit_AJ(fs, o, a, j)		bcemit_INS(fs, BCINS_AJ(o, a, j))
 
-#define bcptr(fs, e)			(proto_insptr((fs)->pt, (e)->u.s.info))
+#define bcptr(fs, e)			(&(fs)->bcbase[(e)->u.s.info].ins)
 
 /* -- Bytecode emitter for expressions ------------------------------------ */
 
@@ -579,14 +579,12 @@ static void bcemit_method(FuncState *fs, ExpDesc *e, ExpDesc *key)
 /* Emit bytecode to set a range of registers to nil. */
 static void bcemit_nil(FuncState *fs, BCReg from, BCReg n)
 {
-  BCIns *pr;
   if (fs->pc > fs->lasttarget) {  /* No jumps to current position? */
-    BCReg pfrom, pto;
-    pr = proto_insptr(fs->pt, fs->pc-1);
-    pfrom = bc_a(*pr);
-    switch (bc_op(*pr)) {  /* Try to merge with the previous instruction. */
+    BCIns *ip = &fs->bcbase[fs->pc-1].ins;
+    BCReg pto, pfrom = bc_a(*ip);
+    switch (bc_op(*ip)) {  /* Try to merge with the previous instruction. */
     case BC_KPRI:
-      if (bc_d(*pr) != ~LJ_TNIL) break;
+      if (bc_d(*ip) != ~LJ_TNIL) break;
       if (from == pfrom) {
 	if (n == 1) return;
       } else if (from == pfrom+1) {
@@ -598,10 +596,10 @@ static void bcemit_nil(FuncState *fs, BCReg from, BCReg n)
       fs->pc--;  /* Drop KPRI. */
       break;
     case BC_KNIL:
-      pto = bc_d(*pr);
+      pto = bc_d(*ip);
       if (pfrom <= from && from <= pto+1) {  /* Can we connect both ranges? */
 	if (from+n-1 > pto)
-	  setbc_d(pr, from+n-1);  /* Patch previous instruction range. */
+	  setbc_d(ip, from+n-1);  /* Patch previous instruction range. */
 	return;
       }
       break;
@@ -623,8 +621,8 @@ static BCPos bcemit_jmp(FuncState *fs)
   BCPos j = fs->pc - 1;
   fs->jpc = NO_JMP;
   if ((int32_t)j >= (int32_t)fs->lasttarget &&
-      bc_op(proto_ins(fs->pt, j)) == BC_UCLO)
-    setbc_j(proto_insptr(fs->pt, j), NO_JMP);
+      bc_op(fs->bcbase[j].ins) == BC_UCLO)
+    setbc_j(&fs->bcbase[j].ins, NO_JMP);
   else
     j = bcemit_AJ(fs, BC_JMP, fs->freereg, NO_JMP);
   jmp_append(fs, &j, jpc);
@@ -634,8 +632,8 @@ static BCPos bcemit_jmp(FuncState *fs)
 /* Invert branch condition of bytecode instruction. */
 static void invertcond(FuncState *fs, ExpDesc *e)
 {
-  BCIns *i = bcptr(fs, e) - 1;
-  setbc_op(i, bc_op(*i)^1);
+  BCIns *ip = &fs->bcbase[e->u.s.info - 1].ins;
+  setbc_op(ip, bc_op(*ip)^1);
 }
 
 /* Emit conditional branch. */
@@ -643,9 +641,9 @@ static BCPos bcemit_branch(FuncState *fs, ExpDesc *e, int cond)
 {
   BCPos pc;
   if (e->k == VRELOCABLE) {
-    BCIns *i = bcptr(fs, e);
-    if (bc_op(*i) == BC_NOT) {
-      *i = BCINS_AD(cond ? BC_ISF : BC_IST, 0, bc_d(*i));
+    BCIns *ip = bcptr(fs, e);
+    if (bc_op(*ip) == BC_NOT) {
+      *ip = BCINS_AD(cond ? BC_ISF : BC_IST, 0, bc_d(*ip));
       return bcemit_jmp(fs);
     }
   }
@@ -1094,10 +1092,10 @@ static int bcopisret(BCOp op)
 }
 
 /* Fixup return instruction for prototype. */
-static void fs_fixup_ret(FuncState *fs, GCproto *pt)
+static void fs_fixup_ret(FuncState *fs)
 {
   BCPos lastpc = fs->pc;
-  if (lastpc <= fs->lasttarget || !bcopisret(bc_op(proto_ins(pt, lastpc-1)))) {
+  if (lastpc <= fs->lasttarget || !bcopisret(bc_op(fs->bcbase[lastpc-1].ins))) {
     if (fs->flags & PROTO_HAS_FNEW)
       bcemit_AJ(fs, BC_UCLO, 0, 0);
     bcemit_AD(fs, BC_RET0, 0, 1);  /* Need final return. */
@@ -1106,16 +1104,16 @@ static void fs_fixup_ret(FuncState *fs, GCproto *pt)
   if (fs->flags & PROTO_FIXUP_RETURN) {
     BCPos pc;
     for (pc = 0; pc < lastpc; pc++) {
-      BCIns i = proto_ins(pt, pc);
+      BCIns ins = fs->bcbase[pc].ins;
       BCPos offset;
-      switch (bc_op(i)) {
+      switch (bc_op(ins)) {
       case BC_CALLMT: case BC_CALLT:
       case BC_RETM: case BC_RET: case BC_RET0: case BC_RET1:
-	offset = bcemit_INS(fs, i)-(pc+1)+BCBIAS_J;  /* Copy return ins. */
+	offset = bcemit_INS(fs, ins)-(pc+1)+BCBIAS_J;  /* Copy return ins. */
 	if (offset > BCMAX_D)
 	  err_syntax(fs->ls, LJ_ERR_XFIXUP);
 	/* Replace with UCLO plus branch. */
-	*proto_insptr(pt, pc) = BCINS_AD(BC_UCLO, 0, offset);
+	fs->bcbase[pc].ins = BCINS_AD(BC_UCLO, 0, offset);
 	break;
       case BC_UCLO:
 	return;  /* We're done. */
@@ -1132,26 +1130,29 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   lua_State *L = ls->L;
   FuncState *fs = ls->fs;
   GCproto *pt = fs->pt;
-  BCIns *bc;
-  BCLine *lineinfo;
 
   /* Apply final fixups. */
   var_remove(ls, 0);
-  fs_fixup_ret(fs, pt);
-
-  /* Reallocate arrays. */
-  bc = proto_bc(pt);
-  lj_mem_reallocvec(L, bc, pt->sizebc, fs->pc, BCIns);
-  setmref(pt->bc, bc);
-  pt->sizebc = fs->pc;
+  fs_fixup_ret(fs);
 
   fs_fixup_k(fs, pt);
   fs_fixup_uv(fs, pt);
 
-  lineinfo = proto_lineinfo(pt);
-  lj_mem_reallocvec(L, lineinfo, pt->sizelineinfo, fs->pc, BCLine);
-  setmref(pt->lineinfo, lineinfo);
-  pt->sizelineinfo = fs->pc;
+  {
+    MSize i, n = fs->pc;
+    BCInsLine *base = fs->bcbase;
+    BCLine *lineinfo;
+    BCIns *bc = lj_mem_newvec(L, n, BCIns);
+    setmref(pt->bc, bc);
+    pt->sizebc = fs->pc;
+    lineinfo = lj_mem_newvec(L, n, BCLine);
+    setmref(pt->lineinfo, lineinfo);
+    pt->sizelineinfo = n;
+    for (i = 0; i < n; i++) {
+      bc[i] = base[i].ins;
+      lineinfo[i] = base[i].line;
+    }
+  }
 
   {
     MSize n = ls->vtop - fs->vbase;
@@ -1173,6 +1174,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   /* Initialize prototype fields. */
   setgcref(pt->chunkname, obj2gco(ls->chunkname));
   pt->flags = fs->flags;
+  pt->numparams = fs->numparams;
   pt->framesize = fs->framesize;
   pt->linedefined = fs->linedefined;
   pt->lastlinedefined = line;
@@ -1196,7 +1198,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 }
 
 /* Initialize a new FuncState. */
-static void fs_init(LexState *ls, FuncState *fs, BCLine line)
+static void fs_init(LexState *ls, FuncState *fs)
 {
   lua_State *L = ls->L;
   GCproto *pt = lj_func_newproto(L);
@@ -1216,7 +1218,6 @@ static void fs_init(LexState *ls, FuncState *fs, BCLine line)
   fs->bl = NULL;
   fs->flags = 0;
   fs->framesize = 2;  /* Minimum frame size. */
-  fs->linedefined = line;
   fs->kt = lj_tab_new(L, 0, 0);
   /* Anchor table of constants and prototype (to avoid being collected). */
   settabV(L, L->top, fs->kt);
@@ -1333,7 +1334,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
 	BCReg kidx;
 	t = lj_tab_new(fs->L, 0, 0);
 	kidx = const_gc(fs, obj2gco(t), LJ_TTAB);
-	*proto_insptr(fs->pt, pc) = BCINS_AD(BC_TDUP, freg-1, kidx);
+	fs->bcbase[pc].ins = BCINS_AD(BC_TDUP, freg-1, kidx);
       }
       vcall = 0;
       expr_kvalue(&k, &key);
@@ -1350,14 +1351,15 @@ static void expr_table(LexState *ls, ExpDesc *e)
   }
   lex_match(ls, '}', '{', line);
   if (vcall) {
-    BCIns *i = proto_insptr(fs->pt, fs->pc-1);
+    BCInsLine *ilp = &fs->bcbase[fs->pc-1];
     ExpDesc en;
-    lua_assert(bc_a(*i)==freg && bc_op(*i) == (narr>256?BC_TSETV:BC_TSETB));
+    lua_assert(bc_a(ilp->ins) == freg &&
+	       bc_op(ilp->ins) == (narr > 256 ? BC_TSETV : BC_TSETB));
     expr_init(&en, VKNUM, 0);
     setintV(&en.u.nval, narr-1);
-    if (narr > 256) { fs->pc--; i--; }
-    *i = BCINS_AD(BC_TSETM, freg, const_num(fs, &en));
-    setbc_b(i-1, 0);
+    if (narr > 256) { fs->pc--; ilp--; }
+    ilp->ins = BCINS_AD(BC_TSETM, freg, const_num(fs, &en));
+    setbc_b(&ilp[-1].ins, 0);
   }
   if (pc == fs->pc-1) {  /* Make expr relocable if possible. */
     e->u.s.info = pc;
@@ -1370,15 +1372,14 @@ static void expr_table(LexState *ls, ExpDesc *e)
     if (!needarr) narr = 0;
     else if (narr < 3) narr = 3;
     else if (narr > 0x7ff) narr = 0x7ff;
-    setbc_d(proto_insptr(fs->pt, pc), (uint32_t)narr|(hsize2hbits(nhash)<<11));
+    setbc_d(&fs->bcbase[pc].ins, (uint32_t)narr|(hsize2hbits(nhash)<<11));
   }
 }
 
 /* Parse function parameters. */
-static void parse_params(LexState *ls, int needself)
+static BCReg parse_params(LexState *ls, int needself)
 {
   FuncState *fs = ls->fs;
-  GCproto *pt = fs->pt;
   BCReg nparams = 0;
   lex_check(ls, '(');
   if (needself) {
@@ -1399,9 +1400,9 @@ static void parse_params(LexState *ls, int needself)
     } while (lex_opt(ls, ','));
   }
   var_add(ls, nparams);
-  pt->numparams = cast_byte(fs->nactvar);
   bcreg_reserve(fs, fs->nactvar);
   lex_check(ls, ')');
+  return fs->nactvar;
 }
 
 /* Forward declaration. */
@@ -1410,18 +1411,23 @@ static void parse_chunk(LexState *ls);
 /* Parse body of a function. */
 static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
 {
-  FuncState *fs, cfs;
+  FuncState cfs, *fs = ls->fs;
   BCReg kidx;
   BCLine lastline;
   GCproto *pt;
-  fs_init(ls, &cfs, line);
-  parse_params(ls, needself);
+  ptrdiff_t oldbase = fs->bcbase - ls->bcstack;
+  fs_init(ls, &cfs);
+  cfs.linedefined = line;
+  cfs.numparams = (uint8_t)parse_params(ls, needself);
+  cfs.bcbase = fs->bcbase + fs->pc;
+  cfs.bclim = fs->bclim - fs->pc;
   parse_chunk(ls);
   lastline = ls->linenumber;
   lex_match(ls, TK_end, TK_function, line);
   pt = fs_finish(ls, lastline);
+  fs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
+  fs->bclim = ls->sizebcstack - oldbase;
   /* Store new prototype in the constant array of the parent. */
-  fs = ls->fs;
   kidx = const_gc(fs, obj2gco(pt), LJ_TPROTO);
   expr_init(e, VRELOCABLE, bcemit_AD(fs, BC_FNEW, 0, kidx));
   if (!(fs->flags & PROTO_HAS_FNEW)) {
@@ -1485,7 +1491,7 @@ static void parse_args(LexState *ls, ExpDesc *e)
   }
   expr_init(e, VCALL, bcemit_INS(fs, ins));
   e->u.s.aux = base;
-  proto_lineinfo(fs->pt)[fs->pc - 1] = line;
+  fs->bcbase[fs->pc - 1].line = line;
   fs->freereg = base+1;  /* Leave one result by default. */
 }
 
@@ -1693,7 +1699,7 @@ static void scope_begin(FuncState *fs, FuncScope *bl, int isbreakable)
 {
   bl->breaklist = NO_JMP;
   bl->isbreakable = (uint8_t)isbreakable;
-  bl->nactvar = fs->nactvar;
+  bl->nactvar = (uint8_t)fs->nactvar;
   bl->upval = 0;
   bl->prev = fs->bl;
   fs->bl = bl;
@@ -1766,11 +1772,11 @@ static void parse_return(LexState *ls)
     BCReg nret = expr_list(ls, &e);
     if (nret == 1) {  /* Return one result. */
       if (e.k == VCALL) {  /* Check for tail call. */
-	BCIns *i = bcptr(fs, &e);
+	BCIns *ip = bcptr(fs, &e);
 	/* It doesn't pay off to add BC_VARGT just for 'return ...'. */
-	if (bc_op(*i) == BC_VARG) goto notailcall;
+	if (bc_op(*ip) == BC_VARG) goto notailcall;
 	fs->pc--;
-	ins = BCINS_AD(bc_op(*i)-BC_CALL+BC_CALLT, bc_a(*i), bc_c(*i));
+	ins = BCINS_AD(bc_op(*ip)-BC_CALL+BC_CALLT, bc_a(*ip), bc_c(*ip));
       } else {  /* Can return the result from any register. */
 	ins = BCINS_AD(BC_RET1, expr_toanyreg(fs, &e), 2);
       }
@@ -1957,7 +1963,7 @@ static void parse_func(LexState *ls, BCLine line)
   parse_body(ls, &b, needself, line);
   fs = ls->fs;
   bcemit_store(fs, &v, &b);
-  proto_lineinfo(fs->pt)[fs->pc - 1] = line;  /* Set line for the store. */
+  fs->bcbase[fs->pc - 1].line = line;  /* Set line for the store. */
 }
 
 /* -- Loop and conditional statements ------------------------------------- */
@@ -2033,9 +2039,9 @@ static void parse_for_body(LexState *ls, BCReg base, BCLine line,
     jmp_patchins(fs, loop, fs->pc);
     bcemit_ABC(fs, BC_ITERC, base+3, nvars+1, 2+1);
     loopend = bcemit_AJ(fs, BC_ITERL, base+3, NO_JMP);
-    proto_lineinfo(fs->pt)[loopend-1] = line;
+    fs->bcbase[loopend-1].line = line;
   }
-  proto_lineinfo(fs->pt)[loopend] = line;  /* Fix line for control ins. */
+  fs->bcbase[loopend].line = line;  /* Fix line for control ins. */
   jmp_patchins(fs, loopend, loop+1);
 }
 
@@ -2210,7 +2216,11 @@ GCproto *lj_parse(LexState *ls)
   setstrV(L, L->top, ls->chunkname);  /* Anchor chunkname string. */
   incr_top(L);
   ls->level = 0;
-  fs_init(ls, &fs, 0);
+  fs_init(ls, &fs);
+  fs.linedefined = 0;
+  fs.numparams = 0;
+  fs.bcbase = NULL;
+  fs.bclim = 0;
   fs.flags |= PROTO_IS_VARARG;  /* Main chunk is always a vararg func. */
   lj_lex_next(ls);  /* Read-ahead first token. */
   parse_chunk(ls);

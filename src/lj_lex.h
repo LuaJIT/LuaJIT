@@ -32,6 +32,12 @@ TKDEF(TKENUM1, TKENUM2)
 
 typedef int LexToken;
 
+/* Combined bytecode ins/line. Only used during bytecode generation. */
+typedef struct BCInsLine {
+  BCIns ins;		/* Bytecode instruction. */
+  BCLine line;		/* Line number for this bytecode. */
+} BCInsLine;
+
 /* Lua lexer state. */
 typedef struct LexState {
   struct FuncState *fs;	/* Current FuncState. Defined in lj_parse.c. */
@@ -53,6 +59,8 @@ typedef struct LexState {
   VarInfo *vstack;	/* Stack for names and extents of local variables. */
   MSize sizevstack;	/* Size of variable stack. */
   MSize vtop;		/* Top of variable stack. */
+  BCInsLine *bcstack;	/* Stack for bytecode instructions/line numbers. */
+  MSize sizebcstack;	/* Size of bytecode stack. */
   uint32_t level;	/* Syntactical nesting level. */
 } LexState;
 
