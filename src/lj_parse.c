@@ -100,7 +100,6 @@ typedef struct UVMap {
 
 /* Per-function state. */
 typedef struct FuncState {
-  GCproto *pt;			/* Prototype object to be built. */
   GCtab *kt;			/* Hash table for constants. */
   LexState *ls;			/* Lexer state. */
   lua_State *L;			/* Lua state. */
@@ -1129,11 +1128,25 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 {
   lua_State *L = ls->L;
   FuncState *fs = ls->fs;
-  GCproto *pt = fs->pt;
+  GCproto *pt;
 
   /* Apply final fixups. */
   var_remove(ls, 0);
+  lua_assert(fs->bl == NULL);
   fs_fixup_ret(fs);
+
+  /* Allocate prototype and initialize its fields. */
+  pt = lj_func_newproto(L);
+  setgcref(pt->chunkname, obj2gco(ls->chunkname));
+  pt->flags = fs->flags;
+  pt->numparams = fs->numparams;
+  pt->framesize = fs->framesize;
+  pt->linedefined = fs->linedefined;
+  pt->lastlinedefined = line;
+
+  /* Anchor prototype since allocation of the arrays may fail. */
+  setprotoV(L, L->top, pt);
+  incr_top(L);
 
   fs_fixup_k(fs, pt);
   fs_fixup_uv(fs, pt);
@@ -1171,23 +1184,15 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
     pt->sizeuvname = n;
   }
 
-  /* Initialize prototype fields. */
-  setgcref(pt->chunkname, obj2gco(ls->chunkname));
-  pt->flags = fs->flags;
-  pt->numparams = fs->numparams;
-  pt->framesize = fs->framesize;
-  pt->linedefined = fs->linedefined;
-  pt->lastlinedefined = line;
-
   lj_vmevent_send(L, BC,
     setprotoV(L, L->top++, pt);
   );
 
-  /* Remove VarInfo and FuncState. Pop const table and prototype. */
-  lua_assert(fs->bl == NULL);
-  ls->vtop = fs->vbase;
+  L->top--;  /* Pop prototype. */
+
+  L->top--;  /* Pop table of constants. */
+  ls->vtop = fs->vbase;  /* Reset variable stack. */
   ls->fs = fs->prev;
-  L->top -= 2;
   lua_assert(ls->fs != NULL || ls->token == TK_eof);
   /* Re-anchor last string token to avoid GC. */
   if (ls->token == TK_name || ls->token == TK_string) {
@@ -1201,8 +1206,6 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 static void fs_init(LexState *ls, FuncState *fs)
 {
   lua_State *L = ls->L;
-  GCproto *pt = lj_func_newproto(L);
-  fs->pt = pt;
   fs->prev = ls->fs; ls->fs = fs;  /* Append to list. */
   fs->ls = ls;
   fs->vbase = ls->vtop;
@@ -1221,8 +1224,6 @@ static void fs_init(LexState *ls, FuncState *fs)
   fs->kt = lj_tab_new(L, 0, 0);
   /* Anchor table of constants and prototype (to avoid being collected). */
   settabV(L, L->top, fs->kt);
-  incr_top(L);
-  setprotoV(L, L->top, pt);
   incr_top(L);
 }
 
