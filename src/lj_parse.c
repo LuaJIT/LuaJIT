@@ -1033,7 +1033,6 @@ static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, BCLine *lineinfo)
 {
   MSize i, n = fs->pc;
   BCInsLine *base = fs->bcbase;
-  setmref(pt->bc, bc);
   setmref(pt->lineinfo, lineinfo);
   pt->sizebc = n;
   bc[n] = ~0u;  /* Close potentially uninitialized gap between bc and kgc. */

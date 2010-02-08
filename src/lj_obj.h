@@ -351,7 +351,6 @@ typedef struct GCproto {
   MSize sizebc;		/* Number of bytecode instructions. */
   GCRef gclist;
   MRef k;		/* Split constant array (points to the middle). */
-  MRef bc;		/* Array of bytecode instructions. */
   MRef uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
   MSize sizekgc;	/* Number of collectable constants. */
   MSize sizekn;		/* Number of lua_Number constants. */
@@ -381,11 +380,7 @@ typedef struct GCproto {
 	    gcref(mref((pt)->k, GCRef)[(idx)]))
 #define proto_knum(pt, idx) \
   check_exp((uintptr_t)(idx) < (pt)->sizekn, mref((pt)->k, lua_Number)[(idx)])
-#define proto_bc(pt)		(mref((pt)->bc, BCIns))
-#define proto_ins(pt, pos) \
-  check_exp((uintptr_t)(pos) < (pt)->sizebc, proto_bc(pt)[(pos)])
-#define proto_insptr(pt, pos) \
-  check_exp((uintptr_t)(pos) < (pt)->sizebc, &proto_bc(pt)[(pos)])
+#define proto_bc(pt)		((BCIns *)((char *)(pt) + sizeof(GCproto)))
 #define proto_bcpos(pt, pc)	((BCPos)((pc) - proto_bc(pt)))
 #define proto_uv(pt)		(mref((pt)->uv, uint16_t))
 

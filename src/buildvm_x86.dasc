@@ -409,7 +409,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PROTO:RB, LFUNC:RB->pt
   |  mov [BASE-4], PC			// Store caller PC.
   |  movzx RA, byte PROTO:RB->framesize
-  |  mov PC, PROTO:RB->bc
+  |  lea PC, [PROTO:RB+sizeof(GCproto)]
   |  mov KBASE, PROTO:RB->k
   |  mov L:RB, SAVE_L
   |  lea RA, [BASE+RA*8]		// Top of frame.
@@ -462,7 +462,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jnz <1
   |2:
   |  movzx RA, byte PROTO:RB->framesize
-  |  mov PC, PROTO:RB->bc
+  |  lea PC, [PROTO:RB+sizeof(GCproto)]
   |  mov KBASE, PROTO:RB->k
   |  lea RA, [BASE+RA*8]
   |  jmp <9
@@ -666,7 +666,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  sub RC, 8
   |  mov BASE, RA
   |  mov RA, KBASE
-  |  mov PC, PROTO:RB->bc
+  |  lea PC, [PROTO:RB+sizeof(GCproto)]
   |  mov L:RB, SAVE_L
   |
   |->gate_lf_growstack:			// Grow stack for fixarg Lua function.

@@ -13,7 +13,7 @@
 #define DASM_SECTION_CODE_SUB	1
 #define DASM_MAXSECTION		2
 static const unsigned char build_actionlist[15185] = {
-  254,1,248,10,137,202,139,173,233,137,114,252,252,15,182,141,233,139,181,233,
+  254,1,248,10,137,202,139,173,233,137,114,252,252,15,182,141,233,141,181,233,
   139,189,233,139,108,36,48,141,12,202,141,68,194,252,252,59,141,233,15,135,
   244,11,248,9,189,237,248,1,137,40,137,104,8,131,192,16,57,200,15,130,244,
   1,255,139,6,15,182,204,15,182,232,131,198,4,193,232,16,252,255,36,171,248,
@@ -22,7 +22,7 @@ static const unsigned char build_actionlist[15185] = {
   4,59,190,233,15,135,244,13,15,182,181,233,133,252,246,15,132,244,248,248,
   1,131,193,8,57,209,15,131,244,248,139,121,252,248,137,120,252,252,139,121,
   252,252,137,56,131,192,8,199,65,252,252,237,131,252,238,1,15,133,244,1,248,
-  2,15,182,141,233,139,181,233,255,139,189,233,141,12,202,252,233,244,9,248,
+  2,15,182,141,233,141,181,233,255,139,189,233,141,12,202,252,233,244,9,248,
   14,137,113,252,252,139,189,233,139,108,36,48,141,68,193,252,248,137,141,233,
   141,136,233,137,133,233,59,141,233,137,124,36,4,137,44,36,15,135,244,15,199,
   131,233,237,252,255,147,233,199,131,233,237,139,149,233,141,12,194,252,247,
@@ -46,7 +46,7 @@ static const unsigned char build_actionlist[15185] = {
   199,66,252,252,237,199,131,233,237,255,252,233,244,16,248,20,252,247,198,
   237,15,132,244,27,131,230,252,248,41,252,242,141,76,49,252,248,139,114,252,
   252,199,68,10,4,237,252,233,244,16,248,15,186,237,252,233,244,247,248,13,
-  131,232,8,137,202,137,252,249,139,181,233,139,108,36,48,248,11,131,232,4,
+  131,232,8,137,202,137,252,249,141,181,233,139,108,36,48,248,11,131,232,4,
   41,209,193,252,233,3,131,198,4,137,149,233,137,133,233,137,116,36,24,137,
   202,248,1,137,252,233,232,251,1,0,139,141,233,255,139,133,233,139,105,252,
   248,139,113,252,252,41,200,193,232,3,131,192,1,252,255,165,233,248,28,85,
@@ -1107,16 +1107,16 @@ static const char *const extnames[] = {
 static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
 {
   dasm_put(Dst, 0);
-  dasm_put(Dst, 2, Dt7(->pt), Dt9(->framesize), Dt9(->bc), Dt9(->k), Dt1(->maxstack), LJ_TNIL);
+  dasm_put(Dst, 2, Dt7(->pt), Dt9(->framesize), sizeof(GCproto), Dt9(->k), Dt1(->maxstack), LJ_TNIL);
 #if LJ_HASJIT
 #endif
-  dasm_put(Dst, 63, FRAME_VARG, -FRAME_VARG, Dt7(->pt), Dt9(->framesize), Dt1(->maxstack), Dt9(->numparams), LJ_TNIL, Dt9(->framesize), Dt9(->bc));
+  dasm_put(Dst, 63, FRAME_VARG, -FRAME_VARG, Dt7(->pt), Dt9(->framesize), Dt1(->maxstack), Dt9(->numparams), LJ_TNIL, Dt9(->framesize), sizeof(GCproto));
   dasm_put(Dst, 191, Dt9(->k), Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->top), Dt1(->maxstack), DISPATCH_GL(vmstate), ~LJ_VMST_C, DISPATCH_GL(wrapf), DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top), FRAME_TYPE);
   dasm_put(Dst, 280, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->top), Dt1(->maxstack), DISPATCH_GL(vmstate), ~LJ_VMST_C, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top), FRAME_TYPE);
   dasm_put(Dst, 362, FRAME_C, DISPATCH_GL(vmstate), ~LJ_VMST_C, Dt1(->base));
   dasm_put(Dst, 453, Dt1(->top), Dt1(->cframe), Dt1(->maxstack), LJ_TNIL, Dt1(->top));
   dasm_put(Dst, 532, Dt1(->top), Dt1(->glref), Dt2(->vmstate), ~LJ_VMST_C, CFRAME_RAWMASK, 1+1, Dt1(->base), Dt1(->glref), GG_G2DISP, LJ_TFALSE, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP);
-  dasm_put(Dst, 622, FRAME_P, LJ_TTRUE, LUA_MINSTACK, Dt9(->bc), Dt1(->base), Dt1(->top), Dt1(->base));
+  dasm_put(Dst, 622, FRAME_P, LJ_TTRUE, LUA_MINSTACK, sizeof(GCproto), Dt1(->base), Dt1(->top), Dt1(->base));
   dasm_put(Dst, 725, Dt1(->top), Dt7(->gate), FRAME_CP, CFRAME_RESUME, Dt1(->glref), GG_G2DISP, Dt1(->cframe), Dt1(->status), DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->status), Dt1(->base), Dt1(->top), FRAME_TYPE);
   dasm_put(Dst, 845, FRAME_CP, FRAME_C, Dt1(->cframe), Dt1(->cframe), Dt1(->glref), GG_G2DISP, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top), LJ_TFUNC, Dt7(->gate));
   dasm_put(Dst, 948, Dt1(->stack), Dt1(->top), Dt1(->cframe), Dt1(->cframe), FRAME_CP, LJ_TNIL, Dt7(->pt), Dt9(->k), LJ_TSTR);
