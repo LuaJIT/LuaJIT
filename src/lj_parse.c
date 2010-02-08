@@ -1348,8 +1348,8 @@ static void expr_table(LexState *ls, ExpDesc *e)
       if (val.k == VKSTR)
 	lj_gc_objbarriert(fs->L, t, val.u.sval);
     } else {
+      if (val.k != VCALL) { expr_toanyreg(fs, &val); vcall = 0; }
       if (expr_isk(&key)) expr_index(fs, e, &key);
-      if (val.k != VCALL) vcall = 0;
       bcemit_store(fs, e, &val);
     }
     fs->freereg = freg;
