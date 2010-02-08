@@ -256,12 +256,12 @@ static void emit_bcdef(BuildCtx *ctx)
 {
   int i;
   fprintf(ctx->fp, "/* This is a generated file. DO NOT EDIT! */\n\n");
-  fprintf(ctx->fp, "LJ_DATADEF const uint16_t lj_bc_ofs[BC__MAX+1] = {\n  ");
+  fprintf(ctx->fp, "LJ_DATADEF const uint16_t lj_bc_ofs[BC__MAX+1] = {\n ");
   for (i = 0; i < ctx->npc; i++) {
-    fprintf(ctx->fp, "%4d, ", ctx->sym_ofs[i]);
-    if ((i & 7) == 7) fprintf(ctx->fp, "\n  ");
+    fprintf(ctx->fp, " %4d,", ctx->sym_ofs[i]);
+    if ((i & 7) == 7) fprintf(ctx->fp, "\n ");
   }
-  fprintf(ctx->fp, "0\n};\n\n");
+  fprintf(ctx->fp, " 0\n};\n\n");
 }
 
 /* Emit VM definitions as Lua code for debug modules. */
