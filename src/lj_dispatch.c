@@ -301,7 +301,7 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
     g->hookcount = g->hookcstart;
     callhook(L, LUA_HOOKCOUNT, -1);
   }
-  if ((g->hookmask & LUA_MASKLINE) && proto_lineinfo(pt)) {
+  if ((g->hookmask & LUA_MASKLINE)) {
     BCPos npc = proto_bcpos(pt, pc) - 1;
     BCPos opc = proto_bcpos(pt, oldpc) - 1;
     BCLine line = proto_line(pt, npc);

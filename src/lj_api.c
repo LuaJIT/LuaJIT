@@ -811,9 +811,9 @@ static const char *aux_upvalue(cTValue *f, uint32_t idx, TValue **val)
   fn = funcV(f);
   if (isluafunc(fn)) {
     GCproto *pt = funcproto(fn);
-    if (idx < pt->sizeuvname) {
+    if (idx < pt->sizeuv) {
       *val = uvval(&gcref(fn->l.uvptr[idx])->uv);
-      return strdata(gco2str(proto_uvname(pt, idx)));
+      return strdata(proto_uvname(pt, idx));
     }
   } else {
     if (idx < fn->c.nupvalues) {

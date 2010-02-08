@@ -853,7 +853,7 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
     } else if (expr_isk(e)) {
       e->k = VKFALSE;
       return;
-    } else if (e->k == VJMP) { 
+    } else if (e->k == VJMP) {
       invertcond(fs, e);
       return;
     } else if (e->k == VRELOCABLE) {
@@ -1026,22 +1026,32 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
 
 /* -- Function state management ------------------------------------------- */
 
+/* NYI: compress debug info. */
+
+/* Fixup bytecode and lineinfo for prototype. */
+static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, BCLine *lineinfo)
+{
+  MSize i, n = fs->pc;
+  BCInsLine *base = fs->bcbase;
+  setmref(pt->bc, bc);
+  setmref(pt->lineinfo, lineinfo);
+  pt->sizebc = n;
+  bc[n] = ~0u;  /* Close potentially uninitialized gap between bc and kgc. */
+  for (i = 0; i < n; i++) {
+    bc[i] = base[i].ins;
+    lineinfo[i] = base[i].line;
+  }
+}
+
 /* Fixup constants for prototype. */
-static void fs_fixup_k(FuncState *fs, GCproto *pt)
+static void fs_fixup_k(FuncState *fs, GCproto *pt, void *kptr)
 {
   GCtab *kt;
   TValue *array;
   Node *node;
-  BCReg nkgc;
-  MSize i, hmask, sizek;
-  GCRef *kptr;
+  MSize i, hmask;
   checklimitgt(fs, fs->nkn, BCMAX_D+1, "constants");
   checklimitgt(fs, fs->nkgc, BCMAX_D+1, "constants");
-  nkgc = round_nkgc(fs->nkgc);
-  sizek = (MSize)(nkgc*sizeof(GCRef) + fs->nkn*sizeof(lua_Number));
-  kptr = lj_mem_newt(fs->L, sizek, GCRef);
-  if (nkgc) setgcrefnull(kptr[0]);  /* May be uninitialized otherwise. */
-  kptr += nkgc;
   setmref(pt->k, kptr);
   pt->sizekn = fs->nkn;
   pt->sizekgc = fs->nkgc;
@@ -1060,7 +1070,7 @@ static void fs_fixup_k(FuncState *fs, GCproto *pt)
 	((lua_Number *)kptr)[kidx] = numV(&n->key);
       } else {
 	GCobj *o = gcV(&n->key);
-	setgcref(kptr[~kidx], o);
+	setgcref(((GCRef *)kptr)[~kidx], o);
 	lj_gc_objbarrier(fs->L, pt, o);
       }
     }
@@ -1068,14 +1078,27 @@ static void fs_fixup_k(FuncState *fs, GCproto *pt)
 }
 
 /* Fixup upvalues for prototype. */
-static void fs_fixup_uv(FuncState *fs, GCproto *pt)
+static void fs_fixup_uv(FuncState *fs, GCproto *pt, uint16_t *uv)
 {
   MSize i, n = fs->nuv;
-  uint16_t *uv = lj_mem_newvec(fs->L, n, uint16_t);
   setmref(pt->uv, uv);
   pt->sizeuv = n;
   for (i = 0; i < n; i++)
     uv[i] = fs->uvloc[i].slot;
+}
+
+/* Fixup debug info for prototype. */
+static void fs_fixup_dbg(FuncState *fs, GCproto *pt, VarInfo *vi, MSize sizevi)
+{
+  MSize i, n = fs->nuv;
+  GCRef *uvname = (GCRef *)((char *)vi + sizevi*sizeof(VarInfo));
+  VarInfo *vstack = fs->ls->vstack;
+  setmref(pt->varinfo, vi);
+  setmref(pt->uvname, uvname);
+  pt->sizevarinfo = sizevi;
+  memcpy(vi, &vstack[fs->vbase], sizevi*sizeof(VarInfo));
+  for (i = 0; i < n; i++)
+    setgcref(uvname[i], gcref(vstack[fs->uvloc[i].vidx].name));
 }
 
 /* Check if bytecode op returns. */
@@ -1128,6 +1151,8 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 {
   lua_State *L = ls->L;
   FuncState *fs = ls->fs;
+  MSize sizevi;
+  size_t sizept, ofsk, ofsuv, ofsdbg, ofsli;
   GCproto *pt;
 
   /* Apply final fixups. */
@@ -1135,60 +1160,40 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   lua_assert(fs->bl == NULL);
   fs_fixup_ret(fs);
 
+  /* Calculate total size of prototype including all colocated arrays. */
+  sizept = sizeof(GCproto) + fs->pc*sizeof(BCIns) + fs->nkgc*sizeof(GCRef);
+  sizept = (sizept + sizeof(lua_Number)-1) & ~(sizeof(lua_Number)-1);
+  ofsk = sizept;
+  sizept += fs->nkn*sizeof(lua_Number);
+  ofsuv = sizept;
+  sizept += ((fs->nuv+1)&~1)*2;
+  ofsdbg = sizept;
+  sizevi = ls->vtop - fs->vbase;
+  sizept += sizevi*sizeof(VarInfo) + fs->nuv*sizeof(GCRef);
+  ofsli = sizept;
+  sizept += fs->pc*sizeof(BCLine);
+
   /* Allocate prototype and initialize its fields. */
-  pt = lj_func_newproto(L);
+  pt = (GCproto *)lj_mem_newgco(L, (MSize)sizept);
+  pt->gct = ~LJ_TPROTO;
+  pt->sizept = (MSize)sizept;
   setgcref(pt->chunkname, obj2gco(ls->chunkname));
+  pt->trace = 0;
   pt->flags = fs->flags;
   pt->numparams = fs->numparams;
   pt->framesize = fs->framesize;
   pt->linedefined = fs->linedefined;
   pt->lastlinedefined = line;
 
-  /* Anchor prototype since allocation of the arrays may fail. */
-  setprotoV(L, L->top, pt);
-  incr_top(L);
-
-  fs_fixup_k(fs, pt);
-  fs_fixup_uv(fs, pt);
-
-  {
-    MSize i, n = fs->pc;
-    BCInsLine *base = fs->bcbase;
-    BCLine *lineinfo;
-    BCIns *bc = lj_mem_newvec(L, n, BCIns);
-    setmref(pt->bc, bc);
-    pt->sizebc = fs->pc;
-    lineinfo = lj_mem_newvec(L, n, BCLine);
-    setmref(pt->lineinfo, lineinfo);
-    pt->sizelineinfo = n;
-    for (i = 0; i < n; i++) {
-      bc[i] = base[i].ins;
-      lineinfo[i] = base[i].line;
-    }
-  }
-
-  {
-    MSize n = ls->vtop - fs->vbase;
-    VarInfo *vi = lj_mem_newvec(L, n, VarInfo);
-    memcpy(vi, &ls->vstack[fs->vbase], n*sizeof(VarInfo));
-    setmref(pt->varinfo, vi);
-    pt->sizevarinfo = n;
-  }
-
-  {
-    MSize i, n = fs->nuv;
-    GCRef *uvname = lj_mem_newvec(L, n, GCRef);
-    for (i = 0; i < n; i++)
-      setgcref(uvname[i], gcref(ls->vstack[fs->uvloc[i].vidx].name));
-    setmref(pt->uvname, uvname);
-    pt->sizeuvname = n;
-  }
+  fs_fixup_bc(fs, pt, (BCIns *)((char *)pt + sizeof(GCproto)),
+		      (BCLine *)((char *)pt + ofsli));
+  fs_fixup_k(fs, pt, (void *)((char *)pt + ofsk));
+  fs_fixup_uv(fs, pt, (uint16_t *)((char *)pt + ofsuv));
+  fs_fixup_dbg(fs, pt, (VarInfo *)((char *)pt + ofsdbg), sizevi);
 
   lj_vmevent_send(L, BC,
     setprotoV(L, L->top++, pt);
   );
-
-  L->top--;  /* Pop prototype. */
 
   L->top--;  /* Pop table of constants. */
   ls->vtop = fs->vbase;  /* Reset variable stack. */
@@ -1427,7 +1432,7 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
   lex_match(ls, TK_end, TK_function, line);
   pt = fs_finish(ls, lastline);
   fs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
-  fs->bclim = ls->sizebcstack - oldbase;
+  fs->bclim = (BCPos)(ls->sizebcstack - oldbase);
   /* Store new prototype in the constant array of the parent. */
   kidx = const_gc(fs, obj2gco(pt), LJ_TPROTO);
   expr_init(e, VRELOCABLE, bcemit_AD(fs, BC_FNEW, 0, kidx));

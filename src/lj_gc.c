@@ -254,8 +254,8 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
   gc_mark_str(proto_chunkname(pt));
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++)  /* Mark collectable consts. */
     gc_markobj(g, proto_kgc(pt, i));
-  for (i = 0; i < (ptrdiff_t)pt->sizeuvname; i++)  /* Mark upvalue names. */
-    gc_mark_str(gco2str(proto_uvname(pt, i)));
+  for (i = 0; i < (ptrdiff_t)pt->sizeuv; i++)  /* Mark upvalue names. */
+    gc_mark_str(proto_uvname(pt, i));
   for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
     gc_mark_str(gco2str(gcref(proto_varinfo(pt)[i].name)));
 }
@@ -323,13 +323,7 @@ static size_t propagatemark(global_State *g)
   } else if (LJ_LIKELY(o->gch.gct == ~LJ_TPROTO)) {
     GCproto *pt = gco2pt(o);
     gc_traverse_proto(g, pt);
-    return sizeof(GCproto) + sizeof(BCIns) * pt->sizebc +
-			     sizeof(GCRef) * pt->sizekgc +
-			     sizeof(lua_Number) * pt->sizekn +
-			     sizeof(uint16_t) * pt->sizeuv +
-			     sizeof(BCLine) * pt->sizelineinfo +
-			     sizeof(VarInfo) * pt->sizevarinfo +
-			     sizeof(GCRef) * pt->sizeuvname;
+    return pt->sizept;
   } else {
     lua_State *th = gco2th(o);
     setgcrefr(th->gclist, g->gc.grayagain);

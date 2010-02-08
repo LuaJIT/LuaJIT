@@ -706,7 +706,7 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
   ctx.spadjp = CFRAME_SIZE + (MSize)(parent ? J->trace[parent]->spadjust : 0);
   ctx.spadj = CFRAME_SIZE + T->spadjust;
   if (startpc >= proto_bc(pt))
-    ctx.lineno = proto_lineinfo(pt) ? proto_line(pt,proto_bcpos(pt,startpc)): 0;
+    ctx.lineno = proto_line(pt,proto_bcpos(pt,startpc));
   else
     ctx.lineno = pt->linedefined;
   ctx.filename = strdata(proto_chunkname(pt));

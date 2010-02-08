@@ -246,8 +246,8 @@ LJLIB_CF(jit_util_funcuvname)
 {
   GCproto *pt = check_Lproto(L, 0);
   uint32_t idx = (uint32_t)lj_lib_checkint(L, 2);
-  if (idx < pt->sizeuvname) {
-    setstrV(L, L->top-1, gco2str(proto_uvname(pt, idx)));
+  if (idx < pt->sizeuv) {
+    setstrV(L, L->top-1, proto_uvname(pt, idx));
     return 1;
   }
   return 0;

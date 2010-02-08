@@ -129,7 +129,7 @@ static BCLine currentline(lua_State *L, GCfunc *fn, cTValue *nextframe)
   if (pc != ~(BCPos)0) {
     GCproto *pt = funcproto(fn);
     lua_assert(pc < pt->sizebc);
-    return proto_lineinfo(pt) ? proto_line(pt, pc) : 0;
+    return proto_line(pt, pc);
   } else {
     return -1;
   }
@@ -138,9 +138,10 @@ static BCLine currentline(lua_State *L, GCfunc *fn, cTValue *nextframe)
 static const char *getvarname(const GCproto *pt, BCPos pc, BCReg slot)
 {
   MSize i;
-  for (i = 0; i < pt->sizevarinfo && proto_varinfo(pt)[i].startpc <= pc; i++)
-    if (pc < proto_varinfo(pt)[i].endpc && slot-- == 0)
-      return strdata(gco2str(gcref(proto_varinfo(pt)[i].name)));
+  VarInfo *vi = proto_varinfo(pt);
+  for (i = 0; i < pt->sizevarinfo && vi[i].startpc <= pc; i++)
+    if (pc < vi[i].endpc && slot-- == 0)
+      return strdata(gco2str(gcref(vi[i].name)));
   return NULL;
 }
 
@@ -176,8 +177,7 @@ restart:
 	}
 	return "field";
       case BC_UGET:
-	*name = mref(pt->uvname, GCRef) ?
-		strdata(gco2str(proto_uvname(pt,bc_d(ins)))) : "?";
+	*name = strdata(proto_uvname(pt, bc_d(ins)));
 	return "upvalue";
       default:
 	return NULL;
@@ -224,7 +224,7 @@ void lj_err_pushloc(lua_State *L, GCproto *pt, BCPos pc)
     MSize i, len = name->len;
     BCLine line;
     if (pc)
-      line = proto_lineinfo(pt) ? proto_line(pt, pc-1) : 0;
+      line = proto_line(pt, pc-1);
     else
       line = pt->linedefined;
     if (*s == '@') {
@@ -377,12 +377,11 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     case 'L':
       if (isluafunc(fn)) {
 	GCtab *t = lj_tab_new(L, 0, 0);
-	BCLine *lineinfo = proto_lineinfo(funcproto(fn));
-	if (lineinfo) {
-	  uint32_t i, szl = funcproto(fn)->sizelineinfo;
-	  for (i = 0; i < szl; i++)
-	    setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
-	}
+	GCproto *pt = funcproto(fn);
+	BCLine *lineinfo = proto_lineinfo(pt);
+	MSize i, szl = pt->sizebc;
+	for (i = 0; i < szl; i++)
+	  setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
 	settabV(L, L->top, t);
       } else {
 	setnilV(L->top);

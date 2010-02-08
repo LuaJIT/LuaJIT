@@ -9,7 +9,6 @@
 #include "lj_obj.h"
 
 /* Prototypes. */
-LJ_FUNC GCproto *lj_func_newproto(lua_State *L);
 LJ_FUNC void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt);
 
 /* Upvalues. */

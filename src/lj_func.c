@@ -17,46 +17,10 @@
 
 /* -- Prototypes ---------------------------------------------------------- */
 
-GCproto *lj_func_newproto(lua_State *L)
-{
-  GCproto *pt = lj_mem_newobj(L, GCproto);
-  pt->gct = ~LJ_TPROTO;
-  pt->numparams = 0;
-  pt->framesize = 0;
-  pt->sizeuv = 0;
-  pt->flags = 0;
-  pt->trace = 0;
-  setmref(pt->k, NULL);
-  setmref(pt->bc, NULL);
-  setmref(pt->uv, NULL);
-  pt->sizebc = 0;
-  pt->sizekgc = 0;
-  pt->sizekn = 0;
-  pt->sizelineinfo = 0;
-  pt->sizevarinfo = 0;
-  pt->sizeuvname = 0;
-  pt->linedefined = 0;
-  pt->lastlinedefined = 0;
-  setmref(pt->lineinfo, NULL);
-  setmref(pt->varinfo, NULL);
-  setmref(pt->uvname, NULL);
-  setgcrefnull(pt->chunkname);
-  return pt;
-}
-
 void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 {
-  MSize nkgc = round_nkgc(pt->sizekgc);
-  MSize sizek = nkgc*(MSize)sizeof(GCRef) +
-		pt->sizekn*(MSize)sizeof(lua_Number);
-  lj_mem_free(g, mref(pt->k, GCRef) - nkgc, sizek);
-  lj_mem_freevec(g, proto_bc(pt), pt->sizebc, BCIns);
-  lj_mem_freevec(g, proto_uv(pt), pt->sizeuv, uint16_t);
-  lj_mem_freevec(g, proto_lineinfo(pt), pt->sizelineinfo, BCLine);
-  lj_mem_freevec(g, proto_varinfo(pt), pt->sizevarinfo, VarInfo);
-  lj_mem_freevec(g, mref(pt->uvname, GCRef), pt->sizeuvname, GCRef);
   lj_trace_freeproto(g, pt);
-  lj_mem_freet(g, pt);
+  lj_mem_free(g, pt, pt->sizept);
 }
 
 /* -- Upvalues ------------------------------------------------------------ */
