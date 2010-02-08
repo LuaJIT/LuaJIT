@@ -1171,6 +1171,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   }
 
   /* Initialize prototype fields. */
+  setgcref(pt->chunkname, obj2gco(ls->chunkname));
   pt->flags = fs->flags;
   pt->framesize = fs->framesize;
   pt->linedefined = fs->linedefined;
@@ -1213,7 +1214,6 @@ static void fs_init(LexState *ls, FuncState *fs, BCLine line)
   fs->nactvar = 0;
   fs->nuv = 0;
   fs->bl = NULL;
-  setgcref(pt->chunkname, obj2gco(ls->chunkname));
   fs->flags = 0;
   fs->framesize = 2;  /* Minimum frame size. */
   fs->linedefined = line;
@@ -2205,6 +2205,10 @@ GCproto *lj_parse(LexState *ls)
 {
   struct FuncState fs;
   GCproto *pt;
+  lua_State *L = ls->L;
+  ls->chunkname = lj_str_newz(L, ls->chunkarg);
+  setstrV(L, L->top, ls->chunkname);  /* Anchor chunkname string. */
+  incr_top(L);
   ls->level = 0;
   fs_init(ls, &fs, 0);
   fs.flags |= PROTO_IS_VARARG;  /* Main chunk is always a vararg func. */
@@ -2213,6 +2217,7 @@ GCproto *lj_parse(LexState *ls)
   if (ls->token != TK_eof)
     err_token(ls, TK_eof);
   pt = fs_finish(ls, ls->linenumber);
+  L->top--;  /* Drop chunkname. */
   lua_assert(fs.prev == NULL);
   lua_assert(ls->fs == NULL);
   lua_assert(pt->sizeuv == 0);

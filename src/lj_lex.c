@@ -333,10 +333,6 @@ void lj_lex_setup(lua_State *L, LexState *ls)
     setstrV(L, L->top++, lj_err_str(L, LJ_ERR_XBCLOAD));
     lj_err_throw(L, LUA_ERRSYNTAX);
   }
-  /* This is an unanchored GCstr before it's stored in the prototype.
-  ** Do this last since next() calls the reader which may call the GC.
-  */
-  ls->chunkname = lj_str_newz(L, ls->chunkarg);
 }
 
 /* Cleanup lexer state. */
