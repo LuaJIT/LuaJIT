@@ -112,8 +112,8 @@ GCfunc *lj_func_newL(lua_State *L, GCproto *pt, GCtab *env)
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
   fn->l.nupvalues = cast_byte(pt->sizeuv);
-  /* NOBARRIER: The GCfunc is new (marked white). */
-  setgcref(fn->l.pt, obj2gco(pt));
+  /* NOBARRIER: Really a setgcref. But the GCfunc is new (marked white). */
+  setmref(fn->l.pc, proto_bc(pt));
   setgcref(fn->l.env, obj2gco(env));
   fn->l.gate = (pt->flags & PROTO_IS_VARARG) ? lj_gate_lv : lj_gate_lf;
   return fn;
@@ -137,7 +137,7 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
     GCupval *uv;
     if ((v & 0x8000)) {
       uv = func_finduv(L, base + (v & 0xff));
-      uv->dhash = (uint32_t)(uintptr_t)gcref(parent->pt) ^ (v << 24);
+      uv->dhash = (uint32_t)(uintptr_t)mref(parent->pc, char) ^ (v << 24);
     } else {
       uv = &gcref(puv[v])->uv;
     }

@@ -305,6 +305,8 @@
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
 |
+#define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
+|
 |// Decrement hashed hotcount and trigger trace recorder if zero.
 |.macro hotloop, reg
 |  mov reg, PC
@@ -406,11 +408,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // RA = new base, RB = LFUNC, RC = nargs+1, (BASE = old base), PC = return
   |  // DISPATCH initialized
   |  mov BASE, RA
-  |  mov PROTO:RB, LFUNC:RB->pt
   |  mov [BASE-4], PC			// Store caller PC.
-  |  movzx RA, byte PROTO:RB->framesize
-  |  lea PC, [PROTO:RB+sizeof(GCproto)]
-  |  mov KBASE, PROTO:RB->k
+  |  mov PC, LFUNC:RB->pc
+  |  movzx RA, byte [PC+PC2PROTO(framesize)]
+  |  mov KBASE, [PC+PC2PROTO(k)]
   |  mov L:RB, SAVE_L
   |  lea RA, [BASE+RA*8]		// Top of frame.
   |  lea RC, [BASE+NARGS:RC*8-4]	// Points to tag of 1st free slot.
@@ -437,16 +438,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  lea PC, [NARGS:RC*8+FRAME_VARG]
   |  lea BASE, [RA+PC-FRAME_VARG]
   |  mov [BASE-8], LFUNC:RB		// Store copy of LFUNC.
-  |  mov PROTO:RB, LFUNC:RB->pt
   |  mov [BASE-4], PC			// Store delta + FRAME_VARG.
-  |  movzx PC, byte PROTO:RB->framesize
-  |  lea KBASE, [BASE+PC*8]
-  |  mov L:PC, SAVE_L
+  |  mov PC, LFUNC:RB->pc
+  |  movzx RB, byte [PC+PC2PROTO(framesize)]
+  |  lea KBASE, [BASE+RB*8]
+  |  mov L:RB, SAVE_L
   |  lea RC, [BASE+4]
-  |  cmp KBASE, L:PC->maxstack
+  |  cmp KBASE, L:RB->maxstack
   |  ja ->gate_lv_growstack		// Need to grow stack.
-  |  movzx PC, byte PROTO:RB->numparams
-  |  test PC, PC
+  |  movzx RB, byte [PC+PC2PROTO(numparams)]
+  |  test RB, RB
   |  jz >2
   |1:  // Copy fixarg slots up.
   |  add RA, 8
@@ -458,12 +459,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov [RC], KBASE
   |  add RC, 8
   |  mov dword [RA-4], LJ_TNIL		// Clear old fixarg slot (help the GC).
-  |  sub PC, 1
+  |  sub RB, 1
   |  jnz <1
   |2:
-  |  movzx RA, byte PROTO:RB->framesize
-  |  lea PC, [PROTO:RB+sizeof(GCproto)]
-  |  mov KBASE, PROTO:RB->k
+  |  movzx RA, byte [PC+PC2PROTO(framesize)]
+  |  mov KBASE, [PC+PC2PROTO(k)]
   |  lea RA, [BASE+RA*8]
   |  jmp <9
   |
@@ -663,6 +663,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp >1
   |
   |->gate_lv_growstack:			// Grow stack for vararg Lua function.
+  //XXX
   |  sub RC, 8
   |  mov BASE, RA
   |  mov RA, KBASE
@@ -863,8 +864,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RA, dword [RB-16]
   |.endif
   |  mov LFUNC:KBASE, [BASE-8]
-  |  mov PROTO:KBASE, LFUNC:KBASE->pt
-  |  mov KBASE, PROTO:KBASE->k
+  |  mov KBASE, LFUNC:KBASE->pc
+  |  mov KBASE, [KBASE+PC2PROTO(k)]
   |  // BASE = base, RC = result, RB = meta base
   |  jmp RAa				// Jump to continuation.
   |
@@ -2719,8 +2720,8 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vm_exit_interp:
 #if LJ_HASJIT
   |  mov LFUNC:KBASE, [BASE-8]
-  |  mov PROTO:KBASE, LFUNC:KBASE->pt
-  |  mov KBASE, PROTO:KBASE->k
+  |  mov KBASE, LFUNC:KBASE->pc
+  |  mov KBASE, [KBASE+PC2PROTO(k)]
   |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
   |  set_vmstate INTERP
   |  ins_next
@@ -4454,8 +4455,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  not RDa
     |  lea BASE, [BASE+RD*8]
     |  mov LFUNC:KBASE, [BASE-8]
-    |  mov PROTO:KBASE, LFUNC:KBASE->pt
-    |  mov KBASE, PROTO:KBASE->k
+    |  mov KBASE, LFUNC:KBASE->pc
+    |  mov KBASE, [KBASE+PC2PROTO(k)]
     |  jmp <4
     |
     |7:  // Tailcall from a vararg function.
@@ -4492,8 +4493,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  ins_AB_	// RA = base, RB = nresults+1, (RC = 1)
     |  mov LFUNC:RC, [BASE-8]
     |  lea RA, [BASE+RA*8]
-    |  mov PROTO:RC, LFUNC:RC->pt
-    |  movzx RC, byte PROTO:RC->numparams
+    |  mov RC, LFUNC:RC->pc
+    |  movzx RC, byte [RC+PC2PROTO(numparams)]
     |  mov TMP1, KBASE			// Need one more free register.
     |  lea KBASE, [BASE+RC*8+(8+FRAME_VARG)]
     |  sub KBASE, [BASE-4]
@@ -4618,8 +4619,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  not RAa				// Note: ~RA = -(RA+1)
     |  lea BASE, [BASE+RA*8]		// base = base - (RA+1)*8
     |  mov LFUNC:KBASE, [BASE-8]
-    |  mov PROTO:KBASE, LFUNC:KBASE->pt
-    |  mov KBASE, PROTO:KBASE->k
+    |  mov KBASE, LFUNC:KBASE->pc
+    |  mov KBASE, [KBASE+PC2PROTO(k)]
     |  ins_next
     |
     |6:  // Fill up results with nil.

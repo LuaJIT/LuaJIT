@@ -429,7 +429,7 @@ typedef struct GCfuncC {
 
 typedef struct GCfuncL {
   GCfuncHeader;
-  GCRef pt;		/* Link to prototype this function is based on. */
+  MRef pc;		/* Start PC (and GCproto reference). */
   GCRef uvptr[1];	/* Array of _pointers_ to upvalue objects (GCupval). */
 } GCfuncL;
 
@@ -443,7 +443,8 @@ typedef union GCfunc {
 #define isluafunc(fn)	((fn)->c.ffid == FF_LUA)
 #define iscfunc(fn)	((fn)->c.ffid == FF_C)
 #define isffunc(fn)	((fn)->c.ffid > FF_C)
-#define funcproto(fn)	check_exp(isluafunc(fn), &gcref((fn)->l.pt)->pt)
+#define funcproto(fn) \
+  check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
 #define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
 #define sizeLfunc(n)	(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n))
 
