@@ -74,12 +74,13 @@ local function bcline(func, pc, prefix)
     pc, prefix or "  ", sub(bcnames, oidx+1, oidx+6), ma == 0 and "" or a)
   local d = shr(ins, 16)
   if mc == 13*128 then -- BCMjump
-    if ma == 0 then
-      return format("%s=> %04d\n", sub(s, 1, -3), pc+d-0x7fff)
-    end
     return format("%s=> %04d\n", s, pc+d-0x7fff)
   end
-  if mb ~= 0 then d = band(d, 0xff) end
+  if mb ~= 0 then
+    d = band(d, 0xff)
+  elseif mc == 0 then
+    return s.."\n"
+  end
   local kc
   if mc == 10*128 then -- BCMstr
     kc = funck(func, -d-1)
