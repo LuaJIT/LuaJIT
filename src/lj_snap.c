@@ -229,10 +229,6 @@ void lj_snap_restore(jit_State *J, void *exptr)
 	      o = L->top;
 	    }
 	    fs = o + framesize;
-	    if (s == 0)  /* Only partially clear tail call frame at #0. */
-	      o = &frame[nslots];
-	    while (o < fs)  /* Clear slots of newly added frames. */
-	      setnilV(o++);
 	  }
 	}
       }

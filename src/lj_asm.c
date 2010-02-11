@@ -3043,8 +3043,7 @@ static void asm_tail_sync(ASMState *as)
   MSize n, nent = snap->nent;
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
   SnapEntry *flinks = map + nent + 1;
-  BCReg newbase = 0;
-  BCReg nslots, topslot = 0;
+  BCReg newbase = 0, topslot = 0;
 
   checkmclim(as);
   ra_allocref(as, REF_BASE, RID2RSET(RID_BASE));
@@ -3075,21 +3074,6 @@ static void asm_tail_sync(ASMState *as)
   }
 
   emit_addptr(as, RID_BASE, 8*(int32_t)newbase);
-
-  /* Clear stack slots of newly added frames. */
-  nslots = snap->nslots;
-  if (nslots <= topslot) {
-    if (nslots < topslot) {
-      BCReg s;
-      for (s = nslots; s <= topslot; s++) {
-	emit_movtomro(as, RID_EAX, RID_BASE, 8*((int32_t)s-1)+4);
-	checkmclim(as);
-      }
-      emit_loadi(as, RID_EAX, LJ_TNIL);
-    } else {
-      emit_movmroi(as, RID_BASE, 8*((int32_t)nslots-1)+4, LJ_TNIL);
-    }
-  }
 
   /* Store the value of all modified slots to the Lua stack. */
   for (n = 0; n < nent; n++) {
