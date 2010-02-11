@@ -1271,9 +1271,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  movzx OP, RCL
   |  shr RC, 16
   |.if X64
-  |  jmp aword [DISPATCH+OP*8+GG_DISP_STATIC*8]	// Retry FORI or JFORI.
+  |  jmp aword [DISPATCH+OP*8+BC__MAX*8]	// Retry FORI or JFORI.
   |.else
-  |  jmp aword [DISPATCH+OP*4+GG_DISP_STATIC*4]	// Retry FORI or JFORI.
+  |  jmp aword [DISPATCH+OP*4+BC__MAX*4]	// Retry FORI or JFORI.
   |.endif
   |
   |//-----------------------------------------------------------------------
@@ -2629,9 +2629,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  movzx OP, PC_OP
   |  movzx RD, PC_RD
   |.if X64
-  |  jmp aword [DISPATCH+OP*8+GG_DISP_STATIC*8]	// Re-dispatch to static ins.
+  |  jmp aword [DISPATCH+OP*8+BC__MAX*8]	// Re-dispatch to static ins.
   |.else
-  |  jmp aword [DISPATCH+OP*4+GG_DISP_STATIC*4]	// Re-dispatch to static ins.
+  |  jmp aword [DISPATCH+OP*4+BC__MAX*4]	// Re-dispatch to static ins.
   |.endif
   |
   |->cont_hook:				// Continue from hook yield.

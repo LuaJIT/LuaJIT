@@ -1060,7 +1060,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   dasm_put(Dst, 1419, Dt1(->base), Dt1(->base), Dt1(->top), FRAME_CONT, Dt7(->gate), Dt1(->base), Dt1(->base));
   dasm_put(Dst, 1615, -BCBIAS_J*4, LJ_TISTRUECOND, LJ_TISTRUECOND, Dt1(->base));
   dasm_put(Dst, 1724, Dt1(->base), Dt1(->base), FRAME_CONT, LJ_TFUNC);
-  dasm_put(Dst, 1849, Dt7(->gate), Dt1(->base), Dt1(->base), Dt1(->base), Dt1(->base), Dt7(->gate), Dt1(->base), Dt1(->base), GG_DISP_STATIC*8, 1+1);
+  dasm_put(Dst, 1849, Dt7(->gate), Dt1(->base), Dt1(->base), Dt1(->base), Dt1(->base), Dt7(->gate), Dt1(->base), Dt1(->base), BC__MAX*8, 1+1);
   dasm_put(Dst, 2005, LJ_TISTRUECOND, 1+1, ~LJ_TNUMX);
   if (cmov) {
   dasm_put(Dst, 2101);
@@ -1343,7 +1343,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   dasm_put(Dst, 7419, DISPATCH_GL(hookmask), HOOK_VMEVENT, HOOK_ACTIVE, LUA_MASKLINE|LUA_MASKCOUNT, DISPATCH_GL(hookcount));
 #endif
   dasm_put(Dst, 7450, DISPATCH_GL(hookmask), HOOK_ACTIVE, LUA_MASKLINE|LUA_MASKCOUNT, DISPATCH_GL(hookcount), LUA_MASKLINE, Dt1(->base), Dt1(->base));
-  dasm_put(Dst, 7516, GG_DISP_STATIC*8);
+  dasm_put(Dst, 7516, BC__MAX*8);
 #if LJ_HASJIT
   dasm_put(Dst, 7552);
 #endif

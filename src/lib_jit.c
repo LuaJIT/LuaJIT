@@ -15,6 +15,7 @@
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_tab.h"
+#include "lj_bc.h"
 #if LJ_HASJIT
 #include "lj_ir.h"
 #include "lj_jit.h"

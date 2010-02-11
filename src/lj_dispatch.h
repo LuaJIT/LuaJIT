@@ -7,7 +7,6 @@
 #define _LJ_DISPATCH_H
 
 #include "lj_obj.h"
-#include "lj_bc.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -30,24 +29,22 @@ typedef struct GG_State {
   jit_State J;				/* JIT state. */
   HotCount hotcount[HOTCOUNT_SIZE];	/* Hot counters. */
 #endif
-  ASMFunction dispatch[2*BC__MAX];	/* Instruction dispatch tables. */
+  /* Instruction dispatch tables follow. */
 } GG_State;
 
-#define GG_DISP_STATIC	BC__MAX
-
 #define GG_OFS(field)	((int)offsetof(GG_State, field))
-#define G2GG(gl) \
-  ((GG_State *)(((char *)(gl))-((char *)(&((GG_State *)0)->g))))
-#define J2GG(j) \
-  ((GG_State *)(((char *)(j))-((char *)(&((GG_State *)0)->J))))
-#define L2GG(L)		G2GG(G(L))
+#define GG_OFS_DISP	((int)sizeof(GG_State))
+#define GG2DISP(gg)	((ASMFunction *)((char *)(gg) + GG_OFS_DISP))
+#define G2GG(gl)	((GG_State *)((char *)(gl) - GG_OFS(g)))
+#define J2GG(j)		((GG_State *)((char *)(j) - GG_OFS(J)))
+#define L2GG(L)		(G2GG(G(L)))
 #define J2G(J)		(&J2GG(J)->g)
 #define G2J(gl)		(&G2GG(gl)->J)
 #define L2J(L)		(&L2GG(L)->J)
-#define GG_G2DISP	(GG_OFS(dispatch) - GG_OFS(g))
-#define GG_DISP2G	(GG_OFS(g) - GG_OFS(dispatch))
-#define GG_DISP2J	(GG_OFS(J) - GG_OFS(dispatch))
-#define GG_DISP2HOT	(GG_OFS(hotcount) - GG_OFS(dispatch))
+#define GG_G2DISP	(GG_OFS_DISP - GG_OFS(g))
+#define GG_DISP2G	(GG_OFS(g) - GG_OFS_DISP)
+#define GG_DISP2J	(GG_OFS(J) - GG_OFS_DISP)
+#define GG_DISP2HOT	(GG_OFS(hotcount) - GG_OFS_DISP)
 
 #define hotcount_get(gg, pc) \
   (gg)->hotcount[(u32ptr(pc)>>2) & (HOTCOUNT_SIZE-1)]

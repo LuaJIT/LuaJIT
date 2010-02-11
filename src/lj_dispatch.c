@@ -19,13 +19,15 @@
 #include "lj_vm.h"
 #include "luajit.h"
 
+#define GG_DISP_STATIC		BC__MAX
+
 /* -- Dispatch table management ------------------------------------------- */
 
 /* Initialize instruction dispatch table and hot counters. */
 void lj_dispatch_init(GG_State *GG)
 {
   uint32_t i;
-  ASMFunction *disp = GG->dispatch;
+  ASMFunction *disp = GG2DISP(GG);
   for (i = 0; i < BC__MAX; i++)
     disp[GG_DISP_STATIC+i] = disp[i] = makeasmfunc(lj_bc_ofs[i]);
   /* The JIT engine is off by default. luaopen_jit() turns it on. */
@@ -57,7 +59,7 @@ void lj_dispatch_update(global_State *g)
 #endif
   mode |= (g->hookmask & HOOK_EVENTMASK) ? 2 : 0;
   if (oldmode != mode) {  /* Mode changed? */
-    ASMFunction *disp = G2GG(g)->dispatch;
+    ASMFunction *disp = GG2DISP(G2GG(g));
     ASMFunction f_forl, f_iterl, f_loop;
     g->dispatchmode = mode;
     if ((mode & 5) == 1) {  /* Hotcount if JIT is on, but not when recording. */
