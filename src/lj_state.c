@@ -49,14 +49,18 @@
 /* Resize stack slots and adjust pointers in state. */
 static void resizestack(lua_State *L, MSize n)
 {
-  TValue *oldst = L->stack;
+  TValue *st, *oldst = L->stack;
   ptrdiff_t delta;
+  MSize oldsize = L->stacksize;
   MSize realsize = n + 1 + LJ_STACK_EXTRA;
   GCobj *up;
   lua_assert((MSize)(L->maxstack-L->stack) == L->stacksize-LJ_STACK_EXTRA-1);
   lj_mem_reallocvec(L, L->stack, L->stacksize, realsize, TValue);
-  delta = (char *)L->stack - (char *)oldst;
-  L->maxstack = L->stack + n;
+  st = L->stack;
+  delta = (char *)st - (char *)oldst;
+  L->maxstack = st + n;
+  while (oldsize < realsize)  /* Clear new slots. */
+    setnilV(st + oldsize++);
   L->stacksize = realsize;
   L->base = (TValue *)((char *)L->base + delta);
   L->top = (TValue *)((char *)L->top + delta);
@@ -90,13 +94,8 @@ void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)
   if (L->stacksize > LJ_STACK_MAXEX)  /* overflow while handling overflow? */
     lj_err_throw(L, LUA_ERRERR);
   resizestack(L, L->stacksize + (need > L->stacksize ? need : L->stacksize));
-  if (L->stacksize > LJ_STACK_MAXEX) {
-    if (curr_funcisL(L)) {  /* Clear slots of incomplete Lua frame. */
-      TValue *top = curr_topL(L);
-      while (--top >= L->top) setnilV(top);
-    }
-    lj_err_msg(L, LJ_ERR_STKOV);  /* ... to allow L->top = curr_topL(L). */
-  }
+  if (L->stacksize > LJ_STACK_MAXEX)
+    lj_err_msg(L, LJ_ERR_STKOV);
 }
 
 void LJ_FASTCALL lj_state_growstack1(lua_State *L)
@@ -107,13 +106,15 @@ void LJ_FASTCALL lj_state_growstack1(lua_State *L)
 /* Allocate basic stack for new state. */
 static void stack_init(lua_State *L1, lua_State *L)
 {
-  L1->stack = lj_mem_newvec(L, LJ_STACK_START + LJ_STACK_EXTRA, TValue);
+  TValue *st, *stend;
+  L1->stack = st = lj_mem_newvec(L, LJ_STACK_START + LJ_STACK_EXTRA, TValue);
   L1->stacksize = LJ_STACK_START + LJ_STACK_EXTRA;
-  L1->top = L1->stack;
-  L1->maxstack = L1->stack+(L1->stacksize - LJ_STACK_EXTRA)-1;
-  setthreadV(L1, L1->top, L1);  /* needed for curr_funcisL() on empty stack */
-  setnilV(L1->top);  /* but clear its type */
-  L1->base = ++L1->top;
+  stend = st + L1->stacksize;
+  L1->maxstack = stend - LJ_STACK_EXTRA - 1;
+  L1->base = L1->top = st+1;
+  setthreadV(L1, st, L1);  /* Needed for curr_funcisL() on empty stack. */
+  while (st < stend)  /* Clear new slots. */
+    setnilV(st++);
 }
 
 /* -- State handling ------------------------------------------------------ */

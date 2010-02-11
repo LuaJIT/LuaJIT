@@ -414,22 +414,24 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov KBASE, [PC+PC2PROTO(k)]
   |  mov L:RB, SAVE_L
   |  lea RA, [BASE+RA*8]		// Top of frame.
-  |  lea RC, [BASE+NARGS:RC*8-4]	// Points to tag of 1st free slot.
   |  cmp RA, L:RB->maxstack
   |  ja ->gate_lf_growstack
-  |9:  // Entry point from vararg setup below.
-  |  mov RB, LJ_TNIL
-  |1:  // Clear free slots until top of frame.
-  |  mov [RC], RB
-  |  mov [RC+8], RB
-  |  add RC, 16
-  |  cmp RC, RA
-  |  jb <1
+  |  movzx RA, byte [PC+PC2PROTO(numparams)]
+  |  cmp NARGS:RC, RA			// Check for missing parameters.
+  |  jbe >3
+  |2:
 #if LJ_HASJIT
   |  // NYI: Disabled, until the tracer supports recursion/upcalls/leaves.
   |  // hotcall RB
 #endif
   |  ins_next
+  |
+  |3:  // Clear missing parameters.
+  |  mov dword [BASE+NARGS:RC*8-4], LJ_TNIL
+  |  add NARGS:RC, 1
+  |  cmp NARGS:RC, RA			// Check for missing parameters.
+  |  jbe <3
+  |  jmp <2
   |
   |->gate_lv:				// Call gate for vararg Lua functions.
   |  // RA = new base, RB = LFUNC, RC = nargs+1, (BASE = old base), PC = return
@@ -443,29 +445,38 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  movzx RB, byte [PC+PC2PROTO(framesize)]
   |  lea KBASE, [BASE+RB*8]
   |  mov L:RB, SAVE_L
-  |  lea RC, [BASE+4]
   |  cmp KBASE, L:RB->maxstack
   |  ja ->gate_lv_growstack		// Need to grow stack.
+  |  mov RC, BASE
   |  movzx RB, byte [PC+PC2PROTO(numparams)]
   |  test RB, RB
   |  jz >2
-  |1:  // Copy fixarg slots up.
+  |1:  // Copy fixarg slots up to new frame.
   |  add RA, 8
   |  cmp RA, BASE
-  |  jnb >2
+  |  jnb >3				// Less args than parameters?
   |  mov KBASE, [RA-8]
-  |  mov [RC-4], KBASE
-  |  mov KBASE, [RA-4]
   |  mov [RC], KBASE
+  |  mov KBASE, [RA-4]
+  |  mov [RC+4], KBASE
   |  add RC, 8
   |  mov dword [RA-4], LJ_TNIL		// Clear old fixarg slot (help the GC).
   |  sub RB, 1
   |  jnz <1
   |2:
-  |  movzx RA, byte [PC+PC2PROTO(framesize)]
   |  mov KBASE, [PC+PC2PROTO(k)]
-  |  lea RA, [BASE+RA*8]
-  |  jmp <9
+#if LJ_HASJIT
+  |  // NYI: Disabled, until the tracer supports recursion/upcalls/leaves.
+  |  // hotcall RB
+#endif
+  |  ins_next
+  |
+  |3:  // Clear missing parameters.
+  |  mov dword [RC+4], LJ_TNIL
+  |  add RC, 8
+  |  sub RB, 1
+  |  jnz <3
+  |  jmp <2
   |
   |->gate_cwrap:			// Call gate for wrapped C functions.
   |  // RA = new base, RB = CFUNC, RC = nargs+1, (BASE = old base), PC = return
@@ -663,19 +674,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp >1
   |
   |->gate_lv_growstack:			// Grow stack for vararg Lua function.
-  //XXX
-  |  sub RC, 8
-  |  mov BASE, RA
-  |  mov RA, KBASE
-  |  lea PC, [PROTO:RB+sizeof(GCproto)]
-  |  mov L:RB, SAVE_L
+  |  mov BASE, RA			// Drop vararg frame again.
   |
   |->gate_lf_growstack:			// Grow stack for fixarg Lua function.
-  |  // BASE = new base, RA = requested top, RC = top (offset +4 bytes)
-  |  // RB = L, PC = first PC of called function (or anything if C function)
-  |  sub RC, 4				// Adjust top.
-  |  sub RA, BASE
-  |  shr RA, 3				// n = pt->framesize - L->top
+  |  // BASE = new base, RC = nargs+1, RB = L, PC = first PC
+  |  lea RC, [BASE+NARGS:RC*8-8]
+  |  movzx RA, byte [PC+PC2PROTO(framesize)]
   |  add PC, 4				// Must point after first instruction.
   |  mov L:RB->base, BASE
   |  mov L:RB->top, RC

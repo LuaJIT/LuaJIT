@@ -261,7 +261,7 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
 }
 
 /* Traverse the frame structure of a stack. */
-static TValue *gc_traverse_frames(global_State *g, lua_State *th)
+static MSize gc_traverse_frames(global_State *g, lua_State *th)
 {
   TValue *frame, *top = th->top-1;
   /* Note: extra vararg frame not skipped, marks function twice (harmless). */
@@ -274,32 +274,22 @@ static TValue *gc_traverse_frames(global_State *g, lua_State *th)
   }
   top++;  /* Correct bias of -1 (frame == base-1). */
   if (top > th->maxstack) top = th->maxstack;
-  return top;
+  return (MSize)(top - th->stack);  /* Return minimum needed stack size. */
 }
 
 /* Traverse a thread object. */
 static void gc_traverse_thread(global_State *g, lua_State *th)
 {
-  TValue *o, *lim;
-  gc_markobj(g, tabref(th->env));
-  for (o = th->stack+1; o < th->top; o++)
+  TValue *o, *top = th->top;
+  for (o = th->stack+1; o < top; o++)
     gc_marktv(g, o);
-  lim = gc_traverse_frames(g, th);
-  /* Extra cleanup required to avoid this marking problem:
-  **
-  ** [aa[bb.X|   X created.
-  ** [aa[cc|     GC called from (small) inner frame, X destroyed.
-  ** [aa....X.|  GC called again in (larger) outer frame, X resurrected (ouch).
-  **
-  ** During GC in step 2 the stack must be cleaned up to the max. frame extent:
-  **
-  **       ***|  Slots cleaned
-  **    [cc|      from top of last frame
-  ** [aa......|   to max. frame extent.
-  */
-  for (; o <= lim; o++)
-    setnilV(o);
-  lj_state_shrinkstack(th, (MSize)(lim - th->stack));
+  if (g->gc.state == GCSatomic) {
+    top = th->stack + th->stacksize;
+    for (; o < top; o++)  /* Clear unmarked slots. */
+      setnilV(o);
+  }
+  gc_markobj(g, tabref(th->env));
+  lj_state_shrinkstack(th, gc_traverse_frames(g, th));
 }
 
 /* Propagate one gray object. Traverse it and turn it black. */
@@ -524,6 +514,7 @@ static void atomic(global_State *g, lua_State *L)
 {
   size_t udsize;
 
+  g->gc.state = GCSatomic;
   gc_mark_uv(g);  /* Need to remark open upvalues (the thread may be dead). */
   gc_propagate_gray(g);  /* Propagate any left-overs. */
 

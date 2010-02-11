@@ -9,7 +9,9 @@
 #include "lj_obj.h"
 
 /* Garbage collector states. Order matters. */
-enum { GCSpause, GCSpropagate, GCSsweepstring, GCSsweep, GCSfinalize };
+enum {
+  GCSpause, GCSpropagate, GCSatomic, GCSsweepstring, GCSsweep, GCSfinalize
+};
 
 /* Bitmasks for marked field of GCobj. */
 #define LJ_GC_WHITE0	0x01
