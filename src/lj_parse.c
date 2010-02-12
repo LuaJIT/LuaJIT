@@ -1155,9 +1155,9 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   GCproto *pt;
 
   /* Apply final fixups. */
-  var_remove(ls, 0);
   lua_assert(fs->bl == NULL);
   fs_fixup_ret(fs);
+  var_remove(ls, 0);
 
   /* Calculate total size of prototype including all colocated arrays. */
   sizept = sizeof(GCproto) + fs->pc*sizeof(BCIns) + fs->nkgc*sizeof(GCRef);
