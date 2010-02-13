@@ -9,11 +9,6 @@
 #include "lj_obj.h"
 #include "lj_bc.h"
 
-/* Bytecode instruction modes. */
-LJ_DATADEF const uint16_t lj_bc_mode[BC__MAX+1] = {
-BCDEF(BCMODE)
-  0
-};
-
+/* Bytecode offsets and bytecode instruction modes. */
 #include "lj_bcdef.h"
 

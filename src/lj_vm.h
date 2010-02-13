@@ -44,12 +44,6 @@ LJ_ASMF void lj_vm_exp2(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
 
-/* Call gates for functions. */
-LJ_ASMF void lj_gate_lf(void);
-LJ_ASMF void lj_gate_lv(void);
-LJ_ASMF void lj_gate_c(void);
-LJ_ASMF void lj_gate_cwrap(void);
-
 /* Continuations for metamethods. */
 LJ_ASMF void lj_cont_cat(void);  /* Continue with concatenation. */
 LJ_ASMF void lj_cont_ra(void);  /* Store result in RA from instruction. */

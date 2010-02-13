@@ -1671,14 +1671,8 @@ static int rec_call(jit_State *J, BCReg func, ptrdiff_t cres, ptrdiff_t nargs)
     GCproto *pt = funcproto(rd.fn);
     if ((pt->flags & PROTO_NO_JIT))
       lj_trace_err(J, LJ_TRERR_CJITOFF);
-    if ((pt->flags & PROTO_IS_VARARG)) {
-      if (rd.fn->l.gate != lj_gate_lv)
-	lj_trace_err(J, LJ_TRERR_NYILNKF);
+    if ((pt->flags & PROTO_IS_VARARG))
       lj_trace_err(J, LJ_TRERR_NYIVF);
-    } else {
-      if (rd.fn->l.gate != lj_gate_lf)
-	lj_trace_err(J, LJ_TRERR_NYILNKF);
-    }
     if (cres == CALLRES_TAILCALL) {
       ptrdiff_t i;
       /* Tailcalls can form a loop, so count towards the loop unroll limit. */

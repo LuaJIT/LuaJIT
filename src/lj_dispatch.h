@@ -7,6 +7,7 @@
 #define _LJ_DISPATCH_H
 
 #include "lj_obj.h"
+#include "lj_bc.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -21,6 +22,13 @@ typedef uint16_t HotCount;
 #define HOTCOUNT_MIN_PENALTY	103
 #define HOTCOUNT_MAX_PENALTY	60000
 
+/* This solves a circular dependency problem -- bump as needed. Sigh. */
+#define GG_NUM_ASMFF	62
+
+#define GG_LEN_DDISP	(BC__MAX + GG_NUM_ASMFF)
+#define GG_LEN_SDISP	BC_FUNCC
+#define GG_LEN_DISP	(GG_LEN_DDISP + GG_LEN_SDISP)
+
 /* Global state, main thread and extra fields are allocated together. */
 typedef struct GG_State {
   lua_State L;				/* Main thread. */
@@ -29,22 +37,22 @@ typedef struct GG_State {
   jit_State J;				/* JIT state. */
   HotCount hotcount[HOTCOUNT_SIZE];	/* Hot counters. */
 #endif
-  /* Instruction dispatch tables follow. */
+  ASMFunction dispatch[GG_LEN_DISP];	/* Instruction dispatch tables. */
+  BCIns bcff[GG_NUM_ASMFF];		/* Bytecode for ASM fast functions. */
 } GG_State;
 
 #define GG_OFS(field)	((int)offsetof(GG_State, field))
-#define GG_OFS_DISP	((int)sizeof(GG_State))
-#define GG2DISP(gg)	((ASMFunction *)((char *)(gg) + GG_OFS_DISP))
 #define G2GG(gl)	((GG_State *)((char *)(gl) - GG_OFS(g)))
 #define J2GG(j)		((GG_State *)((char *)(j) - GG_OFS(J)))
 #define L2GG(L)		(G2GG(G(L)))
 #define J2G(J)		(&J2GG(J)->g)
 #define G2J(gl)		(&G2GG(gl)->J)
 #define L2J(L)		(&L2GG(L)->J)
-#define GG_G2DISP	(GG_OFS_DISP - GG_OFS(g))
-#define GG_DISP2G	(GG_OFS(g) - GG_OFS_DISP)
-#define GG_DISP2J	(GG_OFS(J) - GG_OFS_DISP)
-#define GG_DISP2HOT	(GG_OFS(hotcount) - GG_OFS_DISP)
+#define GG_G2DISP	(GG_OFS(dispatch) - GG_OFS(g))
+#define GG_DISP2G	(GG_OFS(g) - GG_OFS(dispatch))
+#define GG_DISP2J	(GG_OFS(J) - GG_OFS(dispatch))
+#define GG_DISP2HOT	(GG_OFS(hotcount) - GG_OFS(dispatch))
+#define GG_DISP2STATIC	(GG_LEN_DDISP*(int)sizeof(ASMFunction))
 
 #define hotcount_get(gg, pc) \
   (gg)->hotcount[(u32ptr(pc)>>2) & (HOTCOUNT_SIZE-1)]

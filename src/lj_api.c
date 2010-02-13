@@ -18,6 +18,7 @@
 #include "lj_udata.h"
 #include "lj_meta.h"
 #include "lj_state.h"
+#include "lj_bc.h"
 #include "lj_frame.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
@@ -487,8 +488,8 @@ LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   if (tvisfunc(o)) {
-    ASMFunction gate = funcV(o)->c.gate;
-    if (gate == lj_gate_c || gate == lj_gate_cwrap)
+    BCOp op = bc_op(*mref(funcV(o)->c.pc, BCIns));
+    if (op == BC_FUNCC || op == BC_FUNCCW)
       return funcV(o)->c.f;
   }
   return NULL;

@@ -906,7 +906,7 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
   *mxp++ = MODRM(XM_OFS8, 0, RID_ESP);
   *mxp++ = MODRM(XM_SCALE1, RID_ESP, RID_ESP);
   *mxp++ = 2*sizeof(void *);
-  *(int32_t *)mxp = ptr2addr(GG2DISP(J2GG(as->J))); mxp += 4;
+  *(int32_t *)mxp = ptr2addr(J2GG(as->J)->dispatch); mxp += 4;
   /* Jump to exit handler which fills in the ExitState. */
   *mxp++ = XI_JMP; mxp += 4;
   *((int32_t *)(mxp-4)) = (int32_t)((MCode *)lj_vm_exit_handler - mxp);
@@ -3066,7 +3066,7 @@ static void asm_tail_sync(ASMState *as)
 
   if (as->T->link == TRACE_INTERP) {
     /* Setup fixed registers for exit to interpreter. */
-    emit_loada(as, RID_DISPATCH, GG2DISP(J2GG(as->J)));
+    emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
     emit_loadi(as, RID_PC, (int32_t)map[nent]);
   } else if (newbase) {
     /* Save modified BASE for linking to trace with higher start frame. */

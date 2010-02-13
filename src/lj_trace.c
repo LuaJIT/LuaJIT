@@ -361,7 +361,7 @@ static void trace_start(jit_State *J)
     setstrV(L, L->top++, lj_str_newlit(L, "start"));
     setintV(L->top++, J->curtrace);
     setfuncV(L, L->top++, J->fn);
-    setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
+    setintV(L->top++, proto_bcpos(J->pt, J->pc));
     if (J->parent) {
       setintV(L->top++, J->parent);
       setintV(L->top++, J->exitno);
@@ -444,7 +444,7 @@ static int trace_abort(jit_State *J)
       setstrV(L, L->top++, lj_str_newlit(L, "abort"));
       setintV(L->top++, J->curtrace);
       setfuncV(L, L->top++, J->fn);
-      setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
+      setintV(L->top++, proto_bcpos(J->pt, J->pc));
       copyTV(L, L->top++, restorestack(L, errobj));
       copyTV(L, L->top++, &J->errinfo);
     );
@@ -478,7 +478,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       lj_vmevent_send(L, RECORD,
 	setintV(L->top++, J->curtrace);
 	setfuncV(L, L->top++, J->fn);
-	setintV(L->top++, proto_bcpos(J->pt, J->pc) + 1);
+	setintV(L->top++, proto_bcpos(J->pt, J->pc));
 	setintV(L->top++, J->framedepth);
 	if (bcmode_mm(bc_op(*J->pc)) == MM_call) {
 	  cTValue *o = &L->base[bc_a(*J->pc)];
@@ -555,8 +555,6 @@ void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
   /* Only start a new trace if not recording or inside __gc call or vmevent. */
   if (J->state == LJ_TRACE_IDLE &&
       !(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
-    lua_State *L = J->L;
-    L->top = curr_topL(L);  /* Only called from Lua and NRESULTS is not used. */
     J->parent = 0;  /* Root trace. */
     J->exitno = 0;
     J->pc = pc-1;  /* The interpreter bytecode PC is offset by 1. */

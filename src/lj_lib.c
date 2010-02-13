@@ -14,6 +14,8 @@
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_func.h"
+#include "lj_bc.h"
+#include "lj_dispatch.h"
 #include "lj_vm.h"
 #include "lj_lib.h"
 
@@ -46,6 +48,7 @@ void lj_lib_register(lua_State *L, const char *libname,
   GCtab *env = tabref(L->env);
   GCfunc *ofn = NULL;
   int ffid = *p++;
+  BCIns *bcff = &L2GG(L)->bcff[*p++];
   GCtab *tab = lib_create_table(L, libname, *p++);
   ptrdiff_t tpos = L->top - L->base;
 
@@ -68,10 +71,10 @@ void lj_lib_register(lua_State *L, const char *libname,
       fn->c.ffid = (uint8_t)(ffid++);
       name = (const char *)p;
       p += len;
-      if (tag != LIBINIT_CF) {
-	fn->c.gate = makeasmfunc(p[0] + (p[1] << 8));
-	p += 2;
-      }
+      if (tag == LIBINIT_CF)
+	setmref(fn->c.pc, &G(L)->bc_cfunc_int);
+      else
+	setmref(fn->c.pc, bcff++);
       if (tag == LIBINIT_ASM_)
 	fn->c.f = ofn->c.f;  /* Copy handler from previous function. */
       else

@@ -258,13 +258,12 @@ side traces from the cache.
 
 <h3 id="mode_engine"><tt>luaJIT_setmode(L, idx, LUAJIT_MODE_WRAPCFUNC|flag)</tt></h3>
 <p>
-This mode defines a wrapper function for calls to C functions. The
-first time this is called with <tt>LUAJIT_MODE_ON</tt>, the stack
-index at <tt>idx</tt> must be a <tt>lightuserdata</tt> object holding
-a pointer to the wrapper function. All <b>subsequently created C
-functions</b> are called through the wrapper functions. After the initial
-definition <tt>idx</tt> can be left at <tt>0</tt> when turning the mode
-on or off.
+This mode defines a wrapper function for calls to C functions. If
+called with <tt>LUAJIT_MODE_ON</tt>, the stack index at <tt>idx</tt>
+must be a <tt>lightuserdata</tt> object holding a pointer to the wrapper
+function. From now on all C functions are called through the wrapper
+function. If called with <tt>LUAJIT_MODE_OFF</tt> this mode is turned
+off and all C functions are directly called.
 </p>
 <p>
 The wrapper function can be used for debugging purposes or to catch
@@ -291,38 +290,27 @@ static int wrap_exceptions(lua_State *L, lua_CFunction f)
   return lua_error(L);  // Rethrow as a Lua error.
 }
 
-static int myregister(lua_State *L)
+static int myinit(lua_State *L)
 {
   ...
   // Define wrapper function and enable it.
   lua_pushlightuserdata(L, (void *)wrap_exceptions);
   luaJIT_setmode(L, -1, LUAJIT_MODE_WRAPCFUNC|LUAJIT_MODE_ON);
   lua_pop(L, 1);
-  luaL_register(L, "mymodule", myfuncs);  // Pass luaL_Reg list.
-  luaJIT_setmode(L, 0, LUAJIT_MODE_WRAPCFUNC|LUAJIT_MODE_OFF);
-  ...
-  // Wrap some more C++ functions which might throw an exception.
-  luaJIT_setmode(L, 0, LUAJIT_MODE_WRAPCFUNC|LUAJIT_MODE_ON);
-  lua_pushcfunction(L, mythrowingfunc1);
-  lua_pushcclosure(L, mythrowingfunc2, 1);
-  luaJIT_setmode(L, 0, LUAJIT_MODE_WRAPCFUNC|LUAJIT_MODE_OFF);
   ...
 }
 </pre>
 <p>
 Note that you can only define <b>a single global wrapper function</b>,
 so be careful when using this mechanism from multiple C++ modules.
-Also note that this mechanism is not without overhead. It should only
-be enabled for definitions of C++ functions that can actually throw
-exceptions. If you're embedding LuaJIT into an application, only
-enable it <b>after</b> running <tt>luaL_openlibs</tt>.
+Also note that this mechanism is not without overhead.
 </p>
 <p>
-LuaJIT already intercepts exception handling for all x64 systems and
-for x86 systems using DWARF2 stack unwinding (e.g. Linux, OSX). This
-is a zero-cost mechanism and always enabled. You don't need to use any
-wrapper functions, except when you want to get a more specific error
-message than <tt>"C++&nbsp;exception"</tt>.
+LuaJIT already intercepts exception handling for systems using DWARF2
+stack unwinding (e.g. Linux or OSX) and for Windows/x64 (but <b>not</b>
+for Windows/x86). This is a zero-cost mechanism and always enabled.
+You don't need to use any wrapper functions, except when you want to get
+a more specific error message than <tt>"C++&nbsp;exception"</tt>.
 </p>
 <br class="flush">
 </div>

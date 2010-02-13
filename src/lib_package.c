@@ -482,14 +482,14 @@ LUALIB_API int luaopen_package(lua_State *L)
 {
   int i;
   luaL_newmetatable(L, "_LOADLIB");
-  lua_pushcfunction(L, lj_cf_package_unloadlib);
+  lj_lib_pushcf(L, lj_cf_package_unloadlib, 1);
   lua_setfield(L, -2, "__gc");
   luaL_register(L, LUA_LOADLIBNAME, package_lib);
   lua_pushvalue(L, -1);
   lua_replace(L, LUA_ENVIRONINDEX);
   lua_createtable(L, sizeof(package_loaders)/sizeof(package_loaders[0])-1, 0);
   for (i = 0; package_loaders[i] != NULL; i++) {
-    lua_pushcfunction(L, package_loaders[i]);
+    lj_lib_pushcf(L, package_loaders[i], 1);
     lua_rawseti(L, -2, i+1);
   }
   lua_setfield(L, -2, "loaders");

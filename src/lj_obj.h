@@ -360,7 +360,6 @@ typedef struct GCproto {
   uint16_t trace;	/* Anchor for chain of root traces. */
   /* ------ The following fields are for debugging/tracebacks only ------ */
   GCRef chunkname;	/* Name of the chunk this function was defined in. */
-  BCLine linedefined;	/* First line of the function definition. */
   BCLine lastlinedefined;  /* Last line of the function definition. */
   MSize sizevarinfo;	/* Size of local var info array. */
   MRef varinfo;		/* Names and extents of local variables. */
@@ -419,7 +418,7 @@ typedef struct GCupval {
 /* Common header for functions. env should be at same offset in GCudata. */
 #define GCfuncHeader \
   GCHeader; uint8_t ffid; uint8_t nupvalues; \
-  GCRef env; GCRef gclist; ASMFunction gate
+  GCRef env; GCRef gclist; MRef pc
 
 typedef struct GCfuncC {
   GCfuncHeader;
@@ -429,7 +428,6 @@ typedef struct GCfuncC {
 
 typedef struct GCfuncL {
   GCfuncHeader;
-  MRef pc;		/* Start PC (and GCproto reference). */
   GCRef uvptr[1];	/* Array of _pointers_ to upvalue objects (GCupval). */
 } GCfuncL;
 
@@ -558,7 +556,7 @@ typedef struct global_State {
   uint8_t hookmask;	/* Hook mask. */
   uint8_t dispatchmode;	/* Dispatch mode. */
   uint8_t vmevmask;	/* VM event mask. */
-  uint8_t wrapmode;	/* Wrap mode. */
+  uint8_t unused1;
   GCRef mainthref;	/* Link to main thread. */
   TValue registrytv;	/* Anchor for registry. */
   TValue tmptv;		/* Temporary TValue. */
@@ -569,6 +567,8 @@ typedef struct global_State {
   lua_CFunction wrapf;	/* Wrapper for C function calls. */
   lua_CFunction panic;	/* Called as a last resort for errors. */
   volatile int32_t vmstate;  /* VM state or current JIT code trace number. */
+  BCIns bc_cfunc_int;	/* Bytecode for internal C function calls. */
+  BCIns bc_cfunc_ext;	/* Bytecode for external C function calls. */
   GCRef jit_L;		/* Current JIT code lua_State or NULL. */
   MRef jit_base;	/* Current JIT code L->base. */
   GCRef gcroot[GCROOT__MAX];  /* GC roots. */
@@ -584,6 +584,7 @@ typedef struct global_State {
 /* Hook management. Hook event masks are defined in lua.h. */
 #define HOOK_EVENTMASK		0x0f
 #define HOOK_ACTIVE		0x10
+#define HOOK_ACTIVE_SHIFT	4
 #define HOOK_VMEVENT		0x20
 #define HOOK_GC			0x40
 #define hook_active(g)		((g)->hookmask & HOOK_ACTIVE)

@@ -152,7 +152,7 @@ static const char *getobjname(GCproto *pt, const BCIns *ip, BCReg slot,
 restart:
   lname = getvarname(pt, proto_bcpos(pt, ip), slot);
   if (lname != NULL) { *name = lname; return "local"; }
-  while (--ip >= proto_bc(pt)) {
+  while (--ip > proto_bc(pt)) {
     BCIns ins = *ip;
     BCOp op = bc_op(ins);
     BCReg ra = bc_a(ins);
@@ -222,11 +222,7 @@ void lj_err_pushloc(lua_State *L, GCproto *pt, BCPos pc)
   if (name) {
     const char *s = strdata(name);
     MSize i, len = name->len;
-    BCLine line;
-    if (pc)
-      line = proto_line(pt, pc-1);
-    else
-      line = pt->linedefined;
+    BCLine line = pc < pt->sizebc ? proto_line(pt, pc) : 0;
     if (*s == '@') {
       s++; len--;
       for (i = len; i > 0; i--)
@@ -345,9 +341,10 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     switch (*what) {
     case 'S':
       if (isluafunc(fn)) {
-	ar->source = strdata(proto_chunkname(funcproto(fn)));
-	ar->linedefined = cast_int(funcproto(fn)->linedefined);
-	ar->lastlinedefined = cast_int(funcproto(fn)->lastlinedefined);
+	GCproto *pt = funcproto(fn);
+	ar->source = strdata(proto_chunkname(pt));
+	ar->linedefined = (int)proto_line(pt, 0);
+	ar->lastlinedefined = (int)pt->lastlinedefined;
 	ar->what = (ar->linedefined == 0) ? "main" : "Lua";
       } else {
 	ar->source = "=[C]";
@@ -380,7 +377,7 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
 	GCproto *pt = funcproto(fn);
 	BCLine *lineinfo = proto_lineinfo(pt);
 	MSize i, szl = pt->sizebc;
-	for (i = 0; i < szl; i++)
+	for (i = 1; i < szl; i++)
 	  setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
 	settabV(L, L->top, t);
       } else {

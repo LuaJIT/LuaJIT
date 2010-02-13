@@ -178,7 +178,17 @@
   _(ILOOP,	rbase,	___,	jump,	___) \
   _(JLOOP,	rbase,	___,	lit,	___) \
   \
-  _(JMP,	rbase,	___,	jump,	___)
+  _(JMP,	rbase,	___,	jump,	___) \
+  \
+  /* Function headers. I/J = interp/JIT, F/V/C = fixarg/vararg/C func. */ \
+  _(FUNCF,	rbase,	___,	___,	___) \
+  _(IFUNCF,	rbase,	___,	___,	___) \
+  _(JFUNCF,	rbase,	___,	lit,	___) \
+  _(FUNCV,	rbase,	___,	___,	___) \
+  _(IFUNCV,	rbase,	___,	___,	___) \
+  _(JFUNCV,	rbase,	___,	lit,	___) \
+  _(FUNCC,	___,	___,	___,	___) \
+  _(FUNCCW,	___,	___,	___,	___)
 
 /* Bytecode opcode numbers. */
 typedef enum {
@@ -206,6 +216,10 @@ LJ_STATIC_ASSERT((int)BC_ITERL + 1 == (int)BC_IITERL);
 LJ_STATIC_ASSERT((int)BC_ITERL + 2 == (int)BC_JITERL);
 LJ_STATIC_ASSERT((int)BC_LOOP + 1 == (int)BC_ILOOP);
 LJ_STATIC_ASSERT((int)BC_LOOP + 2 == (int)BC_JLOOP);
+LJ_STATIC_ASSERT((int)BC_FUNCF + 1 == (int)BC_IFUNCF);
+LJ_STATIC_ASSERT((int)BC_FUNCF + 2 == (int)BC_JFUNCF);
+LJ_STATIC_ASSERT((int)BC_FUNCV + 1 == (int)BC_IFUNCV);
+LJ_STATIC_ASSERT((int)BC_FUNCV + 2 == (int)BC_JFUNCV);
 
 /* Stack slots used by FORI/FORL, relative to operand A. */
 enum {
@@ -229,8 +243,9 @@ typedef enum {
 
 #define BCMODE(name, ma, mb, mc, mm) \
   (BCM##ma|(BCM##mb<<3)|(BCM##mc<<7)|(MM_##mm<<11)),
+#define BCMODE_FF	0
 
-LJ_DATA const uint16_t lj_bc_mode[BC__MAX+1];
-LJ_DATA const uint16_t lj_bc_ofs[BC__MAX+1];
+LJ_DATA const uint16_t lj_bc_mode[];
+LJ_DATA const uint16_t lj_bc_ofs[];
 
 #endif

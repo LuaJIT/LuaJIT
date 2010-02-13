@@ -37,8 +37,8 @@
 ** Calls to metamethods store their arguments beyond the current top
 ** without checking for the stack limit. This avoids stack resizes which
 ** would invalidate passed TValue pointers. The stack check is performed
-** later by the call gate. This can safely resize the stack or raise an
-** error. Thus we need some extra slots beyond the current stack limit.
+** later by the function header. This can safely resize the stack or raise
+** an error. Thus we need some extra slots beyond the current stack limit.
 **
 ** Most metamethods need 4 slots above top (cont, mobj, arg1, arg2) plus
 ** one extra slot if mobj is not a function. Only lj_meta_tset needs 5
@@ -119,8 +119,6 @@ static void stack_init(lua_State *L1, lua_State *L)
 
 /* -- State handling ------------------------------------------------------ */
 
-#define GG_SIZE		(sizeof(GG_State)+(BC__MAX*2)*sizeof(ASMFunction))
-
 /* Open parts that may cause memory-allocation errors. */
 static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
 {
@@ -156,8 +154,8 @@ static void close_state(lua_State *L)
     lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
     lj_str_freebuf(g, &g->tmpbuf);
     lj_mem_freevec(g, L->stack, L->stacksize, TValue);
-    lua_assert(g->gc.total == GG_SIZE);
-    g->allocf(g->allocd, G2GG(g), GG_SIZE, 0);
+    lua_assert(g->gc.total == sizeof(GG_State));
+    g->allocf(g->allocd, G2GG(g), sizeof(GG_State), 0);
   }
 }
 
@@ -167,7 +165,7 @@ lua_State *lj_state_newstate(lua_Alloc f, void *ud)
 LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
 #endif
 {
-  GG_State *GG = cast(GG_State *, f(ud, NULL, 0, GG_SIZE));
+  GG_State *GG = cast(GG_State *, f(ud, NULL, 0, sizeof(GG_State)));
   lua_State *L = &GG->L;
   global_State *g = &GG->g;
   if (GG == NULL || !checkptr32(GG)) return NULL;
@@ -190,7 +188,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   g->gc.state = GCSpause;
   setgcref(g->gc.root, obj2gco(L));
   g->gc.sweep = &g->gc.root;
-  g->gc.total = GG_SIZE;
+  g->gc.total = sizeof(GG_State);
   g->gc.pause = LUAI_GCPAUSE;
   g->gc.stepmul = LUAI_GCMUL;
   lj_dispatch_init((GG_State *)L);

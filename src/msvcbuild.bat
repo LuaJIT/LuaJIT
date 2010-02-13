@@ -32,7 +32,7 @@ if exist buildvm.exe.manifest^
   %LJMT% -manifest buildvm.exe.manifest -outputresource:buildvm.exe
 
 buildvm -m peobj -o lj_vm.obj
-buildvm -m bcdef -o lj_bcdef.h
+buildvm -m bcdef -o lj_bcdef.h %ALL_LIB%
 buildvm -m ffdef -o lj_ffdef.h %ALL_LIB%
 buildvm -m libdef -o lj_libdef.h %ALL_LIB%
 buildvm -m recdef -o lj_recdef.h %ALL_LIB%

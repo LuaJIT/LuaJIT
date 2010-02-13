@@ -177,7 +177,7 @@ LJLIB_CF(jit_util_funcinfo)
     GCtab *t;
     lua_createtable(L, 0, 16);  /* Increment hash size if fields are added. */
     t = tabV(L->top-1);
-    setintfield(L, t, "linedefined", pt->linedefined);
+    setintfield(L, t, "linedefined", proto_line(pt, 0));
     setintfield(L, t, "lastlinedefined", pt->lastlinedefined);
     setintfield(L, t, "stackslots", pt->framesize);
     setintfield(L, t, "params", pt->numparams);
@@ -185,9 +185,9 @@ LJLIB_CF(jit_util_funcinfo)
     setintfield(L, t, "gcconsts", (int32_t)pt->sizekgc);
     setintfield(L, t, "nconsts", (int32_t)pt->sizekn);
     setintfield(L, t, "upvalues", (int32_t)pt->sizeuv);
-    if (pc-1 < pt->sizebc)
+    if (pc < pt->sizebc)
       setintfield(L, t, "currentline",
-		  proto_lineinfo(pt) ? proto_line(pt, pc-1) : 0);
+		  proto_lineinfo(pt) ? proto_line(pt, pc) : 0);
     lua_pushboolean(L, (pt->flags & PROTO_IS_VARARG));
     lua_setfield(L, -2, "isvararg");
     setstrV(L, L->top++, proto_chunkname(pt));
@@ -209,7 +209,7 @@ LJLIB_CF(jit_util_funcinfo)
 LJLIB_CF(jit_util_funcbc)
 {
   GCproto *pt = check_Lproto(L, 0);
-  BCPos pc = (BCPos)lj_lib_checkint(L, 2) - 1;
+  BCPos pc = (BCPos)lj_lib_checkint(L, 2);
   if (pc < pt->sizebc) {
     BCIns ins = proto_bc(pt)[pc];
     BCOp op = bc_op(ins);

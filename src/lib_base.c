@@ -22,7 +22,9 @@
 #include "lj_tab.h"
 #include "lj_meta.h"
 #include "lj_state.h"
+#include "lj_bc.h"
 #include "lj_ff.h"
+#include "lj_dispatch.h"
 #include "lj_ctype.h"
 #include "lj_lib.h"
 
@@ -521,18 +523,24 @@ void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L, lua_State *co)
     lj_err_run(L);
 }
 
+/* Forward declaration. */
+static void setpc_wrap_aux(lua_State *L, GCfunc *fn);
+
 LJLIB_CF(coroutine_wrap)
 {
-  GCfunc *fn;
   lj_cf_coroutine_create(L);
-  lua_pushcclosure(L, lj_ffh_coroutine_wrap_aux, 1);
-  fn = funcV(L->top-1);
-  fn->c.gate = lj_ff_coroutine_wrap_aux;
-  fn->c.ffid = FF_coroutine_wrap_aux;
+  lj_lib_pushcc(L, lj_ffh_coroutine_wrap_aux, FF_coroutine_wrap_aux, 1);
+  setpc_wrap_aux(L, funcV(L->top-1));
   return 1;
 }
 
 #include "lj_libdef.h"
+
+/* Fix the PC of wrap_aux. Really ugly workaround. */
+static void setpc_wrap_aux(lua_State *L, GCfunc *fn)
+{
+  setmref(fn->c.pc, &L2GG(L)->bcff[lj_lib_init_coroutine[1]+2]);
+}
 
 /* ------------------------------------------------------------------------ */
 

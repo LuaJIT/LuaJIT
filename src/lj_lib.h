@@ -57,6 +57,19 @@ LJ_FUNC int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst);
 #define lj_lib_checkfpu(L)	UNUSED(L)
 #endif
 
+/* Push internal function on the stack. */
+static LJ_AINLINE void lj_lib_pushcc(lua_State *L, lua_CFunction f,
+				     int id, int n)
+{
+  GCfunc *fn;
+  lua_pushcclosure(L, f, n);
+  fn = funcV(L->top-1);
+  fn->c.ffid = (uint8_t)id;
+  setmref(fn->c.pc, &G(L)->bc_cfunc_int);
+}
+
+#define lj_lib_pushcf(L, fn, id)	(lj_lib_pushcc(L, (fn), (id), 0))
+
 /* Library function declarations. Scanned by buildvm. */
 #define LJLIB_CF(name)		static int lj_cf_##name(lua_State *L)
 #define LJLIB_ASM(name)		static int lj_ffh_##name(lua_State *L)

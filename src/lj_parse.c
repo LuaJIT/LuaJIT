@@ -1036,7 +1036,10 @@ static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, BCLine *lineinfo)
   setmref(pt->lineinfo, lineinfo);
   pt->sizebc = n;
   bc[n] = ~0u;  /* Close potentially uninitialized gap between bc and kgc. */
-  for (i = 0; i < n; i++) {
+  bc[0] = BCINS_AD((fs->flags & PROTO_IS_VARARG) ? BC_FUNCV : BC_FUNCF,
+		   fs->framesize, 0);
+  lineinfo[0] = fs->linedefined;
+  for (i = 1; i < n; i++) {
     bc[i] = base[i].ins;
     lineinfo[i] = base[i].line;
   }
@@ -1181,7 +1184,6 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   pt->flags = fs->flags;
   pt->numparams = fs->numparams;
   pt->framesize = fs->framesize;
-  pt->linedefined = fs->linedefined;
   pt->lastlinedefined = line;
 
   fs_fixup_bc(fs, pt, (BCIns *)((char *)pt + sizeof(GCproto)),
@@ -1416,29 +1418,30 @@ static void parse_chunk(LexState *ls);
 /* Parse body of a function. */
 static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
 {
-  FuncState cfs, *fs = ls->fs;
+  FuncState fs, *pfs = ls->fs;
   BCReg kidx;
   BCLine lastline;
   GCproto *pt;
-  ptrdiff_t oldbase = fs->bcbase - ls->bcstack;
-  fs_init(ls, &cfs);
-  cfs.linedefined = line;
-  cfs.numparams = (uint8_t)parse_params(ls, needself);
-  cfs.bcbase = fs->bcbase + fs->pc;
-  cfs.bclim = fs->bclim - fs->pc;
+  ptrdiff_t oldbase = pfs->bcbase - ls->bcstack;
+  fs_init(ls, &fs);
+  fs.linedefined = line;
+  fs.numparams = (uint8_t)parse_params(ls, needself);
+  fs.bcbase = pfs->bcbase + pfs->pc;
+  fs.bclim = pfs->bclim - pfs->pc;
+  bcemit_AD(&fs, BC_FUNCF, 0, 0);  /* Placeholder. */
   parse_chunk(ls);
   lastline = ls->linenumber;
   lex_match(ls, TK_end, TK_function, line);
   pt = fs_finish(ls, lastline);
-  fs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
-  fs->bclim = (BCPos)(ls->sizebcstack - oldbase);
+  pfs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
+  pfs->bclim = (BCPos)(ls->sizebcstack - oldbase);
   /* Store new prototype in the constant array of the parent. */
-  kidx = const_gc(fs, obj2gco(pt), LJ_TPROTO);
-  expr_init(e, VRELOCABLE, bcemit_AD(fs, BC_FNEW, 0, kidx));
-  if (!(fs->flags & PROTO_HAS_FNEW)) {
-    if (fs->flags & PROTO_HAS_RETURN)
-      fs->flags |= PROTO_FIXUP_RETURN;
-    fs->flags |= PROTO_HAS_FNEW;
+  kidx = const_gc(pfs, obj2gco(pt), LJ_TPROTO);
+  expr_init(e, VRELOCABLE, bcemit_AD(pfs, BC_FNEW, 0, kidx));
+  if (!(pfs->flags & PROTO_HAS_FNEW)) {
+    if (pfs->flags & PROTO_HAS_RETURN)
+      pfs->flags |= PROTO_FIXUP_RETURN;
+    pfs->flags |= PROTO_HAS_FNEW;
   }
 }
 
@@ -2227,6 +2230,7 @@ GCproto *lj_parse(LexState *ls)
   fs.bcbase = NULL;
   fs.bclim = 0;
   fs.flags |= PROTO_IS_VARARG;  /* Main chunk is always a vararg func. */
+  bcemit_AD(&fs, BC_FUNCV, 0, 0);  /* Placeholder. */
   lj_lex_next(ls);  /* Read-ahead first token. */
   parse_chunk(ls);
   if (ls->token != TK_eof)

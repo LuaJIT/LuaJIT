@@ -536,8 +536,7 @@ LJLIB_CF(string_gmatch)
   lj_lib_checkstr(L, 2);
   L->top = L->base+3;
   (L->top-1)->u64 = 0;
-  lua_pushcclosure(L, lj_cf_string_gmatch_aux, 3);
-  funcV(L->top-1)->c.ffid = FF_string_gmatch_aux;
+  lj_lib_pushcc(L, lj_cf_string_gmatch_aux, FF_string_gmatch_aux, 3);
   return 1;
 }
 

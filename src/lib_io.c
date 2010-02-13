@@ -502,8 +502,7 @@ static GCobj *io_std_new(lua_State *L, FILE *fp, const char *name)
 
 LUALIB_API int luaopen_io(lua_State *L)
 {
-  lua_pushcfunction(L, lj_cf_io_lines_iter);
-  funcV(L->top-1)->c.ffid = FF_io_lines_iter;
+  lj_lib_pushcf(L, lj_cf_io_lines_iter, FF_io_lines_iter);
   LJ_LIB_REG_(L, NULL, io_method);
   copyTV(L, L->top, L->top-1); L->top++;
   lua_setfield(L, LUA_REGISTRYINDEX, LUA_FILEHANDLE);

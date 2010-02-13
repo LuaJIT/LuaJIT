@@ -101,8 +101,8 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
   fn->c.ffid = FF_C;
   fn->c.nupvalues = cast_byte(nelems);
   /* NOBARRIER: The GCfunc is new (marked white). */
+  setmref(fn->c.pc, &G(L)->bc_cfunc_ext);
   setgcref(fn->c.env, obj2gco(env));
-  fn->c.gate = G(L)->wrapmode ? lj_gate_cwrap : lj_gate_c;
   return fn;
 }
 
@@ -115,7 +115,6 @@ GCfunc *lj_func_newL(lua_State *L, GCproto *pt, GCtab *env)
   /* NOBARRIER: Really a setgcref. But the GCfunc is new (marked white). */
   setmref(fn->l.pc, proto_bc(pt));
   setgcref(fn->l.env, obj2gco(env));
-  fn->l.gate = (pt->flags & PROTO_IS_VARARG) ? lj_gate_lv : lj_gate_lf;
   return fn;
 }
 

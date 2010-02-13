@@ -11,6 +11,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_ff.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -19,7 +20,8 @@
 #include "lj_vm.h"
 #include "luajit.h"
 
-#define GG_DISP_STATIC		BC__MAX
+/* Bump GG_NUM_ASMFF in lj_dispatch.h as needed. Ugly. */
+LJ_STATIC_ASSERT(GG_NUM_ASMFF == FF_NUM_ASMFUNC);
 
 /* -- Dispatch table management ------------------------------------------- */
 
@@ -27,13 +29,20 @@
 void lj_dispatch_init(GG_State *GG)
 {
   uint32_t i;
-  ASMFunction *disp = GG2DISP(GG);
-  for (i = 0; i < BC__MAX; i++)
-    disp[GG_DISP_STATIC+i] = disp[i] = makeasmfunc(lj_bc_ofs[i]);
+  ASMFunction *disp = GG->dispatch;
+  for (i = 0; i < GG_LEN_SDISP; i++)
+    disp[GG_LEN_DDISP+i] = disp[i] = makeasmfunc(lj_bc_ofs[i]);
+  for (i = GG_LEN_SDISP; i < GG_LEN_DDISP; i++)
+    disp[i] = makeasmfunc(lj_bc_ofs[i]);
   /* The JIT engine is off by default. luaopen_jit() turns it on. */
   disp[BC_FORL] = disp[BC_IFORL];
   disp[BC_ITERL] = disp[BC_IITERL];
   disp[BC_LOOP] = disp[BC_ILOOP];
+  disp[BC_FUNCF] = disp[BC_IFUNCF];
+  disp[BC_FUNCV] = disp[BC_IFUNCV];
+  GG->g.bc_cfunc_ext = GG->g.bc_cfunc_int = BCINS_AD(BC_FUNCC, 0, 0);
+  for (i = 0; i < GG_NUM_ASMFF; i++)
+    GG->bcff[i] = BCINS_AD(BC__MAX+i, 0, 0);
 }
 
 #if LJ_HASJIT
@@ -57,39 +66,50 @@ void lj_dispatch_update(global_State *g)
   mode |= (G2J(g)->flags & JIT_F_ON) ? 1 : 0;
   mode |= G2J(g)->state != LJ_TRACE_IDLE ? 6 : 0;
 #endif
-  mode |= (g->hookmask & HOOK_EVENTMASK) ? 2 : 0;
+  mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? 2 : 0;
   if (oldmode != mode) {  /* Mode changed? */
-    ASMFunction *disp = GG2DISP(G2GG(g));
-    ASMFunction f_forl, f_iterl, f_loop;
+    ASMFunction *disp = G2GG(g)->dispatch;
+    ASMFunction f_forl, f_iterl, f_loop, f_funcf, f_funcv;
     g->dispatchmode = mode;
     if ((mode & 5) == 1) {  /* Hotcount if JIT is on, but not when recording. */
       f_forl = makeasmfunc(lj_bc_ofs[BC_FORL]);
       f_iterl = makeasmfunc(lj_bc_ofs[BC_ITERL]);
       f_loop = makeasmfunc(lj_bc_ofs[BC_LOOP]);
+      f_funcf = makeasmfunc(lj_bc_ofs[BC_FUNCF]);
+      f_funcv = makeasmfunc(lj_bc_ofs[BC_FUNCV]);
     } else {  /* Otherwise use the non-hotcounting instructions. */
-      f_forl = disp[GG_DISP_STATIC+BC_IFORL];
-      f_iterl = disp[GG_DISP_STATIC+BC_IITERL];
-      f_loop = disp[GG_DISP_STATIC+BC_ILOOP];
+      f_forl = disp[GG_LEN_DDISP+BC_IFORL];
+      f_iterl = disp[GG_LEN_DDISP+BC_IITERL];
+      f_loop = disp[GG_LEN_DDISP+BC_ILOOP];
+      f_funcf = disp[GG_LEN_DDISP+BC_IFUNCF];
+      f_funcv = disp[GG_LEN_DDISP+BC_IFUNCV];
     }
-    /* Set static loop ins first (may be copied below). */
-    disp[GG_DISP_STATIC+BC_FORL] = f_forl;
-    disp[GG_DISP_STATIC+BC_ITERL] = f_iterl;
-    disp[GG_DISP_STATIC+BC_LOOP] = f_loop;
+    /* Set static counting ins first (may be copied below). */
+    disp[GG_LEN_DDISP+BC_FORL] = f_forl;
+    disp[GG_LEN_DDISP+BC_ITERL] = f_iterl;
+    disp[GG_LEN_DDISP+BC_LOOP] = f_loop;
+    disp[GG_LEN_DDISP+BC_FUNCF] = f_funcf;
+    disp[GG_LEN_DDISP+BC_FUNCV] = f_funcv;
     if ((oldmode & 6) != (mode & 6)) {  /* Need to change whole table? */
       if ((mode & 6) == 0) {  /* No hooks and no recording? */
 	/* Copy static dispatch table to dynamic dispatch table. */
-	memcpy(&disp[0], &disp[GG_DISP_STATIC], sizeof(ASMFunction)*BC__MAX);
+	memcpy(&disp[0], &disp[GG_LEN_DDISP], GG_LEN_SDISP*sizeof(ASMFunction));
       } else {
 	/* The recording dispatch also checks for hooks. */
 	ASMFunction f = (mode & 6) == 6 ? lj_vm_record : lj_vm_hook;
 	uint32_t i;
-	for (i = 0; i < BC__MAX; i++)
+	for (i = 0; i < BC_FUNCF; i++)
 	  disp[i] = f;
+	/* NYI: call hooks for function headers. */
+	memcpy(&disp[BC_FUNCF], &disp[GG_LEN_DDISP+BC_FUNCF],
+	       (GG_LEN_SDISP-BC_FUNCF)*sizeof(ASMFunction));
       }
-    } else if ((mode & 6) == 0) {  /* Fix dynamic loop ins unless overriden. */
+    } else if ((mode & 6) == 0) {  /* Set dynamic counting ins. */
       disp[BC_FORL] = f_forl;
       disp[BC_ITERL] = f_iterl;
       disp[BC_LOOP] = f_loop;
+      disp[BC_FUNCF] = f_funcf;
+      disp[BC_FUNCV] = f_funcv;
     }
 #if LJ_HASJIT
     if ((mode & 1) && !(oldmode & 1))  /* JIT off to on transition. */
@@ -186,14 +206,16 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
     if ((mode & LUAJIT_MODE_ON)) {
       if (idx != 0) {
 	cTValue *tv = idx > 0 ? L->base + (idx-1) : L->top + idx;
-	if (tvislightud(tv) && lightudV(tv) != NULL)
+	if (tvislightud(tv))
 	  g->wrapf = (lua_CFunction)lightudV(tv);
 	else
 	  return 0;  /* Failed. */
+      } else {
+	return 0;  /* Failed. */
       }
-      g->wrapmode = 1;
+      g->bc_cfunc_ext = BCINS_AD(BC_FUNCCW, 0, 0);
     } else {
-      g->wrapmode = 0;
+      g->bc_cfunc_ext = BCINS_AD(BC_FUNCC, 0, 0);
     }
     break;
   default:

@@ -412,9 +412,9 @@ $(LJVM_BOUT): $(BUILDVM_T)
 	$(E) "BUILDVM   $@"
 	$(Q)$(BUILDVM_X) -m $(LJVM_MODE) -o $@
 
-lj_bcdef.h: $(BUILDVM_T)
+lj_bcdef.h: $(BUILDVM_T) $(LJLIB_C)
 	$(E) "BUILDVM   $@"
-	$(Q)$(BUILDVM_X) -m bcdef -o $@
+	$(Q)$(BUILDVM_X) -m bcdef -o $@ $(LJLIB_C)
 
 lj_ffdef.h: $(BUILDVM_T) $(LJLIB_C)
 	$(E) "BUILDVM   $@"

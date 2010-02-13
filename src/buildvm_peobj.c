@@ -238,7 +238,7 @@ void emit_peobj(BuildCtx *ctx)
   for (relocsyms = 0; ctx->extnames[relocsyms]; relocsyms++) ;
   pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+(ctx->nsym-nzsym) + relocsyms;
 #if !LJ_HASJIT
-  pehdr.nsyms -= 7;
+  pehdr.nsyms -= 11;  /* See below, removes [IJ]* opcode symbols. */
 #endif
 #if LJ_TARGET_X64
   pehdr.nsyms += 1;  /* Symbol for lj_err_unwind_win64. */
@@ -353,8 +353,9 @@ void emit_peobj(BuildCtx *ctx)
       } else {
 #else
       } else if (!(pi == BC_JFORI || pi == BC_JFORL || pi == BC_JITERL ||
-		   pi == BC_JLOOP || pi == BC_IFORL || pi == BC_IITERL ||
-		   pi == BC_ILOOP)) {
+		   pi == BC_JLOOP || pi == BC_JFUNCF || pi == BC_JFUNCV ||
+		   pi == BC_IFORL || pi == BC_IITERL || pi == BC_ILOOP ||
+		   pi == BC_IFUNCF || pi == BC_IFUNCV)) {
 #endif
 	sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX_BC "%s",
 		bc_names[pi]);

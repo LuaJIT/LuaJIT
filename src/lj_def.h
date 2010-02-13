@@ -193,18 +193,14 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 #endif
 
 /* Attributes for internal functions. */
-#if defined(ljamalg_c)
-#define LJ_DATA		static
-#define LJ_DATADEF	static
-#define LJ_FUNC		static
-#define LJ_ASMF		LJ_NOAPI
-#define LJ_FUNCA	LJ_NOAPI
-#else
 #define LJ_DATA		LJ_NOAPI
 #define LJ_DATADEF
-#define LJ_FUNC		LJ_NOAPI
 #define LJ_ASMF		LJ_NOAPI
 #define LJ_FUNCA	LJ_NOAPI
+#if defined(ljamalg_c)
+#define LJ_FUNC		static
+#else
+#define LJ_FUNC		LJ_NOAPI
 #endif
 #define LJ_FUNC_NORET	LJ_FUNC LJ_NORET
 #define LJ_FUNCA_NORET	LJ_FUNCA LJ_NORET

@@ -15,7 +15,7 @@ static char modname[80];
 static size_t modnamelen;
 static char funcname[80];
 static int modstate, regfunc;
-static int ffid, recffid;
+static int ffid, recffid, ffasmfunc;
 
 enum {
   REGFUNC_OK,
@@ -77,7 +77,8 @@ static void libdef_module(BuildCtx *ctx, char *p, int arg)
     libdef_endmodule(ctx);
     optr = obuf;
     *optr++ = (uint8_t)ffid;
-    *optr++ = 0;
+    *optr++ = (uint8_t)ffasmfunc;
+    *optr++ = 0;  /* Hash table size. */
     modstate = 1;
     fprintf(ctx->fp, "#ifdef %sMODULE_%s\n", LIBDEF_PREFIX, p);
     fprintf(ctx->fp, "#undef %sMODULE_%s\n", LIBDEF_PREFIX, p);
@@ -108,8 +109,9 @@ static int find_ffofs(BuildCtx *ctx, const char *name)
 
 static void libdef_func(BuildCtx *ctx, char *p, int arg)
 {
+  if (arg != LIBINIT_CF)
+    ffasmfunc++;
   if (ctx->mode == BUILD_libdef) {
-    int ofs = arg != LIBINIT_CF ? find_ffofs(ctx, p) : 0;
     if (modstate == 0) {
       fprintf(stderr, "Error: no module for function definition %s\n", p);
       exit(1);
@@ -126,12 +128,8 @@ static void libdef_func(BuildCtx *ctx, char *p, int arg)
 	modstate = 2;
 	fprintf(ctx->fp, "  %s%s", arg ? LABEL_PREFIX_FFH : LABEL_PREFIX_CF, p);
       }
-      if (regfunc != REGFUNC_NOREGUV) obuf[1]++;  /* Bump hash table size. */
+      if (regfunc != REGFUNC_NOREGUV) obuf[2]++;  /* Bump hash table size. */
       libdef_name(regfunc == REGFUNC_NOREGUV ? "" : p, arg);
-      if (arg) {
-	*optr++ = (uint8_t)ofs;
-	*optr++ = (uint8_t)(ofs >> 8);
-      }
     }
   } else if (ctx->mode == BUILD_ffdef) {
     fprintf(ctx->fp, "FFDEF(%s)\n", p);
@@ -146,6 +144,9 @@ static void libdef_func(BuildCtx *ctx, char *p, int arg)
     for (i = 1; p[i] && modname[i-1]; i++)
       if (p[i] == '_') p[i] = '.';
     fprintf(ctx->fp, "\"%s\",\n", p);
+  } else if (ctx->mode == BUILD_bcdef) {
+    if (arg != LIBINIT_CF)
+      fprintf(ctx->fp, ",\n%d", find_ffofs(ctx, p));
   }
   ffid++;
   regfunc = REGFUNC_OK;
@@ -253,7 +254,7 @@ static void libdef_set(BuildCtx *ctx, char *p, int arg)
     if (p[0] == '!' && p[1] == '\0') p[0] = '\0';  /* Set env. */
     libdef_name(p, LIBINIT_STRING);
     *optr++ = LIBINIT_SET;
-    obuf[1]++;  /* Bump hash table size. */
+    obuf[2]++;  /* Bump hash table size. */
   }
 }
 
@@ -298,6 +299,7 @@ void emit_lib(BuildCtx *ctx)
   if (ctx->mode == BUILD_recdef)
     fprintf(ctx->fp, "static const uint16_t recff_idmap[] = {\n0,\n0x0100");
   recffid = ffid = FF_C+1;
+  ffasmfunc = 0;
 
   while ((fname = *ctx->args++)) {
     char buf[256];  /* We don't care about analyzing lines longer than that. */
@@ -347,8 +349,19 @@ void emit_lib(BuildCtx *ctx)
 
   if (ctx->mode == BUILD_ffdef) {
     fprintf(ctx->fp, "\n#undef FFDEF\n\n");
+    fprintf(ctx->fp,
+      "#ifndef FF_NUM_ASMFUNC\n#define FF_NUM_ASMFUNC %d\n#endif\n\n",
+      ffasmfunc);
   } else if (ctx->mode == BUILD_vmdef) {
     fprintf(ctx->fp, "}\n\n");
+  } else if (ctx->mode == BUILD_bcdef) {
+    int i;
+    fprintf(ctx->fp, "\n};\n\n");
+    fprintf(ctx->fp, "LJ_DATADEF const uint16_t lj_bc_mode[] = {\n");
+    fprintf(ctx->fp, "BCDEF(BCMODE)\n");
+    for (i = ffasmfunc-1; i > 0; i--)
+      fprintf(ctx->fp, "BCMODE_FF,\n");
+    fprintf(ctx->fp, "BCMODE_FF\n};\n\n");
   } else if (ctx->mode == BUILD_recdef) {
     char *p = (char *)obuf;
     fprintf(ctx->fp, "\n};\n\n");
