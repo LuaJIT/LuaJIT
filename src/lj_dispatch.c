@@ -62,6 +62,7 @@ void lj_dispatch_init_hotcount(global_State *g)
 #define DISPMODE_REC	0x02	/* Recording active. */
 #define DISPMODE_INS	0x04	/* Override instruction dispatch. */
 #define DISPMODE_CALL	0x08	/* Override call dispatch. */
+#define DISPMODE_RET	0x08	/* Override return dispatch. */
 
 /* Update dispatch table depending on various flags. */
 void lj_dispatch_update(global_State *g)
@@ -74,6 +75,7 @@ void lj_dispatch_update(global_State *g)
 #endif
   mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? DISPMODE_INS : 0;
   mode |= (g->hookmask & LUA_MASKCALL) ? DISPMODE_CALL : 0;
+  mode |= (g->hookmask & LUA_MASKRET) ? DISPMODE_RET : 0;
   if (oldmode != mode) {  /* Mode changed? */
     ASMFunction *disp = G2GG(g)->dispatch;
     ASMFunction f_forl, f_iterl, f_loop, f_funcf, f_funcv;
@@ -104,18 +106,37 @@ void lj_dispatch_update(global_State *g)
       if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {  /* No ins dispatch? */
 	/* Copy static dispatch table to dynamic dispatch table. */
 	memcpy(&disp[0], &disp[GG_LEN_DDISP], GG_LEN_SDISP*sizeof(ASMFunction));
+	/* Overwrite with dynamic return dispatch. */
+	if ((mode & DISPMODE_RET)) {
+	  disp[BC_RETM] = lj_vm_rethook;
+	  disp[BC_RET] = lj_vm_rethook;
+	  disp[BC_RET0] = lj_vm_rethook;
+	  disp[BC_RET1] = lj_vm_rethook;
+	}
       } else {
 	/* The recording dispatch also checks for hooks. */
-	ASMFunction f = (mode & DISPMODE_REC) ? lj_vm_record : lj_vm_hook;
+	ASMFunction f = (mode & DISPMODE_REC) ? lj_vm_record : lj_vm_inshook;
 	uint32_t i;
 	for (i = 0; i < GG_LEN_SDISP; i++)
 	  disp[i] = f;
       }
     } else if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {
-      /* Otherwise only set dynamic counting ins. */
+      /* Otherwise set dynamic counting ins. */
       disp[BC_FORL] = f_forl;
       disp[BC_ITERL] = f_iterl;
       disp[BC_LOOP] = f_loop;
+      /* Set dynamic return dispatch. */
+      if ((mode & DISPMODE_RET)) {
+	disp[BC_RETM] = lj_vm_rethook;
+	disp[BC_RET] = lj_vm_rethook;
+	disp[BC_RET0] = lj_vm_rethook;
+	disp[BC_RET1] = lj_vm_rethook;
+      } else {
+	disp[BC_RETM] = disp[GG_LEN_DDISP+BC_RETM];
+	disp[BC_RET] = disp[GG_LEN_DDISP+BC_RET];
+	disp[BC_RET0] = disp[GG_LEN_DDISP+BC_RET0];
+	disp[BC_RET1] = disp[GG_LEN_DDISP+BC_RET1];
+      }
     }
 
     /* Set dynamic call dispatch. */
@@ -321,7 +342,7 @@ static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
   }
 }
 
-/* Instruction dispatch. Used by instr/line hooks or when recording. */
+/* Instruction dispatch. Used by instr/line/return hooks or when recording. */
 void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 {
   GCfunc *fn = curr_func(L);
@@ -348,16 +369,21 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
   if ((g->hookmask & LUA_MASKCOUNT) && g->hookcount == 0) {
     g->hookcount = g->hookcstart;
     callhook(L, LUA_HOOKCOUNT, -1);
+    L->top = L->base + slots;  /* Fix top again. */
   }
   if ((g->hookmask & LUA_MASKLINE)) {
     BCPos npc = proto_bcpos(pt, pc) - 1;
     BCPos opc = proto_bcpos(pt, oldpc) - 1;
     BCLine line = proto_line(pt, npc);
-    if (npc == 0 || pc <= oldpc ||
-	opc >= pt->sizebc || line != proto_line(pt, opc)) {
-      L->top = L->base + slots;  /* Fix top again after instruction hook. */
+    if (pc <= oldpc || opc >= pt->sizebc || line != proto_line(pt, opc)) {
       callhook(L, LUA_HOOKLINE, line);
+      L->top = L->base + slots;  /* Fix top again. */
     }
+  }
+  if ((g->hookmask & LUA_MASKRET)) {
+    BCOp op = bc_op(pc[-1]);
+    if (op == BC_RETM || op == BC_RET || op == BC_RET0 || op == BC_RET1)
+      callhook(L, LUA_HOOKRET, -1);
   }
 }
 

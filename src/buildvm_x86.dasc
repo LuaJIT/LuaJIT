@@ -2453,7 +2453,13 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp >1
 #endif
   |
-  |->vm_hook:				// Dispatch target with enabled hooks.
+  |->vm_rethook:			// Dispatch target for return hooks.
+  |  movzx RD, byte [DISPATCH+DISPATCH_GL(hookmask)]
+  |  test RDL, HOOK_ACTIVE		// Hook already active?
+  |  jnz >5
+  |  jmp >1
+  |
+  |->vm_inshook:			// Dispatch target for instr/line hooks.
   |  movzx RD, byte [DISPATCH+DISPATCH_GL(hookmask)]
   |  test RDL, HOOK_ACTIVE		// Hook already active?
   |  jnz >5
