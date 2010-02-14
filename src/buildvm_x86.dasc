@@ -2504,36 +2504,43 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB->top, RD
   |  mov FCARG2, PC
   |  lea FCARG1, [DISPATCH+GG_DISP2J]
-  |  mov [DISPATCH+DISPATCH_J(L)], L:RB
+  |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
   |  mov SAVE_PC, PC
   |  call extern lj_trace_hot@8		// (jit_State *J, const BCIns *pc)
   |  jmp <3
   |.endif
 #endif
   |
+  |->vm_callhook:			// Dispatch target for call hooks.
+#if LJ_HASJIT
+  |  mov aword [DISPATCH+DISPATCH_J(L)], 0  // Marker for call hook.
+  |  jmp >1
+#endif
+  |
   |->vm_hotcall:			// Hot call counter underflow.
 #if LJ_HASJIT
-  |.if X64
-  |  int3	// NYI
-  |.else
+  |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
+  |1:
+#endif
   |  lea RD, [BASE+NARGS:RD*8-8]
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, BASE
   |  mov L:RB->top, RD
   |  mov FCARG2, PC
-  |  lea FCARG1, [DISPATCH+GG_DISP2J]
-  |  mov [DISPATCH+DISPATCH_J(L)], L:RB
+  |  mov FCARG1, L:RB
   |  mov SAVE_PC, PC
-  |  call extern lj_trace_hot@8		// (jit_State *J, const BCIns *pc)
+  |  call extern lj_dispatch_call@8	// (lua_State *L, const BCIns *pc)
+  |  // ASMFunction returned in eax/rax (RDa).
+  |  mov SAVE_PC, 0			// Invalidate for subsequent line hook.
   |  mov BASE, L:RB->base
+  |  mov RAa, RDa
   |  mov RD, L:RB->top
   |  sub RD, BASE
+  |  mov RBa, RAa
+  |  movzx RA, PC_RA
   |  shr RD, 3
   |  add NARGS:RD, 1
-  |  mov LFUNC:RB, [BASE-8]
-  |  ins_callt
-  |.endif
-#endif
+  |  jmp RBa
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
@@ -2570,7 +2577,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // Caveat: RB is ebp.
   |  mov L:RB, [DISPATCH+DISPATCH_GL(jit_L)]
   |  mov BASE, [DISPATCH+DISPATCH_GL(jit_base)]
-  |  mov [DISPATCH+DISPATCH_J(L)], L:RB
+  |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
   |  mov L:RB->base, BASE
   |  lea FCARG2, [esp+16]
   |  lea FCARG1, [DISPATCH+GG_DISP2J]

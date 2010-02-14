@@ -26,7 +26,7 @@ typedef uint16_t HotCount;
 #define GG_NUM_ASMFF	62
 
 #define GG_LEN_DDISP	(BC__MAX + GG_NUM_ASMFF)
-#define GG_LEN_SDISP	BC_FUNCC
+#define GG_LEN_SDISP	BC_FUNCF
 #define GG_LEN_DISP	(GG_LEN_DDISP + GG_LEN_SDISP)
 
 /* Global state, main thread and extra fields are allocated together. */
@@ -64,7 +64,8 @@ LJ_FUNC void lj_dispatch_init(GG_State *GG);
 LJ_FUNC void lj_dispatch_init_hotcount(global_State *g);
 LJ_FUNC void lj_dispatch_update(global_State *g);
 
-/* Instruction dispatch callback for instr/line hooks or when recording. */
+/* Instruction dispatch callback for hooks or when recording. */
 LJ_FUNCA void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc);
+LJ_FUNCA ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc);
 
 #endif

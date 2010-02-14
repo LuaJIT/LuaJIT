@@ -57,21 +57,30 @@ void lj_dispatch_init_hotcount(global_State *g)
 }
 #endif
 
+/* Internal dispatch mode bits. */
+#define DISPMODE_JIT	0x01	/* JIT compiler on. */
+#define DISPMODE_REC	0x02	/* Recording active. */
+#define DISPMODE_INS	0x04	/* Override instruction dispatch. */
+#define DISPMODE_CALL	0x08	/* Override call dispatch. */
+
 /* Update dispatch table depending on various flags. */
 void lj_dispatch_update(global_State *g)
 {
   uint8_t oldmode = g->dispatchmode;
   uint8_t mode = 0;
 #if LJ_HASJIT
-  mode |= (G2J(g)->flags & JIT_F_ON) ? 1 : 0;
-  mode |= G2J(g)->state != LJ_TRACE_IDLE ? 6 : 0;
+  mode |= (G2J(g)->flags & JIT_F_ON) ? DISPMODE_JIT : 0;
+  mode |= G2J(g)->state != LJ_TRACE_IDLE ? (DISPMODE_REC|DISPMODE_INS) : 0;
 #endif
-  mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? 2 : 0;
+  mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? DISPMODE_INS : 0;
+  mode |= (g->hookmask & LUA_MASKCALL) ? DISPMODE_CALL : 0;
   if (oldmode != mode) {  /* Mode changed? */
     ASMFunction *disp = G2GG(g)->dispatch;
     ASMFunction f_forl, f_iterl, f_loop, f_funcf, f_funcv;
     g->dispatchmode = mode;
-    if ((mode & 5) == 1) {  /* Hotcount if JIT is on, but not when recording. */
+
+    /* Hotcount if JIT is on, but not while recording. */
+    if ((mode & (DISPMODE_JIT|DISPMODE_REC)) == DISPMODE_JIT) {
       f_forl = makeasmfunc(lj_bc_ofs[BC_FORL]);
       f_iterl = makeasmfunc(lj_bc_ofs[BC_ITERL]);
       f_loop = makeasmfunc(lj_bc_ofs[BC_LOOP]);
@@ -81,38 +90,53 @@ void lj_dispatch_update(global_State *g)
       f_forl = disp[GG_LEN_DDISP+BC_IFORL];
       f_iterl = disp[GG_LEN_DDISP+BC_IITERL];
       f_loop = disp[GG_LEN_DDISP+BC_ILOOP];
-      f_funcf = disp[GG_LEN_DDISP+BC_IFUNCF];
-      f_funcv = disp[GG_LEN_DDISP+BC_IFUNCV];
+      f_funcf = makeasmfunc(lj_bc_ofs[BC_IFUNCF]);
+      f_funcv = makeasmfunc(lj_bc_ofs[BC_IFUNCV]);
     }
-    /* Set static counting ins first (may be copied below). */
+    /* Init static counting instruction dispatch first (may be copied below). */
     disp[GG_LEN_DDISP+BC_FORL] = f_forl;
     disp[GG_LEN_DDISP+BC_ITERL] = f_iterl;
     disp[GG_LEN_DDISP+BC_LOOP] = f_loop;
-    disp[GG_LEN_DDISP+BC_FUNCF] = f_funcf;
-    disp[GG_LEN_DDISP+BC_FUNCV] = f_funcv;
-    if ((oldmode & 6) != (mode & 6)) {  /* Need to change whole table? */
-      if ((mode & 6) == 0) {  /* No hooks and no recording? */
+
+    /* Set dynamic instruction dispatch. */
+    if ((oldmode ^ mode) & (DISPMODE_REC|DISPMODE_INS)) {
+      /* Need to update the whole table. */
+      if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {  /* No ins dispatch? */
 	/* Copy static dispatch table to dynamic dispatch table. */
 	memcpy(&disp[0], &disp[GG_LEN_DDISP], GG_LEN_SDISP*sizeof(ASMFunction));
       } else {
 	/* The recording dispatch also checks for hooks. */
-	ASMFunction f = (mode & 6) == 6 ? lj_vm_record : lj_vm_hook;
+	ASMFunction f = (mode & DISPMODE_REC) ? lj_vm_record : lj_vm_hook;
 	uint32_t i;
-	for (i = 0; i < BC_FUNCF; i++)
+	for (i = 0; i < GG_LEN_SDISP; i++)
 	  disp[i] = f;
-	/* NYI: call hooks for function headers. */
-	memcpy(&disp[BC_FUNCF], &disp[GG_LEN_DDISP+BC_FUNCF],
-	       (GG_LEN_SDISP-BC_FUNCF)*sizeof(ASMFunction));
       }
-    } else if ((mode & 6) == 0) {  /* Set dynamic counting ins. */
+    } else if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {
+      /* Otherwise only set dynamic counting ins. */
       disp[BC_FORL] = f_forl;
       disp[BC_ITERL] = f_iterl;
       disp[BC_LOOP] = f_loop;
+    }
+
+    /* Set dynamic call dispatch. */
+    if ((oldmode ^ mode) & DISPMODE_CALL) {  /* Update the whole table? */
+      uint32_t i;
+      if ((mode & 8) == 0) {  /* No call hooks? */
+	for (i = GG_LEN_SDISP; i < GG_LEN_DDISP; i++)
+	  disp[i] = makeasmfunc(lj_bc_ofs[i]);
+      } else {
+	for (i = GG_LEN_SDISP; i < GG_LEN_DDISP; i++)
+	  disp[i] = lj_vm_callhook;
+      }
+    }
+    if (!(mode & DISPMODE_CALL)) {  /* Overwrite dynamic counting ins. */
       disp[BC_FUNCF] = f_funcf;
       disp[BC_FUNCV] = f_funcv;
     }
+
 #if LJ_HASJIT
-    if ((mode & 1) && !(oldmode & 1))  /* JIT off to on transition. */
+    /* Reset hotcounts for JIT off to on transition. */
+    if ((mode & DISPMODE_JIT) && !(oldmode & DISPMODE_JIT))
       lj_dispatch_init_hotcount(g);
 #endif
   }
@@ -279,7 +303,7 @@ static void callhook(lua_State *L, int event, BCLine line)
   }
 }
 
-/* -- Instruction dispatch callbacks -------------------------------------- */
+/* -- Dispatch callbacks -------------------------------------------------- */
 
 /* Calculate number of used stack slots in the current frame. */
 static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
@@ -297,7 +321,7 @@ static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
   }
 }
 
-/* Instruction dispatch callback for instr/line hooks or when recording. */
+/* Instruction dispatch. Used by instr/line hooks or when recording. */
 void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 {
   GCfunc *fn = curr_func(L);
@@ -335,5 +359,50 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
       callhook(L, LUA_HOOKLINE, line);
     }
   }
+}
+
+/* Initialize call. Ensure stack space and clear missing parameters. */
+static void call_init(lua_State *L, GCfunc *fn)
+{
+  if (isluafunc(fn)) {
+    MSize numparams = funcproto(fn)->numparams;
+    TValue *o;
+    lj_state_checkstack(L, numparams);
+    for (o = L->base + numparams; L->top < o; L->top++)
+      setnilV(L->top);  /* Clear missing parameters. */
+  } else {
+    lj_state_checkstack(L, LUA_MINSTACK);
+  }
+}
+
+/* Call dispatch. Used by call hooks and hot calls. */
+ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
+{
+  GCfunc *fn = curr_func(L);
+  BCOp op;
+  global_State *g = G(L);
+#if LJ_HASJIT
+  jit_State *J = G2J(g);
+#endif
+  call_init(L, fn);
+#if LJ_HASJIT
+  if (J->L) {  /* Marker for hot call. */
+    lj_trace_hot(J, pc);
+    goto out;
+  }
+#endif
+  if ((g->hookmask & LUA_MASKCALL))
+    callhook(L, LUA_HOOKCALL, -1);
+#if LJ_HASJIT
+out:
+#endif
+  op = bc_op(pc[-1]);  /* Get FUNC* op. */
+#if LJ_HASJIT
+  /* Use the non-hotcounting variants if JIT is off or while recording. */
+  if ((!(J->flags & JIT_F_ON) || J->state != LJ_TRACE_IDLE) &&
+      (op == BC_FUNCF || op == BC_FUNCV))
+    op = (BCOp)((int)op+(int)BC_IFUNCF-(int)BC_FUNCF);
+#endif
+  return makeasmfunc(lj_bc_ofs[op]);  /* Return static dispatch target. */
 }
 
