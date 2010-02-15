@@ -532,46 +532,52 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 /* -- Event handling ------------------------------------------------------ */
 
 /* A bytecode instruction is about to be executed. Record it. */
-void lj_trace_ins(jit_State *J)
+void lj_trace_ins(jit_State *J, const BCIns *pc)
 {
-  while (lj_vm_cpcall(J->L, NULL, (void *)J, trace_state) != 0)
-    J->state = LJ_TRACE_ERR;
-}
-
-/* Start recording a new trace. */
-static void trace_new(jit_State *J)
-{
-  lua_assert(J->state == LJ_TRACE_IDLE);
-  J->state = LJ_TRACE_START;
+  /* Note: J->L must already be set. pc is the true bytecode PC here. */
+  J->pc = pc;
   J->fn = curr_func(J->L);
   J->pt = funcproto(J->fn);
-  lj_trace_ins(J);
+  while (lj_vm_cpcall(J->L, NULL, (void *)J, trace_state) != 0)
+    J->state = LJ_TRACE_ERR;
 }
 
 /* A hotcount triggered. Start recording a root trace. */
 void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
+  /* Note: pc is the interpreter bytecode PC here. It's offset by 1. */
   hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]+1);  /* Reset hotcount. */
   /* Only start a new trace if not recording or inside __gc call or vmevent. */
   if (J->state == LJ_TRACE_IDLE &&
       !(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
     J->parent = 0;  /* Root trace. */
     J->exitno = 0;
-    J->pc = pc-1;  /* The interpreter bytecode PC is offset by 1. */
-    trace_new(J);
+    J->state = LJ_TRACE_START;
+    lj_trace_ins(J, pc-1);
   }
 }
 
-/* A trace exited. Restore interpreter state and check for hot exits. */
+/* Check for a hot side exit. If yes, start recording a side trace. */
+static void trace_hotside(jit_State *J, const BCIns *pc)
+{
+  SnapShot *snap = &J->trace[J->parent]->snap[J->exitno];
+  if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT)) &&
+      snap->count != SNAPCOUNT_DONE &&
+      ++snap->count >= J->param[JIT_P_hotexit]) {
+    lua_assert(J->state == LJ_TRACE_IDLE);
+    /* J->parent is non-zero for a side trace. */
+    J->state = LJ_TRACE_START;
+    lj_trace_ins(J, pc);
+  }
+}
+
+/* A trace exited. Restore interpreter state. */
 void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 {
+  const BCIns *pc = lj_snap_restore(J, exptr);
   lua_State *L = J->L;
-  void *cf;
-
-  /* Restore interpreter state. */
-  lj_snap_restore(J, exptr);
-  cf = cframe_raw(L->cframe);
-  setcframe_pc(cf, J->pc);
+  void *cf = cframe_raw(L->cframe);
+  setcframe_pc(cf, pc);  /* Restart interpreter at this PC. */
 
   lj_vmevent_send(L, TEXIT,
     ExitState *ex = (ExitState *)exptr;
@@ -591,14 +597,7 @@ void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     }
   );
 
-  {  /* Check for a hot exit. */
-    SnapShot *snap = &J->trace[J->parent]->snap[J->exitno];
-    if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT)) &&
-	snap->count != SNAPCOUNT_DONE &&
-	++snap->count >= J->param[JIT_P_hotexit])
-      trace_new(J);  /* Start recording a side trace. */
-  }
-
+  trace_hotside(J, pc);
   return cf;  /* Return the interpreter C frame. */
 }
 

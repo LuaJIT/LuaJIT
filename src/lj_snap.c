@@ -179,7 +179,7 @@ void lj_snap_regspmap(uint16_t *rsmap, Trace *T, SnapNo snapno)
 }
 
 /* Restore interpreter state from exit state with the help of a snapshot. */
-void lj_snap_restore(jit_State *J, void *exptr)
+const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 {
   ExitState *ex = (ExitState *)exptr;
   SnapNo snapno = J->exitno;  /* For now, snapno == exitno. */
@@ -187,7 +187,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nent;
+  SnapEntry *flinks = map + nent + 1;
   int32_t ftsz0;
   BCReg nslots = snap->nslots;
   TValue *frame;
@@ -201,7 +201,6 @@ void lj_snap_restore(jit_State *J, void *exptr)
   }
 
   /* Fill stack slots with data from the registers and spill slots. */
-  J->pc = snap_pc(*flinks++);
   frame = L->base-1;
   ftsz0 = frame_ftsz(frame);  /* Preserve link to previous frame in slot #0. */
   for (n = 0; n < nent; n++) {
@@ -266,6 +265,7 @@ void lj_snap_restore(jit_State *J, void *exptr)
   }
   L->top = curr_topL(L);
   lua_assert(map + nent + 1 + snap->depth == flinks);
+  return snap_pc(map[nent]);
 }
 
 #undef IR

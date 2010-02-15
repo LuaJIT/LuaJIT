@@ -359,10 +359,7 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
     jit_State *J = G2J(g);
     if (J->state != LJ_TRACE_IDLE) {
       J->L = L;
-      J->pc = pc-1;
-      J->fn = fn;
-      J->pt = pt;
-      lj_trace_ins(J);
+      lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
     }
   }
 #endif

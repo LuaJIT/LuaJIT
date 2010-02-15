@@ -31,7 +31,7 @@ LJ_FUNC int lj_trace_flushall(lua_State *L);
 LJ_FUNC void lj_trace_freestate(global_State *g);
 
 /* Event handling. */
-LJ_FUNC void lj_trace_ins(jit_State *J);
+LJ_FUNC void lj_trace_ins(jit_State *J, const BCIns *pc);
 LJ_FUNCA void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc);
 LJ_FUNCA void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr);
 
