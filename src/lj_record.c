@@ -310,16 +310,25 @@ static TRef fori_arg(jit_State *J, const BCIns *fori, BCReg slot, IRType t)
   return tr;
 }
 
+/* In-place coercion of FORI arguments. */
+static lua_Number for_coerce(jit_State *J, TValue *o)
+{
+  if (!tvisnum(o) && !(tvisstr(o) && lj_str_tonum(strV(o), o)))
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  return numV(o);
+}
+
 /* Simulate the runtime behavior of the FOR loop iterator.
 ** It's important to exactly reproduce the semantics of the interpreter.
 */
 static LoopEvent for_iter(jit_State *J, IROp *op, BCReg ra, int isforl)
 {
-  cTValue *forbase = &J->L->base[ra];
-  lua_Number stopv = numV(&forbase[FORL_STOP]);
-  lua_Number idxv = numV(&forbase[FORL_IDX]);
+  TValue *forbase = &J->L->base[ra];
+  lua_Number stopv = for_coerce(J, &forbase[FORL_STOP]);
+  lua_Number idxv = for_coerce(J, &forbase[FORL_IDX]);
+  lua_Number stepv = for_coerce(J, &forbase[FORL_STEP]);
   if (isforl)
-    idxv += numV(&forbase[FORL_STEP]);
+    idxv += stepv;
   if ((int32_t)forbase[FORL_STEP].u32.hi >= 0) {
     if (idxv <= stopv) { *op = IR_LE; return LOOPEV_ENTER; }
     *op = IR_GT; return LOOPEV_LEAVE;
