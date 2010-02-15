@@ -227,6 +227,19 @@ local function ctlsub(c)
   end
 end
 
+local function fmtfunc(func, pc)
+  local fi = funcinfo(func, pc)
+  if fi.loc then
+    return fi.loc
+  elseif fi.ffid then
+    return vmdef.ffnames[fi.ffid]
+  elseif fi.addr then
+    return format("C:%x", fi.addr)
+  else
+    return "(?)"
+  end
+end
+
 local function formatk(tr, idx)
   local k, t, slot = tracek(tr, idx)
   local tn = type(k)
@@ -240,12 +253,7 @@ local function formatk(tr, idx)
   elseif tn == "string" then
     s = format(#k > 20 and '"%.20s"~' or '"%s"', gsub(k, "%c", ctlsub))
   elseif tn == "function" then
-    local fi = funcinfo(k)
-    if fi.ffid then
-      s = vmdef.ffnames[fi.ffid]
-    else
-      s = fi.loc
-    end
+    s = fmtfunc(k)
   elseif tn == "table" then
     s = format("{%p}", k)
   elseif tn == "userdata" then
@@ -428,14 +436,7 @@ local recdepth = 0
 -- Format trace error message.
 local function fmterr(err, info)
   if type(err) == "number" then
-    if type(info) == "function" then
-      local fi = funcinfo(info)
-      if fi.ffid then
-	info = vmdef.ffnames[fi.ffid]
-      else
-	info = fi.loc
-      end
-    end
+    if type(info) == "function" then info = fmtfunc(info) end
     err = format(vmdef.traceerr[err], info)
   end
   return err
@@ -452,16 +453,14 @@ local function dump_trace(what, tr, func, pc, otr, oex)
     if dumpmode.H then out:write('<pre class="ljdump">\n') end
     out:write("---- TRACE ", tr, " ", what)
     if otr then out:write(" ", otr, "/", oex) end
-    local fi = funcinfo(func, pc)
-    out:write(" ", fi.loc, "\n")
+    out:write(" ", fmtfunc(func, pc), "\n")
     recprefix = ""
     reclevel = 0
   elseif what == "stop" or what == "abort" then
     out:write("---- TRACE ", tr, " ", what)
     recprefix = nil
     if what == "abort" then
-      local fi = funcinfo(func, pc)
-      out:write(" ", fi.loc, " -- ", fmterr(otr, oex), "\n")
+      out:write(" ", fmtfunc(func, pc), " -- ", fmterr(otr, oex), "\n")
     else
       local link = traceinfo(tr).link
       if link == tr then
@@ -487,12 +486,7 @@ local function dump_record(tr, func, pc, depth, callee)
   local line = bcline(func, pc, recprefix)
   if dumpmode.H then line = gsub(line, "[<>&]", html_escape) end
   if type(callee) == "function" then
-    local fi = funcinfo(callee)
-    if fi.ffid then
-      out:write(sub(line, 1, -2), "  ; ", vmdef.ffnames[fi.ffid], "\n")
-    else
-      out:write(sub(line, 1, -2), "  ; ", fi.loc, "\n")
-    end
+    out:write(sub(line, 1, -2), "  ; ", fmtfunc(callee), "\n")
   else
     out:write(line)
   end

@@ -73,17 +73,23 @@ local active, out
 
 local startloc, startex
 
+local function fmtfunc(func, pc)
+  local fi = funcinfo(func, pc)
+  if fi.loc then
+    return fi.loc
+  elseif fi.ffid then
+    return vmdef.ffnames[fi.ffid]
+  elseif fi.addr then
+    return format("C:%x", fi.addr)
+  else
+    return "(?)"
+  end
+end
+
 -- Format trace error message.
 local function fmterr(err, info)
   if type(err) == "number" then
-    if type(info) == "function" then
-      local fi = funcinfo(info)
-      if fi.ffid then
-	info = vmdef.ffnames[fi.ffid]
-      else
-	info = fi.loc
-      end
-    end
+    if type(info) == "function" then info = fmtfunc(info) end
     err = format(vmdef.traceerr[err], info)
   end
   return err
@@ -92,11 +98,11 @@ end
 -- Dump trace states.
 local function dump_trace(what, tr, func, pc, otr, oex)
   if what == "start" then
-    startloc = funcinfo(func, pc).loc
+    startloc = fmtfunc(func, pc)
     startex = otr and "("..otr.."/"..oex..") " or ""
   else
     if what == "abort" then
-      local loc = funcinfo(func, pc).loc
+      local loc = fmtfunc(func, pc)
       if loc ~= startloc then
 	out:write(format("[TRACE --- %s%s -- %s at %s]\n",
 	  startex, startloc, fmterr(otr, oex), loc))

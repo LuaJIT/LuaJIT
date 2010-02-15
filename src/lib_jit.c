@@ -197,9 +197,12 @@ LJLIB_CF(jit_util_funcinfo)
   } else {
     GCfunc *fn = funcV(L->base);
     GCtab *t;
-    lua_createtable(L, 0, 2);  /* Increment hash size if fields are added. */
+    lua_createtable(L, 0, 4);  /* Increment hash size if fields are added. */
     t = tabV(L->top-1);
-    setintfield(L, t, "ffid", fn->c.ffid);
+    if (!iscfunc(fn))
+      setintfield(L, t, "ffid", fn->c.ffid);
+    setnumV(lj_tab_setstr(L, t, lj_str_newlit(L, "addr")),
+	    cast_num((intptr_t)fn->c.f));
     setintfield(L, t, "upvalues", fn->c.nupvalues);
   }
   return 1;

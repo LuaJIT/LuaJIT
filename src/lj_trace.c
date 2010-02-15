@@ -475,17 +475,18 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 
     case LJ_TRACE_RECORD:
       setvmstate(J2G(J), RECORD);
-      lj_vmevent_send(L, RECORD,
-	setintV(L->top++, J->curtrace);
-	setfuncV(L, L->top++, J->fn);
-	setintV(L->top++, proto_bcpos(J->pt, J->pc));
-	setintV(L->top++, J->framedepth);
-	if (bcmode_mm(bc_op(*J->pc)) == MM_call) {
-	  cTValue *o = &L->base[bc_a(*J->pc)];
-	  if (bc_op(*J->pc) == BC_ITERC) o -= 3;
-	  copyTV(L, L->top++, o);
-	}
-      );
+      if (J->pt)
+	lj_vmevent_send(L, RECORD,
+	  setintV(L->top++, J->curtrace);
+	  setfuncV(L, L->top++, J->fn);
+	  setintV(L->top++, proto_bcpos(J->pt, J->pc));
+	  setintV(L->top++, J->framedepth);
+	  if (bcmode_mm(bc_op(*J->pc)) == MM_call) {
+	    cTValue *o = &L->base[bc_a(*J->pc)];
+	    if (bc_op(*J->pc) == BC_ITERC) o -= 3;
+	    copyTV(L, L->top++, o);
+	  }
+	);
       lj_record_ins(J);
       break;
 
@@ -537,7 +538,7 @@ void lj_trace_ins(jit_State *J, const BCIns *pc)
   /* Note: J->L must already be set. pc is the true bytecode PC here. */
   J->pc = pc;
   J->fn = curr_func(J->L);
-  J->pt = funcproto(J->fn);
+  J->pt = isluafunc(J->fn) ? funcproto(J->fn) : NULL;
   while (lj_vm_cpcall(J->L, NULL, (void *)J, trace_state) != 0)
     J->state = LJ_TRACE_ERR;
 }
