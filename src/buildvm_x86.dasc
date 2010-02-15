@@ -2518,14 +2518,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
+  |  mov SAVE_PC, PC
 #if LJ_HASJIT
-  |  mov aword [DISPATCH+DISPATCH_J(L)], 0  // Marker for call hook.
   |  jmp >1
 #endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
 #if LJ_HASJIT
-  |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
+  |  mov SAVE_PC, PC
+  |  or PC, 1				// Marker for hot call.
   |1:
 #endif
   |  lea RD, [BASE+NARGS:RD*8-8]
@@ -2534,10 +2535,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB->top, RD
   |  mov FCARG2, PC
   |  mov FCARG1, L:RB
-  |  mov SAVE_PC, PC
   |  call extern lj_dispatch_call@8	// (lua_State *L, const BCIns *pc)
   |  // ASMFunction returned in eax/rax (RDa).
   |  mov SAVE_PC, 0			// Invalidate for subsequent line hook.
+#if LJ_HASJIT
+  |  and PC, -2
+#endif
   |  mov BASE, L:RB->base
   |  mov RAa, RDa
   |  mov RD, L:RB->top
