@@ -249,33 +249,65 @@ nocanon:
   J->mergesnap = 1;  /* In case recording continues. */
 }
 
-/* Peek before FORI to find a const initializer, otherwise load from slot. */
-static TRef fori_arg(jit_State *J, const BCIns *pc, BCReg slot, IRType t)
+/* Search bytecode backwards for a int/num constant slot initializer. */
+static TRef find_kinit(jit_State *J, const BCIns *endpc, BCReg slot, IRType t)
 {
-  /* A store to slot-1 means there's no conditional assignment for slot. */
-  if (bc_a(pc[-1]) == slot-1 && bcmode_a(bc_op(pc[-1])) == BCMdst) {
-    BCIns ins = pc[0];
-    if (bc_a(ins) == slot) {
-      if (bc_op(ins) == BC_KSHORT) {
-	int32_t k = (int32_t)(int16_t)bc_d(ins);
-	if (t == IRT_INT)
-	  return lj_ir_kint(J, k);
-	else
-	  return lj_ir_knum(J, cast_num(k));
-      } else if (bc_op(ins) == BC_KNUM) {
-	lua_Number n = proto_knum(J->pt, bc_d(ins));
-	if (t == IRT_INT)
-	  return lj_ir_kint(J, lj_num2int(n));
-	else
-	  return lj_ir_knum(J, n);
+  /* This algorithm is rather simplistic and assumes quite a bit about
+  ** how the bytecode is generated. It works fine for FORI initializers,
+  ** but it won't necessarily work in other cases (e.g. iterator arguments).
+  ** It doesn't do anything fancy, either (like backpropagating MOVs).
+  */
+  const BCIns *pc, *startpc = proto_bc(J->pt);
+  for (pc = endpc-1; pc > startpc; pc--) {
+    BCIns ins = *pc;
+    BCOp op = bc_op(ins);
+    /* First try to find the last instruction that stores to this slot. */
+    if (bcmode_a(op) == BCMbase && bc_a(ins) <= slot) {
+      return 0;  /* Multiple results, e.g. from a CALL or KNIL. */
+    } else if (bcmode_a(op) == BCMdst && bc_a(ins) == slot) {
+      if (op == BC_KSHORT || op == BC_KNUM) {  /* Found const. initializer. */
+	/* Now try to verify there's no forward jump across it. */
+	const BCIns *kpc = pc;
+	for ( ; pc > startpc; pc--)
+	  if (bc_op(*pc) == BC_JMP) {
+	    const BCIns *target = pc+bc_j(*pc)+1;
+	    if (target > kpc && target <= endpc)
+	      return 0;  /* Conditional assignment. */
+	  }
+	if (op == BC_KSHORT) {
+	  int32_t k = (int32_t)(int16_t)bc_d(ins);
+	  return t == IRT_INT ? lj_ir_kint(J, k) : lj_ir_knum(J, cast_num(k));
+	} else {
+	  lua_Number n = proto_knum(J->pt, bc_d(ins));
+	  if (t == IRT_INT) {
+	    int32_t k = lj_num2int(n);
+	    if (n == cast_num(k))  /* -0 is ok here. */
+	      return lj_ir_kint(J, k);
+	    return 0;  /* Type mismatch. */
+	  } else {
+	    return lj_ir_knum(J, n);
+	  }
+	}
       }
+      return 0;  /* Non-constant initializer. */
     }
   }
-  if (J->base[slot])
-    return J->base[slot];
-  if (t == IRT_INT)
-    t |= IRT_GUARD;
-  return sloadt(J, (int32_t)slot, t, IRSLOAD_READONLY|IRSLOAD_INHERIT);
+  return 0;  /* No assignment to this slot found? */
+}
+
+/* Peek before FORI to find a const initializer. Otherwise load from slot. */
+static TRef fori_arg(jit_State *J, const BCIns *fori, BCReg slot, IRType t)
+{
+  TRef tr = find_kinit(J, fori, slot, t);
+  if (!tr) {
+    tr = J->base[slot];
+    if (!tr) {
+      if (t == IRT_INT)
+	t |= IRT_GUARD;
+      tr = sloadt(J, (int32_t)slot, t, IRSLOAD_READONLY|IRSLOAD_INHERIT);
+    }
+  }
+  return tr;
 }
 
 /* Simulate the runtime behavior of the FOR loop iterator.
@@ -311,8 +343,8 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
     idx = tr[FORL_IDX];
     if (!idx) idx = sloadt(J, (int32_t)(ra+FORL_IDX), IRT_NUM, 0);
     t = tref_type(idx);
-    stop = fori_arg(J, fori-2, ra+FORL_STOP, t);
-    step = fori_arg(J, fori-1, ra+FORL_STEP, t);
+    stop = fori_arg(J, fori, ra+FORL_STOP, t);
+    step = fori_arg(J, fori, ra+FORL_STEP, t);
     tr[FORL_IDX] = idx = emitir(IRT(IR_ADD, t), idx, step);
   } else {  /* Handle FORI/JFORI opcodes. */
     BCReg i;
@@ -2134,8 +2166,8 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
   cTValue *forbase = &J->L->base[ra];
   IRType t = (J->flags & JIT_F_OPT_NARROW) ? lj_opt_narrow_forl(forbase)
 					   : IRT_NUM;
-  TRef stop = fori_arg(J, fori-2, ra+FORL_STOP, t);
-  TRef step = fori_arg(J, fori-1, ra+FORL_STEP, t);
+  TRef stop = fori_arg(J, fori, ra+FORL_STOP, t);
+  TRef step = fori_arg(J, fori, ra+FORL_STEP, t);
   int dir = (0 <= numV(&forbase[FORL_STEP]));
   lua_assert(bc_op(*fori) == BC_FORI || bc_op(*fori) == BC_JFORI);
   if (!tref_isk(step)) {
@@ -2165,7 +2197,7 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
     k = (int32_t)(dir ? 0x7fffffff : 0x80000000) - k;
     emitir(IRTGI(dir ? IR_LE : IR_GE), stop, lj_ir_kint(J, k));
   }
-  if (t == IRT_INT)
+  if (t == IRT_INT && !find_kinit(J, fori, ra+FORL_IDX, IRT_INT))
     t |= IRT_GUARD;
   J->base[ra+FORL_EXT] = sloadt(J, (int32_t)(ra+FORL_IDX), t, IRSLOAD_INHERIT);
   J->maxslot = ra+FORL_EXT+1;
