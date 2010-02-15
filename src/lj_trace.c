@@ -475,18 +475,12 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 
     case LJ_TRACE_RECORD:
       setvmstate(J2G(J), RECORD);
-      if (J->pt)
-	lj_vmevent_send(L, RECORD,
-	  setintV(L->top++, J->curtrace);
-	  setfuncV(L, L->top++, J->fn);
-	  setintV(L->top++, proto_bcpos(J->pt, J->pc));
-	  setintV(L->top++, J->framedepth);
-	  if (bcmode_mm(bc_op(*J->pc)) == MM_call) {
-	    cTValue *o = &L->base[bc_a(*J->pc)];
-	    if (bc_op(*J->pc) == BC_ITERC) o -= 3;
-	    copyTV(L, L->top++, o);
-	  }
-	);
+      lj_vmevent_send(L, RECORD,
+	setintV(L->top++, J->curtrace);
+	setfuncV(L, L->top++, J->fn);
+	setintV(L->top++, J->pt ? (int32_t)proto_bcpos(J->pt, J->pc) : -1);
+	setintV(L->top++, J->framedepth);
+      );
       lj_record_ins(J);
       break;
 

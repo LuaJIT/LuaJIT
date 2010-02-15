@@ -483,15 +483,21 @@ local function dump_record(tr, func, pc, depth, callee)
     recdepth = depth
     recprefix = rep(" .", depth)
   end
-  local line = bcline(func, pc, recprefix)
-  if dumpmode.H then line = gsub(line, "[<>&]", html_escape) end
-  if type(callee) == "function" then
-    out:write(sub(line, 1, -2), "  ; ", fmtfunc(callee), "\n")
+  local line
+  if pc >= 0 then
+    line = bcline(func, pc, recprefix)
+    if dumpmode.H then line = gsub(line, "[<>&]", html_escape) end
+  else
+    line = "0000 "..recprefix.." FUNCC      \n"
+    callee = func
+  end
+  if pc <= 0 then
+    out:write(sub(line, 1, -2), "         ; ", fmtfunc(func), "\n")
   else
     out:write(line)
   end
-  if band(funcbc(func, pc), 0xff) < 16 then -- Write JMP for cond. ORDER BC
-    out:write(bcline(func, pc+1, recprefix))
+  if pc >= 0 and band(funcbc(func, pc), 0xff) < 16 then -- ORDER BC
+    out:write(bcline(func, pc+1, recprefix)) -- Write JMP for cond.
   end
 end
 
