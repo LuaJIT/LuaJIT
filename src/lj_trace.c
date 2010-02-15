@@ -441,10 +441,21 @@ static int trace_abort(jit_State *J)
   if (J->curtrace) {  /* Is there anything to abort? */
     ptrdiff_t errobj = savestack(L, L->top-1);  /* Stack may be resized. */
     lj_vmevent_send(L, TRACE,
+      TValue *frame;
+      const BCIns *pc;
+      GCfunc *fn;
       setstrV(L, L->top++, lj_str_newlit(L, "abort"));
       setintV(L->top++, J->curtrace);
-      setfuncV(L, L->top++, J->fn);
-      setintV(L->top++, proto_bcpos(J->pt, J->pc));
+      /* Find original Lua function call to generate a better error message. */
+      frame = J->L->base-1;
+      pc = J->pc;
+      while (!isluafunc(frame_func(frame))) {
+	pc = frame_pc(frame) - 1;
+	frame = frame_prev(frame);
+      }
+      fn = frame_func(frame);
+      setfuncV(L, L->top++, fn);
+      setintV(L->top++, proto_bcpos(funcproto(fn), pc));
       copyTV(L, L->top++, restorestack(L, errobj));
       copyTV(L, L->top++, &J->errinfo);
     );
