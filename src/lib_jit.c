@@ -49,12 +49,10 @@ static int setjitmode(lua_State *L, int mode)
       mode |= LUAJIT_MODE_FUNC;
   }
   if (luaJIT_setmode(L, idx, mode) != 1) {
+    if ((mode & LUAJIT_MODE_MASK) == LUAJIT_MODE_ENGINE)
+      lj_err_caller(L, LJ_ERR_NOJIT);
   err:
-#if LJ_HASJIT
     lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
-#else
-    lj_err_caller(L, LJ_ERR_NOJIT);
-#endif
   }
   return 0;
 }
@@ -532,19 +530,15 @@ static uint32_t jit_cpudetect(lua_State *L)
     }
 #endif
   }
-  /* Check for required instruction set support on x86. */
+  /* Check for required instruction set support on x86 (unnecessary on x64). */
 #if LJ_TARGET_X86
 #if !defined(LUAJIT_CPU_NOCMOV)
   if (!(flags & JIT_F_CMOV))
     luaL_error(L, "Ancient CPU lacks CMOV support (recompile with -DLUAJIT_CPU_NOCMOV)");
 #endif
-  if (!(flags & JIT_F_SSE2))
 #if defined(LUAJIT_CPU_SSE2)
+  if (!(flags & JIT_F_SSE2))
     luaL_error(L, "CPU does not support SSE2 (recompile without -DLUAJIT_CPU_SSE2)");
-#elif LJ_HASJIT
-    luaL_error(L, "Sorry, SSE2 CPU support required for this beta release");
-#else
-    (void)0;
 #endif
 #endif
   UNUSED(L);
@@ -560,7 +554,11 @@ static void jit_init(lua_State *L)
   uint32_t flags = jit_cpudetect(L);
 #if LJ_HASJIT
   jit_State *J = L2J(L);
-  J->flags = flags | JIT_F_ON | JIT_F_OPT_DEFAULT;
+#if LJ_TARGET_X86
+  /* Silently turn off the JIT compiler on CPUs without SSE2. */
+  if ((flags & JIT_F_SSE2))
+#endif
+    J->flags = flags | JIT_F_ON | JIT_F_OPT_DEFAULT;
   memcpy(J->param, jit_param_default, sizeof(J->param));
   lj_dispatch_update(G(L));
 #else

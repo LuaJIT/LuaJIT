@@ -209,10 +209,12 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
     if ((mode & LUAJIT_MODE_FLUSH)) {
       lj_trace_flushall(L);
     } else {
-      if ((mode & LUAJIT_MODE_ON))
+      if (!(mode & LUAJIT_MODE_ON))
+	G2J(g)->flags &= ~(uint32_t)JIT_F_ON;
+      else if ((G2J(g)->flags & JIT_F_SSE2))
 	G2J(g)->flags |= (uint32_t)JIT_F_ON;
       else
-	G2J(g)->flags &= ~(uint32_t)JIT_F_ON;
+	return 0;  /* Don't turn on JIT compiler without SSE2 support. */
       lj_dispatch_update(g);
     }
     break;

@@ -65,10 +65,13 @@ This is a list of the things you should know about the LuaJIT 2.0 beta test:
 </p>
 <ul>
 <li>
-The JIT compiler can only generate code for CPUs with <b>SSE2</b> at the
-moment. I.e. you need at least a P4, Core 2/i5/i7 or K8/K10 to use it. I
-plan to fix this during the beta phase and add support for emitting x87
-instructions to the backend.
+The JIT compiler only generates code for CPUs with support for
+<b>SSE2</b> instructions. I.e. you need at least a P4, Core 2/i5/i7
+or K8/K10 to get the full benefit.<br>
+If you run LuaJIT on older CPUs without SSE2 support, the JIT compiler
+is disabled and the VM falls back to the interpreter.
+Run the command line executable without arguments to show the current status 
+(<tt>JIT: ON</tt> or <tt>JIT: OFF</tt>).
 </li>
 <li>
 Obviously there will be many <b>bugs</b> in a VM which has been
