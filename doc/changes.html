@@ -55,21 +55,48 @@ to see whether newer versions are available.
 <div class="major" style="background: #d0d0d0;">
 <h2 id="snap">Development Snapshot</h2>
 <ul>
-<li>Build of preliminary x64 interpreter works on Linux/x64 or WIN64.</li>
-<li>Implement call/return hooks (zero-cost if disabled).</li>
-<li>Major redesign of internal function call handling.</li>
-<li>Implement yield from C hooks.</li>
-<li>Add abstract C call handling to IR.</li>
-<li>Improve KNUM fuse vs. load heuristics.</li>
-<li>Drive the GC forward on string allocations in the parser.</li>
-<li>Compile various <tt>io.*()</tt> functions.</li>
-<li>Compile <tt>math.sinh()</tt>, <tt>math.cosh()</tt>, <tt>math.tanh()</tt>
-and <tt>math.random()</tt>.</li>
+<li>CPU support:
+<ul>
+<li>Port integrated memory allocator to Linux/x64 and Windows/x64.</li>
+<li>Port the interpreter to x64.</li>
+<li>Port DynASM to x64.</li>
+<li>Many 32/64 bit cleanups in the VM.</li>
+<li>Allow building the interpreter with either x87 or SSE2 arithmetics.</li>
+<li>Disable JIT compiler on older non-SSE2 CPUs instead of aborting.</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>Fix constructor bytecode generation for certain conditional values.</li>
+<li>Fix some cases of ordered string comparisons.</li>
 <li>Fix <tt>lua_tocfunction()</tt>.</li>
 <li>Fix cutoff register in JMP bytecode for some conditional expressions.</li>
 <li>Fix PHI marking algorithm for references from variant slots.</li>
 <li>Fix <tt>package.cpath</tt> for non-default PREFIX.</li>
 <li>Fix DWARF2 frame unwind information for interpreter on OSX.</li>
+<li>Drive the GC forward on string allocations in the parser.</li>
+<li>Implement call/return hooks (zero-cost if disabled).</li>
+<li>Implement yield from C hooks.</li>
+<li>Add external unwinding and C++ exception interop (default on x64).</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Split CALL/FUNC recording and clean up fast function call semantics.</li>
+<li>Major redesign of internal function call handling.</li>
+<li>Improve FOR loop const specialization and integerness checks.</li>
+<li>Switch to pre-initialized stacks. Avoid frame-clearing.</li>
+<li>Colocation of prototypes and related data: bytecode, constants, debug info.</li>
+<li>Cleanup parser and streamline bytecode generation.</li>
+<li>Add support for weak IR references to register allocator.</li>
+<li>Switch to compressed, extensible snapshots.</li>
+<li>Compile returns to frames below the start frame.</li>
+<li>Improve alias analysis of upvalues using a disambiguation hash value.</li>
+<li>Compile floor/ceil/trunc to SSE2 helper calls or SSE4.1 instructions.</li>
+<li>Add generic C call handling to IR and backend.</li>
+<li>Improve KNUM fuse vs. load heuristics.</li>
+<li>Compile various <tt>io.*()</tt> functions.</li>
+<li>Compile <tt>math.sinh()</tt>, <tt>math.cosh()</tt>, <tt>math.tanh()</tt>
+and <tt>math.random()</tt>.</li>
+</ul></li>
 </ul>
 </div>
 
