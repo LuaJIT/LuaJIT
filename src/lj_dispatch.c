@@ -71,7 +71,8 @@ void lj_dispatch_update(global_State *g)
   uint8_t mode = 0;
 #if LJ_HASJIT
   mode |= (G2J(g)->flags & JIT_F_ON) ? DISPMODE_JIT : 0;
-  mode |= G2J(g)->state != LJ_TRACE_IDLE ? (DISPMODE_REC|DISPMODE_INS) : 0;
+  mode |= G2J(g)->state != LJ_TRACE_IDLE ?
+	    (DISPMODE_REC|DISPMODE_INS|DISPMODE_CALL) : 0;
 #endif
   mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? DISPMODE_INS : 0;
   mode |= (g->hookmask & LUA_MASKCALL) ? DISPMODE_CALL : 0;
@@ -398,7 +399,7 @@ static void call_init(lua_State *L, GCfunc *fn)
   }
 }
 
-/* Call dispatch. Used by call hooks and hot calls. */
+/* Call dispatch. Used by call hooks, hot calls or when recording. */
 ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 {
   GCfunc *fn = curr_func(L);
@@ -409,10 +410,14 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #endif
   call_init(L, fn);
 #if LJ_HASJIT
+  J->L = L;
   if ((uintptr_t)pc & 1) {  /* Marker for hot call. */
-    J->L = L;
     lj_trace_hot(J, (const BCIns *)((uintptr_t)pc & ~(uintptr_t)1));
     goto out;
+  } else if (J->state != LJ_TRACE_IDLE &&
+	     !(g->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
+    /* Record the FUNC* bytecodes, too. */
+    lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
   }
 #endif
   if ((g->hookmask & LUA_MASKCALL))
