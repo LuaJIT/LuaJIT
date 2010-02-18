@@ -1734,20 +1734,38 @@ static void check_call_unroll(jit_State *J)
   }
 }
 
-static void rec_func_lua(jit_State *J)
+/* Record Lua function setup. */
+static void rec_func_setup(jit_State *J)
 {
   GCproto *pt = J->pt;
+  BCReg s, numparams = pt->numparams;
   if ((pt->flags & PROTO_NO_JIT))
     lj_trace_err(J, LJ_TRERR_CJITOFF);
   lua_assert(!(pt->flags & PROTO_IS_VARARG));
   if (J->baseslot + pt->framesize >= LJ_MAX_JSLOTS)
     lj_trace_err(J, LJ_TRERR_STACKOV);
-  /* Fill up missing args with nil. */
-  while (J->maxslot < pt->numparams)
-    J->base[J->maxslot++] = TREF_NIL;
+  /* Fill up missing parameters with nil. */
+  for (s = J->maxslot; s < numparams; s++)
+    J->base[s] = TREF_NIL;
   /* The remaining slots should never be read before they are written. */
-  J->maxslot = pt->numparams;
+  J->maxslot = numparams;
+}
+
+/* Record entry to a Lua function. */
+static void rec_func_lua(jit_State *J)
+{
+  rec_func_setup(J);
   check_call_unroll(J);
+}
+
+/* Record entry to an already compiled function. */
+static void rec_func_jit(jit_State *J, TraceNo lnk)
+{
+  rec_func_setup(J);
+  J->instunroll = 0;  /* Cannot continue across a compiled function. */
+  if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
+    lnk = J->curtrace;  /* Can form an extra tail-recursive loop. */
+  rec_stop(J, lnk);  /* Link to the function. */
 }
 
 /* -- Record allocations -------------------------------------------------- */
@@ -2127,9 +2145,8 @@ void lj_record_ins(jit_State *J)
   case BC_FUNCF:
     rec_func_lua(J);
     break;
-
   case BC_JFUNCF:
-    lj_trace_err(J, LJ_TRERR_NYILNKF);
+    rec_func_jit(J, rc);
     break;
 
   case BC_FUNCV:
