@@ -149,7 +149,9 @@ void lj_trace_reenableproto(GCproto *pt)
     BCIns *bc = proto_bc(pt);
     BCPos i, sizebc = pt->sizebc;;
     pt->flags &= ~PROTO_HAS_ILOOP;
-    for (i = 0; i < sizebc; i++) {
+    if (bc_op(bc[0]) == BC_IFUNCF)
+      setbc_op(&bc[0], BC_FUNCF);
+    for (i = 1; i < sizebc; i++) {
       BCOp op = bc_op(bc[i]);
       if (op == BC_IFORL || op == BC_IITERL || op == BC_ILOOP)
 	setbc_op(&bc[i], (int)op+(int)BC_LOOP-(int)BC_ILOOP);
@@ -325,14 +327,9 @@ static void trace_start(jit_State *J)
 
   if ((J->pt->flags & PROTO_NO_JIT)) {  /* JIT disabled for this proto? */
     if (J->parent == 0) {
-      if (J->pc >= proto_bc(J->pt)) {
-	/* Lazy bytecode patching to disable hotcount events. */
-	setbc_op(J->pc, (int)bc_op(*J->pc)+(int)BC_ILOOP-(int)BC_LOOP);
-	J->pt->flags |= PROTO_HAS_ILOOP;
-      } else {
-	/* NYI: lazy closure patching to disable hotcall events. */
-	lua_assert(0);
-      }
+      /* Lazy bytecode patching to disable hotcount events. */
+      setbc_op(J->pc, (int)bc_op(*J->pc)+(int)BC_ILOOP-(int)BC_LOOP);
+      J->pt->flags |= PROTO_HAS_ILOOP;
     }
     J->state = LJ_TRACE_IDLE;  /* Silently ignored. */
     return;
