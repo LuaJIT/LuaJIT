@@ -92,26 +92,6 @@ static void rec_check_ir(jit_State *J)
   }
 }
 
-/* Compare frame stack of the recorder and the VM. */
-static void rec_check_frames(jit_State *J)
-{
-  cTValue *frame = J->L->base - 1;
-  cTValue *lim = J->L->base - J->baseslot;
-  int32_t depth = J->framedepth;
-  while (frame > lim) {
-    depth--;
-    lua_assert(depth >= 0);
-    lua_assert((SnapEntry)frame_ftsz(frame) == J->frame[depth]);
-    if (frame_iscont(frame)) {
-      depth--;
-      lua_assert(depth >= 0);
-      lua_assert((SnapEntry)frame_ftsz(frame-1) == J->frame[depth]);
-    }
-    frame = frame_prev(frame);
-  }
-  lua_assert(depth == 0);
-}
-
 /* Compare stack slots and frames of the recorder and the VM. */
 static void rec_check_slots(jit_State *J)
 {
@@ -157,7 +137,6 @@ static void rec_check_slots(jit_State *J)
     }
   }
   lua_assert(J->framedepth == depth);
-  rec_check_frames(J);
 }
 #endif
 
@@ -519,9 +498,7 @@ static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
   fbase[0] = trfunc | TREF_FRAME;
 
   /* Bump frame. */
-  J->frame[J->framedepth++] = SNAP_MKPC(J->pc+1);
-  if (J->framedepth > LJ_MAX_JFRAME)
-    lj_trace_err(J, LJ_TRERR_STACKOV);
+  J->framedepth++;
   J->base += func+1;
   J->baseslot += func+1;
   J->maxslot = nargs;
@@ -626,6 +603,7 @@ static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
   trcont = lj_ir_kptr(J, (void *)cont);
 #endif
   J->base[top] = trcont | TREF_CONT;
+  J->framedepth++;
   for (s = J->maxslot; s < top; s++)
     J->base[s] = 0;  /* Clear frame gap to avoid resurrecting previous refs. */
   return top+1;
@@ -695,7 +673,6 @@ ok:
   base[0] = ix->mobj;
   copyTV(J->L, basev+0, &ix->mobjv);
   rec_call(J, func, 2);
-  J->frame[J->framedepth++] = SNAP_MKFTSZ((func+1)*sizeof(TValue)+FRAME_CONT);
   return 0;  /* No result yet. */
 }
 
@@ -710,7 +687,6 @@ static void rec_mm_callcomp(jit_State *J, RecordIndex *ix, int op)
   copyTV(J->L, tv+1, &ix->valv);
   copyTV(J->L, tv+2, &ix->keyv);
   rec_call(J, func, 2);
-  J->frame[J->framedepth++] = SNAP_MKFTSZ((func+1)*sizeof(TValue)+FRAME_CONT);
 }
 
 /* Record call to equality comparison metamethod (for tab and udata only). */
@@ -890,11 +866,9 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 	base[3] = ix->val;
 	copyTV(J->L, tv+3, &ix->valv);
 	rec_call(J, func, 3);  /* mobj(tab, key, val) */
-	J->frame[J->framedepth++] = SNAP_MKFTSZ((func+1)*sizeof(TValue)+FRAME_CONT);
 	return 0;
       } else {
 	rec_call(J, func, 2);  /* res = mobj(tab, key) */
-	J->frame[J->framedepth++] = SNAP_MKFTSZ((func+1)*sizeof(TValue)+FRAME_CONT);
 	return 0;  /* No result yet. */
       }
     }
@@ -1294,8 +1268,6 @@ static void LJ_FASTCALL recff_ipairs(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_pcall(jit_State *J, RecordFFData *rd)
 {
   if (J->maxslot >= 1) {
-    J->pc = (const BCIns *)(sizeof(TValue) - 4 +
-			    (hook_active(J2G(J)) ? FRAME_PCALLH : FRAME_PCALL));
     rec_call(J, 0, J->maxslot - 1);
     rd->nres = -1;  /* Pending call. */
   }  /* else: Interpreter will throw. */
@@ -1321,8 +1293,6 @@ static void LJ_FASTCALL recff_xpcall(jit_State *J, RecordFFData *rd)
     copyTV(J->L, &argv1, &rd->argv[1]);
     copyTV(J->L, &rd->argv[0], &argv1);
     copyTV(J->L, &rd->argv[1], &argv0);
-    J->pc = (const BCIns *)(2*sizeof(TValue) - 4 +
-			    (hook_active(J2G(J)) ? FRAME_PCALLH : FRAME_PCALL));
     /* Need to protect rec_call because it may throw. */
     errcode = lj_vm_cpcall(J->L, NULL, J, recff_xpcall_cp);
     /* Always undo Lua stack swap to avoid confusing the interpreter. */
@@ -2329,13 +2299,12 @@ static void rec_setup_side(jit_State *J, Trace *T)
     }
   setslot:
     J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
-    if ((sn & SNAP_FRAME) && s != 0)
+    if ((sn & SNAP_FRAME))
       J->baseslot = s+1;
   }
   J->base = J->slot + J->baseslot;
   J->maxslot = snap->nslots - J->baseslot;
-  J->framedepth = snap->depth;  /* Copy frames from snapshot. */
-  memcpy(J->frame, &map[nent+1], sizeof(SnapEntry)*(size_t)snap->depth);
+  J->framedepth = snap->depth;
   lj_snap_add(J);
 }
 

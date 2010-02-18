@@ -3044,7 +3044,7 @@ static void asm_tail_sync(ASMState *as)
   SnapShot *snap = &as->T->snap[as->T->nsnap-1];  /* Last snapshot. */
   MSize n, nent = snap->nent;
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nent + 1;
+  SnapEntry *flinks = map + nent + snap->depth;
   BCReg newbase = 0, topslot = 0;
 
   checkmclim(as);
@@ -3102,11 +3102,11 @@ static void asm_tail_sync(ASMState *as)
       if (!(sn & (SNAP_CONT|SNAP_FRAME)))
 	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
       else if (s != 0)  /* Do not overwrite link to previous frame. */
-	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*flinks++));
+	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*flinks--));
     }
     checkmclim(as);
   }
-  lua_assert(map + nent + 1 + snap->depth == flinks);
+  lua_assert(map + nent == flinks);
 }
 
 /* Fixup the tail code. */

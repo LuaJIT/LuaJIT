@@ -252,7 +252,6 @@ typedef struct jit_State {
 
   IRRef1 chain[IR__MAX];  /* IR instruction skip-list chain anchors. */
   TRef slot[LJ_MAX_JSLOTS+LJ_STACK_EXTRA];  /* Stack slot map. */
-  SnapEntry frame[LJ_MAX_JFRAME+2];  /* Frame link stack. */
 
   int32_t param[JIT_P__MAX];  /* JIT engine parameters. */
 
