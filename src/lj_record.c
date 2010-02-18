@@ -600,7 +600,7 @@ static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 #endif
   J->base[top] = trcont | TREF_CONT;
   for (s = J->maxslot; s < top; s++)
-    J->base[s] = TREF_NIL;
+    J->base[s] = 0;  /* Clear frame gap to avoid resurrecting previous refs. */
   return top+1;
 }
 
@@ -1982,7 +1982,11 @@ void lj_record_ins(jit_State *J)
 
   /* -- Constant and move ops --------------------------------------------- */
 
-  case BC_KSTR: case BC_KNUM: case BC_KPRI: case BC_MOV:
+  case BC_MOV:
+    /* Clear gap of method call to avoid resurrecting previous refs. */
+    if (ra > J->maxslot) J->base[ra-1] = 0;
+    break;
+  case BC_KSTR: case BC_KNUM: case BC_KPRI:
     break;
   case BC_KSHORT:
     rc = lj_ir_kint(J, (int32_t)(int16_t)rc);
