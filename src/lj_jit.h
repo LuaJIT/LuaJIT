@@ -229,7 +229,7 @@ typedef struct jit_State {
 
   int32_t instunroll;	/* Unroll counter for instable loops. */
   int32_t loopunroll;	/* Unroll counter for loop ops in side traces. */
-  int32_t tailcalled;	/* Number of successive tailcalls. */
+  uint64_t tailcalled;	/* History of the number of successive tailcalls. */
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 

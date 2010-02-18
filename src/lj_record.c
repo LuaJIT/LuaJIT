@@ -473,8 +473,8 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
 
 /* -- Record calls and returns -------------------------------------------- */
 
-/* Record call. */
-static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
+/* Record call setup. */
+static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
 {
   RecordIndex ix;
   TValue *functv = &J->L->base[func];
@@ -496,24 +496,30 @@ static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
   trfunc = lj_ir_kfunc(J, funcV(functv));
   emitir(IRTG(IR_EQ, IRT_FUNC), fbase[0], trfunc);
   fbase[0] = trfunc | TREF_FRAME;
+  J->maxslot = nargs;
+}
 
+/* Record call. */
+static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
+{
+  rec_call_setup(J, func, nargs);
   /* Bump frame. */
   J->framedepth++;
+  J->tailcalled <<= 8;  /* NYI: tail call history overflow is ignored. */
   J->base += func+1;
   J->baseslot += func+1;
-  J->maxslot = nargs;
 }
 
 /* Record tail call. */
 static void rec_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs)
 {
-  rec_call(J, func, nargs);
+  rec_call_setup(J, func, nargs);
   /* Move func + args down. */
-  J->framedepth--;
-  J->base -= func+1;
-  J->baseslot -= func+1;
   memmove(&J->base[-1], &J->base[func], sizeof(TRef)*(J->maxslot+1));
   /* Note: the new TREF_FRAME is now at J->base[-1] (even for slot #0). */
+  /* Tailcalls can form a loop, so count towards the loop unroll limit. */
+  if ((int32_t)(++J->tailcalled & 0xff) > J->loopunroll)
+    lj_trace_err(J, LJ_TRERR_LUNROLL);
 }
 
 /* Record return. */
@@ -521,6 +527,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
   TValue *frame = J->L->base - 1;
   ptrdiff_t i;
+  J->tailcalled >>= 8;
   for (i = 0; i < gotresults; i++)
     getslot(J, rbase+i);  /* Ensure all results have a reference. */
   while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
@@ -1693,7 +1700,7 @@ static uint32_t recdef_lookup(GCfunc *fn)
     return 0;
 }
 
-/* Record call to fast function or C function. */
+/* Record entry to a fast function or C function. */
 static void rec_func_ff(jit_State *J)
 {
   RecordFFData rd;
@@ -1719,7 +1726,7 @@ static void check_call_unroll(jit_State *J)
     if ((J->slot[s] & TREF_FRAME) && tref_ref(J->slot[s]) == fref)
       count++;
   if (J->pc == J->startpc) {
-    if (count + J->tailcalled > J->param[JIT_P_recunroll])
+    if (count + (int32_t)(J->tailcalled & 0xff) > J->param[JIT_P_recunroll])
       lj_trace_err(J, LJ_TRERR_NYIRECU);
   } else {
     if (count > J->param[JIT_P_callunroll])
@@ -2057,9 +2064,6 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_CALLT:
     rec_tailcall(J, ra, (ptrdiff_t)rc-1);
-    /* Tailcalls can form a loop, so count towards the loop unroll limit. */
-    if (++J->tailcalled > J->loopunroll)
-      lj_trace_err(J, LJ_TRERR_LUNROLL);
     break;
 
   /* -- Returns ----------------------------------------------------------- */
@@ -2070,7 +2074,6 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_RET: case BC_RET0: case BC_RET1:
     rec_ret(J, ra, (ptrdiff_t)rc-1);
-    J->tailcalled = 0;  /* NYI: logic is broken, need a better check. */
     break;
 
   /* -- Loops and branches ------------------------------------------------ */
