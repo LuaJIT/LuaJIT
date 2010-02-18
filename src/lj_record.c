@@ -112,21 +112,48 @@ static void rec_check_frames(jit_State *J)
   lua_assert(depth == 0);
 }
 
-/* Sanity check the slots. */
+/* Compare stack slots and frames of the recorder and the VM. */
 static void rec_check_slots(jit_State *J)
 {
   BCReg s, nslots = J->baseslot + J->maxslot;
   int32_t depth;
+  cTValue *base = J->L->base - J->baseslot;
   lua_assert(J->baseslot >= 1 && J->baseslot < LJ_MAX_JSLOTS);
+  lua_assert(J->baseslot == 1 || (J->slot[J->baseslot-1] & TREF_FRAME));
   lua_assert(nslots < LJ_MAX_JSLOTS);
   for (s = 0; s < nslots; s++) {
     TRef tr = J->slot[s];
-    if (s != 0 && (tr & (TREF_CONT|TREF_FRAME)))
-      depth++;
     if (tr) {
+      cTValue *tv = &base[s];
       IRRef ref = tref_ref(tr);
+      IRIns *ir;
       lua_assert(ref >= J->cur.nk && ref < J->cur.nins);
-      lua_assert(irt_t(IR(ref)->t) == tref_t(tr));
+      ir = IR(ref);
+      lua_assert(irt_t(ir->t) == tref_t(tr));
+      if (s == 0) {
+	lua_assert(tref_isfunc(tr));
+      } else if ((tr & TREF_FRAME)) {
+	GCfunc *fn = gco2func(frame_gc(tv));
+	BCReg delta = (BCReg)(tv - frame_prev(tv));
+	lua_assert(tref_isfunc(tr));
+	if (tref_isk(tr)) lua_assert(fn == ir_kfunc(ir));
+	lua_assert(s > delta ? (J->slot[s-delta] & TREF_FRAME) : (s == delta));
+	depth++;
+      } else if ((tr & TREF_CONT)) {
+	lua_assert(ir_kptr(ir) == gcrefp(tv->gcr, void));
+	lua_assert((J->slot[s+1] & TREF_FRAME));
+	depth++;
+      } else {
+	if (tvisnum(tv))
+	  lua_assert(tref_isnumber(tr));  /* Could be IRT_INT etc., too. */
+	else
+	  lua_assert(itype2irt(tv) == tref_type(tr));
+	if (tref_isk(tr)) {  /* Compare constants. */
+	  TValue tvk;
+	  lj_ir_kvalue(J->L, &tvk, ir);
+	  lua_assert(lj_obj_equal(tv, &tvk));
+	}
+      }
     }
   }
   lua_assert(J->framedepth == depth);
