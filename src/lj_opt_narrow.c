@@ -360,7 +360,7 @@ TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc)
       tref_isk(rc) && tref_isint(rc)) {  /* Optimize x % k. */
     int32_t k = IR(tref_ref(rc))->i;
     if (k > 0 && (k & (k-1)) == 0) {  /* i % 2^k ==> band(i, 2^k-1) */
-      if (tref_isint(rb))
+      if (tref_isinteger(rb))
 	return emitir(IRTI(IR_BAND), rb, lj_ir_kint(J, k-1));
     }
   }
@@ -381,7 +381,7 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   n = numV(vc);
   /* Limit narrowing for pow to small exponents (or for two constants). */
-  if ((tref_isint(rc) && tref_isk(rc) && tref_isk(rb)) ||
+  if ((tref_isk(rc) && tref_isint(rc) && tref_isk(rb)) ||
       ((J->flags & JIT_F_OPT_NARROW) &&
        (numisint(n) && n >= -65536.0 && n <= 65536.0))) {
     TRef tmp;
