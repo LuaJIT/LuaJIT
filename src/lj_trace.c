@@ -163,6 +163,7 @@ static void trace_unpatch(jit_State *J, Trace *T)
   BCOp op = bc_op(T->startins);
   MSize pcofs = T->snap[0].mapofs + T->snap[0].nent;
   BCIns *pc = ((BCIns *)snap_pc(T->snapmap[pcofs])) - 1;
+  UNUSED(J);
   switch (op) {
   case BC_FORL:
     lua_assert(bc_op(*pc) == BC_JFORI);
@@ -181,8 +182,9 @@ static void trace_unpatch(jit_State *J, Trace *T)
     lua_assert(bc_op(*pc) == BC_JITERL && J->trace[bc_d(*pc)] == T);
     *pc = T->startins;
     break;
-  case BC_CALL:
-    lj_trace_err(J, LJ_TRERR_NYILNKF);
+  case BC_FUNCF:
+    lua_assert(bc_op(*pc) == BC_JFUNCF && J->trace[bc_d(*pc)] == T);
+    *pc = T->startins;
     break;
   case BC_JMP:  /* No need to unpatch branches in parent traces (yet). */
   default:
@@ -384,15 +386,13 @@ static void trace_stop(jit_State *J)
     /* fallthrough */
   case BC_LOOP:
   case BC_ITERL:
+  case BC_FUNCF:
     /* Patch bytecode of starting instruction in root trace. */
     setbc_op(pc, (int)op+(int)BC_JLOOP-(int)BC_LOOP);
     setbc_d(pc, J->curtrace);
     /* Add to root trace chain in prototype. */
     J->cur.nextroot = pt->trace;
     pt->trace = (TraceNo1)J->curtrace;
-    break;
-  case BC_CALL:
-    lj_trace_err(J, LJ_TRERR_NYILNKF);
     break;
   case BC_JMP:
     /* Patch exit branch in parent to side trace entry. */

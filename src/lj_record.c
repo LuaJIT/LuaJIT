@@ -2248,6 +2248,11 @@ static const BCIns *rec_setup_root(jit_State *J)
     J->maxslot = ra;
     pc++;
     break;
+  case BC_FUNCF:
+    /* No bytecode range check for root traces started by a hot call. */
+    J->maxslot = J->pt->numparams;
+    pc++;
+    break;
   default:
     lua_assert(0);
     break;
@@ -2370,15 +2375,11 @@ void lj_record_setup(jit_State *J)
       rec_stop(J, TRACE_INTERP);
   } else {  /* Root trace. */
     J->cur.root = 0;
-    if (J->pc >= proto_bc(J->pt)) {  /* Not a hot CALL? */
-      J->cur.startins = *J->pc;
-      J->pc = rec_setup_root(J);
-      /* Note: the loop instruction itself is recorded at the end and not
-      ** at the start! So snapshot #0 needs to point to the *next* instruction.
-      */
-    } else {
-      J->cur.startins = BCINS_ABC(BC_CALL, 0, 0, 0);
-    }
+    J->cur.startins = *J->pc;
+    J->pc = rec_setup_root(J);
+    /* Note: the loop instruction itself is recorded at the end and not
+    ** at the start! So snapshot #0 needs to point to the *next* instruction.
+    */
     lj_snap_add(J);
     if (bc_op(J->cur.startins) == BC_FORL)
       rec_setup_forl(J, J->pc-1);

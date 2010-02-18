@@ -414,7 +414,8 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #if LJ_HASJIT
   J->L = L;
   if ((uintptr_t)pc & 1) {  /* Marker for hot call. */
-    lj_trace_hot(J, (const BCIns *)((uintptr_t)pc & ~(uintptr_t)1));
+    pc = (const BCIns *)((uintptr_t)pc & ~(uintptr_t)1);
+    lj_trace_hot(J, pc);
     goto out;
   } else if (J->state != LJ_TRACE_IDLE &&
 	     !(g->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
