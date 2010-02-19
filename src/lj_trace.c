@@ -574,13 +574,34 @@ static void trace_hotside(jit_State *J, const BCIns *pc)
   }
 }
 
-/* A trace exited. Restore interpreter state. */
-void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
+/* Tiny struct to pass data to protected call. */
+typedef struct ExitDataCP {
+  jit_State *J;
+  void *exptr;		/* Pointer to exit state. */
+  const BCIns *pc;	/* Restart interpreter at this PC. */
+} ExitDataCP;
+
+/* Need to protect lj_snap_restore because it may throw. */
+static TValue *trace_exit_cp(lua_State *L, lua_CFunction dummy, void *ud)
 {
-  const BCIns *pc = lj_snap_restore(J, exptr);
+  ExitDataCP *exd = (ExitDataCP *)ud;
+  cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */
+  exd->pc = lj_snap_restore(exd->J, exd->exptr);
+  UNUSED(dummy);
+  return NULL;
+}
+
+/* A trace exited. Restore interpreter state. */
+int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
+{
   lua_State *L = J->L;
-  void *cf = cframe_raw(L->cframe);
-  setcframe_pc(cf, pc);  /* Restart interpreter at this PC. */
+  ExitDataCP exd;
+  int errcode;
+  exd.J = J;
+  exd.exptr = exptr;
+  errcode = lj_vm_cpcall(L, NULL, &exd, trace_exit_cp);
+  if (errcode)
+    return errcode;
 
   lj_vmevent_send(L, TEXIT,
     ExitState *ex = (ExitState *)exptr;
@@ -600,8 +621,9 @@ void * LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     }
   );
 
-  trace_hotside(J, pc);
-  return cf;  /* Return the interpreter C frame. */
+  trace_hotside(J, exd.pc);
+  setcframe_pc(cframe_raw(L->cframe), exd.pc);
+  return 0;
 }
 
 #endif

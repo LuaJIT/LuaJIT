@@ -2591,11 +2591,14 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  lea FCARG2, [esp+16]
   |  lea FCARG1, [DISPATCH+GG_DISP2J]
   |  call extern lj_trace_exit@8	// (jit_State *J, ExitState *ex)
-  |  // Interpreter C frame returned in eax.
-  |  mov esp, eax			// Reposition stack to C frame.
+  |  // Error code returned in eax (RD).
+  |  mov RAa, L:RB->cframe
+  |  and RAa, CFRAME_RAWMASK
+  |  mov esp, RAa			// Reposition stack to C frame.
+  |  mov SAVE_L, L:RB			// Needed for on-trace resume/yield.
+  |  test RD, RD; jnz >1		// Check for error from exit.
   |  mov BASE, L:RB->base
   |  mov PC, SAVE_PC
-  |  mov SAVE_L, L:RB			// Needed for on-trace resume/yield.
   |.endif
 #endif
   |->vm_exit_interp:
@@ -2606,6 +2609,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
   |  set_vmstate INTERP
   |  ins_next
+  |
+  |1:  // Rethrow error from the right C frame.
+  |  mov FCARG1, L:RB
+  |  mov FCARG2, RD
+  |  call extern lj_err_throw@8		// (lua_State *L, int errcode)
 #endif
   |
   |//-----------------------------------------------------------------------

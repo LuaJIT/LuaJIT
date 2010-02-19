@@ -695,7 +695,7 @@ static void err_raise_ext(int errcode)
 /* -- Error handling ------------------------------------------------------ */
 
 /* Throw error. Find catch frame, unwind stack and continue. */
-LJ_NOINLINE void lj_err_throw(lua_State *L, int errcode)
+LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
 {
   global_State *g = G(L);
   lj_trace_abort(g);

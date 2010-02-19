@@ -216,7 +216,11 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   BCReg nslots = snap->nslots;
   TValue *frame;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
+  const BCIns *pc = snap_pc(map[nent]);
   lua_State *L = J->L;
+
+  /* Set interpreter PC to the next PC to get correct error messages. */
+  setcframe_pc(cframe_raw(L->cframe), pc+1);
 
   /* Make sure the stack is big enough for the slots from the snapshot. */
   if (LJ_UNLIKELY(L->base + nslots > L->maxstack)) {
@@ -289,7 +293,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   }
   L->top = curr_topL(L);
   lua_assert(map + nent == flinks);
-  return snap_pc(*flinks);
+  return pc;
 }
 
 #undef IR
