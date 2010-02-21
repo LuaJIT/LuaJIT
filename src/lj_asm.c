@@ -741,6 +741,21 @@ static void ra_evictset(ASMState *as, RegSet drop)
   }
 }
 
+/* Evict (rematerialize) all registers allocated to constants. */
+static void ra_evictk(ASMState *as)
+{
+  RegSet work = ~as->freeset & RSET_ALL;
+  while (work) {
+    Reg r = rset_pickbot(work);
+    IRRef ref = regcost_ref(as->cost[r]);
+    if (irref_isk(ref)) {
+      ra_rematk(as, IR(ref));
+      checkmclim(as);
+    }
+    rset_clear(work, r);
+  }
+}
+
 /* Allocate a register for ref from the allowed set of registers.
 ** Note: this function assumes the ref does NOT have a register yet!
 ** Picks an optimal register, sets the cost and marks the register as non-free.
@@ -2504,6 +2519,93 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 #define asm_comp(as, ir, ci, cf, cu) \
   asm_comp_(as, ir, (ci)+((cf)<<4)+(cu))
 
+/* -- Stack handling ------------------------------------------------------ */
+
+/* Get extent of the stack for a snapshot. */
+static BCReg asm_stack_extent(ASMState *as, SnapShot *snap, BCReg *ptopslot)
+{
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
+  MSize n, nent = snap->nent;
+  BCReg baseslot = 0, topslot = 0;
+  /* Must check all frames to find topslot (outer can be larger than inner). */
+  for (n = 0; n < nent; n++) {
+    SnapEntry sn = map[n];
+    if ((sn & SNAP_FRAME)) {
+      IRIns *ir = IR(snap_ref(sn));
+      GCfunc *fn = ir_kfunc(ir);
+      if (isluafunc(fn)) {
+	BCReg s = snap_slot(sn);
+	BCReg fs = s + funcproto(fn)->framesize;
+	if (fs > topslot) topslot = fs;
+	baseslot = s;
+      }
+    }
+  }
+  *ptopslot = topslot;
+  return baseslot;
+}
+
+/* Check Lua stack size for overflow. Use exit handler as fallback. */
+static void asm_stack_check(ASMState *as, BCReg topslot,
+			    Reg pbase, RegSet allow, ExitNo exitno)
+{
+  /* Try to get an unused temp. register, otherwise spill/restore eax. */
+  Reg r = allow ? rset_pickbot(allow) : RID_EAX;
+  emit_jcc(as, CC_B, exitstub_addr(as->J, exitno));
+  if (allow == RSET_EMPTY)  /* Restore temp. register. */
+    emit_rmro(as, XO_MOV, r, RID_ESP, sps_scale(SPS_TEMP1));
+  else
+    ra_modified(as, r);
+  emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*topslot));
+  if (ra_hasreg(pbase) && pbase != r)
+    emit_rr(as, XO_ARITH(XOg_SUB), r, pbase);
+  else
+    emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE,
+	      ptr2addr(&J2G(as->J)->jit_base));
+  emit_rmro(as, XO_MOV, r, r, offsetof(lua_State, maxstack));
+  emit_getgl(as, r, jit_L);
+  if (allow == RSET_EMPTY)  /* Spill temp. register. */
+    emit_rmro(as, XO_MOVto, r, RID_ESP, sps_scale(SPS_TEMP1));
+}
+
+/* Restore Lua stack from on-trace state. */
+static void asm_stack_restore(ASMState *as, SnapShot *snap)
+{
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
+  MSize n, nent = snap->nent;
+  SnapEntry *flinks = map + nent + snap->depth;
+  /* Store the value of all modified slots to the Lua stack. */
+  for (n = 0; n < nent; n++) {
+    SnapEntry sn = map[n];
+    BCReg s = snap_slot(sn);
+    int32_t ofs = 8*((int32_t)s-1);
+    IRRef ref = snap_ref(sn);
+    IRIns *ir = IR(ref);
+    /* No need to restore readonly slots and unmodified non-parent slots. */
+    if (ir->o == IR_SLOAD && ir->op1 == s &&
+	(ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
+      continue;
+    if (irt_isnum(ir->t)) {
+      Reg src = ra_alloc1(as, ref, RSET_FPR);
+      emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
+    } else {
+      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
+      if (!irref_isk(ref)) {
+	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
+	emit_movtomro(as, src, RID_BASE, ofs);
+      } else if (!irt_ispri(ir->t)) {
+	emit_movmroi(as, RID_BASE, ofs, ir->i);
+      }
+      if (!(sn & (SNAP_CONT|SNAP_FRAME)))
+	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
+      else if (s != 0)  /* Do not overwrite link to previous frame. */
+	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*flinks--));
+    }
+    checkmclim(as);
+  }
+  lua_assert(map + nent == flinks);
+}
+
 /* -- GC handling --------------------------------------------------------- */
 
 /* Sync all live GC values to Lua stack slots. */
@@ -2802,21 +2904,6 @@ static void asm_loop(ASMState *as)
 
 /* -- Head of trace ------------------------------------------------------- */
 
-/* Rematerialize all remaining constants in registers. */
-static void asm_const_remat(ASMState *as)
-{
-  RegSet work = ~as->freeset & RSET_ALL;
-  while (work) {
-    Reg r = rset_pickbot(work);
-    IRRef ref = regcost_ref(as->cost[r]);
-    if (irref_isk(ref)) {
-      ra_rematk(as, IR(ref));
-      checkmclim(as);
-    }
-    rset_clear(work, r);
-  }
-}
-
 /* Coalesce BASE register for a root trace. */
 static void asm_head_root_base(ASMState *as)
 {
@@ -2842,32 +2929,6 @@ static void asm_head_root(ASMState *as)
   emit_addptr(as, RID_ESP, -spadj);
   /* Root traces assume a checked stack for the starting proto. */
   as->T->topslot = gcref(as->T->startpt)->pt.framesize;
-}
-
-/* Check Lua stack size for overflow at the start of a side trace.
-** Stack overflow is rare, so let the regular exit handling fix this up.
-** This is done in the context of the *parent* trace and parent exitno!
-*/
-static void asm_checkstack(ASMState *as, BCReg topslot,
-			   Reg pbase, RegSet allow, ExitNo exitno)
-{
-  /* Try to get an unused temp. register, otherwise spill/restore eax. */
-  Reg r = allow ? rset_pickbot(allow) : RID_EAX;
-  emit_jcc(as, CC_B, exitstub_addr(as->J, exitno));
-  if (allow == RSET_EMPTY)  /* Restore temp. register. */
-    emit_rmro(as, XO_MOV, r, RID_ESP, sps_scale(SPS_TEMP1));
-  else
-    ra_modified(as, r);
-  emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*topslot));
-  if (ra_hasreg(pbase) && pbase != r)
-    emit_rr(as, XO_ARITH(XOg_SUB), r, pbase);
-  else
-    emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE,
-	      ptr2addr(&J2G(as->J)->jit_base));
-  emit_rmro(as, XO_MOV, r, r, offsetof(lua_State, maxstack));
-  emit_getgl(as, r, jit_L);
-  if (allow == RSET_EMPTY)  /* Spill temp. register. */
-    emit_rmro(as, XO_MOVto, r, RID_ESP, sps_scale(SPS_TEMP1));
 }
 
 /* Coalesce or reload BASE register for a side trace. */
@@ -3039,88 +3100,38 @@ static void asm_head_side(ASMState *as)
   if (as->topslot > as->T->topslot) {  /* Need to check for higher slot? */
     as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
     /* Reuse the parent exit in the context of the parent trace. */
-    asm_checkstack(as, as->topslot, pbase, allow & RSET_GPR, as->J->exitno);
+    asm_stack_check(as, as->topslot, pbase, allow & RSET_GPR, as->J->exitno);
   }
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
 
-/* Sync Lua stack slots to match the last snapshot.
-** Note: code generation is backwards, so this is best read bottom-up.
-*/
-static void asm_tail_sync(ASMState *as)
+/* Link to another trace. */
+static void asm_tail_link(ASMState *as)
 {
   SnapNo snapno = as->T->nsnap-1;  /* Last snapshot. */
   SnapShot *snap = &as->T->snap[snapno];
-  MSize n, nent = snap->nent;
-  SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nent + snap->depth;
-  BCReg newbase = 0, topslot = 0;
+  BCReg baseslot = asm_stack_extent(as, snap, &as->topslot);
 
   checkmclim(as);
   ra_allocref(as, REF_BASE, RID2RSET(RID_BASE));
 
-  /* Must check all frames to find topslot (outer can be larger than inner). */
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    if ((sn & SNAP_FRAME)) {
-      IRIns *ir = IR(snap_ref(sn));
-      GCfunc *fn = ir_kfunc(ir);
-      if (isluafunc(fn)) {
-	BCReg s = snap_slot(sn);
-	BCReg fs = s + funcproto(fn)->framesize;
-	if (fs > topslot) topslot = fs;
-	newbase = s;
-      }
-    }
-  }
-  as->topslot = topslot;  /* Used in asm_head_side(). */
-
   if (as->T->link == TRACE_INTERP) {
     /* Setup fixed registers for exit to interpreter. */
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
-    emit_loadi(as, RID_PC, (int32_t)map[nent]);
-  } else if (newbase) {
+    emit_loada(as, RID_PC, snap_pc(as->T->snapmap[snap->mapofs + snap->nent]));
+  } else if (baseslot) {
     /* Save modified BASE for linking to trace with higher start frame. */
     emit_setgl(as, RID_BASE, jit_base);
   }
+  emit_addptr(as, RID_BASE, 8*(int32_t)baseslot);
 
-  emit_addptr(as, RID_BASE, 8*(int32_t)newbase);
-
-  /* Store the value of all modified slots to the Lua stack. */
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    BCReg s = snap_slot(sn);
-    int32_t ofs = 8*((int32_t)s-1);
-    IRRef ref = snap_ref(sn);
-    IRIns *ir = IR(ref);
-    /* No need to restore readonly slots and unmodified non-parent slots. */
-    if (ir->o == IR_SLOAD && ir->op1 == s &&
-	(ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
-      continue;
-    if (irt_isnum(ir->t)) {
-      Reg src = ra_alloc1(as, ref, RSET_FPR);
-      emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
-    } else {
-      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
-      if (!irref_isk(ref)) {
-	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
-	emit_movtomro(as, src, RID_BASE, ofs);
-      } else if (!irt_ispri(ir->t)) {
-	emit_movmroi(as, RID_BASE, ofs, ir->i);
-      }
-      if (!(sn & (SNAP_CONT|SNAP_FRAME)))
-	emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));
-      else if (s != 0)  /* Do not overwrite link to previous frame. */
-	emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*flinks--));
-    }
-    checkmclim(as);
-  }
-  lua_assert(map + nent == flinks);
+  /* Sync the interpreter state with the on-trace state. */
+  asm_stack_restore(as, snap);
 
   /* Root traces that grow the stack need to check the stack at the end. */
-  if (!as->parent && topslot)
-    asm_checkstack(as, topslot, RID_BASE, as->freeset & RSET_GPR, snapno);
+  if (!as->parent && as->topslot)
+    asm_stack_check(as, as->topslot, RID_BASE, as->freeset & RSET_GPR, snapno);
 }
 
 /* Fixup the tail code. */
@@ -3483,7 +3494,7 @@ void lj_asm_trace(jit_State *J, Trace *T)
       /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
       as->mcp -= (as->flags & JIT_F_LEA_AGU) ? 7 : 6;
       as->invmcp = NULL;
-      asm_tail_sync(as);
+      asm_tail_link(as);
     }
     asm_trace(as);
   } while (as->realign);  /* Retry in case the MCode needs to be realigned. */
@@ -3492,7 +3503,7 @@ void lj_asm_trace(jit_State *J, Trace *T)
   checkmclim(as);
   if (as->gcsteps)
     asm_gc_check(as, &as->T->snap[0]);
-  asm_const_remat(as);
+  ra_evictk(as);
   if (as->parent)
     asm_head_side(as);
   else
