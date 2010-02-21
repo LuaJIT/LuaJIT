@@ -169,6 +169,10 @@ typedef struct Trace {
   TraceNo1 nextside;	/* Next side trace of same root trace. */
   uint16_t nchild;	/* Number of child traces (root trace only). */
   uint16_t spadjust;	/* Stack pointer adjustment (offset in bytes). */
+  uint8_t topslot;	/* Top stack slot already checked to be allocated. */
+  uint8_t unused1;
+  uint8_t unused2;
+  uint8_t unused3;
 #ifdef LUAJIT_USE_GDBJIT
   void *gdbjit_entry;	/* GDB JIT entry. */
 #endif
@@ -227,9 +231,9 @@ typedef struct jit_State {
 
   TraceState state;	/* Trace compiler state. */
 
+  uint64_t tailcalled;	/* History of the number of successive tailcalls. */
   int32_t instunroll;	/* Unroll counter for instable loops. */
   int32_t loopunroll;	/* Unroll counter for loop ops in side traces. */
-  uint64_t tailcalled;	/* History of the number of successive tailcalls. */
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 

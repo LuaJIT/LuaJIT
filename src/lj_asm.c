@@ -2840,19 +2840,24 @@ static void asm_head_root(ASMState *as)
   spadj = sps_adjust(as->evenspill);
   as->T->spadjust = (uint16_t)spadj;
   emit_addptr(as, RID_ESP, -spadj);
+  /* Root traces assume a checked stack for the starting proto. */
+  as->T->topslot = gcref(as->T->startpt)->pt.framesize;
 }
 
 /* Check Lua stack size for overflow at the start of a side trace.
 ** Stack overflow is rare, so let the regular exit handling fix this up.
 ** This is done in the context of the *parent* trace and parent exitno!
 */
-static void asm_checkstack(ASMState *as, BCReg topslot, Reg pbase, RegSet allow)
+static void asm_checkstack(ASMState *as, BCReg topslot,
+			   Reg pbase, RegSet allow, ExitNo exitno)
 {
   /* Try to get an unused temp. register, otherwise spill/restore eax. */
   Reg r = allow ? rset_pickbot(allow) : RID_EAX;
-  emit_jcc(as, CC_B, exitstub_addr(as->J, as->J->exitno));
+  emit_jcc(as, CC_B, exitstub_addr(as->J, exitno));
   if (allow == RSET_EMPTY)  /* Restore temp. register. */
     emit_rmro(as, XO_MOV, r, RID_ESP, sps_scale(SPS_TEMP1));
+  else
+    ra_modified(as, r);
   emit_gri(as, XG_ARITHi(XOg_CMP), r, (int32_t)(8*topslot));
   if (ra_hasreg(pbase) && pbase != r)
     emit_rr(as, XO_ARITH(XOg_SUB), r, pbase);
@@ -3029,9 +3034,13 @@ static void asm_head_side(ASMState *as)
     /* Continue with coalescing to fix up the broken cycle(s). */
   }
 
-  /* Check Lua stack size if frames have been added. */
-  if (as->topslot)
-    asm_checkstack(as, as->topslot, pbase, allow & RSET_GPR);
+  /* Inherit top stack slot already checked by parent trace. */
+  as->T->topslot = as->parent->topslot;
+  if (as->topslot > as->T->topslot) {  /* Need to check for higher slot? */
+    as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
+    /* Reuse the parent exit in the context of the parent trace. */
+    asm_checkstack(as, as->topslot, pbase, allow & RSET_GPR, as->J->exitno);
+  }
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
@@ -3041,7 +3050,8 @@ static void asm_head_side(ASMState *as)
 */
 static void asm_tail_sync(ASMState *as)
 {
-  SnapShot *snap = &as->T->snap[as->T->nsnap-1];  /* Last snapshot. */
+  SnapNo snapno = as->T->nsnap-1;  /* Last snapshot. */
+  SnapShot *snap = &as->T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
   SnapEntry *flinks = map + nent + snap->depth;
@@ -3107,6 +3117,10 @@ static void asm_tail_sync(ASMState *as)
     checkmclim(as);
   }
   lua_assert(map + nent == flinks);
+
+  /* Root traces that grow the stack need to check the stack at the end. */
+  if (!as->parent && topslot)
+    asm_checkstack(as, topslot, RID_BASE, as->freeset & RSET_GPR, snapno);
 }
 
 /* Fixup the tail code. */
@@ -3479,7 +3493,7 @@ void lj_asm_trace(jit_State *J, Trace *T)
   if (as->gcsteps)
     asm_gc_check(as, &as->T->snap[0]);
   asm_const_remat(as);
-  if (J->parent)
+  if (as->parent)
     asm_head_side(as);
   else
     asm_head_root(as);
