@@ -1726,8 +1726,10 @@ static void check_call_unroll(jit_State *J)
     if ((J->slot[s] & TREF_FRAME) && tref_ref(J->slot[s]) == fref)
       count++;
   if (J->pc == J->startpc) {
-    if (count + (int32_t)(J->tailcalled & 0xff) > J->param[JIT_P_recunroll])
-      lj_trace_err(J, LJ_TRERR_NYIRECU);
+    if (count + (int32_t)(J->tailcalled & 0xff) > J->param[JIT_P_recunroll]) {
+      J->pc++;
+      rec_stop(J, J->curtrace);  /* Up-recursion or tail-recursion. */
+    }
   } else {
     if (count > J->param[JIT_P_callunroll])
       lj_trace_err(J, LJ_TRERR_CUNROLL);

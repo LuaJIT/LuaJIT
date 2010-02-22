@@ -76,7 +76,7 @@
   _(\012, instunroll,	4)	/* Max. unroll for instable loops. */ \
   _(\012, loopunroll,	7)	/* Max. unroll for loop ops in side traces. */ \
   _(\012, callunroll,	3)	/* Max. unroll for recursive calls. */ \
-  _(\011, recunroll,	0)	/* Max. unroll for true recursion. */ \
+  _(\011, recunroll,	2)	/* Max. unroll for true recursion. */ \
   \
   /* Size of each machine code area (in KBytes). */ \
   _(\011, sizemcode,	JIT_P_sizemcode_DEFAULT) \
