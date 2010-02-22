@@ -3532,8 +3532,16 @@ void lj_asm_patchexit(jit_State *J, Trace *T, ExitNo exitno, MCode *target)
   MSize len = T->szmcode;
   MCode *px = exitstub_addr(J, exitno) - 6;
   MCode *pe = p+len-6;
+  uint32_t stateaddr = u32ptr(&J2G(J)->vmstate);
   if (len > 5 && p[len-5] == XI_JMP && p+len-6 + *(int32_t *)(p+len-4) == px)
     *(int32_t *)(p+len-4) = (int32_t)(target - (p+len));
+  /* Do not patch parent exit for a stack check. Skip beyond vmstate update. */
+  for (; p < pe; p++)
+    if (*(uint32_t *)(p+(LJ_64 ? 3 : 2)) == stateaddr && p[0] == XI_MOVmi) {
+      p += LJ_64 ? 11 : 10;
+      break;
+    }
+  lua_assert(p < pe);
   for (; p < pe; p++) {
     if ((*(uint16_t *)p & 0xf0ff) == 0x800f && p + *(int32_t *)(p+2) == px) {
       *(int32_t *)(p+2) = (int32_t)(target - (p+6));
