@@ -505,7 +505,6 @@ static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
   rec_call_setup(J, func, nargs);
   /* Bump frame. */
   J->framedepth++;
-  J->tailcalled <<= 8;  /* NYI: tail call history overflow is ignored. */
   J->base += func+1;
   J->baseslot += func+1;
 }
@@ -518,7 +517,7 @@ static void rec_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs)
   memmove(&J->base[-1], &J->base[func], sizeof(TRef)*(J->maxslot+1));
   /* Note: the new TREF_FRAME is now at J->base[-1] (even for slot #0). */
   /* Tailcalls can form a loop, so count towards the loop unroll limit. */
-  if ((int32_t)(++J->tailcalled & 0xff) > J->loopunroll)
+  if (++J->tailcalled > J->loopunroll)
     lj_trace_err(J, LJ_TRERR_LUNROLL);
 }
 
@@ -527,7 +526,6 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
   TValue *frame = J->L->base - 1;
   ptrdiff_t i;
-  J->tailcalled >>= 8;
   for (i = 0; i < gotresults; i++)
     getslot(J, rbase+i);  /* Ensure all results have a reference. */
   while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
@@ -1726,7 +1724,7 @@ static void check_call_unroll(jit_State *J)
     if ((J->slot[s] & TREF_FRAME) && tref_ref(J->slot[s]) == fref)
       count++;
   if (J->pc == J->startpc) {
-    if (count + (int32_t)(J->tailcalled & 0xff) > J->param[JIT_P_recunroll]) {
+    if (count + J->tailcalled > J->param[JIT_P_recunroll]) {
       J->pc++;
       rec_stop(J, J->curtrace);  /* Up-recursion or tail-recursion. */
     }
