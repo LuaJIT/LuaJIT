@@ -479,9 +479,10 @@ static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
   RecordIndex ix;
   TValue *functv = &J->L->base[func];
   TRef trfunc, *fbase = &J->base[func];
-
+  ptrdiff_t i;
+  for (i = 0; i <= nargs; i++)
+    getslot(J, func+i);  /* Ensure func and all args have a reference. */
   if (!tref_isfunc(fbase[0])) {  /* Resolve __call metamethod. */
-    ptrdiff_t i;
     ix.tab = fbase[0];
     copyTV(J->L, &ix.tabv, functv);
     if (!rec_mm_lookup(J, &ix, MM_call) || !tref_isfunc(ix.mobj))
@@ -1019,15 +1020,29 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   }
 }
 
-/* -- Record calls to fast functions -------------------------------------- */
+/* -- Fast function recording handlers ------------------------------------ */
 
-/* Note: The function and the arguments for the bytecode CALL instructions
-** always occupy _new_ stack slots (above the highest active variable).
-** This means they must have been stored there by previous instructions
-** (MOV, K*, ADD etc.) which must be part of the same trace. This in turn
-** means their reference slots are already valid and their types have
-** already been specialized (i.e. getslot() would be redundant).
-** The 1st slot beyond the arguments is set to 0 before calling recff_*.
+/* Conventions for fast function call handlers:
+**
+** The argument slots start at J->base[0]. All of them are guaranteed to be
+** valid and type-specialized references. J->base[J->maxslot] is set to 0
+** as a sentinel. The runtime argument values start at rd->argv[0].
+**
+** In general fast functions should check for presence of all of their
+** arguments and for the correct argument types. Some simplifications
+** are allowed if the interpreter throws instead. But even if recording
+** is aborted, the generated IR must be consistent (no zero-refs).
+**
+** The number of results in rd->nres is set to 1. Handlers that return
+** a different number of results need to override it. A negative value
+** prevents return processing (e.g. for pending calls).
+**
+** Results need to be stored starting at J->base[0]. Return processing
+** moves them to the right slots later.
+**
+** The per-ffid auxiliary data is the value of the 2nd part of the
+** LJLIB_REC() annotation. This allows handling similar functionality
+** in a common handler.
 */
 
 /* Data used by handlers to record a fast function. */
@@ -1687,6 +1702,8 @@ static void LJ_FASTCALL recff_io_flush(jit_State *J, RecordFFData *rd)
     emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, 0));
   J->base[0] = TREF_TRUE;
 }
+
+/* -- Record calls to fast functions -------------------------------------- */
 
 #include "lj_recdef.h"
 
