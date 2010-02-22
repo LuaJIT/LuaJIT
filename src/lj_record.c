@@ -1947,7 +1947,7 @@ void lj_record_ins(jit_State *J)
     } else {
       ix.tab = rc;
       copyTV(J->L, &ix.tabv, &ix.keyv);
-      ix.key = IRT_NIL;
+      ix.key = TREF_NIL;
       setnilV(&ix.keyv);
       rc = rec_mm_arith(J, &ix, MM_len);
     }
