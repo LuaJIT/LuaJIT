@@ -203,7 +203,7 @@ Here are the parameters and their default settings:
 <tr class="odd">
 <td class="param_name">maxsnap</td><td class="param_default">100</td><td class="param_desc">Max. number of snapshots for a trace</td></tr>
 <tr class="even separate">
-<td class="param_name">hotloop</td><td class="param_default">57</td><td class="param_desc">Number of iterations to detect a hot loop</td></tr>
+<td class="param_name">hotloop</td><td class="param_default">56</td><td class="param_desc">Number of iterations to detect a hot loop or hot call</td></tr>
 <tr class="odd">
 <td class="param_name">hotexit</td><td class="param_default">10</td><td class="param_desc">Number of taken exits to start a side trace</td></tr>
 <tr class="even">
@@ -214,9 +214,11 @@ Here are the parameters and their default settings:
 <td class="param_name">loopunroll</td><td class="param_default">7</td><td class="param_desc">Max. unroll factor for loop ops in side traces</td></tr>
 <tr class="odd">
 <td class="param_name">callunroll</td><td class="param_default">3</td><td class="param_desc">Max. unroll factor for pseudo-recursive calls</td></tr>
-<tr class="even separate">
+<tr class="even">
+<td class="param_name">recunroll</td><td class="param_default">2</td><td class="param_desc">Min. unroll factor for true recursion</td></tr>
+<tr class="odd separate">
 <td class="param_name">sizemcode</td><td class="param_default">32</td><td class="param_desc">Size of each machine code area in KBytes (Windows: 64K)</td></tr>
-<tr class="odd">
+<tr class="even">
 <td class="param_name">maxmcode</td><td class="param_default">512</td><td class="param_desc">Max. total size of all machine code areas in KBytes</td></tr>
 </table>
 <br class="flush">

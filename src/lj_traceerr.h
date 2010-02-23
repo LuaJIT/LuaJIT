@@ -10,13 +10,13 @@ TREDEF(RECERR,	"error thrown or hook called during recording")
 TREDEF(TRACEOV,	"trace too long")
 TREDEF(STACKOV,	"trace too deep")
 TREDEF(SNAPOV,	"too many snapshots")
+TREDEF(BLACKL,	"blacklisted")
 TREDEF(NYIBC,	"NYI: bytecode %d")
 
 /* Recording loop ops. */
 TREDEF(LLEAVE,	"leaving loop in root trace")
 TREDEF(LINNER,	"inner loop in root trace")
 TREDEF(LUNROLL,	"loop unroll limit reached")
-TREDEF(LBLACKL,	"blacklisted loop")
 
 /* Recording calls/returns. */
 TREDEF(BADTYPE,	"bad argument type")

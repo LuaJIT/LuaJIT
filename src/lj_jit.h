@@ -69,14 +69,14 @@
   _(\007, maxside,	100)	/* Max. # of side traces of a root trace. */ \
   _(\007, maxsnap,	100)	/* Max. # of snapshots for a trace. */ \
   \
-  _(\007, hotloop,	57)	/* # of iterations to detect a hot loop. */ \
+  _(\007, hotloop,	56)	/* # of iter. to detect a hot loop/call. */ \
   _(\007, hotexit,	10)	/* # of taken exits to start a side trace. */ \
   _(\007, tryside,	4)	/* # of attempts to compile a side trace. */ \
   \
   _(\012, instunroll,	4)	/* Max. unroll for instable loops. */ \
   _(\012, loopunroll,	7)	/* Max. unroll for loop ops in side traces. */ \
   _(\012, callunroll,	3)	/* Max. unroll for recursive calls. */ \
-  _(\011, recunroll,	2)	/* Max. unroll for true recursion. */ \
+  _(\011, recunroll,	2)	/* Min. unroll for true recursion. */ \
   \
   /* Size of each machine code area (in KBytes). */ \
   _(\011, sizemcode,	JIT_P_sizemcode_DEFAULT) \
@@ -181,13 +181,15 @@ typedef struct Trace {
 
 /* Round-robin penalty cache for bytecodes leading to aborted traces. */
 typedef struct HotPenalty {
-  const BCIns *pc;	/* Starting bytecode PC. */
+  MRef pc;		/* Starting bytecode PC. */
   uint16_t val;		/* Penalty value, i.e. hotcount start. */
   uint16_t reason;	/* Abort reason (really TraceErr). */
 } HotPenalty;
 
-/* Number of slots for the penalty cache. Must be a power of 2. */
-#define PENALTY_SLOTS	16
+#define PENALTY_SLOTS	64	/* Penalty cache slot. Must be a power of 2. */
+#define PENALTY_MIN	36	/* Minimum penalty value. */
+#define PENALTY_MAX	60000	/* Maximum penalty value. */
+#define PENALTY_RNDBITS	4	/* # of random bits to add to penalty value. */
 
 /* Round-robin backpropagation cache for narrowing conversions. */
 typedef struct BPropEntry {
@@ -264,6 +266,7 @@ typedef struct jit_State {
 
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
+  uint32_t prngstate;	/* PRNG state for penalty randomization. */
 
   BPropEntry bpropcache[BPROP_SLOTS];  /* Backpropagation cache slots. */
   uint32_t bpropslot;	/* Round-robin index into bpropcache slots. */

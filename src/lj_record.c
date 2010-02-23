@@ -419,9 +419,9 @@ static int innerloopleft(jit_State *J, const BCIns *pc)
 {
   ptrdiff_t i;
   for (i = 0; i < PENALTY_SLOTS; i++)
-    if (J->penalty[i].pc == pc) {
+    if (mref(J->penalty[i].pc, const BCIns) == pc) {
       if (J->penalty[i].reason == LJ_TRERR_LLEAVE &&
-	  J->penalty[i].val >= 2*HOTCOUNT_MIN_PENALTY)
+	  J->penalty[i].val >= 2*PENALTY_MIN)
 	return 1;
       break;
     }
@@ -2149,7 +2149,7 @@ void lj_record_ins(jit_State *J)
   case BC_ILOOP:
   case BC_IFUNCF:
   case BC_IFUNCV:
-    lj_trace_err(J, LJ_TRERR_LBLACKL);
+    lj_trace_err(J, LJ_TRERR_BLACKL);
     break;
 
   case BC_JMP:

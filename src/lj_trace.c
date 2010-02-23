@@ -294,26 +294,49 @@ void lj_trace_freestate(global_State *g)
   lj_mem_freevec(g, J->trace, J->sizetrace, Trace *);
 }
 
-/* -- Trace compiler state machine ---------------------------------------- */
+/* -- Penalties and blacklisting ------------------------------------------ */
 
-/* Penalize a bytecode instruction by bumping its hot counter. */
-static void hotpenalty(jit_State *J, const BCIns *pc, TraceError e)
+/* Trivial PRNG for randomization of penalties. */
+static uint32_t penalty_prng(jit_State *J, int bits)
 {
-  uint32_t i, val = HOTCOUNT_MIN_PENALTY;
+  /* Yes, this LCG is very weak, but that doesn't matter for our use case. */
+  J->prngstate = J->prngstate * 1103515245 + 12345;
+  return J->prngstate >> (32-bits);
+}
+
+/* Blacklist a bytecode instruction. */
+static void blacklist_pc(GCproto *pt, BCIns *pc)
+{
+  setbc_op(pc, (int)bc_op(*pc)+(int)BC_ILOOP-(int)BC_LOOP);
+  pt->flags |= PROTO_HAS_ILOOP;
+}
+
+/* Penalize a bytecode instruction. */
+static void penalty_pc(jit_State *J, GCproto *pt, BCIns *pc, TraceError e)
+{
+  uint32_t i, val = PENALTY_MIN;
   for (i = 0; i < PENALTY_SLOTS; i++)
-    if (J->penalty[i].pc == pc) {
-      val = ((uint32_t)J->penalty[i].val << 1) + 1;
-      if (val > HOTCOUNT_MAX_PENALTY) val = HOTCOUNT_MAX_PENALTY;
+    if (mref(J->penalty[i].pc, const BCIns) == pc) {  /* Cache slot found? */
+      /* First try to bump its hotcount several times. */
+      val = ((uint32_t)J->penalty[i].val << 1) +
+	    penalty_prng(J, PENALTY_RNDBITS);
+      if (val > PENALTY_MAX) {
+	blacklist_pc(pt, pc);  /* Blacklist it, if that didn't help. */
+	return;
+      }
       goto setpenalty;
     }
+  /* Assign a new penalty cache slot. */
   i = J->penaltyslot;
   J->penaltyslot = (J->penaltyslot + 1) & (PENALTY_SLOTS-1);
-  J->penalty[i].pc = pc;
+  setmref(J->penalty[i].pc, pc);
 setpenalty:
   J->penalty[i].val = (uint16_t)val;
   J->penalty[i].reason = e;
   hotcount_set(J2GG(J), pc+1, val);
 }
+
+/* -- Trace compiler state machine ---------------------------------------- */
 
 /* Start tracing. */
 static void trace_start(jit_State *J)
@@ -433,8 +456,9 @@ static int trace_abort(jit_State *J)
     J->state = LJ_TRACE_ASM;
     return 1;  /* Retry ASM with new MCode area. */
   }
+  /* Penalize or blacklist starting bytecode instruction. */
   if (J->parent == 0)
-    hotpenalty(J, J->startpc, e);  /* Penalize starting instruction. */
+    penalty_pc(J, &gcref(J->cur.startpt)->pt, (BCIns *)J->startpc, e);
   if (J->curtrace) {  /* Is there anything to abort? */
     ptrdiff_t errobj = savestack(L, L->top-1);  /* Stack may be resized. */
     lj_vmevent_send(L, TRACE,

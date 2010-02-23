@@ -19,8 +19,6 @@ typedef uint16_t HotCount;
 /* Number of hot counter hash table entries (must be a power of two). */
 #define HOTCOUNT_SIZE		64
 #define HOTCOUNT_PCMASK		((HOTCOUNT_SIZE-1)*sizeof(HotCount))
-#define HOTCOUNT_MIN_PENALTY	103
-#define HOTCOUNT_MAX_PENALTY	60000
 
 /* This solves a circular dependency problem -- bump as needed. Sigh. */
 #define GG_NUM_ASMFF	62
