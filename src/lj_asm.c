@@ -817,7 +817,8 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   as->cost[down] = 0;
   lua_assert((down < RID_MAX_GPR) == (up < RID_MAX_GPR));
   lua_assert(!rset_test(as->freeset, down) && rset_test(as->freeset, up));
-  rset_set(as->freeset, down);  /* 'down' is free ... */
+  ra_free(as, down);  /* 'down' is free ... */
+  ra_modified(as, down);
   rset_clear(as->freeset, up);  /* ... and 'up' is now allocated. */
   ra_noweak(as, up);
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
