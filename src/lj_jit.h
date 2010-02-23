@@ -125,6 +125,7 @@ typedef uint32_t SnapEntry;
 
 #define SNAP_FRAME		0x010000	/* Frame slot. */
 #define SNAP_CONT		0x020000	/* Continuation slot. */
+#define SNAP_NORESTORE		0x040000	/* No need to restore slot. */
 LJ_STATIC_ASSERT(SNAP_FRAME == TREF_FRAME);
 LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 

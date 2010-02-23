@@ -2581,9 +2581,7 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
     int32_t ofs = 8*((int32_t)s-1);
     IRRef ref = snap_ref(sn);
     IRIns *ir = IR(ref);
-    /* No need to restore readonly slots and unmodified non-parent slots. */
-    if (ir->o == IR_SLOAD && ir->op1 == s &&
-	(ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
+    if ((sn & SNAP_NORESTORE))
       continue;
     if (irt_isnum(ir->t)) {
       Reg src = ra_alloc1(as, ref, RSET_FPR);

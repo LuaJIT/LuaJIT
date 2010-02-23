@@ -53,16 +53,24 @@ void lj_snap_grow_map_(jit_State *J, MSize need)
 /* Add all modified slots to the snapshot. */
 static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 {
+  IRRef retf = J->chain[IR_RETF];  /* Limits SLOAD restore elimination. */
   BCReg s;
   MSize n = 0;
   for (s = 0; s < nslots; s++) {
     TRef tr = J->slot[s];
     IRRef ref = tref_ref(tr);
     if (ref) {
+      SnapEntry sn = SNAP_TR(s, tr);
       IRIns *ir = IR(ref);
-      if (!(ir->o == IR_SLOAD && ir->op1 == s &&
-	    !(ir->op2 & IRSLOAD_INHERIT)))
-	map[n++] = SNAP_TR(s, tr);
+      if (ir->o == IR_SLOAD && ir->op1 == s && ref > retf) {
+	/* No need to snapshot unmodified non-inherited slots. */
+	if (!(ir->op2 & IRSLOAD_INHERIT))
+	  continue;
+	/* No need to restore readonly slots and unmodified non-parent slots. */
+	if ((ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
+	  sn |= SNAP_NORESTORE;
+      }
+      map[n++] = sn;
     }
   }
   return n;
