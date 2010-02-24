@@ -362,6 +362,7 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 
 #define irt_isnil(t)		(irt_type(t) == IRT_NIL)
 #define irt_ispri(t)		((uint32_t)irt_type(t) <= IRT_TRUE)
+#define irt_islightud(t)	(irt_type(t) == IRT_LIGHTUD)
 #define irt_isstr(t)		(irt_type(t) == IRT_STR)
 #define irt_isfunc(t)		(irt_type(t) == IRT_FUNC)
 #define irt_istab(t)		(irt_type(t) == IRT_TAB)
@@ -376,9 +377,20 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isgcv(t)		(irt_typerange((t), IRT_STR, IRT_UDATA))
 #define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD, IRT_UDATA))
 
-#define itype2irt(tv) \
-  (~uitype(tv) < IRT_NUM ? cast(IRType, ~uitype(tv)) : IRT_NUM)
-#define irt_toitype(t)		((int32_t)~(uint32_t)irt_type(t))
+static LJ_AINLINE IRType itype2irt(const TValue *tv)
+{
+  if (tvisnum(tv))
+    return IRT_NUM;
+#if LJ_64
+  else if (tvislightud(tv))
+    return IRT_LIGHTUD;
+#endif
+  else
+    return cast(IRType, ~uitype(tv));
+}
+
+#define irt_toitype(t) \
+  check_exp(!(LJ_64 && irt_islightud((t))), (int32_t)~(uint32_t)irt_type((t)))
 
 #define irt_isguard(t)		((t).irt & IRT_GUARD)
 #define irt_ismarked(t)		((t).irt & IRT_MARK)

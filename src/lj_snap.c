@@ -279,6 +279,11 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  setintV(o, *sps);
 	} else if (irt_isnum(t)) {
 	  o->u64 = *(uint64_t *)sps;
+#if LJ_64
+	} else if (irt_islightud(t)) {
+	  /* 64 bit lightuserdata which may escape already has the tag bits. */
+	  o->u64 = *(uint64_t *)sps;
+#endif
 	} else {
 	  lua_assert(!irt_ispri(t));  /* PRI refs never have a spill slot. */
 	  setgcrefi(o->gcr, *sps);
@@ -291,6 +296,11 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  setintV(o, ex->gpr[r-RID_MIN_GPR]);
 	} else if (irt_isnum(t)) {
 	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
+#if LJ_64
+	} else if (irt_islightud(t)) {
+	  /* 64 bit lightuserdata which may escape already has the tag bits. */
+	  o->u64 = ex->gpr[r-RID_MIN_GPR];
+#endif
 	} else {
 	  if (!irt_ispri(t))
 	    setgcrefi(o->gcr, ex->gpr[r-RID_MIN_GPR]);

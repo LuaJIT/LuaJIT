@@ -96,20 +96,24 @@ enum {
 
 /* -- Spill slots --------------------------------------------------------- */
 
-/* Stack layout for the compiled machine code (after stack adjustment). */
-enum {
-  SPS_TEMP1,		/* Temps (3*dword) for calls and asm_x87load. */
-  SPS_TEMP2,
-  SPS_TEMP3,
-  SPS_FIRST,		/* First spill slot for general use. */
+/* Available fixed spill slots in interpreter frame.
+** This definition must match with the *.dasc file(s).
+*/
+#if LJ_64
+#ifdef _WIN64
+#define SPS_FIXED	(5*2)
+#else
+#define SPS_FIXED	2
+#endif
+#else
+#define SPS_FIXED	6
+#endif
 
-  /* This definition must match with the *.dasc file(s). */
-  SPS_FIXED = 6		/* Available fixed spill slots in interpreter frame. */
-};
+/* First spill slot for general use. Reserve one 64 bit slot. */
+#define SPS_FIRST	2
 
 /* Spill slots are 32 bit wide. An even/odd pair is used for FPRs. */
 #define sps_scale(slot)		(4 * (int32_t)(slot))
-#define sps_adjust(slot)	(sps_scale(((slot)-SPS_FIXED+3)&~3))
 
 /* -- Exit state ---------------------------------------------------------- */
 
@@ -241,6 +245,8 @@ typedef uint32_t x86Group;
 
 #define XG_(i8, i, g)	((x86Group)(((i8) << 16) + ((i) << 8) + (g)))
 #define XG_ARITHi(g)	XG_(XI_ARITHi8, XI_ARITHi, g)
+#define XG_TOXOi(xg)	((x86Op)(0x000000fe + (((xg)<<16) & 0xff000000)))
+#define XG_TOXOi8(xg)	((x86Op)(0x000000fe + (((xg)<<8) & 0xff000000)))
 
 #define XO_ARITH(a)	((x86Op)(0x030000fe + ((a)<<27)))
 
