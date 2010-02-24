@@ -1263,6 +1263,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |.ffunc_1 type
   |  mov RB, [BASE+4]
+  |.if X64
+  |  mov RA, RB
+  |  sar RA, 15
+  |  cmp RA, -2
+  |  je >3
+  |.endif
   |  mov RC, ~LJ_TNUMX
   |  not RB
   |  cmp RC, RB
@@ -1271,12 +1277,18 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   ||} else {
   |  jbe >1; mov RC, RB; 1:
   ||}
+  |2:
   |  mov CFUNC:RB, [BASE-8]
   |  mov STR:RC, [CFUNC:RB+RC*8+((char *)(&((GCfuncC *)0)->upvalue))]
   |  mov PC, [BASE-4]
   |  mov dword [BASE-4], LJ_TSTR
   |  mov [BASE-8], STR:RC
   |  jmp ->fff_res1
+  |.if X64
+  |3:
+  |  mov RC, ~LJ_TLIGHTUD
+  |  jmp <2
+  |.endif
   |
   |//-- Base library: getters and setters ---------------------------------
   |
