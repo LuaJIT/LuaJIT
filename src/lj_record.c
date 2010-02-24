@@ -534,11 +534,11 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     if (--J->framedepth < 0)
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lua_assert(J->baseslot > 1);
-    J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
     gotresults++;
     rbase += cbase;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
+    J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
     frame = frame_prevd(frame);
   }
   if (frame_islua(frame)) {  /* Return to Lua frame. */
