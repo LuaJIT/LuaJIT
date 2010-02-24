@@ -2510,9 +2510,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
-  |.if X64
-  |  int3	// NYI
-  |.else
   |  mov LFUNC:RB, [BASE-8]		// Same as curr_topL(L).
   |  mov RB, LFUNC:RB->pc
   |  movzx RD, byte [RB+PC2PROTO(framesize)]
@@ -2526,7 +2523,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov SAVE_PC, PC
   |  call extern lj_trace_hot@8		// (jit_State *J, const BCIns *pc)
   |  jmp <3
-  |.endif
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
@@ -2572,46 +2568,74 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vm_exit_handler:
 #if LJ_HASJIT
   |.if X64
-  |  int3	// NYI
+  |  push r13; push r12
+  |  push r11; push r10; push r9; push r8
+  |  push rdi; push rsi; push rbp; lea rbp, [rsp+88]; push rbp
+  |  push rbx; push rdx; push rcx; push rax
+  |  movzx RC, byte [rbp-8]		// Reconstruct exit number.
+  |  mov RCH, byte [rbp-16]
+  |  mov [rbp-8], r15; mov [rbp-16], r14
   |.else
   |  push ebp; lea ebp, [esp+12]; push ebp
   |  push ebx; push edx; push ecx; push eax
   |  movzx RC, byte [ebp-4]		// Reconstruct exit number.
   |  mov RCH, byte [ebp-8]
   |  mov [ebp-4], edi; mov [ebp-8], esi
+  |.endif
   |  // Caveat: DISPATCH is ebx.
   |  mov DISPATCH, [ebp]
   |  mov RA, [DISPATCH+DISPATCH_GL(vmstate)]	// Get trace number.
   |  set_vmstate EXIT
   |  mov [DISPATCH+DISPATCH_J(exitno)], RC
   |  mov [DISPATCH+DISPATCH_J(parent)], RA
+  |.if X64
+  |.if X64WIN
+  |  sub rsp, 16*8+4*8			// Room for SSE regs + save area.
+  |.else
+  |  sub rsp, 16*8			// Room for SSE regs.
+  |.endif
+  |  add rbp, -128
+  |  movsd qword [rbp-8],   xmm15; movsd qword [rbp-16],  xmm14
+  |  movsd qword [rbp-24],  xmm13; movsd qword [rbp-32],  xmm12
+  |  movsd qword [rbp-40],  xmm11; movsd qword [rbp-48],  xmm10
+  |  movsd qword [rbp-56],  xmm9;  movsd qword [rbp-64],  xmm8
+  |  movsd qword [rbp-72],  xmm7;  movsd qword [rbp-80],  xmm6
+  |  movsd qword [rbp-88],  xmm5;  movsd qword [rbp-96],  xmm4
+  |  movsd qword [rbp-104], xmm3;  movsd qword [rbp-112], xmm2
+  |  movsd qword [rbp-120], xmm1;  movsd qword [rbp-128], xmm0
+  |.else
   |  sub esp, 8*8+16			// Room for SSE regs + args.
-  |
-  |  // Must not access SSE regs if SSE2 is not present.
-  |  test dword [DISPATCH+DISPATCH_J(flags)], JIT_F_SSE2
-  |  jz >1
   |  movsd qword [ebp-40], xmm7; movsd qword [ebp-48], xmm6
   |  movsd qword [ebp-56], xmm5; movsd qword [ebp-64], xmm4
   |  movsd qword [ebp-72], xmm3; movsd qword [ebp-80], xmm2
   |  movsd qword [ebp-88], xmm1; movsd qword [ebp-96], xmm0
-  |1:
+  |.endif
   |  // Caveat: RB is ebp.
   |  mov L:RB, [DISPATCH+DISPATCH_GL(jit_L)]
   |  mov BASE, [DISPATCH+DISPATCH_GL(jit_base)]
   |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
   |  mov L:RB->base, BASE
+  |.if X64WIN
+  |  lea CARG2, [rsp+4*8]
+  |.elif X64
+  |  mov CARG2, rsp
+  |.else
   |  lea FCARG2, [esp+16]
+  |.endif
   |  lea FCARG1, [DISPATCH+GG_DISP2J]
   |  call extern lj_trace_exit@8	// (jit_State *J, ExitState *ex)
   |  // Error code returned in eax (RD).
   |  mov RAa, L:RB->cframe
   |  and RAa, CFRAME_RAWMASK
+  |.if X64
+  |  mov rsp, RAa			// Reposition stack to C frame.
+  |.else
   |  mov esp, RAa			// Reposition stack to C frame.
+  |.endif
   |  mov SAVE_L, L:RB			// Needed for on-trace resume/yield.
   |  test RD, RD; jnz >1		// Check for error from exit.
   |  mov BASE, L:RB->base
   |  mov PC, SAVE_PC
-  |.endif
 #endif
   |->vm_exit_interp:
 #if LJ_HASJIT
@@ -4681,7 +4705,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 #if LJ_HASJIT
     |  ins_AD	// RA = base (ignored), RD = traceno
     |  mov RA, [DISPATCH+DISPATCH_J(trace)]
+    |.if X64
+    |  mov TRACE:RD, [RA+RD*8]
+    |.else
     |  mov TRACE:RD, [RA+RD*4]
+    |.endif
     |  mov RDa, TRACE:RD->mcode
     |  mov L:RB, SAVE_L
     |  mov [DISPATCH+DISPATCH_GL(jit_base)], BASE
