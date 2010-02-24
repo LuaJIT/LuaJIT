@@ -235,6 +235,7 @@ TRef lj_ir_knum_addr(jit_State *J, cTValue *tv)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
+  lua_assert(checkptr32(tv));
   setmref(ir->ptr, tv);
   ir->t.irt = IRT_NUM;
   ir->o = IR_KNUM;
@@ -249,12 +250,6 @@ TRef lj_ir_knum_nn(jit_State *J, uint64_t nn)
 {
   return lj_ir_knum_addr(J, ir_knum_find(J, nn));
 }
-
-/* Special 16 byte aligned SIMD constants. */
-LJ_DATADEF LJ_ALIGN(16) cTValue lj_ir_knum_tv[4] = {
-  { U64x(7fffffff,ffffffff) }, { U64x(7fffffff,ffffffff) },
-  { U64x(80000000,00000000) }, { U64x(80000000,00000000) }
-};
 
 /* Check whether a number is int and return it. -0 is NOT considered an int. */
 static int numistrueint(lua_Number n, int32_t *kp)

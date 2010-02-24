@@ -201,6 +201,17 @@ typedef struct BPropEntry {
 /* Number of slots for the backpropagation cache. Must be a power of 2. */
 #define BPROP_SLOTS	16
 
+/* 128 bit SIMD constants. */
+enum {
+  LJ_KSIMD_ABS,
+  LJ_KSIMD_NEG,
+  LJ_KSIMD__MAX
+};
+
+/* Get 16 byte aligned pointer to SIMD constant. */
+#define LJ_KSIMD(J, n) \
+  ((TValue *)(((intptr_t)&J->ksimd[2*(n)] + 15) & ~(intptr_t)15))
+
 /* Fold state is used to fold instructions on-the-fly. */
 typedef struct FoldState {
   IRIns ins;		/* Currently emitted instruction. */
@@ -214,20 +225,20 @@ typedef struct jit_State {
 
   lua_State *L;		/* Current Lua state. */
   const BCIns *pc;	/* Current PC. */
-  BCReg maxslot;	/* Relative to baseslot. */
-
-  uint32_t flags;	/* JIT engine flags. */
-  TRef *base;		/* Current frame base, points into J->slots. */
-  BCReg baseslot;	/* Current frame base, offset into J->slots. */
   GCfunc *fn;		/* Current function. */
   GCproto *pt;		/* Current prototype. */
+  TRef *base;		/* Current frame base, points into J->slots. */
 
-  FoldState fold;	/* Fold state. */
+  uint32_t flags;	/* JIT engine flags. */
+  BCReg maxslot;	/* Relative to baseslot. */
+  BCReg baseslot;	/* Current frame base, offset into J->slots. */
 
   uint8_t mergesnap;	/* Allowed to merge with next snapshot. */
   uint8_t needsnap;	/* Need snapshot before recording next bytecode. */
   IRType1 guardemit;	/* Accumulated IRT_GUARD for emitted instructions. */
   uint8_t unused1;
+
+  FoldState fold;	/* Fold state. */
 
   const BCIns *bc_min;	/* Start of allowed bytecode range for root trace. */
   MSize bc_extent;	/* Extent of the range. */
@@ -241,19 +252,20 @@ typedef struct jit_State {
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
   MRef knum;		/* Pointer to chained array of KNUM constants. */
+  TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
 
   IRIns *irbuf;		/* Temp. IR instruction buffer. Biased with REF_BIAS. */
   IRRef irtoplim;	/* Upper limit of instuction buffer (biased). */
   IRRef irbotlim;	/* Lower limit of instuction buffer (biased). */
   IRRef loopref;	/* Last loop reference or ref of final LOOP (or 0). */
 
+  MSize sizesnap;	/* Size of temp. snapshot buffer. */
   SnapShot *snapbuf;	/* Temp. snapshot buffer. */
   SnapEntry *snapmapbuf;  /* Temp. snapshot map buffer. */
-  MSize sizesnap;	/* Size of temp. snapshot buffer. */
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
 
-  Trace **trace;	/* Array of traces. */
   TraceNo curtrace;	/* Current trace number (if not 0). Kept in J->cur. */
+  Trace **trace;	/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */
   MSize sizetrace;	/* Size of trace array. */
 
