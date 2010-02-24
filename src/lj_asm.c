@@ -183,7 +183,7 @@ static void emit_rr(ASMState *as, x86Op xo, Reg r1, Reg r2)
 
 #if LJ_64 && defined(LUA_USE_ASSERT)
 /* [addr] is sign-extended in x64 and must be in lower 2G (not 4G). */
-static int32_t ptr2addr(void *p)
+static int32_t ptr2addr(const void *p)
 {
   lua_assert((uintptr_t)p < (uintptr_t)0x80000000);
   return i32ptr(p);
@@ -414,7 +414,9 @@ typedef MCode *MCLabel;
 static void emit_sjcc(ASMState *as, int cc, MCLabel target)
 {
   MCode *p = as->mcp;
-  p[-1] = (MCode)(int8_t)(target-p);
+  ptrdiff_t delta = target - p;
+  lua_assert(delta == (int8_t)delta);
+  p[-1] = (MCode)(int8_t)delta;
   p[-2] = (MCode)(XI_JCCs+(cc&15));
   as->mcp = p - 2;
 }
@@ -438,12 +440,19 @@ static void emit_sfixup(ASMState *as, MCLabel source)
 /* Return label pointing to current PC. */
 #define emit_label(as)		((as)->mcp)
 
+/* Compute relative 32 bit offset for jump and call instructions. */
+static LJ_AINLINE int32_t jmprel(MCode *p, MCode *target)
+{
+  ptrdiff_t delta = target - p;
+  lua_assert(delta == (int32_t)delta);
+  return (int32_t)delta;
+}
+
 /* jcc target */
 static void emit_jcc(ASMState *as, int cc, MCode *target)
 {
   MCode *p = as->mcp;
-  int32_t addr = (int32_t)(target - p);
-  *(int32_t *)(p-4) = addr;
+  *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = (MCode)(XI_JCCn+(cc&15));
   p[-6] = 0x0f;
   as->mcp = p - 6;
@@ -453,7 +462,7 @@ static void emit_jcc(ASMState *as, int cc, MCode *target)
 static void emit_call_(ASMState *as, MCode *target)
 {
   MCode *p = as->mcp;
-  *(int32_t *)(p-4) = (int32_t)(target - p);
+  *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = XI_CALL;
   as->mcp = p - 5;
 }
@@ -925,7 +934,7 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
   *(int32_t *)mxp = ptr2addr(J2GG(as->J)->dispatch); mxp += 4;
   /* Jump to exit handler which fills in the ExitState. */
   *mxp++ = XI_JMP; mxp += 4;
-  *((int32_t *)(mxp-4)) = (int32_t)((MCode *)lj_vm_exit_handler - mxp);
+  *((int32_t *)(mxp-4)) = jmprel(mxp, (MCode *)(void *)lj_vm_exit_handler);
   /* Commit the code for this group (even if assembly fails later on). */
   lj_mcode_commitbot(as->J, mxp);
   as->mcbot = mxp;
@@ -3165,7 +3174,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   /* Patch exit branch. */
   target = lnk == TRACE_INTERP ? (MCode *)lj_vm_exit_interp :
 				 as->J->trace[lnk]->mcode;
-  *(int32_t *)(p-4) = (int32_t)(target - p);
+  *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = XI_JMP;
   /* Drop unused mcode tail. Fill with NOPs to make the prefetcher happy. */
   for (q = as->mctop-1; q >= p; q--)
@@ -3533,7 +3542,7 @@ void lj_asm_patchexit(jit_State *J, Trace *T, ExitNo exitno, MCode *target)
   MCode *pe = p+len-6;
   uint32_t stateaddr = u32ptr(&J2G(J)->vmstate);
   if (len > 5 && p[len-5] == XI_JMP && p+len-6 + *(int32_t *)(p+len-4) == px)
-    *(int32_t *)(p+len-4) = (int32_t)(target - (p+len));
+    *(int32_t *)(p+len-4) = jmprel(p+len, target);
   /* Do not patch parent exit for a stack check. Skip beyond vmstate update. */
   for (; p < pe; p++)
     if (*(uint32_t *)(p+(LJ_64 ? 3 : 2)) == stateaddr && p[0] == XI_MOVmi) {
@@ -3543,7 +3552,7 @@ void lj_asm_patchexit(jit_State *J, Trace *T, ExitNo exitno, MCode *target)
   lua_assert(p < pe);
   for (; p < pe; p++) {
     if ((*(uint16_t *)p & 0xf0ff) == 0x800f && p + *(int32_t *)(p+2) == px) {
-      *(int32_t *)(p+2) = (int32_t)(target - (p+6));
+      *(int32_t *)(p+2) = jmprel(p+6, target);
       p += 5;
     }
   }
