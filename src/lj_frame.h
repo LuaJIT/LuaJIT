@@ -37,7 +37,8 @@ enum {
 #define frame_contpc(f)		(frame_pc((f)-1))
 #if LJ_64
 #define frame_contf(f) \
-  ((ASMFunction)(void *)((intptr_t)lj_vm_asm_begin+(((f)-1)->u64 & 0xffffffff)))
+  ((ASMFunction)(void *)((intptr_t)lj_vm_asm_begin + \
+			 (intptr_t)(int32_t)((f)-1)->u32.lo))
 #else
 #define frame_contf(f)		((ASMFunction)gcrefp(((f)-1)->gcr, void))
 #endif
