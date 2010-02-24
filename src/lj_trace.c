@@ -636,7 +636,7 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     setintV(L->top++, RID_NUM_GPR);
     setintV(L->top++, RID_NUM_FPR);
     for (i = 0; i < RID_NUM_GPR; i++)
-      setintV(L->top++, ex->gpr[i]);
+      setnumV(L->top++, cast_num(ex->gpr[i]));
     for (i = 0; i < RID_NUM_FPR; i++) {
       setnumV(L->top, ex->fpr[i]);
       if (LJ_UNLIKELY(tvisnan(L->top)))

@@ -306,10 +306,18 @@ local function dump_snap(tr)
 end
 
 -- NYI: should really get the register map from the disassembler.
-local reg_map = {
-  [0] = "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
-  "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-}
+local reg_map = ({
+  x86 = {
+    [0] = "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
+    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+  },
+  x64 = {
+    [0] = "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
+    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
+    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+    "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15",
+  }
+})[jit.arch]
 
 -- Return a register name or stack slot for a rid/sp location.
 local function ridsp_name(ridsp)
@@ -508,9 +516,16 @@ local function dump_texit(tr, ex, ngpr, nfpr, ...)
   out:write("---- TRACE ", tr, " exit ", ex, "\n")
   if dumpmode.X then
     local regs = {...}
-    for i=1,ngpr do
-      out:write(format(" %08x", regs[i]))
-      if i % 8 == 0 then out:write("\n") end
+    if jit.arch == "x64" then
+      for i=1,ngpr do
+	out:write(format(" %016x", regs[i]))
+	if i % 4 == 0 then out:write("\n") end
+      end
+    else
+      for i=1,ngpr do
+	out:write(format(" %08x", regs[i]))
+	if i % 8 == 0 then out:write("\n") end
+      end
     end
     for i=1,nfpr do
       out:write(format(" %+17.14g", regs[ngpr+i]))
