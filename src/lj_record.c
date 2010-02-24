@@ -497,7 +497,7 @@ static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
   trfunc = lj_ir_kfunc(J, funcV(functv));
   emitir(IRTG(IR_EQ, IRT_FUNC), fbase[0], trfunc);
   fbase[0] = trfunc | TREF_FRAME;
-  J->maxslot = nargs;
+  J->maxslot = (BCReg)nargs;
 }
 
 /* Record call. */
@@ -1568,12 +1568,12 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
     ptrdiff_t i, len = end - start;
     if (len > 0) {
       TRef trslen = emitir(IRTI(IR_SUB), trend, trstart);
-      emitir(IRTGI(IR_EQ), trslen, lj_ir_kint(J, len));
+      emitir(IRTGI(IR_EQ), trslen, lj_ir_kint(J, (int32_t)len));
       if (J->baseslot + len > LJ_MAX_JSLOTS)
 	lj_trace_err_info(J, LJ_TRERR_STACKOV);
       rd->nres = len;
       for (i = 0; i < len; i++) {
-	TRef tmp = emitir(IRTI(IR_ADD), trstart, lj_ir_kint(J, i));
+	TRef tmp = emitir(IRTI(IR_ADD), trstart, lj_ir_kint(J, (int32_t)i));
 	tmp = emitir(IRT(IR_STRREF, IRT_PTR), trstr, tmp);
 	J->base[i] = emitir(IRT(IR_XLOAD, IRT_U8), tmp, IRXLOAD_READONLY);
       }

@@ -99,7 +99,7 @@ LJLIB_CF(jit_status)
   setboolV(L->top++, (J->flags & JIT_F_ON) ? 1 : 0);
   flagbits_to_strings(L, J->flags, JIT_F_CPU_FIRST, JIT_F_CPUSTRING);
   flagbits_to_strings(L, J->flags, JIT_F_OPT_FIRST, JIT_F_OPTSTRING);
-  return L->top - L->base;
+  return (int)(L->top - L->base);
 #else
   setboolV(L->top++, 0);
   return 1;

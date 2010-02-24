@@ -1047,7 +1047,7 @@ static void asm_guardcc(ASMState *as, int cc)
   MCode *p = as->mcp;
   if (LJ_UNLIKELY(p == as->invmcp)) {
     as->loopinv = 1;
-    *(int32_t *)(p+1) = target - (p+5);
+    *(int32_t *)(p+1) = jmprel(p+5, target);
     target = p;
     cc ^= 1;
     if (as->realign) {
