@@ -1292,21 +1292,52 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
   RegSet allow = RSET_ALL;
   uint32_t n, nargs = CCI_NARGS(ci);
-  int32_t ofs = 0;
+  int32_t ofs = STACKARG_OFS;
+  uint32_t gprs = REGARG_GPRS;
+#if LJ_64
+  Reg fpr = REGARG_FIRSTFPR;
+#endif
   lua_assert(!(nargs > 2 && (ci->flags&CCI_FASTCALL)));  /* Avoid stack adj. */
   emit_call(as, ci->func);
   for (n = 0; n < nargs; n++) {  /* Setup args. */
-#if LJ_64
-#error "NYI: 64 bit mode call argument setup"
-#endif
     IRIns *ir = IR(args[n]);
+    Reg r;
+#if LJ_64 && defined(_WIN64)
+    /* Windows/x64 argument registers are strictly positional. */
+    r = irt_isnum(ir->t) ? (fpr <= REGARG_LASTFPR ? fpr : 0) : (gprs & 31);
+    fpr++; gprs >>= 5;
+#elif LJ_64
+    /* POSIX/x64 argument registers are used in order of appearance. */
     if (irt_isnum(ir->t)) {
-      if ((ofs & 4) && irref_isk(args[n])) {
+      r = fpr <= REGARG_LASTFPR ? fpr : 0; fpr++;
+    } else {
+      r = gprs & 31; gprs >>= 5;
+    }
+#else
+    if (irt_isnum(ir->t) || !(ci->flags & CCI_FASTCALL)) {
+      r = 0;
+    } else {
+      r = gprs & 31; gprs >>= 5;
+    }
+#endif
+    if (r) {  /* Argument is in a register. */
+      if (args[n] < ASMREF_TMP1) {
+	emit_loadi(as, r, ir->i);
+      } else {
+	lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
+	if (ra_hasreg(ir->r)) {
+	  ra_noweak(as, ir->r);
+	  ra_movrr(as, ir, r, ir->r);
+	} else {
+	  ra_allocref(as, args[n], RID2RSET(r));
+	}
+      }
+    } else if (irt_isnum(ir->t)) {  /* FP argument is on stack. */
+      if (!LJ_64 && (ofs & 4) && irref_isk(args[n])) {
 	/* Split stores for unaligned FP consts. */
 	emit_movmroi(as, RID_ESP, ofs, (int32_t)ir_knum(ir)->u32.lo);
 	emit_movmroi(as, RID_ESP, ofs+4, (int32_t)ir_knum(ir)->u32.hi);
       } else {
-	Reg r;
 	if ((allow & RSET_FPR) == RSET_EMPTY)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
 	r = ra_alloc1(as, args[n], allow & RSET_FPR);
@@ -1314,34 +1345,18 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	emit_rmro(as, XO_MOVSDto, r, RID_ESP, ofs);
       }
       ofs += 8;
-    } else {
-      if ((ci->flags & CCI_FASTCALL) && n < 2) {
-	Reg r = n == 0 ? RID_ECX : RID_EDX;
-	if (args[n] < ASMREF_TMP1) {
-	  emit_loadi(as, r, ir->i);
-	} else {
-	  lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
-	  allow &= ~RID2RSET(r);
-	  if (ra_hasreg(ir->r)) {
-	    ra_noweak(as, ir->r);
-	    ra_movrr(as, ir, r, ir->r);
-	  } else {
-	    ra_allocref(as, args[n], RID2RSET(r));
-	  }
-	}
+    } else {  /* Non-FP argument is on stack. */
+      /* NYI: no widening for 64 bit parameters on x64. */
+      if (args[n] < ASMREF_TMP1) {
+	emit_movmroi(as, RID_ESP, ofs, ir->i);
       } else {
-	if (args[n] < ASMREF_TMP1) {
-	  emit_movmroi(as, RID_ESP, ofs, ir->i);
-	} else {
-	  Reg r;
-	  if ((allow & RSET_GPR) == RSET_EMPTY)
-	    lj_trace_err(as->J, LJ_TRERR_NYICOAL);
-	  r = ra_alloc1(as, args[n], allow & RSET_GPR);
-	  allow &= ~RID2RSET(r);
-	  emit_movtomro(as, r, RID_ESP, ofs);
-	}
-	ofs += 4;
+	if ((allow & RSET_GPR) == RSET_EMPTY)
+	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
+	r = ra_alloc1(as, args[n], allow & RSET_GPR);
+	allow &= ~RID2RSET(r);
+	emit_movtomro(as, REX_64LU(ir, r), RID_ESP, ofs);
       }
+      ofs += sizeof(intptr_t);
     }
   }
 }
@@ -2561,7 +2576,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
-	  emit_rr(as, XO_TEST, left, left);
+	  emit_rr(as, XO_TEST, REX_64LU(ir, left), left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
@@ -2580,11 +2595,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
       Reg left = ra_alloc1(as, lref, RSET_GPR);
       Reg right = asm_fuseload(as, rref, rset_exclude(RSET_GPR, left));
       asm_guardcc(as, cc);
-#if LJ_64
-      if (irt_islightud(ir->t))
-	left |= REX_64;
-#endif
-      emit_mrm(as, XO_CMP, left, right);
+      emit_mrm(as, XO_CMP, REX_64LU(ir, left), right);
     }
   }
 }
@@ -2732,14 +2743,14 @@ static void asm_gc_check(ASMState *as, SnapShot *snap)
   /* We don't know spadj yet, so get the C frame from L->cframe. */
   emit_movmroi(as, tmp, CFRAME_OFS_PC,
 	       (int32_t)as->T->snapmap[snap->mapofs+snap->nent]);
-  emit_gri(as, XG_ARITHi(XOg_AND), tmp, CFRAME_RAWMASK);
+  emit_gri(as, XG_ARITHi(XOg_AND), tmp|REX_64, CFRAME_RAWMASK);
   lstate = IR(ASMREF_L)->r;
-  emit_rmro(as, XO_MOV, tmp, lstate, offsetof(lua_State, cframe));
+  emit_rmro(as, XO_MOV, tmp|REX_64, lstate, offsetof(lua_State, cframe));
   /* It's ok if lstate is already in a non-scratch reg. But all allocations
   ** in the non-fast path must use a scratch reg. See comment above.
   */
   base = ra_alloc1(as, REF_BASE, rset_exclude(RSET_SCRATCH & RSET_GPR, lstate));
-  emit_movtomro(as, base, lstate, offsetof(lua_State, base));
+  emit_movtomro(as, base|REX_64, lstate, offsetof(lua_State, base));
   asm_gc_sync(as, snap, base);
   /* BASE/L get restored anyway, better do it inside the slow path. */
   if (as->parent || as->curins == as->loopref) ra_restore(as, REF_BASE);
@@ -3447,7 +3458,12 @@ static void asm_setup_regsp(ASMState *as, Trace *T)
     case IR_CALLN: case IR_CALLL: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
 #if LJ_64
-      /* NYI: add stack slots for calls with more than 4/6 args. */
+      /* NYI: add stack slots for x64 calls with many args. */
+#ifdef _WIN64
+      lua_assert(CCI_NARGS(ci) <= 4);
+#else
+      lua_assert(CCI_NARGS(ci) <= 6);  /* Safe lower bound. */
+#endif
       ir->prev = REGSP_HINT(irt_isnum(ir->t) ? RID_FPRET : RID_RET);
 #else
       /* NYI: not fastcall-aware, but doesn't matter (yet). */

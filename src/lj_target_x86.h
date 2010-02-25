@@ -78,14 +78,27 @@ enum {
 /* Windows x64 ABI. */
 #define RSET_SCRATCH \
   (RSET_ACD|RSET_RANGE(RID_R8D, RID_R11D+1)|RSET_RANGE(RID_XMM0, RID_XMM5+1))
+#define REGARG_GPRS \
+  (RID_ECX|((RID_EDX|((RID_R8D|(RID_R9D<<5))<<5))<<5))
+#define REGARG_FIRSTFPR	RID_XMM0
+#define REGARG_LASTFPR	RID_XMM3
+#define STACKARG_OFS	(4*8)
 #else
 /* The rest of the civilized x64 world has a common ABI. */
 #define RSET_SCRATCH \
   (RSET_ACD|RSET_RANGE(RID_ESI, RID_R11D+1)|RSET_FPR)
+#define REGARG_GPRS \
+  (RID_EDI|((RID_ESI|((RID_EDX|((RID_ECX|((RID_R8D|(RID_R9D \
+   <<5))<<5))<<5))<<5))<<5))
+#define REGARG_FIRSTFPR	RID_XMM0
+#define REGARG_LASTFPR	RID_XMM7
+#define STACKARG_OFS	0
 #endif
 #else
 /* Common x86 ABI. */
 #define RSET_SCRATCH	(RSET_ACD|RSET_FPR)
+#define REGARG_GPRS	(RID_ECX|(RID_EDX<<5))  /* Fastcall only. */
+#define STACKARG_OFS	0
 #endif
 
 #if LJ_64
@@ -96,23 +109,26 @@ enum {
 
 /* -- Spill slots --------------------------------------------------------- */
 
-/* Available fixed spill slots in interpreter frame.
+/* Spill slots are 32 bit wide. An even/odd pair is used for FPRs.
+**
+** SPS_FIXED: Available fixed spill slots in interpreter frame.
 ** This definition must match with the *.dasc file(s).
+**
+** SPS_FIRST: First spill slot for general use. Reserve min. two 32 bit slots.
 */
 #if LJ_64
 #ifdef _WIN64
 #define SPS_FIXED	(5*2)
+#define SPS_FIRST	(4*2)	/* Don't use callee register save area. */
 #else
 #define SPS_FIXED	2
+#define SPS_FIRST	2
 #endif
 #else
 #define SPS_FIXED	6
+#define SPS_FIRST	2
 #endif
 
-/* First spill slot for general use. Reserve one 64 bit slot. */
-#define SPS_FIRST	2
-
-/* Spill slots are 32 bit wide. An even/odd pair is used for FPRs. */
 #define sps_scale(slot)		(4 * (int32_t)(slot))
 
 /* -- Exit state ---------------------------------------------------------- */
