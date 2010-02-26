@@ -143,6 +143,7 @@ static void close_state(lua_State *L)
   global_State *g = G(L);
 #ifndef LUAJIT_USE_SYSMALLOC
   if (g->allocf == lj_alloc_f) {
+    lj_trace_freestate(g);
     lj_alloc_destroy(g->allocd);
   } else
 #endif

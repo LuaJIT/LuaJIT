@@ -15,6 +15,7 @@
 #include "lj_mcode.h"
 #include "lj_trace.h"
 #include "lj_dispatch.h"
+#include "lj_vm.h"
 
 /* -- OS-specific functions ----------------------------------------------- */
 
@@ -27,21 +28,22 @@
 #define MCPROT_RX	PAGE_EXECUTE_READ
 #define MCPROT_RWX	PAGE_EXECUTE_READWRITE
 
-static LJ_AINLINE void *mcode_alloc(jit_State *J, size_t sz, DWORD prot)
+static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, DWORD prot)
 {
-  void *p = VirtualAlloc(NULL, sz, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, prot);
+  void *p = VirtualAlloc((void *)hint, sz,
+			 MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, prot);
   if (!p)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
   return p;
 }
 
-static LJ_AINLINE void mcode_free(jit_State *J, void *p, size_t sz)
+static void mcode_free(jit_State *J, void *p, size_t sz)
 {
   UNUSED(J); UNUSED(sz);
   VirtualFree(p, 0, MEM_RELEASE);
 }
 
-static LJ_AINLINE void mcode_setprot(void *p, size_t sz, DWORD prot)
+static void mcode_setprot(void *p, size_t sz, DWORD prot)
 {
   DWORD oprot;
   VirtualProtect(p, sz, prot, &oprot);
@@ -59,21 +61,21 @@ static LJ_AINLINE void mcode_setprot(void *p, size_t sz, DWORD prot)
 #define MCPROT_RX	(PROT_READ|PROT_EXEC)
 #define MCPROT_RWX	(PROT_READ|PROT_WRITE|PROT_EXEC)
 
-static LJ_AINLINE void *mcode_alloc(jit_State *J, size_t sz, int prot)
+static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 {
-  void *p = mmap(NULL, sz, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+  void *p = mmap((void *)hint, sz, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
   if (p == MAP_FAILED)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
   return p;
 }
 
-static LJ_AINLINE void mcode_free(jit_State *J, void *p, size_t sz)
+static void mcode_free(jit_State *J, void *p, size_t sz)
 {
   UNUSED(J);
   munmap(p, sz);
 }
 
-static LJ_AINLINE void mcode_setprot(void *p, size_t sz, int prot)
+static void mcode_setprot(void *p, size_t sz, int prot)
 {
   mprotect(p, sz, prot);
 }
@@ -86,18 +88,62 @@ static LJ_AINLINE void mcode_setprot(void *p, size_t sz, int prot)
 #define MCPROT_RX	0
 #define MCPROT_RWX	0
 
-static LJ_AINLINE void *mcode_alloc(jit_State *J, size_t sz, int prot)
+static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 {
-  UNUSED(prot);
+  UNUSED(hint); UNUSED(prot);
   return lj_mem_new(J->L, sz);
 }
 
-static LJ_AINLINE void mcode_free(jit_State *J, void *p, size_t sz)
+static void mcode_free(jit_State *J, void *p, size_t sz)
 {
   lj_mem_free(J2G(J), p, sz);
 }
 
 #define mcode_setprot(p, sz, prot)	UNUSED(p)
+
+#endif
+
+/* -- MCode area allocation ----------------------------------------------- */
+
+#if LJ_64
+
+/* Get memory within relative jump distance of our code in 64 bit mode. */
+static void *mcode_alloc(jit_State *J, size_t sz, int prot)
+{
+  /* Target an address in the static assembler code.
+  ** Try addresses within a distance of target-1GB+1MB .. target+1GB-1MB.
+  */
+  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler;
+  const uintptr_t range = (1u<<31) - (1u << 21);
+  int i;
+  /* First try a contiguous area below the last one. */
+  if (J->mcarea && (uintptr_t)J->mcarea - sz < (uintptr_t)1<<47) {
+    void *p = mcode_alloc_at(J, (uintptr_t)J->mcarea - sz, sz, prot);
+    if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
+      return p;
+    mcode_free(J, p, sz);  /* Free badly placed area. */
+  }
+  /* Next try probing with hinted addresses. */
+  for (i = 0; i < 32; i++) {  /* 32 attempts ought to be enough ... */
+    uintptr_t hint;
+    void *p;
+    do {
+      hint = LJ_PRNG_BITS(J, 15) << 16;
+    } while (!(hint + sz < range &&
+	       target + hint - (range>>1) < (uintptr_t)1<<47));
+    p = mcode_alloc_at(J, target + hint - (range>>1), sz, prot);
+    if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
+      return p;
+    mcode_free(J, p, sz);  /* Free badly placed area. */
+  }
+  lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
+  return NULL;
+}
+
+#else
+
+/* All 32 bit memory addresses are reachable by relative jumps on x86. */
+#define mcode_alloc(J, sz, prot)	mcode_alloc_at((J), 0, (sz), (prot))
 
 #endif
 
