@@ -278,7 +278,7 @@ typedef struct jit_State {
 
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
-  uint32_t prngstate;	/* PRNG state for penalty randomization. */
+  uint32_t prngstate;	/* PRNG state. */
 
   BPropEntry bpropcache[BPROP_SLOTS];  /* Backpropagation cache slots. */
   uint32_t bpropslot;	/* Round-robin index into bpropcache slots. */
@@ -296,6 +296,14 @@ typedef struct jit_State {
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
   int mcprot;		/* Protection of current mcode area. */
 } jit_State;
+
+/* Trivial PRNG e.g. used for penalty randomization. */
+static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
+{
+  /* Yes, this LCG is very weak, but that doesn't matter for our use case. */
+  J->prngstate = J->prngstate * 1103515245 + 12345;
+  return J->prngstate >> (32-bits);
+}
 
 /* Exit stubs. */
 #if LJ_TARGET_X86ORX64

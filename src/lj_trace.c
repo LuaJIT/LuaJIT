@@ -310,14 +310,6 @@ void lj_trace_freestate(global_State *g)
 
 /* -- Penalties and blacklisting ------------------------------------------ */
 
-/* Trivial PRNG for randomization of penalties. */
-static uint32_t penalty_prng(jit_State *J, int bits)
-{
-  /* Yes, this LCG is very weak, but that doesn't matter for our use case. */
-  J->prngstate = J->prngstate * 1103515245 + 12345;
-  return J->prngstate >> (32-bits);
-}
-
 /* Blacklist a bytecode instruction. */
 static void blacklist_pc(GCproto *pt, BCIns *pc)
 {
@@ -333,7 +325,7 @@ static void penalty_pc(jit_State *J, GCproto *pt, BCIns *pc, TraceError e)
     if (mref(J->penalty[i].pc, const BCIns) == pc) {  /* Cache slot found? */
       /* First try to bump its hotcount several times. */
       val = ((uint32_t)J->penalty[i].val << 1) +
-	    penalty_prng(J, PENALTY_RNDBITS);
+	    LJ_PRNG_BITS(J, PENALTY_RNDBITS);
       if (val > PENALTY_MAX) {
 	blacklist_pc(pt, pc);  /* Blacklist it, if that didn't help. */
 	return;
