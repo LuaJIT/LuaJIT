@@ -118,10 +118,10 @@ enum {
 */
 #if LJ_64
 #ifdef _WIN64
-#define SPS_FIXED	(5*2)
+#define SPS_FIXED	(4*2)
 #define SPS_FIRST	(4*2)	/* Don't use callee register save area. */
 #else
-#define SPS_FIXED	2
+#define SPS_FIXED	4
 #define SPS_FIRST	2
 #endif
 #else

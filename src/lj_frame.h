@@ -77,10 +77,10 @@ enum {
 #define CFRAME_SIZE		(10*8)
 #else
 #define CFRAME_OFS_PREV		(4*8)
-#define CFRAME_OFS_PC		(5*4)
-#define CFRAME_OFS_L		(4*4)
-#define CFRAME_OFS_ERRF		(3*4)
-#define CFRAME_OFS_NRES		(2*4)
+#define CFRAME_OFS_PC		(7*4)
+#define CFRAME_OFS_L		(6*4)
+#define CFRAME_OFS_ERRF		(5*4)
+#define CFRAME_OFS_NRES		(4*4)
 #define CFRAME_OFS_MULTRES	(1*4)
 #define CFRAME_SIZE		(10*8)
 #endif

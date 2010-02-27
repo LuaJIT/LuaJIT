@@ -223,19 +223,18 @@
 |.define SAVE_R2,	aword [rsp+aword*6]
 |.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
 |.define SAVE_CFRAME,	aword [rsp+aword*4]
-|.define TMPa,		aword [rsp+aword*3]
-|//----- ^^^ awords above, vvv dwords below
-|.define SAVE_PC,	dword [rsp+dword*5]
-|.define SAVE_L,	dword [rsp+dword*4]
-|.define SAVE_ERRF,	dword [rsp+dword*3]
-|.define SAVE_NRES,	dword [rsp+dword*2]
+|.define SAVE_PC,	dword [rsp+dword*7]
+|.define SAVE_L,	dword [rsp+dword*6]
+|.define SAVE_ERRF,	dword [rsp+dword*5]
+|.define SAVE_NRES,	dword [rsp+dword*4]
+|.define TMPa,		aword [rsp+aword*1]
 |.define TMP2,		dword [rsp+dword*1]
 |.define TMP1,		dword [rsp]		//<-- rsp while in interpreter.
 |//----- 16 byte aligned
 |
 |// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
 |.define TMPQ,		qword [rsp]
-|.define TMP3,		dword [rsp+aword*3]
+|.define TMP3,		dword [rsp+aword*1]
 |.define MULTRES,	TMP2
 |
 |.endif
@@ -2627,18 +2626,51 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // Error code returned in eax (RD).
   |  mov RAa, L:RB->cframe
   |  and RAa, CFRAME_RAWMASK
-  |.if X64
+  |.if X64WIN
+  |  // Reposition stack later.
+  |.elif X64
   |  mov rsp, RAa			// Reposition stack to C frame.
   |.else
   |  mov esp, RAa			// Reposition stack to C frame.
   |.endif
-  |  mov SAVE_L, L:RB			// Needed for on-trace resume/yield.
-  |  test RD, RD; jnz >1		// Check for error from exit.
+  |  mov [RAa+CFRAME_OFS_L], L:RB	// Set SAVE_L (on-trace resume/yield).
   |  mov BASE, L:RB->base
-  |  mov PC, SAVE_PC
+  |  mov PC, [RAa+CFRAME_OFS_PC]	// Get SAVE_PC.
+  |.if X64
+  |  jmp >1
+  |.else
+  |  test RD, RD; jnz >2		// Check for error from exit.
+  |.endif
 #endif
   |->vm_exit_interp:
 #if LJ_HASJIT
+  |.if X64
+  |  xor RD, RD
+  |  // Restore additional callee-save registers only used in compiled code.
+  |.if X64WIN
+  |  lea RAa, [rsp+9*16+4*8]
+  |1:
+  |  movdqa xmm15, [RAa-9*16]
+  |  movdqa xmm14, [RAa-8*16]
+  |  movdqa xmm13, [RAa-7*16]
+  |  movdqa xmm12, [RAa-6*16]
+  |  movdqa xmm11, [RAa-5*16]
+  |  movdqa xmm10, [RAa-4*16]
+  |  movdqa xmm9, [RAa-3*16]
+  |  movdqa xmm8, [RAa-2*16]
+  |  movdqa xmm7, [RAa-1*16]
+  |  mov rsp, RAa			// Reposition stack to C frame.
+  |  movdqa xmm6, [RAa]
+  |  mov r15, CSAVE_3
+  |  mov r14, CSAVE_4
+  |.else
+  |  add rsp, 16			// Reposition stack to C frame.
+  |1:
+  |.endif
+  |  mov r13, TMPa
+  |  mov r12, TMPQ
+  |  test RD, RD; jnz >2		// Check for error from exit.
+  |.endif
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
@@ -2646,7 +2678,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  set_vmstate INTERP
   |  ins_next
   |
-  |1:  // Rethrow error from the right C frame.
+  |2:  // Rethrow error from the right C frame.
   |  mov FCARG1, L:RB
   |  mov FCARG2, RD
   |  call extern lj_err_throw@8		// (lua_State *L, int errcode)
@@ -4714,6 +4746,29 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov L:RB, SAVE_L
     |  mov [DISPATCH+DISPATCH_GL(jit_base)], BASE
     |  mov [DISPATCH+DISPATCH_GL(jit_L)], L:RB
+    |  // Save additional callee-save registers only used in compiled code.
+    |.if X64WIN
+    |  mov TMPQ, r12
+    |  mov TMPa, r13
+    |  mov CSAVE_4, r14
+    |  mov CSAVE_3, r15
+    |  mov RAa, rsp
+    |  sub rsp, 9*16+4*8
+    |  movdqa [RAa], xmm6
+    |  movdqa [RAa-1*16], xmm7
+    |  movdqa [RAa-2*16], xmm8
+    |  movdqa [RAa-3*16], xmm9
+    |  movdqa [RAa-4*16], xmm10
+    |  movdqa [RAa-5*16], xmm11
+    |  movdqa [RAa-6*16], xmm12
+    |  movdqa [RAa-7*16], xmm13
+    |  movdqa [RAa-8*16], xmm14
+    |  movdqa [RAa-9*16], xmm15
+    |.elif X64
+    |  mov TMPQ, r12
+    |  mov TMPa, r13
+    |  sub rsp, 16
+    |.endif
     |  jmp RDa
 #endif
     break;
