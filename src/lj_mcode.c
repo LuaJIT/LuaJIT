@@ -110,10 +110,10 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 /* Get memory within relative jump distance of our code in 64 bit mode. */
 static void *mcode_alloc(jit_State *J, size_t sz, int prot)
 {
-  /* Target an address in the static assembler code.
+  /* Target an address in the static assembler code (64K aligned).
   ** Try addresses within a distance of target-1GB+1MB .. target+1GB-1MB.
   */
-  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler;
+  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
   const uintptr_t range = (1u<<31) - (1u << 21);
   int i;
   /* First try a contiguous area below the last one. */
@@ -128,7 +128,7 @@ static void *mcode_alloc(jit_State *J, size_t sz, int prot)
     uintptr_t hint;
     void *p;
     do {
-      hint = LJ_PRNG_BITS(J, 15) << 16;
+      hint = LJ_PRNG_BITS(J, 15) << 16;  /* 64K aligned. */
     } while (!(hint + sz < range &&
 	       target + hint - (range>>1) < (uintptr_t)1<<47));
     p = mcode_alloc_at(J, target + hint - (range>>1), sz, prot);

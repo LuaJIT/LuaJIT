@@ -18,6 +18,7 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#include "lj_mcode.h"
 #include "lj_trace.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
@@ -143,7 +144,9 @@ static void close_state(lua_State *L)
   global_State *g = G(L);
 #ifndef LUAJIT_USE_SYSMALLOC
   if (g->allocf == lj_alloc_f) {
-    lj_trace_freestate(g);
+#if LJ_HASJIT
+    lj_mcode_free(G2J(g));
+#endif
     lj_alloc_destroy(g->allocd);
   } else
 #endif

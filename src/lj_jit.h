@@ -53,7 +53,7 @@
 #define JIT_F_OPT_3	(JIT_F_OPT_2|JIT_F_OPT_FWD|JIT_F_OPT_DSE|JIT_F_OPT_FUSE)
 #define JIT_F_OPT_DEFAULT	JIT_F_OPT_3
 
-#ifdef LUA_USE_WIN
+#if defined(LUA_USE_WIN) || LJ_64
 /* See: http://blogs.msdn.com/oldnewthing/archive/2003/10/08/55239.aspx */
 #define JIT_P_sizemcode_DEFAULT		64
 #else
