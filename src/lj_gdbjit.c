@@ -528,7 +528,13 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     DB(DW_CFA_offset|DW_REG_SI); DUV(4);
     DB(DW_CFA_offset|DW_REG_BX); DUV(5);
 #elif LJ_TARGET_X64
-    /* Add saved registers for x64 CFRAME. */
+    DB(DW_CFA_offset|DW_REG_BP); DUV(2);
+    DB(DW_CFA_offset|DW_REG_BX); DUV(3);
+    DB(DW_CFA_offset|DW_REG_15); DUV(4);
+    DB(DW_CFA_offset|DW_REG_14); DUV(5);
+    /* Extra registers saved for JIT-compiled code. */
+    DB(DW_CFA_offset|DW_REG_13); DUV(9);
+    DB(DW_CFA_offset|DW_REG_12); DUV(10);
 #else
 #error "Unsupported target architecture"
 #endif
@@ -703,8 +709,8 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
   ctx.T = T;
   ctx.mcaddr = (uintptr_t)T->mcode;
   ctx.szmcode = T->szmcode;
-  ctx.spadjp = CFRAME_SIZE + (MSize)(parent ? J->trace[parent]->spadjust : 0);
-  ctx.spadj = CFRAME_SIZE + T->spadjust;
+  ctx.spadjp = CFRAME_SIZE_JIT + (MSize)(parent?J->trace[parent]->spadjust:0);
+  ctx.spadj = CFRAME_SIZE_JIT + T->spadjust;
   ctx.lineno = proto_line(pt, proto_bcpos(pt, startpc));
   ctx.filename = strdata(proto_chunkname(pt));
   if (*ctx.filename == '@' || *ctx.filename == '=')
