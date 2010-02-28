@@ -46,7 +46,9 @@ LJ_FUNC void lj_gc_finalizeudata(lua_State *L);
 LJ_FUNC void lj_gc_freeall(global_State *g);
 LJ_FUNCA int LJ_FASTCALL lj_gc_step(lua_State *L);
 LJ_FUNCA void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L);
+#if LJ_HASJIT
 LJ_FUNC void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps);
+#endif
 LJ_FUNC void lj_gc_fullgc(lua_State *L);
 
 /* GC check: drive collector forward if the GC threshold has been reached. */
@@ -62,7 +64,9 @@ LJ_FUNC void lj_gc_barrierback(global_State *g, GCtab *t);
 LJ_FUNC void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v);
 LJ_FUNCA void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv);
 LJ_FUNC void lj_gc_closeuv(global_State *g, GCupval *uv);
+#if LJ_HASJIT
 LJ_FUNC void lj_gc_barriertrace(global_State *g, void *T);
+#endif
 
 /* Barrier for stores to table objects. TValue and GCobj variant. */
 #define lj_gc_barriert(L, t, tv) \

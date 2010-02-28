@@ -160,6 +160,7 @@ GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits)
   return t;
 }
 
+#if LJ_HASJIT
 GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize)
 {
   GCtab *t = newtab(L, ahsize & 0xffffff, ahsize >> 24);
@@ -167,6 +168,7 @@ GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize)
   if (t->hmask > 0) clearhpart(t);
   return t;
 }
+#endif
 
 /* Duplicate a table. */
 GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)

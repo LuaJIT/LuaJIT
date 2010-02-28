@@ -23,7 +23,9 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 LJ_FUNC int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n);
 LJ_FUNC int LJ_FASTCALL lj_str_tonum(GCstr *str, TValue *n);
 LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np);
+#if LJ_HASJIT
 LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k);
+#endif
 
 /* String formatting. */
 LJ_FUNC const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp);

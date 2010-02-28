@@ -181,6 +181,7 @@ GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
   return lj_str_new(L, s, len);
 }
 
+#if LJ_HASJIT
 /* Convert integer to string. */
 GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k)
 {
@@ -191,6 +192,7 @@ GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k)
   if (k < 0) *--p = '-';
   return lj_str_new(L, p, (size_t)(s+sizeof(s)-p));
 }
+#endif
 
 /* -- String formatting --------------------------------------------------- */
 

@@ -631,6 +631,7 @@ void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L)
   lj_gc_step(L);
 }
 
+#if LJ_HASJIT
 /* Perform multiple GC steps. Called from JIT-compiled code. */
 void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps)
 {
@@ -638,6 +639,7 @@ void LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps)
   while (steps-- > 0 && lj_gc_step(L) == 0)
     ;
 }
+#endif
 
 /* Perform a full GC cycle. */
 void lj_gc_fullgc(lua_State *L)

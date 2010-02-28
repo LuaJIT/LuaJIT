@@ -11,7 +11,9 @@
 #define hsize2hbits(s)	((s) ? ((s)==1 ? 1 : 1+lj_fls((uint32_t)((s)-1))) : 0)
 
 LJ_FUNCA GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits);
+#if LJ_HASJIT
 LJ_FUNC GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize);
+#endif
 LJ_FUNCA GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt);
 LJ_FUNC void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t);
 LJ_FUNCA void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize);

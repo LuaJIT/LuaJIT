@@ -18,7 +18,9 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#if LJ_HASJIT
 #include "lj_mcode.h"
+#endif
 #include "lj_trace.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"

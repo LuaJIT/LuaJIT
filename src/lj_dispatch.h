@@ -59,7 +59,9 @@ typedef struct GG_State {
 
 /* Dispatch table management. */
 LJ_FUNC void lj_dispatch_init(GG_State *GG);
+#if LJ_HASJIT
 LJ_FUNC void lj_dispatch_init_hotcount(global_State *g);
+#endif
 LJ_FUNC void lj_dispatch_update(global_State *g);
 
 /* Instruction dispatch callback for hooks or when recording. */
