@@ -746,7 +746,7 @@ void *lj_mem_realloc(lua_State *L, void *p, MSize osz, MSize nsz)
   lua_assert((osz == 0) == (p == NULL));
   p = g->allocf(g->allocd, p, osz, nsz);
   if (p == NULL && nsz > 0)
-    lj_err_throw(L, LUA_ERRMEM);
+    lj_err_mem(L);
   lua_assert((nsz == 0) == (p == NULL));
   lua_assert(checkptr32(p));
   g->gc.total = (g->gc.total - osz) + nsz;
@@ -759,7 +759,7 @@ void *lj_mem_newgco(lua_State *L, MSize size)
   global_State *g = G(L);
   GCobj *o = (GCobj *)g->allocf(g->allocd, NULL, 0, size);
   if (o == NULL)
-    lj_err_throw(L, LUA_ERRMEM);
+    lj_err_mem(L);
   lua_assert(checkptr32(o));
   g->gc.total += size;
   setgcrefr(o->gch.nextgc, g->gc.root);
