@@ -20,9 +20,6 @@ NODOTABIVER= 51
 # Turn any of the optional settings on by removing the '#' in front of them.
 # You need to 'make clean' and 'make' again, if you change any options.
 #
-# Note: LuaJIT can only be compiled for x86, and not for x64 (yet)!
-#       In the meantime, the x86 binary runs fine under a x64 OS.
-#
 # It's recommended to compile at least for i686. By default the assembler part
 # of the interpreter makes use of CMOV/FCOMI*/FUCOMI* instructions, anyway.
 CC= gcc -m32 -march=i686
@@ -30,10 +27,14 @@ CC= gcc -m32 -march=i686
 # binaries to a different machine:
 #CC= gcc -m32 -march=native
 #
+# Currently LuaJIT builds by default as a 32 bit binary. Use this to force
+# a native x64 build on Linux/x64:
+#CC= gcc -m64
+#
 # Since the assembler part does NOT maintain a frame pointer, it's pointless
-# to slow down the C part by not omitting it. Debugging and tracebacks are
-# not affected -- the assembler part has frame unwind information and GCC
-# emits it with -g (see CCDEBUG below).
+# to slow down the C part by not omitting it. Debugging, tracebacks and
+# unwinding are not affected -- the assembler part has frame unwind
+# information and GCC emits it where needed (x64) or with -g (see CCDEBUG).
 CCOPT= -O2 -fomit-frame-pointer
 # Use this if you want to generate a smaller binary (but it's slower):
 #CCOPT= -Os -fomit-frame-pointer
@@ -75,7 +76,8 @@ XCFLAGS=
 #
 # Use the system provided memory allocator (realloc) instead of the
 # bundled memory allocator. This is slower, but sometimes helpful for
-# debugging. It's mandatory for Valgrind's memcheck tool, too.
+# debugging. It's helpful for Valgrind's memcheck tool, too. This option
+# cannot be enabled on x64, since the built-in allocator is mandatory.
 #XCFLAGS+= -DLUAJIT_USE_SYSMALLOC
 #
 # This define is required to run LuaJIT under Valgrind. The Valgrind

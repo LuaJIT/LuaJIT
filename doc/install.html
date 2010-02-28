@@ -54,16 +54,10 @@ LuaJIT currently builds out-of-the box on all popular x86 systems
 (Linux, Windows, OSX etc.). It builds and runs fine as a 32&nbsp;bit
 application under x64-based systems, too.
 </p>
-<p class="indent" style="color: #00a000;">
-The x64 port of LuaJIT is still experimental and not enabled by default.
-It only contains the interpreter and only builds on Linux/x64 and WIN64
-right now. If you want to give it a try, follow the special build instructions
-below.
-</p>
-<p class="indent" style="color: #00a000;">
-Note that the pure interpreter is quite a bit faster than Lua, but of
-course not as fast as the x86 JIT compiler. Work on the x64 JIT compiler
-is still ongoing.
+<p style="color: #00a000;">
+The x64 port of LuaJIT is still preliminary and not enabled by default.
+It only builds on Linux/x64 and Windows/x64 right now. If you want to
+give it a try, please follow the special build instructions below.
 </p>
 
 <h2>Configuring LuaJIT</h2>
@@ -119,8 +113,7 @@ make
 </pre>
 <div style="color: #00a000;">
 <p>
-You can force a build of the x64 interpreter on Linux/x64 with the
-following command:
+You can force a native x64 build on Linux/x64 with the following command:
 </p>
 <pre class="code">
 make CC="gcc -m64"
@@ -212,7 +205,7 @@ setenv /release /x86
 </pre>
 <div style="color: #00a000;">
 <p>
-Or select the x64 compiler (this only builds the interpreter right now):
+Or select the x64 compiler:
 </p>
 <pre class="code">
 setenv /release /x64

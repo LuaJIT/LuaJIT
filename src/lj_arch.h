@@ -48,7 +48,6 @@
 #define LJ_TARGET_X64		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_PAGESIZE		4096
-#define LJ_ARCH_NOJIT		1	/* NYI */
 #else
 #error "No target architecture defined"
 #endif

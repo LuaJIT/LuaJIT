@@ -148,9 +148,8 @@ trace linking heuristics prevent this, but in the worst case this
 means the code always falls back to the interpreter.
 </li>
 <li>
-<b>Trace management</b> needs more tuning: better blacklisting of aborted
-traces, less drastic countermeasures against trace explosion and better
-heuristics in general.
+<b>Trace management</b> needs more tuning: less drastic countermeasures
+against trace explosion and better heuristics in general.
 </li>
 <li>
 Some checks are missing in the JIT-compiled code for obscure situations
@@ -199,7 +198,7 @@ Nonetheless, it compiles to native code and needs to be adapted to each
 architecture. Porting the compiler backend is probably the easier task,
 but a key element of its design is the fast interpreter, written in
 machine-specific assembler.<br>
-An x64 port is already in the works, thanks to the
+A preliminary x64 port is already available, thanks to the
 <a href="sponsors.html">LuaJIT sponsorship program</a>.
 Other ports will follow &mdash; companies which are
 interested in sponsoring a port to a particular architecture, please

@@ -58,7 +58,7 @@ to see whether newer versions are available.
 <li>CPU support:
 <ul>
 <li>Port integrated memory allocator to Linux/x64 and Windows/x64.</li>
-<li>Port the interpreter to x64.</li>
+<li>Port interpreter and JIT compiler to x64.</li>
 <li>Port DynASM to x64.</li>
 <li>Many 32/64 bit cleanups in the VM.</li>
 <li>Allow building the interpreter with either x87 or SSE2 arithmetics.</li>
@@ -80,6 +80,7 @@ to see whether newer versions are available.
 </ul></li>
 <li>Structural and performance enhancements:
 <ul>
+<li>Improve heuristics for bytecode penalties and blacklisting.</li>
 <li>Split CALL/FUNC recording and clean up fast function call semantics.</li>
 <li>Major redesign of internal function call handling.</li>
 <li>Improve FOR loop const specialization and integerness checks.</li>
