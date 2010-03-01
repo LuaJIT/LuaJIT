@@ -94,9 +94,18 @@ void lj_state_shrinkstack(lua_State *L, MSize used)
 /* Try to grow stack. */
 void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)
 {
-  if (L->stacksize > LJ_STACK_MAXEX)  /* overflow while handling overflow? */
+  MSize n;
+  if (L->stacksize > LJ_STACK_MAXEX)  /* Overflow while handling overflow? */
     lj_err_throw(L, LUA_ERRERR);
-  resizestack(L, L->stacksize + (need > L->stacksize ? need : L->stacksize));
+  n = L->stacksize + need;
+  if (n > LJ_STACK_MAX) {
+    n += 2*LUA_MINSTACK;
+  } else if (n < 2*L->stacksize) {
+    n = 2*L->stacksize;
+    if (n >= LJ_STACK_MAX)
+      n = LJ_STACK_MAX;
+  }
+  resizestack(L, n);
   if (L->stacksize > LJ_STACK_MAXEX)
     lj_err_msg(L, LJ_ERR_STKOV);
 }
