@@ -136,10 +136,6 @@ with me, before writing major improvements, to avoid duplication of
 effort.
 </li>
 <li>
-<b>Recursion</b> is not traced yet. Often no trace will be generated at
-all or some unroll limit will catch it and abort the trace.
-</li>
-<li>
 The trace compiler currently does not back off specialization for
 function call dispatch. It should really fall back to specializing on
 the prototype, not the closure identity. This can lead to the so-called

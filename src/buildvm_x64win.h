@@ -12,7 +12,7 @@
 #define DASM_SECTION_CODE_OP	0
 #define DASM_SECTION_CODE_SUB	1
 #define DASM_MAXSECTION		2
-static const unsigned char build_actionlist[13976] = {
+static const unsigned char build_actionlist[13997] = {
   254,1,248,10,252,247,198,237,15,132,244,11,131,230,252,248,41,252,242,72,
   141,76,49,252,248,139,114,252,252,199,68,10,4,237,248,12,131,192,1,137,68,
   36,84,252,247,198,237,15,132,244,13,248,14,252,247,198,237,15,132,244,10,
@@ -676,9 +676,10 @@ static const unsigned char build_actionlist[13976] = {
   233,102,68,15,127,129,233,102,68,15,127,137,233,102,68,15,127,145,233,102,
   68,15,127,153,233,102,68,15,127,161,233,102,68,15,127,169,233,102,68,15,127,
   177,233,102,68,15,127,185,233,252,255,224,255,141,180,253,134,233,139,6,15,
-  182,204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,255,139,190,233,
-  139,108,36,96,141,12,202,59,141,233,15,135,244,23,15,182,142,233,57,200,15,
-  134,244,249,248,2,255,15,183,70,252,254,252,233,245,255,248,3,199,68,194,
+  182,204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,255,137,252,245,
+  209,252,237,129,229,239,102,131,172,253,43,233,1,15,132,244,142,255,139,190,
+  233,139,108,36,96,141,12,202,59,141,233,15,135,244,23,15,182,142,233,57,200,
+  15,134,244,249,248,2,255,15,183,70,252,254,252,233,245,255,248,3,199,68,194,
   252,252,237,131,192,1,57,200,15,134,244,3,252,233,244,2,255,141,44,197,237,
   141,4,194,139,122,252,248,137,104,252,252,137,120,252,248,139,108,36,96,141,
   12,200,59,141,233,15,135,244,22,137,209,137,194,15,182,174,233,133,252,237,
@@ -2150,6 +2151,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FUNCF:
 #if LJ_HASJIT
+    dasm_put(Dst, 13692, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     break;
@@ -2159,13 +2161,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
 #endif
   case BC_IFUNCF:
-    dasm_put(Dst, 13692, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
+    dasm_put(Dst, 13713, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
     if (op == BC_JFUNCF) {
-      dasm_put(Dst, 13722, BC_JLOOP);
+      dasm_put(Dst, 13743, BC_JLOOP);
     } else {
       dasm_put(Dst, 9539);
     }
-    dasm_put(Dst, 13731, LJ_TNIL);
+    dasm_put(Dst, 13752, LJ_TNIL);
     break;
 
   case BC_JFUNCV:
@@ -2176,30 +2178,30 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    dasm_put(Dst, 13753, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
+    dasm_put(Dst, 13774, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
     if (op == BC_JFUNCV) {
-      dasm_put(Dst, 13722, BC_JLOOP);
+      dasm_put(Dst, 13743, BC_JLOOP);
     } else {
-      dasm_put(Dst, 13844, -4+PC2PROTO(k));
+      dasm_put(Dst, 13865, -4+PC2PROTO(k));
     }
-    dasm_put(Dst, 13867, LJ_TNIL);
+    dasm_put(Dst, 13888, LJ_TNIL);
     break;
 
   case BC_FUNCC:
   case BC_FUNCCW:
-    dasm_put(Dst, 13889, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
-    if (op == BC_FUNCC) {
-      dasm_put(Dst, 13919);
-    } else {
-      dasm_put(Dst, 13923);
-    }
-    dasm_put(Dst, 13931, DISPATCH_GL(vmstate), ~LJ_VMST_C);
+    dasm_put(Dst, 13910, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
     if (op == BC_FUNCC) {
       dasm_put(Dst, 13940);
     } else {
-      dasm_put(Dst, 13944, DISPATCH_GL(wrapf));
+      dasm_put(Dst, 13944);
     }
-    dasm_put(Dst, 13949, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
+    dasm_put(Dst, 13952, DISPATCH_GL(vmstate), ~LJ_VMST_C);
+    if (op == BC_FUNCC) {
+      dasm_put(Dst, 13961);
+    } else {
+      dasm_put(Dst, 13965, DISPATCH_GL(wrapf));
+    }
+    dasm_put(Dst, 13970, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
     break;
 
   /* ---------------------------------------------------------------------- */
@@ -2227,7 +2229,7 @@ static int build_backend(BuildCtx *ctx)
 
   build_subroutines(ctx, cmov, sse);
 
-  dasm_put(Dst, 13974);
+  dasm_put(Dst, 13995);
   for (op = 0; op < BC__MAX; op++)
     build_ins(ctx, (BCOp)op, op, cmov, sse);
 

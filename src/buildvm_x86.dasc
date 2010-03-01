@@ -4790,8 +4790,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FUNCF:
 #if LJ_HASJIT
-    |  // NYI: Disabled, until the tracer supports recursion/upcalls/leaves.
-    |  // hotcall RB
+    |  hotcall RB
 #endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     | // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow and ins_AD is a no-op.

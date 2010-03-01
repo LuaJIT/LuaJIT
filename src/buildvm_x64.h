@@ -12,7 +12,7 @@
 #define DASM_SECTION_CODE_OP	0
 #define DASM_SECTION_CODE_SUB	1
 #define DASM_MAXSECTION		2
-static const unsigned char build_actionlist[14028] = {
+static const unsigned char build_actionlist[14049] = {
   254,1,248,10,252,247,195,237,15,132,244,11,131,227,252,248,41,218,72,141,
   76,25,252,248,139,90,252,252,199,68,10,4,237,248,12,131,192,1,137,68,36,4,
   252,247,195,237,15,132,244,13,248,14,252,247,195,237,15,132,244,10,65,199,
@@ -676,8 +676,9 @@ static const unsigned char build_actionlist[14028] = {
   233,139,4,193,72,139,128,233,139,108,36,24,65,137,150,233,65,137,174,233,
   76,137,36,36,76,137,108,36,8,72,131,252,236,16,252,255,224,255,141,156,253,
   131,233,139,3,15,182,204,15,182,232,131,195,4,193,232,16,65,252,255,36,252,
-  238,255,68,139,187,233,139,108,36,24,141,12,202,59,141,233,15,135,244,23,
-  15,182,139,233,57,200,15,134,244,249,248,2,255,15,183,67,252,254,252,233,
+  238,255,137,221,209,252,237,129,229,239,102,65,131,172,253,46,233,1,15,132,
+  244,142,255,68,139,187,233,139,108,36,24,141,12,202,59,141,233,15,135,244,
+  23,15,182,139,233,57,200,15,134,244,249,248,2,255,15,183,67,252,254,252,233,
   245,255,248,3,199,68,194,252,252,237,131,192,1,57,200,15,134,244,3,252,233,
   244,2,255,141,44,197,237,141,4,194,68,139,122,252,248,137,104,252,252,68,
   137,120,252,248,139,108,36,24,141,12,200,59,141,233,15,135,244,22,137,209,
@@ -2150,6 +2151,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FUNCF:
 #if LJ_HASJIT
+    dasm_put(Dst, 13731, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     break;
@@ -2159,13 +2161,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
 #endif
   case BC_IFUNCF:
-    dasm_put(Dst, 13731, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
+    dasm_put(Dst, 13752, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
     if (op == BC_JFUNCF) {
-      dasm_put(Dst, 13762, BC_JLOOP);
+      dasm_put(Dst, 13783, BC_JLOOP);
     } else {
       dasm_put(Dst, 9531);
     }
-    dasm_put(Dst, 13771, LJ_TNIL);
+    dasm_put(Dst, 13792, LJ_TNIL);
     break;
 
   case BC_JFUNCV:
@@ -2176,30 +2178,30 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    dasm_put(Dst, 13793, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
+    dasm_put(Dst, 13814, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
     if (op == BC_JFUNCV) {
-      dasm_put(Dst, 13762, BC_JLOOP);
+      dasm_put(Dst, 13783, BC_JLOOP);
     } else {
-      dasm_put(Dst, 13890, -4+PC2PROTO(k));
+      dasm_put(Dst, 13911, -4+PC2PROTO(k));
     }
-    dasm_put(Dst, 13915, LJ_TNIL);
+    dasm_put(Dst, 13936, LJ_TNIL);
     break;
 
   case BC_FUNCC:
   case BC_FUNCCW:
-    dasm_put(Dst, 13937, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
+    dasm_put(Dst, 13958, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
     if (op == BC_FUNCC) {
-      dasm_put(Dst, 13967);
+      dasm_put(Dst, 13988);
     } else {
-      dasm_put(Dst, 13971);
+      dasm_put(Dst, 13992);
     }
-    dasm_put(Dst, 13979, DISPATCH_GL(vmstate), ~LJ_VMST_C);
+    dasm_put(Dst, 14000, DISPATCH_GL(vmstate), ~LJ_VMST_C);
     if (op == BC_FUNCC) {
-      dasm_put(Dst, 13989);
+      dasm_put(Dst, 14010);
     } else {
-      dasm_put(Dst, 13994, DISPATCH_GL(wrapf));
+      dasm_put(Dst, 14015, DISPATCH_GL(wrapf));
     }
-    dasm_put(Dst, 14000, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
+    dasm_put(Dst, 14021, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
     break;
 
   /* ---------------------------------------------------------------------- */
@@ -2227,7 +2229,7 @@ static int build_backend(BuildCtx *ctx)
 
   build_subroutines(ctx, cmov, sse);
 
-  dasm_put(Dst, 14026);
+  dasm_put(Dst, 14047);
   for (op = 0; op < BC__MAX; op++)
     build_ins(ctx, (BCOp)op, op, cmov, sse);
 
