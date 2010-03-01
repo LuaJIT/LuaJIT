@@ -3212,8 +3212,14 @@ static void asm_tail_link(ASMState *as)
 
   if (as->T->link == TRACE_INTERP) {
     /* Setup fixed registers for exit to interpreter. */
+    const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
+    if (bc_op(*pc) == BC_JLOOP) {  /* NYI: find a better way to do this. */
+      BCIns *retpc = &as->J->trace[bc_d(*pc)]->startins;
+      if (bc_isret(bc_op(*retpc)))
+	pc = retpc;
+    }
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
-    emit_loada(as, RID_PC, snap_pc(as->T->snapmap[snap->mapofs + snap->nent]));
+    emit_loada(as, RID_PC, pc);
   } else if (baseslot) {
     /* Save modified BASE for linking to trace with higher start frame. */
     emit_setgl(as, RID_BASE, jit_base);

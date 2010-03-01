@@ -522,6 +522,29 @@ static void rec_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs)
     lj_trace_err(J, LJ_TRERR_LUNROLL);
 }
 
+/* Check unroll limits for down-recursion. */
+static int check_downrec_unroll(jit_State *J, GCproto *pt)
+{
+  IRRef ptref;
+  for (ptref = J->chain[IR_KGC]; ptref; ptref = IR(ptref)->prev)
+    if (ir_kgc(IR(ptref)) == obj2gco(pt)) {
+      int count = 0;
+      IRRef ref;
+      for (ref = J->chain[IR_RETF]; ref; ref = IR(ref)->prev)
+	if (IR(ref)->op1 == ptref)
+	  count++;
+      if (count) {
+	if (J->pc == J->startpc) {
+	  if (count + J->tailcalled > J->param[JIT_P_recunroll])
+	    return 1;
+	} else {
+	  lj_trace_err(J, LJ_TRERR_DOWNREC);
+	}
+      }
+    }
+  return 0;
+}
+
 /* Record return. */
 static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
@@ -545,6 +568,15 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     BCIns callins = *(frame_pc(frame)-1);
     ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
     BCReg cbase = bc_a(callins);
+    GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
+    if (J->pt && frame == J->L->base - 1) {
+      if (J->framedepth == 0 && check_downrec_unroll(J, pt)) {
+	J->maxslot = rbase + nresults;
+	rec_stop(J, J->curtrace);  /* Down-recursion. */
+	return;
+      }
+      lj_snap_add(J);
+    }
     for (i = 0; i < nresults; i++)  /* Adjust results. */
       J->base[i-1] = i < gotresults ? J->base[rbase+i] : TREF_NIL;
     J->maxslot = cbase+(BCReg)nresults;
@@ -553,11 +585,10 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       lua_assert(J->baseslot > cbase+1);
       J->baseslot -= cbase+1;
       J->base -= cbase+1;
-    } else if (J->parent == 0) {
+    } else if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins))) {
       /* Return to lower frame would leave the loop in a root trace. */
       lj_trace_err(J, LJ_TRERR_LLEAVE);
     } else {  /* Return to lower frame. Guard for the target we return to. */
-      GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
       TRef trpt = lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);
       TRef trpc = lj_ir_kptr(J, (void *)frame_pc(frame));
       emitir(IRTG(IR_RETF, IRT_PTR), trpt, trpc);
@@ -2284,6 +2315,12 @@ static const BCIns *rec_setup_root(jit_State *J)
     }
     J->maxslot = ra;
     pc++;
+    break;
+  case BC_RET:
+  case BC_RET0:
+  case BC_RET1:
+    /* No bytecode range check for down-recursive root traces. */
+    J->maxslot = ra + bc_d(ins);
     break;
   case BC_FUNCF:
     /* No bytecode range check for root traces started by a hot call. */

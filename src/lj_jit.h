@@ -287,6 +287,9 @@ typedef struct jit_State {
   TraceNo parent;	/* Parent of current side trace (0 for root traces). */
   ExitNo exitno;	/* Exit number in parent of current side trace. */
 
+  BCIns *patchpc;	/* PC for pending re-patch. */
+  BCIns patchins;	/* Instruction for pending re-patch. */
+
   TValue errinfo;	/* Additional info element for trace errors. */
 
   MCode *mcarea;	/* Base of current mcode area. */

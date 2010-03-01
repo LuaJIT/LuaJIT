@@ -380,11 +380,8 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
       L->top = L->base + slots;  /* Fix top again. */
     }
   }
-  if ((g->hookmask & LUA_MASKRET)) {
-    BCOp op = bc_op(pc[-1]);
-    if (op == BC_RETM || op == BC_RET || op == BC_RET0 || op == BC_RET1)
-      callhook(L, LUA_HOOKRET, -1);
-  }
+  if ((g->hookmask & LUA_MASKRET) && bc_isret(bc_op(pc[-1])))
+    callhook(L, LUA_HOOKRET, -1);
 }
 
 /* Initialize call. Ensure stack space and clear missing parameters. */

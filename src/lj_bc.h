@@ -245,6 +245,11 @@ typedef enum {
   (BCM##ma|(BCM##mb<<3)|(BCM##mc<<7)|(MM_##mm<<11)),
 #define BCMODE_FF	0
 
+static LJ_AINLINE int bc_isret(BCOp op)
+{
+  return (op == BC_RETM || op == BC_RET || op == BC_RET0 || op == BC_RET1);
+}
+
 LJ_DATA const uint16_t lj_bc_mode[];
 LJ_DATA const uint16_t lj_bc_ofs[];
 
