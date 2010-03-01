@@ -711,7 +711,10 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
   ctx.szmcode = T->szmcode;
   ctx.spadjp = CFRAME_SIZE_JIT + (MSize)(parent?J->trace[parent]->spadjust:0);
   ctx.spadj = CFRAME_SIZE_JIT + T->spadjust;
-  ctx.lineno = proto_line(pt, proto_bcpos(pt, startpc));
+  if (startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc)
+    ctx.lineno = proto_line(pt, proto_bcpos(pt, startpc));
+  else
+    ctx.lineno = proto_line(pt, 0);  /* Wrong, but better than nothing. */
   ctx.filename = strdata(proto_chunkname(pt));
   if (*ctx.filename == '@' || *ctx.filename == '=')
     ctx.filename++;
