@@ -172,7 +172,8 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #elif defined(__MACH__) && defined(__APPLE__)
 #error "NYI: no support for 64 bit OSX (yet)"
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
-/* FreeBSD 64 bit kernel ignores mmap() hints for lower 8GB of memory. */
+/* FreeBSD 64 bit kernel ignores mmap() hints for lower 32GB of memory. */
+/* See /usr/src/sys/vm/vm_mmap.c near RLIMIT_DATA. */
 #error "No support for 64 bit FreeBSD"
 #else
 #error "NYI: need an equivalent of MAP_32BIT for this 64 bit OS"
