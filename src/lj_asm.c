@@ -791,6 +791,11 @@ static Reg ra_allocref(ASMState *as, IRRef ref, RegSet allow)
 	pick &= ~as->modset;
       r = rset_pickbot(pick);  /* Reduce conflicts with inverse allocation. */
     } else {
+#if LJ_64
+      /* We've got plenty of regs, so get callee-save regs if possible. */
+      if ((pick & ~RSET_SCRATCH))
+	pick &= ~RSET_SCRATCH;
+#endif
       r = rset_picktop(pick);
     }
   } else {
