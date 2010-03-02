@@ -160,16 +160,29 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #define MMAP_PROT		(PROT_READ|PROT_WRITE)
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS		MAP_ANON
-#endif /* MAP_ANON */
+#endif
+#define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS)
 
 #if LJ_64
-#define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS|MAP_32BIT)
+/* Need special support for allocating memory in the lower 2GB. */
+
+#if defined(__linux__)
+/* Actually this only gives us max. 1GB in current Linux kernels. */
+#define CALL_MMAP(s)	mmap(0, (s), MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0)
+#elif defined(__MACH__) && defined(__APPLE__)
+#error "NYI: no support for 64 bit OSX (yet)"
+#elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+/* FreeBSD 64 bit kernel ignores mmap() hints for lower 8GB of memory. */
+#error "No support for 64 bit FreeBSD"
 #else
-#define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS)
+#error "NYI: need an equivalent of MAP_32BIT for this 64 bit OS"
+#endif
+
+#else
+#define CALL_MMAP(s)		mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
 #endif
 
 #define INIT_MMAP()		((void)0)
-#define CALL_MMAP(s)		mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
 #define DIRECT_MMAP(s)		CALL_MMAP(s)
 #define CALL_MUNMAP(a, s)	munmap((a), (s))
 
