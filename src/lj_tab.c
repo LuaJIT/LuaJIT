@@ -22,7 +22,7 @@
 /* String hashes are precomputed when they are interned. */
 #define hashstr(t, s)		hashmask(t, (s)->hash)
 
-#define hashnum(t, o)		hashrot(t, (o)->u32.lo, (o)->u32.hi&0x7fffffff)
+#define hashnum(t, o)		hashrot(t, (o)->u32.lo, ((o)->u32.hi << 1))
 #define hashgcref(t, r)		hashrot(t, gcrefu(r), gcrefu(r)-0x04c11db7)
 
 /* Scramble the bits of numbers and pointers. */

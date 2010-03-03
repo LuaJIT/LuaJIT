@@ -382,6 +382,19 @@ static void emit_loadi(ASMState *as, Reg r, int32_t i)
 #define emit_loada(as, r, addr) \
   emit_loadi(as, (r), ptr2addr((addr)))
 
+#if LJ_64
+/* mov r, imm64 */
+static void emit_loadu64(ASMState *as, Reg r, uint64_t i)
+{
+  MCode *p = as->mcp;
+  *(uint64_t *)(p-8) = i;
+  p[-9] = (MCode)(XI_MOVri+(r&7));
+  p[-10] = 0x48 + ((r>>3)&1);
+  p -= 10;
+  as->mcp = p;
+}
+#endif
+
 /* movsd r, [&tv->n] / xorps r, r */
 static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
 {
@@ -1558,7 +1571,7 @@ static uint32_t ir_khash(IRIns *ir)
     return ir_kstr(ir)->hash;
   } else if (irt_isnum(ir->t)) {
     lo = ir_knum(ir)->u32.lo;
-    hi = ir_knum(ir)->u32.hi & 0x7fffffff;
+    hi = ir_knum(ir)->u32.hi << 1;
   } else if (irt_ispri(ir->t)) {
     lua_assert(!irt_isnil(ir->t));
     return irt_type(ir->t)-IRT_FALSE;
@@ -1696,9 +1709,15 @@ static void asm_href(ASMState *as, IRIns *ir)
       emit_shifti(as, XOg_ROL, dest, 14);
       emit_rr(as, XO_ARITH(XOg_XOR), tmp, dest);
       if (irt_isnum(kt)) {
-	emit_rmro(as, XO_ARITH(XOg_AND), dest, RID_ESP, ra_spill(as, irkey)+4);
-	emit_loadi(as, dest, 0x7fffffff);
+	emit_rr(as, XO_ARITH(XOg_ADD), dest, dest);
+#if LJ_64
+	emit_shifti(as, XOg_SHR|REX_64, dest, 32);
+	emit_rr(as, XO_MOV, tmp, dest);
+	emit_rr(as, XO_MOVDto, key|REX_64, dest);
+#else
+	emit_rmro(as, XO_MOV, dest, RID_ESP, ra_spill(as, irkey)+4);
 	emit_rr(as, XO_MOVDto, key, tmp);
+#endif
       } else {
 	emit_rr(as, XO_MOV, tmp, key);
 	emit_rmro(as, XO_LEA, dest, key, -0x04c11db7);
@@ -1714,7 +1733,9 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   int32_t ofs = (int32_t)(kslot->op2 * sizeof(Node));
   Reg dest = ra_used(ir) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
   Reg node = ra_alloc1(as, ir->op1, RSET_GPR);
+#if !LJ_64
   MCLabel l_exit;
+#endif
   lua_assert(ofs % sizeof(Node) == 0);
   if (ra_hasreg(dest)) {
     if (ofs != 0) {
@@ -1727,6 +1748,23 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
     }
   }
   asm_guardcc(as, CC_NE);
+#if LJ_64
+  if (!irt_ispri(irkey->t)) {
+    Reg key = ra_scratch(as, rset_exclude(RSET_GPR, node));
+    emit_rmro(as, XO_CMP, key|REX_64, node,
+	       ofs + (int32_t)offsetof(Node, key.u64));
+    lua_assert(irt_isnum(irkey->t) || irt_isgcv(irkey->t));
+    /* Assumes -0.0 is already canonicalized to +0.0. */
+    emit_loadu64(as, key, irt_isnum(irkey->t) ? ir_knum(irkey)->u64 :
+			  ((uint64_t)~irt_type(irkey->t) << 32) |
+			  (uint64_t)(uint32_t)ptr2addr(ir_kgc(irkey)));
+  } else {
+    lua_assert(!irt_isnil(irkey->t));
+    emit_i8(as, ~irt_type(irkey->t));
+    emit_rmro(as, XO_ARITHi8, XOg_CMP, node,
+	      ofs + (int32_t)offsetof(Node, key.it));
+  }
+#else
   l_exit = emit_label(as);
   if (irt_isnum(irkey->t)) {
     /* Assumes -0.0 is already canonicalized to +0.0. */
@@ -1750,6 +1788,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
     emit_rmro(as, XO_ARITHi8, XOg_CMP, node,
 	      ofs + (int32_t)offsetof(Node, key.it));
   }
+#endif
 }
 
 static void asm_newref(ASMState *as, IRIns *ir)
