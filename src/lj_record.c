@@ -571,7 +571,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
     if (J->pt && frame == J->L->base - 1) {
       if (J->framedepth == 0 && check_downrec_unroll(J, pt)) {
-	J->maxslot = rbase + nresults;
+	J->maxslot = (BCReg)(rbase + nresults);
 	rec_stop(J, J->curtrace);  /* Down-recursion. */
 	return;
       }
