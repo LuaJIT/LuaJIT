@@ -164,23 +164,58 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS)
 
 #if LJ_64
-/* Need special support for allocating memory in the lower 2GB. */
+/* 64 bit mode needs special support for allocating memory in the lower 2GB. */
 
 #if defined(__linux__)
+
 /* Actually this only gives us max. 1GB in current Linux kernels. */
-#define CALL_MMAP(s)	mmap(0, (s), MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0)
+#define CALL_MMAP(s)	mmap(NULL, (s), MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0)
+
 #elif defined(__MACH__) && defined(__APPLE__)
-#error "NYI: no support for 64 bit OSX (yet)"
+
+/* OSX mmap() uses a naive first-fit linear search. That's perfect for us.
+** But -pagezero_size must be set, otherwise the lower 4GB are blocked.
+*/
+#define MMAP_REGION_START	((uintptr_t)0x10000)
+#define MMAP_REGION_END		((uintptr_t)0x80000000)
+
+static LJ_AINLINE void *CALL_MMAP(size_t size)
+{
+  /* Hint for next allocation. Doesn't need to be thread-safe. */
+  static uintptr_t alloc_hint = MMAP_REGION_START;
+  int retry = 0;
+  for (;;) {
+    void *p = mmap((void *)alloc_hint, size, MMAP_PROT, MMAP_FLAGS, -1, 0);
+    if ((uintptr_t)p >= MMAP_REGION_START &&
+	(uintptr_t)p + size < MMAP_REGION_END) {
+      alloc_hint = (uintptr_t)p + size;
+      return p;
+    }
+    if (p != CMFAIL) munmap(p, size);
+    if (retry) break;
+    retry = 1;
+    alloc_hint = MMAP_REGION_START;
+  }
+  return CMFAIL;
+}
+
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+
 /* FreeBSD 64 bit kernel ignores mmap() hints for lower 32GB of memory. */
-/* See /usr/src/sys/vm/vm_mmap.c near RLIMIT_DATA. */
+/* See: grep -C15 RLIMIT_DATA /usr/src/sys/vm/vm_mmap.c */
 #error "No support for 64 bit FreeBSD"
+
 #else
+
 #error "NYI: need an equivalent of MAP_32BIT for this 64 bit OS"
+
 #endif
 
 #else
-#define CALL_MMAP(s)		mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
+
+/* 32 bit mode is easy. */
+#define CALL_MMAP(s)		mmap(NULL, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
+
 #endif
 
 #define INIT_MMAP()		((void)0)

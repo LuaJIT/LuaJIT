@@ -227,6 +227,9 @@ ifeq (Darwin,$(TARGET_SYS))
     TARGET_DYNXLDOPTS=
     TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
   endif
+  ifeq (x64,$(TARGET_CCARCH))
+    TARGET_XLDFLAGS+= -pagezero_size 10000 -image_base 100000000
+  endif
 else
   TARGET_XLDFLAGS+= -Wl,-E
   ifeq (Linux,$(TARGET_SYS))
