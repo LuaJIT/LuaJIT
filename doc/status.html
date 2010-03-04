@@ -53,10 +53,8 @@ page.
 <span style="color: #c00000;">LuaJIT 2.0</span> is the currently active
 <span style="color: #c00000;">development branch</span>.
 It has <b>Beta Test</b> status and is still undergoing
-substantial changes. It's expected to quickly mature within the next
-months. You should definitely start to evaluate it for new projects
-right now. But deploying it in production environments is not yet
-recommended.
+substantial changes. It's maturing quickly, so you should definitely
+start to evaluate it for new projects right now.
 </p>
 
 <h2>Current Status</h2>
@@ -153,6 +151,12 @@ with <b>open upvalues aliasing</b> one of the SSA slots later on (or
 vice versa). Bonus points, if you can find a real world test case for
 this.
 </li>
+<li>
+Currently some <b>out-of-memory</b> errors from <b>on-trace code</b> are not
+handled correctly. The error may fall through an on-trace
+<tt>pcall</tt> (x86) or it may be passed on to the function set with
+<tt>lua_atpanic</tt> (x64).
+</li>
 </ul>
 </li>
 </ul>
@@ -194,7 +198,7 @@ Nonetheless, it compiles to native code and needs to be adapted to each
 architecture. Porting the compiler backend is probably the easier task,
 but a key element of its design is the fast interpreter, written in
 machine-specific assembler.<br>
-A preliminary x64 port is already available, thanks to the
+An x64 port is already available, thanks to the
 <a href="sponsors.html">LuaJIT sponsorship program</a>.
 Other ports will follow &mdash; companies which are
 interested in sponsoring a port to a particular architecture, please
