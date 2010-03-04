@@ -143,6 +143,14 @@ side traces from the cache. Returns <tt>true</tt> on success.
 Returns <tt>false</tt> if there are still links to this trace.
 </p>
 
+<h3 id="jit_status"><tt>status, ... = jit.status()</tt></h3>
+<p>
+Returns the current status of the JIT compiler. The first result is
+either <tt>true</tt> or <tt>false</tt> if the JIT compiler is turned
+on or off. The remaining results are strings for CPU-specific features
+and enabled optimizations.
+</p>
+
 <h3 id="jit_version"><tt>jit.version</tt></h3>
 <p>
 Contains the LuaJIT version string.
