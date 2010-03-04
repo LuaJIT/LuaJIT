@@ -20,16 +20,11 @@ NODOTABIVER= 51
 # Turn any of the optional settings on by removing the '#' in front of them.
 # You need to 'make clean' and 'make' again, if you change any options.
 #
-# It's recommended to compile at least for i686. By default the assembler part
-# of the interpreter makes use of CMOV/FCOMI*/FUCOMI* instructions, anyway.
-CC= gcc -m32 -march=i686
-# Use this for GCC 4.2 or higher if you don't intend to distribute the
-# binaries to a different machine:
-#CC= gcc -m32 -march=native
+# LuaJIT builds as a native 32 or 64 bit binary by default.
+CC= gcc
 #
-# Currently LuaJIT builds by default as a 32 bit binary. Use this to force
-# a native x64 build on Linux/x64:
-#CC= gcc -m64
+# Use this if you want to force a 32 bit build on a 64 bit multilib OS.
+#CC= gcc -m32
 #
 # Since the assembler part does NOT maintain a frame pointer, it's pointless
 # to slow down the C part by not omitting it. Debugging, tracebacks and
@@ -40,6 +35,13 @@ CCOPT= -O2 -fomit-frame-pointer
 #CCOPT= -Os -fomit-frame-pointer
 # Note: it's no longer recommended to use -O3 with GCC 4.x.
 # The I-Cache bloat usually outweighs the benefits from aggressive inlining.
+#
+# It's recommended to compile at least for i686. By default the assembler part
+# of the interpreter makes use of CMOV/FCOMI*/FUCOMI* instructions, anyway.
+# For GCC 4.2 or higher and if you don't intend to distribute the
+# binaries to a different machine you could also use: -march=native
+CCOPT_X86= -march=i686
+CCOPT_X64=
 #
 CCDEBUG=
 # Uncomment the next line to generate debug information:
@@ -127,7 +129,8 @@ BUILDMODE= mixed
 #   LIBS     HOST_LIBS     TARGET_LIBS
 #   CROSS    HOST_SYS      TARGET_SYS
 #
-# Cross-compilation example: make CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+# Cross-compilation example:
+#   make CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
 
 CCOPTIONS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(XCFLAGS) $(CFLAGS)
 LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
@@ -174,6 +177,14 @@ TARGET_ALIBS= $(TARGET_XLIBS) $(LIBS) $(TARGET_LIBS)
 
 ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
   TARGET_XCFLAGS+= -fno-stack-protector
+endif
+
+ifeq (,$(findstring __i386__,$(shell echo __i386__ | $(TARGET_CC) -P -E -)))
+  TARGET_CCARCH= x86
+  TARGET_XCFLAGS+= $(CCOPT_X86)
+else
+  TARGET_CCARCH= x64
+  TARGET_XCFLAGS+= $(CCOPT_X64)
 endif
 
 ifneq (,$(PREFIX))
