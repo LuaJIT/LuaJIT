@@ -5108,7 +5108,11 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte " REG_RA "\n"
 	"\t.byte 6\n"				/* augmentation length */
 	"\t.byte 0x9b\n"			/* indirect|pcrel|sdata4 */
+#if LJ_64
+	"\t.long _lj_err_unwind_dwarf+4@GOTPCREL\n"
+#else
 	"\t.long L_lj_err_unwind_dwarf$non_lazy_ptr-.\n"
+#endif
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
 #if LJ_64
 	"\t.byte 0xc\n\t.byte " REG_SP "\n\t.byte " SZPTR "\n"
@@ -5142,11 +5146,15 @@ static void emit_asm_debug(BuildCtx *ctx)
 #endif
 	"\t.align " BSZPTR "\n"
 	"LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
+#if LJ_64
+      fprintf(ctx->fp, "\t.subsections_via_symbols\n");
+#else
       fprintf(ctx->fp,
 	"\t.non_lazy_symbol_pointer\n"
 	"L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
 	".indirect_symbol _lj_err_unwind_dwarf\n"
 	".long 0\n");
+#endif
     break;
   default:  /* Difficult for other modes. */
     break;
