@@ -43,7 +43,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta2</strong>.<br>
+The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta3</strong>.<br>
 The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.5</strong>.
 </p>
 <p>
@@ -51,18 +51,17 @@ Please check the
 <a href="http://luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
 to see whether newer versions are available.
 </p>
-
-<div class="major" style="background: #d0d0d0;">
-<h2 id="snap">Development Snapshot</h2>
+<div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta3">LuaJIT 2.0.0-beta3 &mdash; 2010-03-07</h2>
 <ul>
-<li>Portability:
+<li>LuaJIT x64 port:</li>
 <ul>
 <li>Port integrated memory allocator to Linux/x64, Windows/x64 and OSX/x64.</li>
 <li>Port interpreter and JIT compiler to x64.</li>
 <li>Port DynASM to x64.</li>
 <li>Many 32/64 bit cleanups in the VM.</li>
 <li>Allow building the interpreter with either x87 or SSE2 arithmetics.</li>
-<li>Disable JIT compiler on older non-SSE2 CPUs instead of aborting.</li>
+<li>Add external unwinding and C++ exception interop (default on x64).</li>
 </ul></li>
 <li>Correctness and completeness:
 <ul>
@@ -76,7 +75,7 @@ to see whether newer versions are available.
 <li>Drive the GC forward on string allocations in the parser.</li>
 <li>Implement call/return hooks (zero-cost if disabled).</li>
 <li>Implement yield from C hooks.</li>
-<li>Add external unwinding and C++ exception interop (default on x64).</li>
+<li>Disable JIT compiler on older non-SSE2 CPUs instead of aborting.</li>
 </ul></li>
 <li>Structural and performance enhancements:
 <ul>
@@ -100,9 +99,7 @@ to see whether newer versions are available.
 and <tt>math.random()</tt>.</li>
 </ul></li>
 </ul>
-</div>
 
-<div class="major" style="background: #ffd0d0;">
 <h2 id="LuaJIT-2.0.0-beta2">LuaJIT 2.0.0-beta2 &mdash; 2009-11-09</h2>
 <ul>
 <li>Reorganize build system. Build static+shared library on POSIX.</li>
