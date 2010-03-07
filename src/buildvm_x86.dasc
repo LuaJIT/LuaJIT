@@ -5093,13 +5093,17 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align " SZPTR "\n"
 	"LEFDE1:\n\n", LJ_32 ? "_" : "", (int)ctx->codesz, CFRAME_SIZE);
     break;
-  case BUILD_machasm:
+  /* Mental note: never let Apple design an assembler.
+  ** Or a linker. Or a plastic case. But I digress.
+  */
+  case BUILD_machasm: {
+    int i;
     fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
     fprintf(ctx->fp,
 	"EH_frame1:\n"
-	"\t.set L$set$0,LECIE1-LSCIE1\n"
-	"\t.long L$set$0\n"
-	"LSCIE1:\n"
+	"\t.set L$set$x,LECIEX-LSCIEX\n"
+	"\t.long L$set$x\n"
+	"LSCIEX:\n"
 	"\t.long 0\n"
 	"\t.byte 0x1\n"
 	"\t.ascii \"zPR\\0\"\n"
@@ -5110,51 +5114,72 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x9b\n"			/* indirect|pcrel|sdata4 */
 #if LJ_64
 	"\t.long _lj_err_unwind_dwarf+4@GOTPCREL\n"
-#else
-	"\t.long L_lj_err_unwind_dwarf$non_lazy_ptr-.\n"
-#endif
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-#if LJ_64
 	"\t.byte 0xc\n\t.byte " REG_SP "\n\t.byte " SZPTR "\n"
 #else
+	"\t.long L_lj_err_unwind_dwarf$non_lazy_ptr-.\n"
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
 	"\t.byte 0xc\n\t.byte 0x5\n\t.byte 0x4\n"  /* esp=5 on 32 bit MACH-O. */
 #endif
 	"\t.byte 0x80+" REG_RA "\n\t.byte 0x1\n"
 	"\t.align " BSZPTR "\n"
-	"LECIE1:\n\n");
+	"LECIEX:\n\n");
+    for (i = 0; i < ctx->nsym; i++) {
+      int pi = ctx->perm[i];
+      int ni = ctx->perm[i+1];
+      int size = ctx->sym_ofs[ni] - ctx->sym_ofs[pi];
+      if (ctx->sym_ofs[pi] >= 0 && size > 0) {
+	char name[80];
+	if (pi >= ctx->npc) {
+	  char *p;
+	  sprintf(name, "_" LABEL_PREFIX "%s", ctx->globnames[pi - ctx->npc]);
+	  p = strchr(name, '@'); if (p) *p = '\0';
+#if LJ_HASJIT
+	} else {
+#else
+	} else if (!(pi == BC_JFORI || pi == BC_JFORL || pi == BC_JITERL ||
+		     pi == BC_JLOOP || pi == BC_IFORL || pi == BC_IITERL ||
+		     pi == BC_ILOOP)) {
+#endif
+	  sprintf(name, "_" LABEL_PREFIX_BC "%s", bc_names[pi]);
+	}
+	fprintf(ctx->fp,
+	    "%s.eh:\n"
+	    "LSFDE%d:\n"
+	    "\t.set L$set$%d,LEFDE%d-LASFDE%d\n"
+	    "\t.long L$set$%d\n"
+	    "LASFDE%d:\n"
+	    "\t.long LASFDE%d-EH_frame1\n"
+	    "\t.long %s-.\n"
+	    "\t.long %d\n"
+	    "\t.byte 0\n"			/* augmentation length */
+	    "\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
+#if LJ_64
+	    "\t.byte 0x86\n\t.byte 0x2\n"	/* offset rbp */
+	    "\t.byte 0x83\n\t.byte 0x3\n"	/* offset rbx */
+	    "\t.byte 0x8f\n\t.byte 0x4\n"	/* offset r15 */
+	    "\t.byte 0x8e\n\t.byte 0x5\n"	/* offset r14 */
+#else
+	    "\t.byte 0x84\n\t.byte 0x2\n"	/* offset ebp (4 for MACH-O)*/
+	    "\t.byte 0x87\n\t.byte 0x3\n"	/* offset edi */
+	    "\t.byte 0x86\n\t.byte 0x4\n"	/* offset esi */
+	    "\t.byte 0x83\n\t.byte 0x5\n"	/* offset ebx */
+#endif
+	    "\t.align " BSZPTR "\n"
+	    "LEFDE%d:\n\n",
+	    name, i, i, i, i, i, i, i, name, size, CFRAME_SIZE, i);
+      }
+    }
+#if LJ_64
+    fprintf(ctx->fp, "\t.subsections_via_symbols\n");
+#else
     fprintf(ctx->fp,
-	"_lj_vm_asm_begin.eh:\n"
-	"LSFDE1:\n"
-	"\t.set L$set$1,LEFDE1-LASFDE1\n"
-	"\t.long L$set$1\n"
-	"LASFDE1:\n"
-	"\t.long LASFDE1-EH_frame1\n"
-	"\t.long _lj_vm_asm_begin-.\n"
-	"\t.long %d\n"
-	"\t.byte 0\n"				/* augmentation length */
-	"\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
-#if LJ_64
-	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
-	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
-	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
-	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
-#else
-	"\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
-	"\t.byte 0x87\n\t.byte 0x3\n"		/* offset edi */
-	"\t.byte 0x86\n\t.byte 0x4\n"		/* offset esi */
-	"\t.byte 0x83\n\t.byte 0x5\n"		/* offset ebx */
+      "\t.non_lazy_symbol_pointer\n"
+      "L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
+      ".indirect_symbol _lj_err_unwind_dwarf\n"
+      ".long 0\n");
 #endif
-	"\t.align " BSZPTR "\n"
-	"LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
-#if LJ_64
-      fprintf(ctx->fp, "\t.subsections_via_symbols\n");
-#else
-      fprintf(ctx->fp,
-	"\t.non_lazy_symbol_pointer\n"
-	"L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
-	".indirect_symbol _lj_err_unwind_dwarf\n"
-	".long 0\n");
-#endif
+    }
     break;
   default:  /* Difficult for other modes. */
     break;
