@@ -8,6 +8,22 @@
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+<style type="text/css">
+table.compat {
+  line-height: 1.2;
+  width: 35em;
+}
+tr.compathead td {
+  font-weight: bold;
+}
+td.compatos {
+  width: 40%;
+}
+td.compatcc {
+  width: 30%;
+  vertical-align: top;
+}
+</style>
 </head>
 <body>
 <div id="site">
@@ -50,9 +66,37 @@ For the impatient (on POSIX systems):
 make &amp;&amp; sudo make install
 </pre>
 <p>
-LuaJIT currently builds out-of-the box on all popular x86 or x64 systems
-(Linux, Windows, OSX etc.).
+LuaJIT currently builds out-of-the box on most x86 or x64 systems.
+Here's the compatibility matrix for the supported combinations of
+operating system, CPU and compilers:
 </p>
+<table class="compat">
+<tr class="compathead">
+<td class="compatos">Operating system</td>
+<td class="compatcc">x86 (32 bit)</td>
+<td class="compatcc">x64 (64 bit)</td>
+</tr>
+<tr class="odd separate">
+<td class="compatos">Linux</td>
+<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
+<td class="compatcc">GCC 4.x</td>
+</tr>
+<tr class="even">
+<td class="compatos">Windows 98/XP/Vista/7</td>
+<td class="compatcc">MSVC (EE)<br>Windows SDK<br>MinGW (GCC)<br>Cygwin (GCC)</td>
+<td class="compatcc">MSVC<br>Windows SDK</td>
+</tr>
+<tr class="odd">
+<td class="compatos">OSX 10.3-10.6</td>
+<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
+<td class="compatcc">GCC 4.x</td>
+</tr>
+<tr class="even">
+<td class="compatos">*BSD, other</td>
+<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
+<td class="compatcc">(not supported)</td>
+</tr>
+</table>
 
 <h2>Configuring LuaJIT</h2>
 <p>
@@ -244,7 +288,7 @@ check the comments in <tt>src/Makefile</tt>. Here are some popular examples:
 </p>
 <p>
 You can cross-compile to a 32 bit binary on a multilib x64 OS by
-installing the multilib development pacakges (e.g. <tt>libc6-dev-i386</tt>
+installing the multilib development packages (e.g. <tt>libc6-dev-i386</tt>
 on Debian/Ubuntu) and running:
 </p>
 <pre class="code">
@@ -283,6 +327,11 @@ library is loaded or the JIT compiler will not be activated.</li>
 <pre class="code">
 -pagezero_size 10000 -image_base 100000000
 </pre>
+<p>
+It's recommended to <tt>rebase</tt> all (self-compiled) shared libraries
+which are loaded at runtime on OSX/x64 (e.g. C extension modules for Lua).
+See: <tt>man rebase</tt>
+</p>
 <br class="flush">
 </div>
 <div id="foot">

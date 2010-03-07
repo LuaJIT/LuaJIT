@@ -122,8 +122,8 @@ argument.
 </p>
 <p>
 If the second argument is <tt>true</tt>, JIT compilation is also
-enabled, disabled or flushed recursively for all subfunctions of a
-function. With <tt>false</tt> only the subfunctions are affected.
+enabled, disabled or flushed recursively for all sub-functions of a
+function. With <tt>false</tt> only the sub-functions are affected.
 </p>
 <p>
 The <tt>jit.on</tt> and <tt>jit.off</tt> functions only set a flag
@@ -252,8 +252,8 @@ This sets the mode for the function at the stack index <tt>idx</tt> or
 the parent of the calling function (<tt>idx = 0</tt>). It either
 enables JIT compilation for a function, disables it and flushes any
 already compiled code or only flushes already compiled code. This
-applies recursively to all subfunctions of the function with
-<tt>LUAJIT_MODE_ALLFUNC</tt> or only to the subfunctions with
+applies recursively to all sub-functions of the function with
+<tt>LUAJIT_MODE_ALLFUNC</tt> or only to the sub-functions with
 <tt>LUAJIT_MODE_ALLSUBFUNC</tt>.
 </p>
 
