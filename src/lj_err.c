@@ -96,6 +96,8 @@ static BCPos currentpc(lua_State *L, GCfunc *fn, cTValue *nextframe)
   if (!isluafunc(fn)) {  /* Cannot derive a PC for non-Lua functions. */
     return ~(BCPos)0;
   } else if (nextframe == NULL) {  /* Lua function on top. */
+    if (L->cframe == NULL)
+      return ~(BCPos)0;
     ins = cframe_Lpc(L);  /* Only happens during error/hook handling. */
   } else {
     if (frame_islua(nextframe)) {
@@ -106,6 +108,8 @@ static BCPos currentpc(lua_State *L, GCfunc *fn, cTValue *nextframe)
       /* Lua function below errfunc/gc/hook: find cframe to get the PC. */
       void *cf = cframe_raw(L->cframe);
       TValue *f = L->base-1;
+      if (cf == NULL)
+	return ~(BCPos)0;
       while (f > nextframe) {
 	if (frame_islua(f)) {
 	  f = frame_prevl(f);
