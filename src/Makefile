@@ -229,6 +229,7 @@ ifeq (Darwin,$(TARGET_SYS))
   endif
   ifeq (x64,$(TARGET_CCARCH))
     TARGET_XLDFLAGS+= -pagezero_size 10000 -image_base 100000000
+    TARGET_XSHLDFLAGS+= -image_base 7fff04c4a000
   endif
 else
   TARGET_XLDFLAGS+= -Wl,-E
