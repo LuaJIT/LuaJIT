@@ -461,6 +461,14 @@ static void emit_jcc(ASMState *as, int cc, MCode *target)
 static void emit_call_(ASMState *as, MCode *target)
 {
   MCode *p = as->mcp;
+#if LJ_64
+  if (target-p != (int32_t)(target-p)) {
+    /* Assumes RID_RET is never an argument to calls and always clobbered. */
+    emit_rr(as, XO_GROUP5, XOg_CALL, RID_RET);
+    emit_loadu64(as, RID_RET, (uint64_t)target);
+    return;
+  }
+#endif
   *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = XI_CALL;
   as->mcp = p - 5;

@@ -224,6 +224,8 @@ typedef enum {
   XO_TEST =	XO_(85),
   XO_GROUP3b =	XO_(f6),
   XO_GROUP3 =	XO_(f7),
+  XO_GROUP5b =	XO_(fe),
+  XO_GROUP5 =	XO_(ff),
   XO_MOVZXb =	XO_0f(b6),
   XO_MOVZXw =	XO_0f(b7),
   XO_MOVSXb =	XO_0f(be),
@@ -277,6 +279,10 @@ typedef enum {
 typedef enum {
   XOg_TEST, XOg_TEST_, XOg_NOT, XOg_NEG, XOg_MUL, XOg_IMUL, XOg_DIV, XOg_IDIV
 } x86Group3;
+
+typedef enum {
+  XOg_INC, XOg_DEC, XOg_CALL, XOg_CALLfar, XOg_JMP, XOg_JMPfar, XOg_PUSH
+} x86Group5;
 
 /* x86 condition codes. */
 typedef enum {
