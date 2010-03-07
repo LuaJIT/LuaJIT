@@ -128,7 +128,7 @@ static void *mcode_alloc(jit_State *J, size_t sz, int prot)
     uintptr_t hint;
     void *p;
     do {
-      hint = LJ_PRNG_BITS(J, 15) << 16;  /* 64K aligned. */
+      hint = (0x78fb ^ LJ_PRNG_BITS(J, 15)) << 16;  /* 64K aligned. */
     } while (!(hint + sz < range &&
 	       target + hint - (range>>1) < (uintptr_t)1<<47));
     p = mcode_alloc_at(J, target + hint - (range>>1), sz, prot);
