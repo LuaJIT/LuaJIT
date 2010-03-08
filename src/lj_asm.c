@@ -1277,7 +1277,8 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
-      if (!irt_isint(ir->t) && !(ir->op2 & IRSLOAD_PARENT)) {
+      if (!irt_isint(ir->t) && !(ir->op2 & IRSLOAD_PARENT) &&
+	  noconflict(as, ref, IR_RETF)) {
 	as->mrm.base = (uint8_t)ra_alloc1(as, REF_BASE, xallow);
 	as->mrm.ofs = 8*((int32_t)ir->op1-1);
 	as->mrm.idx = RID_NONE;
