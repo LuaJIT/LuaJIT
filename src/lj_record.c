@@ -1091,7 +1091,7 @@ typedef void (LJ_FASTCALL *RecordFunc)(jit_State *J, RecordFFData *rd);
 /* Get runtime value of int argument. */
 static int32_t argv2int(jit_State *J, TValue *o)
 {
-  if (tvisstr(o) && !lj_str_tonum(strV(o), o))
+  if (!tvisnum(o) && !(tvisstr(o) && lj_str_tonum(strV(o), o)))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   return lj_num2bit(numV(o));
 }
@@ -1103,7 +1103,8 @@ static GCstr *argv2str(jit_State *J, TValue *o)
     return strV(o);
   } else {
     GCstr *s;
-    lua_assert(tvisnum(o));
+    if (!tvisnum(o))
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
     s = lj_str_fromnum(J->L, &o->n);
     setstrV(J->L, o, s);
     return s;
