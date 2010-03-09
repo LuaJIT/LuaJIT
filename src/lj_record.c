@@ -660,9 +660,11 @@ static int rec_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
   } else {
     /* Specialize to base metatable. Must flush mcode in lua_setmetatable(). */
     mt = tabref(basemt_obj(J2G(J), &ix->tabv));
-    if (mt == NULL)
+    if (mt == NULL) {
+      ix->mt = TREF_NIL;
       return 0;  /* No metamethod. */
-    mix.tab = lj_ir_ktab(J, mt);
+    }
+    ix->mt = mix.tab = lj_ir_ktab(J, mt);
     goto nocheck;
   }
   ix->mt = mt ? mix.tab : TREF_NIL;
@@ -1160,7 +1162,7 @@ static void LJ_FASTCALL recff_type(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_getmetatable(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];
-  if (tref_istab(tr)) {
+  if (tr) {
     RecordIndex ix;
     ix.tab = tr;
     copyTV(J->L, &ix.tabv, &rd->argv[0]);
