@@ -1237,8 +1237,12 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
       if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
 	recff_nyiu(J);
     }
-    if (tref_isstr(tr))
+    if (tref_isstr(tr)) {
+      TValue tmp;
+      if (!lj_str_tonum(strV(&rd->argv[0]), &tmp))
+	recff_nyiu(J);  /* Would need an inverted STRTO for this case. */
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
+    }
   } else {
     tr = TREF_NIL;
   }
