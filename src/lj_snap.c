@@ -309,7 +309,14 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
       }
     }
   }
-  L->top = curr_topL(L);
+  switch (bc_op(*pc)) {
+  case BC_CALLM: case BC_CALLMT: case BC_RETM: case BC_TSETM:
+    L->top = frame + nslots;
+    break;
+  default:
+    L->top = curr_topL(L);
+    break;
+  }
   lua_assert(map + nent == flinks);
   return pc;
 }

@@ -666,6 +666,7 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   ExitDataCP exd;
   int errcode;
   const BCIns *pc;
+  void *cf;
   exd.J = J;
   exd.exptr = exptr;
   errcode = lj_vm_cpcall(L, NULL, &exd, trace_exit_cp);
@@ -692,7 +693,9 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 
   pc = exd.pc;
   trace_hotside(J, pc);
-  if (bc_op(*pc) == BC_JLOOP) {
+  cf = cframe_raw(L->cframe);
+  switch (bc_op(*pc)) {
+  case BC_JLOOP: {
     BCIns *retpc = &J->trace[bc_d(*pc)]->startins;
     if (bc_isret(bc_op(*retpc))) {
       if (J->state == LJ_TRACE_RECORD) {
@@ -703,8 +706,21 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 	pc = retpc;
       }
     }
+    break;
+    }
+  case BC_CALLM: case BC_CALLMT:
+    cframe_multres(cf) = (BCReg)(L->top - L->base) - bc_a(*pc) - bc_c(*pc);
+    break;
+  case BC_RETM:
+    cframe_multres(cf) = (BCReg)(L->top - L->base) + 1 - bc_a(*pc) - bc_d(*pc);
+    break;
+  case BC_TSETM:
+    cframe_multres(cf) = (BCReg)(L->top - L->base) + 1 - bc_a(*pc);
+    break;
+  default:
+    break;
   }
-  setcframe_pc(cframe_raw(L->cframe), pc);
+  setcframe_pc(cf, pc);
   return 0;
 }
 
