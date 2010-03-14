@@ -1020,7 +1020,7 @@ LJFOLDF(comm_comp)
 {
   /* For non-numbers only: x <=> x ==> drop; x <> x ==> fail */
   if (fins->op1 == fins->op2 && !irt_isnum(fins->t))
-    return CONDFOLD(fins->o & 1);
+    return CONDFOLD((fins->o ^ (fins->o >> 1)) & 1);
   if (fins->op1 < fins->op2) {  /* Move lower ref to the right. */
     IRRef1 tmp = fins->op1;
     fins->op1 = fins->op2;
