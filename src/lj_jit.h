@@ -201,6 +201,16 @@ typedef struct BPropEntry {
 /* Number of slots for the backpropagation cache. Must be a power of 2. */
 #define BPROP_SLOTS	16
 
+/* Scalar evolution analysis cache. */
+typedef struct ScEvEntry {
+  IRRef1 idx;		/* Index reference. */
+  IRRef1 start;		/* Constant start reference. */
+  IRRef1 stop;		/* Constant stop reference. */
+  IRRef1 step;		/* Constant step reference. */
+  IRType1 t;		/* Scalar type. */
+  uint8_t dir;		/* Direction. 0: +, 1: -. */
+} ScEvEntry;
+
 /* 128 bit SIMD constants. */
 enum {
   LJ_KSIMD_ABS,
@@ -282,6 +292,8 @@ typedef struct jit_State {
 
   BPropEntry bpropcache[BPROP_SLOTS];  /* Backpropagation cache slots. */
   uint32_t bpropslot;	/* Round-robin index into bpropcache slots. */
+
+  ScEvEntry scev;	/* Scalar evolution analysis cache slots. */
 
   const BCIns *startpc;	/* Bytecode PC of starting instruction. */
   TraceNo parent;	/* Parent of current side trace (0 for root traces). */

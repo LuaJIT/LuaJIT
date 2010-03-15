@@ -295,9 +295,9 @@ static TRef find_kinit(jit_State *J, const BCIns *endpc, BCReg slot, IRType t)
 /* Peek before FORI to find a const initializer. Otherwise load from slot. */
 static TRef fori_arg(jit_State *J, const BCIns *fori, BCReg slot, IRType t)
 {
-  TRef tr = find_kinit(J, fori, slot, t);
+  TRef tr = J->base[slot];
   if (!tr) {
-    tr = J->base[slot];
+    tr = find_kinit(J, fori, slot, t);
     if (!tr) {
       if (t == IRT_INT)
 	t |= IRT_GUARD;
@@ -347,10 +347,16 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
   if (isforl) {  /* Handle FORL/JFORL opcodes. */
     TRef step;
     idx = tr[FORL_IDX];
-    if (!idx) idx = sloadt(J, (int32_t)(ra+FORL_IDX), IRT_NUM, 0);
-    t = tref_type(idx);
-    stop = fori_arg(J, fori, ra+FORL_STOP, t);
-    step = fori_arg(J, fori, ra+FORL_STEP, t);
+    if (tref_ref(idx) == J->scev.idx) {
+      t = J->scev.t.irt;
+      stop = J->scev.stop;
+      step = J->scev.step;
+    } else {
+      if (!idx) idx = sloadt(J, (int32_t)(ra+FORL_IDX), IRT_NUM, 0);
+      t = tref_type(idx);
+      stop = fori_arg(J, fori, ra+FORL_STOP, t);
+      step = fori_arg(J, fori, ra+FORL_STEP, t);
+    }
     tr[FORL_IDX] = idx = emitir(IRT(IR_ADD, t), idx, step);
   } else {  /* Handle FORI/JFORI opcodes. */
     BCReg i;
@@ -2258,6 +2264,10 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
   TRef step = fori_arg(J, fori, ra+FORL_STEP, t);
   int dir = (0 <= numV(&forbase[FORL_STEP]));
   lua_assert(bc_op(*fori) == BC_FORI || bc_op(*fori) == BC_JFORI);
+  J->scev.t.irt = t;
+  J->scev.dir = dir;
+  J->scev.stop = tref_ref(stop);
+  J->scev.step = tref_ref(step);
   if (!tref_isk(step)) {
     /* Non-constant step: need a guard for the direction. */
     TRef zero = (t == IRT_INT) ? lj_ir_kint(J, 0) : lj_ir_knum_zero(J);
@@ -2285,9 +2295,11 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
     k = (int32_t)(dir ? 0x7fffffff : 0x80000000) - k;
     emitir(IRTGI(dir ? IR_LE : IR_GE), stop, lj_ir_kint(J, k));
   }
-  if (t == IRT_INT && !find_kinit(J, fori, ra+FORL_IDX, IRT_INT))
+  J->scev.start = tref_ref(find_kinit(J, fori, ra+FORL_IDX, IRT_INT));
+  if (t == IRT_INT && !J->scev.start)
     t |= IRT_GUARD;
   J->base[ra+FORL_EXT] = sloadt(J, (int32_t)(ra+FORL_IDX), t, IRSLOAD_INHERIT);
+  J->scev.idx = tref_ref(J->base[ra+FORL_EXT]);
   J->maxslot = ra+FORL_EXT+1;
 }
 
@@ -2403,6 +2415,7 @@ void lj_record_setup(jit_State *J)
   memset(J->slot, 0, sizeof(J->slot));
   memset(J->chain, 0, sizeof(J->chain));
   memset(J->bpropcache, 0, sizeof(J->bpropcache));
+  J->scev.idx = REF_NIL;
 
   J->baseslot = 1;  /* Invoking function is at base[-1]. */
   J->base = J->slot + J->baseslot;
