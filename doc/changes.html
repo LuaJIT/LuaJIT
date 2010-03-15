@@ -51,6 +51,24 @@ Please check the
 <a href="http://luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
 to see whether newer versions are available.
 </p>
+
+<div class="major" style="background: #d0d0d0;">
+<h2 id="snap">Development Snapshot</h2>
+<ul>
+<li>Correctness and completeness:
+<ul>
+<li>Fix folding of ordered comparisons with same references.</li>
+<li>Fix snapshot restores for multi-result bytecodes.</li>
+<li>Fix potential hang when recording bytecode with nested closures.</li>
+<li>Fix recording of getmetatable(), tonumber() and bad argument types.</li>
+<li>Fix SLOAD fusion across returns to lower frames.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Add array bounds check elimination. -Oabc is enabled by default.</li>
+</ul></li>
+</div>
+
 <div class="major" style="background: #ffd0d0;">
 <h2 id="LuaJIT-2.0.0-beta3">LuaJIT 2.0.0-beta3 &mdash; 2010-03-07</h2>
 <ul>
