@@ -203,7 +203,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   lj_str_initbuf(L, &g->tmpbuf);
   g->gc.state = GCSpause;
   setgcref(g->gc.root, obj2gco(L));
-  g->gc.sweep = &g->gc.root;
+  setmref(g->gc.sweep, &g->gc.root);
   g->gc.total = sizeof(GG_State);
   g->gc.pause = LUAI_GCPAUSE;
   g->gc.stepmul = LUAI_GCMUL;

@@ -60,15 +60,15 @@ typedef struct ASMState {
   SnapNo snapno;	/* Current snapshot number. */
   SnapNo loopsnapno;	/* Loop snapshot number. */
 
-  Trace *T;		/* Trace to assemble. */
-  Trace *parent;	/* Parent trace (or NULL). */
-
   IRRef fuseref;	/* Fusion limit (loopref, 0 or FUSE_DISABLED). */
   IRRef sectref;	/* Section base reference (loopref or 0). */
   IRRef loopref;	/* Reference of LOOP instruction (or 0). */
 
   BCReg topslot;	/* Number of slots for stack check (unless 0). */
   MSize gcsteps;	/* Accumulated number of GC steps (per section). */
+
+  Trace *T;		/* Trace to assemble. */
+  Trace *parent;	/* Parent trace (or NULL). */
 
   MCode *mcbot;		/* Bottom of reserved MCode. */
   MCode *mctop;		/* Top of generated MCode. */

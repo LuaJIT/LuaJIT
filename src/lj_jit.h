@@ -304,14 +304,14 @@ typedef struct jit_State {
   BCIns *patchpc;	/* PC for pending re-patch. */
   BCIns patchins;	/* Instruction for pending re-patch. */
 
-  TValue errinfo;	/* Additional info element for trace errors. */
-
+  int mcprot;		/* Protection of current mcode area. */
   MCode *mcarea;	/* Base of current mcode area. */
   MCode *mctop;		/* Top of current mcode area. */
   MCode *mcbot;		/* Bottom of current mcode area. */
   size_t szmcarea;	/* Size of current mcode area. */
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
-  int mcprot;		/* Protection of current mcode area. */
+
+  TValue errinfo;	/* Additional info element for trace errors. */
 } jit_State;
 
 /* Trivial PRNG e.g. used for penalty randomization. */

@@ -454,8 +454,8 @@ static int handle_luainit(lua_State *L)
 }
 
 struct Smain {
-  int argc;
   char **argv;
+  int argc;
   int status;
 };
 

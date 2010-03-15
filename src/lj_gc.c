@@ -540,7 +540,7 @@ static void atomic(global_State *g, lua_State *L)
   /* Prepare for sweep phase. */
   g->gc.currentwhite = cast_byte(otherwhite(g));  /* Flip current white. */
   g->gc.sweepstr = 0;
-  g->gc.sweep = &g->gc.root;
+  setmref(g->gc.sweep, &g->gc.root);
   g->gc.state = GCSsweepstring;
   g->gc.estimate = g->gc.total - (MSize)udsize;  /* Initial estimate. */
 }
@@ -569,8 +569,8 @@ static size_t gc_onestep(lua_State *L)
     }
   case GCSsweep: {
     MSize old = g->gc.total;
-    g->gc.sweep = gc_sweep(g, g->gc.sweep, GCSWEEPMAX);  /* Partial sweep. */
-    if (gcref(*g->gc.sweep) == NULL) {
+    setmref(g->gc.sweep, gc_sweep(g, mref(g->gc.sweep, GCRef), GCSWEEPMAX));
+    if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
       gc_shrink(g, L);
       g->gc.state = GCSfinalize;  /* End of sweep phase. */
     }
@@ -649,7 +649,7 @@ void lj_gc_fullgc(lua_State *L)
   setvmstate(g, GC);
   if (g->gc.state <= GCSpropagate) {  /* Caught somewhere in the middle. */
     g->gc.sweepstr = 0;
-    g->gc.sweep = &g->gc.root;  /* Sweep everything (preserving it). */
+    setmref(g->gc.sweep, &g->gc.root);  /* Sweep everything (preserving it). */
     setgcrefnull(g->gc.gray);  /* Reset lists from partial propagation. */
     setgcrefnull(g->gc.grayagain);
     setgcrefnull(g->gc.weak);

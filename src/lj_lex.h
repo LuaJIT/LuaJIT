@@ -47,9 +47,9 @@ typedef struct LexState {
   int current;		/* Current character (charint). */
   LexToken token;	/* Current token. */
   LexToken lookahead;	/* Lookahead token. */
-  SBuf sb;		/* String buffer for tokens. */
-  const char *p;	/* Current position in input buffer. */
   MSize n;		/* Bytes left in input buffer. */
+  const char *p;	/* Current position in input buffer. */
+  SBuf sb;		/* String buffer for tokens. */
   lua_Reader rfunc;	/* Reader callback. */
   void *rdata;		/* Reader callback data. */
   BCLine linenumber;	/* Input line counter. */

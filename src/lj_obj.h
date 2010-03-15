@@ -532,7 +532,7 @@ typedef struct GCState {
   uint8_t unused2;
   MSize sweepstr;	/* Sweep position in string table. */
   GCRef root;		/* List of all collectable objects. */
-  GCRef *sweep;		/* Sweep position in root list. */
+  MRef sweep;		/* Sweep position in root list. */
   GCRef gray;		/* List of gray objects. */
   GCRef grayagain;	/* List of objects for atomic traversal. */
   GCRef weak;		/* List of weak tables (to be cleared). */
