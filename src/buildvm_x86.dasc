@@ -4284,11 +4284,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
     |  mov TMP1, KBASE			// Need one more free register.
     if (sse) {
-      |  movsd xmm0, qword [KBASE+RD*8]
+      |  cvtsd2si KBASE, qword [KBASE+RD*8]
     } else {
       |.if not X64
       |  fld qword [KBASE+RD*8]
       |  fistp ARG4			// Const is guaranteed to be an int.
+      |  mov KBASE, ARG4
       |.endif
     }
     |1:
@@ -4298,13 +4299,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jnz >7
     |2:
     |  mov RD, MULTRES
-    if (sse) {
-      |  cvtsd2si KBASE, xmm0		// Const is guaranteed to be an int.
-    } else {
-      |.if not X64
-      |  mov KBASE, ARG4
-      |.endif
-    }
     |  sub RD, 1
     |  jz >4				// Nothing to copy?
     |  add RD, KBASE			// Compute needed size.
