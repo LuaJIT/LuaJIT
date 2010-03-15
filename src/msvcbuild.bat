@@ -17,6 +17,7 @@
 @set LJCOMPILE=cl /nologo /c /MD /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
+@set LJLIB=lib /nologo
 @set DASMDIR=..\dynasm
 @set DASM=lua %DASMDIR%\dynasm.lua
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c
@@ -40,8 +41,13 @@ buildvm -m vmdef -o ..\lib\vmdef.lua %ALL_LIB%
 buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 
 @if "%1"=="amalg" goto :AMALGDLL
+@if "%1"=="static" goto :STATIC
 %LJCOMPILE% /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
 %LJLINK% /DLL /out:lua51.dll lj_*.obj lib_*.obj
+@goto :MTDLL
+:STATIC
+%LJCOMPILE% /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
+%LJLIB% /OUT:lua51.lib lj_*.obj lib_*.obj
 @goto :MTDLL
 :AMALGDLL
 %LJCOMPILE% /DLUA_BUILD_AS_DLL ljamalg.c
