@@ -806,6 +806,44 @@ static void rec_mm_comp(jit_State *J, RecordIndex *ix, int op)
 
 /* -- Indexed access ------------------------------------------------------ */
 
+/* Record bounds-check. */
+static void rec_idx_abc(jit_State *J, TRef asizeref, TRef ikey, uint32_t asize)
+{
+  /* Try to emit invariant bounds checks. */
+  if ((J->flags & (JIT_F_OPT_LOOP|JIT_F_OPT_ABC)) ==
+      (JIT_F_OPT_LOOP|JIT_F_OPT_ABC)) {
+    IRRef ref = tref_ref(ikey);
+    IRIns *ir = IR(ref);
+    int32_t ofs = 0;
+    IRRef ofsref = 0;
+    /* Handle constant offsets. */
+    if (ir->o == IR_ADD && irref_isk(ir->op2)) {
+      ofsref = ir->op2;
+      ofs = IR(ofsref)->i;
+      ref = ir->op1;
+      ir = IR(ref);
+    }
+    /* Got scalar evolution analysis results for this reference? */
+    if (ref == J->scev.idx) {
+      int32_t stop;
+      lua_assert(irt_isint(J->scev.t) && ir->o == IR_SLOAD);
+      stop = lj_num2int(numV(&(J->L->base - J->baseslot)[ir->op1 + FORL_STOP]));
+      /* Runtime value for stop of loop is within bounds? */
+      if ((int64_t)stop + ofs < (int64_t)asize) {
+	/* Emit invariant bounds check for stop. */
+	emitir(IRTG(IR_ABC, IRT_PTR), asizeref, ofs == 0 ? J->scev.stop :
+	       emitir(IRTI(IR_ADD), J->scev.stop, ofsref));
+	/* Emit invariant bounds check for start, if not const or negative. */
+	if (!(J->scev.dir && J->scev.start &&
+	      (int64_t)IR(J->scev.start)->i + ofs >= 0))
+	  emitir(IRTG(IR_ABC, IRT_PTR), asizeref, ikey);
+	return;
+      }
+    }
+  }
+  emitir(IRTGI(IR_ABC), asizeref, ikey);  /* Emit regular bounds check. */
+}
+
 /* Record indexed key lookup. */
 static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
 {
@@ -827,7 +865,7 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
       asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
       if ((MSize)k < t->asize) {  /* Currently an array key? */
 	TRef arrayref;
-	emitir(IRTGI(IR_ABC), asizeref, ikey);  /* Bounds check. */
+	rec_idx_abc(J, asizeref, ikey, t->asize);
 	arrayref = emitir(IRT(IR_FLOAD, IRT_PTR), ix->tab, IRFL_TAB_ARRAY);
 	return emitir(IRT(IR_AREF, IRT_PTR), arrayref, ikey);
       } else {  /* Currently not in array (may be an array extension)? */

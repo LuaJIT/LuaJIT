@@ -2571,7 +2571,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
   } else {
     IRRef lref = ir->op1, rref = ir->op2;
     IROp leftop = (IROp)(IR(lref)->o);
-    lua_assert(irt_isint(ir->t) || (irt_isaddr(ir->t) && (cc & 0xe) == CC_E));
+    lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
     /* Swap constants (only for ABC) and fusable loads to the right. */
     if (irref_isk(lref) || (!irref_isk(rref) && opisfusableload(leftop))) {
       if ((cc & 0xc) == 0xc) cc ^= 3;  /* L <-> G, LE <-> GE */

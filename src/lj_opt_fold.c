@@ -1,5 +1,6 @@
 /*
 ** FOLD: Constant Folding, Algebraic Simplifications and Reassociation.
+** ABCelim: Array Bounds Check Elimination.
 ** CSE: Common-Subexpression Elimination.
 ** Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 */
@@ -949,28 +950,66 @@ LJFOLDF(reassoc_minmax_right)
   return NEXTFOLD;
 }
 
+/* -- Array bounds check elimination -------------------------------------- */
+
 /* Eliminate ABC across PHIs to handle t[i-1] forwarding case.
 ** ABC(asize, (i+k)+(-k)) ==> ABC(asize, i), but only if it already exists.
 ** Could be generalized to (i+k1)+k2 ==> i+(k1+k2), but needs better disambig.
 */
 LJFOLD(ABC any ADD)
-LJFOLDF(reassoc_abc)
+LJFOLDF(abc_fwd)
 {
-  if (irref_isk(fright->op2)) {
-    IRIns *add2 = IR(fright->op1);
-    if (add2->o == IR_ADD && irref_isk(add2->op2) &&
-	IR(fright->op2)->i == -IR(add2->op2)->i) {
-      IRRef ref = J->chain[IR_ABC];
-      IRRef lim = add2->op1;
-      if (fins->op1 > lim) lim = fins->op1;
-      while (ref > lim) {
-	IRIns *ir = IR(ref);
-	if (ir->op1 == fins->op1 && ir->op2 == add2->op1)
-	  return DROPFOLD;
-	ref = ir->prev;
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_ABC)) {
+    if (irref_isk(fright->op2)) {
+      IRIns *add2 = IR(fright->op1);
+      if (add2->o == IR_ADD && irref_isk(add2->op2) &&
+	  IR(fright->op2)->i == -IR(add2->op2)->i) {
+	IRRef ref = J->chain[IR_ABC];
+	IRRef lim = add2->op1;
+	if (fins->op1 > lim) lim = fins->op1;
+	while (ref > lim) {
+	  IRIns *ir = IR(ref);
+	  if (ir->op1 == fins->op1 && ir->op2 == add2->op1)
+	    return DROPFOLD;
+	  ref = ir->prev;
+	}
       }
     }
   }
+  return NEXTFOLD;
+}
+
+/* Eliminate ABC for constants.
+** ABC(asize, k1), ABC(asize k2) ==> ABC(asize, max(k1, k2))
+** Drop second ABC if k2 is lower. Otherwise patch first ABC with k2.
+*/
+LJFOLD(ABC any KINT)
+LJFOLDF(abc_k)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_ABC)) {
+    IRRef ref = J->chain[IR_ABC];
+    IRRef asize = fins->op1;
+    while (ref > asize) {
+      IRIns *ir = IR(ref);
+      if (ir->op1 == asize && irref_isk(ir->op2)) {
+	int32_t k = IR(ir->op2)->i;
+	if (fright->i > k)
+	  ir->op2 = fins->op2;
+	return DROPFOLD;
+      }
+      ref = ir->prev;
+    }
+    return EMITFOLD;  /* Already performed CSE. */
+  }
+  return NEXTFOLD;
+}
+
+/* Eliminate invariant ABC inside loop. */
+LJFOLD(ABC any any)
+LJFOLDF(abc_invar)
+{
+  if (!irt_isint(fins->t) && J->chain[IR_LOOP])  /* Currently marked as PTR. */
+    return DROPFOLD;
   return NEXTFOLD;
 }
 
