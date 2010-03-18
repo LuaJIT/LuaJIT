@@ -1095,7 +1095,7 @@ IRFLDEF(FLOFS)
 };
 
 /* Limit linear search to this distance. Avoids O(n^2) behavior. */
-#define CONFLICT_SEARCH_LIM	15
+#define CONFLICT_SEARCH_LIM	31
 
 /* Check if there's no conflicting instruction between curins and ref. */
 static int noconflict(ASMState *as, IRRef ref, IROp conflict)
