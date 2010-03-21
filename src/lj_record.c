@@ -575,8 +575,8 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
     BCReg cbase = bc_a(callins);
     GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
-    if (J->pt && frame == J->L->base - 1) {
-      if (J->framedepth == 0 && check_downrec_unroll(J, pt)) {
+    if (J->framedepth == 0 && J->pt && frame == J->L->base - 1) {
+      if (check_downrec_unroll(J, pt)) {
 	J->maxslot = (BCReg)(rbase + nresults);
 	rec_stop(J, J->curtrace);  /* Down-recursion. */
 	return;
