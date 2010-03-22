@@ -453,7 +453,7 @@ typedef struct Node {
   TValue val;		/* Value object. Must be first field. */
   TValue key;		/* Key object. */
   MRef next;		/* Hash chain. */
-  int32_t unused;	/* For consistent alignment. */
+  MRef freetop;		/* Top of free elements (stored in t->node[0]). */
 } Node;
 
 LJ_STATIC_ASSERT(offsetof(Node, val) == 0);
@@ -468,7 +468,6 @@ typedef struct GCtab {
   MRef node;		/* Hash part. */
   uint32_t asize;	/* Size of array part (keys [0, asize-1]). */
   uint32_t hmask;	/* Hash part mask (size of hash part - 1). */
-  MRef lastfree;	/* Any free position is before this position. */
 } GCtab;
 
 #define sizetabcolo(n)	((n)*sizeof(TValue) + sizeof(GCtab))
