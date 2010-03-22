@@ -98,24 +98,18 @@ static LJ_AINLINE void clearapart(GCtab *t)
 static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
 {
   GCtab *t;
-  global_State *g;
   /* First try to colocate the array part. */
   if (LJ_MAX_COLOSIZE && asize > 0 && asize <= LJ_MAX_COLOSIZE) {
-    /* This is ugly. (sizeof(GCtab)&7) != 0. So prepend the colocated array. */
-    TValue *array = lj_mem_newt(L, sizetabcolo(asize), TValue);
-    t = cast(GCtab *, array + asize);
-    g = G(L);
-    setgcrefr(t->nextgc, g->gc.root);
-    setgcref(g->gc.root, obj2gco(t));
-    newwhite(g, t);
+    lua_assert((sizeof(GCtab) & 7) == 0);
+    t = (GCtab *)lj_mem_newgco(L, sizetabcolo(asize));
     t->gct = ~LJ_TTAB;
     t->nomm = cast_byte(~0);
     t->colo = (int8_t)asize;
-    setmref(t->array, array);
+    setmref(t->array, (TValue *)((char *)t + sizeof(GCtab)));
     setgcrefnull(t->metatable);
     t->asize = asize;
     t->hmask = 0;
-    setmref(t->node, &g->nilnode);
+    setmref(t->node, &G(L)->nilnode);
   } else {  /* Otherwise separately allocate the array part. */
     t = lj_mem_newobj(L, GCtab);
     t->gct = ~LJ_TTAB;
@@ -125,8 +119,7 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
     setgcrefnull(t->metatable);
     t->asize = 0;  /* In case the array allocation fails. */
     t->hmask = 0;
-    g = G(L);
-    setmref(t->node, &g->nilnode);
+    setmref(t->node, &G(L)->nilnode);
     if (asize > 0) {
       if (asize > LJ_MAX_ASIZE)
 	lj_err_msg(L, LJ_ERR_TABOV);
@@ -212,17 +205,12 @@ void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t)
 {
   if (t->hmask > 0)
     lj_mem_freevec(g, noderef(t->node), t->hmask+1, Node);
-  if (LJ_MAX_COLOSIZE && t->colo) {
-    ptrdiff_t n;
-    if (t->colo < 0 && t->asize > 0)  /* Array part was separated. */
-      lj_mem_freevec(g, tvref(t->array), t->asize, TValue);
-    n = t->colo & 0x7f;
-    lj_mem_free(g, (TValue *)t - n, sizetabcolo((uint32_t)n));
-  } else {
-    if (t->asize > 0)
-      lj_mem_freevec(g, tvref(t->array), t->asize, TValue);
+  if (t->asize > 0 && LJ_MAX_COLOSIZE && t->colo <= 0)
+    lj_mem_freevec(g, tvref(t->array), t->asize, TValue);
+  if (LJ_MAX_COLOSIZE && t->colo)
+    lj_mem_free(g, t, sizetabcolo((uint32_t)t->colo & 0x7f));
+  else
     lj_mem_freet(g, t);
-  }
 }
 
 /* -- Table resizing ------------------------------------------------------ */

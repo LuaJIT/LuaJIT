@@ -1122,7 +1122,7 @@ static void asm_fusearef(ASMState *as, IRIns *ir, RegSet allow)
       noconflict(as, irb->op1, IR_NEWREF)) {
     /* We can avoid the FLOAD of t->array for colocated arrays. */
     as->mrm.base = (uint8_t)ra_alloc1(as, irb->op1, allow);  /* Table obj. */
-    as->mrm.ofs = -(int32_t)(ira->op1*sizeof(TValue));  /* Ofs to colo array. */
+    as->mrm.ofs = (int32_t)sizeof(GCtab);  /* Ofs to colocated array. */
   } else {
     as->mrm.base = (uint8_t)ra_alloc1(as, ir->op1, allow);  /* Array base. */
     as->mrm.ofs = 0;

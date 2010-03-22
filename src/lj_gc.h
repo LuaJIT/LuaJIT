@@ -91,8 +91,12 @@ LJ_FUNC void *lj_mem_grow(lua_State *L, void *p,
 			  MSize *szp, MSize lim, MSize esz);
 
 #define lj_mem_new(L, s)	lj_mem_realloc(L, NULL, 0, (s))
-#define lj_mem_free(g, p, osize) \
-  (g->gc.total -= (MSize)(osize), g->allocf(g->allocd, (p), (osize), 0))
+
+static LJ_AINLINE void lj_mem_free(global_State *g, void *p, size_t osize)
+{
+  g->gc.total -= (MSize)osize;
+  g->allocf(g->allocd, p, osize, 0);
+}
 
 #define lj_mem_newvec(L, n, t)	((t *)lj_mem_new(L, (MSize)((n)*sizeof(t))))
 #define lj_mem_reallocvec(L, p, on, n, t) \
