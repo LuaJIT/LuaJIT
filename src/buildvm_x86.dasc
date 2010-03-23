@@ -2623,7 +2623,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |  lea FCARG1, [DISPATCH+GG_DISP2J]
   |  call extern lj_trace_exit@8	// (jit_State *J, ExitState *ex)
-  |  // Error code returned in eax (RD).
+  |  // MULTRES or negated error code returned in eax (RD).
   |  mov RAa, L:RB->cframe
   |  and RAa, CFRAME_RAWMASK
   |.if X64WIN
@@ -2638,14 +2638,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, [RAa+CFRAME_OFS_PC]	// Get SAVE_PC.
   |.if X64
   |  jmp >1
-  |.else
-  |  test RD, RD; jnz >2		// Check for error from exit.
   |.endif
 #endif
   |->vm_exit_interp:
+  |  // RD = MULTRES or negated error code, BASE, PC and DISPATCH set.
 #if LJ_HASJIT
   |.if X64
-  |  xor RD, RD
   |  // Restore additional callee-save registers only used in compiled code.
   |.if X64WIN
   |  lea RAa, [rsp+9*16+4*8]
@@ -2669,8 +2667,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |  mov r13, TMPa
   |  mov r12, TMPQ
-  |  test RD, RD; jnz >2		// Check for error from exit.
   |.endif
+  |  test RD, RD; js >2			// Check for error from exit.
+  |  mov MULTRES, RD
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
@@ -2679,6 +2678,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  ins_next
   |
   |2:  // Rethrow error from the right C frame.
+  |  neg RD
   |  mov FCARG1, L:RB
   |  mov FCARG2, RD
   |  call extern lj_err_throw@8		// (lua_State *L, int errcode)

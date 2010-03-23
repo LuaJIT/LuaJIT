@@ -3253,16 +3253,6 @@ static void asm_head_side(ASMState *as)
 
 /* -- Tail of trace ------------------------------------------------------- */
 
-/* Set MULTRES in C frame. */
-static void asm_tail_multres(ASMState *as, BCReg mres)
-{
-  /* We don't know spadj yet, so get the C frame from L->cframe. */
-  emit_movmroi(as, RID_RET, CFRAME_OFS_MULTRES, mres);
-  emit_gri(as, XG_ARITHi(XOg_AND), RID_RET|REX_64, CFRAME_RAWMASK);
-  emit_rmro(as, XO_MOV, RID_RET|REX_64, RID_RET, offsetof(lua_State, cframe));
-  emit_getgl(as, RID_RET, jit_L);
-}
-
 /* Link to another trace. */
 static void asm_tail_link(ASMState *as)
 {
@@ -3276,6 +3266,7 @@ static void asm_tail_link(ASMState *as)
   if (as->T->link == TRACE_INTERP) {
     /* Setup fixed registers for exit to interpreter. */
     const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
+    int32_t mres;
     if (bc_op(*pc) == BC_JLOOP) {  /* NYI: find a better way to do this. */
       BCIns *retpc = &as->J->trace[bc_d(*pc)]->startins;
       if (bc_isret(bc_op(*retpc)))
@@ -3283,19 +3274,14 @@ static void asm_tail_link(ASMState *as)
     }
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
     emit_loada(as, RID_PC, pc);
+    mres = (int32_t)(snap->nslots - baseslot - bc_a(*pc));
     switch (bc_op(*pc)) {
-    case BC_CALLM: case BC_CALLMT:
-      asm_tail_multres(as, snap->nslots - baseslot - 1 - bc_a(*pc) - bc_c(*pc));
-      break;
-    case BC_RETM:
-      asm_tail_multres(as, snap->nslots - baseslot - bc_a(*pc) - bc_d(*pc));
-      break;
-    case BC_TSETM:
-      asm_tail_multres(as, snap->nslots - baseslot - bc_a(*pc));
-      break;
-    default:
-      break;
+    case BC_CALLM: case BC_CALLMT: mres -= (int32_t)(1 + bc_c(*pc)); break;
+    case BC_RETM: mres -= (int32_t)bc_d(*pc); break;
+    case BC_TSETM: break;
+    default: mres = 0; break;
     }
+    emit_loadi(as, RID_RET, mres);  /* Return MULTRES or 0. */
   } else if (baseslot) {
     /* Save modified BASE for linking to trace with higher start frame. */
     emit_setgl(as, RID_BASE, jit_base);
