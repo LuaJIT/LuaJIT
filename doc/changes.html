@@ -45,17 +45,16 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta3</strong>.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.5</strong>.
+The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta4</strong>.<br>
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.6</strong>.
 </p>
 <p>
 Please check the
 <a href="http://luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
 to see whether newer versions are available.
 </p>
-
-<div class="major" style="background: #d0d0d0;">
-<h2 id="snap">Development Snapshot</h2>
+<div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta4">LuaJIT 2.0.0-beta4 &mdash; 2010-03-28</h2>
 <ul>
 <li>Correctness and completeness:
 <ul>
@@ -72,9 +71,8 @@ to see whether newer versions are available.
 <li>Add array bounds check elimination. -Oabc is enabled by default.</li>
 <li>More tuning for x64, e.g. smaller table objects.</li>
 </ul></li>
-</div>
+</ul>
 
-<div class="major" style="background: #ffd0d0;">
 <h2 id="LuaJIT-2.0.0-beta3">LuaJIT 2.0.0-beta3 &mdash; 2010-03-07</h2>
 <ul>
 <li>LuaJIT x64 port:</li>
@@ -162,6 +160,16 @@ no point in listing differences over earlier versions.</li>
 </div>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-1.1.6">LuaJIT 1.1.6 &mdash; 2010-03-28</h2>
+<ul>
+<li>Added fixes for the
+<a href="http://www.lua.org/bugs.html#5.1.4"><span class="ext">&raquo;</span>&nbsp;currently known bugs in Lua 5.1.4</a>.</li>
+<li>Removed wrong GC check in <tt>jit_createstate()</tt>.
+Thanks to Tim Mensch.</li>
+<li>Fixed bad assertions while compiling <tt>table.insert()</tt> and
+<tt>table.remove()</tt>.</li>
+</ul>
+
 <h2 id="LuaJIT-1.1.5">LuaJIT 1.1.5 &mdash; 2008-10-25</h2>
 <ul>
 <li>Merged with Lua 5.1.4. Fixes all
