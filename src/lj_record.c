@@ -981,7 +981,13 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 
   if (ix->val == 0) {  /* Indexed load */
     IRType t = itype2irt(oldv);
-    TRef res = emitir(IRTG(loadop, t), xref, 0);
+    TRef res;
+    if (oldv == niltvg(J2G(J))) {
+      emitir(IRTG(IR_EQ, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+      res = TREF_NIL;
+    } else {
+      res = emitir(IRTG(loadop, t), xref, 0);
+    }
     if (t == IRT_NIL && ix->idxchain && rec_mm_lookup(J, ix, MM_index))
       goto handlemm;
     if (irtype_ispri(t)) res = TREF_PRI(t);  /* Canonicalize primitives. */
