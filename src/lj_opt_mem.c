@@ -21,6 +21,7 @@
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)		(&J->cur.ir[(ref)])
 #define fins		(&J->fold.ins)
+#define fright		(&J->fold.right)
 
 /*
 ** Caveat #1: return value is not always a TRef -- only use with tref_ref().
@@ -218,6 +219,34 @@ TRef LJ_FASTCALL lj_opt_fwd_hload(jit_State *J)
   if (ref)
     return ref;
   return EMITFOLD;
+}
+
+/* Check whether HREF of TNEW/TDUP can be folded to niltv. */
+int LJ_FASTCALL lj_opt_fwd_href_nokey(jit_State *J)
+{
+  IRRef lim = fins->op1;  /* Search limit. */
+  IRRef ref;
+
+  /* The key for an ASTORE may end up in the hash part after a NEWREF. */
+  if (irt_isnum(fright->t) && J->chain[IR_NEWREF] > lim) {
+    ref = J->chain[IR_ASTORE];
+    while (ref > lim) {
+      if (ref < J->chain[IR_NEWREF])
+	return 0;  /* Conflict. */
+      ref = IR(ref)->prev;
+    }
+  }
+
+  /* Search for conflicting stores. */
+  ref = J->chain[IR_HSTORE];
+  while (ref > lim) {
+    IRIns *store = IR(ref);
+    if (aa_ahref(J, fins, IR(store->op1)) != ALIAS_NO)
+      return 0;  /* Conflict. */
+    ref = store->prev;
+  }
+
+  return 1;  /* No conflict. Can fold to niltv. */
 }
 
 /* ASTORE/HSTORE elimination. */
@@ -530,5 +559,6 @@ int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref)
 
 #undef IR
 #undef fins
+#undef fright
 
 #endif

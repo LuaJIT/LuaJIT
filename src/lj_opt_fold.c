@@ -13,6 +13,7 @@
 #if LJ_HASJIT
 
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
@@ -1163,6 +1164,15 @@ LJFOLDF(merge_eqne_snew_kgc)
 LJFOLD(ALOAD any)
 LJFOLDX(lj_opt_fwd_aload)
 
+/* From HREF fwd (see below). Must eliminate, not supported by fwd/backend. */
+LJFOLD(HLOAD KPTR)
+LJFOLDF(kfold_hload_kptr)
+{
+  UNUSED(J);
+  lua_assert(ir_kptr(fleft) == niltvg(J2G(J)));
+  return TREF_NIL;
+}
+
 LJFOLD(HLOAD any)
 LJFOLDX(lj_opt_fwd_hload)
 
@@ -1200,6 +1210,27 @@ LJFOLDF(cse_uref)
     }
   }
   return EMITFOLD;
+}
+
+LJFOLD(HREF TNEW any)
+LJFOLDF(fwd_href_tnew)
+{
+  if (lj_opt_fwd_href_nokey(J))
+    return lj_ir_kptr(J, niltvg(J2G(J)));
+  return NEXTFOLD;
+}
+
+LJFOLD(HREF TDUP KPRI)
+LJFOLD(HREF TDUP KGC)
+LJFOLD(HREF TDUP KNUM)
+LJFOLDF(fwd_href_tdup)
+{
+  TValue keyv;
+  lj_ir_kvalue(J->L, &keyv, fright);
+  if (lj_tab_get(J->L, ir_ktab(IR(fleft->op1)), &keyv) == niltvg(J2G(J)) &&
+      lj_opt_fwd_href_nokey(J))
+    return lj_ir_kptr(J, niltvg(J2G(J)));
+  return NEXTFOLD;
 }
 
 /* We can safely FOLD/CSE array/hash refs and field loads, since there
