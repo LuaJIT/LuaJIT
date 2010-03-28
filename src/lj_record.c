@@ -995,10 +995,10 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 	cTValue *mo = lj_tab_getstr(mt, strref(J2G(J)->mmname[MM_newindex]));
 	hasmm = mo && !tvisnil(mo);
       }
-      if (hasmm || oldv == niltvg(J2G(J)))
+      if (hasmm)
 	emitir(IRTG(loadop, IRT_NIL), xref, 0);  /* Guard for nil value. */
       else if (xrefop == IR_HREF)
-	emitir(IRTG(IR_NE, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
       if (ix->idxchain && rec_mm_lookup(J, ix, MM_newindex)) { /* Metamethod? */
 	lua_assert(hasmm);
 	goto handlemm;
