@@ -1307,7 +1307,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
     }
   }
   if (!(as->freeset & allow) &&
-      (allow == RSET_EMPTY || ra_hasspill(ir->s) || ref < as->loopref))
+      (allow == RSET_EMPTY || ra_hasspill(ir->s) || iscrossref(as, ref)))
     goto fusespill;
   return ra_allocref(as, ref, allow);
 }
