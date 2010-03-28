@@ -59,6 +59,7 @@ to see whether newer versions are available.
 <ul>
 <li>Correctness and completeness:
 <ul>
+<li>Fix precondition for on-trace creation of table keys.</li>
 <li>Fix <tt>{f()}</tt> on x64 when table is resized.</li>
 <li>Fix folding of ordered comparisons with same references.</li>
 <li>Fix snapshot restores for multi-result bytecodes.</li>
@@ -69,6 +70,7 @@ to see whether newer versions are available.
 <li>Structural and performance enhancements:
 <ul>
 <li>Add array bounds check elimination. -Oabc is enabled by default.</li>
+<li>More tuning for x64, e.g. smaller table objects.</li>
 </ul></li>
 </div>
 
