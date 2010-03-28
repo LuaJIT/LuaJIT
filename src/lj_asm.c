@@ -1599,7 +1599,8 @@ static uint32_t ir_khash(IRIns *ir)
 static MCode *merge_href_niltv(ASMState *as, IRIns *ir)
 {
   /* Assumes nothing else generates NE of HREF. */
-  if (ir[1].o == IR_NE && ir[1].op1 == as->curins) {
+  if ((ir[1].o == IR_NE || ir[1].o == IR_EQ) && ir[1].op1 == as->curins &&
+      ra_hasreg(ir->r)) {
     if (LJ_64 && *as->mcp != XI_ARITHi)
       as->mcp += 7+6;
     else
@@ -1639,10 +1640,12 @@ static void asm_href(ASMState *as, IRIns *ir)
 
   /* Key not found in chain: jump to exit (if merged with NE) or load niltv. */
   l_end = emit_label(as);
-  if (nilexit)
+  if (nilexit && ir[1].o == IR_NE) {
     emit_jcc(as, CC_E, nilexit);  /* XI_JMP is not found by lj_asm_patchexit. */
-  else
+    nilexit = NULL;
+  } else {
     emit_loada(as, dest, niltvg(J2G(as->J)));
+  }
 
   /* Follow hash chain until the end. */
   l_loop = emit_sjcc_label(as, CC_NZ);
@@ -1651,7 +1654,10 @@ static void asm_href(ASMState *as, IRIns *ir)
   l_next = emit_label(as);
 
   /* Type and value comparison. */
-  emit_sjcc(as, CC_E, l_end);
+  if (nilexit)
+    emit_jcc(as, CC_E, nilexit);
+  else
+    emit_sjcc(as, CC_E, l_end);
   if (irt_isnum(kt)) {
     if (isk) {
       /* Assumes -0.0 is already canonicalized to +0.0. */
