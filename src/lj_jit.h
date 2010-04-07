@@ -140,7 +140,7 @@ LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 #define snap_slot(sn)		((BCReg)((sn) >> 24))
 #define snap_isframe(sn)	((sn) & SNAP_FRAME)
 #define snap_pc(sn)		((const BCIns *)(uintptr_t)(sn))
-#define snap_setref(sn, ref)	(((sn) & 0xffff0000) | (ref))
+#define snap_setref(sn, ref)	(((sn) & (0xffff0000&~SNAP_NORESTORE)) | (ref))
 
 /* Snapshot and exit numbers. */
 typedef uint32_t SnapNo;

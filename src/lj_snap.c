@@ -267,7 +267,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  }
 	}
       }
-    } else {
+    } else if (!(sn & SNAP_NORESTORE)) {
       IRType1 t = ir->t;
       RegSP rs = ir->prev;
       lua_assert(!(sn & (SNAP_CONT|SNAP_FRAME)));
