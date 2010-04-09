@@ -2668,16 +2668,30 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov r13, TMPa
   |  mov r12, TMPQ
   |.endif
-  |  test RD, RD; js >2			// Check for error from exit.
+  |  test RD, RD; js >3			// Check for error from exit.
   |  mov MULTRES, RD
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
   |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
   |  set_vmstate INTERP
-  |  ins_next
+  |  // Modified copy of ins_next which handles function header dispatch, too.
+  |  mov RC, [PC]
+  |  movzx RA, RCH
+  |  movzx OP, RCL
+  |  add PC, 4
+  |  shr RC, 16
+  |  cmp OP, BC_FUNCF			// Function header?
+  |  jb >2
+  |  mov RC, MULTRES			// RC/RD holds nres+1.
+  |2:
+  |.if X64
+  |  jmp aword [DISPATCH+OP*8]
+  |.else
+  |  jmp aword [DISPATCH+OP*4]
+  |.endif
   |
-  |2:  // Rethrow error from the right C frame.
+  |3:  // Rethrow error from the right C frame.
   |  neg RD
   |  mov FCARG1, L:RB
   |  mov FCARG2, RD

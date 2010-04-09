@@ -254,16 +254,13 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  GCfunc *fn = ir_kfunc(ir);
 	  if (isluafunc(fn)) {
 	    MSize framesize = funcproto(fn)->framesize;
-	    TValue *fs;
 	    L->base = ++o;
 	    if (LJ_UNLIKELY(o + framesize > L->maxstack)) {  /* Grow again? */
 	      ptrdiff_t fsave = savestack(L, frame);
 	      L->top = o;
 	      lj_state_growstack(L, framesize);
 	      frame = restorestack(L, fsave);
-	      o = L->top;
 	    }
-	    fs = o + framesize;
 	  }
 	}
       }

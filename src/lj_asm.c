@@ -3280,12 +3280,13 @@ static void asm_tail_link(ASMState *as)
     }
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
     emit_loada(as, RID_PC, pc);
-    mres = (int32_t)(snap->nslots - baseslot - bc_a(*pc));
+    mres = (int32_t)(snap->nslots - baseslot);
     switch (bc_op(*pc)) {
-    case BC_CALLM: case BC_CALLMT: mres -= (int32_t)(1 + bc_c(*pc)); break;
-    case BC_RETM: mres -= (int32_t)bc_d(*pc); break;
-    case BC_TSETM: break;
-    default: mres = 0; break;
+    case BC_CALLM: case BC_CALLMT:
+      mres -= (int32_t)(1 + bc_a(*pc) + bc_c(*pc)); break;
+    case BC_RETM: mres -= (int32_t)(bc_a(*pc) + bc_d(*pc)); break;
+    case BC_TSETM: mres -= (int32_t)bc_a(*pc); break;
+    default: if (bc_op(*pc) < BC_FUNCF) mres = 0; break;
     }
     emit_loadi(as, RID_RET, mres);  /* Return MULTRES or 0. */
   } else if (baseslot) {
