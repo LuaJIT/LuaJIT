@@ -84,14 +84,11 @@ typedef struct PEsymaux {
 #define PEOBJ_ARCH_TARGET	0x014c
 #define PEOBJ_RELOC_REL32	0x14  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x06
-#define PEOBJ_SYM_PREFIX	"_"
-#define PEOBJ_SYMF_PREFIX	"@"
 #elif LJ_TARGET_X64
 #define PEOBJ_ARCH_TARGET	0x8664
 #define PEOBJ_RELOC_REL32	0x04  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x02
 #define PEOBJ_RELOC_ADDR32NB	0x03
-#define PEOBJ_SYM_PREFIX	""
 #endif
 
 /* Section numbers (0-based). */
@@ -164,18 +161,13 @@ static void emit_peobj_sym_sect(BuildCtx *ctx, PEsection *pesect, int sect)
   owrite(ctx, &aux, PEOBJ_SYM_SIZE);
 }
 
-#define emit_peobj_sym_func(ctx, name, ofs) \
-  emit_peobj_sym(ctx, name, (uint32_t)(ofs), \
-		 PEOBJ_SECT_TEXT, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN)
-
 /* Emit Windows PE object file. */
 void emit_peobj(BuildCtx *ctx)
 {
   PEheader pehdr;
   PEsection pesect[PEOBJ_NSECTIONS];
-  int nzsym, relocsyms;
   uint32_t sofs;
-  int i;
+  int i, nrsym;
   union { uint8_t b; uint32_t u; } host_endian;
 
   host_endian.u = 1;
@@ -230,16 +222,11 @@ void emit_peobj(BuildCtx *ctx)
 
   /* Compute the size of the symbol table:
   ** @feat.00 + nsections*2
-  ** + asm_start + (nsyms-nzsym)
-  ** + relocsyms
+  ** + asm_start + nsym
+  ** + nrsym
   */
-  /* Skip _Z syms. */
-  for (nzsym = 0; ctx->sym_ofs[ctx->perm[nzsym]] < 0; nzsym++) ;
-  for (relocsyms = 0; ctx->extnames[relocsyms]; relocsyms++) ;
-  pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+(ctx->nsym-nzsym) + relocsyms;
-#if !LJ_HASJIT
-  pehdr.nsyms -= 11;  /* See below, removes [IJ]* opcode symbols. */
-#endif
+  nrsym = ctx->nrelocsym;
+  pehdr.nsyms = 1+PEOBJ_NSECTIONS*2 + 1+ctx->nsym + nrsym;
 #if LJ_TARGET_X64
   pehdr.nsyms += 1;  /* Symbol for lj_err_unwind_win64. */
 #endif
@@ -264,13 +251,13 @@ void emit_peobj(BuildCtx *ctx)
     PEreloc reloc;
     pdata[0] = 0; pdata[1] = (uint32_t)ctx->codesz; pdata[2] = 0;
     owrite(ctx, &pdata, sizeof(pdata));
-    reloc.vaddr = 0; reloc.symidx = 1+2+relocsyms+2+2+1;
+    reloc.vaddr = 0; reloc.symidx = 1+2+nrsym+2+2+1;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
-    reloc.vaddr = 4; reloc.symidx = 1+2+relocsyms+2+2+1;
+    reloc.vaddr = 4; reloc.symidx = 1+2+nrsym+2+2+1;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
-    reloc.vaddr = 8; reloc.symidx = 1+2+relocsyms+2;
+    reloc.vaddr = 8; reloc.symidx = 1+2+nrsym+2;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }
@@ -287,7 +274,7 @@ void emit_peobj(BuildCtx *ctx)
     xdata[7] = 0;  /* Alignment. */
     xdata[8] = xdata[9] = 0;  /* Relocated address of exception handler. */
     owrite(ctx, &xdata, sizeof(xdata));
-    reloc.vaddr = sizeof(xdata)-4; reloc.symidx = 1+2+relocsyms+2+2;
+    reloc.vaddr = sizeof(xdata)-4; reloc.symidx = 1+2+nrsym+2+2;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }
@@ -299,69 +286,28 @@ void emit_peobj(BuildCtx *ctx)
   /* Write symbol table. */
   strtab = NULL;  /* 1st pass: collect string sizes. */
   for (;;) {
-    char name[80];
-
     strtabofs = 4;
     /* Mark as SafeSEH compliant. */
     emit_peobj_sym(ctx, "@feat.00", 1,
 		   PEOBJ_SECT_ABS, PEOBJ_TYPE_NULL, PEOBJ_SCL_STATIC);
 
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_TEXT);
-    for (i = 0; ctx->extnames[i]; i++) {
-      const char *sym = ctx->extnames[i];
-      const char *p = strchr(sym, '@');
-      if (p) {
-#ifdef PEOBJ_SYMF_PREFIX
-	sprintf(name, PEOBJ_SYMF_PREFIX "%s", sym);
-#else
-	strncpy(name, sym, p-sym);
-	name[p-sym] = '\0';
-#endif
-      } else {
-	sprintf(name, PEOBJ_SYM_PREFIX "%s", sym);
-      }
-      emit_peobj_sym(ctx, name, 0,
+    for (i = 0; i < nrsym; i++)
+      emit_peobj_sym(ctx, ctx->relocsym[i], 0,
 		     PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
-    }
 
 #if LJ_TARGET_X64
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_PDATA);
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_XDATA);
-    emit_peobj_sym(ctx, PEOBJ_SYM_PREFIX "lj_err_unwind_win64", 0,
+    emit_peobj_sym(ctx, "lj_err_unwind_win64", 0,
 		   PEOBJ_SECT_UNDEF, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
 #endif
 
-    emit_peobj_sym(ctx, PEOBJ_SYM_PREFIX LABEL_ASM_BEGIN, 0,
+    emit_peobj_sym(ctx, ctx->beginsym, 0,
 		   PEOBJ_SECT_TEXT, PEOBJ_TYPE_NULL, PEOBJ_SCL_EXTERN);
-    for (i = nzsym; i < ctx->nsym; i++) {
-      int pi = ctx->perm[i];
-      if (pi >= ctx->npc) {
-	const char *sym = ctx->globnames[pi-ctx->npc];
-	const char *p = strchr(sym, '@');
-	if (p) {
-#ifdef PEOBJ_SYMF_PREFIX
-	  sprintf(name, PEOBJ_SYMF_PREFIX LABEL_PREFIX "%s", sym);
-#else
-	  sprintf(name, LABEL_PREFIX "%s", sym);
-	  name[(p-sym)+sizeof(LABEL_PREFIX)-1] = '\0';
-#endif
-	} else {
-	  sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX "%s", sym);
-	}
-	emit_peobj_sym_func(ctx, name, ctx->sym_ofs[pi]);
-#if LJ_HASJIT
-      } else {
-#else
-      } else if (!(pi == BC_JFORI || pi == BC_JFORL || pi == BC_JITERL ||
-		   pi == BC_JLOOP || pi == BC_JFUNCF || pi == BC_JFUNCV ||
-		   pi == BC_IFORL || pi == BC_IITERL || pi == BC_ILOOP ||
-		   pi == BC_IFUNCF || pi == BC_IFUNCV)) {
-#endif
-	sprintf(name, PEOBJ_SYM_PREFIX LABEL_PREFIX_BC "%s",
-		bc_names[pi]);
-	emit_peobj_sym_func(ctx, name, ctx->sym_ofs[pi]);
-      }
-    }
+    for (i = 0; i < ctx->nsym; i++)
+      emit_peobj_sym(ctx, ctx->sym[i].name, (uint32_t)ctx->sym[i].ofs,
+		     PEOBJ_SECT_TEXT, PEOBJ_TYPE_FUNC, PEOBJ_SCL_EXTERN);
 
     emit_peobj_sym_sect(ctx, pesect, PEOBJ_SECT_RDATA_Z);
 

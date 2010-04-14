@@ -5133,50 +5133,33 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align " BSZPTR "\n"
 	"LECIEX:\n\n");
     for (i = 0; i < ctx->nsym; i++) {
-      int pi = ctx->perm[i];
-      int ni = ctx->perm[i+1];
-      int size = ctx->sym_ofs[ni] - ctx->sym_ofs[pi];
-      if (ctx->sym_ofs[pi] >= 0 && size > 0) {
-	char name[80];
-	if (pi >= ctx->npc) {
-	  char *p;
-	  sprintf(name, "_" LABEL_PREFIX "%s", ctx->globnames[pi - ctx->npc]);
-	  p = strchr(name, '@'); if (p) *p = '\0';
-#if LJ_HASJIT
-	} else {
-#else
-	} else if (!(pi == BC_JFORI || pi == BC_JFORL || pi == BC_JITERL ||
-		     pi == BC_JLOOP || pi == BC_IFORL || pi == BC_IITERL ||
-		     pi == BC_ILOOP)) {
-#endif
-	  sprintf(name, "_" LABEL_PREFIX_BC "%s", bc_names[pi]);
-	}
-	fprintf(ctx->fp,
-	    "%s.eh:\n"
-	    "LSFDE%d:\n"
-	    "\t.set L$set$%d,LEFDE%d-LASFDE%d\n"
-	    "\t.long L$set$%d\n"
-	    "LASFDE%d:\n"
-	    "\t.long LASFDE%d-EH_frame1\n"
-	    "\t.long %s-.\n"
-	    "\t.long %d\n"
-	    "\t.byte 0\n"			/* augmentation length */
-	    "\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
+      const char *name = ctx->sym[i].name;
+      int32_t size = ctx->sym[i+1].ofs - ctx->sym[i].ofs;
+      fprintf(ctx->fp,
+	  "%s.eh:\n"
+	  "LSFDE%d:\n"
+	  "\t.set L$set$%d,LEFDE%d-LASFDE%d\n"
+	  "\t.long L$set$%d\n"
+	  "LASFDE%d:\n"
+	  "\t.long LASFDE%d-EH_frame1\n"
+	  "\t.long %s-.\n"
+	  "\t.long %d\n"
+	  "\t.byte 0\n"			/* augmentation length */
+	  "\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
 #if LJ_64
-	    "\t.byte 0x86\n\t.byte 0x2\n"	/* offset rbp */
-	    "\t.byte 0x83\n\t.byte 0x3\n"	/* offset rbx */
-	    "\t.byte 0x8f\n\t.byte 0x4\n"	/* offset r15 */
-	    "\t.byte 0x8e\n\t.byte 0x5\n"	/* offset r14 */
+	  "\t.byte 0x86\n\t.byte 0x2\n"	/* offset rbp */
+	  "\t.byte 0x83\n\t.byte 0x3\n"	/* offset rbx */
+	  "\t.byte 0x8f\n\t.byte 0x4\n"	/* offset r15 */
+	  "\t.byte 0x8e\n\t.byte 0x5\n"	/* offset r14 */
 #else
-	    "\t.byte 0x84\n\t.byte 0x2\n"	/* offset ebp (4 for MACH-O)*/
-	    "\t.byte 0x87\n\t.byte 0x3\n"	/* offset edi */
-	    "\t.byte 0x86\n\t.byte 0x4\n"	/* offset esi */
-	    "\t.byte 0x83\n\t.byte 0x5\n"	/* offset ebx */
+	  "\t.byte 0x84\n\t.byte 0x2\n"	/* offset ebp (4 for MACH-O)*/
+	  "\t.byte 0x87\n\t.byte 0x3\n"	/* offset edi */
+	  "\t.byte 0x86\n\t.byte 0x4\n"	/* offset esi */
+	  "\t.byte 0x83\n\t.byte 0x5\n"	/* offset ebx */
 #endif
-	    "\t.align " BSZPTR "\n"
-	    "LEFDE%d:\n\n",
-	    name, i, i, i, i, i, i, i, name, size, CFRAME_SIZE, i);
-      }
+	  "\t.align " BSZPTR "\n"
+	  "LEFDE%d:\n\n",
+	  name, i, i, i, i, i, i, i, name, size, CFRAME_SIZE, i);
     }
 #if LJ_64
     fprintf(ctx->fp, "\t.subsections_via_symbols\n");

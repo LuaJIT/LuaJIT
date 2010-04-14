@@ -123,74 +123,33 @@ static void emit_asm_align(BuildCtx *ctx, int bits)
 /* Emit assembler source code. */
 void emit_asm(BuildCtx *ctx)
 {
-  char name[80];
-  int32_t prev;
-  int i, pi, rel;
-#if LJ_64
-  const char *symprefix = ctx->mode == BUILD_machasm ? "_" : "";
-  int keepfc = 0;
-#else
-  const char *symprefix = ctx->mode != BUILD_elfasm ? "_" : "";
-  /* Keep fastcall suffix for COFF on WIN32. */
-  int keepfc = (ctx->mode == BUILD_coffasm);
-#endif
+  int i, rel;
 
   fprintf(ctx->fp, "\t.file \"buildvm_%s.dasc\"\n", ctx->dasm_arch);
   fprintf(ctx->fp, "\t.text\n");
   emit_asm_align(ctx, 4);
 
-  sprintf(name, "%s" LABEL_ASM_BEGIN, symprefix);
-  emit_asm_label(ctx, name, 0, 0);
+  emit_asm_label(ctx, ctx->beginsym, 0, 0);
   if (ctx->mode != BUILD_machasm)
     fprintf(ctx->fp, ".Lbegin:\n");
 
-  i = 0;
-  do {
-    pi = ctx->perm[i++];
-    prev = ctx->sym_ofs[pi];
-  } while (prev < 0);  /* Skip the _Z symbols. */
-
-  for (rel = 0; i <= ctx->nsym; i++) {
-    int ni = ctx->perm[i];
-    int32_t next = ctx->sym_ofs[ni];
-    int size = (int)(next - prev);
-    int32_t stop = next;
-    if (pi >= ctx->npc) {
-      char *p;
-      sprintf(name, "%s" LABEL_PREFIX "%s", symprefix,
-	      ctx->globnames[pi-ctx->npc]);
-      p = strchr(name, '@');
-      if (p) { if (keepfc) name[0] = '@'; else *p = '\0'; }
-      emit_asm_label(ctx, name, size, 1);
-#if LJ_HASJIT
-    } else {
-#else
-    } else if (!(pi == BC_JFORI || pi == BC_JFORL || pi == BC_JITERL ||
-		 pi == BC_JLOOP || pi == BC_IFORL || pi == BC_IITERL ||
-		 pi == BC_ILOOP)) {
-#endif
-      sprintf(name, "%s" LABEL_PREFIX_BC "%s", symprefix, bc_names[pi]);
-      emit_asm_label(ctx, name, size, 1);
-    }
-    while (rel < ctx->nreloc && ctx->reloc[rel].ofs < stop) {
+  for (i = rel = 0; i < ctx->nsym; i++) {
+    int32_t ofs = ctx->sym[i].ofs;
+    int32_t next = ctx->sym[i+1].ofs;
+    emit_asm_label(ctx, ctx->sym[i].name, next - ofs, 1);
+    while (rel < ctx->nreloc && ctx->reloc[rel].ofs < next) {
       BuildReloc *r = &ctx->reloc[rel];
-      int n = r->ofs - prev;
-      char *p;
-      sprintf(name, "%s%s", symprefix, ctx->extnames[r->sym]);
-      p = strchr(name, '@');
-      if (p) { if (keepfc) name[0] = '@'; else *p = '\0'; }
+      int n = r->ofs - ofs;
       if (ctx->mode == BUILD_machasm && r->type != 0) {
-	emit_asm_reloc_mach(ctx, ctx->code+prev, n, name);
+	emit_asm_reloc_mach(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
       } else {
-	emit_asm_bytes(ctx, ctx->code+prev, n);
-	emit_asm_reloc(ctx, r->type, name);
+	emit_asm_bytes(ctx, ctx->code+ofs, n);
+	emit_asm_reloc(ctx, r->type, ctx->relocsym[r->sym]);
       }
-      prev += n+4;
+      ofs += n+4;
       rel++;
     }
-    emit_asm_bytes(ctx, ctx->code+prev, stop-prev);
-    prev = next;
-    pi = ni;
+    emit_asm_bytes(ctx, ctx->code+ofs, next-ofs);
   }
 
   fprintf(ctx->fp, "\n");
