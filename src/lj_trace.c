@@ -692,8 +692,12 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   );
 
   pc = exd.pc;
-  trace_hotside(J, pc);
   cf = cframe_raw(L->cframe);
+  setcframe_pc(cf, pc);
+  if (G(L)->gc.state == GCSatomic || G(L)->gc.state == GCSfinalize)
+    lj_gc_step(L);  /* Exited because of GC: drive GC forward. */
+  else
+    trace_hotside(J, pc);
   if (bc_op(*pc) == BC_JLOOP) {
     BCIns *retpc = &J->trace[bc_d(*pc)]->startins;
     if (bc_isret(bc_op(*retpc))) {
@@ -703,10 +707,10 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 	*J->patchpc = *retpc;
       } else {
 	pc = retpc;
+	setcframe_pc(cf, pc);
       }
     }
   }
-  setcframe_pc(cf, pc);
   /* Return MULTRES or 0. */
   switch (bc_op(*pc)) {
   case BC_CALLM: case BC_CALLMT:

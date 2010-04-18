@@ -2752,67 +2752,32 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 
 /* -- GC handling --------------------------------------------------------- */
 
-/* Sync all live GC values to Lua stack slots. */
-static void asm_gc_sync(ASMState *as, SnapShot *snap, Reg base)
-{
-  /* Some care must be taken when allocating registers here, since this is
-  ** not part of the fast path. All scratch registers are evicted in the
-  ** fast path, so it's easiest to force allocation from scratch registers
-  ** only. This avoids register allocation state unification.
-  */
-  RegSet allow = rset_exclude(RSET_SCRATCH & RSET_GPR, base);
-  SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  MSize n, nent = snap->nent;
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    IRRef ref = snap_ref(sn);
-    /* NYI: sync the frame, bump base, set topslot, clear new slots. */
-    if ((sn & (SNAP_CONT|SNAP_FRAME)))
-      lj_trace_err(as->J, LJ_TRERR_NYIGCF);
-    if (!irref_isk(ref)) {
-      IRIns *ir = IR(ref);
-      if (irt_isgcv(ir->t)) {
-	int32_t ofs = 8*(int32_t)(snap_slot(sn)-1);
-	Reg src = ra_alloc1(as, ref, allow);
-	emit_movtomro(as, src, base, ofs);
-	emit_movmroi(as, base, ofs+4, irt_toitype(ir->t));
-	checkmclim(as);
-      }
-    }
-  }
-}
-
 /* Check GC threshold and do one or more GC steps. */
-static void asm_gc_check(ASMState *as, SnapShot *snap)
+static void asm_gc_check(ASMState *as)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_step_jit];
   IRRef args[2];
   MCLabel l_end;
   Reg base, lstate, tmp;
-  RegSet drop = RSET_SCRATCH;
-  if (ra_hasreg(IR(REF_BASE)->r))  /* Stack may be reallocated by the GC. */
-    drop |= RID2RSET(IR(REF_BASE)->r);  /* Need to evict BASE, too. */
-  ra_evictset(as, drop);
+  ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
+  /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
+  asm_guardcc(as, CC_NE);  /* Assumes asm_snap_prep() already done. */
+  emit_rr(as, XO_TEST, RID_RET, RID_RET);
   args[0] = ASMREF_L;
   args[1] = ASMREF_TMP1;
   asm_gencall(as, ci, args);
   tmp = ra_releasetmp(as, ASMREF_TMP1);
   emit_loadi(as, tmp, (int32_t)as->gcsteps);
-  /* We don't know spadj yet, so get the C frame from L->cframe. */
-  emit_movmroi(as, tmp, CFRAME_OFS_PC,
-	       (int32_t)as->T->snapmap[snap->mapofs+snap->nent]);
-  emit_gri(as, XG_ARITHi(XOg_AND), tmp|REX_64, CFRAME_RAWMASK);
-  lstate = IR(ASMREF_L)->r;
-  emit_rmro(as, XO_MOV, tmp|REX_64, lstate, offsetof(lua_State, cframe));
   /* It's ok if lstate is already in a non-scratch reg. But all allocations
-  ** in the non-fast path must use a scratch reg. See comment above.
+  ** in the non-fast path must use a scratch reg (avoids unification).
   */
+  lstate = IR(ASMREF_L)->r;
   base = ra_alloc1(as, REF_BASE, rset_exclude(RSET_SCRATCH & RSET_GPR, lstate));
   emit_movtomro(as, base|REX_64, lstate, offsetof(lua_State, base));
-  asm_gc_sync(as, snap, base);
   /* BASE/L get restored anyway, better do it inside the slow path. */
-  if (as->parent || as->curins == as->loopref) ra_restore(as, REF_BASE);
+  if (rset_test(RSET_SCRATCH, base) && (as->parent || as->snapno != 0))
+    ra_restore(as, REF_BASE);
   if (rset_test(RSET_SCRATCH, lstate) && ra_hasreg(IR(ASMREF_L)->r))
     ra_restore(as, ASMREF_L);
   /* Jump around GC step if GC total < GC threshold. */
@@ -3034,7 +2999,7 @@ static void asm_loop(ASMState *as)
   /* LOOP is a guard, so the snapno is up to date. */
   as->loopsnapno = as->snapno;
   if (as->gcsteps)
-    asm_gc_check(as, &as->T->snap[as->loopsnapno]);
+    asm_gc_check(as);
   /* LOOP marks the transition from the variant to the invariant part. */
   as->testmcp = as->invmcp = NULL;
   as->sectref = 0;
@@ -3126,7 +3091,7 @@ static void asm_head_side(ASMState *as)
   allow = asm_head_side_base(as, pbase, allow);
 
   /* Scan all parent SLOADs and collect register dependencies. */
-  for (i = as->curins; i > REF_BASE; i--) {
+  for (i = as->stopins; i > REF_BASE; i--) {
     IRIns *ir = IR(i);
     RegSP rs;
     lua_assert(ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_PARENT));
@@ -3161,7 +3126,7 @@ static void asm_head_side(ASMState *as)
 
   /* Reload spilled target registers. */
   if (pass2) {
-    for (i = as->curins; i > REF_BASE; i--) {
+    for (i = as->stopins; i > REF_BASE; i--) {
       IRIns *ir = IR(i);
       if (irt_ismarked(ir->t)) {
 	RegSet mask;
@@ -3686,8 +3651,11 @@ void lj_asm_trace(jit_State *J, Trace *T)
 
   RA_DBG_REF();
   checkmclim(as);
-  if (as->gcsteps)
-    asm_gc_check(as, &as->T->snap[0]);
+  if (as->gcsteps) {
+    as->curins = as->T->snap[0].ref;
+    asm_snap_prep(as);  /* The GC check is a guard. */
+    asm_gc_check(as);
+  }
   ra_evictk(as);
   if (as->parent)
     asm_head_side(as);

@@ -1885,13 +1885,22 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
 
 /* -- Record bytecode ops ------------------------------------------------- */
 
-/* Optimize state after comparison. */
-static void optstate_comp(jit_State *J, int cond)
+/* Prepare for comparison. */
+static void rec_comp_prep(jit_State *J)
+{
+  /* Prevent merging with snapshot #0 (GC exit) since we fixup the PC. */
+  if (J->cur.nsnap == 1 && J->cur.snap[0].ref == J->cur.nins)
+    emitir_raw(IRT(IR_NOP, IRT_NIL), 0, 0);
+  lj_snap_add(J);
+}
+
+/* Fixup comparison. */
+static void rec_comp_fixup(jit_State *J, int cond)
 {
   BCIns jmpins = J->pc[1];
   const BCIns *npc = J->pc + 2 + (cond ? bc_j(jmpins) : 0);
   SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
-  /* Avoid re-recording the comparison in side traces. */
+  /* Set PC to opposite target to avoid re-recording the comp. in side trace. */
   J->cur.snapmap[snap->mapofs + snap->nent] = SNAP_MKPC(npc);
   J->needsnap = 1;
   /* Shrink last snapshot if possible. */
@@ -1987,7 +1996,7 @@ void lj_record_ins(jit_State *J)
 	  break;  /* Interpreter will throw for two different types. */
 	}
       }
-      lj_snap_add(J);
+      rec_comp_prep(J);
       irop = (int)op - (int)BC_ISLT + (int)IR_LT;
       if (ta == IRT_NUM) {
 	if ((irop & 1)) irop ^= 4;  /* ISGE/ISGT are unordered. */
@@ -2004,7 +2013,7 @@ void lj_record_ins(jit_State *J)
 	break;
       }
       emitir(IRTG(irop, ta), ra, rc);
-      optstate_comp(J, ((int)op ^ irop) & 1);
+      rec_comp_fixup(J, ((int)op ^ irop) & 1);
     }
     break;
 
@@ -2015,14 +2024,14 @@ void lj_record_ins(jit_State *J)
     /* Emit nothing for two non-table, non-udata consts. */
     if (!(tref_isk2(ra, rc) && !(tref_istab(ra) || tref_isudata(ra)))) {
       int diff;
-      lj_snap_add(J);
+      rec_comp_prep(J);
       diff = rec_objcmp(J, ra, rc, rav, rcv);
       if (diff == 1 && (tref_istab(ra) || tref_isudata(ra))) {
 	/* Only check __eq if different, but the same type (table or udata). */
 	rec_mm_equal(J, &ix, (int)op);
 	break;
       }
-      optstate_comp(J, ((int)op & 1) == !diff);
+      rec_comp_fixup(J, ((int)op & 1) == !diff);
     }
     break;
 

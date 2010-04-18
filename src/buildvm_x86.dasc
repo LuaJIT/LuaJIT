@@ -2613,6 +2613,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB, [DISPATCH+DISPATCH_GL(jit_L)]
   |  mov BASE, [DISPATCH+DISPATCH_GL(jit_base)]
   |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
+  |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
   |  mov L:RB->base, BASE
   |.if X64WIN
   |  lea CARG2, [rsp+4*8]

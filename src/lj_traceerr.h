@@ -49,7 +49,6 @@ TREDEF(BADRA,	"inconsistent register allocation")
 TREDEF(NYIIR,	"NYI: cannot assemble IR instruction %d")
 TREDEF(NYIPHI,	"NYI: PHI shuffling too complex")
 TREDEF(NYICOAL,	"NYI: register coalescing too complex")
-TREDEF(NYIGCF,	"NYI: gcstep sync with frames")
 
 #undef TREDEF
 
