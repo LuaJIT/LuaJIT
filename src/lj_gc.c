@@ -631,8 +631,10 @@ void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L)
 
 #if LJ_HASJIT
 /* Perform multiple GC steps. Called from JIT-compiled code. */
-int LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps)
+int LJ_FASTCALL lj_gc_step_jit(global_State *g, MSize steps)
 {
+  lua_State *L = gco2th(gcref(g->jit_L));
+  L->base = mref(G(L)->jit_base, TValue);
   L->top = curr_topL(L);
   while (steps-- > 0 && lj_gc_step(L) == 0)
     ;

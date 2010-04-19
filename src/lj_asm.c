@@ -1530,9 +1530,9 @@ static void asm_strto(ASMState *as, IRIns *ir)
     rset_set(drop, ir->r);  /* WIN64 doesn't spill all FPRs. */
   ra_evictset(as, drop);
   asm_guardcc(as, CC_E);
-  emit_rr(as, XO_TEST, RID_RET, RID_RET);
-  args[0] = ir->op1;
-  args[1] = ASMREF_TMP1;
+  emit_rr(as, XO_TEST, RID_RET, RID_RET);  /* Test return status. */
+  args[0] = ir->op1;      /* GCstr *str */
+  args[1] = ASMREF_TMP1;  /* TValue *n  */
   asm_gencall(as, ci, args);
   /* Store the result to the spill slot or temp slots. */
   emit_rmro(as, XO_LEA, ra_releasetmp(as, ASMREF_TMP1)|REX_64,
@@ -1547,15 +1547,15 @@ static void asm_tostr(ASMState *as, IRIns *ir)
   as->gcsteps++;
   if (irt_isnum(irl->t)) {
     const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
-    args[1] = ASMREF_TMP1;
-    asm_setupresult(as, ir, ci);
+    args[1] = ASMREF_TMP1;  /* const lua_Number * */
+    asm_setupresult(as, ir, ci);  /* GCstr * */
     asm_gencall(as, ci, args);
     emit_rmro(as, XO_LEA, ra_releasetmp(as, ASMREF_TMP1)|REX_64,
 	      RID_ESP, ra_spill(as, irl));
   } else {
     const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
-    args[1] = ir->op1;
-    asm_setupresult(as, ir, ci);
+    args[1] = ir->op1;  /* int32_t k */
+    asm_setupresult(as, ir, ci);  /* GCstr * */
     asm_gencall(as, ci, args);
   }
 }
@@ -1812,10 +1812,10 @@ static void asm_newref(ASMState *as, IRIns *ir)
   IRRef args[3];
   IRIns *irkey;
   Reg tmp;
-  args[0] = ASMREF_L;
-  args[1] = ir->op1;
-  args[2] = ASMREF_TMP1;
-  asm_setupresult(as, ir, ci);
+  args[0] = ASMREF_L;     /* lua_State *L */
+  args[1] = ir->op1;      /* GCtab *t     */
+  args[2] = ASMREF_TMP1;  /* cTValue *key */
+  asm_setupresult(as, ir, ci);  /* TValue * */
   asm_gencall(as, ci, args);
   tmp = ra_releasetmp(as, ASMREF_TMP1);
   irkey = IR(ir->op2);
@@ -2086,11 +2086,11 @@ static void asm_snew(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_new];
   IRRef args[3];
-  args[0] = ASMREF_L;
-  args[1] = ir->op1;
-  args[2] = ir->op2;
+  args[0] = ASMREF_L;  /* lua_State *L    */
+  args[1] = ir->op1;   /* const char *str */
+  args[2] = ir->op2;   /* size_t len      */
   as->gcsteps++;
-  asm_setupresult(as, ir, ci);
+  asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);
 }
 
@@ -2098,10 +2098,10 @@ static void asm_tnew(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_new1];
   IRRef args[2];
-  args[0] = ASMREF_L;
-  args[1] = ASMREF_TMP1;
+  args[0] = ASMREF_L;     /* lua_State *L    */
+  args[1] = ASMREF_TMP1;  /* uint32_t ahsize */
   as->gcsteps++;
-  asm_setupresult(as, ir, ci);
+  asm_setupresult(as, ir, ci);  /* GCtab * */
   asm_gencall(as, ci, args);
   emit_loadi(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1 | (ir->op2 << 24));
 }
@@ -2110,10 +2110,10 @@ static void asm_tdup(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_dup];
   IRRef args[2];
-  args[0] = ASMREF_L;
-  args[1] = ir->op1;
+  args[0] = ASMREF_L;  /* lua_State *L    */
+  args[1] = ir->op1;   /* const GCtab *kt */
   as->gcsteps++;
-  asm_setupresult(as, ir, ci);
+  asm_setupresult(as, ir, ci);  /* GCtab * */
   asm_gencall(as, ci, args);
 }
 
@@ -2144,8 +2144,8 @@ static void asm_obar(ASMState *as, IRIns *ir)
   lua_assert(IR(ir->op1)->o == IR_UREFC);
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
-  args[0] = ASMREF_TMP1;
-  args[1] = ir->op1;
+  args[0] = ASMREF_TMP1;  /* global_State *g */
+  args[1] = ir->op1;      /* TValue *tv      */
   asm_gencall(as, ci, args);
   emit_loada(as, ra_releasetmp(as, ASMREF_TMP1), J2G(as->J));
   obj = IR(ir->op1)->r;
@@ -2758,30 +2758,19 @@ static void asm_gc_check(ASMState *as)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_step_jit];
   IRRef args[2];
   MCLabel l_end;
-  Reg base, lstate, tmp;
+  Reg tmp;
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
   asm_guardcc(as, CC_NE);  /* Assumes asm_snap_prep() already done. */
   emit_rr(as, XO_TEST, RID_RET, RID_RET);
-  args[0] = ASMREF_L;
-  args[1] = ASMREF_TMP1;
+  args[0] = ASMREF_TMP1;  /* global_State *g */
+  args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
   tmp = ra_releasetmp(as, ASMREF_TMP1);
-  emit_loadi(as, tmp, (int32_t)as->gcsteps);
-  /* It's ok if lstate is already in a non-scratch reg. But all allocations
-  ** in the non-fast path must use a scratch reg (avoids unification).
-  */
-  lstate = IR(ASMREF_L)->r;
-  base = ra_alloc1(as, REF_BASE, rset_exclude(RSET_SCRATCH & RSET_GPR, lstate));
-  emit_movtomro(as, base|REX_64, lstate, offsetof(lua_State, base));
-  /* BASE/L get restored anyway, better do it inside the slow path. */
-  if (rset_test(RSET_SCRATCH, base) && (as->parent || as->snapno != 0))
-    ra_restore(as, REF_BASE);
-  if (rset_test(RSET_SCRATCH, lstate) && ra_hasreg(IR(ASMREF_L)->r))
-    ra_restore(as, ASMREF_L);
+  emit_loada(as, tmp, J2G(as->J));
+  emit_loadi(as, ra_releasetmp(as, ASMREF_TMP2), (int32_t)as->gcsteps);
   /* Jump around GC step if GC total < GC threshold. */
-  tmp = ra_scratch(as, RSET_SCRATCH & RSET_GPR);
   emit_sjcc(as, CC_B, l_end);
   emit_opgl(as, XO_ARITH(XOg_CMP), tmp, gc.threshold);
   emit_getgl(as, tmp, gc.total);

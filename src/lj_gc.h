@@ -47,7 +47,7 @@ LJ_FUNC void lj_gc_freeall(global_State *g);
 LJ_FUNCA int LJ_FASTCALL lj_gc_step(lua_State *L);
 LJ_FUNCA void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L);
 #if LJ_HASJIT
-LJ_FUNC int LJ_FASTCALL lj_gc_step_jit(lua_State *L, MSize steps);
+LJ_FUNC int LJ_FASTCALL lj_gc_step_jit(global_State *g, MSize steps);
 #endif
 LJ_FUNC void lj_gc_fullgc(lua_State *L);
 
