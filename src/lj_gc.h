@@ -69,6 +69,8 @@ LJ_FUNC void lj_gc_barriertrace(global_State *g, void *T);
 #endif
 
 /* Barrier for stores to table objects. TValue and GCobj variant. */
+#define lj_gc_anybarriert(L, t)  \
+  { if (isblack(obj2gco(t))) lj_gc_barrierback(G(L), (t)); }
 #define lj_gc_barriert(L, t, tv) \
   { if (tviswhite(tv) && isblack(obj2gco(t))) \
       lj_gc_barrierback(G(L), (t)); }

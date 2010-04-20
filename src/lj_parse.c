@@ -189,6 +189,7 @@ static BCReg const_gc(FuncState *fs, GCobj *gc, int itype)
   lua_State *L = fs->L;
   TValue o, *val;
   setgcV(L, &o, &gc->gch, itype);
+  /* NOBARRIER: the key is new or kept alive. */
   val = lj_tab_set(L, fs->kt, &o);
   if (tvisnum(val))
     return val->u32.lo;
@@ -206,6 +207,7 @@ static BCReg const_str(FuncState *fs, ExpDesc *e)
 /* Anchor string constant to avoid GC. */
 GCstr *lj_parse_keepstr(LexState *ls, const char *str, size_t len)
 {
+  /* NOBARRIER: the key is new or kept alive. */
   lua_State *L = ls->L;
   GCstr *s = lj_str_new(L, str, len);
   TValue *tv = lj_tab_setstr(L, ls->fs->kt, s);
@@ -1202,6 +1204,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   lua_assert(ls->fs != NULL || ls->token == TK_eof);
   /* Re-anchor last string token to avoid GC. */
   if (ls->token == TK_name || ls->token == TK_string) {
+    /* NOBARRIER: the key is new or kept alive. */
     TValue *tv = lj_tab_setstr(ls->L, ls->fs->kt, strV(&ls->tokenval));
     if (tvisnil(tv)) setboolV(tv, 1);
   }
@@ -1346,8 +1349,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
       vcall = 0;
       expr_kvalue(&k, &key);
       expr_kvalue(lj_tab_set(fs->L, t, &k), &val);
-      if (val.k == VKSTR)
-	lj_gc_objbarriert(fs->L, t, val.u.sval);
+      lj_gc_anybarriert(fs->L, t);
     } else {
       if (val.k != VCALL) { expr_toanyreg(fs, &val); vcall = 0; }
       if (expr_isk(&key)) expr_index(fs, e, &key);

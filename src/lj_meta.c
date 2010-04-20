@@ -134,7 +134,7 @@ TValue *lj_meta_tset(lua_State *L, cTValue *o, cTValue *k)
       TValue *tv = lj_tab_set(L, t, k);
       if (!tvisnil(tv) ||
 	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_newindex))) {
-	if (isblack(obj2gco(t))) lj_gc_barrierback(G(L), t);
+	lj_gc_anybarriert(L, t);
 	return tv;
       }
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_newindex))) {

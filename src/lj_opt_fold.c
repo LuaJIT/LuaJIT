@@ -1351,8 +1351,9 @@ LJFOLDF(fwd_xload)
 /* Write barriers are amenable to CSE, but not across any incremental
 ** GC steps.
 **
-** The same logic applies to open upvalue references, because the stack
-** may be resized during a GC step.
+** The same logic applies to open upvalue references, because a stack
+** may be resized during a GC step (not the current stack, but maybe that
+** of a coroutine).
 */
 LJFOLD(TBAR any)
 LJFOLD(OBAR any any)

@@ -54,7 +54,7 @@ LJLIB_PUSH("upval")
 LJLIB_PUSH("thread")
 LJLIB_PUSH("proto")
 LJLIB_PUSH("function")
-LJLIB_PUSH("deadkey")
+LJLIB_PUSH("")  /* Unused. */
 LJLIB_PUSH("table")
 LJLIB_PUSH(top-8)  /* userdata */
 LJLIB_PUSH("number")

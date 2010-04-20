@@ -192,7 +192,7 @@ GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)
       Node *kn = &knode[i];
       Node *n = &node[i];
       Node *next = nextnode(kn);
-      /* Don't use copyTV here, since it asserts on a copy of a DEADKEY. */
+      /* Don't use copyTV here, since it asserts on a copy of a dead key. */
       n->val = kn->val; n->key = kn->key;
       setmref(n->next, next == NULL? next : (Node *)((char *)next + d));
     }
@@ -448,7 +448,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
   n->key.u64 = key->u64;
   if (LJ_UNLIKELY(tvismzero(&n->key)))
     n->key.u64 = 0;
-  lj_gc_barriert(L, t, key);
+  lj_gc_anybarriert(L, t);
   lua_assert(tvisnil(&n->val));
   return &n->val;
 }
@@ -517,9 +517,7 @@ static uint32_t keyindex(lua_State *L, GCtab *t, cTValue *key)
   if (!tvisnil(key)) {
     Node *n = hashkey(t, key);
     do {
-      if (lj_obj_equal(&n->key, key) ||
-	  (itype(&n->key) == LJ_TDEADKEY && tvisgcv(key) &&
-	   gcV(&n->key) == gcV(key)))
+      if (lj_obj_equal(&n->key, key))
 	return t->asize + (uint32_t)(n - noderef(t->node));
 	/* Hash key indexes: [t->asize..t->asize+t->nmask] */
     } while ((n = nextnode(n)));

@@ -186,13 +186,10 @@ static int gc_traverse_tab(global_State *g, GCtab *t)
     MSize i, hmask = t->hmask;
     for (i = 0; i <= hmask; i++) {
       Node *n = &node[i];
-      lua_assert(itype(&n->key) != LJ_TDEADKEY || tvisnil(&n->val));
       if (!tvisnil(&n->val)) {  /* Mark non-empty slot. */
 	lua_assert(!tvisnil(&n->key));
 	if (!(weak & LJ_GC_WEAKKEY)) gc_marktv(g, &n->key);
 	if (!(weak & LJ_GC_WEAKVAL)) gc_marktv(g, &n->val);
-      } else if (tvisgcv(&n->key)) {  /* Leave GC key in, but mark as dead. */
-	setitype(&n->key, LJ_TDEADKEY);
       }
     }
   }
@@ -424,11 +421,8 @@ static void gc_clearweak(GCobj *o)
 	Node *n = &node[i];
 	/* Clear hash slot when key or value is about to be collected. */
 	if (!tvisnil(&n->val) && (gc_mayclear(&n->key, 0) ||
-				  gc_mayclear(&n->val, 1))) {
+				  gc_mayclear(&n->val, 1)))
 	  setnilV(&n->val);
-	  if (tvisgcv(&n->key))  /* Leave GC key in, but mark as dead. */
-	    setitype(&n->key, LJ_TDEADKEY);
-	}
       }
     }
     o = gcref(t->gclist);

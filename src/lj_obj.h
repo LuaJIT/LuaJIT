@@ -75,9 +75,37 @@ typedef struct GCRef {
 ** a barrier has been omitted are annotated with a NOBARRIER comment.
 **
 ** The same logic applies for stores to table slots (array part or hash
-** part). ALL uses of lj_tab_set* require a barrier for the stored *value*
-** (if it's a GC object). The barrier for the *key* is already handled
-** internally by lj_tab_newkey.
+** part). ALL uses of lj_tab_set* require a barrier for the stored value
+** *and* the stored key, based on the above rules. In practice this means
+** a barrier is needed if *either* of the key or value are a GC object.
+**
+** It's ok to LEAVE OUT the write barrier in the following special cases:
+** - The stored value is nil. The key doesn't matter because it's either
+**   not resurrected or lj_tab_newkey() will take care of the key barrier.
+** - The key doesn't matter if the *previously* stored value is guaranteed
+**   to be non-nil (because the key is kept alive in the table).
+** - The key doesn't matter if it's guaranteed not to be part of the table,
+**   since lj_tab_newkey() takes care of the key barrier. This applies
+**   trivially to new tables, but watch out for resurrected keys. Storing
+**   a nil value leaves the key in the table!
+**
+** In case of doubt use lj_gc_anybarriert() as it's rather cheap. It's used
+** by the interpreter for all table stores.
+**
+** Note: In contrast to Lua's GC, LuaJIT's GC does *not* specially mark
+** dead keys in tables. The reference is left in, but it's guaranteed to
+** be never dereferenced as long as the value is nil. It's ok if the key is
+** freed or if any object subsequently gets the same address.
+**
+** Not destroying dead keys helps to keep key hash slots stable. This avoids
+** specialization back-off for HREFK when a value flips between nil and
+** non-nil and the GC gets in the way. It also allows safely hoisting
+** HREF/HREFK across GC steps. Dead keys are only removed if a table is
+** resized (i.e. by NEWREF) and xREF must not be CSEd across a resize.
+**
+** The trade-off is that a write barrier for tables must take the key into
+** account, too. Implicitly resurrecting the key by storing a non-nil value
+** may invalidate the incremental GC invariant.
 */
 
 /* -- Common type definitions --------------------------------------------- */
@@ -136,10 +164,7 @@ typedef const TValue cTValue;
 
 /* More external and GCobj tags for internal objects. */
 #define LAST_TT		LUA_TTHREAD
-
 #define LUA_TPROTO	(LAST_TT+1)
-#define LUA_TUPVAL	(LAST_TT+2)
-#define LUA_TDEADKEY	(LAST_TT+3)
 
 /* Internal object tags.
 **
@@ -170,7 +195,7 @@ typedef const TValue cTValue;
 #define LJ_TTHREAD		(-7)
 #define LJ_TPROTO		(-8)
 #define LJ_TFUNC		(-9)
-#define LJ_TDEADKEY		(-10)
+/* Unused			(-10) */
 #define LJ_TTAB			(-11)
 #define LJ_TUDATA		(-12)
 /* This is just the canonical number type used in some places. */
@@ -689,7 +714,7 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 /* -- Miscellaneous object handling --------------------------------------- */
 
 /* Names and maps for internal and external object tags. */
-LJ_DATA const char *const lj_obj_typename[1+LUA_TUPVAL+1];
+LJ_DATA const char *const lj_obj_typename[1+LUA_TPROTO+1];
 LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 
 #define typename(o)	(lj_obj_itypename[itypemap(o)])

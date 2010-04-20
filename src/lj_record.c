@@ -994,6 +994,7 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
     return res;
   } else {  /* Indexed store. */
     GCtab *mt = tabref(tabV(&ix->tabv)->metatable);
+    int keybarrier = tref_isgcv(ix->key) && !tref_isnil(ix->val);
     if (tvisnil(oldv)) {  /* Previous value was nil? */
       /* Need to duplicate the hasmm check for the early guards. */
       int hasmm = 0;
@@ -1004,7 +1005,8 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
       if (hasmm)
 	emitir(IRTG(loadop, IRT_NIL), xref, 0);  /* Guard for nil value. */
       else if (xrefop == IR_HREF)
-	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_PTR),
+	       xref, lj_ir_kptr(J, niltvg(J2G(J))));
       if (ix->idxchain && rec_mm_lookup(J, ix, MM_newindex)) { /* Metamethod? */
 	lua_assert(hasmm);
 	goto handlemm;
@@ -1015,6 +1017,7 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 	if (tref_isinteger(key))  /* NEWREF needs a TValue as a key. */
 	  key = emitir(IRTN(IR_TONUM), key, 0);
 	xref = emitir(IRT(IR_NEWREF, IRT_PTR), ix->tab, key);
+	keybarrier = 0;  /* NEWREF already takes care of the key barrier. */
       }
     } else if (!lj_opt_fwd_wasnonnil(J, loadop, tref_ref(xref))) {
       /* Cannot derive that the previous value was non-nil, must do checks. */
@@ -1030,11 +1033,13 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
 	  emitir(IRTG(loadop, t), xref, 0);  /* Guard for non-nil value. */
 	}
       }
+    } else {
+      keybarrier = 0;  /* Previous non-nil value kept the key alive. */
     }
     if (tref_isinteger(ix->val))  /* Convert int to number before storing. */
       ix->val = emitir(IRTN(IR_TONUM), ix->val, 0);
     emitir(IRT(loadop+IRDELTA_L2S, tref_type(ix->val)), xref, ix->val);
-    if (tref_isgcv(ix->val))
+    if (keybarrier || tref_isgcv(ix->val))
       emitir(IRT(IR_TBAR, IRT_NIL), ix->tab, 0);
     /* Invalidate neg. metamethod cache for stores with certain string keys. */
     if (!nommstr(J, ix->key)) {

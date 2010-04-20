@@ -53,7 +53,7 @@ void lj_lib_register(lua_State *L, const char *libname,
   ptrdiff_t tpos = L->top - L->base;
 
   /* Avoid barriers further down. */
-  if (isblack(obj2gco(tab))) lj_gc_barrierback(G(L), tab);
+  lj_gc_anybarriert(L, tab);
   tab->nomm = 0;
 
   for (;;) {

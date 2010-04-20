@@ -196,7 +196,8 @@ LUA_API int lua_type(lua_State *L, int idx)
     return LUA_TNONE;
   } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
     int t = ~itype(o);
-    return (int)(((t < 8 ? 0x98a42110 : 0x75b6) >> 4*(t&7)) & 15u);
+    lua_assert(itype(o) != LJ_TUPVAL);
+    return (int)(((t < 8 ? 0x98042110 : 0x7506) >> 4*(t&7)) & 15u);
   }
 }
 
@@ -631,7 +632,7 @@ LUALIB_API int luaL_newmetatable(lua_State *L, const char *tname)
     GCtab *mt = lj_tab_new(L, 0, 1);
     settabV(L, tv, mt);
     settabV(L, L->top++, mt);
-    lj_gc_objbarriert(L, regt, mt);
+    lj_gc_anybarriert(L, regt);
     return 1;
   } else {
     copyTV(L, L->top++, tv);
@@ -899,7 +900,7 @@ LUA_API void lua_rawset(lua_State *L, int idx)
   key = L->top-2;
   dst = lj_tab_set(L, t, key);
   copyTV(L, dst, key+1);
-  lj_gc_barriert(L, t, dst);
+  lj_gc_anybarriert(L, t);
   L->top = key;
 }
 
