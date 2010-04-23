@@ -23,7 +23,7 @@ enum {
   REGFUNC_NOREGUV
 };
 
-static void libdef_name(char *p, int kind)
+static void libdef_name(const char *p, int kind)
 {
   size_t n = strlen(p);
   if (kind != LIBINIT_STRING) {
