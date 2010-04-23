@@ -997,6 +997,7 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
 
 LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 {
+  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
   api_checknelems(L, nargs+1);
   lj_vm_call(L, L->top - nargs, nresults+1);
 }
@@ -1007,6 +1008,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   uint8_t oldh = hook_save(g);
   ptrdiff_t ef;
   int status;
+  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
   api_checknelems(L, nargs+1);
   if (errfunc == 0) {
     ef = 0;
@@ -1022,8 +1024,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
 
 static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
 {
-  GCfunc *fn;
-  fn = lj_func_newC(L, 0, getcurrenv(L));
+  GCfunc *fn = lj_func_newC(L, 0, getcurrenv(L));
   fn->c.f = func;
   setfuncV(L, L->top, fn);
   setlightudV(L->top+1, checklightudptr(L, ud));
@@ -1036,7 +1037,9 @@ LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
 {
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
-  int status = lj_vm_cpcall(L, func, ud, cpcall);
+  int status;
+  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
+  status = lj_vm_cpcall(L, func, ud, cpcall);
   if (status) hook_restore(g, oldh);
   return status;
 }
