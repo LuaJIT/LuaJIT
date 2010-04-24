@@ -58,14 +58,6 @@ static void save(LexState *ls, int c)
   ls->sb.buf[ls->sb.n++] = cast(char, c);
 }
 
-static int check_next(LexState *ls, const char *set)
-{
-  if (!strchr(set, ls->current))
-    return 0;
-  save_and_next(ls);
-  return 1;
-}
-
 static void inclinenumber(LexState *ls)
 {
   int old = ls->current;
@@ -85,8 +77,12 @@ static void read_numeral(LexState *ls, TValue *tv)
   do {
     save_and_next(ls);
   } while (lj_ctype_isdigit(ls->current) || ls->current == '.');
-  if (check_next(ls, "Ee"))  /* `E'? */
-    check_next(ls, "+-");  /* optional exponent sign */
+  if (ls->current == 'e' || ls->current == 'E' ||
+      ls->current == 'p' || ls->current == 'P') {
+    save_and_next(ls);
+    if (ls->current == '+' || ls->current == '-')
+      save_and_next(ls);
+  }
   while (lj_ctype_isident(ls->current))
     save_and_next(ls);
   save(ls, '\0');
@@ -277,11 +273,13 @@ static int llex(LexState *ls, TValue *tv)
       return TK_string;
     case '.':
       save_and_next(ls);
-      if (check_next(ls, ".")) {
-	if (check_next(ls, "."))
+      if (ls->current == '.') {
+	next(ls);
+	if (ls->current == '.') {
+	  next(ls);
 	  return TK_dots;   /* ... */
-	else
-	  return TK_concat;   /* .. */
+	}
+	return TK_concat;   /* .. */
       } else if (!lj_ctype_isdigit(ls->current)) {
 	return '.';
       } else {
