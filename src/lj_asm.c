@@ -3029,7 +3029,7 @@ static void asm_head_root(ASMState *as)
 {
   int32_t spadj;
   asm_head_root_base(as);
-  emit_setgli(as, vmstate, (int32_t)as->J->curtrace);
+  emit_setgli(as, vmstate, (int32_t)as->T->traceno);
   spadj = asm_stack_adjust(as);
   as->T->spadjust = (uint16_t)spadj;
   emit_addptr(as, RID_ESP|REX_64, -spadj);
@@ -3145,7 +3145,7 @@ static void asm_head_side(ASMState *as)
   }
 
   /* Store trace number and adjust stack frame relative to the parent. */
-  emit_setgli(as, vmstate, (int32_t)as->J->curtrace);
+  emit_setgli(as, vmstate, (int32_t)as->T->traceno);
   emit_addptr(as, RID_ESP|REX_64, -spdelta);
 
   /* Restore target registers from parent spill slots. */

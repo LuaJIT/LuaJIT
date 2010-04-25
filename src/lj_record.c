@@ -232,7 +232,7 @@ static void rec_stop(jit_State *J, TraceNo lnk)
   lj_trace_end(J);
   J->cur.link = (uint16_t)lnk;
   /* Looping back at the same stack level? */
-  if (lnk == J->curtrace && J->framedepth + J->retdepth == 0) {
+  if (lnk == J->cur.traceno && J->framedepth + J->retdepth == 0) {
     if ((J->flags & JIT_F_OPT_LOOP))  /* Shall we try to create a loop? */
       goto nocanon;  /* Do not canonicalize or we lose the narrowing. */
     if (J->cur.root)  /* Otherwise ensure we always link to the root trace. */
@@ -442,7 +442,7 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
       /* Same loop? */
       if (ev == LOOPEV_LEAVE)  /* Must loop back to form a root trace. */
 	lj_trace_err(J, LJ_TRERR_LLEAVE);
-      rec_stop(J, J->curtrace);  /* Root trace forms a loop. */
+      rec_stop(J, J->cur.traceno);  /* Root trace forms a loop. */
     } else if (ev != LOOPEV_LEAVE) {  /* Entering inner loop? */
       /* It's usually better to abort here and wait until the inner loop
       ** is traced. But if the inner loop repeatedly didn't loop back,
@@ -472,7 +472,7 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
   } else if (ev != LOOPEV_LEAVE) {  /* Side trace enters a compiled loop. */
     J->instunroll = 0;  /* Cannot continue across a compiled loop op. */
     if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
-      lnk = J->curtrace;  /* Can form an extra loop. */
+      lnk = J->cur.traceno;  /* Can form an extra loop. */
     rec_stop(J, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
 }
@@ -578,7 +578,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     if (J->framedepth == 0 && J->pt && frame == J->L->base - 1) {
       if (check_downrec_unroll(J, pt)) {
 	J->maxslot = (BCReg)(rbase + nresults);
-	rec_stop(J, J->curtrace);  /* Down-recursion. */
+	rec_stop(J, J->cur.traceno);  /* Down-recursion. */
 	return;
       }
       lj_snap_add(J);
@@ -1836,7 +1836,7 @@ static void check_call_unroll(jit_State *J)
   if (J->pc == J->startpc) {
     if (count + J->tailcalled > J->param[JIT_P_recunroll]) {
       J->pc++;
-      rec_stop(J, J->curtrace);  /* Up-recursion or tail-recursion. */
+      rec_stop(J, J->cur.traceno);  /* Up-recursion or tail-recursion. */
     }
   } else {
     if (count > J->param[JIT_P_callunroll])
@@ -1874,7 +1874,7 @@ static void rec_func_jit(jit_State *J, TraceNo lnk)
   rec_func_setup(J);
   J->instunroll = 0;  /* Cannot continue across a compiled function. */
   if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
-    lnk = J->curtrace;  /* Can form an extra tail-recursive loop. */
+    lnk = J->cur.traceno;  /* Can form an extra tail-recursive loop. */
   rec_stop(J, lnk);  /* Link to the function. */
 }
 

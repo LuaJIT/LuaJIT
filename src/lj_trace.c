@@ -50,9 +50,9 @@ void lj_trace_err_info(jit_State *J, TraceError e)
 /* -- Trace management ---------------------------------------------------- */
 
 /* The current trace is first assembled in J->cur. The variable length
-** arrays point to shared, growable buffers (J->irbuf etc.). The trace is
-** kept in this state until a new trace needs to be created. Then the current
-** trace and its data structures are copied to a new (compact) GCtrace object.
+** arrays point to shared, growable buffers (J->irbuf etc.). When trace
+** recording ends successfully, the current trace and its data structures
+** are copied to a new (compact) GCtrace object.
 */
 
 /* Find a free trace number. */
@@ -76,32 +76,35 @@ static TraceNo trace_findfree(jit_State *J)
   return J->freetrace;
 }
 
-#define TRACE_COPYELEM(field, szfield, tp) \
-  T2->field = (tp *)p; \
-  memcpy(p, T->field, T->szfield*sizeof(tp)); \
-  p += T->szfield*sizeof(tp);
+#define TRACE_APPENDVEC(field, szfield, tp) \
+  T->field = (tp *)p; \
+  memcpy(p, J->cur.field, J->cur.szfield*sizeof(tp)); \
+  p += J->cur.szfield*sizeof(tp);
 
-/* Save a trace by copying and compacting it. */
-static GCtrace *trace_save(jit_State *J, GCtrace *T)
+/* Save current trace by copying and compacting it. */
+static void trace_save(jit_State *J)
 {
   size_t sztr = ((sizeof(GCtrace)+7)&~7);
-  size_t szins = (T->nins-T->nk)*sizeof(IRIns);
+  size_t szins = (J->cur.nins-J->cur.nk)*sizeof(IRIns);
   size_t sz = sztr + szins +
-	      T->nsnap*sizeof(SnapShot) +
-	      T->nsnapmap*sizeof(SnapEntry);
-  GCtrace *T2 = lj_mem_newt(J->L, (MSize)sz, GCtrace);
-  char *p = (char *)T2 + sztr;
-  memcpy(T2, T, sizeof(GCtrace));
-  setgcrefr(T2->nextgc, J2G(J)->gc.root);
-  setgcrefp(J2G(J)->gc.root, T2);
-  newwhite(J2G(J), T2);
-  T2->gct = ~LJ_TTRACE;
-  T2->ir = (IRIns *)p - T->nk;
-  memcpy(p, T->ir+T->nk, szins);
+	      J->cur.nsnap*sizeof(SnapShot) +
+	      J->cur.nsnapmap*sizeof(SnapEntry);
+  GCtrace *T = lj_mem_newt(J->L, (MSize)sz, GCtrace);
+  char *p = (char *)T + sztr;
+  memcpy(T, &J->cur, sizeof(GCtrace));
+  setgcrefr(T->nextgc, J2G(J)->gc.root);
+  setgcrefp(J2G(J)->gc.root, T);
+  newwhite(J2G(J), T);
+  T->gct = ~LJ_TTRACE;
+  T->ir = (IRIns *)p - J->cur.nk;
+  memcpy(p, J->cur.ir+J->cur.nk, szins);
   p += szins;
-  TRACE_COPYELEM(snap, nsnap, SnapShot)
-  TRACE_COPYELEM(snapmap, nsnapmap, SnapEntry)
-  return T2;
+  TRACE_APPENDVEC(snap, nsnap, SnapShot)
+  TRACE_APPENDVEC(snapmap, nsnapmap, SnapEntry)
+  J->cur.traceno = 0;
+  setgcrefp(J->trace[T->traceno], T);
+  lj_gc_barriertrace(J2G(J), T->traceno);
+  lj_gdbjit_addtrace(J, T);
 }
 
 void LJ_FASTCALL lj_trace_free(global_State *g, GCtrace *T)
@@ -225,7 +228,7 @@ int lj_trace_flushall(lua_State *L)
       setgcrefnull(J->trace[i]);
     }
   }
-  J->curtrace = 0;
+  J->cur.traceno = 0;
   J->freetrace = 0;
   /* Free the whole machine code and invalidate all exit stub groups. */
   lj_mcode_free(J);
@@ -254,13 +257,11 @@ void lj_trace_initstate(global_State *g)
 void lj_trace_freestate(global_State *g)
 {
   jit_State *J = G2J(g);
-  if (J->curtrace)
-    lj_gdbjit_deltrace(J, &J->cur);
 #ifdef LUA_USE_ASSERT
   {  /* This assumes all traces have already been freed. */
     ptrdiff_t i;
     for (i = 1; i < (ptrdiff_t)J->sizetrace; i++)
-      lua_assert(i == (ptrdiff_t)J->curtrace || traceref(J, i) == NULL);
+      lua_assert(i == (ptrdiff_t)J->cur.traceno || traceref(J, i) == NULL);
   }
 #endif
   lj_mcode_free(J);
@@ -311,13 +312,7 @@ setpenalty:
 static void trace_start(jit_State *J)
 {
   lua_State *L;
-
-  if (J->curtrace != 0 && traceref(J, J->curtrace) == &J->cur) {
-    TraceNo tr = J->curtrace;  /* Save current trace. */
-    setgcrefp(J->trace[tr], trace_save(J, &J->cur));
-    J->curtrace = 0;
-    lj_gc_barriertrace(J2G(J), tr);
-  }
+  TraceNo traceno;
 
   if ((J->pt->flags & PROTO_NO_JIT)) {  /* JIT disabled for this proto? */
     if (J->parent == 0) {
@@ -332,18 +327,18 @@ static void trace_start(jit_State *J)
   }
 
   /* Get a new trace number. */
-  J->curtrace = trace_findfree(J);
-  if (LJ_UNLIKELY(J->curtrace == 0)) {  /* No free trace? */
+  traceno = trace_findfree(J);
+  if (LJ_UNLIKELY(traceno == 0)) {  /* No free trace? */
     lua_assert((J2G(J)->hookmask & HOOK_GC) == 0);
     lj_trace_flushall(J->L);
     J->state = LJ_TRACE_IDLE;  /* Silently ignored. */
     return;
   }
-  setgcrefp(J->trace[J->curtrace], &J->cur);
+  setgcrefp(J->trace[traceno], &J->cur);
 
   /* Setup enough of the current trace to be able to send the vmevent. */
   memset(&J->cur, 0, sizeof(GCtrace));
-  J->cur.traceno = J->curtrace;
+  J->cur.traceno = traceno;
   J->cur.nins = J->cur.nk = REF_BASE;
   J->cur.ir = J->irbuf;
   J->cur.snap = J->snapbuf;
@@ -356,7 +351,7 @@ static void trace_start(jit_State *J)
   L = J->L;
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "start"));
-    setintV(L->top++, J->curtrace);
+    setintV(L->top++, traceno);
     setfuncV(L, L->top++, J->fn);
     setintV(L->top++, proto_bcpos(J->pt, J->pc));
     if (J->parent) {
@@ -373,6 +368,7 @@ static void trace_stop(jit_State *J)
   BCIns *pc = (BCIns *)J->startpc;  /* Not const here. */
   BCOp op = bc_op(J->cur.startins);
   GCproto *pt = &gcref(J->cur.startpt)->pt;
+  TraceNo traceno = J->cur.traceno;
   lua_State *L;
 
   switch (op) {
@@ -384,16 +380,16 @@ static void trace_stop(jit_State *J)
   case BC_FUNCF:
     /* Patch bytecode of starting instruction in root trace. */
     setbc_op(pc, (int)op+(int)BC_JLOOP-(int)BC_LOOP);
-    setbc_d(pc, J->curtrace);
+    setbc_d(pc, traceno);
   addroot:
     /* Add to root trace chain in prototype. */
     J->cur.nextroot = pt->trace;
-    pt->trace = (TraceNo1)J->curtrace;
+    pt->trace = (TraceNo1)traceno;
     break;
   case BC_RET:
   case BC_RET0:
   case BC_RET1:
-    *pc = BCINS_AD(BC_JLOOP, J->cur.snap[0].nslots, J->curtrace);
+    *pc = BCINS_AD(BC_JLOOP, J->cur.snap[0].nslots, traceno);
     goto addroot;
   case BC_JMP:
     /* Patch exit branch in parent to side trace entry. */
@@ -406,7 +402,7 @@ static void trace_stop(jit_State *J)
       GCtrace *root = traceref(J, J->cur.root);
       root->nchild++;
       J->cur.nextside = root->nextside;
-      root->nextside = (TraceNo1)J->curtrace;
+      root->nextside = (TraceNo1)traceno;
     }
     break;
   default:
@@ -416,12 +412,12 @@ static void trace_stop(jit_State *J)
 
   /* Commit new mcode only after all patching is done. */
   lj_mcode_commit(J, J->cur.mcode);
-  lj_gdbjit_addtrace(J, &J->cur, J->curtrace);
+  trace_save(J);
 
   L = J->L;
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "stop"));
-    setintV(L->top++, J->curtrace);
+    setintV(L->top++, traceno);
   );
 }
 
@@ -445,6 +441,8 @@ static int trace_abort(jit_State *J)
 {
   lua_State *L = J->L;
   TraceError e = LJ_TRERR_RECERR;
+  TraceNo traceno;
+
   lj_mcode_abort(J);
   if (tvisnum(L->top-1))
     e = (TraceError)lj_num2int(numV(L->top-1));
@@ -455,14 +453,18 @@ static int trace_abort(jit_State *J)
   /* Penalize or blacklist starting bytecode instruction. */
   if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins)))
     penalty_pc(J, &gcref(J->cur.startpt)->pt, (BCIns *)J->startpc, e);
-  if (J->curtrace) {  /* Is there anything to abort? */
+
+  /* Is there anything to abort? */
+  traceno = J->cur.traceno;
+  if (traceno) {
     ptrdiff_t errobj = savestack(L, L->top-1);  /* Stack may be resized. */
+    J->cur.link = 0;
     lj_vmevent_send(L, TRACE,
       TValue *frame;
       const BCIns *pc;
       GCfunc *fn;
       setstrV(L, L->top++, lj_str_newlit(L, "abort"));
-      setintV(L->top++, J->curtrace);
+      setintV(L->top++, traceno);
       /* Find original Lua function call to generate a better error message. */
       frame = J->L->base-1;
       pc = J->pc;
@@ -477,10 +479,10 @@ static int trace_abort(jit_State *J)
       copyTV(L, L->top++, &J->errinfo);
     );
     /* Drop aborted trace after the vmevent (which may still access it). */
-    setgcrefnull(J->trace[J->curtrace]);
-    if (J->curtrace < J->freetrace)
-      J->freetrace = J->curtrace;
-    J->curtrace = 0;
+    setgcrefnull(J->trace[traceno]);
+    if (traceno < J->freetrace)
+      J->freetrace = traceno;
+    J->cur.traceno = 0;
   }
   L->top--;  /* Remove error object */
   if (e == LJ_TRERR_DOWNREC)
@@ -517,7 +519,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       trace_pendpatch(J, 0);
       setvmstate(J2G(J), RECORD);
       lj_vmevent_send(L, RECORD,
-	setintV(L->top++, J->curtrace);
+	setintV(L->top++, J->cur.traceno);
 	setfuncV(L, L->top++, J->fn);
 	setintV(L->top++, J->pt ? (int32_t)proto_bcpos(J->pt, J->pc) : -1);
 	setintV(L->top++, J->framedepth);
@@ -529,10 +531,11 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       trace_pendpatch(J, 1);
       J->loopref = 0;
       if ((J->flags & JIT_F_OPT_LOOP) &&
-	  J->cur.link == J->curtrace && J->framedepth + J->retdepth == 0) {
+	  J->cur.link == J->cur.traceno && J->framedepth + J->retdepth == 0) {
 	setvmstate(J2G(J), OPT);
 	lj_opt_dce(J);
 	if (lj_opt_loop(J)) {  /* Loop optimization failed? */
+	  J->cur.link = 0;
 	  J->loopref = J->cur.nins;
 	  J->state = LJ_TRACE_RECORD;  /* Try to continue recording. */
 	  break;

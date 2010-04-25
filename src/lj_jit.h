@@ -284,7 +284,6 @@ typedef struct jit_State {
   SnapEntry *snapmapbuf;  /* Temp. snapshot map buffer. */
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
 
-  TraceNo curtrace;	/* Current trace number (if not 0). Kept in J->cur. */
   GCRef *trace;		/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */
   MSize sizetrace;	/* Size of trace array. */

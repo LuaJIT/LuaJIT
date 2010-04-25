@@ -217,13 +217,12 @@ static void gc_traverse_func(global_State *g, GCfunc *fn)
 /* Mark a trace. */
 static void gc_marktrace(global_State *g, TraceNo traceno)
 {
-  if (traceno && traceno != G2J(g)->curtrace) {
-    GCobj *o = obj2gco(traceref(G2J(g), traceno));
-    if (iswhite(o)) {
-      white2gray(o);
-      setgcrefr(o->gch.gclist, g->gc.gray);
-      setgcref(g->gc.gray, o);
-    }
+  GCobj *o = obj2gco(traceref(G2J(g), traceno));
+  lua_assert(traceno != G2J(g)->cur.traceno);
+  if (iswhite(o)) {
+    white2gray(o);
+    setgcrefr(o->gch.gclist, g->gc.gray);
+    setgcref(g->gc.gray, o);
   }
 }
 
@@ -236,15 +235,15 @@ static void gc_traverse_trace(global_State *g, GCtrace *T)
     if (ir->o == IR_KGC)
       gc_markobj(g, ir_kgc(ir));
   }
-  gc_marktrace(g, T->link);
-  gc_marktrace(g, T->nextroot);
-  gc_marktrace(g, T->nextside);
+  if (T->link) gc_marktrace(g, T->link);
+  if (T->nextroot) gc_marktrace(g, T->nextroot);
+  if (T->nextside) gc_marktrace(g, T->nextside);
   gc_markobj(g, gcref(T->startpt));
 }
 
 /* The current trace is a GC root while not anchored in the prototype (yet). */
 #define gc_traverse_curtrace(g) \
-  { if (G2J(g)->curtrace != 0) gc_traverse_trace(g, &G2J(g)->cur); }
+  { if (G2J(g)->cur.traceno != 0) gc_traverse_trace(g, &G2J(g)->cur); }
 #else
 #define gc_traverse_curtrace(g)	UNUSED(g)
 #endif
@@ -261,7 +260,7 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
   for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
     gc_mark_str(gco2str(gcref(proto_varinfo(pt)[i].name)));
 #if LJ_HASJIT
-  gc_marktrace(g, pt->trace);
+  if (pt->trace) gc_marktrace(g, pt->trace);
 #endif
 }
 

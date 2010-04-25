@@ -698,7 +698,7 @@ static void gdbjit_newentry(lua_State *L, GDBJITctx *ctx)
 }
 
 /* Add debug info for newly compiled trace and notify GDB. */
-void lj_gdbjit_addtrace(jit_State *J, GCtrace *T, TraceNo traceno)
+void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
 {
   GDBJITctx ctx;
   lua_State *L = J->L;
@@ -721,7 +721,7 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T, TraceNo traceno)
     ctx.filename++;
   else
     ctx.filename = "(string)";
-  ctx.trname = lj_str_pushf(L, "TRACE_%d", traceno);
+  ctx.trname = lj_str_pushf(L, "TRACE_%d", T->traceno);
   L->top--;
   gdbjit_buildobj(&ctx);
   gdbjit_newentry(L, &ctx);
