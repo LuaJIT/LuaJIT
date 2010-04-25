@@ -32,7 +32,7 @@ static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, DWORD prot)
 {
   void *p = VirtualAlloc((void *)hint, sz,
 			 MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, prot);
-  if (!p)
+  if (!p && !hint)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
   return p;
 }
@@ -64,7 +64,7 @@ static void mcode_setprot(void *p, size_t sz, DWORD prot)
 static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 {
   void *p = mmap((void *)hint, sz, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-  if (p == MAP_FAILED)
+  if (p == MAP_FAILED && !hint)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
   return p;
 }
@@ -79,6 +79,10 @@ static void mcode_setprot(void *p, size_t sz, int prot)
 {
   mprotect(p, sz, prot);
 }
+
+#elif LJ_64
+
+#error "Missing OS support for allocating executable memory"
 
 #else
 
@@ -103,51 +107,7 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 
 #endif
 
-/* -- MCode area allocation ----------------------------------------------- */
-
-#if LJ_64
-
-/* Get memory within relative jump distance of our code in 64 bit mode. */
-static void *mcode_alloc(jit_State *J, size_t sz, int prot)
-{
-  /* Target an address in the static assembler code (64K aligned).
-  ** Try addresses within a distance of target-1GB+1MB .. target+1GB-1MB.
-  */
-  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
-  const uintptr_t range = (1u<<31) - (1u << 21);
-  int i;
-  /* First try a contiguous area below the last one. */
-  if (J->mcarea && (uintptr_t)J->mcarea - sz < (uintptr_t)1<<47) {
-    void *p = mcode_alloc_at(J, (uintptr_t)J->mcarea - sz, sz, prot);
-    if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
-      return p;
-    mcode_free(J, p, sz);  /* Free badly placed area. */
-  }
-  /* Next try probing with hinted addresses. */
-  for (i = 0; i < 32; i++) {  /* 32 attempts ought to be enough ... */
-    uintptr_t hint;
-    void *p;
-    do {
-      hint = (0x78fb ^ LJ_PRNG_BITS(J, 15)) << 16;  /* 64K aligned. */
-    } while (!(hint + sz < range &&
-	       target + hint - (range>>1) < (uintptr_t)1<<47));
-    p = mcode_alloc_at(J, target + hint - (range>>1), sz, prot);
-    if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
-      return p;
-    mcode_free(J, p, sz);  /* Free badly placed area. */
-  }
-  lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
-  return NULL;
-}
-
-#else
-
-/* All 32 bit memory addresses are reachable by relative jumps on x86. */
-#define mcode_alloc(J, sz, prot)	mcode_alloc_at((J), 0, (sz), (prot))
-
-#endif
-
-/* -- MCode area management ----------------------------------------------- */
+/* -- MCode area protection ----------------------------------------------- */
 
 /* Define this ONLY if the page protection twiddling becomes a bottleneck. */
 #ifdef LUAJIT_UNPROTECT_MCODE
@@ -165,6 +125,11 @@ static void *mcode_alloc(jit_State *J, size_t sz, int prot)
 #define MCPROT_GEN	MCPROT_RWX
 #define MCPROT_RUN	MCPROT_RWX
 
+static void mcode_protect(jit_State *J, int prot)
+{
+  UNUSED(J); UNUSED(prot);
+}
+
 #else
 
 /* This is the default behaviour and much safer:
@@ -178,20 +143,59 @@ static void *mcode_alloc(jit_State *J, size_t sz, int prot)
 #define MCPROT_GEN	MCPROT_RW
 #define MCPROT_RUN	MCPROT_RX
 
-#endif
-
 /* Change protection of MCode area. */
 static void mcode_protect(jit_State *J, int prot)
 {
-#ifdef LUAJIT_UNPROTECT_MCODE
-  UNUSED(J); UNUSED(prot);
-#else
   if (J->mcprot != prot) {
     mcode_setprot(J->mcarea, J->szmcarea, prot);
     J->mcprot = prot;
   }
-#endif
 }
+
+#endif
+
+/* -- MCode area allocation ----------------------------------------------- */
+
+#if LJ_64
+
+/* Get memory within relative jump distance of our code in 64 bit mode. */
+static void *mcode_alloc(jit_State *J, size_t sz)
+{
+  /* Target an address in the static assembler code (64K aligned).
+  ** Try addresses within a distance of target-1GB+1MB .. target+1GB-1MB.
+  */
+  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
+  const uintptr_t range = (1u<<31) - (1u << 21);
+  /* First try a contiguous area below the last one. */
+  uintptr_t hint = (uintptr_t)J->mcarea - sz;
+  int i;
+  for (i = 0; i < 32; i++) {  /* 32 attempts ought to be enough ... */
+    if (hint && hint < (uintptr_t)1<<47) {
+      void *p = mcode_alloc_at(J, hint, sz, MCPROT_GEN);
+      if (p && (uintptr_t)p < (uintptr_t)1<<47) {
+	if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
+	  return p;
+	mcode_free(J, p, sz);  /* Free badly placed area. */
+      }
+    }
+    /* Next try probing pseudo-random addresses. */
+    do {
+      hint = (0x78fb ^ LJ_PRNG_BITS(J, 15)) << 16;  /* 64K aligned. */
+    } while (!(hint + sz < range));
+    hint = target + hint - (range>>1);
+  }
+  lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
+  return NULL;
+}
+
+#else
+
+/* All 32 bit memory addresses are reachable by relative jumps on x86. */
+#define mcode_alloc(J, sz)	mcode_alloc_at((J), 0, (sz), MCPROT_GEN)
+
+#endif
+
+/* -- MCode area management ----------------------------------------------- */
 
 /* Linked list of MCode areas. */
 typedef struct MCLink {
@@ -205,7 +209,7 @@ static void mcode_allocarea(jit_State *J)
   MCode *oldarea = J->mcarea;
   size_t sz = (size_t)J->param[JIT_P_sizemcode] << 10;
   sz = (sz + LJ_PAGESIZE-1) & ~(size_t)(LJ_PAGESIZE - 1);
-  J->mcarea = (MCode *)mcode_alloc(J, sz, MCPROT_GEN);
+  J->mcarea = (MCode *)mcode_alloc(J, sz);
   J->szmcarea = sz;
   J->mcprot = MCPROT_GEN;
   J->mctop = (MCode *)((char *)J->mcarea + J->szmcarea);
