@@ -184,7 +184,7 @@ static BCReg const_num(FuncState *fs, ExpDesc *e)
 }
 
 /* Add a GC object constant. */
-static BCReg const_gc(FuncState *fs, GCobj *gc, int itype)
+static BCReg const_gc(FuncState *fs, GCobj *gc, uint32_t itype)
 {
   lua_State *L = fs->L;
   TValue o, *val;
@@ -1294,10 +1294,10 @@ static void expr_bracket(LexState *ls, ExpDesc *v)
 static void expr_kvalue(TValue *v, ExpDesc *e)
 {
   if (e->k <= VKTRUE) {
-    v->it = ~(int32_t)e->k;
+    setitype(v, ~(uint32_t)e->k);
   } else if (e->k == VKSTR) {
     setgcref(v->gcr, obj2gco(e->u.sval));
-    v->it = LJ_TSTR;
+    setitype(v, LJ_TSTR);
   } else {
     lua_assert(e->k == VKNUM);
     setnumV(v, expr_numV(e));

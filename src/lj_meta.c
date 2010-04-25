@@ -285,7 +285,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
   cTValue *mo = lj_meta_fast(L, tabref(o1->gch.metatable), MM_eq);
   if (mo) {
     TValue *top;
-    int it;
+    uint32_t it;
     if (tabref(o1->gch.metatable) != tabref(o2->gch.metatable)) {
       cTValue *mo2 = lj_meta_fast(L, tabref(o2->gch.metatable), MM_eq);
       if (mo2 == NULL || !lj_obj_equal(mo, mo2))
@@ -294,7 +294,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     top = curr_top(L);
     setcont(top, ne ? lj_cont_condf : lj_cont_condt);
     copyTV(L, top+1, mo);
-    it = ~(int32_t)o1->gch.gct;
+    it = ~(uint32_t)o1->gch.gct;
     setgcV(L, top+2, &o1->gch, it);
     setgcV(L, top+3, &o2->gch, it);
     return top+2;  /* Trigger metamethod call. */

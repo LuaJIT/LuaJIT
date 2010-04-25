@@ -141,7 +141,7 @@ typedef LJ_ALIGN(8) union TValue {
   struct {
     LJ_ENDIAN_LOHI(
       GCRef gcr;	/* GCobj reference (if any). */
-    , int32_t it;	/* Internal object tag. Must overlap MSW of number. */
+    , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
     )
   };
   struct {
@@ -186,42 +186,41 @@ typedef const TValue cTValue;
 ** GC objects are at the end, table/userdata must be lowest.
 ** Also check lj_ir.h for similar ordering constraints.
 */
-#define LJ_TNIL			(-1)
-#define LJ_TFALSE		(-2)
-#define LJ_TTRUE		(-3)
-#define LJ_TLIGHTUD		(-4)
-#define LJ_TSTR			(-5)
-#define LJ_TUPVAL		(-6)
-#define LJ_TTHREAD		(-7)
-#define LJ_TPROTO		(-8)
-#define LJ_TFUNC		(-9)
-#define LJ_TTRACE		(-10)
-#define LJ_TTAB			(-11)
-#define LJ_TUDATA		(-12)
+#define LJ_TNIL			(~0u)
+#define LJ_TFALSE		(~1u)
+#define LJ_TTRUE		(~2u)
+#define LJ_TLIGHTUD		(~3u)
+#define LJ_TSTR			(~4u)
+#define LJ_TUPVAL		(~5u)
+#define LJ_TTHREAD		(~6u)
+#define LJ_TPROTO		(~7u)
+#define LJ_TFUNC		(~8u)
+#define LJ_TTRACE		(~9u)
+#define LJ_TTAB			(~10u)
+#define LJ_TUDATA		(~11u)
 /* This is just the canonical number type used in some places. */
-#define LJ_TNUMX		(-13)
+#define LJ_TNUMX		(~12u)
 
 #if LJ_64
-#define LJ_TISNUM		((uint32_t)0xfffeffff)
+#define LJ_TISNUM		0xfffeffffu
 #else
-#define LJ_TISNUM		((uint32_t)LJ_TNUMX)
+#define LJ_TISNUM		LJ_TNUMX
 #endif
-#define LJ_TISTRUECOND		((uint32_t)LJ_TFALSE)
-#define LJ_TISPRI		((uint32_t)LJ_TTRUE)
-#define LJ_TISGCV		((uint32_t)(LJ_TSTR+1))
-#define LJ_TISTABUD		((uint32_t)LJ_TTAB)
+#define LJ_TISTRUECOND		LJ_TFALSE
+#define LJ_TISPRI		LJ_TTRUE
+#define LJ_TISGCV		(LJ_TSTR+1)
+#define LJ_TISTABUD		LJ_TTAB
 
 /* -- TValue getters/setters ---------------------------------------------- */
 
 /* Macros to test types. */
 #define itype(o)	((o)->it)
-#define uitype(o)	((uint32_t)itype(o))
 #define tvisnil(o)	(itype(o) == LJ_TNIL)
 #define tvisfalse(o)	(itype(o) == LJ_TFALSE)
 #define tvistrue(o)	(itype(o) == LJ_TTRUE)
 #define tvisbool(o)	(tvisfalse(o) || tvistrue(o))
 #if LJ_64
-#define tvislightud(o)	((itype(o) >> 15) == -2)
+#define tvislightud(o)	(((int32_t)itype(o) >> 15) == -2)
 #else
 #define tvislightud(o)	(itype(o) == LJ_TLIGHTUD)
 #endif
@@ -231,13 +230,12 @@ typedef const TValue cTValue;
 #define tvisproto(o)	(itype(o) == LJ_TPROTO)
 #define tvistab(o)	(itype(o) == LJ_TTAB)
 #define tvisudata(o)	(itype(o) == LJ_TUDATA)
-#define tvisnum(o)	(uitype(o) <= LJ_TISNUM)
+#define tvisnum(o)	(itype(o) <= LJ_TISNUM)
 
-#define tvistruecond(o)	(uitype(o) < LJ_TISTRUECOND)
-#define tvispri(o)	(uitype(o) >= LJ_TISPRI)
-#define tvistabud(o)	(uitype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
-#define tvisgcv(o) \
-  ((uitype(o) - LJ_TISGCV) > ((uint32_t)LJ_TNUMX - LJ_TISGCV))
+#define tvistruecond(o)	(itype(o) < LJ_TISTRUECOND)
+#define tvispri(o)	(itype(o) >= LJ_TISPRI)
+#define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
+#define tvisgcv(o)	((itype(o) - LJ_TISGCV) > (LJ_TNUMX - LJ_TISGCV))
 
 /* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
 #define tvisnan(o)	((o)->n != (o)->n)

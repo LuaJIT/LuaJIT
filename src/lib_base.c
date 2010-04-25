@@ -224,7 +224,7 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
     if (tvisnum(o)) {
       s = lj_str_fromnum(L, &o->n);
     } else if (tvispri(o)) {
-      s = strV(lj_lib_upvalue(L, -itype(o)));
+      s = strV(lj_lib_upvalue(L, -(int32_t)itype(o)));
     } else {
       if (tvisfunc(o) && isffunc(funcV(o)))
 	lua_pushfstring(L, "function: fast#%d", funcV(o)->c.ffid);

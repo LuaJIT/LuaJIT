@@ -1969,7 +1969,7 @@ void lj_record_ins(jit_State *J)
   switch (bcmode_c(op)) {
   case BCMvar:
     copyTV(J->L, rcv, &lbase[rc]); ix.key = rc = getslot(J, rc); break;
-  case BCMpri: setitype(rcv, (int32_t)~rc); rc = TREF_PRI(IRT_NIL+rc); break;
+  case BCMpri: setitype(rcv, ~rc); rc = TREF_PRI(IRT_NIL+rc); break;
   case BCMnum: { lua_Number n = proto_knum(J->pt, rc);
     setnumV(rcv, n); ix.key = rc = lj_ir_knumint(J, n); } break;
   case BCMstr: { GCstr *s = gco2str(proto_kgc(J->pt, ~(ptrdiff_t)rc));

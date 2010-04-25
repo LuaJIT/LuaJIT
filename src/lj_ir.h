@@ -386,11 +386,11 @@ static LJ_AINLINE IRType itype2irt(const TValue *tv)
     return IRT_LIGHTUD;
 #endif
   else
-    return cast(IRType, ~uitype(tv));
+    return cast(IRType, ~itype(tv));
 }
 
 #define irt_toitype(t) \
-  check_exp(!(LJ_64 && irt_islightud((t))), (int32_t)~(uint32_t)irt_type((t)))
+  check_exp(!(LJ_64 && irt_islightud((t))), ~(uint32_t)irt_type((t)))
 
 #define irt_isguard(t)		((t).irt & IRT_GUARD)
 #define irt_ismarked(t)		((t).irt & IRT_MARK)

@@ -195,9 +195,10 @@ LUA_API int lua_type(lua_State *L, int idx)
   } else if (o == niltv(L)) {
     return LUA_TNONE;
   } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
-    int t = ~itype(o);
-    lua_assert(itype(o) != LJ_TUPVAL);
-    return (int)(((t < 8 ? 0x98042110 : 0x7506) >> 4*(t&7)) & 15u);
+    uint32_t t = ~itype(o);
+    int tt = (int)(((t < 8 ? 0x98042110 : 0x7506) >> 4*(t&7)) & 15u);
+    lua_assert(tt != LUA_TNIL || tvisnil(o));
+    return tt;
   }
 }
 
