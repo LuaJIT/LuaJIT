@@ -12,7 +12,7 @@
 #define DASM_SECTION_CODE_OP	0
 #define DASM_SECTION_CODE_SUB	1
 #define DASM_MAXSECTION		2
-static const unsigned char build_actionlist[14023] = {
+static const unsigned char build_actionlist[14024] = {
   254,1,248,10,252,247,198,237,15,132,244,11,131,230,252,248,41,252,242,72,
   141,76,49,252,248,139,114,252,252,199,68,10,4,237,248,12,131,192,1,137,68,
   36,84,252,247,198,237,15,132,244,13,248,14,252,247,198,237,15,132,244,10,
@@ -554,21 +554,21 @@ static const unsigned char build_actionlist[14023] = {
   131,198,4,193,232,16,252,255,36,252,235,255,72,252,247,208,139,108,36,96,
   137,149,233,68,139,66,252,248,139,20,135,137,252,233,137,116,36,100,232,251,
   1,28,139,149,233,15,182,78,252,253,137,4,202,199,68,202,4,237,139,6,15,182,
-  204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,255,139,76,36,96,137,
-  145,233,248,1,65,137,192,37,252,255,7,0,0,65,193,232,11,61,252,255,7,0,0,
-  15,132,244,249,248,2,137,194,139,131,233,137,205,59,131,233,137,116,36,100,
-  15,131,244,251,232,251,1,29,139,149,233,15,182,78,252,253,137,4,202,199,68,
-  202,4,237,139,6,15,182,204,15,182,232,131,198,4,193,232,16,252,255,36,252,
-  235,248,3,184,1,8,0,0,252,233,244,2,248,5,232,251,1,30,15,183,70,252,254,
-  137,252,233,252,233,244,1,255,72,252,247,208,139,108,36,96,139,139,233,137,
-  116,36,100,59,139,233,137,149,233,15,131,244,249,248,2,139,20,135,137,252,
-  233,232,251,1,31,139,149,233,15,182,78,252,253,137,4,202,199,68,202,4,237,
-  139,6,15,182,204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,248,3,
-  137,252,233,232,251,1,30,15,183,70,252,254,72,252,247,208,252,233,244,2,255,
-  72,252,247,208,139,106,252,248,139,173,233,139,4,135,252,233,244,157,255,
-  72,252,247,208,139,106,252,248,139,173,233,139,4,135,252,233,244,158,255,
-  15,182,252,236,15,182,192,129,124,253,252,234,4,239,15,133,244,36,139,44,
-  252,234,129,124,253,194,4,239,15,135,244,251,255,252,242,15,16,4,194,252,
+  204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,255,139,108,36,96,
+  137,149,233,139,139,233,59,139,233,137,116,36,100,15,131,244,251,248,1,65,
+  137,192,37,252,255,7,0,0,65,193,232,11,61,252,255,7,0,0,15,132,244,249,248,
+  2,137,252,233,137,194,232,251,1,29,139,149,233,15,182,78,252,253,137,4,202,
+  199,68,202,4,237,139,6,15,182,204,15,182,232,131,198,4,193,232,16,252,255,
+  36,252,235,248,3,184,1,8,0,0,252,233,244,2,248,5,137,252,233,232,251,1,30,
+  15,183,70,252,254,252,233,244,1,255,72,252,247,208,139,108,36,96,139,139,
+  233,137,116,36,100,59,139,233,137,149,233,15,131,244,249,248,2,139,20,135,
+  137,252,233,232,251,1,31,139,149,233,15,182,78,252,253,137,4,202,199,68,202,
+  4,237,139,6,15,182,204,15,182,232,131,198,4,193,232,16,252,255,36,252,235,
+  248,3,137,252,233,232,251,1,30,15,183,70,252,254,72,252,247,208,252,233,244,
+  2,255,72,252,247,208,139,106,252,248,139,173,233,139,4,135,252,233,244,157,
+  255,72,252,247,208,139,106,252,248,139,173,233,139,4,135,252,233,244,158,
+  255,15,182,252,236,15,182,192,129,124,253,252,234,4,239,15,133,244,36,139,
+  44,252,234,129,124,253,194,4,239,15,135,244,251,255,252,242,15,16,4,194,252,
   242,15,45,192,252,242,15,42,200,102,15,46,193,255,15,133,244,36,59,133,233,
   15,131,244,36,193,224,3,3,133,233,129,120,253,4,239,15,132,244,248,248,1,
   139,40,139,64,4,137,44,202,137,68,202,4,139,6,15,182,204,15,182,232,131,198,
@@ -1912,61 +1912,61 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     dasm_put(Dst, 11175, Dt1(->base), DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), Dt1(->base), LJ_TTAB);
     break;
   case BC_TDUP:
-    dasm_put(Dst, 11296, DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), Dt1(->base), Dt1(->base), LJ_TTAB);
+    dasm_put(Dst, 11297, DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), Dt1(->base), Dt1(->base), LJ_TTAB);
     break;
 
   case BC_GGET:
-    dasm_put(Dst, 11391, Dt7(->env));
+    dasm_put(Dst, 11392, Dt7(->env));
     break;
   case BC_GSET:
-    dasm_put(Dst, 11410, Dt7(->env));
+    dasm_put(Dst, 11411, Dt7(->env));
     break;
 
   case BC_TGETV:
-    dasm_put(Dst, 11429, LJ_TTAB, LJ_TISNUM);
+    dasm_put(Dst, 11430, LJ_TTAB, LJ_TISNUM);
     if (sse) {
-      dasm_put(Dst, 11462);
+      dasm_put(Dst, 11463);
     } else {
     }
-    dasm_put(Dst, 11483, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
-    dasm_put(Dst, 11576, LJ_TSTR);
+    dasm_put(Dst, 11484, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
+    dasm_put(Dst, 11577, LJ_TSTR);
     break;
   case BC_TGETS:
-    dasm_put(Dst, 11594, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), LJ_TNIL);
-    dasm_put(Dst, 11679, LJ_TNIL, DtB(->next), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
+    dasm_put(Dst, 11595, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), LJ_TNIL);
+    dasm_put(Dst, 11680, LJ_TNIL, DtB(->next), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
     break;
   case BC_TGETB:
-    dasm_put(Dst, 11751, LJ_TTAB, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
+    dasm_put(Dst, 11752, LJ_TTAB, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_index);
     dasm_put(Dst, 10092);
     break;
 
   case BC_TSETV:
-    dasm_put(Dst, 11851, LJ_TTAB, LJ_TISNUM);
+    dasm_put(Dst, 11852, LJ_TTAB, LJ_TISNUM);
     if (sse) {
-      dasm_put(Dst, 11462);
+      dasm_put(Dst, 11463);
     } else {
     }
-    dasm_put(Dst, 11884, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable));
-    dasm_put(Dst, 11968, Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 11885, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable));
+    dasm_put(Dst, 11969, Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
   case BC_TSETS:
-    dasm_put(Dst, 12030, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->nomm), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), LJ_TNIL);
-    dasm_put(Dst, 12106, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, DtB(->next));
-    dasm_put(Dst, 12199, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt1(->base), Dt1(->base), Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 12031, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->nomm), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), LJ_TNIL);
+    dasm_put(Dst, 12107, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, DtB(->next));
+    dasm_put(Dst, 12200, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt1(->base), Dt1(->base), Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
   case BC_TSETB:
-    dasm_put(Dst, 12290, LJ_TTAB, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable));
-    dasm_put(Dst, 12389, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 12291, LJ_TTAB, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable));
+    dasm_put(Dst, 12390, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
 
   case BC_TSETM:
-    dasm_put(Dst, 12435);
+    dasm_put(Dst, 12436);
     if (sse) {
-      dasm_put(Dst, 12440);
+      dasm_put(Dst, 12441);
     } else {
     }
-    dasm_put(Dst, 12447, Dt6(->marked), LJ_GC_BLACK, Dt6(->asize), Dt6(->array), Dt1(->base), Dt1(->base));
-    dasm_put(Dst, 12587, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 12448, Dt6(->marked), LJ_GC_BLACK, Dt6(->asize), Dt6(->array), Dt1(->base), Dt1(->base));
+    dasm_put(Dst, 12588, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
@@ -1974,60 +1974,60 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_CALL: case BC_CALLM:
     dasm_put(Dst, 10106);
     if (op == BC_CALLM) {
-      dasm_put(Dst, 12605);
+      dasm_put(Dst, 12606);
     }
-    dasm_put(Dst, 12610, LJ_TFUNC, Dt7(->pc));
+    dasm_put(Dst, 12611, LJ_TFUNC, Dt7(->pc));
     break;
 
   case BC_CALLMT:
-    dasm_put(Dst, 12605);
+    dasm_put(Dst, 12606);
     break;
   case BC_CALLT:
-    dasm_put(Dst, 12652, LJ_TFUNC, FRAME_TYPE, Dt7(->ffid), Dt7(->pc));
-    dasm_put(Dst, 12771, FRAME_TYPE, Dt7(->pc), PC2PROTO(k));
+    dasm_put(Dst, 12653, LJ_TFUNC, FRAME_TYPE, Dt7(->ffid), Dt7(->pc));
+    dasm_put(Dst, 12772, FRAME_TYPE, Dt7(->pc), PC2PROTO(k));
     break;
 
   case BC_ITERC:
-    dasm_put(Dst, 12829, LJ_TFUNC, 2+1, Dt7(->pc));
+    dasm_put(Dst, 12830, LJ_TFUNC, 2+1, Dt7(->pc));
     break;
 
   case BC_VARG:
-    dasm_put(Dst, 12910, Dt7(->pc), PC2PROTO(numparams), (8+FRAME_VARG), LJ_TNIL);
-    dasm_put(Dst, 13055, Dt1(->maxstack), Dt1(->base), Dt1(->top), Dt1(->base), Dt1(->top));
+    dasm_put(Dst, 12911, Dt7(->pc), PC2PROTO(numparams), (8+FRAME_VARG), LJ_TNIL);
+    dasm_put(Dst, 13056, Dt1(->maxstack), Dt1(->base), Dt1(->top), Dt1(->base), Dt1(->top));
     break;
 
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
-    dasm_put(Dst, 12605);
+    dasm_put(Dst, 12606);
     break;
 
   case BC_RET: case BC_RET0: case BC_RET1:
     if (op != BC_RET0) {
-      dasm_put(Dst, 13154);
+      dasm_put(Dst, 13155);
     }
-    dasm_put(Dst, 13158, FRAME_TYPE);
+    dasm_put(Dst, 13159, FRAME_TYPE);
     switch (op) {
     case BC_RET:
-      dasm_put(Dst, 13177);
+      dasm_put(Dst, 13178);
       break;
     case BC_RET1:
-      dasm_put(Dst, 13235);
+      dasm_put(Dst, 13236);
       /* fallthrough */
     case BC_RET0:
-      dasm_put(Dst, 13251);
+      dasm_put(Dst, 13252);
     default:
       break;
     }
-    dasm_put(Dst, 13262, Dt7(->pc), PC2PROTO(k));
+    dasm_put(Dst, 13263, Dt7(->pc), PC2PROTO(k));
     if (op == BC_RET) {
-      dasm_put(Dst, 13306, LJ_TNIL);
+      dasm_put(Dst, 13307, LJ_TNIL);
     } else {
-      dasm_put(Dst, 13315, LJ_TNIL);
+      dasm_put(Dst, 13316, LJ_TNIL);
     }
-    dasm_put(Dst, 13322);
+    dasm_put(Dst, 13323);
     if (op != BC_RET0) {
-      dasm_put(Dst, 13343);
+      dasm_put(Dst, 13344);
     }
     dasm_put(Dst, 4570);
     break;
@@ -2037,7 +2037,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FORL:
 #if LJ_HASJIT
-    dasm_put(Dst, 13347, HOTCOUNT_PCMASK, GG_DISP2HOT);
+    dasm_put(Dst, 13348, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
     break;
 
@@ -2049,57 +2049,57 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_FORI:
   case BC_IFORL:
     vk = (op == BC_IFORL || op == BC_JFORL);
-    dasm_put(Dst, 13368);
+    dasm_put(Dst, 13369);
     if (!vk) {
-      dasm_put(Dst, 13372, LJ_TISNUM, LJ_TISNUM);
+      dasm_put(Dst, 13373, LJ_TISNUM, LJ_TISNUM);
     }
-    dasm_put(Dst, 13391);
+    dasm_put(Dst, 13392);
     if (!vk) {
-      dasm_put(Dst, 13395, LJ_TISNUM);
+      dasm_put(Dst, 13396, LJ_TISNUM);
     }
     if (sse) {
-      dasm_put(Dst, 13404);
+      dasm_put(Dst, 13405);
       if (vk) {
-	dasm_put(Dst, 13416);
+	dasm_put(Dst, 13417);
       } else {
-	dasm_put(Dst, 13435);
+	dasm_put(Dst, 13436);
       }
-      dasm_put(Dst, 13440);
+      dasm_put(Dst, 13441);
     } else {
-      dasm_put(Dst, 13453);
+      dasm_put(Dst, 13454);
       if (vk) {
-	dasm_put(Dst, 13459);
+	dasm_put(Dst, 13460);
       } else {
-	dasm_put(Dst, 13475);
+	dasm_put(Dst, 13476);
       }
-      dasm_put(Dst, 13483);
+      dasm_put(Dst, 13484);
       if (cmov) {
       dasm_put(Dst, 9529);
       } else {
       dasm_put(Dst, 9535);
       }
       if (!cmov) {
-	dasm_put(Dst, 13488);
+	dasm_put(Dst, 13489);
       }
     }
     if (op == BC_FORI) {
-      dasm_put(Dst, 13494, -BCBIAS_J*4);
+      dasm_put(Dst, 13495, -BCBIAS_J*4);
     } else if (op == BC_JFORI) {
-      dasm_put(Dst, 13504, -BCBIAS_J*4, BC_JLOOP);
+      dasm_put(Dst, 13505, -BCBIAS_J*4, BC_JLOOP);
     } else if (op == BC_IFORL) {
-      dasm_put(Dst, 13518, -BCBIAS_J*4);
+      dasm_put(Dst, 13519, -BCBIAS_J*4);
     } else {
-      dasm_put(Dst, 13514, BC_JLOOP);
+      dasm_put(Dst, 13515, BC_JLOOP);
     }
     dasm_put(Dst, 9564);
     if (sse) {
-      dasm_put(Dst, 13528);
+      dasm_put(Dst, 13529);
     }
     break;
 
   case BC_ITERL:
 #if LJ_HASJIT
-    dasm_put(Dst, 13347, HOTCOUNT_PCMASK, GG_DISP2HOT);
+    dasm_put(Dst, 13348, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
     break;
 
@@ -2108,18 +2108,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
 #endif
   case BC_IITERL:
-    dasm_put(Dst, 13539, LJ_TNIL);
+    dasm_put(Dst, 13540, LJ_TNIL);
     if (op == BC_JITERL) {
-      dasm_put(Dst, 13554, BC_JLOOP);
+      dasm_put(Dst, 13555, BC_JLOOP);
     } else {
-      dasm_put(Dst, 13568, -BCBIAS_J*4);
+      dasm_put(Dst, 13569, -BCBIAS_J*4);
     }
     dasm_put(Dst, 9864);
     break;
 
   case BC_LOOP:
 #if LJ_HASJIT
-    dasm_put(Dst, 13347, HOTCOUNT_PCMASK, GG_DISP2HOT);
+    dasm_put(Dst, 13348, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
     break;
 
@@ -2129,12 +2129,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_JLOOP:
 #if LJ_HASJIT
-    dasm_put(Dst, 13584, DISPATCH_J(trace), DtD(->mcode), DISPATCH_GL(jit_base), DISPATCH_GL(jit_L), 9*16+4*8, -1*16, -2*16, -3*16, -4*16, -5*16, -6*16, -7*16, -8*16, -9*16);
+    dasm_put(Dst, 13585, DISPATCH_J(trace), DtD(->mcode), DISPATCH_GL(jit_base), DISPATCH_GL(jit_L), 9*16+4*8, -1*16, -2*16, -3*16, -4*16, -5*16, -6*16, -7*16, -8*16, -9*16);
 #endif
     break;
 
   case BC_JMP:
-    dasm_put(Dst, 13693, -BCBIAS_J*4);
+    dasm_put(Dst, 13694, -BCBIAS_J*4);
     break;
 
   /* -- Function headers -------------------------------------------------- */
@@ -2148,7 +2148,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_FUNCF:
 #if LJ_HASJIT
-    dasm_put(Dst, 13718, HOTCOUNT_PCMASK, GG_DISP2HOT);
+    dasm_put(Dst, 13719, HOTCOUNT_PCMASK, GG_DISP2HOT);
 #endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     break;
@@ -2158,13 +2158,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
 #endif
   case BC_IFUNCF:
-    dasm_put(Dst, 13739, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
+    dasm_put(Dst, 13740, -4+PC2PROTO(k), Dt1(->maxstack), -4+PC2PROTO(numparams));
     if (op == BC_JFUNCF) {
-      dasm_put(Dst, 13769, BC_JLOOP);
+      dasm_put(Dst, 13770, BC_JLOOP);
     } else {
       dasm_put(Dst, 9566);
     }
-    dasm_put(Dst, 13778, LJ_TNIL);
+    dasm_put(Dst, 13779, LJ_TNIL);
     break;
 
   case BC_JFUNCV:
@@ -2175,30 +2175,30 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    dasm_put(Dst, 13800, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
+    dasm_put(Dst, 13801, FRAME_VARG, Dt1(->maxstack), -4+PC2PROTO(numparams), LJ_TNIL);
     if (op == BC_JFUNCV) {
-      dasm_put(Dst, 13769, BC_JLOOP);
+      dasm_put(Dst, 13770, BC_JLOOP);
     } else {
-      dasm_put(Dst, 13891, -4+PC2PROTO(k));
+      dasm_put(Dst, 13892, -4+PC2PROTO(k));
     }
-    dasm_put(Dst, 13914, LJ_TNIL);
+    dasm_put(Dst, 13915, LJ_TNIL);
     break;
 
   case BC_FUNCC:
   case BC_FUNCCW:
-    dasm_put(Dst, 13936, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
+    dasm_put(Dst, 13937, Dt8(->f), Dt1(->base), 8*LUA_MINSTACK, Dt1(->maxstack), Dt1(->top));
     if (op == BC_FUNCC) {
-      dasm_put(Dst, 13966);
+      dasm_put(Dst, 13967);
     } else {
-      dasm_put(Dst, 13970);
+      dasm_put(Dst, 13971);
     }
-    dasm_put(Dst, 13978, DISPATCH_GL(vmstate), ~LJ_VMST_C);
+    dasm_put(Dst, 13979, DISPATCH_GL(vmstate), ~LJ_VMST_C);
     if (op == BC_FUNCC) {
-      dasm_put(Dst, 13987);
+      dasm_put(Dst, 13988);
     } else {
-      dasm_put(Dst, 13991, DISPATCH_GL(wrapf));
+      dasm_put(Dst, 13992, DISPATCH_GL(wrapf));
     }
-    dasm_put(Dst, 13996, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
+    dasm_put(Dst, 13997, DISPATCH_GL(vmstate), ~LJ_VMST_INTERP, Dt1(->base), Dt1(->top));
     break;
 
   /* ---------------------------------------------------------------------- */
@@ -2226,7 +2226,7 @@ static int build_backend(BuildCtx *ctx)
 
   build_subroutines(ctx, cmov, sse);
 
-  dasm_put(Dst, 14021);
+  dasm_put(Dst, 14022);
   for (op = 0; op < BC__MAX; op++)
     build_ins(ctx, (BCOp)op, op, cmov, sse);
 

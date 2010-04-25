@@ -3901,39 +3901,32 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_TNEW:
     |  ins_AD	// RA = dst, RD = hbits|asize
-    |.if X64
-    |  mov L:CARG1d, SAVE_L
-    |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+    |  mov L:RB, SAVE_L
+    |  mov L:RB->base, BASE
+    |  mov RA, [DISPATCH+DISPATCH_GL(gc.total)]
+    |  cmp RA, [DISPATCH+DISPATCH_GL(gc.threshold)]
+    |  mov SAVE_PC, PC
+    |  jae >5
     |1:
+    |.if X64
     |  mov CARG3d, RD
     |  and RD, 0x7ff
     |  shr CARG3d, 11
-    |  cmp RD, 0x7ff
-    |  je >3
-    |2:
-    |  mov CARG2d, RD
-    |  mov RD, [DISPATCH+DISPATCH_GL(gc.total)]
-    |  mov L:RB, L:CARG1d
-    |  cmp RD, [DISPATCH+DISPATCH_GL(gc.threshold)]
-    |  mov SAVE_PC, PC
-    |  jae >5
     |.else
-    |  mov RB, RD
+    |  mov RA, RD
     |  and RD, 0x7ff
-    |  shr RB, 11
+    |  shr RA, 11
+    |  mov ARG3, RA
+    |.endif
     |  cmp RD, 0x7ff
     |  je >3
     |2:
-    |  mov ARG3, RB
-    |  mov L:RB, SAVE_L
-    |  mov ARG2, RD
-    |  mov SAVE_PC, PC
-    |  mov RD, [DISPATCH+DISPATCH_GL(gc.total)]
+    |.if X64
+    |  mov L:CARG1d, L:RB
+    |  mov CARG2d, RD
+    |.else
     |  mov ARG1, L:RB
-    |  cmp RD, [DISPATCH+DISPATCH_GL(gc.threshold)]
-    |  mov L:RB->base, BASE
-    |  jae >5
-    |1:
+    |  mov ARG2, RD
     |.endif
     |  call extern lj_tab_new  // (lua_State *L, int32_t asize, uint32_t hbits)
     |  // Table * returned in eax (RC).
@@ -3946,16 +3939,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov RD, 0x801
     |  jmp <2
     |5:
-    |.if X64
-    |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
-    |  movzx RD, PC_RD
-    |  mov L:CARG1d, L:RB
-    |  jmp <1
-    |.else
     |  mov L:FCARG1, L:RB
     |  call extern lj_gc_step_fixtop@4	// (lua_State *L)
+    |  movzx RD, PC_RD
     |  jmp <1
-    |.endif
     break;
   case BC_TDUP:
     |  ins_AND	// RA = dst, RD = table const (~) (holding template table)
