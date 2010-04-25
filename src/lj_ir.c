@@ -379,7 +379,7 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   } else {
     if (ir->o == IR_KGC) {
       lua_assert(irt_isgcv(ir->t));
-      setgcV(L, tv, &ir_kgc(ir)->gch, irt_toitype(ir->t));
+      setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t));
     } else {
       lua_assert(ir->o == IR_KPTR || ir->o == IR_KNULL);
       setlightudV(tv, mref(ir->ptr, void));

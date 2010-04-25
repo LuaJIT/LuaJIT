@@ -235,7 +235,7 @@ LJLIB_CF(jit_util_funck)
   } else {
     if (~idx < (ptrdiff_t)pt->sizekgc) {
       GCobj *gc = proto_kgc(pt, idx);
-      setgcV(L, L->top-1, &gc->gch, ~gc->gch.gct);
+      setgcV(L, L->top-1, gc, ~gc->gch.gct);
       return 1;
     }
   }

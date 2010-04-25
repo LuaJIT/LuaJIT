@@ -226,9 +226,9 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       ** after mm:  [...][CAT stack ...] <--push-- [result]
       ** next step: [...][CAT stack .............]
       */
-      copyTV(L, top+2, top)  /* Careful with the order of stack copies! */
-      copyTV(L, top+1, top-1)
-      copyTV(L, top, mo)
+      copyTV(L, top+2, top);  /* Careful with the order of stack copies! */
+      copyTV(L, top+1, top-1);
+      copyTV(L, top, mo);
       setcont(top-1, lj_cont_cat);
       return top+1;  /* Trigger metamethod call. */
     } else if (strV(top)->len == 0) {  /* Shortcut. */
@@ -295,8 +295,8 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     setcont(top, ne ? lj_cont_condf : lj_cont_condt);
     copyTV(L, top+1, mo);
     it = ~(uint32_t)o1->gch.gct;
-    setgcV(L, top+2, &o1->gch, it);
-    setgcV(L, top+3, &o2->gch, it);
+    setgcV(L, top+2, o1, it);
+    setgcV(L, top+3, o2, it);
     return top+2;  /* Trigger metamethod call. */
   }
   return cast(TValue *, (intptr_t)ne);

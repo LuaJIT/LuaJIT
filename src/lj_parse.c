@@ -188,7 +188,7 @@ static BCReg const_gc(FuncState *fs, GCobj *gc, uint32_t itype)
 {
   lua_State *L = fs->L;
   TValue o, *val;
-  setgcV(L, &o, &gc->gch, itype);
+  setgcV(L, &o, gc, itype);
   /* NOBARRIER: the key is new or kept alive. */
   val = lj_tab_set(L, fs->kt, &o);
   if (tvisnum(val))
