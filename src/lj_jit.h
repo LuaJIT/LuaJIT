@@ -152,34 +152,42 @@ typedef uint16_t TraceNo1;	/* Stored trace number. */
 
 #define TRACE_INTERP	0	/* Fallback to interpreter. */
 
-/* Trace anchor. */
-typedef struct Trace {
-  IRIns *ir;		/* IR instructions/constants. Biased with REF_BIAS. */
+/* Trace object. */
+typedef struct GCtrace {
+  GCHeader;
+  uint8_t topslot;	/* Top stack slot already checked to be allocated. */
+  uint8_t unused1;
   IRRef nins;		/* Next IR instruction. Biased with REF_BIAS. */
+  GCRef gclist;
+  IRIns *ir;		/* IR instructions/constants. Biased with REF_BIAS. */
   IRRef nk;		/* Lowest IR constant. Biased with REF_BIAS. */
-  SnapShot *snap;	/* Snapshot array. */
-  SnapEntry *snapmap;	/* Snapshot map. */
   uint16_t nsnap;	/* Number of snapshots. */
   uint16_t nsnapmap;	/* Number of snapshot map elements. */
+  SnapShot *snap;	/* Snapshot array. */
+  SnapEntry *snapmap;	/* Snapshot map. */
   GCRef startpt;	/* Starting prototype. */
   BCIns startins;	/* Original bytecode of starting instruction. */
   MCode *mcode;		/* Start of machine code. */
   MSize szmcode;	/* Size of machine code. */
   MSize mcloop;		/* Offset of loop start in machine code. */
+  uint16_t nchild;	/* Number of child traces (root trace only). */
+  uint16_t spadjust;	/* Stack pointer adjustment (offset in bytes). */
+  TraceNo1 traceno;	/* Trace number. */
   TraceNo1 link;	/* Linked trace (or self for loops). */
   TraceNo1 root;	/* Root trace of side trace (or 0 for root traces). */
   TraceNo1 nextroot;	/* Next root trace for same prototype. */
   TraceNo1 nextside;	/* Next side trace of same root trace. */
-  uint16_t nchild;	/* Number of child traces (root trace only). */
-  uint16_t spadjust;	/* Stack pointer adjustment (offset in bytes). */
-  uint8_t topslot;	/* Top stack slot already checked to be allocated. */
-  uint8_t unused1;
-  uint8_t unused2;
-  uint8_t unused3;
+  uint16_t unused2;
 #ifdef LUAJIT_USE_GDBJIT
   void *gdbjit_entry;	/* GDB JIT entry. */
 #endif
-} Trace;
+} GCtrace;
+
+#define gco2trace(o)	check_exp((o)->gch.gct == ~LJ_TTRACE, (GCtrace *)(o))
+#define traceref(J, n) \
+  check_exp((n)>0 && (MSize)(n)<J->sizetrace, (GCtrace *)gcref(J->trace[(n)]))
+
+LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCtrace, gclist));
 
 /* Round-robin penalty cache for bytecodes leading to aborted traces. */
 typedef struct HotPenalty {
@@ -233,7 +241,7 @@ typedef struct FoldState {
 
 /* JIT compiler state. */
 typedef struct jit_State {
-  Trace cur;		/* Current trace. */
+  GCtrace cur;		/* Current trace. */
 
   lua_State *L;		/* Current Lua state. */
   const BCIns *pc;	/* Current PC. */
@@ -277,7 +285,7 @@ typedef struct jit_State {
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
 
   TraceNo curtrace;	/* Current trace number (if not 0). Kept in J->cur. */
-  Trace **trace;	/* Array of traces. */
+  GCRef *trace;		/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */
   MSize sizetrace;	/* Size of trace array. */
 

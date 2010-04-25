@@ -214,8 +214,21 @@ static void gc_traverse_func(global_State *g, GCfunc *fn)
 }
 
 #if LJ_HASJIT
+/* Mark a trace. */
+static void gc_marktrace(global_State *g, TraceNo traceno)
+{
+  if (traceno && traceno != G2J(g)->curtrace) {
+    GCobj *o = obj2gco(traceref(G2J(g), traceno));
+    if (iswhite(o)) {
+      white2gray(o);
+      setgcrefr(o->gch.gclist, g->gc.gray);
+      setgcref(g->gc.gray, o);
+    }
+  }
+}
+
 /* Traverse a trace. */
-static void gc_traverse_trace(global_State *g, Trace *T)
+static void gc_traverse_trace(global_State *g, GCtrace *T)
 {
   IRRef ref;
   for (ref = T->nk; ref < REF_TRUE; ref++) {
@@ -223,31 +236,23 @@ static void gc_traverse_trace(global_State *g, Trace *T)
     if (ir->o == IR_KGC)
       gc_markobj(g, ir_kgc(ir));
   }
+  gc_marktrace(g, T->link);
+  gc_marktrace(g, T->nextroot);
+  gc_marktrace(g, T->nextside);
+  gc_markobj(g, gcref(T->startpt));
 }
 
 /* The current trace is a GC root while not anchored in the prototype (yet). */
-#define gc_mark_curtrace(g) \
+#define gc_traverse_curtrace(g) \
   { if (G2J(g)->curtrace != 0) gc_traverse_trace(g, &G2J(g)->cur); }
 #else
-#define gc_mark_curtrace(g)	UNUSED(g)
+#define gc_traverse_curtrace(g)	UNUSED(g)
 #endif
 
 /* Traverse a prototype. */
 static void gc_traverse_proto(global_State *g, GCproto *pt)
 {
   ptrdiff_t i;
-#if LJ_HASJIT
-  jit_State *J = G2J(g);
-  TraceNo root, side;
-  /* Mark all root traces and attached side traces. */
-  for (root = pt->trace; root != 0; root = J->trace[root]->nextroot) {
-    for (side = J->trace[root]->nextside; side != 0;
-	 side = J->trace[side]->nextside)
-      gc_traverse_trace(g, J->trace[side]);
-    gc_traverse_trace(g, J->trace[root]);
-  }
-#endif
-  /* GC during prototype creation could cause NULL fields. */
   gc_mark_str(proto_chunkname(pt));
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++)  /* Mark collectable consts. */
     gc_markobj(g, proto_kgc(pt, i));
@@ -255,6 +260,9 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
     gc_mark_str(proto_uvname(pt, i));
   for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
     gc_mark_str(gco2str(gcref(proto_varinfo(pt)[i].name)));
+#if LJ_HASJIT
+  gc_marktrace(g, pt->trace);
+#endif
 }
 
 /* Traverse the frame structure of a stack. */
@@ -311,13 +319,23 @@ static size_t propagatemark(global_State *g)
     GCproto *pt = gco2pt(o);
     gc_traverse_proto(g, pt);
     return pt->sizept;
-  } else {
+  } else if (LJ_LIKELY(o->gch.gct == ~LJ_TTHREAD)) {
     lua_State *th = gco2th(o);
     setgcrefr(th->gclist, g->gc.grayagain);
     setgcref(g->gc.grayagain, o);
     black2gray(o);  /* Threads are never black. */
     gc_traverse_thread(g, th);
     return sizeof(lua_State) + sizeof(TValue) * th->stacksize;
+  } else {
+#if LJ_HASJIT
+    GCtrace *T = gco2trace(o);
+    gc_traverse_trace(g, T);
+    return ((sizeof(GCtrace)+7)&~7) + (T->nins-T->nk)*sizeof(IRIns) +
+	   T->nsnap*sizeof(SnapShot) + T->nsnapmap*sizeof(SnapEntry);
+#else
+    lua_assert(0);
+    return 0;
+#endif
   }
 }
 
@@ -351,7 +369,11 @@ static const GCFreeFunc gc_freefunc[] = {
   (GCFreeFunc)lj_state_free,
   (GCFreeFunc)lj_func_freeproto,
   (GCFreeFunc)lj_func_free,
+#if LJ_HASJIT
+  (GCFreeFunc)lj_trace_free,
+#else
   (GCFreeFunc)0,
+#endif
   (GCFreeFunc)lj_tab_free,
   (GCFreeFunc)lj_udata_free
 };
@@ -502,7 +524,7 @@ static void atomic(global_State *g, lua_State *L)
   setgcrefnull(g->gc.weak);
   lua_assert(!iswhite(obj2gco(mainthread(g))));
   gc_markobj(g, L);  /* Mark running thread. */
-  gc_mark_curtrace(g);  /* Mark current trace. */
+  gc_traverse_curtrace(g);  /* Traverse current trace. */
   gc_mark_gcroot(g);  /* Mark GC roots (again). */
   gc_propagate_gray(g);  /* Propagate all of the above. */
 
@@ -681,7 +703,7 @@ void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v)
   lua_assert(g->gc.state != GCSfinalize && g->gc.state != GCSpause);
   lua_assert(o->gch.gct != ~LJ_TTAB);
   /* Preserve invariant during propagation. Otherwise it doesn't matter. */
-  if (g->gc.state == GCSpropagate)
+  if (g->gc.state == GCSpropagate || g->gc.state == GCSatomic)
     gc_mark(g, v);  /* Move frontier forward. */
   else
     makewhite(g, o);  /* Make it white to avoid the following barrier. */
@@ -692,7 +714,7 @@ void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv)
 {
 #define TV2MARKED(x) \
   (*((uint8_t *)(x) - offsetof(GCupval, tv) + offsetof(GCupval, marked)))
-  if (g->gc.state == GCSpropagate)
+  if (g->gc.state == GCSpropagate || g->gc.state == GCSatomic)
     gc_mark(g, gcV(tv));
   else
     TV2MARKED(tv) = (TV2MARKED(tv) & cast_byte(~LJ_GC_COLORS)) | curwhite(g);
@@ -710,7 +732,7 @@ void lj_gc_closeuv(global_State *g, GCupval *uv)
   setgcrefr(o->gch.nextgc, g->gc.root);
   setgcref(g->gc.root, o);
   if (isgray(o)) {  /* A closed upvalue is never gray, so fix this. */
-    if (g->gc.state == GCSpropagate) {
+    if (g->gc.state == GCSpropagate || g->gc.state == GCSatomic) {
       gray2black(o);  /* Make it black and preserve invariant. */
       if (tviswhite(&uv->tv))
 	lj_gc_barrierf(g, o, gcV(&uv->tv));
@@ -723,10 +745,10 @@ void lj_gc_closeuv(global_State *g, GCupval *uv)
 
 #if LJ_HASJIT
 /* Mark a trace if it's saved during the propagation phase. */
-void lj_gc_barriertrace(global_State *g, void *T)
+void lj_gc_barriertrace(global_State *g, uint32_t traceno)
 {
-  if (g->gc.state == GCSpropagate)
-    gc_traverse_trace(g, (Trace *)T);
+  if (g->gc.state == GCSpropagate || g->gc.state == GCSatomic)
+    gc_marktrace(g, traceno);
 }
 #endif
 

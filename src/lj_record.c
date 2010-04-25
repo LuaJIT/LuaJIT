@@ -265,7 +265,7 @@ static TRef find_kinit(jit_State *J, const BCIns *endpc, BCReg slot, IRType t)
       if (op == BC_KSHORT || op == BC_KNUM) {  /* Found const. initializer. */
 	/* Now try to verify there's no forward jump across it. */
 	const BCIns *kpc = pc;
-	for ( ; pc > startpc; pc--)
+	for (; pc > startpc; pc--)
 	  if (bc_op(*pc) == BC_JMP) {
 	    const BCIns *target = pc+bc_j(*pc)+1;
 	    if (target > kpc && target <= endpc)
@@ -2237,10 +2237,10 @@ void lj_record_ins(jit_State *J)
     break;
 
   case BC_JFORL:
-    rec_loop_jit(J, rc, rec_for(J, pc+bc_j(J->trace[rc]->startins), 1));
+    rec_loop_jit(J, rc, rec_for(J, pc+bc_j(traceref(J, rc)->startins), 1));
     break;
   case BC_JITERL:
-    rec_loop_jit(J, rc, rec_iterl(J, J->trace[rc]->startins));
+    rec_loop_jit(J, rc, rec_iterl(J, traceref(J, rc)->startins));
     break;
   case BC_JLOOP:
     rec_loop_jit(J, rc, rec_loop(J, ra));
@@ -2412,7 +2412,7 @@ static const BCIns *rec_setup_root(jit_State *J)
 }
 
 /* Setup recording for a side trace. */
-static void rec_setup_side(jit_State *J, Trace *T)
+static void rec_setup_side(jit_State *J, GCtrace *T)
 {
   SnapShot *snap = &T->snap[J->exitno];
   SnapEntry *map = &T->snapmap[snap->mapofs];
@@ -2500,10 +2500,9 @@ void lj_record_setup(jit_State *J)
   }
   J->cur.nk = REF_TRUE;
 
-  setgcref(J->cur.startpt, obj2gco(J->pt));
   J->startpc = J->pc;
   if (J->parent) {  /* Side trace. */
-    Trace *T = J->trace[J->parent];
+    GCtrace *T = traceref(J, J->parent);
     TraceNo root = T->root ? T->root : J->parent;
     J->cur.root = (uint16_t)root;
     J->cur.startins = BCINS_AD(BC_JMP, 0, 0);
@@ -2521,7 +2520,7 @@ void lj_record_setup(jit_State *J)
     }
     rec_setup_side(J, T);
   sidecheck:
-    if (J->trace[J->cur.root]->nchild >= J->param[JIT_P_maxside] ||
+    if (traceref(J, J->cur.root)->nchild >= J->param[JIT_P_maxside] ||
 	T->snap[J->exitno].count >= J->param[JIT_P_hotexit] +
 				    J->param[JIT_P_tryside])
       rec_stop(J, TRACE_INTERP);

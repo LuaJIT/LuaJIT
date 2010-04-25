@@ -65,7 +65,7 @@ LJ_FUNC void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v);
 LJ_FUNCA void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv);
 LJ_FUNC void lj_gc_closeuv(global_State *g, GCupval *uv);
 #if LJ_HASJIT
-LJ_FUNC void lj_gc_barriertrace(global_State *g, void *T);
+LJ_FUNC void lj_gc_barriertrace(global_State *g, uint32_t traceno);
 #endif
 
 /* Barrier for stores to table objects. TValue and GCobj variant. */

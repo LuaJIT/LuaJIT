@@ -378,7 +378,7 @@ static const ELFheader elfhdr_template = {
 typedef struct GDBJITctx {
   uint8_t *p;		/* Pointer to next address in obj.space. */
   uint8_t *startp;	/* Pointer to start address in obj.space. */
-  Trace *T;		/* Generate symbols for this trace. */
+  GCtrace *T;		/* Generate symbols for this trace. */
   uintptr_t mcaddr;	/* Machine code address. */
   MSize szmcode;	/* Size of machine code. */
   MSize spadjp;		/* Stack adjustment for parent trace or interpreter. */
@@ -698,7 +698,7 @@ static void gdbjit_newentry(lua_State *L, GDBJITctx *ctx)
 }
 
 /* Add debug info for newly compiled trace and notify GDB. */
-void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
+void lj_gdbjit_addtrace(jit_State *J, GCtrace *T, TraceNo traceno)
 {
   GDBJITctx ctx;
   lua_State *L = J->L;
@@ -709,7 +709,8 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
   ctx.T = T;
   ctx.mcaddr = (uintptr_t)T->mcode;
   ctx.szmcode = T->szmcode;
-  ctx.spadjp = CFRAME_SIZE_JIT + (MSize)(parent?J->trace[parent]->spadjust:0);
+  ctx.spadjp = CFRAME_SIZE_JIT +
+	       (MSize)(parent ? traceref(J, parent)->spadjust : 0);
   ctx.spadj = CFRAME_SIZE_JIT + T->spadjust;
   if (startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc)
     ctx.lineno = proto_line(pt, proto_bcpos(pt, startpc));
@@ -727,7 +728,7 @@ void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno)
 }
 
 /* Delete debug info for trace and notify GDB. */
-void lj_gdbjit_deltrace(jit_State *J, Trace *T)
+void lj_gdbjit_deltrace(jit_State *J, GCtrace *T)
 {
   GDBJITentryobj *eo = (GDBJITentryobj *)T->gdbjit_entry;
   if (eo) {

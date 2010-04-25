@@ -168,7 +168,7 @@ void lj_snap_shrink(jit_State *J)
 ** There are very few renames (often none), so the filter has
 ** very few bits set. This makes it suitable for negative filtering.
 */
-static BloomFilter snap_renamefilter(Trace *T, SnapNo lim)
+static BloomFilter snap_renamefilter(GCtrace *T, SnapNo lim)
 {
   BloomFilter rfilt = 0;
   IRIns *ir;
@@ -179,7 +179,7 @@ static BloomFilter snap_renamefilter(Trace *T, SnapNo lim)
 }
 
 /* Process matching renames to find the original RegSP. */
-static RegSP snap_renameref(Trace *T, SnapNo lim, IRRef ref, RegSP rs)
+static RegSP snap_renameref(GCtrace *T, SnapNo lim, IRRef ref, RegSP rs)
 {
   IRIns *ir;
   for (ir = &T->ir[T->nins-1]; ir->o == IR_RENAME; ir--)
@@ -191,7 +191,7 @@ static RegSP snap_renameref(Trace *T, SnapNo lim, IRRef ref, RegSP rs)
 /* Convert a snapshot into a linear slot -> RegSP map.
 ** Note: unused slots are not initialized!
 */
-void lj_snap_regspmap(uint16_t *rsmap, Trace *T, SnapNo snapno)
+void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno)
 {
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
@@ -215,7 +215,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 {
   ExitState *ex = (ExitState *)exptr;
   SnapNo snapno = J->exitno;  /* For now, snapno == exitno. */
-  Trace *T = J->trace[J->parent];
+  GCtrace *T = traceref(J, J->parent);
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];

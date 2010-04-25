@@ -138,11 +138,11 @@ of a module to turn off JIT compilation for the whole module for
 debugging purposes.
 </p>
 
-<h3 id="jit_flush_tr"><tt>status = jit.flush(tr)</tt></h3>
+<h3 id="jit_flush_tr"><tt>jit.flush(tr)</tt></h3>
 <p>
-Tries to flush the code for the specified trace and all of its
-side traces from the cache. Returns <tt>true</tt> on success.
-Returns <tt>false</tt> if there are still links to this trace.
+Flushes the specified root trace and all of its side traces from the cache.
+The code for the trace will be retained as long as there are any other
+traces which link to it.
 </p>
 
 <h3 id="jit_status"><tt>status, ... = jit.status()</tt></h3>
@@ -262,8 +262,9 @@ applies recursively to all sub-functions of the function with
 <h3 id="mode_engine"><tt>luaJIT_setmode(L, trace,<br>
 &nbsp;&nbsp;LUAJIT_MODE_TRACE|LUAJIT_MODE_FLUSH)</tt></h3>
 <p>
-Tries to flush the code for the specified trace and all of its
-side traces from the cache.
+Flushes the specified root trace and all of its side traces from the cache.
+The code for the trace will be retained as long as there are any other
+traces which link to it.
 </p>
 
 <h3 id="mode_engine"><tt>luaJIT_setmode(L, idx, LUAJIT_MODE_WRAPCFUNC|flag)</tt></h3>

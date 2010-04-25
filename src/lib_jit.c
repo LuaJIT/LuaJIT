@@ -72,9 +72,8 @@ LJLIB_CF(jit_flush)
 #if LJ_HASJIT
   if (L->base < L->top && (tvisnum(L->base) || tvisstr(L->base))) {
     int traceno = lj_lib_checkint(L, 1);
-    setboolV(L->top-1,
-	     luaJIT_setmode(L, traceno, LUAJIT_MODE_FLUSH|LUAJIT_MODE_TRACE));
-    return 1;
+    luaJIT_setmode(L, traceno, LUAJIT_MODE_FLUSH|LUAJIT_MODE_TRACE);
+    return 0;
   }
 #endif
   return setjitmode(L, LUAJIT_MODE_FLUSH);
@@ -260,19 +259,19 @@ LJLIB_CF(jit_util_funcuvname)
 #if LJ_HASJIT
 
 /* Check trace argument. Must not throw for non-existent trace numbers. */
-static Trace *jit_checktrace(lua_State *L)
+static GCtrace *jit_checktrace(lua_State *L)
 {
   TraceNo tr = (TraceNo)lj_lib_checkint(L, 1);
   jit_State *J = L2J(L);
   if (tr > 0 && tr < J->sizetrace)
-    return J->trace[tr];
+    return traceref(J, tr);
   return NULL;
 }
 
 /* local info = jit.util.traceinfo(tr) */
 LJLIB_CF(jit_util_traceinfo)
 {
-  Trace *T = jit_checktrace(L);
+  GCtrace *T = jit_checktrace(L);
   if (T) {
     GCtab *t;
     lua_createtable(L, 0, 4);  /* Increment hash size if fields are added. */
@@ -290,7 +289,7 @@ LJLIB_CF(jit_util_traceinfo)
 /* local m, ot, op1, op2, prev = jit.util.traceir(tr, idx) */
 LJLIB_CF(jit_util_traceir)
 {
-  Trace *T = jit_checktrace(L);
+  GCtrace *T = jit_checktrace(L);
   IRRef ref = (IRRef)lj_lib_checkint(L, 2) + REF_BIAS;
   if (T && ref >= REF_BIAS && ref < T->nins) {
     IRIns *ir = &T->ir[ref];
@@ -308,7 +307,7 @@ LJLIB_CF(jit_util_traceir)
 /* local k, t [, slot] = jit.util.tracek(tr, idx) */
 LJLIB_CF(jit_util_tracek)
 {
-  Trace *T = jit_checktrace(L);
+  GCtrace *T = jit_checktrace(L);
   IRRef ref = (IRRef)lj_lib_checkint(L, 2) + REF_BIAS;
   if (T && ref >= T->nk && ref < REF_BIAS) {
     IRIns *ir = &T->ir[ref];
@@ -330,7 +329,7 @@ LJLIB_CF(jit_util_tracek)
 /* local snap = jit.util.tracesnap(tr, sn) */
 LJLIB_CF(jit_util_tracesnap)
 {
-  Trace *T = jit_checktrace(L);
+  GCtrace *T = jit_checktrace(L);
   SnapNo sn = (SnapNo)lj_lib_checkint(L, 2);
   if (T && sn < T->nsnap) {
     SnapShot *snap = &T->snap[sn];
@@ -352,7 +351,7 @@ LJLIB_CF(jit_util_tracesnap)
 /* local mcode, addr, loop = jit.util.tracemc(tr) */
 LJLIB_CF(jit_util_tracemc)
 {
-  Trace *T = jit_checktrace(L);
+  GCtrace *T = jit_checktrace(L);
   if (T && T->mcode != NULL) {
     setstrV(L, L->top-1, lj_str_new(L, (const char *)T->mcode, T->szmcode));
     setnumV(L->top++, cast_num((intptr_t)T->mcode));

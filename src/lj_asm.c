@@ -67,8 +67,8 @@ typedef struct ASMState {
   BCReg topslot;	/* Number of slots for stack check (unless 0). */
   MSize gcsteps;	/* Accumulated number of GC steps (per section). */
 
-  Trace *T;		/* Trace to assemble. */
-  Trace *parent;	/* Parent trace (or NULL). */
+  GCtrace *T;		/* Trace to assemble. */
+  GCtrace *parent;	/* Parent trace (or NULL). */
 
   MCode *mcbot;		/* Bottom of reserved MCode. */
   MCode *mctop;		/* Top of generated MCode. */
@@ -3228,7 +3228,7 @@ static void asm_tail_link(ASMState *as)
     const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
     int32_t mres;
     if (bc_op(*pc) == BC_JLOOP) {  /* NYI: find a better way to do this. */
-      BCIns *retpc = &as->J->trace[bc_d(*pc)]->startins;
+      BCIns *retpc = &traceref(as->J, bc_d(*pc))->startins;
       if (bc_isret(bc_op(*retpc)))
 	pc = retpc;
     }
@@ -3294,7 +3294,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   }
   /* Patch exit branch. */
   target = lnk == TRACE_INTERP ? (MCode *)lj_vm_exit_interp :
-				 as->J->trace[lnk]->mcode;
+				 traceref(as->J, lnk)->mcode;
   *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = XI_JMP;
   /* Drop unused mcode tail. Fill with NOPs to make the prefetcher happy. */
@@ -3437,7 +3437,7 @@ static void asm_trace(ASMState *as)
 /* -- Trace setup --------------------------------------------------------- */
 
 /* Clear reg/sp for all instructions and add register hints. */
-static void asm_setup_regsp(ASMState *as, Trace *T)
+static void asm_setup_regsp(ASMState *as, GCtrace *T)
 {
   IRRef i, nins;
   int inloop;
@@ -3577,7 +3577,7 @@ static void asm_setup_regsp(ASMState *as, Trace *T)
 #endif
 
 /* Assemble a trace. */
-void lj_asm_trace(jit_State *J, Trace *T)
+void lj_asm_trace(jit_State *J, GCtrace *T)
 {
   ASMState as_;
   ASMState *as = &as_;
@@ -3591,7 +3591,7 @@ void lj_asm_trace(jit_State *J, Trace *T)
   as->realign = NULL;
   as->loopinv = 0;
   if (J->parent) {
-    as->parent = J->trace[J->parent];
+    as->parent = traceref(J, J->parent);
     lj_snap_regspmap(as->parentmap, as->parent, J->exitno);
   } else {
     as->parent = NULL;
@@ -3667,7 +3667,7 @@ void lj_asm_trace(jit_State *J, Trace *T)
 }
 
 /* Patch exit jumps of existing machine code to a new target. */
-void lj_asm_patchexit(jit_State *J, Trace *T, ExitNo exitno, MCode *target)
+void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
 {
   MCode *p = T->mcode;
   MCode *mcarea = lj_mcode_patch(J, p, 0);

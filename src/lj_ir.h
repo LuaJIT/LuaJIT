@@ -317,7 +317,7 @@ typedef enum {
   IRT_THREAD,
   IRT_PROTO,
   IRT_FUNC,
-  IRT_9,		/* Never used in the IR. */
+  IRT_9,		/* Unused (map of LJ_TTRACE). */
   IRT_TAB,
   IRT_UDATA,
   /* ... until here. */

@@ -12,7 +12,7 @@
 #if LJ_HASJIT
 LJ_FUNC void lj_snap_add(jit_State *J);
 LJ_FUNC void lj_snap_shrink(jit_State *J);
-LJ_FUNC void lj_snap_regspmap(uint16_t *rsmap, Trace *T, SnapNo snapno);
+LJ_FUNC void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno);
 LJ_FUNC const BCIns *lj_snap_restore(jit_State *J, void *exptr);
 LJ_FUNC void lj_snap_grow_buf_(jit_State *J, MSize need);
 LJ_FUNC void lj_snap_grow_map_(jit_State *J, MSize need);

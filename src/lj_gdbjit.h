@@ -11,8 +11,8 @@
 
 #if LJ_HASJIT && defined(LUAJIT_USE_GDBJIT)
 
-LJ_FUNC void lj_gdbjit_addtrace(jit_State *J, Trace *T, TraceNo traceno);
-LJ_FUNC void lj_gdbjit_deltrace(jit_State *J, Trace *T);
+LJ_FUNC void lj_gdbjit_addtrace(jit_State *J, GCtrace *T, TraceNo traceno);
+LJ_FUNC void lj_gdbjit_deltrace(jit_State *J, GCtrace *T);
 
 #else
 #define lj_gdbjit_addtrace(J, T, tn)	UNUSED(T)

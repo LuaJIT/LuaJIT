@@ -19,7 +19,6 @@
 
 void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 {
-  lj_trace_freeproto(g, pt);
   lj_mem_free(g, pt, pt->sizept);
 }
 

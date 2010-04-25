@@ -195,7 +195,7 @@ typedef const TValue cTValue;
 #define LJ_TTHREAD		(-7)
 #define LJ_TPROTO		(-8)
 #define LJ_TFUNC		(-9)
-/* Unused			(-10) */
+#define LJ_TTRACE		(-10)
 #define LJ_TTAB			(-11)
 #define LJ_TUDATA		(-12)
 /* This is just the canonical number type used in some places. */

@@ -23,10 +23,10 @@ LJ_FUNC_NORET void lj_trace_err(jit_State *J, TraceError e);
 LJ_FUNC_NORET void lj_trace_err_info(jit_State *J, TraceError e);
 
 /* Trace management. */
-LJ_FUNC void lj_trace_freeproto(global_State *g, GCproto *pt);
+LJ_FUNC void LJ_FASTCALL lj_trace_free(global_State *g, GCtrace *T);
 LJ_FUNC void lj_trace_reenableproto(GCproto *pt);
 LJ_FUNC void lj_trace_flushproto(global_State *g, GCproto *pt);
-LJ_FUNC int lj_trace_flush(jit_State *J, TraceNo traceno);
+LJ_FUNC void lj_trace_flush(jit_State *J, TraceNo traceno);
 LJ_FUNC int lj_trace_flushall(lua_State *L);
 LJ_FUNC void lj_trace_initstate(global_State *g);
 LJ_FUNC void lj_trace_freestate(global_State *g);
@@ -45,7 +45,6 @@ LJ_FUNCA int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr);
 #define lj_trace_flushall(L)	(UNUSED(L), 0)
 #define lj_trace_initstate(g)	UNUSED(g)
 #define lj_trace_freestate(g)	UNUSED(g)
-#define lj_trace_freeproto(g, pt)  (UNUSED(g), UNUSED(pt), (void)0)
 #define lj_trace_abort(g)	UNUSED(g)
 #define lj_trace_end(J)		UNUSED(J)
 

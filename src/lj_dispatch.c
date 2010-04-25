@@ -239,7 +239,8 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
   case LUAJIT_MODE_TRACE:
     if (!(mode & LUAJIT_MODE_FLUSH))
       return 0;  /* Failed. */
-    return lj_trace_flush(G2J(g), idx);
+    lj_trace_flush(G2J(g), idx);
+    break;
 #else
   case LUAJIT_MODE_ENGINE:
   case LUAJIT_MODE_FUNC:

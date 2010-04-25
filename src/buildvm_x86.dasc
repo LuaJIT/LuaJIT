@@ -107,7 +107,7 @@
 |.type UPVAL,		GCupval
 |.type NODE,		Node
 |.type NARGS,		int
-|.type TRACE,		Trace
+|.type TRACE,		GCtrace
 |.type EXITINFO,	ExitInfo
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
@@ -4746,11 +4746,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 #if LJ_HASJIT
     |  ins_AD	// RA = base (ignored), RD = traceno
     |  mov RA, [DISPATCH+DISPATCH_J(trace)]
-    |.if X64
-    |  mov TRACE:RD, [RA+RD*8]
-    |.else
     |  mov TRACE:RD, [RA+RD*4]
-    |.endif
     |  mov RDa, TRACE:RD->mcode
     |  mov L:RB, SAVE_L
     |  mov [DISPATCH+DISPATCH_GL(jit_base)], BASE

@@ -16,7 +16,7 @@ LJ_DATADEF const char *const lj_obj_typename[] = {  /* ORDER LUA_T */
 
 LJ_DATADEF const char *const lj_obj_itypename[] = {  /* ORDER LJ_T */
   "nil", "boolean", "boolean", "userdata", "string", "upval", "thread",
-  "proto", "function", "" /* Unused */, "table", "userdata", "number"
+  "proto", "function", "trace", "table", "userdata", "number"
 };
 
 /* Compare two objects without calling metamethods. */
