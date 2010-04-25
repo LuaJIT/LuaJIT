@@ -677,14 +677,12 @@ static int rec_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
   emitir(IRTG(mt ? IR_NE : IR_EQ, IRT_TAB), mix.tab, lj_ir_knull(J, IRT_TAB));
 nocheck:
   if (mt) {
-    GCstr *mmstr = strref(J2G(J)->mmname[mm]);
+    GCstr *mmstr = mmname_str(J2G(J), mm);
     cTValue *mo = lj_tab_getstr(mt, mmstr);
     if (mo && !tvisnil(mo))
       copyTV(J->L, &ix->mobjv, mo);
     ix->mtv = mt;
     settabV(J->L, &mix.tabv, mt);
-    if (isdead(J2G(J), obj2gco(mmstr)))
-      flipwhite(obj2gco(mmstr));  /* Need same logic as lj_str_new(). */
     setstrV(J->L, &mix.keyv, mmstr);
     mix.key = lj_ir_kstr(J, mmstr);
     mix.val = 0;
@@ -914,9 +912,9 @@ static int nommstr(jit_State *J, TRef key)
   if (tref_isstr(key)) {
     if (tref_isk(key)) {
       GCstr *str = ir_kstr(IR(tref_ref(key)));
-      uint32_t i;
-      for (i = 0; i <= MM_FAST; i++)
-	if (strref(J2G(J)->mmname[i]) == str)
+      uint32_t mm;
+      for (mm = 0; mm <= MM_FAST; mm++)
+	if (mmname_str(J2G(J), mm) == str)
 	  return 0;  /* MUST be one the fast metamethod names. */
     } else {
       return 0;  /* Variable string key MAY be a metamethod name. */
@@ -999,7 +997,7 @@ static TRef rec_idx(jit_State *J, RecordIndex *ix)
       /* Need to duplicate the hasmm check for the early guards. */
       int hasmm = 0;
       if (ix->idxchain && mt) {
-	cTValue *mo = lj_tab_getstr(mt, strref(J2G(J)->mmname[MM_newindex]));
+	cTValue *mo = lj_tab_getstr(mt, mmname_str(J2G(J), MM_newindex));
 	hasmm = mo && !tvisnil(mo);
       }
       if (hasmm)

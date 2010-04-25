@@ -1302,7 +1302,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  test TAB:RB, TAB:RB
   |  mov dword [BASE-4], LJ_TNIL
   |  jz ->fff_res1
-  |  mov STR:RC, [DISPATCH+DISPATCH_GL(mmname)+4*MM_metatable]
+  |  mov STR:RC, [DISPATCH+DISPATCH_GL(gcroot)+4*(GCROOT_MMNAME+MM_metatable)]
   |  mov dword [BASE-4], LJ_TTAB	// Store metatable as default result.
   |  mov [BASE-8], TAB:RB
   |  mov RA, TAB:RB->hmask

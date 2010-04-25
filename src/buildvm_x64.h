@@ -1089,7 +1089,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   dasm_put(Dst, 1814);
   }
   dasm_put(Dst, 1823, ((char *)(&((GCfuncC *)0)->upvalue)), LJ_TSTR, ~LJ_TLIGHTUD, 1+1, LJ_TTAB, Dt6(->metatable), LJ_TNIL);
-  dasm_put(Dst, 1902, DISPATCH_GL(mmname)+4*MM_metatable, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), DtB(->next));
+  dasm_put(Dst, 1902, DISPATCH_GL(gcroot)+4*(GCROOT_MMNAME+MM_metatable), LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), DtB(->next));
   dasm_put(Dst, 1960, LJ_TNIL, LJ_TUDATA, LJ_TISNUM, LJ_TNUMX, DISPATCH_GL(gcroot[GCROOT_BASEMT]));
   dasm_put(Dst, 2029, 2+1, LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->marked), LJ_GC_BLACK, Dt6(->marked), cast_byte(~LJ_GC_BLACK));
   dasm_put(Dst, 2098, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist), 2+1, LJ_TTAB, 1+1, LJ_TISNUM);

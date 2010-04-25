@@ -537,15 +537,18 @@ MMDEF(MMENUM)
 
 /* GC root IDs. */
 typedef enum {
+  GCROOT_MMNAME,	/* Metamethod names. */
+  GCROOT_MMNAME_LAST = GCROOT_MMNAME + MM_MAX-1,
   GCROOT_BASEMT,	/* Metatables for base types. */
-  GCROOT_BASEMT_NUM = ~LJ_TNUMX,  /* Last base metatable. */
+  GCROOT_BASEMT_NUM = GCROOT_BASEMT + ~LJ_TNUMX,
   GCROOT_IO_INPUT,	/* Userdata for default I/O input file. */
   GCROOT_IO_OUTPUT,	/* Userdata for default I/O output file. */
-  GCROOT__MAX
+  GCROOT_MAX
 } GCRootID;
 
 #define basemt_it(g, it)	((g)->gcroot[GCROOT_BASEMT+~(it)])
 #define basemt_obj(g, o)	((g)->gcroot[GCROOT_BASEMT+itypemap(o)])
+#define mmname_str(g, mm)	(strref((g)->gcroot[GCROOT_MMNAME+(mm)]))
 
 typedef struct GCState {
   MSize total;		/* Memory currently allocated. */
@@ -595,8 +598,7 @@ typedef struct global_State {
   BCIns bc_cfunc_ext;	/* Bytecode for external C function calls. */
   GCRef jit_L;		/* Current JIT code lua_State or NULL. */
   MRef jit_base;	/* Current JIT code L->base. */
-  GCRef gcroot[GCROOT__MAX];  /* GC roots. */
-  GCRef mmname[MM_MAX];	/* Array holding metamethod names. */
+  GCRef gcroot[GCROOT_MAX];  /* GC roots. */
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)

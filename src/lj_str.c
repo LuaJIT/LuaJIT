@@ -88,7 +88,8 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   for (o = gcref(g->strhash[h & g->strmask]); o != NULL; o = gcnext(o)) {
     GCstr *tso = gco2str(o);
     if (tso->len == len && (memcmp(str, strdata(tso), len) == 0)) {
-      if (isdead(g, o)) flipwhite(o);  /* Resurrect if dead. */
+      /* Resurrect if dead. Can only happen with fixstring() (keywords). */
+      if (isdead(g, o)) flipwhite(o);
       return tso;  /* Return existing string. */
     }
   }

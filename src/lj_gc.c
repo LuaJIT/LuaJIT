@@ -77,7 +77,7 @@ static void gc_mark(global_State *g, GCobj *o)
 static void gc_mark_gcroot(global_State *g)
 {
   ptrdiff_t i;
-  for (i = 0; i < GCROOT__MAX; i++)
+  for (i = 0; i < GCROOT_MAX; i++)
     if (gcref(g->gcroot[i]) != NULL)
       gc_markobj(g, gcref(g->gcroot[i]));
 }

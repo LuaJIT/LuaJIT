@@ -213,7 +213,7 @@ static const char *getfuncname(lua_State *L, TValue *frame, const char **name)
     if (bc_op(*ip) == BC_ITERC) slot -= 3;
     return getobjname(funcproto(fn), ip, slot, name);
   } else if (mm != MM_MAX) {
-    *name = strdata(strref(G(L)->mmname[mm]));
+    *name = strdata(mmname_str(G(L), mm));
     return "metamethod";
   } else {
     return NULL;

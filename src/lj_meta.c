@@ -28,14 +28,13 @@ void lj_meta_init(lua_State *L)
 #undef MMNAME
   global_State *g = G(L);
   const char *p, *q;
-  uint32_t i;
-  for (i = 0, p = metanames; *p; i++, p = q) {
+  uint32_t mm;
+  for (mm = 0, p = metanames; *p; mm++, p = q) {
     GCstr *s;
     for (q = p+2; *q && *q != '_'; q++) ;
     s = lj_str_new(L, p, (size_t)(q-p));
-    fixstring(s);  /* Never collect these names. */
-    /* NOBARRIER: g->mmname[] is a GC root. */
-    setgcref(g->mmname[i], obj2gco(s));
+    /* NOBARRIER: g->gcroot[] is a GC root. */
+    setgcref(g->gcroot[GCROOT_MMNAME+mm], obj2gco(s));
   }
 }
 
@@ -62,7 +61,7 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   else
     mt = tabref(basemt_obj(G(L), o));
   if (mt) {
-    cTValue *mo = lj_tab_getstr(mt, strref(G(L)->mmname[mm]));
+    cTValue *mo = lj_tab_getstr(mt, mmname_str(G(L), mm));
     if (mo)
       return mo;
   }

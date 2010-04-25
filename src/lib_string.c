@@ -774,7 +774,6 @@ LJLIB_CF(string_format)
 LUALIB_API int luaopen_string(lua_State *L)
 {
   GCtab *mt;
-  GCstr *mmstr;
   global_State *g;
   LJ_LIB_REG(L, string);
 #if defined(LUA_COMPAT_GFIND)
@@ -785,9 +784,7 @@ LUALIB_API int luaopen_string(lua_State *L)
   /* NOBARRIER: basemt is a GC root. */
   g = G(L);
   setgcref(basemt_it(g, LJ_TSTR), obj2gco(mt));
-  mmstr = strref(g->mmname[MM_index]);
-  if (isdead(g, obj2gco(mmstr))) flipwhite(obj2gco(mmstr));
-  settabV(L, lj_tab_setstr(L, mt, mmstr), tabV(L->top-1));
+  settabV(L, lj_tab_setstr(L, mt, mmname_str(g, MM_index)), tabV(L->top-1));
   mt->nomm = cast_byte(~(1u<<MM_index));
   return 1;
 }
