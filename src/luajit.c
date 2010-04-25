@@ -470,7 +470,7 @@ static int pmain(lua_State *L)
   LUAJIT_VERSION_SYM();  /* linker-enforced version check */
   lua_gc(L, LUA_GCSTOP, 0);  /* stop collector during initialization */
   luaL_openlibs(L);  /* open libraries */
-  lua_gc(L, LUA_GCRESTART, 0);
+  lua_gc(L, LUA_GCRESTART, -1);
   s->status = handle_luainit(L);
   if (s->status != 0) return 0;
   script = collectargs(argv, &has_i, &has_v, &has_e);
