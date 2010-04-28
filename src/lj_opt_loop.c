@@ -133,7 +133,11 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
     while (!irref_isk(ref) && ref != subst[ref]) {
       IRIns *ir = IR(ref);
       irt_clearmark(ir->t);  /* Unmark potential uses, too. */
-      if (irt_isphi(ir->t) || irt_ispri(ir->t))
+      if (irt_isphi(ir->t)) {
+	irt_clearmark(IR(subst[ref])->t);
+	break;
+      }
+      if (irt_ispri(ir->t))
 	break;
       irt_setphi(ir->t);
       if (nphi >= LJ_MAX_PHI)
