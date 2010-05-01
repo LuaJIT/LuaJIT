@@ -81,6 +81,44 @@ static TraceNo trace_findfree(jit_State *J)
   memcpy(p, J->cur.field, J->cur.szfield*sizeof(tp)); \
   p += J->cur.szfield*sizeof(tp);
 
+#ifdef LUAJIT_USE_PERFTOOLS
+/*
+** Create symbol table of JIT-compiled code. For use with Linux perf tools.
+** Example usage:
+**   perf record -f -e cycles luajit test.lua
+**   perf report -s symbol
+**   rm perf.data /tmp/perf-*.map
+*/
+#include <stdio.h>
+#include <unistd.h>
+
+static void perftools_addtrace(GCtrace *T)
+{
+  static FILE *fp;
+  GCproto *pt = &gcref(T->startpt)->pt;
+  uintptr_t pcofs = (uintptr_t)(T->snap[0].mapofs+T->snap[0].nent);
+  const BCIns *startpc = snap_pc(T->snapmap[pcofs]);
+  const char *name = strdata(proto_chunkname(pt));
+  BCLine lineno;
+  if (name[0] == '@' || name[0] == '=')
+    name++;
+  else
+    name = "(string)";
+  if (startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc)
+    lineno = proto_line(pt, proto_bcpos(pt, startpc));
+  else
+    lineno = proto_line(pt, 0);  /* Wrong, but better than nothing. */
+  if (!fp) {
+    char fname[40];
+    sprintf(fname, "/tmp/perf-%d.map", getpid());
+    if (!(fp = fopen(fname, "w"))) return;
+    setlinebuf(fp);
+  }
+  fprintf(fp, "%lx %x TRACE_%d::%s:%u\n",
+	  (long)T->mcode, T->szmcode, T->traceno, name, lineno);
+}
+#endif
+
 /* Save current trace by copying and compacting it. */
 static void trace_save(jit_State *J)
 {
@@ -105,6 +143,9 @@ static void trace_save(jit_State *J)
   setgcrefp(J->trace[T->traceno], T);
   lj_gc_barriertrace(J2G(J), T->traceno);
   lj_gdbjit_addtrace(J, T);
+#ifdef LUAJIT_USE_PERFTOOLS
+  perftools_addtrace(T);
+#endif
 }
 
 void LJ_FASTCALL lj_trace_free(global_State *g, GCtrace *T)
