@@ -1883,7 +1883,7 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
   uint32_t asize = ah & 0x7ff;
   uint32_t hbits = ah >> 11;
   if (asize == 0x7ff) asize = 0x801;
-  return emitir(IRT(IR_TNEW, IRT_TAB), asize, hbits);
+  return emitir(IRTG(IR_TNEW, IRT_TAB), asize, hbits);
 }
 
 /* -- Record bytecode ops ------------------------------------------------- */
@@ -2167,7 +2167,7 @@ void lj_record_ins(jit_State *J)
     rc = rec_tnew(J, rc);
     break;
   case BC_TDUP:
-    rc = emitir(IRT(IR_TDUP, IRT_TAB),
+    rc = emitir(IRTG(IR_TDUP, IRT_TAB),
 		lj_ir_ktab(J, gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)rc))), 0);
     break;
 

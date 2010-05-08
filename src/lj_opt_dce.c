@@ -45,7 +45,7 @@ static void dce_propagate(jit_State *J)
     if (irt_ismarked(ir->t)) {
       irt_clearmark(ir->t);
       pchain[ir->o] = &ir->prev;
-    } else if (!(irt_isguard(ir->t) || irm_sideeff(lj_ir_mode[ir->o]))) {
+    } else if (!ir_sideeff(ir)) {
       *pchain[ir->o] = ir->prev;  /* Reroute original instruction chain. */
       *pchain[IR_NOP] = (IRRef1)ins;
       ir->t.irt = IRT_NIL;

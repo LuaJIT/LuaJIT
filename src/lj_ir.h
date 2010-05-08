@@ -15,7 +15,7 @@
   /* Miscellaneous ops. */ \
   _(NOP,	N , ___, ___) \
   _(BASE,	N , lit, lit) \
-  _(LOOP,	G , ___, ___) \
+  _(LOOP,	S , ___, ___) \
   _(PHI,	S , ref, ref) \
   _(RENAME,	S , ref, lit) \
   \
@@ -30,21 +30,21 @@
   \
   /* Guarded assertions. */ \
   /* Must be properly aligned to flip opposites (^1) and (un)ordered (^4). */ \
-  _(EQ,		GC, ref, ref) \
-  _(NE,		GC, ref, ref) \
+  _(EQ,		C , ref, ref) \
+  _(NE,		C , ref, ref) \
   \
-  _(ABC,	G , ref, ref) \
-  _(RETF,	SG, ref, ref) \
+  _(ABC,	N , ref, ref) \
+  _(RETF,	S , ref, ref) \
   \
-  _(LT,		G , ref, ref) \
-  _(GE,		G , ref, ref) \
-  _(LE,		G , ref, ref) \
-  _(GT,		G , ref, ref) \
+  _(LT,		N , ref, ref) \
+  _(GE,		N , ref, ref) \
+  _(LE,		N , ref, ref) \
+  _(GT,		N , ref, ref) \
   \
-  _(ULT,	G , ref, ref) \
-  _(UGE,	G , ref, ref) \
-  _(ULE,	G , ref, ref) \
-  _(UGT,	G , ref, ref) \
+  _(ULT,	N , ref, ref) \
+  _(UGE,	N , ref, ref) \
+  _(ULE,	N , ref, ref) \
+  _(UGT,	N , ref, ref) \
   \
   /* Bit ops. */ \
   _(BNOT,	N , ref, ___) \
@@ -75,27 +75,27 @@
   _(MAX,	C , ref, ref) \
   \
   /* Overflow-checking arithmetic ops. */ \
-  _(ADDOV,	GC, ref, ref) \
-  _(SUBOV,	G , ref, ref) \
+  _(ADDOV,	C , ref, ref) \
+  _(SUBOV,	N , ref, ref) \
   \
   /* Memory ops. A = array, H = hash, U = upvalue, F = field, S = stack. */ \
   \
   /* Memory references. */ \
   _(AREF,	R , ref, ref) \
-  _(HREFK,	RG, ref, ref) \
+  _(HREFK,	R , ref, ref) \
   _(HREF,	L , ref, ref) \
   _(NEWREF,	S , ref, ref) \
-  _(UREFO,	LG, ref, lit) \
-  _(UREFC,	LG, ref, lit) \
+  _(UREFO,	LW, ref, lit) \
+  _(UREFC,	LW, ref, lit) \
   _(FREF,	R , ref, lit) \
   _(STRREF,	N , ref, ref) \
   \
   /* Loads and Stores. These must be in the same order. */ \
-  _(ALOAD,	LG, ref, ___) \
-  _(HLOAD,	LG, ref, ___) \
-  _(ULOAD,	LG, ref, ___) \
+  _(ALOAD,	L , ref, ___) \
+  _(HLOAD,	L , ref, ___) \
+  _(ULOAD,	L , ref, ___) \
   _(FLOAD,	L , ref, lit) \
-  _(SLOAD,	LG, lit, lit) \
+  _(SLOAD,	L , lit, lit) \
   _(XLOAD,	L , ref, lit) \
   \
   _(ASTORE,	S , ref, ref) \
@@ -105,8 +105,8 @@
   \
   /* Allocations. */ \
   _(SNEW,	N , ref, ref) /* CSE is ok, so not marked as A. */ \
-  _(TNEW,	A , lit, lit) \
-  _(TDUP,	A , ref, ___) \
+  _(TNEW,	AW, lit, lit) \
+  _(TDUP,	AW, ref, ___) \
   \
   /* Write barriers. */ \
   _(TBAR,	S , ref, ___) \
@@ -117,7 +117,7 @@
   _(TOINT,	N , ref, lit) \
   _(TOBIT,	N , ref, ref) \
   _(TOSTR,	N , ref, ___) \
-  _(STRTO,	G , ref, ___) \
+  _(STRTO,	N , ref, ___) \
   \
   /* Calls. */ \
   _(CALLN,	N , ref, lit) \
@@ -274,7 +274,7 @@ typedef enum {
 } IRMode;
 #define IRM___		IRMnone
 
-/* Mode bits: Commutative, {Normal/Ref, Alloc, Load, Store}, Guard. */
+/* Mode bits: Commutative, {Normal/Ref, Alloc, Load, Store}, Non-weak guard. */
 #define IRM_C			0x10
 
 #define IRM_N			0x00
@@ -283,22 +283,17 @@ typedef enum {
 #define IRM_L			0x40
 #define IRM_S			0x60
 
-#define IRM_G			0x80
+#define IRM_W			0x80
 
-#define IRM_GC			(IRM_G|IRM_C)
-#define IRM_RG			(IRM_R|IRM_G)
-#define IRM_LG			(IRM_L|IRM_G)
-#define IRM_SG			(IRM_S|IRM_G)
+#define IRM_AW			(IRM_A|IRM_W)
+#define IRM_LW			(IRM_L|IRM_W)
 
 #define irm_op1(m)		(cast(IRMode, (m)&3))
 #define irm_op2(m)		(cast(IRMode, ((m)>>2)&3))
 #define irm_iscomm(m)		((m) & IRM_C)
 #define irm_kind(m)		((m) & IRM_S)
-#define irm_isguard(m)		((m) & IRM_G)
-/* Stores or any other op with a guard has a side-effect. */
-#define irm_sideeff(m)		((m) >= IRM_S)
 
-#define IRMODE(name, m, m1, m2)	((IRM##m1)|((IRM##m2)<<2)|(IRM_##m)),
+#define IRMODE(name, m, m1, m2)	(((IRM##m1)|((IRM##m2)<<2)|(IRM_##m))^IRM_W),
 
 LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
 
@@ -335,8 +330,8 @@ typedef enum {
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
-  IRT_GUARD = 0x40,	/* Instruction is a guard. */
-  IRT_ISPHI = 0x80,	/* Instruction is left or right PHI operand. */
+  IRT_ISPHI = 0x40,	/* Instruction is left or right PHI operand. */
+  IRT_GUARD = 0x80,	/* Instruction is a guard. */
 
   /* Masks. */
   IRT_TYPE = 0x1f,
@@ -530,5 +525,13 @@ typedef union IRIns {
 #define ir_kfunc(ir)	(gco2func(ir_kgc((ir))))
 #define ir_knum(ir)	check_exp((ir)->o == IR_KNUM, mref((ir)->ptr, cTValue))
 #define ir_kptr(ir)	check_exp((ir)->o == IR_KPTR, mref((ir)->ptr, void))
+
+LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
+
+/* A store or any other op with a non-weak guard has a side-effect. */
+static LJ_AINLINE int ir_sideeff(IRIns *ir)
+{
+  return (((ir->t.irt | ~IRT_GUARD) & lj_ir_mode[ir->o]) >= IRM_S);
+}
 
 #endif

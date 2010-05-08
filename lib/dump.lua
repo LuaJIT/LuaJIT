@@ -391,8 +391,8 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 	out:write(format("%04d ", ins))
       end
       out:write(format("%s%s %s %s ",
-		       band(ot, 64) == 0 and " " or ">",
-		       band(ot, 128) == 0 and " " or "+",
+		       band(ot, 128) == 0 and " " or ">",
+		       band(ot, 64) == 0 and " " or "+",
 		       irtype[t], op))
       local m1 = band(m, 3)
       if sub(op, 1, 4) == "CALL" then

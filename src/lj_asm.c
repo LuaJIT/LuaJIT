@@ -1842,26 +1842,24 @@ static void asm_newref(ASMState *as, IRIns *ir)
 static void asm_uref(ASMState *as, IRIns *ir)
 {
   /* NYI: Check that UREFO is still open and not aliasing a slot. */
-  if (ra_used(ir)) {
-    Reg dest = ra_dest(as, ir, RSET_GPR);
-    if (irref_isk(ir->op1)) {
-      GCfunc *fn = ir_kfunc(IR(ir->op1));
-      MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
-      emit_rma(as, XO_MOV, dest, v);
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  if (irref_isk(ir->op1)) {
+    GCfunc *fn = ir_kfunc(IR(ir->op1));
+    MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
+    emit_rma(as, XO_MOV, dest, v);
+  } else {
+    Reg uv = ra_scratch(as, RSET_GPR);
+    Reg func = ra_alloc1(as, ir->op1, RSET_GPR);
+    if (ir->o == IR_UREFC) {
+      emit_rmro(as, XO_LEA, dest, uv, offsetof(GCupval, tv));
+      asm_guardcc(as, CC_NE);
+      emit_i8(as, 1);
+      emit_rmro(as, XO_ARITHib, XOg_CMP, uv, offsetof(GCupval, closed));
     } else {
-      Reg uv = ra_scratch(as, RSET_GPR);
-      Reg func = ra_alloc1(as, ir->op1, RSET_GPR);
-      if (ir->o == IR_UREFC) {
-	emit_rmro(as, XO_LEA, dest, uv, offsetof(GCupval, tv));
-	asm_guardcc(as, CC_NE);
-	emit_i8(as, 1);
-	emit_rmro(as, XO_ARITHib, XOg_CMP, uv, offsetof(GCupval, closed));
-      } else {
-	emit_rmro(as, XO_MOV, dest, uv, offsetof(GCupval, v));
-      }
-      emit_rmro(as, XO_MOV, uv, func,
-		(int32_t)offsetof(GCfuncL, uvptr) + 4*(int32_t)(ir->op2 >> 8));
+      emit_rmro(as, XO_MOV, dest, uv, offsetof(GCupval, v));
     }
+    emit_rmro(as, XO_MOV, uv, func,
+	      (int32_t)offsetof(GCfuncL, uvptr) + 4*(int32_t)(ir->op2 >> 8));
   }
 }
 
@@ -3423,11 +3421,10 @@ static void asm_trace(ASMState *as)
 {
   for (as->curins--; as->curins > as->stopins; as->curins--) {
     IRIns *ir = IR(as->curins);
+    if (!ra_used(ir) && !ir_sideeff(ir) && (as->flags & JIT_F_OPT_DCE))
+      continue;  /* Dead-code elimination can be soooo easy. */
     if (irt_isguard(ir->t))
       asm_snap_prep(as);
-    else if (!ra_used(ir) && !irm_sideeff(lj_ir_mode[ir->o]) &&
-	     (as->flags & JIT_F_OPT_DCE))
-      continue;  /* Dead-code elimination can be soooo easy. */
     RA_DBG_REF();
     checkmclim(as);
     asm_ir(as, ir);
