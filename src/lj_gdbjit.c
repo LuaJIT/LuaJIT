@@ -12,7 +12,6 @@
 
 #include "lj_gc.h"
 #include "lj_err.h"
-#include "lj_str.h"
 #include "lj_frame.h"
 #include "lj_jit.h"
 #include "lj_dispatch.h"
@@ -385,7 +384,6 @@ typedef struct GDBJITctx {
   MSize spadj;		/* Stack adjustment for trace itself. */
   BCLine lineno;	/* Starting line number. */
   const char *filename;	/* Starting file name. */
-  const char *trname;	/* Name of trace. */
   size_t objsize;	/* Final size of ELF object. */
   GDBJITobj obj;	/* In-memory ELF object. */
 } GDBJITctx;
@@ -400,6 +398,13 @@ static uint32_t gdbjit_strz(GDBJITctx *ctx, const char *str)
   } while (*str++);
   ctx->p = p;
   return ofs;
+}
+
+/* Append a decimal number. */
+static void gdbjit_catnum(GDBJITctx *ctx, uint32_t n)
+{
+  if (n >= 10) { uint32_t m = n / 10; n = n % 10; gdbjit_catnum(ctx, m); }
+  *ctx->p++ = '0' + n;
 }
 
 /* Add a ULEB128 value. */
@@ -488,7 +493,8 @@ static void LJ_FASTCALL gdbjit_symtab(GDBJITctx *ctx)
   sym->info = ELFSYM_TYPE_FILE|ELFSYM_BIND_LOCAL;
 
   sym = &ctx->obj.sym[GDBJIT_SYM_FUNC];
-  sym->name = gdbjit_strz(ctx, ctx->trname);
+  sym->name = gdbjit_strz(ctx, "TRACE_"); ctx->p--;
+  gdbjit_catnum(ctx, ctx->T->traceno); *ctx->p++ = '\0';
   sym->sectidx = GDBJIT_SECT_text;
   sym->value = 0;
   sym->size = ctx->szmcode;
@@ -701,7 +707,6 @@ static void gdbjit_newentry(lua_State *L, GDBJITctx *ctx)
 void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
 {
   GDBJITctx ctx;
-  lua_State *L = J->L;
   GCproto *pt = &gcref(T->startpt)->pt;
   TraceNo parent = T->ir[REF_BASE].op1;
   uintptr_t pcofs = (uintptr_t)(T->snap[0].mapofs+T->snap[0].nent);
@@ -721,10 +726,8 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
     ctx.filename++;
   else
     ctx.filename = "(string)";
-  ctx.trname = lj_str_pushf(L, "TRACE_%d", T->traceno);
-  L->top--;
   gdbjit_buildobj(&ctx);
-  gdbjit_newentry(L, &ctx);
+  gdbjit_newentry(J->L, &ctx);
 }
 
 /* Delete debug info for trace and notify GDB. */
