@@ -140,6 +140,7 @@ static int io_file_readnum(lua_State *L, FILE *fp)
     setnumV(L->top++, d);
     return 1;
   } else {
+    setnilV(L->top++);
     return 0;
   }
 }
