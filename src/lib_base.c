@@ -413,8 +413,7 @@ LJLIB_CF(print)
       size = strV(o)->len;
     } else if (shortcut && tvisnum(o)) {
       char buf[LUAI_MAXNUMBER2STR];
-      lua_Number n = numV(o);
-      size = (size_t)lua_number2str(buf, n);
+      size = lj_str_bufnum(buf, o);
       str = buf;
     } else {
       copyTV(L, L->top+1, o);

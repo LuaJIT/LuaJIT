@@ -734,9 +734,23 @@ LJLIB_CF(string_format)
 	addintlen(form);
 	sprintf(buff, form, (unsigned LUA_INTFRM_T)lj_lib_checknum(L, arg));
 	break;
-      case 'e':  case 'E': case 'f': case 'g': case 'G':
-	sprintf(buff, form, (double)lj_lib_checknum(L, arg));
+      case 'e':  case 'E': case 'f': case 'g': case 'G': {
+	TValue tv;
+	tv.n = lj_lib_checknum(L, arg);
+	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
+	  /* Canonicalize output of non-finite values. */
+	  size_t len = lj_str_bufnum(buff, &tv);
+	  if (strfrmt[-1] == 'E' || strfrmt[-1] == 'G') {
+	    buff[len-3] = buff[len-3] - 0x20;
+	    buff[len-2] = buff[len-2] - 0x20;
+	    buff[len-1] = buff[len-1] - 0x20;
+	  }
+	  luaL_addlstring(&b, buff, len);
+	  continue;
+	}
+	sprintf(buff, form, (double)tv.n);
 	break;
+	}
       case 'q':
 	addquoted(L, &b, arg);
 	continue;

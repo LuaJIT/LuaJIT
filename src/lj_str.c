@@ -173,13 +173,27 @@ parsedbl:
   }
 }
 
+/* Print number to buffer. Canonicalizes non-finite values. */
+size_t LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o)
+{
+  if (LJ_LIKELY((o->u32.hi << 1) < 0xffe00000)) {  /* Finite? */
+    lua_Number n = o->n;
+    return (size_t)lua_number2str(s, n);
+  } else if (((o->u32.hi & 0x000fffff) | o->u32.lo) != 0) {
+    s[0] = 'n'; s[1] = 'a'; s[2] = 'n'; return 3;
+  } else if ((o->u32.hi & 0x80000000) == 0) {
+    s[0] = 'i'; s[1] = 'n'; s[2] = 'f'; return 3;
+  } else {
+    s[0] = '-'; s[1] = 'i'; s[2] = 'n'; s[3] = 'f'; return 4;
+  }
+}
+
 /* Convert number to string. */
 GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
 {
-  char s[LUAI_MAXNUMBER2STR];
-  lua_Number n = *np;
-  size_t len = (size_t)lua_number2str(s, n);
-  return lj_str_new(L, s, len);
+  char buf[LUAI_MAXNUMBER2STR];
+  size_t len = lj_str_bufnum(buf, (TValue *)np);
+  return lj_str_new(L, buf, len);
 }
 
 #if LJ_HASJIT
@@ -252,10 +266,12 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       break;
       }
     case 'f': {
-      char buff[LUAI_MAXNUMBER2STR];
-      lua_Number n = cast_num(va_arg(argp, LUAI_UACNUMBER));
-      MSize len = (MSize)lua_number2str(buff, n);
-      addstr(L, sb, buff, len);
+      char buf[LUAI_MAXNUMBER2STR];
+      TValue tv;
+      MSize len;
+      tv.n = cast_num(va_arg(argp, LUAI_UACNUMBER));
+      len = (MSize)lj_str_bufnum(buf, &tv);
+      addstr(L, sb, buf, len);
       break;
       }
     case 'p': {
