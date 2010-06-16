@@ -402,8 +402,15 @@ LJLIB_CF(print)
 {
   ptrdiff_t i, nargs = L->top - L->base;
   cTValue *tv = lj_tab_getstr(tabref(L->env), strV(lj_lib_upvalue(L, 1)));
-  int shortcut = (tv && tvisfunc(tv) && funcV(tv)->c.ffid == FF_tostring);
-  copyTV(L, L->top++, tv ? tv : niltv(L));
+  int shortcut;
+  if (tv && !tvisnil(tv)) {
+    copyTV(L, L->top++, tv);
+  } else {
+    setstrV(L, L->top++, strV(lj_lib_upvalue(L, 1)));
+    lua_gettable(L, LUA_GLOBALSINDEX);
+    tv = L->top-1;
+  }
+  shortcut = (tvisfunc(tv) && funcV(tv)->c.ffid == FF_tostring);
   for (i = 0; i < nargs; i++) {
     const char *str;
     size_t size;
