@@ -1432,6 +1432,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
   |  mov L:RB, SAVE_L
   |  mov L:RB->base, BASE		// Add frame since C call can throw.
+  |  mov L:RB->top, BASE		// Dummy frame length is ok.
   |  mov PC, [BASE-4]
   |.if X64WIN
   |  lea CARG3d, [BASE+8]
