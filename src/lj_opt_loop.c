@@ -101,7 +101,8 @@
 /* -- PHI elimination ----------------------------------------------------- */
 
 /* Emit or eliminate collected PHIs. */
-static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
+static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
+			  SnapNo onsnap)
 {
   int pass2 = 0;
   IRRef i, nslots;
@@ -120,10 +121,20 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
   }
   /* Pass #2: traverse variant part and clear marks of non-redundant PHIs. */
   if (pass2) {
+    SnapNo s;
     for (i = J->cur.nins-1; i > invar; i--) {
       IRIns *ir = IR(i);
       if (!irref_isk(ir->op1)) irt_clearmark(IR(ir->op1)->t);
       if (!irref_isk(ir->op2)) irt_clearmark(IR(ir->op2)->t);
+    }
+    for (s = J->cur.nsnap-1; s >= onsnap; s--) {
+      SnapShot *snap = &J->cur.snap[s];
+      SnapEntry *map = &J->cur.snapmap[snap->mapofs];
+      MSize n, nent = snap->nent;
+      for (n = 0; n < nent; n++) {
+	IRRef ref = snap_ref(map[n]);
+	if (!irref_isk(ref)) irt_clearmark(IR(ref)->t);
+      }
     }
   }
   /* Pass #3: add PHIs for variant slots without a corresponding SLOAD. */
@@ -133,11 +144,7 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi)
     while (!irref_isk(ref) && ref != subst[ref]) {
       IRIns *ir = IR(ref);
       irt_clearmark(ir->t);  /* Unmark potential uses, too. */
-      if (irt_isphi(ir->t)) {
-	irt_clearmark(IR(subst[ref])->t);
-	break;
-      }
-      if (irt_ispri(ir->t))
+      if (irt_isphi(ir->t) || irt_ispri(ir->t))
 	break;
       irt_setphi(ir->t);
       if (nphi >= LJ_MAX_PHI)
@@ -222,7 +229,8 @@ static void loop_unroll(jit_State *J)
   IRRef1 phi[LJ_MAX_PHI];
   uint32_t nphi = 0;
   IRRef1 *subst;
-  SnapShot *osnap;
+  SnapNo onsnap;
+  SnapShot *osnap, *loopsnap;
   SnapEntry *loopmap, *psentinel;
   IRRef ins, invar;
 
@@ -244,20 +252,17 @@ static void loop_unroll(jit_State *J)
   ** from the loop snapshot entries for each new snapshot.
   ** Caveat: both calls may reallocate J->cur.snap and J->cur.snapmap!
   */
-  {
-    MSize nsnap = J->cur.nsnap;
-    SnapShot *loopsnap;
-    lj_snap_grow_buf(J, 2*nsnap-2);
-    lj_snap_grow_map(J, J->cur.nsnapmap*2+(nsnap-2)*J->cur.snap[nsnap-1].nent);
+  onsnap = J->cur.nsnap;
+  lj_snap_grow_buf(J, 2*onsnap-2);
+  lj_snap_grow_map(J, J->cur.nsnapmap*2+(onsnap-2)*J->cur.snap[onsnap-1].nent);
 
-    /* The loop snapshot is used for fallback substitutions. */
-    loopsnap = &J->cur.snap[nsnap-1];
-    loopmap = &J->cur.snapmap[loopsnap->mapofs];
-    /* The PC of snapshot #0 and the loop snapshot must match. */
-    psentinel = &loopmap[loopsnap->nent];
-    lua_assert(*psentinel == J->cur.snapmap[J->cur.snap[0].nent]);
-    *psentinel = SNAP(255, 0, 0);  /* Replace PC with temporary sentinel. */
-  }
+  /* The loop snapshot is used for fallback substitutions. */
+  loopsnap = &J->cur.snap[onsnap-1];
+  loopmap = &J->cur.snapmap[loopsnap->mapofs];
+  /* The PC of snapshot #0 and the loop snapshot must match. */
+  psentinel = &loopmap[loopsnap->nent];
+  lua_assert(*psentinel == J->cur.snapmap[J->cur.snap[0].nent]);
+  *psentinel = SNAP(255, 0, 0);  /* Replace PC with temporary sentinel. */
 
   /* Start substitution with snapshot #1 (#0 is empty for root traces). */
   osnap = &J->cur.snap[1];
@@ -308,11 +313,11 @@ static void loop_unroll(jit_State *J)
   lua_assert(J->cur.nsnapmap <= J->sizesnapmap);
   *psentinel = J->cur.snapmap[J->cur.snap[0].nent];  /* Restore PC. */
 
-  loop_emit_phi(J, subst, phi, nphi);
+  loop_emit_phi(J, subst, phi, nphi, onsnap);
 }
 
 /* Undo any partial changes made by the loop optimization. */
-static void loop_undo(jit_State *J, IRRef ins, MSize nsnap)
+static void loop_undo(jit_State *J, IRRef ins, SnapNo nsnap)
 {
   ptrdiff_t i;
   SnapShot *snap = &J->cur.snap[nsnap-1];
@@ -346,7 +351,7 @@ static TValue *cploop_opt(lua_State *L, lua_CFunction dummy, void *ud)
 int lj_opt_loop(jit_State *J)
 {
   IRRef nins = J->cur.nins;
-  MSize nsnap = J->cur.nsnap;
+  SnapNo nsnap = J->cur.nsnap;
   int errcode = lj_vm_cpcall(J->L, NULL, J, cploop_opt);
   if (LJ_UNLIKELY(errcode)) {
     lua_State *L = J->L;
