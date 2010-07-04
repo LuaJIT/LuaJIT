@@ -439,6 +439,18 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
       freenode->next = n->next;
       setmref(n->next, NULL);
       setnilV(&n->val);
+      /* Rechain pseudo-resurrected string keys with colliding hashes. */
+      while (nextnode(freenode)) {
+	Node *nn = nextnode(freenode);
+	if (tvisstr(&nn->key) && !tvisnil(&nn->val) &&
+	    hashstr(t, strV(&nn->key)) == n) {
+	  freenode->next = nn->next;
+	  nn->next = n->next;
+	  setmref(n->next, nn);
+	} else {
+	  freenode = nn;
+	}
+      }
     } else {  /* Otherwise use free node. */
       setmrefr(freenode->next, n->next);  /* Insert into chain. */
       setmref(n->next, freenode);
