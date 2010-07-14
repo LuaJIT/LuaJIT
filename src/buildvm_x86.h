@@ -1265,7 +1265,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   }
   dasm_put(Dst, 4858, 2+1, LJ_TISNUM, LJ_TISNUM);
   if (sse) {
-    dasm_put(Dst, 4910, 1+1, LJ_TISNUM, LJ_TISNUM);
+    dasm_put(Dst, 4910, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
     dasm_put(Dst, 4957, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
@@ -1404,31 +1404,31 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   }
   dasm_put(Dst, 6982);
   if (sse) {
-  dasm_put(Dst, 6993, 1+1, LJ_TISNUM, LJ_TISNUM);
+  dasm_put(Dst, 6993, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
   dasm_put(Dst, 7067, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
   dasm_put(Dst, 7133);
   if (sse) {
-  dasm_put(Dst, 7142, 1+1, LJ_TISNUM, LJ_TISNUM);
+  dasm_put(Dst, 7142, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
   dasm_put(Dst, 7216, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
   dasm_put(Dst, 7282);
   if (sse) {
-  dasm_put(Dst, 7292, 1+1, LJ_TISNUM, LJ_TISNUM);
+  dasm_put(Dst, 7292, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
   dasm_put(Dst, 7366, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
   dasm_put(Dst, 7432);
   if (sse) {
-  dasm_put(Dst, 7442, 1+1, LJ_TISNUM, LJ_TISNUM);
+  dasm_put(Dst, 7442, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
   dasm_put(Dst, 7516, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
   dasm_put(Dst, 7582);
   if (sse) {
-  dasm_put(Dst, 7591, 1+1, LJ_TISNUM, LJ_TISNUM);
+  dasm_put(Dst, 7591, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
   dasm_put(Dst, 7665, 2+1, LJ_TISNUM, LJ_TISNUM);
   }

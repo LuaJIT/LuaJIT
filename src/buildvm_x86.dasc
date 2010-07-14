@@ -1211,7 +1211,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endmacro
   |
   |.macro .ffunc_nnsse, name
-  |  .ffunc_1 name
+  |  .ffunc_2 name
   |  cmp dword [BASE+4], LJ_TISNUM;  ja ->fff_fallback
   |  cmp dword [BASE+12], LJ_TISNUM;  ja ->fff_fallback
   |  movsd xmm0, qword [BASE]

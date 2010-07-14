@@ -1207,7 +1207,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   }
   dasm_put(Dst, 4748, 2+1, LJ_TISNUM, LJ_TISNUM);
   if (sse) {
-    dasm_put(Dst, 4800, 1+1, LJ_TISNUM, LJ_TISNUM);
+    dasm_put(Dst, 4800, 2+1, LJ_TISNUM, LJ_TISNUM);
   } else {
     dasm_put(Dst, 4847, 2+1, LJ_TISNUM, LJ_TISNUM);
   }
@@ -1320,27 +1320,27 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   }
   dasm_put(Dst, 6364);
   if (sse) {
-  dasm_put(Dst, 6375, 1+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
+  dasm_put(Dst, 6375, 2+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
   } else {
   }
   dasm_put(Dst, 6444);
   if (sse) {
-  dasm_put(Dst, 6453, 1+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
+  dasm_put(Dst, 6453, 2+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
   } else {
   }
   dasm_put(Dst, 6522);
   if (sse) {
-  dasm_put(Dst, 6532, 1+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
+  dasm_put(Dst, 6532, 2+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
   } else {
   }
   dasm_put(Dst, 6601);
   if (sse) {
-  dasm_put(Dst, 6611, 1+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
+  dasm_put(Dst, 6611, 2+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
   } else {
   }
   dasm_put(Dst, 6680);
   if (sse) {
-  dasm_put(Dst, 6689, 1+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
+  dasm_put(Dst, 6689, 2+1, LJ_TISNUM, LJ_TISNUM, (unsigned int)(U64x(43380000,00000000)), (unsigned int)((U64x(43380000,00000000))>>32));
   } else {
   }
   dasm_put(Dst, 6758, 1+2, 1+1, Dt1(->base), 8*LUA_MINSTACK, Dt1(->top), Dt1(->maxstack), Dt8(->f), Dt1(->base));
