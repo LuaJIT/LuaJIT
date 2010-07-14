@@ -1348,7 +1348,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     }
 #endif
     if (r) {  /* Argument is in a register. */
-      if (args[n] < ASMREF_TMP1) {
+      if (r < RID_MAX_GPR && args[n] < ASMREF_TMP1) {
 	emit_loadi(as, r, ir->i);
       } else {
 	lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
