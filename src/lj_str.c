@@ -76,15 +76,29 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   GCstr *s;
   GCobj *o;
   MSize len = (MSize)lenx;
-  MSize h = len;
-  MSize step = (len>>5)+1;  /* Partial hash. */
-  MSize l1;
+  MSize a, b, h = len;
   if (lenx >= LJ_MAX_STR)
     lj_err_msg(L, LJ_ERR_STROV);
-  for (l1 = len; l1 >= step; l1 -= step)  /* Compute string hash. */
-    h = h ^ ((h<<5)+(h>>2)+cast(unsigned char, str[l1-1]));
-  /* Check if the string has already been interned. */
   g = G(L);
+  /* Compute string hash. Constants taken from lookup3 hash by Bob Jenkins. */
+  if (len >= 4) {  /* Caveat: unaligned access! */
+    a = *(const uint32_t *)str;
+    h ^= *(const uint32_t *)(str+len-4);
+    b = *(const uint32_t *)(str+(len>>1)-2);
+    h ^= b; h -= lj_rol(b, 14);
+    b += *(const uint32_t *)(str+(len>>2)-1);
+  } else if (len > 0) {
+    a = *(const uint8_t *)str;
+    h ^= *(const uint8_t *)(str+len-1);
+    b = *(const uint8_t *)(str+(len>>1));
+    h ^= b; h -= lj_rol(b, 14);
+  } else {
+    return &g->strempty;
+  }
+  a ^= h; a -= lj_rol(h, 11);
+  b ^= a; b -= lj_rol(a, 25);
+  h ^= b; h -= lj_rol(b, 16);
+  /* Check if the string has already been interned. */
   for (o = gcref(g->strhash[h & g->strmask]); o != NULL; o = gcnext(o)) {
     GCstr *tso = gco2str(o);
     if (tso->len == len && (memcmp(str, strdata(tso), len) == 0)) {

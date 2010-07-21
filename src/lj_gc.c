@@ -540,6 +540,7 @@ static void atomic(global_State *g, lua_State *L)
 
   /* Prepare for sweep phase. */
   g->gc.currentwhite = cast_byte(otherwhite(g));  /* Flip current white. */
+  g->strempty.marked = g->gc.currentwhite;
   setmref(g->gc.sweep, &g->gc.root);
   g->gc.estimate = g->gc.total - (MSize)udsize;  /* Initial estimate. */
 }

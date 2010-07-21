@@ -473,10 +473,11 @@ typedef struct global_State {
   GCState gc;		/* Garbage collector. */
   SBuf tmpbuf;		/* Temporary buffer for string concatenation. */
   Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
+  GCstr strempty;	/* Empty string. */
+  uint8_t stremptyz;	/* Zero terminator of empty string. */
   uint8_t hookmask;	/* Hook mask. */
   uint8_t dispatchmode;	/* Dispatch mode. */
   uint8_t vmevmask;	/* VM event mask. */
-  uint8_t unused1;
   GCRef mainthref;	/* Link to main thread. */
   TValue registrytv;	/* Anchor for registry. */
   TValue tmptv;		/* Temporary TValue. */
