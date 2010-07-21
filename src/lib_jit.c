@@ -114,8 +114,11 @@ LJLIB_CF(jit_attach)
   GCstr *s = lj_lib_optstr(L, 2);
   luaL_findtable(L, LUA_REGISTRYINDEX, LJ_VMEVENTS_REGKEY, LJ_VMEVENTS_HSIZE);
   if (s) {  /* Attach to given event. */
+    const uint8_t *p = (const uint8_t *)strdata(s);
+    uint32_t h = s->len;
+    while (*p) h = h ^ (lj_rol(h, 6) + *p++);
     lua_pushvalue(L, 1);
-    lua_rawseti(L, -2, VMEVENT_HASHIDX(s->hash));
+    lua_rawseti(L, -2, VMEVENT_HASHIDX(h));
     G(L)->vmevmask = VMEVENT_NOCACHE;  /* Invalidate cache. */
   } else {  /* Detach if no event given. */
     setnilV(L->top++);
