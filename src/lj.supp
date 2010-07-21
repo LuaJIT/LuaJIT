@@ -4,3 +4,13 @@
    Memcheck:Addr4
    fun:lj_str_cmp
 }
+{
+   Optimized string compare
+   Memcheck:Addr4
+   fun:lj_str_new
+}
+{
+   Optimized string compare
+   Memcheck:Cond
+   fun:lj_str_new
+}

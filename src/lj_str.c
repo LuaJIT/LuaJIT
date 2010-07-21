@@ -43,6 +43,27 @@ int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b)
   return (int32_t)(a->len - b->len);
 }
 
+/* Fast string data comparison. Caveat: unaligned access to 1st string! */
+static LJ_AINLINE int str_fastcmp(const char *a, const char *b, MSize len)
+{
+  MSize i = 0;
+  lua_assert(len > 0);
+  lua_assert((((uintptr_t)a + len) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4);
+  do {  /* Note: innocuous access up to end of string + 3. */
+    uint32_t v = *(const uint32_t *)(a+i) ^ *(const uint32_t *)(b+i);
+    if (v) {
+      i -= len;
+#if LJ_ARCH_ENDIAN == LUAJIT_LE
+      return (int32_t)i >= -3 ? (v << (32+(i<<3))) : 1;
+#else
+      return (int32_t)i >= -3 ? (v >> (32+(i<<3))) : 1;
+#endif
+    }
+    i += 4;
+  } while (i < len);
+  return 0;
+}
+
 /* Resize the string hash table (grow and shrink). */
 void lj_str_resize(lua_State *L, MSize newmask)
 {
@@ -99,12 +120,26 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   b ^= a; b -= lj_rol(a, 25);
   h ^= b; h -= lj_rol(b, 16);
   /* Check if the string has already been interned. */
-  for (o = gcref(g->strhash[h & g->strmask]); o != NULL; o = gcnext(o)) {
-    GCstr *tso = gco2str(o);
-    if (tso->len == len && (memcmp(str, strdata(tso), len) == 0)) {
-      /* Resurrect if dead. Can only happen with fixstring() (keywords). */
-      if (isdead(g, o)) flipwhite(o);
-      return tso;  /* Return existing string. */
+  o = gcref(g->strhash[h & g->strmask]);
+  if (LJ_LIKELY((((uintptr_t)str + len) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
+    while (o != NULL) {
+      GCstr *sx = gco2str(o);
+      if (sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	if (isdead(g, o)) flipwhite(o);
+	return sx;  /* Return existing string. */
+      }
+      o = gcnext(o);
+    }
+  } else {  /* Slow path: end of string is too close to a page boundary. */
+    while (o != NULL) {
+      GCstr *sx = gco2str(o);
+      if (sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	if (isdead(g, o)) flipwhite(o);
+	return sx;  /* Return existing string. */
+      }
+      o = gcnext(o);
     }
   }
   /* Nope, create a new string. */
