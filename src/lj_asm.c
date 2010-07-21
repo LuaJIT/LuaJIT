@@ -1572,7 +1572,7 @@ static void asm_aref(ASMState *as, IRIns *ir)
     emit_rr(as, XO_MOV, dest, as->mrm.base);
 }
 
-/* Must match with hashkey() and hashrot() in lj_tab.c. */
+/* Must match with hash*() in lj_tab.c. */
 static uint32_t ir_khash(IRIns *ir)
 {
   uint32_t lo, hi;
@@ -1587,12 +1587,9 @@ static uint32_t ir_khash(IRIns *ir)
   } else {
     lua_assert(irt_isgcv(ir->t));
     lo = u32ptr(ir_kgc(ir));
-    hi = lo - 0x04c11db7;
+    hi = lo + HASH_BIAS;
   }
-  lo ^= hi; hi = lj_rol(hi, 14);
-  lo -= hi; hi = lj_rol(hi, 5);
-  hi ^= lo; hi -= lj_rol(lo, 27);
-  return hi;
+  return hashrot(lo, hi);
 }
 
 /* Merge NE(HREF, niltv) check. */
@@ -1717,11 +1714,11 @@ static void asm_href(ASMState *as, IRIns *ir)
     } else {  /* Must match with hashrot() in lj_tab.c. */
       emit_rmro(as, XO_ARITH(XOg_AND), dest, tab, offsetof(GCtab, hmask));
       emit_rr(as, XO_ARITH(XOg_SUB), dest, tmp);
-      emit_shifti(as, XOg_ROL, tmp, 27);
+      emit_shifti(as, XOg_ROL, tmp, HASH_ROT3);
       emit_rr(as, XO_ARITH(XOg_XOR), dest, tmp);
-      emit_shifti(as, XOg_ROL, dest, 5);
+      emit_shifti(as, XOg_ROL, dest, HASH_ROT2);
       emit_rr(as, XO_ARITH(XOg_SUB), tmp, dest);
-      emit_shifti(as, XOg_ROL, dest, 14);
+      emit_shifti(as, XOg_ROL, dest, HASH_ROT1);
       emit_rr(as, XO_ARITH(XOg_XOR), tmp, dest);
       if (irt_isnum(kt)) {
 	emit_rr(as, XO_ARITH(XOg_ADD), dest, dest);
@@ -1735,7 +1732,7 @@ static void asm_href(ASMState *as, IRIns *ir)
 #endif
       } else {
 	emit_rr(as, XO_MOV, tmp, key);
-	emit_rmro(as, XO_LEA, dest, key, -0x04c11db7);
+	emit_rmro(as, XO_LEA, dest, key, HASH_BIAS);
       }
     }
   }

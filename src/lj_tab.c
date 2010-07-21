@@ -17,22 +17,19 @@
 /* -- Object hashing ------------------------------------------------------ */
 
 /* Hash values are masked with the table hash mask and used as an index. */
-#define hashmask(t, x)		(&noderef(t->node)[(x) & t->hmask])
+static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
+{
+  Node *n = noderef(t->node);
+  return &n[hash & t->hmask];
+}
 
 /* String hashes are precomputed when they are interned. */
 #define hashstr(t, s)		hashmask(t, (s)->hash)
 
-#define hashnum(t, o)		hashrot(t, (o)->u32.lo, ((o)->u32.hi << 1))
-#define hashgcref(t, r)		hashrot(t, gcrefu(r), gcrefu(r)-0x04c11db7)
-
-/* Scramble the bits of numbers and pointers. */
-static LJ_AINLINE Node *hashrot(const GCtab *t, uint32_t lo, uint32_t hi)
-{
-  lo ^= hi; hi = lj_rol(hi, 14);
-  lo -= hi; hi = lj_rol(hi, 5);
-  hi ^= lo; hi -= lj_rol(lo, 27);
-  return hashmask(t, hi);
-}
+#define hashlohi(t, lo, hi)	hashmask((t), hashrot((lo), (hi)))
+#define hashnum(t, o)		hashlohi((t), (o)->u32.lo, ((o)->u32.hi << 1))
+#define hashptr(t, p)		hashlohi((t), u32ptr(p), u32ptr(p) + HASH_BIAS)
+#define hashgcref(t, r)		hashlohi((t), gcrefu(r), gcrefu(r) + HASH_BIAS)
 
 /* Hash an arbitrary key and return its anchor position in the hash table. */
 static Node *hashkey(const GCtab *t, cTValue *key)

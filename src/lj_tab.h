@@ -8,6 +8,21 @@
 
 #include "lj_obj.h"
 
+/* Hash constants. Tuned using a brute force search. */
+#define HASH_BIAS	(-0x04c11db7)
+#define HASH_ROT1	14
+#define HASH_ROT2	5
+#define HASH_ROT3	13
+
+/* Scramble the bits of numbers and pointers. */
+static LJ_AINLINE uint32_t hashrot(uint32_t lo, uint32_t hi)
+{
+  lo ^= hi; hi = lj_rol(hi, HASH_ROT1);
+  lo -= hi; hi = lj_rol(hi, HASH_ROT2);
+  hi ^= lo; hi -= lj_rol(lo, HASH_ROT3);
+  return hi;
+}
+
 #define hsize2hbits(s)	((s) ? ((s)==1 ? 1 : 1+lj_fls((uint32_t)((s)-1))) : 0)
 
 LJ_FUNCA GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits);
