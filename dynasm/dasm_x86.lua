@@ -23,12 +23,11 @@ local _M = { _info = _info }
 
 -- Cache library functions.
 local type, tonumber, pairs, ipairs = type, tonumber, pairs, ipairs
-local assert, unpack = assert, unpack
+local assert, unpack, setmetatable = assert, unpack, setmetatable
 local _s = string
 local sub, format, byte, char = _s.sub, _s.format, _s.byte, _s.char
 local find, match, gmatch, gsub = _s.find, _s.match, _s.gmatch, _s.gsub
 local concat, sort = table.concat, table.sort
-local char, unpack = string.char, unpack
 
 -- Inherited tables and callbacks.
 local g_opt, g_arch
