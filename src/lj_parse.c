@@ -2219,7 +2219,7 @@ static void parse_chunk(LexState *ls)
 /* Entry point of bytecode parser. */
 GCproto *lj_parse(LexState *ls)
 {
-  struct FuncState fs;
+  FuncState fs;
   GCproto *pt;
   lua_State *L = ls->L;
   ls->chunkname = lj_str_newz(L, ls->chunkarg);
