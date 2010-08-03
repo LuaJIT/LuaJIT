@@ -140,7 +140,12 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 #define lj_fls(x)	((uint32_t)(__builtin_clz(x)^31))
 #endif
 
-#if defined(__i386__) || defined(__x86_64__)
+#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 3
+static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
+{
+  return (uint32_t)__builtin_bswap32((int32_t)x);
+}
+#elif defined(__i386__) || defined(__x86_64__)
 static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
   uint32_t r; __asm__("bswap %0" : "=r" (r) : "0" (x)); return r;

@@ -322,4 +322,13 @@ void emit_peobj(BuildCtx *ctx)
   owrite(ctx, strtab, strtabofs);
 }
 
+#else
+
+void emit_peobj(BuildCtx *ctx)
+{
+  UNUSED(ctx);
+  fprintf(stderr, "Error: no PE object support for this target\n");
+  exit(1);
+}
+
 #endif

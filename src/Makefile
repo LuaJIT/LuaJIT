@@ -391,7 +391,10 @@ depend:
 	@test -f buildvm_x86.h || touch buildvm_x86.h
 	@test -f buildvm_x64.h || touch buildvm_x64.h
 	@test -f buildvm_x64win.h || touch buildvm_x64win.h
-	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | sed "s|$(DASM_DIR)|\$$(DASM_DIR)|g" >Makefile.dep
+	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | \
+	  sed -e "s| [^ ]*/dasm_\S*\.h||g" \
+	      -e "s| buildvm_\S*\.h||g" \
+	      -e "s| lj_target_\S*\.h| lj_target_*.h|g" >Makefile.dep
 	@test -s lj_bcdef.h || $(HOST_RM) lj_bcdef.h
 	@test -s lj_ffdef.h || $(HOST_RM) lj_ffdef.h
 	@test -s lj_libdef.h || $(HOST_RM) lj_libdef.h
@@ -419,7 +422,7 @@ buildvm_x64win.h: buildvm_x86.dasc
 	$(E) "DYNASM    $@"
 	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64WIN) -o $@ buildvm_x86.dasc
 
-buildvm.o: buildvm_x86.h buildvm_x64.h buildvm_x64win.h
+buildvm.o: buildvm_x86.h buildvm_x64.h buildvm_x64win.h $(DASM_DIR)/dasm_*.h
 
 $(BUILDVM_T): $(BUILDVM_O)
 	$(E) "HOSTLINK  $@"

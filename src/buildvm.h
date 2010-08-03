@@ -38,14 +38,8 @@
 struct dasm_State;
 
 /* Build modes. */
-#if LJ_TARGET_X86ORX64
-#define BUILDDEFX(_)	_(peobj)
-#else
-#define BUILDDEFX(_)
-#endif
-
 #define BUILDDEF(_) \
-  _(elfasm) _(coffasm) _(machasm) BUILDDEFX(_) _(raw) \
+  _(elfasm) _(coffasm) _(machasm) _(peobj) _(raw) \
   _(bcdef) _(ffdef) _(libdef) _(recdef) _(vmdef) \
   _(folddef)
 

@@ -1049,7 +1049,6 @@ static const char *const extnames[] = {
 #define DtB(_V) (int)(ptrdiff_t)&(((Node *)0)_V)
 #define DtC(_V) (int)(ptrdiff_t)&(((int *)0)_V)
 #define DtD(_V) (int)(ptrdiff_t)&(((GCtrace *)0)_V)
-#define DtE(_V) (int)(ptrdiff_t)&(((ExitInfo *)0)_V)
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
 #define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))

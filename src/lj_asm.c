@@ -950,7 +950,7 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
   }
   /* Push the high byte of the exitno for each exit stub group. */
   *mxp++ = XI_PUSHi8; *mxp++ = (MCode)((group*EXITSTUBS_PER_GROUP)>>8);
-  /* Store DISPATCH in ExitInfo->dispatch. Account for the two push ops. */
+  /* Store DISPATCH at original stack slot 0. Account for the two push ops. */
   *mxp++ = XI_MOVmi;
   *mxp++ = MODRM(XM_OFS8, 0, RID_ESP);
   *mxp++ = MODRM(XM_SCALE1, RID_ESP, RID_ESP);

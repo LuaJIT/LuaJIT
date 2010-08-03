@@ -28,7 +28,6 @@
 #include "lj_ir.h"
 #include "lj_frame.h"
 #include "lj_dispatch.h"
-#include "lj_target.h"
 
 #include "buildvm.h"
 

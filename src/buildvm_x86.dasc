@@ -108,7 +108,6 @@
 |.type NODE,		Node
 |.type NARGS,		int
 |.type TRACE,		GCtrace
-|.type EXITINFO,	ExitInfo
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |//-----------------------------------------------------------------------
