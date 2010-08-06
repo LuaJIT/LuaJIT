@@ -650,7 +650,6 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RA, INARG_BASE			// Caveat: overlaps SAVE_CFRAME!
   |.endif
   |
-  |2:  // Entry point for vm_cpcall below (RA = base, RB = L, PC = ftype).
   |  mov KBASEa, L:RB->cframe		// Add our C frame to cframe chain.
   |  mov SAVE_CFRAME, KBASEa
   |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
@@ -660,6 +659,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:RB->cframe, esp
   |.endif
   |
+  |2:  // Entry point for vm_cpcall below (RA = base, RB = L, PC = ftype).
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  add DISPATCH, GG_G2DISP
   |
