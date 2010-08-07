@@ -437,8 +437,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |->vm_return:
   |  // BASE = base, RA = resultofs, RD = nresults+1 (= MULTRES), PC = return
-  |  test PC, FRAME_C
-  |  jz ->vm_returnp
+  |  xor PC, FRAME_C
+  |  test PC, FRAME_TYPE
+  |  jnz ->vm_returnp
   |
   |  // Return to C.
   |  set_vmstate C
@@ -4412,11 +4413,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jmp <4
     |
     |7:  // Tailcall from a vararg function.
-    |  jnp <1				// Vararg frame below?
-    |  and PC, -8
+    |  sub PC, FRAME_VARG
+    |  test PC, FRAME_TYPEP
+    |  jnz >8				// Vararg frame below?
     |  sub BASE, PC			// Need to relocate BASE/KBASE down.
     |  mov KBASE, BASE
     |  mov PC, [BASE-4]
+    |  jmp <1
+    |8:
+    |  add PC, FRAME_VARG
     |  jmp <1
     break;
 
@@ -4587,12 +4592,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jmp <5
     |
     |7:  // Non-standard return case.
-    |  jnp ->vm_return
+    |  lea RB, [PC-FRAME_VARG]
+    |  test RB, FRAME_TYPEP
+    |  jnz ->vm_return
     |  // Return from vararg function: relocate BASE down and RA up.
-    |  and PC, -8
-    |  sub BASE, PC
+    |  sub BASE, RB
     if (op != BC_RET0) {
-      |  add RA, PC
+      |  add RA, RB
     }
     |  jmp <1
     break;
