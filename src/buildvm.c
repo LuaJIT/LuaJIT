@@ -189,7 +189,7 @@ static int build_code(BuildCtx *ctx)
   ctx->npc = build_backend(ctx);
 
   /* Finalize the code. */
-  (void)dasm_checkstep(Dst, DASM_SECTION_CODE);
+  (void)dasm_checkstep(Dst, -1);
   if ((status = dasm_link(Dst, &ctx->codesz))) return status;
   ctx->code = (uint8_t *)malloc(ctx->codesz);
   if ((status = dasm_encode(Dst, (void *)ctx->code))) return status;
@@ -431,9 +431,7 @@ int main(int argc, char **argv)
   }
 
   switch (ctx->mode) {
-#if LJ_TARGET_X86ORX64
   case BUILD_peobj:
-#endif
   case BUILD_raw:
     binmode = 1;
     break;
@@ -461,11 +459,9 @@ int main(int argc, char **argv)
     emit_asm(ctx);
     emit_asm_debug(ctx);
     break;
-#if LJ_TARGET_X86ORX64
   case BUILD_peobj:
     emit_peobj(ctx);
     break;
-#endif
   case BUILD_raw:
     emit_raw(ctx);
     break;

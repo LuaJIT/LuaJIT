@@ -47,6 +47,9 @@ enum {
 #define DASM_POS2SEC(pos)	((pos)>>24)
 #define DASM_POS2PTR(D, pos)	(D->sections[DASM_POS2SEC(pos)].rbuf + (pos))
 
+/* Action list type. */
+typedef const unsigned char *dasm_ActList;
+
 /* Per-section structure. */
 typedef struct dasm_Section {
   int *rbuf;		/* Biased buffer pointer (negative section bias). */
@@ -132,11 +135,11 @@ void dasm_growpc(Dst_DECL, unsigned int maxpc)
 }
 
 /* Setup encoder. */
-void dasm_setup(Dst_DECL, dasm_ActList actionlist)
+void dasm_setup(Dst_DECL, const void *actionlist)
 {
   dasm_State *D = Dst_REF;
   int i;
-  D->actionlist = actionlist;
+  D->actionlist = (dasm_ActList)actionlist;
   D->status = DASM_S_OK;
   D->section = &D->sections[0];
   memset((void *)D->lglabels, 0, D->lgsize);
