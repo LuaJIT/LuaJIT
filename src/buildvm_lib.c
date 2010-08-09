@@ -198,7 +198,7 @@ static void memcpy_endian(void *dst, void *src, size_t n)
   } else {
     size_t i;
     for (i = 0; i < n; i++)
-      ((uint8_t *)dst)[i] = ((uint8_t *)src)[n-i];
+      ((uint8_t *)dst)[i] = ((uint8_t *)src)[n-i-1];
   }
 }
 
