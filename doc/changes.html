@@ -53,6 +53,38 @@ Please check the
 <a href="http://luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Online Change History</a>
 to see whether newer versions are available.
 </p>
+
+<div class="major" style="background: #d0d0d0;">
+<h2 id="snap">Development Snapshot</h2>
+<ul>
+<li>Correctness and completeness:
+<ul>
+<li>Fix trace exit dispatch to function headers.</li>
+<li>Fix Windows and OSX builds with LUAJIT_DISABLE_JIT.</li>
+<li>Reorganize and fix placement of generated machine code on x64.</li>
+<li>Fix TNEW in x64 interpreter.</li>
+<li>Do not eliminate PHIs for values only referenced from side exits.</li>
+<li>OS-independent canonicalization of strings for non-finite numbers.</li>
+<li>Fix <tt>string.char()</tt> range check on x64.</li>
+<li>Fix <tt>tostring()</tt> resolving within <tt>print()</tt>.</li>
+<li>Fix error handling for <tt>next()</tt>.</li>
+<li>Fix passing of constant arguments to external calls on x64.</li>
+<li>Fix interpreter argument check for two-argument SSE math functions.</li>
+<li>Fix C frame chain corruption caused by <tt>lua_cpcall()</tt>.</li>
+<li>Fix return from <tt>pcall()</tt> within active hook.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Replace on-trace GC frame syncing with interpreter exit.</li>
+<li>Improve hash lookup specialization by not removing dead keys during GC.</li>
+<li>Turn traces into true GC objects.</li>
+<li>Avoid starting a GC cycle immediately after library init.</li>
+<li>Add weak guards to improve dead-code elimination.</li>
+<li>Speed up string interning.</li>
+</ul></li>
+</ul>
+</div>
+
 <div class="major" style="background: #ffd0d0;">
 <h2 id="LuaJIT-2.0.0-beta4">LuaJIT 2.0.0-beta4 &mdash; 2010-03-28</h2>
 <ul>
@@ -63,12 +95,12 @@ to see whether newer versions are available.
 <li>Fix folding of ordered comparisons with same references.</li>
 <li>Fix snapshot restores for multi-result bytecodes.</li>
 <li>Fix potential hang when recording bytecode with nested closures.</li>
-<li>Fix recording of getmetatable(), tonumber() and bad argument types.</li>
+<li>Fix recording of <tt>getmetatable()</tt>, <tt>tonumber()</tt> and bad argument types.</li>
 <li>Fix SLOAD fusion across returns to lower frames.</li>
 </ul></li>
 <li>Structural and performance enhancements:
 <ul>
-<li>Add array bounds check elimination. -Oabc is enabled by default.</li>
+<li>Add array bounds check elimination. <tt>-Oabc</tt> is enabled by default.</li>
 <li>More tuning for x64, e.g. smaller table objects.</li>
 </ul></li>
 </ul>
