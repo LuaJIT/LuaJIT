@@ -739,14 +739,17 @@ LJLIB_CF(string_format)
 	tv.n = lj_lib_checknum(L, arg);
 	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
 	  /* Canonicalize output of non-finite values. */
-	  size_t len = lj_str_bufnum(buff, &tv);
+	  char *p, nbuf[LUAI_MAXNUMBER2STR];
+	  size_t len = lj_str_bufnum(nbuf, &tv);
 	  if (strfrmt[-1] == 'E' || strfrmt[-1] == 'G') {
-	    buff[len-3] = buff[len-3] - 0x20;
-	    buff[len-2] = buff[len-2] - 0x20;
-	    buff[len-1] = buff[len-1] - 0x20;
+	    nbuf[len-3] = nbuf[len-3] - 0x20;
+	    nbuf[len-2] = nbuf[len-2] - 0x20;
+	    nbuf[len-1] = nbuf[len-1] - 0x20;
 	  }
-	  luaL_addlstring(&b, buff, len);
-	  continue;
+	  for (p = form; *p < 'e' && *p != '.'; p++) ;
+	  *p++ = 's'; *p = '\0';
+	  sprintf(buff, form, nbuf);
+	  break;
 	}
 	sprintf(buff, form, (double)tv.n);
 	break;
