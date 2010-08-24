@@ -746,6 +746,7 @@ LJLIB_CF(string_format)
 	    nbuf[len-2] = nbuf[len-2] - 0x20;
 	    nbuf[len-1] = nbuf[len-1] - 0x20;
 	  }
+	  nbuf[len] = '\0';
 	  for (p = form; *p < 'e' && *p != '.'; p++) ;
 	  *p++ = 's'; *p = '\0';
 	  sprintf(buff, form, nbuf);
