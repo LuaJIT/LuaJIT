@@ -1,12 +1,13 @@
-buildvm.o: buildvm.c lua.h luaconf.h luajit.h lj_obj.h lj_def.h lj_arch.h \
- lj_gc.h lj_bc.h lj_ir.h lj_frame.h lj_dispatch.h lj_jit.h buildvm.h \
+buildvm.o: buildvm.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
+ lj_obj.h lj_gc.h lj_bc.h lj_ir.h lj_frame.h lj_dispatch.h lj_jit.h \
+ luajit.h \
  lj_traceerr.h
 buildvm_asm.o: buildvm_asm.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
  lj_bc.h
-buildvm_fold.o: buildvm_fold.c lj_obj.h lua.h luaconf.h lj_def.h \
- lj_arch.h lj_ir.h buildvm.h
-buildvm_lib.o: buildvm_lib.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_lib.h buildvm.h
+buildvm_fold.o: buildvm_fold.c buildvm.h lj_def.h lua.h luaconf.h \
+ lj_arch.h lj_obj.h lj_ir.h
+buildvm_lib.o: buildvm_lib.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
+ lj_obj.h lj_lib.h
 buildvm_peobj.o: buildvm_peobj.c buildvm.h lj_def.h lua.h luaconf.h \
  lj_arch.h lj_bc.h
 lib_aux.o: lib_aux.c lua.h luaconf.h lauxlib.h lj_obj.h lj_def.h \

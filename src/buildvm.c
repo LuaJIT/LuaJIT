@@ -14,22 +14,19 @@
 ** It's a one-shot tool -- any effort fixing this would be wasted.
 */
 
-#include "lua.h"
-#include "luajit.h"
-
 #ifdef LUA_USE_WIN
 #include <fcntl.h>
 #include <io.h>
 #endif
 
+#include "buildvm.h"
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_bc.h"
 #include "lj_ir.h"
 #include "lj_frame.h"
 #include "lj_dispatch.h"
-
-#include "buildvm.h"
+#include "luajit.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -421,6 +418,12 @@ int main(int argc, char **argv)
   BuildCtx ctx_;
   BuildCtx *ctx = &ctx_;
   int status, binmode;
+
+  if (sizeof(void *) != 4*LJ_32+8*LJ_64) {
+    fprintf(stderr,"Error: pointer size mismatch in cross-build.\n");
+    fprintf(stderr,"Try: make CC=\"gcc -m32\" CROSS=... TARGET=...\n\n");
+    return 1;
+  }
 
   UNUSED(argc);
   parseargs(ctx, argv);

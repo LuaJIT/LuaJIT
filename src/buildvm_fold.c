@@ -3,10 +3,9 @@
 ** Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 */
 
+#include "buildvm.h"
 #include "lj_obj.h"
 #include "lj_ir.h"
-
-#include "buildvm.h"
 
 /* Context for the folding hash table generator. */
 static int lineno;
