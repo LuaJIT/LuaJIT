@@ -8,6 +8,7 @@
 
 /* ------------------------------------------------------------------------ */
 
+#if LJ_TARGET_X86ORX64
 /* Emit bytes piecewise as assembler text. */
 static void emit_asm_bytes(BuildCtx *ctx, uint8_t *p, int n)
 {
@@ -72,6 +73,45 @@ err:
   emit_asm_bytes(ctx, cp, n);
   fprintf(ctx->fp, "\t%s %s\n", opname, sym);
 }
+#else
+/* Emit words piecewise as assembler text. */
+static void emit_asm_words(BuildCtx *ctx, uint8_t *p, int n)
+{
+  int i;
+  for (i = 0; i < n; i += 4) {
+    if ((i & 15) == 0)
+      fprintf(ctx->fp, "\t.long 0x%08x", *(uint32_t *)(p+i));
+    else
+      fprintf(ctx->fp, ",0x%08x", *(uint32_t *)(p+i));
+    if ((i & 15) == 12) putc('\n', ctx->fp);
+  }
+  if ((n & 15) != 0) putc('\n', ctx->fp);
+}
+
+/* Emit relocation as part of an instruction. */
+static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
+			       const char *sym)
+{
+  uint32_t ins;
+  emit_asm_words(ctx, p, n-4);
+  ins = *(uint32_t *)(p+n-4);
+#if LJ_TARGET_PPC
+  if ((ins >> 26) == 16) {
+    fprintf(ctx->fp, "\t%s %d, %d, %s\n",
+	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
+  } else if ((ins >> 26) == 18) {
+    fprintf(ctx->fp, "\t%s %s\n", (ins & 1) ? "bl" : "b", sym);
+  } else {
+    fprintf(stderr,
+	    "Error: unsupported opcode %08x for %s symbol relocation.\n",
+	    ins, sym);
+    exit(1);
+  }
+#else
+#error "missing relocation support for this architecture"
+#endif
+}
+#endif
 
 /* Emit an assembler label. */
 static void emit_asm_label(BuildCtx *ctx, const char *name, int size, int isfunc)
@@ -140,6 +180,7 @@ void emit_asm(BuildCtx *ctx)
     while (rel < ctx->nreloc && ctx->reloc[rel].ofs < next) {
       BuildReloc *r = &ctx->reloc[rel];
       int n = r->ofs - ofs;
+#if LJ_TARGET_X86ORX64
       if (ctx->mode == BUILD_machasm && r->type != 0) {
 	emit_asm_reloc_mach(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
       } else {
@@ -147,15 +188,30 @@ void emit_asm(BuildCtx *ctx)
 	emit_asm_reloc(ctx, r->type, ctx->relocsym[r->sym]);
       }
       ofs += n+4;
+#else
+      emit_asm_wordreloc(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
+      ofs += n;
+#endif
       rel++;
     }
+#if LJ_TARGET_X86ORX64
     emit_asm_bytes(ctx, ctx->code+ofs, next-ofs);
+#else
+    emit_asm_words(ctx, ctx->code+ofs, next-ofs);
+#endif
   }
 
   fprintf(ctx->fp, "\n");
   switch (ctx->mode) {
   case BUILD_elfasm:
     fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\",@progbits\n");
+#if LJ_TARGET_PPCSPE
+    /* Soft-float ABI + SPE. */
+    fprintf(ctx->fp, "\t.gnu_attribute 4, 2\n\t.gnu_attribute 8, 3\n");
+#elif LJ_TARGET_PPC
+    /* Hard-float ABI. */
+    fprintf(ctx->fp, "\t.gnu_attribute 4, 1\n");
+#endif
     /* fallthrough */
   case BUILD_coffasm:
     fprintf(ctx->fp, "\t.ident \"%s\"\n", ctx->dasm_ident);
