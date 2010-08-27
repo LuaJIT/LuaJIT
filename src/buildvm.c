@@ -73,6 +73,9 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #else
 #include "buildvm_x64.h"
 #endif
+#elif LJ_TARGET_PPCSPE
+#include "../dynasm/dasm_ppc.h"
+#include "buildvm_ppcspe.h"
 #else
 #error "No support for this architecture (yet)"
 #endif

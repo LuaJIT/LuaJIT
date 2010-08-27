@@ -257,6 +257,7 @@ DASM_DISTFLAGS= -LN
 DASM_FLAGS_X86=
 DASM_FLAGS_X64= -D X64
 DASM_FLAGS_X64WIN= -D X64 -D X64WIN
+DASM_FLAGS_PPCSPE= -D SPE
 
 BUILDVM_O= buildvm.o buildvm_asm.o buildvm_peobj.o buildvm_lib.o buildvm_fold.o
 BUILDVM_T= buildvm
@@ -296,9 +297,9 @@ LUAJIT_SO= libluajit.so
 LUAJIT_T= luajit
 
 ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
-ALL_GEN= $(LJVM_S) lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h \
-	 $(LIB_VMDEFP) lj_folddef.h
-ALL_DYNGEN= buildvm_*.h
+ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h
+ALL_GEN= $(LJVM_S) $(ALL_HDRGEN) $(LIB_VMDEFP)
+ALL_DYNGEN= buildvm_x86.h buildvm_x64.h buildvm_x64win.h buildvm_ppcspe.h
 WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
 ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
 
@@ -381,28 +382,19 @@ distclean:	clean
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X86) -o buildvm_x86.h buildvm_x86.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64) -o buildvm_x64.h buildvm_x86.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64WIN) -o buildvm_x64win.h buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPCSPE) -o buildvm_ppcspe.h buildvm_ppc.dasc
 
 depend:
-	@test -f lj_bcdef.h || touch lj_bcdef.h
-	@test -f lj_ffdef.h || touch lj_ffdef.h
-	@test -f lj_libdef.h || touch lj_libdef.h
-	@test -f lj_recdef.h || touch lj_recdef.h
-	@test -f lj_folddef.h || touch lj_folddef.h
-	@test -f buildvm_x86.h || touch buildvm_x86.h
-	@test -f buildvm_x64.h || touch buildvm_x64.h
-	@test -f buildvm_x64win.h || touch buildvm_x64win.h
+	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
+	  test -f $$file || touch $$file; \
+	  done
 	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | \
 	  sed -e "s| [^ ]*/dasm_\S*\.h||g" \
 	      -e "s| buildvm_\S*\.h||g" \
 	      -e "s| lj_target_\S*\.h| lj_target_*.h|g" >Makefile.dep
-	@test -s lj_bcdef.h || $(HOST_RM) lj_bcdef.h
-	@test -s lj_ffdef.h || $(HOST_RM) lj_ffdef.h
-	@test -s lj_libdef.h || $(HOST_RM) lj_libdef.h
-	@test -s lj_recdef.h || $(HOST_RM) lj_recdef.h
-	@test -s lj_folddef.h || $(HOST_RM) lj_folddef.h
-	@test -s buildvm_x86.h || $(HOST_RM) buildvm_x86.h
-	@test -s buildvm_x64.h || $(HOST_RM) buildvm_x64.h
-	@test -s buildvm_x64win.h || $(HOST_RM) buildvm_x64win.h
+	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
+	  test -s $$file || $(HOST_RM) $$file; \
+	  done
 
 .PHONY: default all amalg clean cleaner distclean depend
 
@@ -422,7 +414,11 @@ buildvm_x64win.h: buildvm_x86.dasc
 	$(E) "DYNASM    $@"
 	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64WIN) -o $@ buildvm_x86.dasc
 
-buildvm.o: buildvm_x86.h buildvm_x64.h buildvm_x64win.h $(DASM_DIR)/dasm_*.h
+buildvm_ppcspe.h: buildvm_ppc.dasc
+	$(E) "DYNASM    $@"
+	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_PPCSPE) -o $@ buildvm_ppc.dasc
+
+buildvm.o: $(ALL_DYNGEN) $(DASM_DIR)/dasm_*.h
 
 $(BUILDVM_T): $(BUILDVM_O)
 	$(E) "HOSTLINK  $@"
