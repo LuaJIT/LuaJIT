@@ -87,6 +87,15 @@ enum {
 #define CFRAME_SIZE		(10*8)
 #define CFRAME_SIZE_JIT		(CFRAME_SIZE + 16)
 #endif
+#elif LJ_TARGET_PPCSPE
+#define CFRAME_OFS_ERRF		28
+#define CFRAME_OFS_NRES		24
+#define CFRAME_OFS_PREV		20
+#define CFRAME_OFS_L		16
+#define CFRAME_OFS_PC		12
+#define CFRAME_OFS_MULTRES	8
+#define CFRAME_SIZE		176
+#define CFRAME_SIZE_JIT		CFRAME_SIZE
 #else
 #error "Missing CFRAME_* definitions for this architecture"
 #endif

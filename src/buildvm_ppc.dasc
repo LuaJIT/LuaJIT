@@ -16,6 +16,62 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// Stack layout while in interpreter. Must match with lj_frame.h.
+|.if SPE
+|.define SAVE_LR,	180(sp)
+|.define CFRAME_SPACE,	176	// Delta for sp.
+|// Back chain for sp:	176(sp)	<-- sp entering interpreter
+|.define SAVE_r31,	168(sp)	// 64 bit register saves.
+|.define SAVE_r30,	160(sp)
+|.define SAVE_r29,	152(sp)
+|.define SAVE_r28,	144(sp)
+|.define SAVE_r27,	136(sp)
+|.define SAVE_r26,	128(sp)
+|.define SAVE_r25,	120(sp)
+|.define SAVE_r24,	112(sp)
+|.define SAVE_r23,	104(sp)
+|.define SAVE_r22,	96(sp)
+|.define SAVE_r21,	88(sp)
+|.define SAVE_r20,	80(sp)
+|.define SAVE_r19,	72(sp)
+|.define SAVE_r18,	64(sp)
+|.define SAVE_r17,	56(sp)
+|.define SAVE_r16,	48(sp)
+|.define SAVE_r15,	40(sp)
+|.define SAVE_r14,	32(sp)
+|.define SAVE_ERRF,	28(sp)	// 32 bit C frame info.
+|.define SAVE_NRES,	24(sp)
+|.define SAVE_CFRAME,	20(sp)
+|.define SAVE_L,	16(sp)
+|.define SAVE_PC,	12(sp)
+|.define SAVE_MULTRES,	8(sp)
+|// Next frame lr:	4(sp)
+|// Back chain for sp:	0(sp)	<-- sp while in interpreter
+|
+|.macro save_, reg; evstdd reg, SAVE_..reg; .endmacro
+|.macro rest_, reg; evldd reg, SAVE_..reg; .endmacro
+|.endif
+|
+|.macro saveregs
+|  stwu sp, -CFRAME_SPACE(sp)
+|  save_ r14; save_ r15; save_ r16; save_ r17; save_ r18; save_ r19
+|  mflr r0
+|  save_ r20; save_ r21; save_ r22; save_ r23; save_ r24; save_ r25
+|  stw  r0, SAVE_LR
+|  save_ r26; save_ r27; save_ r28; save_ r29; save_ r30; save_ r31
+|.endmacro
+|
+|.macro restoreregs
+|  lwz r0, SAVE_LR
+|  rest_ r14; rest_ r15; rest_ r16; rest_ r17; rest_ r18; rest_ r19
+|  mtlr r0
+|  rest_ r20; rest_ r21; rest_ r22; rest_ r23; rest_ r24; rest_ r25
+|  rest_ r26; rest_ r27; rest_ r28; rest_ r29; rest_ r30; rest_ r31
+|  addi sp, sp, CFRAME_SPACE
+|.endmacro
+|
+|//-----------------------------------------------------------------------
+|
 |// Trap for not-yet-implemented parts.
 |.macro NYI; tw 4, sp, sp; .endmacro
 |

@@ -130,8 +130,9 @@ BUILDMODE= mixed
 #   LIBS     HOST_LIBS     TARGET_LIBS
 #   CROSS    HOST_SYS      TARGET_SYS
 #
-# Cross-compilation example:
-#   make CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+# Cross-compilation examples:
+#   make HOST_CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+#   make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe- TARGET=ppcspe
 
 CCOPTIONS= $(CCDEBUG) $(CCOPT) $(CCWARN) $(XCFLAGS) $(CFLAGS)
 LDOPTIONS= $(CCDEBUG) $(LDFLAGS)

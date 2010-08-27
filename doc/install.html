@@ -301,7 +301,7 @@ You can cross-compile for a Windows target on Debian/Ubuntu by
 installing the <tt>mingw32</tt> package and running:
 </p>
 <pre class="code">
-make CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
+make HOST_CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
 </pre>
 
 <h2>Embedding LuaJIT</h2>
