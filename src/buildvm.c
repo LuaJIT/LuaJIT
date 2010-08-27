@@ -34,6 +34,7 @@
 #define Dst		ctx
 #define Dst_DECL	BuildCtx *ctx
 #define Dst_REF		(ctx->D)
+#define DASM_CHECKS	1
 
 #include "../dynasm/dasm_proto.h"
 
