@@ -42,6 +42,7 @@ CCOPT= -O2 -fomit-frame-pointer
 # binaries to a different machine you could also use: -march=native
 CCOPT_X86= -march=i686
 CCOPT_X64=
+CCOPT_PPCSPE=
 #
 CCDEBUG=
 # Uncomment the next line to generate debug information:
@@ -179,12 +180,22 @@ ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
   TARGET_XCFLAGS+= -fno-stack-protector
 endif
 
-ifeq (,$(findstring __i386__,$(shell echo __i386__ | $(TARGET_CC) -P -E -)))
+TARGET_TESTARCH=$(shell $(TARGET_CC) $(TARGET_ACFLAGS) -E lj_arch.h -dM)
+ifneq (,$(findstring LJ_TARGET_X64 ,$(TARGET_TESTARCH)))
+  TARGET_CCARCH= x64
+  TARGET_XCFLAGS+= $(CCOPT_X64)
+else
+ifneq (,$(findstring LJ_TARGET_X86 ,$(TARGET_TESTARCH)))
   TARGET_CCARCH= x86
   TARGET_XCFLAGS+= $(CCOPT_X86)
 else
-  TARGET_CCARCH= x64
-  TARGET_XCFLAGS+= $(CCOPT_X64)
+ifneq (,$(findstring LJ_TARGET_PPCSPE ,$(TARGET_TESTARCH)))
+  TARGET_CCARCH= ppcspe
+  TARGET_XCFLAGS+= $(CCOPT_PPCSPE)
+else
+  $(error Unsupported target architecture)
+endif
+endif
 endif
 
 ifneq (,$(PREFIX))
