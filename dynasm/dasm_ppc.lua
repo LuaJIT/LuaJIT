@@ -825,19 +825,21 @@ end
 for cond,c in pairs(map_cond) do
   local b1 = "b"..cond
   local c1 = (c%4)*0x00010000 + (c < 4 and 0x01000000 or 0)
-  -- bX
+  -- bX[l]
   map_op[b1.."_1"] = tohex(0x40800000 + c1).."K"
+  map_op[b1.."l_1"] = tohex(0x40800001 + c1).."K"
   map_op[b1.."_2"] = tohex(0x40800000 + c1).."-XK"
+  map_op[b1.."l_2"] = tohex(0x40800001 + c1).."-XK"
   -- bXlr[l]
-  map_op[b1.."lr".."_0"] = tohex(0x4c800020 + c1)
-  map_op[b1.."lrl".."_0"] = tohex(0x4c800021 + c1)
-  map_op[b1.."ctr".."_0"] = tohex(0x4c800420 + c1)
-  map_op[b1.."ctrl".."_0"] = tohex(0x4c800421 + c1)
+  map_op[b1.."lr_0"] = tohex(0x4c800020 + c1)
+  map_op[b1.."lrl_0"] = tohex(0x4c800021 + c1)
+  map_op[b1.."ctr_0"] = tohex(0x4c800420 + c1)
+  map_op[b1.."ctrl_0"] = tohex(0x4c800421 + c1)
   -- bXctr[l]
-  map_op[b1.."lr".."_1"] = tohex(0x4c800020 + c1).."-X"
-  map_op[b1.."lrl".."_1"] = tohex(0x4c800021 + c1).."-X"
-  map_op[b1.."ctr".."_1"] = tohex(0x4c800420 + c1).."-X"
-  map_op[b1.."ctrl".."_1"] = tohex(0x4c800421 + c1).."-X"
+  map_op[b1.."lr_1"] = tohex(0x4c800020 + c1).."-X"
+  map_op[b1.."lrl_1"] = tohex(0x4c800021 + c1).."-X"
+  map_op[b1.."ctr_1"] = tohex(0x4c800420 + c1).."-X"
+  map_op[b1.."ctrl_1"] = tohex(0x4c800421 + c1).."-X"
 end
 
 ------------------------------------------------------------------------------
