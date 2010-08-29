@@ -52,7 +52,8 @@
 #define LJ_TARGET_X86		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_PAGESIZE		4096
-#define LJ_TARGET_MASKEDSHIFT	1
+#define LJ_TARGET_MASKSHIFT	1
+#define LJ_TARGET_MASKROT	1
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_X64
 
@@ -62,7 +63,8 @@
 #define LJ_TARGET_X64		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_PAGESIZE		4096
-#define LJ_TARGET_MASKEDSHIFT	1
+#define LJ_TARGET_MASKSHIFT	1
+#define LJ_TARGET_MASKROT	1
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
@@ -76,7 +78,8 @@
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_PPCSPE	1
 #define LJ_PAGESIZE		4096
-#define LJ_TARGET_MASKEDSHIFT	1
+#define LJ_TARGET_MASKSHIFT	0
+#define LJ_TARGET_MASKROT	1
 #define LJ_ARCH_NOJIT		1
 
 #else
@@ -91,6 +94,9 @@
 #endif
 #if defined(_LITTLE_ENDIAN)
 #error "No support for little-endian PowerPC"
+#endif
+#if defined(_LP64)
+#error "No support for PowerPC 64 bit mode"
 #endif
 #endif
 #endif
@@ -113,16 +119,9 @@
 #if LJ_ARCH_BITS == 32
 #define LJ_32			1
 #define LJ_64			0
-#elif LJ_ARCH_BITS == 64
+#else
 #define LJ_32			0
 #define LJ_64			1
-#else
-#error "Bad LJ_ARCH_BITS setting"
-#endif
-
-/* Whether target CPU masks the shift count by the operand length or not. */
-#ifndef LJ_TARGET_MASKEDSHIFT
-#define LJ_TARGET_MASKEDSHIFT	0
 #endif
 
 #endif

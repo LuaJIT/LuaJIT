@@ -811,17 +811,16 @@ LJFOLD(BROL any BAND)
 LJFOLD(BROR any BAND)
 LJFOLDF(simplify_shift_andk)
 {
-#if LJ_TARGET_MASKEDSHIFT
   IRIns *irk = IR(fright->op2);
   PHIBARRIER(fright);
-  if (irk->o == IR_KINT) {  /* i o (j & 31) ==> i o j */
+  if ((fins->o < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
+      irk->o == IR_KINT) {  /* i o (j & 31) ==> i o j */
     int32_t k = irk->i & 31;
     if (k == 31) {
       fins->op2 = fright->op1;
       return RETRYFOLD;
     }
   }
-#endif
   return NEXTFOLD;
 }
 

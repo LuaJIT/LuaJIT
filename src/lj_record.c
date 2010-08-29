@@ -1552,10 +1552,9 @@ static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tobit(J, J->base[0]);
   TRef tsh = lj_ir_tobit(J, J->base[1]);
-#if !LJ_TARGET_MASKEDSHIFT
-  if (!tref_isk(tsh))
+  if (!(rd->data < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
+      !tref_isk(tsh))
     tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 31));
-#endif
   J->base[0] = emitir(IRTI(rd->data), tr, tsh);
 }
 
