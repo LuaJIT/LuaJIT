@@ -574,11 +574,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov BASE, L:RB->base
   |  mov RD, L:RB->top
   |  mov LFUNC:RB, [BASE-8]
-  |  mov PC, [BASE-4]
   |  sub RD, BASE
   |  shr RD, 3
   |  add NARGS:RD, 1
-  |  // BASE = new base, RB = LFUNC, RD = nargs+1, PC restored.
+  |  // BASE = new base, RB = LFUNC, RD = nargs+1
   |  ins_callt				// Just retry the call.
   |
   |//-----------------------------------------------------------------------
@@ -3079,6 +3078,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |// Callable from C: double lj_vm_foldfpm(double x, int fpm)
   |// Computes fpm(x) for extended math functions. ORDER FPM.
   |->vm_foldfpm:
+#if LJ_HASJIT
   if (sse) {
     |.if X64
     |
@@ -3174,6 +3174,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |1: ; fptan; fpop; ret
   }
   |9: ; int3					// Bad fpm.
+#endif
   |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)

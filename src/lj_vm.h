@@ -25,7 +25,9 @@ LJ_ASMF void lj_vm_unwind_ff_eh(void);
 LJ_ASMF int lj_vm_cpuid(uint32_t f, uint32_t res[4]);
 #endif
 LJ_ASMF double lj_vm_foldarith(double x, double y, int op);
+#if LJ_HASJIT
 LJ_ASMF double lj_vm_foldfpm(double x, int op);
+#endif
 
 /* Dispatch targets for recording and hooks. */
 LJ_ASMF void lj_vm_record(void);
@@ -38,6 +40,8 @@ LJ_ASMF void lj_vm_exit_handler(void);
 LJ_ASMF void lj_vm_exit_interp(void);
 
 /* Handlers callable from compiled code. */
+#if LJ_HASJIT
+#if LJ_TARGET_X86ORX64
 LJ_ASMF void lj_vm_floor_sse(void);
 LJ_ASMF void lj_vm_ceil_sse(void);
 LJ_ASMF void lj_vm_trunc_sse(void);
@@ -45,6 +49,13 @@ LJ_ASMF void lj_vm_exp(void);
 LJ_ASMF void lj_vm_exp2(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
+#else
+LJ_ASMF void lj_vm_floor(void);
+LJ_ASMF void lj_vm_ceil(void);
+LJ_ASMF void lj_vm_trunc(void);
+LJ_ASMF void lj_vm_powi(void);
+#endif
+#endif
 
 /* Continuations for metamethods. */
 LJ_ASMF void lj_cont_cat(void);  /* Continue with concatenation. */

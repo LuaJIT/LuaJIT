@@ -480,7 +480,7 @@ typedef struct global_State {
   uint8_t vmevmask;	/* VM event mask. */
   GCRef mainthref;	/* Link to main thread. */
   TValue registrytv;	/* Anchor for registry. */
-  TValue tmptv;		/* Temporary TValue. */
+  TValue tmptv, tmptv2;	/* Temporary TValues. */
   GCupval uvhead;	/* Head of double-linked list of all open upvalues. */
   int32_t hookcount;	/* Instruction hook countdown. */
   int32_t hookcstart;	/* Start count for instruction hook counter. */
