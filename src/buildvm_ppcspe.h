@@ -748,6 +748,19 @@ static const char *const globnames[] = {
 static const char *const extnames[] = {
   (const char *)0
 };
+#define Dt1(_V) (int)(ptrdiff_t)&(((lua_State *)0)_V)
+#define Dt2(_V) (int)(ptrdiff_t)&(((global_State *)0)_V)
+#define Dt3(_V) (int)(ptrdiff_t)&(((TValue *)0)_V)
+#define Dt4(_V) (int)(ptrdiff_t)&(((GCobj *)0)_V)
+#define Dt5(_V) (int)(ptrdiff_t)&(((GCstr *)0)_V)
+#define Dt6(_V) (int)(ptrdiff_t)&(((GCtab *)0)_V)
+#define Dt7(_V) (int)(ptrdiff_t)&(((GCfuncL *)0)_V)
+#define Dt8(_V) (int)(ptrdiff_t)&(((GCfuncC *)0)_V)
+#define Dt9(_V) (int)(ptrdiff_t)&(((GCproto *)0)_V)
+#define DtA(_V) (int)(ptrdiff_t)&(((GCupval *)0)_V)
+#define DtB(_V) (int)(ptrdiff_t)&(((Node *)0)_V)
+#define DtC(_V) (int)(ptrdiff_t)&(((int *)0)_V)
+#define DtD(_V) (int)(ptrdiff_t)&(((GCtrace *)0)_V)
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
 #define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))

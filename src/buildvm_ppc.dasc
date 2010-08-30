@@ -14,7 +14,54 @@
 |.error "No support for plain PowerPC CPUs (yet)"
 |.endif
 |
+|// Note: The ragged indentation of the instructions is intentional.
+|//       The starting columns indicate data dependencies.
+|
 |//-----------------------------------------------------------------------
+|
+|// Fixed register assignments for the interpreter.
+|// Don't use: r1 = sp, r2 and r13 = reserved and/or small data area ptr
+|
+|// The following must be C callee-save (but BASE is often refetched).
+|.define BASE,		r14	// Base of current Lua stack frame.
+|.define KBASE,		r15	// Constants of current Lua function.
+|.define PC,		r16	// Next PC.
+|.define DISPATCH,	r17	// Opcode dispatch table.
+|.define LREG,		r18	// Register holding lua_State (also in SAVE_L).
+|
+|// Constants for vectorized type-comparisons (hi+low GPR). C callee-save.
+|.define TISNUM,	r21
+|.if SPE
+|.define TISSTR,	r22
+|.define TISTAB,	r23
+|.define TISFUNC,	r24
+|.define TISNIL,	r25
+|.endif
+|
+|// The following temporaries are not saved across C calls, except for RA.
+|.define RA,		r19	// Callee-save.
+|.define RB,		r10
+|.define RC,		r11
+|.define RD,		r12
+|.define INS,		r7	// Overlaps CARG5.
+|
+|.define TMP0,		r0
+|.define TMP1,		r8
+|.define TMP2,		r9
+|.define TMP3,		r6	// Overlaps CARG4.
+|
+|// Saved temporaries.
+|.define SAVE0,		r20
+|
+|// Calling conventions.
+|.define CARG1,		r3
+|.define CARG2,		r4
+|.define CARG3,		r5
+|.define CARG4,		r6	// Overlaps TMP3.
+|.define CARG5,		r7	// Overlaps INS.
+|
+|.define CRET1,		r3
+|.define CRET2,		r4
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.if SPE
@@ -69,6 +116,21 @@
 |  rest_ r26; rest_ r27; rest_ r28; rest_ r29; rest_ r30; rest_ r31
 |  addi sp, sp, CFRAME_SPACE
 |.endmacro
+|
+|// Type definitions. Some of these are only used for documentation.
+|.type L,		lua_State,	LREG
+|.type GL,		global_State
+|.type TVALUE,		TValue
+|.type GCOBJ,		GCobj
+|.type STR,		GCstr
+|.type TAB,		GCtab
+|.type LFUNC,		GCfuncL
+|.type CFUNC,		GCfuncC
+|.type PROTO,		GCproto
+|.type UPVAL,		GCupval
+|.type NODE,		Node
+|.type NARGS8,		int
+|.type TRACE,		GCtrace
 |
 |//-----------------------------------------------------------------------
 |
