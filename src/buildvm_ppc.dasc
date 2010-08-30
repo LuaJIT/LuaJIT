@@ -206,6 +206,18 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// Macros to test operand types.
+|.if SPE
+|.macro checknum, reg; evcmpltu reg, TISNUM; .endmacro
+|.macro checkstr, reg; evcmpeq reg, TISSTR; .endmacro
+|.macro checktab, reg; evcmpeq reg, TISTAB; .endmacro
+|.macro checkfunc, reg; evcmpeq reg, TISFUNC; .endmacro
+|.macro checknil, reg; evcmpeq reg, TISNIL; .endmacro
+|.macro checkok, label; blt label; .endmacro
+|.macro checkfail, label; bge label; .endmacro
+|.macro checkanyfail, label; bns label; .endmacro
+|.endif
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
@@ -219,6 +231,10 @@
 |.macro hotcall
 |  NYI
 |.endmacro
+|
+|// Set current VM state. Uses TMP0.
+|.macro li_vmstate, st; li TMP0, ~LJ_VMST_..st; .endmacro
+|.macro st_vmstate; stw TMP0, DISPATCH_GL(vmstate)(DISPATCH); .endmacro
 |
 |//-----------------------------------------------------------------------
 
@@ -242,10 +258,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |->vm_leave_cp:
-  |  NYI
+  |  lwz TMP0, SAVE_CFRAME		// Restore previous C frame.
+  |   li CRET1, 0			// Ok return status for vm_pcall.
+  |  stw TMP0, L->cframe
   |
   |->vm_leave_unw:
-  |  NYI
+  |  restoreregs
+  |  blr
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  NYI
@@ -275,19 +294,78 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
+  |  saveregs
+  |  li PC, FRAME_CP
+  |  stw CARG4, SAVE_ERRF
+  |  b >1
   |
   |->vm_call:				// Setup C frame and enter VM.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1)
+  |  saveregs
+  |  li PC, FRAME_C
+  |
+  |1:  // Entry point for vm_pcall above (PC = ftype).
+  |  lwz TMP1, L:CARG1->cframe
+  |   stw CARG3, SAVE_NRES
+  |    mr L, CARG1
+  |   stw CARG1, SAVE_L
+  |    mr BASE, CARG2
+  |  stw sp, L->cframe			// Add our C frame to cframe chain.
+  |    lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |   stw CARG1, SAVE_PC		// Any value outside of bytecode is ok.
+  |  stw TMP1, SAVE_CFRAME
+  |    addi DISPATCH, DISPATCH, GG_G2DISP
+  |
+  |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
+  |  lwz TMP2, L->base			// TMP2 = old base (used in vmeta_call).
+  |    evsplati TISNUM, LJ_TISNUM+1	// Setup type comparison constants.
+  |   lwz TMP1, L->top
+  |    evsplati TISFUNC, LJ_TFUNC
+  |  add PC, PC, BASE
+  |    li_vmstate INTERP
+  |    evsplati TISTAB, LJ_TTAB
+  |  sub PC, PC, TMP2			// PC = frame delta + frame type
+  |    st_vmstate
+  |    evsplati TISSTR, LJ_TSTR
+  |   sub NARGS8:RC, TMP1, BASE
+  |    evsplati TISNIL, LJ_TNIL
   |
   |->vm_call_dispatch:
-  |  NYI
+  |  // TMP2 = old base, BASE = new base, RC = nargs*8, PC = caller PC
+  |  // NYI: reschedule.
+  |  li TMP0, -8
+  |  evlddx LFUNC:RB, BASE, TMP0
+  |  checkfunc LFUNC:RB
+  |  checkfail ->vmeta_call		// Ensure KBASE defined and != BASE.
   |
   |->vm_call_dispatch_f:
-  |  NYI
+  |  ins_call
+  |  // BASE = new base, RC = nargs*8
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
-  |  NYI
+  |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
+  |  saveregs
+  |  mr L, CARG1
+  |  mtctr CARG4
+  |   lwz TMP0, L:CARG1->stack
+  |  stw CARG1, SAVE_L
+  |   lwz TMP1, L->top
+  |  stw CARG1, SAVE_PC			// Any value outside of bytecode is ok.
+  |   sub TMP0, TMP0, TMP1		// Compute -savestack(L, L->top).
+  |    lwz TMP1, L->cframe
+  |    stw sp, L->cframe		// Add our C frame to cframe chain.
+  |  li TMP2, 0
+  |   stw TMP0, SAVE_NRES		// Neg. delta means cframe w/o frame.
+  |  stw TMP2, SAVE_ERRF		// No error function.
+  |    stw TMP1, SAVE_CFRAME
+  |  bctrl			// (lua_State *L, lua_CFunction func, void *ud)
+  |  mr. BASE, CRET1
+  |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |    li PC, FRAME_CP
+  |   addi DISPATCH, DISPATCH, GG_G2DISP
+  |  bne <3				// Else continue with the call.
+  |  b ->vm_leave_cp			// No base? Just remove C frame.
   |
   |//-----------------------------------------------------------------------
   |//-- Metamethod handling ------------------------------------------------
