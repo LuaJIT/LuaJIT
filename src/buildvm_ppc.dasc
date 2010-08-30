@@ -139,6 +139,73 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// Access to frame relative to BASE.
+|.define FRAME_PC,	-8
+|.define FRAME_FUNC,	-4
+|
+|// Instruction decode.
+|.macro decode_OP4, dst, ins; rlwinm dst, ins, 2, 22, 29; .endmacro
+|.macro decode_RA8, dst, ins; rlwinm dst, ins, 27, 21, 28; .endmacro
+|.macro decode_RB8, dst, ins; rlwinm dst, ins, 11, 21, 28; .endmacro
+|.macro decode_RC8, dst, ins; rlwinm dst, ins, 19, 21, 28; .endmacro
+|.macro decode_RD8, dst, ins; rlwinm dst, ins, 19, 13, 28; .endmacro
+|
+|.macro decode_OP1, dst, ins; rlwinm dst, ins, 0, 24, 31; .endmacro
+|.macro decode_RD4, dst, ins; rlwinm dst, ins, 18, 14, 29; .endmacro
+|
+|// Instruction decode+dispatch.
+|.macro ins_NEXT
+|  lwz INS, 0(PC)
+|   addi PC, PC, 4
+|  decode_OP4 TMP0, INS
+|   decode_RB8 RB, INS
+|  lwzx TMP0, DISPATCH, TMP0
+|   decode_RD8 RD, INS
+|   decode_RC8 RC, INS
+|  mtctr TMP0
+|   decode_RA8 RA, INS
+|  bctr
+|.endmacro
+|
+|// Instruction footer.
+|.if 1
+|  // Replicated dispatch. Less unpredictable branches, but higher I-Cache use.
+|  .define ins_next, ins_NEXT
+|  .define ins_next_, ins_NEXT
+|.else
+|  // Common dispatch. Lower I-Cache use, only one (very) unpredictable branch.
+|  // Affects only certain kinds of benchmarks (and only with -j off).
+|  .macro ins_next
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next_
+|  ->ins_next:
+|    ins_NEXT
+|  .endmacro
+|.endif
+|
+|// Call decode and dispatch.
+|.macro ins_callt
+|  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
+|  lwz PC, LFUNC:RB->pc
+|  lwz INS, 0(PC)
+|   addi PC, PC, 4
+|  decode_OP4 TMP0, INS
+|   decode_RA8 RA, INS
+|  lwzx TMP0, DISPATCH, TMP0
+|   add RA, RA, BASE
+|  mtctr TMP0
+|  bctr
+|.endmacro
+|
+|.macro ins_call
+|  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, PC = caller PC
+|  stw PC, FRAME_PC(BASE)
+|  ins_callt
+|.endmacro
+|
+|//-----------------------------------------------------------------------
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
