@@ -659,6 +659,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
@@ -669,8 +670,6 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_nn math_ldexp;	NYI
   |.ffunc_n math_frexp;		NYI
   |.ffunc_n math_modf;		NYI
-  |
-  |.ffunc_nn math_pow;		NYI
   |
   |.macro math_minmax, name, cmpop
   |  .ffunc_1 name
@@ -827,24 +826,21 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  vm_round vm_floor, 0
   |  vm_round vm_ceil,  1
+#if LJ_HASJIT
   |  vm_round vm_trunc, 2
+#else
+  |->vm_trunc:
+#endif
   |
-  |->vm_mod:
+  |->vm_powi:
+#if LJ_HASJIT
   |  NYI
-  |
-  |->vm_exp:
-  |  NYI
-  |->vm_exp2:
-  |  NYI
-  |
-  |->vm_pow:
-  |  NYI
-  |
-  |->vm_powi_sse:
-  |  NYI
+#endif
   |
   |->vm_foldfpm:
+#if LJ_HASJIT
   |  NYI
+#endif
   |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
