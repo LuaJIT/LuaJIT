@@ -134,6 +134,11 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// These basic macros should really be part of DynASM.
+|.macro srwi, rx, ry, n; rlwinm rx, ry, 32-n, n, 31; .endmacro
+|.macro slwi, rx, ry, n; rlwinm rx, ry, n, 0, 31-n; .endmacro
+|.macro subi, rx, ry, i; addi rx, ry, -i; .endmacro
+|
 |// Trap for not-yet-implemented parts.
 |.macro NYI; tw 4, sp, sp; .endmacro
 |
@@ -249,13 +254,52 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_returnp:
-  |  NYI
+  |  // See vm_return. Also: TMP2 = previous base.
+  |  andi. TMP0, PC, FRAME_P
+  |   evsplati TMP1, LJ_TTRUE
+  |  beq ->cont_dispatch
+  |
+  |  // Return from pcall or xpcall fast func.
+  |  lwz PC, FRAME_PC(TMP2)		// Fetch PC of previous frame.
+  |  mr BASE, TMP2			// Restore caller base.
+  |  // Prepending may overwrite the pcall frame, so do it at the end.
+  |   stwu TMP1, FRAME_PC(RA)		// Prepend true to results.
   |
   |->vm_returnc:
-  |  NYI
+  |  andi. TMP0, PC, FRAME_TYPE
+  |   addi RD, RD, 8			// RD = (nresults+1)*8.
+  |   stw RD, SAVE_MULTRES
+  |  beq ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
-  |  NYI
+  |  // BASE = base, RA = resultptr, RD/MULTRES = (nresults+1)*8, PC = return
+  |  // TMP0 = PC & FRAME_TYPE
+  |  cmpwi TMP0, FRAME_C
+  |   rlwinm TMP2, PC, 0, 0, 28
+  |    li_vmstate C
+  |   sub TMP2, BASE, TMP2		// TMP2 = previous base.
+  |  bne ->vm_returnp
+  |
+  |  addic. TMP1, RD, -8
+  |   stw TMP2, L->base
+  |   lwz TMP2, SAVE_NRES
+  |    subi BASE, BASE, 8
+  |    st_vmstate
+  |   slwi TMP2, TMP2, 3
+  |  beq >2
+  |1:
+  |  addic. TMP1, TMP1, -8
+  |   evldd TMP0, 0(RA)
+  |    addi RA, RA, 8
+  |   evstdd TMP0, 0(BASE)
+  |    addi BASE, BASE, 8
+  |  bne <1
+  |
+  |2:
+  |  cmpw TMP2, RD			// More/less results wanted?
+  |  bne >6
+  |3:
+  |  stw BASE, L->top			// Store new top.
   |
   |->vm_leave_cp:
   |  lwz TMP0, SAVE_CFRAME		// Restore previous C frame.
@@ -265,6 +309,27 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_leave_unw:
   |  restoreregs
   |  blr
+  |
+  |6:
+  |  ble >7				// Less results wanted?
+  |  // More results wanted. Check stack size and fill up results with nil.
+  |  lwz TMP1, L->maxstack
+  |  cmplw BASE, TMP1
+  |  bge >8
+  |  evstdd TISNIL, 0(BASE)
+  |  addi RD, RD, 8
+  |  addi BASE, BASE, 8
+  |  b <2
+  |
+  |7:  // Less results wanted.
+  |   sub TMP0, RD, TMP2
+  |  cmpwi TMP2, 0			// LUA_MULTRET+1 case?
+  |   sub TMP0, BASE, TMP0		// Subtract the difference.
+  |  iseleq BASE, BASE, TMP0		// Either keep top or shrink it.
+  |  b <3
+  |
+  |8:  // Corner case: need to grow stack for filling up results.
+  |  NYI
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  NYI
@@ -987,6 +1052,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_RET:
     |  NYI
+    |->BC_RET_Z:
+    |  NYI
     break;
 
   case BC_RET0: case BC_RET1:
@@ -1077,7 +1144,36 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCC:
   case BC_FUNCCW:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, RB = CFUNC, RC = nargs*8
+    if (op == BC_FUNCC) {
+      |  lwz TMP0, CFUNC:RB->f
+    } else {
+      |  lwz TMP0, DISPATCH_GL(wrapf)(DISPATCH)
+    }
+    |   add TMP1, RA, NARGS8:RC
+    |   lwz TMP2, L->maxstack
+    |    add RC, BASE, NARGS8:RC
+    |   stw BASE, L->base
+    |  mtctr TMP0
+    |   cmplw TMP1, TMP2
+    |    stw RC, L->top
+    |     li_vmstate C
+    if (op == BC_FUNCCW) {
+      |  lwz CARG2, CFUNC:RB->f
+    }
+    |  mr CARG1, L
+    |   bgt ->vm_growstack_c		// Need to grow stack.
+    |     st_vmstate
+    |  bctrl				// (lua_State *L [, lua_CFunction f])
+    |  // Returns nresults.
+    |  lwz TMP1, L->top
+    |   slwi RD, CRET1, 3
+    |  lwz BASE, L->base
+    |    li_vmstate INTERP
+    |  lwz PC, FRAME_PC(BASE)		// Fetch PC of caller.
+    |   sub RA, TMP1, RD		// RA = L->top - nresults*8
+    |    st_vmstate
+    |  b ->vm_returnc
     break;
 
   /* ---------------------------------------------------------------------- */
