@@ -912,7 +912,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
-    |  NYI
+    |  // RA = dst*8, RD = src*8
+    |  evlddx TMP0, BASE, RD
+    |  evstddx TMP0, BASE, RA
+    |  ins_next_
     break;
   case BC_NOT:
     |  NYI
@@ -955,19 +958,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Constant ops ------------------------------------------------------ */
 
   case BC_KSTR:
-    |  NYI
+    |  // RA = dst*8, RD = str_const*8 (~)
+    |  srwi TMP1, RD, 1
+    |  subfic TMP1, TMP1, -4
+    |  lwzx TMP0, KBASE, TMP1		// KBASE-4-str_const*4
+    |  evmergelo TMP0, TISSTR, TMP0
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_KSHORT:
-    |  NYI
+    |  // RA = dst*8, RD = int16_literal*8
+    |  srwi TMP1, RD, 3
+    |  extsh TMP1, TMP1
+    |  efdcfsi TMP0, TMP1
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_KNUM:
-    |  NYI
+    |  // RA = dst*8, RD = num_const*8
+    |  evlddx TMP0, KBASE, RD
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_KPRI:
-    |  NYI
+    |  // RA = dst*8, RD = primitive_type*8 (~)
+    |  srwi TMP1, RD, 3
+    |  not TMP0, TMP1
+    |  stwx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_KNIL:
-    |  NYI
+    |  // RA = base*8, RD = end*8
+    |  evstddx TISNIL, BASE, RA
+    |   addi RA, RA, 8
+    |1:
+    |  evstddx TISNIL, BASE, RA
+    |  cmpw RA, RD
+    |   addi RA, RA, 8
+    |  blt <1
+    |  ins_next
     break;
 
   /* -- Upvalue and function ops ------------------------------------------ */
