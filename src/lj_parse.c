@@ -419,14 +419,48 @@ static void expr_discharge(FuncState *fs, ExpDesc *e)
   e->k = VRELOCABLE;
 }
 
+/* Emit bytecode to set a range of registers to nil. */
+static void bcemit_nil(FuncState *fs, BCReg from, BCReg n)
+{
+  if (fs->pc > fs->lasttarget) {  /* No jumps to current position? */
+    BCIns *ip = &fs->bcbase[fs->pc-1].ins;
+    BCReg pto, pfrom = bc_a(*ip);
+    switch (bc_op(*ip)) {  /* Try to merge with the previous instruction. */
+    case BC_KPRI:
+      if (bc_d(*ip) != ~LJ_TNIL) break;
+      if (from == pfrom) {
+	if (n == 1) return;
+      } else if (from == pfrom+1) {
+	from = pfrom;
+	n++;
+      } else {
+	break;
+      }
+      fs->pc--;  /* Drop KPRI. */
+      break;
+    case BC_KNIL:
+      pto = bc_d(*ip);
+      if (pfrom <= from && from <= pto+1) {  /* Can we connect both ranges? */
+	if (from+n-1 > pto)
+	  setbc_d(ip, from+n-1);  /* Patch previous instruction range. */
+	return;
+      }
+      break;
+    default:
+      break;
+    }
+  }
+  /* Emit new instruction or replace old instruction. */
+  bcemit_INS(fs, n == 1 ? BCINS_AD(BC_KPRI, from, VKNIL) :
+			  BCINS_AD(BC_KNIL, from, from+n-1));
+}
+
 /* Discharge an expression to a specific register. Ignore branches. */
 static void expr_toreg_nobranch(FuncState *fs, ExpDesc *e, BCReg reg)
 {
   BCIns ins;
   expr_discharge(fs, e);
-  if (e->k <= VKTRUE) {
-    ins = BCINS_AD(BC_KPRI, reg, const_pri(e));
-  } else if (e->k == VKSTR) {
+  if (e->k == VKSTR) {
     ins = BCINS_AD(BC_KSTR, reg, const_str(fs, e));
   } else if (e->k == VKNUM) {
     lua_Number n = expr_numV(e);
@@ -442,6 +476,11 @@ static void expr_toreg_nobranch(FuncState *fs, ExpDesc *e, BCReg reg)
     if (reg == e->u.s.info)
       goto noins;
     ins = BCINS_AD(BC_MOV, reg, e->u.s.info);
+  } else if (e->k == VKNIL) {
+    bcemit_nil(fs, reg, 1);
+    goto noins;
+  } else if (e->k <= VKTRUE) {
+    ins = BCINS_AD(BC_KPRI, reg, const_pri(e));
   } else {
     lua_assert(e->k == VVOID || e->k == VJMP);
     return;
@@ -575,42 +614,6 @@ static void bcemit_method(FuncState *fs, ExpDesc *e, ExpDesc *key)
   }
   e->u.s.info = func;
   e->k = VNONRELOC;
-}
-
-/* Emit bytecode to set a range of registers to nil. */
-static void bcemit_nil(FuncState *fs, BCReg from, BCReg n)
-{
-  if (fs->pc > fs->lasttarget) {  /* No jumps to current position? */
-    BCIns *ip = &fs->bcbase[fs->pc-1].ins;
-    BCReg pto, pfrom = bc_a(*ip);
-    switch (bc_op(*ip)) {  /* Try to merge with the previous instruction. */
-    case BC_KPRI:
-      if (bc_d(*ip) != ~LJ_TNIL) break;
-      if (from == pfrom) {
-	if (n == 1) return;
-      } else if (from == pfrom+1) {
-	from = pfrom;
-	n++;
-      } else {
-	break;
-      }
-      fs->pc--;  /* Drop KPRI. */
-      break;
-    case BC_KNIL:
-      pto = bc_d(*ip);
-      if (pfrom <= from && from <= pto+1) {  /* Can we connect both ranges? */
-	if (from+n-1 > pto)
-	  setbc_d(ip, from+n-1);  /* Patch previous instruction range. */
-	return;
-      }
-      break;
-    default:
-      break;
-    }
-  }
-  /* Emit new instruction or replace old instruction. */
-  bcemit_INS(fs, n == 1 ? BCINS_AD(BC_KPRI, from, VKNIL) :
-			  BCINS_AD(BC_KNIL, from, from+n-1));
 }
 
 /* -- Bytecode emitter for branches --------------------------------------- */
