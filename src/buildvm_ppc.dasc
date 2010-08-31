@@ -345,14 +345,32 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
-  |  NYI
+  |  // (void *cframe, int errcode)
+  |  mr sp, CARG1
+  |  mr CRET1, CARG2
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
-  |  NYI
+  |  lwz L, SAVE_L
+  |   li TMP0, ~LJ_VMST_C
+  |  lwz GL:TMP1, L->glref
+  |   stw TMP0, GL:TMP1->vmstate
+  |  b ->vm_leave_unw
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
-  |  NYI
+  |  // (void *cframe)
+  |  rlwinm sp, CARG1, 0, 0, 29
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
-  |  NYI
+  |  lwz L, SAVE_L
+  |  lwz BASE, L->base
+  |  li TMP1, LJ_TFALSE
+  |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |    li_vmstate INTERP
+  |  lwz PC, FRAME_PC(BASE)		// Fetch PC of previous frame.
+  |  subi RA, BASE, 8			// Results start at BASE-8.
+  |   addi DISPATCH, DISPATCH, GG_G2DISP
+  |  stw TMP1, 0(RA)			// Prepend false to error message.
+  |  li RD, 16				// 2 results: false + error message.
+  |    st_vmstate
+  |  b ->vm_returnc
   |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------
