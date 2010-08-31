@@ -1060,17 +1060,98 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
-    |  NYI
+    |  // RA = results*8, RD = extra_nresults*8
+    |  lwz TMP0, SAVE_MULTRES
+    |  add RD, RD, TMP0			// SAVE_MULTRES >= 8, so RD >= 8.
+    |  // Fall through. Assumes BC_RET follows.
     break;
 
   case BC_RET:
-    |  NYI
+    |  // RA = results*8, RD = (nresults+1)*8
+    |  lwz PC, FRAME_PC(BASE)
+    |   add RA, BASE, RA
+    |    stw RD, SAVE_MULTRES
+    |1:
+    |  andi. TMP0, PC, FRAME_TYPE
+    |   xori TMP1, PC, FRAME_VARG
+    |  bne ->BC_RETV_Z
+    |
     |->BC_RET_Z:
-    |  NYI
+    |  // BASE = base, RA = resultptr, RD = (nresults+1)*8, PC = return
+    |   lwz INS, -4(PC)
+    |  cmpwi RD, 8
+    |   subi TMP2, BASE, 8
+    |   decode_RB8 RB, INS
+    |  beq >3
+    |   li TMP1, 0
+    |2:
+    |  addi TMP3, TMP1, 8
+    |   evlddx TMP0, RA, TMP1
+    |  cmpw TMP3, RD
+    |   evstddx TMP0, TMP2, TMP1
+    |  beq >3
+    |  addi TMP1, TMP3, 8
+    |   evlddx TMP0, RA, TMP3
+    |  cmpw TMP1, RD
+    |   evstddx TMP0, TMP2, TMP3
+    |  bne <2
+    |3:
+    |5:
+    |  cmplw RB, RD
+    |   decode_RA8 RA, INS
+    |  bgt >6
+    |   sub BASE, TMP2, RA
+    |  lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+    |  lwz TMP1, LFUNC:TMP1->pc
+    |  lwz KBASE, PC2PROTO(k)(TMP1)
+    |  ins_next
+    |
+    |6:  // Fill up results with nil.
+    |  subi TMP1, RD, 8
+    |   addi RD, RD, 8
+    |  evstddx TISNIL, TMP2, TMP1
+    |  b <5
+    |
+    |->BC_RETV_Z:  // Non-standard return case.
+    |  andi. TMP2, TMP1, FRAME_TYPEP
+    |  bne ->vm_return
+    |  // Return from vararg function: relocate BASE down.
+    |  sub BASE, BASE, TMP1
+    |  lwz PC, FRAME_PC(BASE)
+    |  b <1
     break;
 
   case BC_RET0: case BC_RET1:
-    |  NYI
+    |  // RA = results*8, RD = (nresults+1)*8
+    |  lwz PC, FRAME_PC(BASE)
+    |   add RA, BASE, RA
+    |    stw RD, SAVE_MULTRES
+    |  andi. TMP0, PC, FRAME_TYPE
+    |   xori TMP1, PC, FRAME_VARG
+    |  bne ->BC_RETV_Z
+    |
+    |  lwz INS, -4(PC)
+    |   subi TMP2, BASE, 8
+    |  decode_RB8 RB, INS
+    if (op == BC_RET1) {
+      |  evldd TMP0, 0(RA)
+      |  evstdd TMP0, 0(TMP2)
+    }
+    |5:
+    |  cmplw RB, RD
+    |   decode_RA8 RA, INS
+    |  bgt >6
+    |   sub BASE, TMP2, RA
+    |  lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+    |  lwz TMP1, LFUNC:TMP1->pc
+    |  lwz KBASE, PC2PROTO(k)(TMP1)
+    |  ins_next
+    |
+    |6:  // Fill up results with nil.
+    |  subi TMP1, RD, 8
+    |   addi RD, RD, 8
+    |  evstddx TISNIL, TMP2, TMP1
+    |  b <5
     break;
 
   /* -- Loops and branches ------------------------------------------------ */
