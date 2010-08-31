@@ -329,7 +329,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <3
   |
   |8:  // Corner case: need to grow stack for filling up results.
-  |  NYI
+  |  // This can happen if:
+  |  // - A C function grows the stack (a lot).
+  |  // - The GC shrinks the stack in between.
+  |  // - A return back from a lua_call() with (high) nresults adjustment.
+  |  stw BASE, L->top			// Save current top held in BASE (yes).
+  |   mr SAVE0, RD
+  |  mr CARG2, TMP2
+  |  mr CARG1, L
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |    lwz TMP2, SAVE_NRES
+  |   mr RD, SAVE0
+  |    slwi TMP2, TMP2, 3
+  |  lwz BASE, L->top			// Need the (realloced) L->top in BASE.
+  |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  NYI
