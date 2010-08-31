@@ -1124,7 +1124,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IFUNCF:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, RB = LFUNC, RC = nargs*8
+    |  lwz TMP2, L->maxstack
+    |   lbz TMP1, -4+PC2PROTO(numparams)(PC)
+    |    lwz KBASE, -4+PC2PROTO(k)(PC)
+    |  cmplw RA, TMP2
+    |   slwi TMP1, TMP1, 3
+    |  bgt ->vm_growstack_l
+    |2:
+    |  cmplw NARGS8:RC, TMP1		// Check for missing parameters.
+    |  ble >3
+    if (op == BC_JFUNCF) {
+      |  NYI
+    } else {
+      |  ins_next
+    }
+    |
+    |3:  // Clear missing parameters.
+    |  evstddx TISNIL, BASE, NARGS8:RC
+    |  addi NARGS8:RC, NARGS8:RC, 8
+    |  b <2
     break;
 
   case BC_JFUNCV:
@@ -1135,7 +1154,39 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, RB = LFUNC, RC = nargs*8
+    |  lwz TMP2, L->maxstack
+    |   add TMP1, BASE, RC
+    |  add TMP0, RA, RC
+    |   stw LFUNC:RB, 4(TMP1)		// Store copy of LFUNC.
+    |   addi TMP3, RC, 8+FRAME_VARG
+    |    lwz KBASE, -4+PC2PROTO(k)(PC)
+    |  cmplw TMP0, TMP2
+    |   stw TMP3, 0(TMP1)		// Store delta + FRAME_VARG.
+    |  bge ->vm_growstack_l
+    |  lbz TMP2, -4+PC2PROTO(numparams)(PC)
+    |   mr RA, BASE
+    |   mr RC, TMP1
+    |  cmpwi TMP2, 0
+    |   addi BASE, TMP1, 8
+    |  beq >3
+    |1:
+    |  cmplw RA, RC			// Less args than parameters?
+    |   evldd TMP0, 0(RA)
+    |  bge >4
+    |    evstdd TISNIL, 0(RA)		// Clear old fixarg slot (help the GC).
+    |    addi RA, RA, 8
+    |2:
+    |  addic. TMP2, TMP2, -1
+    |   evstdd TMP0, 8(TMP1)
+    |    addi TMP1, TMP1, 8
+    |  bne <1
+    |3:
+    |  ins_next
+    |
+    |4:  // Clear missing parameters.
+    |  evmr TMP0, TISNIL
+    |  b <2
     break;
 
   case BC_FUNCC:
