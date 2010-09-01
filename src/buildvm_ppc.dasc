@@ -1067,7 +1067,34 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Unary test and copy ops ------------------------------------------- */
 
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
-    |  NYI
+    |  // RA = dst*8 or unused, RD = src*8, JMP with RD = target
+    |  evlddx TMP0, BASE, RD
+    |   evaddw TMP1, TISNIL, TISNIL	// Synthesize LJ_TFALSE.
+    |   lwz INS, 0(PC)
+    |  evcmpltu TMP0, TMP1
+    |   addi PC, PC, 4
+    if (op == BC_IST || op == BC_ISF) {
+      |  addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+      |  decode_RD4 TMP2, INS
+      |  add TMP2, TMP2, TMP3
+      if (op == BC_IST) {
+	|  isellt PC, TMP2, PC
+      } else {
+	|  isellt PC, PC, TMP2
+      }
+    } else {
+      if (op == BC_ISTC) {
+	|  checkfail >1
+      } else {
+	|  checkok >1
+      }
+      |  addis PC, PC, -(BCBIAS_J*4 >> 16)
+      |  decode_RD4 TMP2, INS
+      |   evstddx TMP0, BASE, RA
+      |  add PC, PC, TMP2
+      |1:
+    }
+    |  ins_next
     break;
 
   /* -- Unary ops --------------------------------------------------------- */
