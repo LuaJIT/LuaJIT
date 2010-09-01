@@ -922,23 +922,146 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* Remember: all ops branch for a true comparison, fall through otherwise. */
 
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
-    |  NYI
+    |  // RA = src1*8, RD = src2*8, JMP with RD = target
+    |  evlddx TMP0, BASE, RA
+    |   addi PC, PC, 4
+    |  evlddx TMP1, BASE, RD
+    |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |   lwz INS, -4(PC)
+    |  evmergehi RB, TMP0, TMP1
+    |   decode_RD4 TMP2, INS
+    |  checknum RB
+    |   add TMP2, TMP2, TMP3
+    |  checkanyfail ->vmeta_comp
+    if (op == BC_ISLT || op == BC_ISGE) {
+      |  efdcmplt TMP0, TMP1
+    } else {
+      |  efdcmpgt TMP0, TMP1
+    }
+    if (op == BC_ISLT || op == BC_ISGT) {
+      |  iselgt PC, TMP2, PC
+    } else {
+      |  iselgt PC, PC, TMP2
+    }
+    |  ins_next
     break;
 
   case BC_ISEQV: case BC_ISNEV:
-    |  NYI
+    vk = op == BC_ISEQV;
+    |  // RA = src1*8, RD = src2*8, JMP with RD = target
+    |  evlddx TMP0, BASE, RA
+    |   addi PC, PC, 4
+    |  evlddx TMP1, BASE, RD
+    |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |   lwz INS, -4(PC)
+    |  evmergehi RB, TMP0, TMP1
+    |   decode_RD4 TMP2, INS
+    |  checknum RB
+    |   add TMP2, TMP2, TMP3
+    |  checkanyfail >5
+    |  efdcmpeq TMP0, TMP1
+    if (vk) {
+      |  iselgt PC, TMP2, PC
+    } else {
+      |  iselgt PC, PC, TMP2
+    }
+    |1:
+    |  ins_next
+    |
+    |5:  // Either or both types are not numbers.
+    |  evcmpeq TMP0, TMP1
+    |   not TMP3, RB
+    |   cmplwi cr1, TMP3, ~LJ_TISPRI		// Primitive?
+    |  crorc 4*cr7+lt, 4*cr0+so, 4*cr0+lt	// 1: Same tv or different type.
+    |   cmplwi cr6, TMP3, ~LJ_TISTABUD		// Table or userdata?
+    |  crandc 4*cr7+gt, 4*cr0+lt, 4*cr1+gt	// 2: Same type and primitive.
+    |   mr SAVE0, PC
+    if (vk) {
+      |  isel PC, TMP2, PC, 4*cr7+gt
+    } else {
+      |  isel TMP2, PC, TMP2, 4*cr7+gt
+    }
+    |  cror 4*cr7+lt, 4*cr7+lt, 4*cr7+gt	// 1 or 2.
+    if (vk) {
+      |  isel PC, TMP2, PC, 4*cr0+so
+    } else {
+      |  isel PC, PC, TMP2, 4*cr0+so
+    }
+    |  blt cr7, <1			// Done if 1 or 2.
+    |  blt cr6, <1			// Done if not tab/ud.
+    |
+    |  // Different tables or userdatas. Need to check __eq metamethod.
+    |  // Field metatable must be at same offset for GCtab and GCudata!
+    |  lwz TAB:TMP3, TAB:TMP1->metatable
+    |   li RB, 1-vk			// ne = 0 or 1.
+    |  cmplwi TAB:TMP3, 0
+    |  beq <1				// No metatable?
+    |  lbz TMP0, TAB:TMP3->nomm
+    |  andi. TMP0, TMP0, 1<<MM_eq
+    |  bne <1				// Or 'no __eq' flag set?
+    |  mr PC, SAVE0			// Restore old PC.
+    |  b ->vmeta_equal			// Handle __eq metamethod.
     break;
 
   case BC_ISEQS: case BC_ISNES:
-    |  NYI
+    vk = op == BC_ISEQS;
+    |  // RA = src*8, RD = str_const*8 (~), JMP with RD = target
+    |  evlddx TMP0, BASE, RA
+    |   srwi RD, RD, 1
+    |    lwz INS, 0(PC)
+    |   subfic RD, RD, -4
+    |    addi PC, PC, 4
+    |   lwzx STR:TMP1, KBASE, RD	// KBASE-4-str_const*4
+    |    addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |    decode_RD4 TMP2, INS
+    |   evmergelo STR:TMP1, TISSTR, STR:TMP1
+    |    add TMP2, TMP2, TMP3
+    |  evcmpeq TMP0, STR:TMP1
+    if (vk) {
+      |  isel PC, TMP2, PC, 4*cr0+so
+    } else {
+      |  isel PC, PC, TMP2, 4*cr0+so
+    }
+    |  ins_next
     break;
 
   case BC_ISEQN: case BC_ISNEN:
-    |  NYI
+    vk = op == BC_ISEQN;
+    |  // RA = src*8, RD = num_const*8, JMP with RD = target
+    |  evlddx TMP0, BASE, RA
+    |   addi PC, PC, 4
+    |  evlddx TMP1, KBASE, RD
+    |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |   lwz INS, -4(PC)
+    |  efdcmpeq TMP0, TMP1		// NYI: avoid comparison with NaN.
+    |   decode_RD4 TMP2, INS
+    |   add TMP2, TMP2, TMP3
+    if (vk) {
+      |  iselgt PC, TMP2, PC
+    } else {
+      |  iselgt PC, PC, TMP2
+    }
+    |  ins_next
     break;
 
   case BC_ISEQP: case BC_ISNEP:
-    |  NYI
+    vk = op == BC_ISEQP;
+    |  // RA = src*8, RD = primitive_type*8 (~), JMP with RD = target
+    |  lwzx TMP0, BASE, RA
+    |   srwi TMP1, RD, 3
+    |    lwz INS, 0(PC)
+    |    addi PC, PC, 4
+    |   not TMP1, TMP1
+    |    addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |  cmplw TMP0, TMP1
+    |    decode_RD4 TMP2, INS
+    |    add TMP2, TMP2, TMP3
+    if (vk) {
+      |  iseleq PC, TMP2, PC
+    } else {
+      |  iseleq PC, PC, TMP2
+    }
+    |  ins_next
     break;
 
   /* -- Unary test and copy ops ------------------------------------------- */
