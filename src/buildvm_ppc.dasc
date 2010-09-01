@@ -223,6 +223,12 @@
 |.macro checkanyfail, label; bns label; .endmacro
 |.endif
 |
+|.macro branch_RD
+|  srwi TMP0, RD, 1
+|  add PC, PC, TMP0
+|  addis PC, PC, -(BCBIAS_J*4 >> 16)
+|.endmacro
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
@@ -906,6 +912,7 @@ static void build_subroutines(BuildCtx *ctx)
 /* Generate the code for a single instruction. */
 static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 {
+  int vk = 0;
   |=>defop:
 
   switch (op) {
@@ -1230,7 +1237,51 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #endif
   case BC_FORI:
   case BC_IFORL:
-    |  NYI
+    |  // RA = base*8, RD = target (after end of loop or start of loop)
+    vk = (op == BC_IFORL || op == BC_JFORL);
+    |  add RA, BASE, RA
+    |  evldd TMP1, FORL_IDX*8(RA)
+    |  evldd TMP2, FORL_STOP*8(RA)
+    |  evldd TMP3, FORL_STEP*8(RA)
+    if (!vk) {
+      |  evcmpgtu cr0, TMP1, TISNUM
+      |  evcmpgtu cr1, TMP2, TISNUM
+      |  evcmpgtu cr7, TMP3, TISNUM
+      |  cror 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
+      |  cror 4*cr0+lt, 4*cr0+lt, 4*cr7+lt
+      |  blt ->vmeta_for
+    }
+    if (vk) {
+      |  efdadd TMP1, TMP1, TMP3
+    }
+    if (vk) {
+      |  evstdd TMP1, FORL_IDX*8(RA)
+    }
+    |   evcmpgts TMP3, TISNIL
+    |  evstdd TMP1, FORL_EXT*8(RA)
+    |   bge >2
+    |  efdcmpgt TMP1, TMP2
+    |1:
+    if (op != BC_JFORL) {
+      |  srwi RD, RD, 1
+      |  add RD, PC, RD
+      if (op == BC_JFORI) {
+	|  addis PC, RD, -(BCBIAS_J*4 >> 16)
+      } else {
+	|  addis RD, RD, -(BCBIAS_J*4 >> 16)
+      }
+    }
+    if (op == BC_FORI) {
+      |  iselgt PC, RD, PC
+    } else if (op == BC_IFORL) {
+      |  iselgt PC, PC, RD
+    } else {
+      |  ble =>BC_JLOOP
+    }
+    |  ins_next
+    |2:
+    |  efdcmpgt TMP2, TMP1
+    |  b <1
     break;
 
   case BC_ITERL:
@@ -1245,26 +1296,46 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IITERL:
-    |  NYI
+    |  // RA = base*8, RD = target
+    |  evlddx TMP1, BASE, RA
+    |   subi RA, RA, 8
+    |  checknil TMP1
+    |  checkok >1			// Stop if iterator returned nil.
+    if (op == BC_JITERL) {
+      |  NYI
+    } else {
+      |  branch_RD			// Otherwise save control var + branch.
+      |  evstddx TMP1, BASE, RA
+    }
+    |1:
+    |  ins_next
     break;
 
   case BC_LOOP:
-    |  NYI
+    |  // RA = base*8, RD = target (loop extent)
+    |  // Note: RA/RD is only used by trace recorder to determine scope/extent
+    |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
 #if LJ_HASJIT
-    |  // Fall through. Assumes BC_ILOOP follows.
+    |  hotloop
 #endif
+    |  // Fall through. Assumes BC_ILOOP follows.
     break;
 
   case BC_ILOOP:
-    |  NYI
+    |  // RA = base*8, RD = target (loop extent)
+    |  ins_next
     break;
 
   case BC_JLOOP:
+#if LJ_HASJIT
     |  NYI
+#endif
     break;
 
   case BC_JMP:
-    |  hotcall
+    |  // RA = base*8 (only used by trace recorder), RD = target
+    |  branch_RD
+    |  ins_next
     break;
 
   /* -- Function headers -------------------------------------------------- */
