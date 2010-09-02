@@ -2393,37 +2393,38 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |  call aword CFUNC:RD->f		// (lua_State *L)
   |  mov BASE, L:RB->base
-  |  // Either throws an error or recovers and returns 0 or MULTRES (+1).
-  |  test RD, RD;  jnz ->fff_res	// Returned MULTRES (already in RD).
-  |1:  // Returned 0: retry fast path.
-  |  mov RD, L:RB->top
-  |  sub RD, BASE
-  |  shr RD, 3
-  |  add NARGS:RD, 1
+  |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
+  |  test RD, RD;  jg ->fff_res		// Returned nresults+1?
+  |1:
+  |  mov RA, L:RB->top
+  |  sub RA, BASE
+  |  shr RA, 3
+  |  test RD, RD
+  |  lea NARGS:RD, [RA+1]
   |  mov LFUNC:RB, [BASE-8]
-  |  cmp dword [BASE-4], PC
-  |  jne >2				// Tailcalled?
-  |  ins_callt				// Retry the call.
+  |  jne >2				// Returned -1?
+  |  ins_callt				// Returned 0: retry fast path.
   |
-  |2:  // Reconstruct previous base for vmeta_call.
+  |2:  // Reconstruct previous base for vmeta_call during tailcall.
   |  mov RA, BASE
   |  test PC, FRAME_TYPE
   |  jnz >3
   |  movzx RB, PC_RA
   |  not RBa				// Note: ~RB = -(RB+1)
   |  lea BASE, [BASE+RB*8]		// base = base - (RB+1)*8
-  |  jmp ->vm_call_dispatch		// Resolve again.
+  |  jmp ->vm_call_dispatch		// Resolve again for tailcall.
   |3:
   |  mov RB, PC
   |  and RB, -8
   |  sub BASE, RB
-  |  jmp ->vm_call_dispatch		// Resolve again.
+  |  jmp ->vm_call_dispatch		// Resolve again for tailcall.
   |
   |5:  // Grow stack for fallback handler.
   |  mov FCARG2, LUA_MINSTACK
   |  mov FCARG1, L:RB
   |  call extern lj_state_growstack@8	// (lua_State *L, int n)
   |  mov BASE, L:RB->base
+  |  xor RD, RD				// Simulate a return 0.
   |  jmp <1				// Dumb retry (goes through ff first).
   |
   |->fff_gcstep:			// Call GC step function.
@@ -4366,7 +4367,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_CALLMT:
     |  ins_AD	// RA = base, RD = extra_nargs
     |  add NARGS:RD, MULTRES
-    |  // Fall through. Assumes BC_CALLMT follows and ins_AD is a no-op.
+    |  // Fall through. Assumes BC_CALLT follows and ins_AD is a no-op.
     break;
   case BC_CALLT:
     |  ins_AD	// RA = base, RD = nargs+1

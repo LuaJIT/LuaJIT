@@ -218,7 +218,7 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
   L->top = o+1;  /* Only keep one argument. */
   if (!tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
     copyTV(L, L->base-1, mo);  /* Replace callable. */
-    return FFH_RETRY;
+    return FFH_TAILCALL;
   } else {
     GCstr *s;
     if (tvisnum(o)) {

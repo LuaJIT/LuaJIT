@@ -28,6 +28,7 @@
 #define FFH_RETRY	0
 #define FFH_UNREACHABLE	FFH_RETRY
 #define FFH_RES(n)	((n)+1)
+#define FFH_TAILCALL	(-1)
 
 LJ_FUNC TValue *lj_lib_checkany(lua_State *L, int narg);
 LJ_FUNC GCstr *lj_lib_checkstr(lua_State *L, int narg);
