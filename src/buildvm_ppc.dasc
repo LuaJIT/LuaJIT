@@ -1520,10 +1520,21 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Calls and vararg handling ----------------------------------------- */
 
   case BC_CALLM:
-    |  NYI
+    |  // RA = base*8, (RB = (nresults+1)*8,) RC = extra_nargs*8
+    |  lwz TMP0, SAVE_MULTRES
+    |  add NARGS8:RC, NARGS8:RC, TMP0
+    |  // Fall through. Assumes BC_CALL follows.
     break;
   case BC_CALL:
-    |  NYI
+    |  // RA = base*8, (RB = (nresults+1)*8,) RC = (nargs+1)*8
+    |  evlddx LFUNC:RB, BASE, RA
+    |   mr TMP2, BASE
+    |   add BASE, BASE, RA
+    |    subi NARGS8:RC, NARGS8:RC, 8
+    |  checkfunc LFUNC:RB
+    |   addi BASE, BASE, 8
+    |  checkfail ->vmeta_call
+    |  ins_call
     break;
 
   case BC_CALLMT:
@@ -1534,7 +1545,21 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERC:
-    |  NYI
+    |  // RA = base*8, (RB = (nresults+1)*8,) RC = (nargs+1)*8 ((2+1)*8)
+    |  subi RA, RA, 24			// evldd doesn't support neg. offsets.
+    |   mr TMP2, BASE
+    |  evlddx LFUNC:RB, BASE, RA
+    |   add BASE, BASE, RA
+    |   evldd TMP0, 8(BASE)
+    |    evldd TMP1, 16(BASE)
+    |  evstdd LFUNC:RB, 24(BASE)	// Copy callable.
+    |  checkfunc LFUNC:RB
+    |   evstdd TMP0, 32(BASE)		// Copy state.
+    |     li NARGS8:RC, 16		// Iterators get 2 arguments.
+    |    evstdd TMP1, 40(BASE)		// Copy control var.
+    |     addi BASE, BASE, 32
+    |  checkfail ->vmeta_call
+    |  ins_call
     break;
 
   case BC_VARG:
