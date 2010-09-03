@@ -1250,7 +1250,43 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TGETV:
-    |  NYI
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  evlddx TAB:RB, BASE, RB
+    |   evlddx RC, BASE, RC
+    |  checktab TAB:RB
+    |  checkfail ->vmeta_tgetv
+    |  checknum RC
+    |  checkfail >5
+    |  // Convert number key to integer
+    |  efdctsi TMP2, RC
+    |   lwz TMP0, TAB:RB->asize
+    |  efdcfsi TMP1, TMP2
+    |   cmplw cr0, TMP0, TMP2
+    |  efdcmpeq cr1, RC, TMP1
+    |   lwz TMP1, TAB:RB->array
+    |  crand 4*cr0+gt, 4*cr0+gt, 4*cr1+gt
+    |   slwi TMP2, TMP2, 3
+    |  ble ->vmeta_tgetv		// Integer key and in array part?
+    |  evlddx TMP1, TMP1, TMP2
+    |  checknil TMP1
+    |  checkok >2
+    |1:
+    |  evstddx TMP1, BASE, RA
+    |  ins_next
+    |
+    |2:  // Check for __index if table value is nil.
+    |  lwz TAB:TMP2, TAB:RB->metatable
+    |  cmpwi TAB:TMP2, 0
+    |  beq <1				// No metatable: done.
+    |  lbz TMP0, TAB:TMP2->nomm
+    |  andi. TMP0, TMP0, 1<<MM_index
+    |  bne <1				// 'no __index' flag set: done.
+    |  b ->vmeta_tgetv
+    |
+    |5:
+    |  checkstr STR:RC			// String key?
+    |  checkok ->BC_TGETS_Z
+    |  b ->vmeta_tgetv
     break;
   case BC_TGETS:
     |  // RA = dst*8, RB = table*8, RC = str_const*8 (~)
@@ -1299,11 +1335,71 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->vmeta_tgets
     break;
   case BC_TGETB:
-    |  NYI
+    |  // RA = dst*8, RB = table*8, RC = index*8
+    |  evlddx TAB:RB, BASE, RB
+    |   srwi TMP0, RC, 3
+    |  checktab TAB:RB
+    |  checkfail ->vmeta_tgetb
+    |  lwz TMP1, TAB:RB->asize
+    |   lwz TMP2, TAB:RB->array
+    |  cmplw TMP0, TMP1
+    |  bge ->vmeta_tgetb
+    |  evlddx TMP1, TMP2, RC
+    |  checknil TMP1
+    |  checkok >5
+    |1:
+    |  evstddx TMP1, BASE, RA
+    |  ins_next
+    |
+    |5:  // Check for __index if table value is nil.
+    |  lwz TAB:TMP2, TAB:RB->metatable
+    |  cmpwi TAB:TMP2, 0
+    |  beq <1				// No metatable: done.
+    |  lbz TMP2, TAB:TMP2->nomm
+    |  andi. TMP2, TMP2, 1<<MM_index
+    |  bne <1				// 'no __index' flag set: done.
+    |  b ->vmeta_tgetb			// Caveat: preserve TMP0!
     break;
 
   case BC_TSETV:
-    |  NYI
+    |  // RA = src*8, RB = table*8, RC = key*8
+    |  evlddx TAB:RB, BASE, RB
+    |   evlddx RC, BASE, RC
+    |  checktab TAB:RB
+    |  checkfail ->vmeta_tsetv
+    |  checknum RC
+    |  checkfail >5
+    |  // Convert number key to integer
+    |  efdctsi TMP2, RC
+    |    evlddx SAVE0, BASE, RA
+    |   lwz TMP0, TAB:RB->asize
+    |  efdcfsi TMP1, TMP2
+    |   cmplw cr0, TMP0, TMP2
+    |  efdcmpeq cr1, RC, TMP1
+    |   lwz TMP1, TAB:RB->array
+    |  crand 4*cr0+gt, 4*cr0+gt, 4*cr1+gt
+    |   slwi TMP2, TMP2, 3
+    |  ble ->vmeta_tsetv		// Integer key and in array part?
+    |  evlddx TMP0, TMP1, TMP2
+    |  checknil TMP0
+    |  checkok >2
+    |1:
+    |  evstddx SAVE0, TMP1, TMP2
+    |  ins_next
+    |
+    |2:  // Check for __newindex if previous value is nil.
+    |  lwz TAB:TMP3, TAB:RB->metatable
+    |  cmpwi TAB:TMP3, 0
+    |  beq <1				// No metatable: done.
+    |  lbz TMP0, TAB:TMP3->nomm
+    |  andi. TMP0, TMP0, 1<<MM_newindex
+    |  bne <1				// 'no __newindex' flag set: done.
+    |  b ->vmeta_tsetv
+    |
+    |5:
+    |  checkstr STR:RC			// String key?
+    |  checkok ->BC_TSETS_Z
+    |  b ->vmeta_tsetv
     break;
   case BC_TSETS:
     |  // RA = src*8, RB = table*8, RC = str_const*8 (~)
@@ -1382,7 +1478,39 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <3
     break;
   case BC_TSETB:
-    |  NYI
+    |  // RA = src*8, RB = table*8, RC = index*8
+    |  evlddx TAB:RB, BASE, RB
+    |   srwi TMP0, RC, 3
+    |  checktab TAB:RB
+    |  checkfail ->vmeta_tsetb
+    |  lwz TMP1, TAB:RB->asize
+    |   lwz TMP2, TAB:RB->array
+    |    lbz TMP3, TAB:RB->marked
+    |  cmplw TMP0, TMP1
+    |   evlddx SAVE0, BASE, RA
+    |  bge ->vmeta_tsetb
+    |  evlddx TMP1, TMP2, RC
+    |  checknil TMP1
+    |  checkok >5
+    |1:
+    |  andi. TMP0, TMP3, LJ_GC_BLACK	// isblack(table)
+    |   evstddx SAVE0, TMP2, RC
+    |  bne >7
+    |2:
+    |  ins_next
+    |
+    |5:  // Check for __newindex if previous value is nil.
+    |  lwz TAB:TMP1, TAB:RB->metatable
+    |  cmpwi TAB:TMP1, 0
+    |  beq <1				// No metatable: done.
+    |  lbz TMP1, TAB:TMP1->nomm
+    |  andi. TMP1, TMP1, 1<<MM_newindex
+    |  bne <1				// 'no __newindex' flag set: done.
+    |  b ->vmeta_tsetb			// Caveat: preserve TMP0!
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMP3, TMP0
+    |  b <2
     break;
 
   case BC_TSETM:
