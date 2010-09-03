@@ -247,6 +247,16 @@
 |.macro li_vmstate, st; li TMP0, ~LJ_VMST_..st; .endmacro
 |.macro st_vmstate; stw TMP0, DISPATCH_GL(vmstate)(DISPATCH); .endmacro
 |
+|// Move table write barrier back. Overwrites mark and tmp.
+|.macro barrierback, tab, mark, tmp
+|  lwz tmp, DISPATCH_GL(gc.grayagain)(DISPATCH)
+|  // Assumes LJ_GC_BLACK is 0x04.
+|   rlwinm mark, mark, 0, 30, 28		// black2gray(tab)
+|  stw tab, DISPATCH_GL(gc.grayagain)(DISPATCH)
+|   stb mark, tab->marked
+|  stw tmp, tab->gclist
+|.endmacro
+|
 |//-----------------------------------------------------------------------
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
@@ -500,6 +510,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
+  |->vmeta_tgets1:
   |->vmeta_tgets:
   |  NYI
   |
@@ -511,6 +522,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-----------------------------------------------------------------------
   |
+  |->vmeta_tsets1:
   |->vmeta_tsets:
   |  NYI
   |
@@ -1222,15 +1234,69 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_GGET:
+    |  // RA = dst*8, RD = str_const*8 (~)
   case BC_GSET:
-    |  NYI
+    |  // RA = src*8, RD = str_const*8 (~)
+    |  lwz LFUNC:TMP2, FRAME_FUNC(BASE)
+    |   srwi TMP1, RD, 1
+    |  lwz TAB:RB, LFUNC:TMP2->env
+    |   subfic TMP1, TMP1, -4
+    |   lwzx STR:RC, KBASE, TMP1	// KBASE-4-str_const*4
+    if (op == BC_GGET) {
+      |  b ->BC_TGETS_Z
+    } else {
+      |  b ->BC_TSETS_Z
+    }
     break;
 
   case BC_TGETV:
     |  NYI
     break;
   case BC_TGETS:
-    |  NYI
+    |  // RA = dst*8, RB = table*8, RC = str_const*8 (~)
+    |  evlddx TAB:RB, BASE, RB
+    |   srwi TMP1, RC, 1
+    |  checktab TAB:RB
+    |   subfic TMP1, TMP1, -4
+    |   lwzx STR:RC, KBASE, TMP1	// KBASE-4-str_const*4
+    |  checkfail ->vmeta_tgets1
+    |->BC_TGETS_Z:
+    |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = dst*8
+    |  lwz TMP0, TAB:RB->hmask
+    |  lwz TMP1, STR:RC->hash
+    |  lwz NODE:TMP2, TAB:RB->node
+    |   evmergelo STR:RC, TISSTR, STR:RC
+    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+    |  slwi TMP0, TMP1, 5
+    |  slwi TMP1, TMP1, 3
+    |  sub TMP1, TMP0, TMP1
+    |  add NODE:TMP2, NODE:TMP2, TMP1	// node = tab->node + (idx*32-idx*8)
+    |1:
+    |  evldd TMP0, NODE:TMP2->key
+    |   evldd TMP1, NODE:TMP2->val
+    |  evcmpeq TMP0, STR:RC
+    |  checkanyfail >4
+    |   checknil TMP1
+    |   checkok >5			// Key found, but nil value?
+    |3:
+    |   evstddx TMP1, BASE, RA
+    |  ins_next
+    |
+    |4:  // Follow hash chain.
+    |  lwz NODE:TMP2, NODE:TMP2->next
+    |  cmpwi NODE:TMP2, 0
+    |  bne <1
+    |  // End of hash chain: key not found, nil result.
+    |   evmr TMP1, TISNIL
+    |
+    |5:  // Check for __index if table value is nil.
+    |  lwz TAB:TMP2, TAB:RB->metatable
+    |  cmpwi TAB:TMP2, 0
+    |  beq <3				// No metatable: done.
+    |  lbz TMP0, TAB:TMP2->nomm
+    |  andi. TMP0, TMP0, 1<<MM_index
+    |  bne <3				// 'no __index' flag set: done.
+    |  b ->vmeta_tgets
     break;
   case BC_TGETB:
     |  NYI
@@ -1240,7 +1306,80 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  NYI
     break;
   case BC_TSETS:
-    |  NYI
+    |  // RA = src*8, RB = table*8, RC = str_const*8 (~)
+    |  evlddx TAB:RB, BASE, RB
+    |   srwi TMP1, RC, 1
+    |  checktab TAB:RB
+    |   subfic TMP1, TMP1, -4
+    |   lwzx STR:RC, KBASE, TMP1	// KBASE-4-str_const*4
+    |  checkfail ->vmeta_tsets1
+    |->BC_TSETS_Z:
+    |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = src*8
+    |  lwz TMP0, TAB:RB->hmask
+    |  lwz TMP1, STR:RC->hash
+    |  lwz NODE:TMP2, TAB:RB->node
+    |    li TMP3, 0
+    |   evmergelo STR:RC, TISSTR, STR:RC
+    |    stb TMP3, TAB:RB->nomm		// Clear metamethod cache.
+    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+    |    evlddx SAVE0, BASE, RA
+    |  slwi TMP0, TMP1, 5
+    |  slwi TMP1, TMP1, 3
+    |  sub TMP1, TMP0, TMP1
+    |    lbz TMP3, TAB:RB->marked
+    |  add NODE:TMP2, NODE:TMP2, TMP1	// node = tab->node + (idx*32-idx*8)
+    |1:
+    |  evldd TMP0, NODE:TMP2->key
+    |   evldd TMP1, NODE:TMP2->val
+    |  evcmpeq TMP0, STR:RC
+    |  checkanyfail >5
+    |   checknil TMP1
+    |   checkok >4			// Key found, but nil value?
+    |2:
+    |  andi. TMP0, TMP3, LJ_GC_BLACK	// isblack(table)
+    |    evstdd SAVE0, NODE:TMP2->val
+    |  bne >7
+    |3:
+    |  ins_next
+    |
+    |4:  // Check for __newindex if previous value is nil.
+    |  lwz TAB:TMP1, TAB:RB->metatable
+    |  cmpwi TAB:TMP1, 0
+    |  beq <2				// No metatable: done.
+    |  lbz TMP0, TAB:TMP1->nomm
+    |  andi. TMP0, TMP0, 1<<MM_newindex
+    |  bne <2				// 'no __newindex' flag set: done.
+    |  b ->vmeta_tsets
+    |
+    |5:  // Follow hash chain.
+    |  lwz NODE:TMP2, NODE:TMP2->next
+    |  cmpwi NODE:TMP2, 0
+    |  bne <1
+    |  // End of hash chain: key not found, add a new one.
+    |
+    |  // But check for __newindex first.
+    |  lwz TAB:TMP1, TAB:RB->metatable
+    |   la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+    |   stw PC, SAVE_PC
+    |   mr CARG1, L
+    |  cmpwi TAB:TMP1, 0
+    |   stw BASE, L->base
+    |  beq >6				// No metatable: continue.
+    |  lbz TMP0, TAB:TMP1->nomm
+    |  andi. TMP0, TMP0, 1<<MM_newindex
+    |  beq ->vmeta_tsets		// 'no __newindex' flag NOT set: check.
+    |6:
+    |  mr CARG2, TAB:RB
+    |  evstdd STR:RC, 0(CARG3)
+    |  bl extern lj_tab_newkey		// (lua_State *L, GCtab *t, TValue *k)
+    |  // Returns TValue *.
+    |  lwz BASE, L->base
+    |  evstdd SAVE0, 0(CRET1)
+    |  b <3				// No 2nd write barrier needed.
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMP3, TMP0
+    |  b <3
     break;
   case BC_TSETB:
     |  NYI
