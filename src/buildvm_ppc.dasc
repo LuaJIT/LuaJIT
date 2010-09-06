@@ -1160,17 +1160,50 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   /* -- Binary ops -------------------------------------------------------- */
 
+    |.macro ins_arithpre, t0, t1
+    |  // RA = dst*8, RB = src1*8, RC = src2*8 | num_const*8
+    ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
+    ||switch (vk) {
+    ||case 0:
+    |   evlddx t0, BASE, RB
+    |    checknum t0
+    |   evlddx t1, KBASE, RC
+    |    checkfail ->vmeta_arith_vn
+    ||  break;
+    ||case 1:
+    |   evlddx t1, BASE, RB
+    |    checknum t1
+    |   evlddx t0, KBASE, RC
+    |    checkfail ->vmeta_arith_nv
+    ||  break;
+    ||default:
+    |   evlddx t0, BASE, RB
+    |   evlddx t1, BASE, RC
+    |    evmergehi TMP2, t0, t1
+    |    checknum TMP2
+    |    checkanyfail ->vmeta_arith_vv
+    ||  break;
+    ||}
+    |.endmacro
+    |
+    |.macro ins_arith, ins
+    |  ins_arithpre TMP0, TMP1
+    |  ins TMP0, TMP0, TMP1
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
+    |.endmacro
+
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
-    |  NYI
+    |  ins_arith efdadd
     break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
-    |  NYI
+    |  ins_arith efdsub
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
-    |  NYI
+    |  ins_arith efdmul
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
-    |  NYI
+    |  ins_arith efddiv
     break;
   case BC_MODVN:
     |  NYI
@@ -1179,7 +1212,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  NYI
     break;
   case BC_POW:
-    |  NYI
+    |  evlddx CARG2, BASE, RB
+    |  evlddx CARG4, BASE, RC
+    |  evmergehi CARG1, CARG4, CARG2
+    |  checknum CARG1
+    |   evmergehi CARG3, CARG4, CARG4
+    |  checkanyfail ->vmeta_arith_vv
+    |  bl extern pow
+    |  evmergelo CRET2, CRET1, CRET2
+    |  evstddx CRET2, BASE, RA
+    |  ins_next
     break;
 
   case BC_CAT:
