@@ -1121,13 +1121,41 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next_
     break;
   case BC_NOT:
-    |  NYI
+    |  // RA = dst*8, RD = src*8
+    |  lwzx TMP0, BASE, RD
+    |  subfic TMP1, TMP0, LJ_TTRUE
+    |  adde TMP0, TMP0, TMP1
+    |  stwx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_UNM:
-    |  NYI
+    |  // RA = dst*8, RD = src*8
+    |  evlddx TMP0, BASE, RD
+    |   lus TMP1, 0x8000
+    |   li TMP2, 0
+    |  checknum TMP0
+    |   evmergelo TMP1, TMP1, TMP2
+    |  checkfail ->vmeta_unm
+    |  evxor TMP0, TMP0, TMP1
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_LEN:
-    |  NYI
+    |  // RA = dst*8, RD = src*8
+    |  evlddx CARG1, BASE, RD
+    |  checkstr CARG1
+    |  checkfail >2
+    |  lwz CRET1, STR:CARG1->len
+    |1:
+    |  efdcfsi TMP0, CRET1
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
+    |2:
+    |  checktab CARG1
+    |  checkfail ->vmeta_len
+    |  bl extern lj_tab_len		// (GCtab *t)
+    |  // Returns uint32_t (but less than 2^31).
+    |  b <1
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
