@@ -1230,10 +1230,41 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Table ops --------------------------------------------------------- */
 
   case BC_TNEW:
-    |  NYI
-    break;
   case BC_TDUP:
-    |  NYI
+    |  // RA = dst*8, RD = (hbits|asize)*8 | tab_const*8 (~)
+    |  lwz TMP0, DISPATCH_GL(gc.total)(DISPATCH)
+    |   mr CARG1, L
+    |  lwz TMP1, DISPATCH_GL(gc.threshold)(DISPATCH)
+    |   stw BASE, L->base
+    |  cmplw TMP0, TMP1
+    |   stw PC, SAVE_PC
+    |  bge >5
+    |1:
+    if (op == BC_TNEW) {
+      |  rlwinm CARG2, RD, 29, 21, 31
+      |  rlwinm CARG3, RD, 18, 27, 31
+      |  cmpwi CARG2, 0x7ff
+      |   li TMP1, 0x801
+      |  iseleq CARG2, TMP1, CARG2
+      |  bl extern lj_tab_new  // (lua_State *L, int32_t asize, uint32_t hbits)
+      |  // Returns Table *.
+    } else {
+      |  srwi TMP1, RD, 1
+      |  subfic TMP1, TMP1, -4
+      |  lwzx CARG2, KBASE, TMP1		// KBASE-4-tab_const*4
+      |  bl extern lj_tab_dup  // (lua_State *L, Table *kt)
+      |  // Returns Table *.
+    }
+    |  lwz BASE, L->base
+    |  evmergelo TAB:CRET1, TISTAB, TAB:CRET1
+    |  evstddx TAB:CRET1, BASE, RA
+    |  ins_next
+    |5:
+    |  mr SAVE0, RD
+    |  bl extern lj_gc_step_fixtop  // (lua_State *L)
+    |  mr RD, SAVE0
+    |  mr CARG1, L
+    |  b <1
     break;
 
   case BC_GGET:
