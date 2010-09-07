@@ -1272,10 +1272,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_arith efddiv
     break;
   case BC_MODVN:
-    |  NYI
+    |  ins_arithpre RD, SAVE0
+    |->BC_MODVN_Z:
+    |  efddiv CARG2, RD, SAVE0
+    |  bl ->vm_floor			// floor(b/c)
+    |  efdmul TMP0, CRET2, SAVE0
+    |  efdsub TMP0, RD, TMP0		// b - floor(b/c)*c
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_MODNV: case BC_MODVV:
-    |  NYI
+    |  ins_arithpre RD, SAVE0
+    |  b ->BC_MODVN_Z			// Avoid 3 copies. It's slow anyway.
     break;
   case BC_POW:
     |  evlddx CARG2, BASE, RB
