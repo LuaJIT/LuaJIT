@@ -887,10 +887,75 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// FP value rounding. Called by math.floor/math.ceil fast functions
   |// and from JIT code.
-  |
+  |//
+  |// This can be inlined if the CPU has the frin/friz/frip/frim instructions.
+  |// The alternative hard-float approaches have a deep dependency chain.
+  |// The resulting latency is at least 3x-7x the double-precision FP latency
+  |// (e500v2: 6cy, e600: 5cy, Cell: 10cy) or around 20-70 cycles.
+  |//
+  |// The soft-float approach is tedious, but much faster (e500v2: ~11cy/~6cy).
+  |// However it relies on a fast way to transfer the FP value to GPRs
+  |// (e500v2: 0cy for lo-word, 1cy for hi-word).
+  |//
   |.macro vm_round, name, mode
-  |->name:
-  |  NYI
+  |  // Used temporaries: TMP0, TMP1, TMP2, TMP3.
+  |->name:				// Input: CARG2, output: CRET2
+  |  evmergehi CARG1, CARG2, CARG2
+  |->name.._hilo:
+  |  // Input: CARG1 (hi), CARG2 (hi, lo), output: CRET2
+  |  rlwinm TMP2, CARG1, 12, 21, 31
+  |  addic. TMP2, TMP2, -1023		// exp = exponent(x) - 1023
+  |   li TMP1, -1
+  |  cmplwi cr1, TMP2, 51		// 0 <= exp < 51?
+  |   subfic TMP0, TMP2, 52
+  |  bgt cr1, >1
+  |   lus TMP3, 0xfff0
+  |  slw TMP0, TMP1, TMP0		// lomask = -1 << (52-exp)
+  |   sraw TMP1, TMP3, TMP2		// himask = (int32_t)0xfff00000 >> exp
+  |.if mode == 2		// trunc(x):
+  |  evmergelo TMP0, TMP1, TMP0
+  |  evand CRET2, CARG2, TMP0		// hi &= himask, lo &= lomask
+  |.else
+  |  andc TMP2, CARG2, TMP0
+  |   andc TMP3, CARG1, TMP1
+  |  or TMP2, TMP2, TMP3		// ztest = (hi&~himask) | (lo&~lomask)
+  |   srawi TMP3, CARG1, 31		// signmask = (int32_t)hi >> 31
+  |.if mode == 0		// floor(x):
+  |  and. TMP2, TMP2, TMP3		// iszero = ((ztest & signmask) == 0)
+  |.else			// ceil(x):
+  |  andc. TMP2, TMP2, TMP3		// iszero = ((ztest & ~signmask) == 0)
+  |.endif
+  |  and CARG2, CARG2, TMP0		// lo &= lomask
+  |  and CARG1, CARG1, TMP1		// hi &= himask
+  |   subc TMP0, CARG2, TMP0
+  |  iseleq TMP0, CARG2, TMP0		// lo = iszero ? lo : lo-lomask
+  |   sube TMP1, CARG1, TMP1
+  |  iseleq TMP1, CARG1, TMP1		// hi = iszero ? hi : hi-himask+carry
+  |  evmergelo CRET2, TMP1, TMP0
+  |.endif
+  |  blr
+  |1:
+  |  bgtlr				// Already done if >=2^52, +-inf or nan.
+  |.if mode == 2		// trunc(x):
+  |  rlwinm TMP1, CARG1, 0, 0, 0	// hi = sign(x)
+  |  li TMP0, 0
+  |  evmergelo CRET2, TMP1, TMP0
+  |.else
+  |  rlwinm TMP2, CARG1, 0, 1, 31
+  |  srawi TMP0, CARG1, 31		// signmask = (int32_t)hi >> 31
+  |  or TMP2, TMP2, CARG2		// ztest = abs(hi) | lo
+  |   lus TMP1, 0x3ff0
+  |.if mode == 0		// floor(x):
+  |  and. TMP2, TMP2, TMP0		// iszero = ((ztest & signmask) == 0)
+  |.else			// ceil(x):
+  |  andc. TMP2, TMP2, TMP0		// iszero = ((ztest & ~signmask) == 0)
+  |.endif
+  |   li TMP0, 0
+  |  iseleq TMP1, r0, TMP1
+  |  rlwimi CARG1, TMP1, 0, 1, 31	// hi = sign(x) | (iszero ? 0.0 : 1.0)
+  |  evmergelo CRET2, CARG1, TMP0
+  |.endif
+  |  blr
   |.endmacro
   |
   |  vm_round vm_floor, 0
@@ -899,6 +964,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  vm_round vm_trunc, 2
 #else
   |->vm_trunc:
+  |->vm_trunc_hilo:
 #endif
   |
   |->vm_powi:
