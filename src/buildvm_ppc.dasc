@@ -1375,19 +1375,97 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Upvalue and function ops ------------------------------------------ */
 
   case BC_UGET:
-    |  NYI
+    |  // RA = dst*8, RD = uvnum*8
+    |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+    |   srwi RD, RD, 1
+    |   addi RD, RD, offsetof(GCfuncL, uvptr)
+    |  lwzx UPVAL:RB, LFUNC:RB, RD
+    |  lwz TMP1, UPVAL:RB->v
+    |  evldd TMP0, 0(TMP1)
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
   case BC_USETV:
-    |  NYI
+    |  // RA = uvnum*8, RD = src*8
+    |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+    |    srwi RA, RA, 1
+    |    addi RA, RA, offsetof(GCfuncL, uvptr)
+    |   evlddx TMP1, BASE, RD
+    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  lbz TMP3, UPVAL:RB->marked
+    |   lwz CARG2, UPVAL:RB->v
+    |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
+    |    lbz TMP2, UPVAL:RB->closed
+    |   evmergehi TMP0, TMP1, TMP1
+    |   evstdd TMP1, 0(CARG2)
+    |    cmplwi cr1, TMP2, 0
+    |  cror 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
+    |   subi TMP0, TMP0, LJ_TISNUM
+    |  bne >2				// Upvalue is closed and black?
+    |1:
+    |  ins_next
+    |
+    |2:  // Check if new value is collectable.
+    |  cmplwi TMP0, LJ_TISGCV - LJ_TISNUM
+    |  bge <1				// tvisgcv(v)
+    |  lbz TMP3, GCOBJ:TMP1->gch.marked
+    |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(v)
+    |   la CARG1, GG_DISP2G(DISPATCH)
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  bnel extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  b <1
     break;
   case BC_USETS:
-    |  NYI
+    |  // RA = uvnum*8, RD = str_const*8 (~)
+    |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+    |   srwi TMP1, RD, 1
+    |    srwi RA, RA, 1
+    |   subfic TMP1, TMP1, -4
+    |    addi RA, RA, offsetof(GCfuncL, uvptr)
+    |   lwzx STR:TMP1, KBASE, TMP1	// KBASE-4-str_const*4
+    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |   evmergelo STR:TMP1, TISSTR, STR:TMP1
+    |  lbz TMP3, UPVAL:RB->marked
+    |   lwz CARG2, UPVAL:RB->v
+    |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
+    |   lbz TMP3, STR:TMP1->marked
+    |   lbz TMP2, UPVAL:RB->closed
+    |   evstdd STR:TMP1, 0(CARG2)
+    |  bne >2
+    |1:
+    |  ins_next
+    |
+    |2:  // Check if string is white and ensure upvalue is closed.
+    |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(str)
+    |   cmplwi cr1, TMP2, 0
+    |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
+    |   la CARG1, GG_DISP2G(DISPATCH)
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  bnel extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  b <1
     break;
   case BC_USETN:
-    |  NYI
+    |  // RA = uvnum*8, RD = num_const*8
+    |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+    |   srwi RA, RA, 1
+    |   addi RA, RA, offsetof(GCfuncL, uvptr)
+    |    evlddx TMP0, KBASE, RD
+    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  lwz TMP1, UPVAL:RB->v
+    |  evstdd TMP0, 0(TMP1)
+    |  ins_next
     break;
   case BC_USETP:
-    |  NYI
+    |  // RA = uvnum*8, RD = primitive_type*8 (~)
+    |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+    |   srwi RA, RA, 1
+    |   addi RA, RA, offsetof(GCfuncL, uvptr)
+    |    srwi TMP0, RD, 3
+    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |    not TMP0, TMP0
+    |  lwz TMP1, UPVAL:RB->v
+    |  stw TMP0, 0(TMP1)
+    |  ins_next
     break;
 
   case BC_UCLO:
