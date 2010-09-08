@@ -1389,12 +1389,38 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_USETP:
     |  NYI
     break;
+
   case BC_UCLO:
-    |  NYI
+    |  // RA = level*8, RD = target
+    |  lwz TMP1, L->openupval
+    |  branch_RD			// Do this first since RD is not saved.
+    |   stw BASE, L->base
+    |  cmplwi TMP1, 0
+    |   mr CARG1, L
+    |  beq >1
+    |   add CARG2, BASE, RA
+    |  bl extern lj_func_closeuv	// (lua_State *L, TValue *level)
+    |  lwz BASE, L->base
+    |1:
+    |  ins_next
     break;
 
   case BC_FNEW:
-    |  NYI
+    |  // RA = dst*8, RD = proto_const*8 (~) (holding function prototype)
+    |  srwi TMP1, RD, 1
+    |   stw BASE, L->base
+    |  subfic TMP1, TMP1, -4
+    |   stw PC, SAVE_PC
+    |  lwzx CARG2, KBASE, TMP1		// KBASE-4-tab_const*4
+    |   mr CARG1, L
+    |  lwz CARG3, FRAME_FUNC(BASE)
+    |  // (lua_State *L, GCproto *pt, GCfuncL *parent)
+    |  bl extern lj_func_newL_gc
+    |  // Returns GCfuncL *.
+    |  lwz BASE, L->base
+    |  evmergelo LFUNC:CRET1, TISFUNC, LFUNC:CRET1
+    |  evstddx LFUNC:CRET1, BASE, RA
+    |  ins_next
     break;
 
   /* -- Table ops --------------------------------------------------------- */
