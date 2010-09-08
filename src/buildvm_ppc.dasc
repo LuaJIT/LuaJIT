@@ -1584,7 +1584,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |2:  // Check for __index if table value is nil.
     |  lwz TAB:TMP2, TAB:RB->metatable
-    |  cmpwi TAB:TMP2, 0
+    |  cmplwi TAB:TMP2, 0
     |  beq <1				// No metatable: done.
     |  lbz TMP0, TAB:TMP2->nomm
     |  andi. TMP0, TMP0, 1<<MM_index
@@ -1628,14 +1628,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |4:  // Follow hash chain.
     |  lwz NODE:TMP2, NODE:TMP2->next
-    |  cmpwi NODE:TMP2, 0
+    |  cmplwi NODE:TMP2, 0
     |  bne <1
     |  // End of hash chain: key not found, nil result.
     |   evmr TMP1, TISNIL
     |
     |5:  // Check for __index if table value is nil.
     |  lwz TAB:TMP2, TAB:RB->metatable
-    |  cmpwi TAB:TMP2, 0
+    |  cmplwi TAB:TMP2, 0
     |  beq <3				// No metatable: done.
     |  lbz TMP0, TAB:TMP2->nomm
     |  andi. TMP0, TMP0, 1<<MM_index
@@ -1661,7 +1661,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |5:  // Check for __index if table value is nil.
     |  lwz TAB:TMP2, TAB:RB->metatable
-    |  cmpwi TAB:TMP2, 0
+    |  cmplwi TAB:TMP2, 0
     |  beq <1				// No metatable: done.
     |  lbz TMP2, TAB:TMP2->nomm
     |  andi. TMP2, TMP2, 1<<MM_index
@@ -1697,7 +1697,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |2:  // Check for __newindex if previous value is nil.
     |  lwz TAB:TMP3, TAB:RB->metatable
-    |  cmpwi TAB:TMP3, 0
+    |  cmplwi TAB:TMP3, 0
     |  beq <1				// No metatable: done.
     |  lbz TMP0, TAB:TMP3->nomm
     |  andi. TMP0, TMP0, 1<<MM_newindex
@@ -1748,7 +1748,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |4:  // Check for __newindex if previous value is nil.
     |  lwz TAB:TMP1, TAB:RB->metatable
-    |  cmpwi TAB:TMP1, 0
+    |  cmplwi TAB:TMP1, 0
     |  beq <2				// No metatable: done.
     |  lbz TMP0, TAB:TMP1->nomm
     |  andi. TMP0, TMP0, 1<<MM_newindex
@@ -1757,7 +1757,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |5:  // Follow hash chain.
     |  lwz NODE:TMP2, NODE:TMP2->next
-    |  cmpwi NODE:TMP2, 0
+    |  cmplwi NODE:TMP2, 0
     |  bne <1
     |  // End of hash chain: key not found, add a new one.
     |
@@ -1766,7 +1766,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
     |   stw PC, SAVE_PC
     |   mr CARG1, L
-    |  cmpwi TAB:TMP1, 0
+    |  cmplwi TAB:TMP1, 0
     |   stw BASE, L->base
     |  beq >6				// No metatable: continue.
     |  lbz TMP0, TAB:TMP1->nomm
@@ -1809,7 +1809,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |5:  // Check for __newindex if previous value is nil.
     |  lwz TAB:TMP1, TAB:RB->metatable
-    |  cmpwi TAB:TMP1, 0
+    |  cmplwi TAB:TMP1, 0
     |  beq <1				// No metatable: done.
     |  lbz TMP1, TAB:TMP1->nomm
     |  andi. TMP1, TMP1, 1<<MM_newindex
@@ -1864,7 +1864,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  andi. TMP0, TMP1, FRAME_TYPE	// Caveat: preserve cr0 until the crand.
     |   lbz TMP3, LFUNC:RB->ffid
     |    xori TMP2, TMP1, FRAME_VARG
-    |    cmpwi cr1, NARGS8:RC, 0
+    |    cmplwi cr1, NARGS8:RC, 0
     |  bne >7
     |1:
     |  stw LFUNC:RB, FRAME_FUNC(BASE)	// Copy function down, but keep PC.
@@ -1874,7 +1874,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  addi TMP3, TMP2, 8
     |   evlddx TMP0, RA, TMP2
-    |  cmpw cr1, TMP3, NARGS8:RC
+    |  cmplw cr1, TMP3, NARGS8:RC
     |   evstddx TMP0, BASE, TMP2
     |  mr TMP2, TMP3
     |  bne cr1, <2
