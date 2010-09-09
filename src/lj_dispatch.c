@@ -319,7 +319,8 @@ static void callhook(lua_State *L, int event, BCLine line)
     lj_trace_abort(g);  /* Abort recording on any hook call. */
     ar.event = event;
     ar.currentline = line;
-    ar.i_ci = cast_int((L->base-1) - L->stack); /* Top frame, nextframe=NULL. */
+    /* Top frame, nextframe = NULL. */
+    ar.i_ci = cast_int((L->base-1) - tvref(L->stack));
     lj_state_checkstack(L, 1+LUA_MINSTACK);
     hook_enter(g);
     hookf(L, &ar);

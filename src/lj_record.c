@@ -1062,7 +1062,8 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   uv = (uv << 8) | (hashrot(uvp->dhash, uvp->dhash + HASH_BIAS) & 0xff);
   if (!uvp->closed) {
     /* In current stack? */
-    if (uvval(uvp) >= J->L->stack && uvval(uvp) < J->L->maxstack) {
+    if (uvval(uvp) >= tvref(J->L->stack) &&
+	uvval(uvp) < tvref(J->L->maxstack)) {
       int32_t slot = (int32_t)(uvval(uvp) - (J->L->base - J->baseslot));
       if (slot >= 0) {  /* Aliases an SSA slot? */
 	slot -= (int32_t)J->baseslot;  /* Note: slot number may be negative! */

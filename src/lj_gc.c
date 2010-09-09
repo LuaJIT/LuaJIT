@@ -267,9 +267,9 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
 /* Traverse the frame structure of a stack. */
 static MSize gc_traverse_frames(global_State *g, lua_State *th)
 {
-  TValue *frame, *top = th->top-1;
+  TValue *frame, *top = th->top-1, *bot = tvref(th->stack);
   /* Note: extra vararg frame not skipped, marks function twice (harmless). */
-  for (frame = th->base-1; frame > th->stack; frame = frame_prev(frame)) {
+  for (frame = th->base-1; frame > bot; frame = frame_prev(frame)) {
     GCfunc *fn = frame_func(frame);
     TValue *ftop = frame;
     if (isluafunc(fn)) ftop += funcproto(fn)->framesize;
@@ -277,18 +277,18 @@ static MSize gc_traverse_frames(global_State *g, lua_State *th)
     gc_markobj(g, frame_gc(frame));  /* Need to mark hidden function (or L). */
   }
   top++;  /* Correct bias of -1 (frame == base-1). */
-  if (top > th->maxstack) top = th->maxstack;
-  return (MSize)(top - th->stack);  /* Return minimum needed stack size. */
+  if (top > tvref(th->maxstack)) top = tvref(th->maxstack);
+  return (MSize)(top - bot);  /* Return minimum needed stack size. */
 }
 
 /* Traverse a thread object. */
 static void gc_traverse_thread(global_State *g, lua_State *th)
 {
   TValue *o, *top = th->top;
-  for (o = th->stack+1; o < top; o++)
+  for (o = tvref(th->stack)+1; o < top; o++)
     gc_marktv(g, o);
   if (g->gc.state == GCSatomic) {
-    top = th->stack + th->stacksize;
+    top = tvref(th->stack) + th->stacksize;
     for (; o < top; o++)  /* Clear unmarked slots. */
       setnilV(o);
   }

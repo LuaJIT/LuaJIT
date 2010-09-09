@@ -525,8 +525,8 @@ struct lua_State {
   GCRef gclist;		/* GC chain. */
   TValue *base;		/* Base of currently executing function. */
   TValue *top;		/* First free slot in the stack. */
-  TValue *maxstack;	/* Last free slot in the stack. */
-  TValue *stack;	/* Stack base. */
+  MRef maxstack;	/* Last free slot in the stack. */
+  MRef stack;		/* Stack base. */
   GCRef openupval;	/* List of open upvalues in the stack. */
   GCRef env;		/* Thread environment (table of globals). */
   void *cframe;		/* End of C stack frame chain. */

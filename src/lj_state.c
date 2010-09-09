@@ -52,16 +52,18 @@
 /* Resize stack slots and adjust pointers in state. */
 static void resizestack(lua_State *L, MSize n)
 {
-  TValue *st, *oldst = L->stack;
+  TValue *st, *oldst = tvref(L->stack);
   ptrdiff_t delta;
   MSize oldsize = L->stacksize;
   MSize realsize = n + 1 + LJ_STACK_EXTRA;
   GCobj *up;
-  lua_assert((MSize)(L->maxstack-L->stack) == L->stacksize-LJ_STACK_EXTRA-1);
-  lj_mem_reallocvec(L, L->stack, L->stacksize, realsize, TValue);
-  st = L->stack;
+  lua_assert((MSize)(tvref(L->maxstack)-oldst)==L->stacksize-LJ_STACK_EXTRA-1);
+  st = (TValue *)lj_mem_realloc(L, tvref(L->stack),
+				(MSize)(L->stacksize*sizeof(TValue)),
+				(MSize)(realsize*sizeof(TValue)));
+  setmref(L->stack, st);
   delta = (char *)st - (char *)oldst;
-  L->maxstack = st + n;
+  setmref(L->maxstack, st + n);
   while (oldsize < realsize)  /* Clear new slots. */
     setnilV(st + oldsize++);
   L->stacksize = realsize;
@@ -76,7 +78,7 @@ static void resizestack(lua_State *L, MSize n)
 /* Relimit stack after error, in case the limit was overdrawn. */
 void lj_state_relimitstack(lua_State *L)
 {
-  if (L->stacksize > LJ_STACK_MAXEX && L->top - L->stack < LJ_STACK_MAX-1)
+  if (L->stacksize > LJ_STACK_MAXEX && L->top-tvref(L->stack) < LJ_STACK_MAX-1)
     resizestack(L, LJ_STACK_MAX);
 }
 
@@ -118,11 +120,11 @@ void LJ_FASTCALL lj_state_growstack1(lua_State *L)
 /* Allocate basic stack for new state. */
 static void stack_init(lua_State *L1, lua_State *L)
 {
-  TValue *st, *stend;
-  L1->stack = st = lj_mem_newvec(L, LJ_STACK_START + LJ_STACK_EXTRA, TValue);
+  TValue *stend, *st = lj_mem_newvec(L, LJ_STACK_START+LJ_STACK_EXTRA, TValue);
+  setmref(L1->stack, st);
   L1->stacksize = LJ_STACK_START + LJ_STACK_EXTRA;
   stend = st + L1->stacksize;
-  L1->maxstack = stend - LJ_STACK_EXTRA - 1;
+  setmref(L1->maxstack, stend - LJ_STACK_EXTRA - 1);
   L1->base = L1->top = st+1;
   setthreadV(L1, st, L1);  /* Needed for curr_funcisL() on empty stack. */
   while (st < stend)  /* Clear new slots. */
@@ -162,14 +164,14 @@ static void close_state(lua_State *L)
   } else
 #endif
   {
-    lj_func_closeuv(L, L->stack);
+    lj_func_closeuv(L, tvref(L->stack));
     lj_gc_freeall(g);
     lua_assert(gcref(g->gc.root) == obj2gco(L));
     lua_assert(g->strnum == 0);
     lj_trace_freestate(g);
     lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
     lj_str_freebuf(g, &g->tmpbuf);
-    lj_mem_freevec(g, L->stack, L->stacksize, TValue);
+    lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
     lua_assert(g->gc.total == sizeof(GG_State));
     g->allocf(g->allocd, G2GG(g), sizeof(GG_State), 0);
   }
@@ -234,7 +236,7 @@ LUA_API void lua_close(lua_State *L)
 {
   global_State *g = G(L);
   L = mainthread(g);  /* Only the main thread can be closed. */
-  lj_func_closeuv(L, L->stack);
+  lj_func_closeuv(L, tvref(L->stack));
   lj_gc_separateudata(g, 1);  /* Separate udata which have GC metamethods. */
 #if LJ_HASJIT
   G2J(g)->flags &= ~JIT_F_ON;
@@ -245,7 +247,7 @@ LUA_API void lua_close(lua_State *L)
     hook_enter(g);
     L->status = 0;
     L->cframe = NULL;
-    L->base = L->top = L->stack + 1;
+    L->base = L->top = tvref(L->stack) + 1;
   } while (lj_vm_cpcall(L, NULL, NULL, cpfinalize) != 0);
   close_state(L);
 }
@@ -257,7 +259,7 @@ lua_State *lj_state_new(lua_State *L)
   L1->dummy_ffid = FF_C;
   L1->status = 0;
   L1->stacksize = 0;
-  L1->stack = NULL;
+  setmref(L1->stack, NULL);
   L1->cframe = NULL;
   /* NOBARRIER: The lua_State is new (marked white). */
   setgcrefnull(L1->openupval);
@@ -271,9 +273,9 @@ lua_State *lj_state_new(lua_State *L)
 void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L)
 {
   lua_assert(L != mainthread(g));
-  lj_func_closeuv(L, L->stack);
+  lj_func_closeuv(L, tvref(L->stack));
   lua_assert(gcref(L->openupval) == NULL);
-  lj_mem_freevec(g, L->stack, L->stacksize, TValue);
+  lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
   lj_mem_freet(g, L);
 }
 

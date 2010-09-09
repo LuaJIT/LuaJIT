@@ -121,9 +121,9 @@ LUA_API int lua_gettop(lua_State *L)
 LUA_API void lua_settop(lua_State *L, int idx)
 {
   if (idx >= 0) {
-    api_check(L, idx <= L->maxstack - L->base);
+    api_check(L, idx <= tvref(L->maxstack) - L->base);
     if (L->base + idx > L->top) {
-      if (L->base + idx >= L->maxstack)
+      if (L->base + idx >= tvref(L->maxstack))
 	lj_state_growstack(L, (MSize)idx - (MSize)(L->top - L->base));
       do { setnilV(L->top++); } while (L->top < L->base + idx);
     } else {

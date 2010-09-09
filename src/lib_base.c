@@ -459,7 +459,7 @@ LJLIB_CF(coroutine_status)
   if (co == L) s = "running";
   else if (co->status == LUA_YIELD) s = "suspended";
   else if (co->status != 0) s = "dead";
-  else if (co->base > co->stack+1) s = "normal";
+  else if (co->base > tvref(co->stack)+1) s = "normal";
   else if (co->top == co->base) s = "dead";
   else s = "suspended";
   lua_pushstring(L, s);

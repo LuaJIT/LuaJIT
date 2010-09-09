@@ -9,10 +9,10 @@
 #include "lj_obj.h"
 
 #define incr_top(L) \
-  (++L->top >= L->maxstack && (lj_state_growstack1(L), 0))
+  (++L->top >= tvref(L->maxstack) && (lj_state_growstack1(L), 0))
 
-#define savestack(L, p)		((char *)(p) - (char *)L->stack)
-#define restorestack(L, n)	((TValue *)((char *)L->stack + (n)))
+#define savestack(L, p)		((char *)(p) - mref(L->stack, char))
+#define restorestack(L, n)	((TValue *)(mref(L->stack, char) + (n)))
 
 LJ_FUNC void lj_state_relimitstack(lua_State *L);
 LJ_FUNC void lj_state_shrinkstack(lua_State *L, MSize used);
@@ -21,7 +21,8 @@ LJ_FUNC void LJ_FASTCALL lj_state_growstack1(lua_State *L);
 
 static LJ_AINLINE void lj_state_checkstack(lua_State *L, MSize need)
 {
-  if ((MSize)((char *)L->maxstack-(char *)L->top) <= need*(MSize)sizeof(TValue))
+  if ((MSize)(mref(L->maxstack, char) - (char *)L->top) <=
+      need*(MSize)sizeof(TValue))
     lj_state_growstack(L, need);
 }
 

@@ -231,7 +231,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   setcframe_pc(cframe_raw(L->cframe), pc+1);
 
   /* Make sure the stack is big enough for the slots from the snapshot. */
-  if (LJ_UNLIKELY(L->base + nslots > L->maxstack)) {
+  if (LJ_UNLIKELY(L->base + nslots > tvref(L->maxstack))) {
     L->top = curr_topL(L);
     lj_state_growstack(L, nslots - curr_proto(L)->framesize);
   }
@@ -255,10 +255,10 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  if (isluafunc(fn)) {
 	    MSize framesize = funcproto(fn)->framesize;
 	    L->base = ++o;
-	    if (LJ_UNLIKELY(o + framesize > L->maxstack)) {  /* Grow again? */
+	    if (LJ_UNLIKELY(o + framesize > tvref(L->maxstack))) {
 	      ptrdiff_t fsave = savestack(L, frame);
 	      L->top = o;
-	      lj_state_growstack(L, framesize);
+	      lj_state_growstack(L, framesize);  /* Grow again. */
 	      frame = restorestack(L, fsave);
 	    }
 	  }

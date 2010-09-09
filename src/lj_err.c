@@ -283,7 +283,7 @@ static TValue *findlocal(lua_State *L, const lua_Debug *ar,
 {
   uint32_t offset = (uint32_t)ar->i_ci & 0xffff;
   uint32_t size = (uint32_t)ar->i_ci >> 16;
-  TValue *frame = L->stack + offset;
+  TValue *frame = tvref(L->stack) + offset;
   TValue *nextframe = size ? frame + size : NULL;
   GCfunc *fn = frame_func(frame);
   BCPos pc = currentpc(L, fn, nextframe);
@@ -335,9 +335,10 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     uint32_t offset = (uint32_t)ar->i_ci & 0xffff;
     uint32_t size = (uint32_t)ar->i_ci >> 16;
     lua_assert(offset != 0);
-    frame = L->stack + offset;
+    frame = tvref(L->stack) + offset;
     if (size) nextframe = frame + size;
-    lua_assert(frame<=L->maxstack && (!nextframe || nextframe<=L->maxstack));
+    lua_assert(frame <= tvref(L->maxstack) &&
+	       (!nextframe || nextframe <= tvref(L->maxstack)));
     fn = frame_func(frame);
     lua_assert(fn->c.gct == ~LJ_TFUNC);
   }
@@ -399,9 +400,9 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
 
 cTValue *lj_err_getframe(lua_State *L, int level, int *size)
 {
-  cTValue *frame, *nextframe;
+  cTValue *frame, *nextframe, *bot = tvref(L->stack);
   /* Traverse frames backwards. */
-  for (nextframe = frame = L->base-1; frame > L->stack; ) {
+  for (nextframe = frame = L->base-1; frame > bot; ) {
     if (frame_gc(frame) == obj2gco(L))
       level++;  /* Skip dummy frames. See lj_meta_call(). */
     if (level-- == 0) {
@@ -426,7 +427,7 @@ LUA_API int lua_getstack(lua_State *L, int level, lua_Debug *ar)
   int size;
   cTValue *frame = lj_err_getframe(L, level, &size);
   if (frame) {
-    ar->i_ci = (size << 16) + cast_int(frame - L->stack);
+    ar->i_ci = (size << 16) + cast_int(frame - tvref(L->stack));
     return 1;
   } else {
     ar->i_ci = level - size;
@@ -465,7 +466,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	return cf;
       }
     }
-    if (frame <= L->stack)
+    if (frame <= tvref(L->stack))
       break;
     switch (frame_typep(frame)) {
     case FRAME_LUA:  /* Lua frame. */
@@ -524,7 +525,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
   /* No C frame. */
   if (errcode) {
     L->cframe = NULL;
-    L->base = L->stack+1;
+    L->base = tvref(L->stack)+1;
     unwindstack(L, L->base);
     if (G(L)->panic)
       G(L)->panic(L);
@@ -749,9 +750,9 @@ LJ_NOINLINE void lj_err_mem(lua_State *L)
 /* Find error function for runtime errors. Requires an extra stack traversal. */
 static ptrdiff_t finderrfunc(lua_State *L)
 {
-  TValue *frame = L->base-1;
+  cTValue *frame = L->base-1, *bot = tvref(L->stack);
   void *cf = L->cframe;
-  while (frame > L->stack) {
+  while (frame > bot) {
     lua_assert(cf != NULL);
     while (cframe_nres(cframe_raw(cf)) < 0) {  /* cframe without frame? */
       if (frame >= restorestack(L, -cframe_nres(cf)))
