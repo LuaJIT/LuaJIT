@@ -4288,15 +4288,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_TSETM:
     |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
     |  mov TMP1, KBASE			// Need one more free register.
-    if (sse) {
-      |  cvtsd2si KBASE, qword [KBASE+RD*8]
-    } else {
-      |.if not X64
-      |  fld qword [KBASE+RD*8]
-      |  fistp ARG4			// Const is guaranteed to be an int.
-      |  mov KBASE, ARG4
-      |.endif
-    }
+    |  mov KBASE, dword [KBASE+RD*8]	// Integer constant is in lo-word.
     |1:
     |  lea RA, [BASE+RA*8]
     |  mov TAB:RB, [RA-8]		// Guaranteed to be a table.
@@ -4308,7 +4300,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jz >4				// Nothing to copy?
     |  add RD, KBASE			// Compute needed size.
     |  cmp RD, TAB:RB->asize
-    |  jae >5				// Does not fit into array part?
+    |  jae >5				// Doesn't fit into array part?
     |  sub RD, KBASE
     |  shl KBASE, 3
     |  add KBASE, TAB:RB->array

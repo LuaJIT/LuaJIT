@@ -1369,7 +1369,8 @@ static void expr_table(LexState *ls, ExpDesc *e)
     lua_assert(bc_a(ilp->ins) == freg &&
 	       bc_op(ilp->ins) == (narr > 256 ? BC_TSETV : BC_TSETB));
     expr_init(&en, VKNUM, 0);
-    setintV(&en.u.nval, narr-1);
+    en.u.nval.u32.lo = narr-1;
+    en.u.nval.u32.hi = 0x43300000;  /* Biased integer to avoid denormals. */
     if (narr > 256) { fs->pc--; ilp--; }
     ilp->ins = BCINS_AD(BC_TSETM, freg, const_num(fs, &en));
     setbc_b(&ilp[-1].ins, 0);

@@ -70,8 +70,9 @@ local function bcline(func, pc, prefix)
   local ma, mb, mc = band(m, 7), band(m, 15*8), band(m, 15*128)
   local a = band(shr(ins, 8), 0xff)
   local oidx = 6*band(ins, 0xff)
+  local op = sub(bcnames, oidx+1, oidx+6)
   local s = format("%04d %s %-6s %3s ",
-    pc, prefix or "  ", sub(bcnames, oidx+1, oidx+6), ma == 0 and "" or a)
+    pc, prefix or "  ", op, ma == 0 and "" or a)
   local d = shr(ins, 16)
   if mc == 13*128 then -- BCMjump
     return format("%s=> %04d\n", s, pc+d-0x7fff)
@@ -87,6 +88,7 @@ local function bcline(func, pc, prefix)
     kc = format(#kc > 40 and '"%.40s"~' or '"%s"', gsub(kc, "%c", ctlsub))
   elseif mc == 9*128 then -- BCMnum
     kc = funck(func, d)
+    if op == "TSETM " then kc = kc - 2^52 end
   elseif mc == 12*128 then -- BCMfunc
     local fi = funcinfo(funck(func, -d-1))
     if fi.ffid then
