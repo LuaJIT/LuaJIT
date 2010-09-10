@@ -653,7 +653,24 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Argument coercion for 'for' statement ------------------------------
   |
   |->vmeta_for:
-  |  NYI
+  |  mr CARG1, L
+  |   stw BASE, L->base
+  |  mr CARG2, RA
+  |   stw PC, SAVE_PC
+  |  mr SAVE0, INS
+  |  bl extern lj_meta_for	// (lua_State *L, TValue *base)
+#if LJ_HASJIT
+  |   decode_OP1 TMP0, SAVE0
+#endif
+  |  decode_RA8 RA, SAVE0
+#if LJ_HASJIT
+  |   cmpwi TMP0, BC_JFORI
+#endif
+  |  decode_RD8 RD, SAVE0
+#if LJ_HASJIT
+  |   beq =>BC_JFORI
+#endif
+  |  b =>BC_FORI
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
