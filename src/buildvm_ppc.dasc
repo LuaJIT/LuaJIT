@@ -554,22 +554,52 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_arith_vn:
-  |  NYI
+  |  add CARG3, BASE, RB
+  |  add CARG4, KBASE, RC
+  |  b >1
   |
   |->vmeta_arith_nv:
-  |  NYI
+  |  add CARG3, KBASE, RC
+  |  add CARG4, BASE, RB
+  |  b >1
   |
   |->vmeta_unm:
-  |  NYI
+  |  add CARG3, BASE, RD
+  |  mr CARG4, CARG3
+  |  b >1
   |
   |->vmeta_arith_vv:
-  |  NYI
+  |  add CARG3, BASE, RB
+  |  add CARG4, BASE, RC
+  |1:
+  |  add CARG2, BASE, RA
+  |   stw BASE, L->base
+  |  mr CARG1, L
+  |   stw PC, SAVE_PC
+  |  decode_OP1 CARG5, INS		// Caveat: CARG5 overlaps INS.
+  |  bl extern lj_meta_arith  // (lua_State *L, TValue *ra,*rb,*rc, BCReg op)
+  |  // Returns NULL (finished) or TValue * (metamethod).
+  |  cmplwi CRET1, 0
+  |  beq ->cont_nop
   |
+  |  // Call metamethod for binary op.
   |->vmeta_binop:
-  |  NYI
+  |  // BASE = old base, CRET1 = new base, stack = cont/func/o1/o2
+  |  sub TMP1, CRET1, BASE
+  |   stw PC, -16(CRET1)		// [cont|PC]
+  |  addi PC, TMP1, FRAME_CONT
+  |   mr BASE, CRET1
+  |  li NARGS8:RC, 16			// 2 args for func(o1, o2).
+  |  b ->vm_call_dispatch
   |
   |->vmeta_len:
-  |  NYI
+  |  add CARG2, BASE, RD
+  |   stw BASE, L->base
+  |  mr CARG1, L
+  |   stw PC, SAVE_PC
+  |  bl extern lj_meta_len		// (lua_State *L, TValue *o)
+  |  // Returns TValue * (metamethod base).
+  |  b ->vmeta_binop			// Binop call for compatibility.
   |
   |//-- Call metamethod ----------------------------------------------------
   |
