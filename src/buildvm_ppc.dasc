@@ -573,14 +573,32 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Call metamethod ----------------------------------------------------
   |
-  |->vmeta_call_ra:
-  |  NYI
-  |
   |->vmeta_call:			// Resolve and call __call metamethod.
-  |  NYI
+  |  // TMP2 = old base, BASE = new base, RC = nargs*8
+  |  mr CARG1, L
+  |   stw TMP2, L->base			// This is the callers base!
+  |  subi CARG2, BASE, 8
+  |   stw PC, SAVE_PC
+  |  add CARG3, BASE, RC
+  |   mr SAVE0, NARGS8:RC
+  |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
+  |   addi NARGS8:RC, SAVE0, 8		// Got one more argument now.
+  |  ins_call
   |
   |->vmeta_callt:			// Resolve __call for BC_CALLT.
-  |  NYI
+  |  // BASE = old base, RA = new base, RC = nargs*8
+  |  mr CARG1, L
+  |   stw BASE, L->base
+  |  subi CARG2, RA, 8
+  |   stw PC, SAVE_PC
+  |  add CARG3, RA, RC
+  |   mr SAVE0, NARGS8:RC
+  |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
+  |  lwz TMP1, FRAME_PC(BASE)
+  |   addi NARGS8:RC, SAVE0, 8		// Got one more argument now.
+  |   lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
+  |  b ->BC_CALLT_Z
   |
   |//-- Argument coercion for 'for' statement ------------------------------
   |
