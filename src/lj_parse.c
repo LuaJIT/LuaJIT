@@ -116,7 +116,7 @@ typedef struct FuncState {
   BCPos bclim;			/* Limit of bytecode stack. */
   MSize vbase;			/* Base of variable stack for this function. */
   uint8_t flags;		/* Prototype flags. */
-  uint8_t numparams;		/* Number of active local variables. */
+  uint8_t numparams;		/* Number of parameters. */
   uint8_t framesize;		/* Fixed frame size. */
   uint8_t nuv;			/* Number of upvalues */
   VarIndex varmap[LJ_MAX_LOCVAR];  /* Map from register to variable idx. */
@@ -1397,10 +1397,8 @@ static BCReg parse_params(LexState *ls, int needself)
   FuncState *fs = ls->fs;
   BCReg nparams = 0;
   lex_check(ls, '(');
-  if (needself) {
-    var_new_lit(ls, 0, "self");
-    var_add(ls, 1);
-  }
+  if (needself)
+    var_new_lit(ls, nparams++, "self");
   if (ls->token != ')') {
     do {
       if (ls->token == TK_name) {
@@ -1415,9 +1413,10 @@ static BCReg parse_params(LexState *ls, int needself)
     } while (lex_opt(ls, ','));
   }
   var_add(ls, nparams);
-  bcreg_reserve(fs, fs->nactvar);
+  lua_assert(fs->nactvar == nparams);
+  bcreg_reserve(fs, nparams);
   lex_check(ls, ')');
-  return fs->nactvar;
+  return nparams;
 }
 
 /* Forward declaration. */
@@ -1577,7 +1576,7 @@ static void expr_simple(LexState *ls, ExpDesc *v)
     checkcond(ls, fs->flags & PROTO_IS_VARARG, LJ_ERR_XDOTS);
     bcreg_reserve(fs, 1);
     base = fs->freereg-1;
-    expr_init(v, VCALL, bcemit_ABC(fs, BC_VARG, base, 2, 1));
+    expr_init(v, VCALL, bcemit_ABC(fs, BC_VARG, base, 2, fs->numparams));
     v->u.s.aux = base;
     break;
   }

@@ -274,7 +274,7 @@ static MSize gc_traverse_frames(global_State *g, lua_State *th)
     TValue *ftop = frame;
     if (isluafunc(fn)) ftop += funcproto(fn)->framesize;
     if (ftop > top) top = ftop;
-    gc_markobj(g, frame_gc(frame));  /* Need to mark hidden function (or L). */
+    gc_markobj(g, fn);  /* Need to mark hidden function (or L). */
   }
   top++;  /* Correct bias of -1 (frame == base-1). */
   if (top > tvref(th->maxstack)) top = tvref(th->maxstack);

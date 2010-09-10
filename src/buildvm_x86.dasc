@@ -4442,13 +4442,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     break;
 
   case BC_VARG:
-    |  ins_AB_	// RA = base, RB = nresults+1, (RC = 1)
-    |  mov LFUNC:RC, [BASE-8]
-    |  lea RA, [BASE+RA*8]
-    |  mov RC, LFUNC:RC->pc
-    |  movzx RC, byte [RC+PC2PROTO(numparams)]
+    |  ins_ABC	// RA = base, RB = nresults+1, RC = numparams
     |  mov TMP1, KBASE			// Need one more free register.
     |  lea KBASE, [BASE+RC*8+(8+FRAME_VARG)]
+    |  lea RA, [BASE+RA*8]
     |  sub KBASE, [BASE-4]
     |  // Note: KBASE may now be even _above_ BASE if nargs was < numparams.
     |  test RB, RB
