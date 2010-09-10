@@ -466,7 +466,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  li TMP0, -8
   |  evlddx LFUNC:RB, BASE, TMP0
   |  checkfunc LFUNC:RB
-  |  checkfail ->vmeta_call		// Ensure KBASE defined and != BASE.
+  |  checkfail ->vmeta_call
   |
   |->vm_call_dispatch_f:
   |  ins_call
@@ -500,10 +500,26 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Metamethod handling ------------------------------------------------
   |//-----------------------------------------------------------------------
   |
+  |// The lj_meta_* functions (except for lj_meta_cat) don't reallocate the
+  |// stack, so BASE doesn't need to be reloaded across these calls.
+  |
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
-  |  NYI
+  |  // BASE = meta base, RA = resultptr, RD = (nresults+1)*8
+  |  lwz TMP0, -12(BASE)		// Continuation.
+  |   rlwinm TMP1, PC, 0, 0, 28
+  |   mr RB, BASE
+  |   sub BASE, BASE, TMP1		// Restore caller BASE.
+  |    lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+  |   subi TMP2, RD, 8
+  |  mtctr TMP0
+  |    lwz PC, -16(RB)			// Restore PC from [cont|PC].
+  |    lwz TMP1, LFUNC:TMP1->pc
+  |   evstddx TISNIL, RA, TMP2		// Ensure one valid arg.
+  |    lwz KBASE, PC2PROTO(k)(TMP1)
+  |  // BASE = base, RA = resultptr, RB = meta base
+  |  bctr				// Jump to continuation.
   |
   |->cont_cat:
   |  NYI
@@ -537,10 +553,14 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_comp:
   |  NYI
   |->cont_nop:
-  |  NYI
+  |  ins_next
   |
-  |->cont_ra:
-  |  NYI
+  |->cont_ra:				// RA = resultptr
+  |  lwz INS, -4(PC)
+  |   evldd TMP0, 0(RA)
+  |  decode_RA8 TMP1, INS
+  |   evstddx TMP0, BASE, TMP1
+  |  b ->cont_nop
   |
   |->cont_condt:
   |  NYI
