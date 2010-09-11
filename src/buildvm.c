@@ -14,11 +14,6 @@
 ** It's a one-shot tool -- any effort fixing this would be wasted.
 */
 
-#ifdef LUA_USE_WIN
-#include <fcntl.h>
-#include <io.h>
-#endif
-
 #include "buildvm.h"
 #include "lj_obj.h"
 #include "lj_gc.h"
@@ -27,6 +22,11 @@
 #include "lj_frame.h"
 #include "lj_dispatch.h"
 #include "luajit.h"
+
+#ifdef LUA_USE_WIN
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 /* ------------------------------------------------------------------------ */
 
