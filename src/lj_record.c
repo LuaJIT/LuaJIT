@@ -570,6 +570,17 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
     frame = frame_prevd(frame);
   }
+  if (frame_isvarg(frame)) {
+    BCReg cbase = (BCReg)frame_delta(frame);
+    lua_assert(J->framedepth != 1);
+    if (--J->framedepth < 0)  /* NYI: return of vararg func to lower frame. */
+      lj_trace_err(J, LJ_TRERR_NYIRETL);
+    lua_assert(J->baseslot > 1);
+    rbase += cbase;
+    J->baseslot -= (BCReg)cbase;
+    J->base -= cbase;
+    frame = frame_prevd(frame);
+  }
   if (frame_islua(frame)) {  /* Return to Lua frame. */
     BCIns callins = *(frame_pc(frame)-1);
     ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
@@ -1840,7 +1851,6 @@ static void rec_func_setup(jit_State *J)
   BCReg s, numparams = pt->numparams;
   if ((pt->flags & PROTO_NO_JIT))
     lj_trace_err(J, LJ_TRERR_CJITOFF);
-  lua_assert(!(pt->flags & PROTO_IS_VARARG));
   if (J->baseslot + pt->framesize >= LJ_MAX_JSLOTS)
     lj_trace_err(J, LJ_TRERR_STACKOV);
   /* Fill up missing parameters with nil. */
@@ -1848,6 +1858,27 @@ static void rec_func_setup(jit_State *J)
     J->base[s] = TREF_NIL;
   /* The remaining slots should never be read before they are written. */
   J->maxslot = numparams;
+}
+
+/* Record Lua vararg function setup. */
+static void rec_func_vararg(jit_State *J)
+{
+  GCproto *pt = J->pt;
+  BCReg s, fixargs, vframe = J->maxslot+1;
+  lua_assert((pt->flags & PROTO_IS_VARARG));
+  if (J->baseslot + vframe + pt->framesize >= LJ_MAX_JSLOTS)
+    lj_trace_err(J, LJ_TRERR_STACKOV);
+  J->base[vframe-1] = J->base[-1];  /* Copy function up. */
+  /* Copy fixarg slots up and set their original slots to nil. */
+  fixargs = pt->numparams < J->maxslot ? pt->numparams : J->maxslot;
+  for (s = 0; s < fixargs; s++) {
+    J->base[vframe+s] = J->base[s];
+    J->base[s] = TREF_NIL;
+  }
+  J->maxslot = fixargs;
+  J->framedepth++;
+  J->base += vframe;
+  J->baseslot += vframe;
 }
 
 /* Record entry to a Lua function. */
@@ -2258,8 +2289,11 @@ void lj_record_ins(jit_State *J)
     break;
 
   case BC_FUNCV:
+    rec_func_vararg(J);
+    rec_func_lua(J);
+    break;
   case BC_JFUNCV:
-    lj_trace_err(J, LJ_TRERR_NYIVF);
+    lua_assert(0);  /* Cannot happen. No hotcall counting for varag funcs. */
     break;
 
   case BC_FUNCC:

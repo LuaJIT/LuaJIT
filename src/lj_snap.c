@@ -87,15 +87,14 @@ static void snapshot_framelinks(jit_State *J, SnapEntry *map)
     if (frame_islua(frame)) {
       map[f++] = SNAP_MKPC(frame_pc(frame));
       frame = frame_prevl(frame);
-    } else if (frame_ispcall(frame)) {
-      map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
-      frame = frame_prevd(frame);
     } else if (frame_iscont(frame)) {
       map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
       map[f++] = SNAP_MKPC(frame_contpc(frame));
       frame = frame_prevd(frame);
     } else {
-      lua_assert(0);
+      lua_assert(!frame_isc(frame));
+      map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
+      frame = frame_prevd(frame);
     }
   }
   lua_assert(f == (MSize)(1 + J->framedepth));

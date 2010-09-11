@@ -384,17 +384,18 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
     callhook(L, LUA_HOOKRET, -1);
 }
 
-/* Initialize call. Ensure stack space and clear missing parameters. */
-static void call_init(lua_State *L, GCfunc *fn)
+/* Initialize call. Ensure stack space and return # of missing parameters. */
+static int call_init(lua_State *L, GCfunc *fn)
 {
   if (isluafunc(fn)) {
-    MSize numparams = funcproto(fn)->numparams;
-    TValue *o;
-    lj_state_checkstack(L, numparams);
-    for (o = L->base + numparams; L->top < o; L->top++)
-      setnilV(L->top);  /* Clear missing parameters. */
+    int numparams = funcproto(fn)->numparams;
+    int gotparams = (int)(L->top - L->base);
+    lj_state_checkstack(L, (MSize)numparams);
+    numparams -= gotparams;
+    return numparams >= 0 ? numparams : 0;
   } else {
     lj_state_checkstack(L, LUA_MINSTACK);
+    return 0;
   }
 }
 
@@ -407,7 +408,7 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #if LJ_HASJIT
   jit_State *J = G2J(g);
 #endif
-  call_init(L, fn);
+  int missing = call_init(L, fn);
 #if LJ_HASJIT
   J->L = L;
   if ((uintptr_t)pc & 1) {  /* Marker for hot call. */
@@ -420,8 +421,15 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
     lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
   }
 #endif
-  if ((g->hookmask & LUA_MASKCALL))
+  if ((g->hookmask & LUA_MASKCALL)) {
+    int i;
+    for (i = 0; i < missing; i++)  /* Add missing parameters. */
+      setnilV(L->top++);
     callhook(L, LUA_HOOKCALL, -1);
+    /* Preserve modifications of missing parameters by lua_setlocal(). */
+    while (missing-- > 0 && tvisnil(L->top - 1))
+      L->top--;
+  }
 #if LJ_HASJIT
 out:
 #endif
