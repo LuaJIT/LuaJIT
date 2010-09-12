@@ -1318,8 +1318,13 @@ LJFOLDX(lj_opt_fwd_fload)
 LJFOLD(SLOAD any any)
 LJFOLDF(fwd_sload)
 {
-  lua_assert(J->slot[fins->op1] != 0);
-  return J->slot[fins->op1];
+  if ((fins->op2 & IRSLOAD_FRAME)) {
+    TRef tr = lj_opt_cse(J);
+    return tref_ref(tr) < J->chain[IR_RETF] ? EMITFOLD : tr;
+  } else {
+    lua_assert(J->slot[fins->op1] != 0);
+    return J->slot[fins->op1];
+  }
 }
 
 LJFOLD(XLOAD KPTR any)

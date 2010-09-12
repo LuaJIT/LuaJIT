@@ -210,7 +210,10 @@ local colorize, irtype
 -- Lookup table to convert some literals into names.
 local litname = {
   ["SLOAD "] = { [0] = "", "I", "R", "RI", "P", "PI", "PR", "PRI",
-		 "T", "IT", "RT", "RIT", "PT", "PIT", "PRT", "PRIT", },
+		 "T", "IT", "RT", "RIT", "PT", "PIT", "PRT", "PRIT",
+		 "F", "IF", "RF", "RIF", "PF", "PIF", "PRF", "PRIF",
+		 "TF", "ITF", "RTF", "RITF", "PTF", "PITF", "PRTF", "PRITF",
+	       },
   ["XLOAD "] = { [0] = "", "R", "U", "RU", },
   ["TOINT "] = { [0] = "check", "index", "", },
   ["FLOAD "] = vmdef.irfield,

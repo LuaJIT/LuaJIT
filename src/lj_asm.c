@@ -1110,23 +1110,34 @@ static int noconflict(ASMState *as, IRRef ref, IROp conflict)
   return 1;  /* Ok, no conflict. */
 }
 
+/* Fuse array base into memory operand. */
+static IRRef asm_fuseabase(ASMState *as, IRRef ref)
+{
+  IRIns *irb = IR(ref);
+  as->mrm.ofs = 0;
+  if (irb->o == IR_FLOAD) {
+    IRIns *ira = IR(irb->op1);
+    lua_assert(irb->op2 == IRFL_TAB_ARRAY);
+    /* We can avoid the FLOAD of t->array for colocated arrays. */
+    if (ira->o == IR_TNEW && ira->op1 <= LJ_MAX_COLOSIZE &&
+	noconflict(as, irb->op1, IR_NEWREF)) {
+      as->mrm.ofs = (int32_t)sizeof(GCtab);  /* Ofs to colocated array. */
+      return irb->op1;  /* Table obj. */
+    }
+  } else if (irb->o == IR_ADD && irref_isk(irb->op2)) {
+    /* Fuse base offset (vararg load). */
+    as->mrm.ofs = IR(irb->op2)->i;
+    return irb->op1;
+  }
+  return ref;  /* Otherwise use the given array base. */
+}
+
 /* Fuse array reference into memory operand. */
 static void asm_fusearef(ASMState *as, IRIns *ir, RegSet allow)
 {
-  IRIns *irb = IR(ir->op1);
-  IRIns *ira, *irx;
+  IRIns *irx;
   lua_assert(ir->o == IR_AREF);
-  lua_assert(irb->o == IR_FLOAD && irb->op2 == IRFL_TAB_ARRAY);
-  ira = IR(irb->op1);
-  if (ira->o == IR_TNEW && ira->op1 <= LJ_MAX_COLOSIZE &&
-      noconflict(as, irb->op1, IR_NEWREF)) {
-    /* We can avoid the FLOAD of t->array for colocated arrays. */
-    as->mrm.base = (uint8_t)ra_alloc1(as, irb->op1, allow);  /* Table obj. */
-    as->mrm.ofs = (int32_t)sizeof(GCtab);  /* Ofs to colocated array. */
-  } else {
-    as->mrm.base = (uint8_t)ra_alloc1(as, ir->op1, allow);  /* Array base. */
-    as->mrm.ofs = 0;
-  }
+  as->mrm.base = (uint8_t)ra_alloc1(as, asm_fuseabase(as, ir->op1), allow);
   irx = IR(ir->op2);
   if (irref_isk(ir->op2)) {
     as->mrm.ofs += 8*irx->i;
@@ -1277,10 +1288,10 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
-      if (!irt_isint(ir->t) && !(ir->op2 & IRSLOAD_PARENT) &&
-	  noconflict(as, ref, IR_RETF)) {
+      if ((!irt_isint(ir->t) || (ir->op2 & IRSLOAD_FRAME)) &&
+	  !(ir->op2 & IRSLOAD_PARENT) && noconflict(as, ref, IR_RETF)) {
 	as->mrm.base = (uint8_t)ra_alloc1(as, REF_BASE, xallow);
-	as->mrm.ofs = 8*((int32_t)ir->op1-1);
+	as->mrm.ofs = 8*((int32_t)ir->op1-1) + ((ir->op2&IRSLOAD_FRAME)?4:0);
 	as->mrm.idx = RID_NONE;
 	return RID_MRM;
       }
@@ -2031,7 +2042,7 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
 
 static void asm_sload(ASMState *as, IRIns *ir)
 {
-  int32_t ofs = 8*((int32_t)ir->op1-1);
+  int32_t ofs = 8*((int32_t)ir->op1-1) + ((ir->op2 & IRSLOAD_FRAME) ? 4 : 0);
   IRType1 t = ir->t;
   Reg base;
   lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
@@ -2056,7 +2067,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
     Reg dest = ra_dest(as, ir, allow);
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
     lua_assert(irt_isnum(t) || irt_isint(t) || irt_isaddr(t));
-    if (irt_isint(t))
+    if (irt_isint(t) && !(ir->op2 & IRSLOAD_FRAME))
       emit_rmro(as, XO_CVTSD2SI, dest, base, ofs);
     else if (irt_isnum(t))
       emit_rmro(as, XMM_MOVRM(as), dest, base, ofs);

@@ -650,29 +650,6 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   lua_assert(J->baseslot >= 1);
 }
 
-/* -- Vararg handling ----------------------------------------------------- */
-
-/* Record vararg instruction. */
-static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
-{
-  ptrdiff_t nvararg = frame_delta(J->L->base-1) - J->pt->numparams - 1;
-  lua_assert(frame_isvarg(J->L->base-1));
-  if (J->framedepth == 0) {  /* NYI: unknown number of varargs. */
-    setintV(&J->errinfo, BC_VARG);
-    lj_trace_err_info(J, LJ_TRERR_NYIBC);
-  } else {  /* Simple case: known fixed number of varargs defined on-trace. */
-    ptrdiff_t i;
-    if (nresults == -1) {
-      nresults = nvararg;
-      J->maxslot = dst + nvararg;
-    } else if (dst + nresults > J->maxslot) {
-      J->maxslot = dst + nresults;
-    }
-    for (i = 0; i < nresults; i++)
-      J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
-  }
-}
-
 /* -- Metamethod handling ------------------------------------------------- */
 
 /* Prepare to record call to metamethod. */
@@ -1926,6 +1903,63 @@ static void rec_func_jit(jit_State *J, TraceNo lnk)
   if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
     lnk = J->cur.traceno;  /* Can form an extra tail-recursive loop. */
   rec_stop(J, lnk);  /* Link to the function. */
+}
+
+/* -- Vararg handling ----------------------------------------------------- */
+
+/* Record vararg instruction. */
+static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
+{
+  int32_t numparams = J->pt->numparams;
+  ptrdiff_t nvararg = frame_delta(J->L->base-1) - numparams - 1;
+  lua_assert(frame_isvarg(J->L->base-1));
+  if (J->framedepth > 0) {  /* Simple case: varargs defined on-trace. */
+    ptrdiff_t i;
+    if (nvararg < 0) nvararg = 0;
+    if (nresults == -1) {
+      nresults = nvararg;
+      J->maxslot = dst + (BCReg)nvararg;
+    } else if (dst + nresults > J->maxslot) {
+      J->maxslot = dst + (BCReg)nresults;
+    }
+    for (i = 0; i < nresults; i++) {
+      J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
+      lua_assert(J->base[dst+i] != 0);
+    }
+  } else {  /* Unknown number of varargs passed to trace. */
+    TRef fr = emitir(IRTI(IR_SLOAD), 0, IRSLOAD_READONLY|IRSLOAD_FRAME);
+    int32_t frofs = 8*(1+numparams)+FRAME_VARG;
+    if (nresults >= 0) {  /* Known fixed number of results. */
+      ptrdiff_t i;
+      if (nvararg > 0) {
+	TRef vbase;
+	if (nvararg >= nresults)
+	  emitir(IRTGI(IR_GE), fr, lj_ir_kint(J, frofs+8*(int32_t)nresults));
+	else
+	  emitir(IRTGI(IR_EQ), fr, lj_ir_kint(J, frame_ftsz(J->L->base-1)));
+	vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
+	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
+	for (i = 0; i < nvararg; i++) {
+	  IRType t = itype2irt(&J->L->base[i-1-nvararg]);
+	  TRef aref = emitir(IRT(IR_AREF, IRT_PTR),
+			     vbase, lj_ir_kint(J, (int32_t)i));
+	  TRef tr = emitir(IRTG(IR_ALOAD, t), aref, 0);
+	  if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
+	  J->base[dst+i] = tr;
+	}
+      } else {
+	emitir(IRTGI(IR_LE), fr, lj_ir_kint(J, frofs));
+	nvararg = 0;
+      }
+      for (i = nvararg; i < nresults; i++)
+	J->base[dst+i] = TREF_NIL;
+      if (dst + (BCReg)nresults > J->maxslot)
+	J->maxslot = dst + (BCReg)nresults;
+    } else {
+      setintV(&J->errinfo, BC_VARG);
+      lj_trace_err_info(J, LJ_TRERR_NYIBC);
+    }
+  }
 }
 
 /* -- Record allocations -------------------------------------------------- */
