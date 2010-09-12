@@ -520,6 +520,14 @@ static void rec_call(jit_State *J, BCReg func, ptrdiff_t nargs)
 static void rec_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs)
 {
   rec_call_setup(J, func, nargs);
+  if (frame_isvarg(J->L->base - 1)) {
+    BCReg cbase = (BCReg)frame_delta(J->L->base - 1);
+    if (--J->framedepth < 0)
+      lj_trace_err(J, LJ_TRERR_NYIRETL);
+    J->baseslot -= (BCReg)cbase;
+    J->base -= cbase;
+    func += cbase;
+  }
   /* Move func + args down. */
   memmove(&J->base[-1], &J->base[func], sizeof(TRef)*(J->maxslot+1));
   /* Note: the new TREF_FRAME is now at J->base[-1] (even for slot #0). */
@@ -572,7 +580,6 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   }
   if (frame_isvarg(frame)) {
     BCReg cbase = (BCReg)frame_delta(frame);
-    lua_assert(J->framedepth != 1);
     if (--J->framedepth < 0)  /* NYI: return of vararg func to lower frame. */
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lua_assert(J->baseslot > 1);
