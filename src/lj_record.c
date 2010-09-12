@@ -643,6 +643,29 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   lua_assert(J->baseslot >= 1);
 }
 
+/* -- Vararg handling ----------------------------------------------------- */
+
+/* Record vararg instruction. */
+static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
+{
+  ptrdiff_t nvararg = frame_delta(J->L->base-1) - J->pt->numparams - 1;
+  lua_assert(frame_isvarg(J->L->base-1));
+  if (J->framedepth == 0) {  /* NYI: unknown number of varargs. */
+    setintV(&J->errinfo, BC_VARG);
+    lj_trace_err_info(J, LJ_TRERR_NYIBC);
+  } else {  /* Simple case: known fixed number of varargs defined on-trace. */
+    ptrdiff_t i;
+    if (nresults == -1) {
+      nresults = nvararg;
+      J->maxslot = dst + nvararg;
+    } else if (dst + nresults > J->maxslot) {
+      J->maxslot = dst + nresults + 1;
+    }
+    for (i = 0; i < nresults; i++)
+      J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
+  }
+}
+
 /* -- Metamethod handling ------------------------------------------------- */
 
 /* Prepare to record call to metamethod. */
@@ -2223,6 +2246,10 @@ void lj_record_ins(jit_State *J)
     rec_tailcall(J, ra, (ptrdiff_t)rc-1);
     break;
 
+  case BC_VARG:
+    rec_varg(J, ra, (ptrdiff_t)rb-1);
+    break;
+
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
@@ -2311,7 +2338,6 @@ void lj_record_ins(jit_State *J)
   case BC_UCLO:
   case BC_FNEW:
   case BC_TSETM:
-  case BC_VARG:
     setintV(&J->errinfo, (int32_t)op);
     lj_trace_err_info(J, LJ_TRERR_NYIBC);
     break;
