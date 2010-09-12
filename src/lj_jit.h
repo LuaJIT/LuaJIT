@@ -256,7 +256,7 @@ typedef struct jit_State {
   uint8_t mergesnap;	/* Allowed to merge with next snapshot. */
   uint8_t needsnap;	/* Need snapshot before recording next bytecode. */
   IRType1 guardemit;	/* Accumulated IRT_GUARD for emitted instructions. */
-  uint8_t unused1;
+  uint8_t bcskip;	/* Number of bytecode instructions to skip. */
 
   FoldState fold;	/* Fold state. */
 

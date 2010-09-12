@@ -1949,6 +1949,18 @@ static void rec_func_jit(jit_State *J, TraceNo lnk)
 
 /* -- Vararg handling ----------------------------------------------------- */
 
+/* Detect y = select(x, ...) idiom. */
+static int select_detect(jit_State *J)
+{
+  BCIns ins = J->pc[1];
+  if (bc_op(ins) == BC_CALLM && bc_b(ins) == 2 && bc_c(ins) == 1) {
+    cTValue *func = &J->L->base[bc_a(ins)];
+    if (tvisfunc(func) && funcV(func)->c.ffid == FF_select)
+      return 1;
+  }
+  return 0;
+}
+
 /* Record vararg instruction. */
 static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 {
@@ -1997,7 +2009,48 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	J->base[dst+i] = TREF_NIL;
       if (dst + (BCReg)nresults > J->maxslot)
 	J->maxslot = dst + (BCReg)nresults;
+    } else if (select_detect(J)) {  /* y = select(x, ...) */
+      TRef tridx = J->base[dst-1];
+      TRef tr = TREF_NIL;
+      ptrdiff_t idx = select_mode(J, tridx, &J->L->base[dst-1]);
+      if (idx < 0) goto nyivarg;
+      if (idx != 0 && tref_isk(tridx)) {
+	emitir(IRTGI(idx <= nvararg ? IR_GE : IR_LT),
+	       fr, lj_ir_kint(J, frofs+8*(int32_t)idx));
+	frofs -= 8;  /* Bias for 1-based index. */
+      } else if (idx <= nvararg) {  /* Compute size. */
+	TRef tmp = emitir(IRTI(IR_ADD), fr, lj_ir_kint(J, -frofs));
+	if (numparams)
+	  emitir(IRTGI(IR_GE), tmp, lj_ir_kint(J, 0));
+	tr = emitir(IRTI(IR_BSHR), tmp, lj_ir_kint(J, 3));
+	if (idx != 0) {
+	  tridx = emitir(IRTI(IR_ADD), tridx, lj_ir_kint(J, -1));
+	  rec_idx_abc(J, tr, tridx, (uint32_t)nvararg);
+	}
+      } else {
+	TRef tmp = lj_ir_kint(J, frofs);
+	if (idx != 0) {
+	  TRef tmp2 = emitir(IRTI(IR_BSHL), tridx, lj_ir_kint(J, 3));
+	  tmp = emitir(IRTI(IR_ADD), tmp2, tmp);
+	} else {
+	  tr = lj_ir_kint(J, 0);
+	}
+	emitir(IRTGI(IR_LT), fr, tmp);
+      }
+      if (idx != 0 && idx <= nvararg) {
+	IRType t;
+	TRef aref, vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
+	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
+	t = itype2irt(&J->L->base[idx-2-nvararg]);
+	aref = emitir(IRT(IR_AREF, IRT_PTR), vbase, tridx);
+	tr = emitir(IRTG(IR_ALOAD, t), aref, 0);
+	if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
+      }
+      J->base[dst-2] = tr;
+      J->maxslot = dst-1;
+      J->bcskip = 2;  /* Skip CALLM + select. */
     } else {
+    nyivarg:
       setintV(&J->errinfo, BC_VARG);
       lj_trace_err_info(J, LJ_TRERR_NYIBC);
     }
@@ -2056,6 +2109,12 @@ void lj_record_ins(jit_State *J)
     J->needsnap = 0;
     lj_snap_add(J);
     J->mergesnap = 1;
+  }
+
+  /* Skip some bytecodes. */
+  if (LJ_UNLIKELY(J->bcskip > 0)) {
+    J->bcskip--;
+    return;
   }
 
   /* Record only closed loops for root traces. */

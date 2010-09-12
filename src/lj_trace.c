@@ -386,6 +386,7 @@ static void trace_start(jit_State *J)
   J->cur.snapmap = J->snapmapbuf;
   J->mergesnap = 0;
   J->needsnap = 0;
+  J->bcskip = 0;
   J->guardemit.irt = 0;
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
