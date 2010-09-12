@@ -628,7 +628,7 @@ static void rec_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       /* Copy result to destination slot. */
       BCReg dst = bc_a(*(frame_contpc(frame)-1));
       J->base[dst] = gotresults ? J->base[cbase+rbase] : TREF_NIL;
-      if (dst > J->maxslot) J->maxslot = dst+1;
+      if (dst >= J->maxslot) J->maxslot = dst+1;
     } else if (cont == lj_cont_nop) {
       /* Nothing to do here. */
     } else if (cont == lj_cont_cat) {
@@ -659,7 +659,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       nresults = nvararg;
       J->maxslot = dst + nvararg;
     } else if (dst + nresults > J->maxslot) {
-      J->maxslot = dst + nresults + 1;
+      J->maxslot = dst + nresults;
     }
     for (i = 0; i < nresults; i++)
       J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
