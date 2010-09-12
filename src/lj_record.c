@@ -1293,6 +1293,48 @@ static void LJ_FASTCALL recff_rawequal(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
+/* Determine mode of select() call. */
+static int32_t select_mode(jit_State *J, TRef tr, TValue *tv)
+{
+  if (tref_isstr(tr) && *strVdata(tv) == '#') {  /* select('#', ...) */
+    if (strV(tv)->len == 1) {
+      emitir(IRT(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, strV(tv)));
+    } else {
+      TRef trptr = emitir(IRT(IR_STRREF, IRT_PTR), tr, 0);
+      TRef trchar = emitir(IRT(IR_XLOAD, IRT_U8), trptr, IRXLOAD_READONLY);
+      emitir(IRT(IR_EQ, IRT_INT), trchar, lj_ir_kint(J, '#'));
+    }
+    return 0;
+  } else {  /* select(n, ...) */
+    int32_t start = argv2int(J, tv);
+    if (start == 0) lj_trace_err(J, LJ_TRERR_BADTYPE);  /* A bit misleading. */
+    return start;
+  }
+}
+
+static void LJ_FASTCALL recff_select(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (tr) {
+    ptrdiff_t start = select_mode(J, tr, &rd->argv[0]);
+    if (start == 0) {  /* select('#', ...) */
+      J->base[0] = lj_ir_kint(J, J->maxslot - 1);
+    } else if (tref_isk(tr)) {  /* select(k, ...) */
+      ptrdiff_t n = (ptrdiff_t)J->maxslot;
+      if (start < 0) start += n;
+      else if (start > n) start = n;
+      rd->nres = n - start;
+      if (start >= 1) {
+	ptrdiff_t i;
+	for (i = 0; i < n - start; i++)
+	  J->base[i] = J->base[start+i];
+      }  /* else: Interpreter will throw. */
+    } else {
+      recff_nyiu(J);
+    }
+  }  /* else: Interpreter will throw. */
+}
+
 static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];

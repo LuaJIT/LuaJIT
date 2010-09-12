@@ -163,7 +163,7 @@ LJLIB_CF(unpack)
   return n;
 }
 
-LJLIB_CF(select)
+LJLIB_CF(select)		LJLIB_REC(.)
 {
   int32_t n = (int32_t)(L->top - L->base);
   if (n >= 1 && tvisstr(L->base) && *strVdata(L->base) == '#') {
