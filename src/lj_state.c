@@ -155,26 +155,21 @@ static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
 static void close_state(lua_State *L)
 {
   global_State *g = G(L);
+  lj_func_closeuv(L, tvref(L->stack));
+  lj_gc_freeall(g);
+  lua_assert(gcref(g->gc.root) == obj2gco(L));
+  lua_assert(g->strnum == 0);
+  lj_trace_freestate(g);
+  lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
+  lj_str_freebuf(g, &g->tmpbuf);
+  lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
+  lua_assert(g->gc.total == sizeof(GG_State));
 #ifndef LUAJIT_USE_SYSMALLOC
-  if (g->allocf == lj_alloc_f) {
-#if LJ_HASJIT
-    lj_mcode_free(G2J(g));
-#endif
+  if (g->allocf == lj_alloc_f)
     lj_alloc_destroy(g->allocd);
-  } else
+  else
 #endif
-  {
-    lj_func_closeuv(L, tvref(L->stack));
-    lj_gc_freeall(g);
-    lua_assert(gcref(g->gc.root) == obj2gco(L));
-    lua_assert(g->strnum == 0);
-    lj_trace_freestate(g);
-    lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
-    lj_str_freebuf(g, &g->tmpbuf);
-    lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
-    lua_assert(g->gc.total == sizeof(GG_State));
     g->allocf(g->allocd, G2GG(g), sizeof(GG_State), 0);
-  }
 }
 
 #if LJ_64
