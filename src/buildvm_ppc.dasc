@@ -1867,7 +1867,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checknil TMP2
     |  checkok >3
     |1:
-    |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(table)
+    |  andi. TMP2, TMP3, LJ_GC_BLACK	// isblack(table)
     |   evstddx SAVE0, TMP1, TMP0
     |  bne >7
     |2:
