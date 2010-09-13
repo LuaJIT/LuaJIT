@@ -28,18 +28,19 @@
 |.define PC,		r16	// Next PC.
 |.define DISPATCH,	r17	// Opcode dispatch table.
 |.define LREG,		r18	// Register holding lua_State (also in SAVE_L).
+|.define MULTRES,	r19	// Size of multi-result: (nresults+1)*8.
 |
 |// Constants for vectorized type-comparisons (hi+low GPR). C callee-save.
-|.define TISNUM,	r21
+|.define TISNUM,	r22
 |.if SPE
-|.define TISSTR,	r22
-|.define TISTAB,	r23
-|.define TISFUNC,	r24
-|.define TISNIL,	r25
+|.define TISSTR,	r23
+|.define TISTAB,	r24
+|.define TISFUNC,	r25
+|.define TISNIL,	r26
 |.endif
 |
 |// The following temporaries are not saved across C calls, except for RA.
-|.define RA,		r19	// Callee-save.
+|.define RA,		r20	// Callee-save.
 |.define RB,		r10
 |.define RC,		r11
 |.define RD,		r12
@@ -51,7 +52,7 @@
 |.define TMP3,		r6	// Overlaps CARG4.
 |
 |// Saved temporaries.
-|.define SAVE0,		r20
+|.define SAVE0,		r21
 |
 |// Calling conventions.
 |.define CARG1,		r3
@@ -284,7 +285,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_returnc:
   |  andi. TMP0, PC, FRAME_TYPE
   |   addi RD, RD, 8			// RD = (nresults+1)*8.
-  |   stw RD, SAVE_MULTRES
+  |   mr MULTRES, RD
   |  beq ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
@@ -2010,8 +2011,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_CALLM:
     |  // RA = base*8, (RB = (nresults+1)*8,) RC = extra_nargs*8
-    |  lwz TMP0, SAVE_MULTRES
-    |  add NARGS8:RC, NARGS8:RC, TMP0
+    |  add NARGS8:RC, NARGS8:RC, MULTRES
     |  // Fall through. Assumes BC_CALL follows.
     break;
   case BC_CALL:
@@ -2028,8 +2028,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_CALLMT:
     |  // RA = base*8, (RB = 0,) RC = extra_nargs*8
-    |  lwz TMP0, SAVE_MULTRES
-    |  add NARGS8:RC, NARGS8:RC, TMP0
+    |  add NARGS8:RC, NARGS8:RC, MULTRES
     |  // Fall through. Assumes BC_CALLT follows.
     break;
   case BC_CALLT:
@@ -2109,8 +2108,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_RETM:
     |  // RA = results*8, RD = extra_nresults*8
-    |  lwz TMP0, SAVE_MULTRES
-    |  add RD, RD, TMP0			// SAVE_MULTRES >= 8, so RD >= 8.
+    |  add RD, RD, MULTRES		// MULTRES >= 8, so RD >= 8.
     |  // Fall through. Assumes BC_RET follows.
     break;
 
@@ -2118,7 +2116,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = results*8, RD = (nresults+1)*8
     |  lwz PC, FRAME_PC(BASE)
     |   add RA, BASE, RA
-    |    stw RD, SAVE_MULTRES
+    |    mr MULTRES, RD
     |1:
     |  andi. TMP0, PC, FRAME_TYPE
     |   xori TMP1, PC, FRAME_VARG
@@ -2173,7 +2171,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = results*8, RD = (nresults+1)*8
     |  lwz PC, FRAME_PC(BASE)
     |   add RA, BASE, RA
-    |    stw RD, SAVE_MULTRES
+    |    mr MULTRES, RD
     |  andi. TMP0, PC, FRAME_TYPE
     |   xori TMP1, PC, FRAME_VARG
     |  bne ->BC_RETV_Z
