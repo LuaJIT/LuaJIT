@@ -527,26 +527,112 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Table indexing metamethods -----------------------------------------
   |
   |->vmeta_tgets1:
-  |->vmeta_tgets:
-  |  NYI
+  |  evmergelo STR:RC, TISSTR, STR:RC
+  |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+  |   decode_RB8 RB, INS
+  |  evstdd STR:RC, 0(CARG3)
+  |   add CARG2, BASE, RB
+  |  b >1
   |
-  |->vmeta_tgetb:
-  |  NYI
+  |->vmeta_tgets:
+  |  evmergelo TAB:RB, TISTAB, TAB:RB
+  |  la CARG2, DISPATCH_GL(tmptv)(DISPATCH)
+  |   evmergelo STR:RC, TISSTR, STR:RC
+  |  evstdd TAB:RB, 0(CARG2)
+  |   la CARG3, DISPATCH_GL(tmptv2)(DISPATCH)
+  |   evstdd STR:RC, 0(CARG3)
+  |  b >1
+  |
+  |->vmeta_tgetb:			// TMP0 = index
+  |  efdcfsi TMP0, TMP0
+  |   decode_RB8 RB, INS
+  |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+  |   add CARG2, BASE, RB
+  |  evstdd TMP0, 0(CARG3)
+  |  b >1
   |
   |->vmeta_tgetv:
-  |  NYI
+  |  decode_RB8 RB, INS
+  |   decode_RC8 RC, INS
+  |  add CARG2, BASE, RB
+  |   add CARG3, BASE, RC
+  |1:
+  |  stw BASE, L->base
+  |  mr CARG1, L
+  |  stw PC, SAVE_PC
+  |  bl extern lj_meta_tget		// (lua_State *L, TValue *o, TValue *k)
+  |  // Returns TValue * (finished) or NULL (metamethod).
+  |  cmplwi CRET1, 0
+  |  beq >3
+  |  evldd TMP0, 0(CRET1)
+  |  evstddx TMP0, BASE, RA
+  |  ins_next
+  |
+  |3:  // Call __index metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k
+  |  subfic TMP1, BASE, FRAME_CONT
+  |  lwz BASE, L->top
+  |  stw PC, -16(BASE)			// [cont|PC]
+  |   add PC, TMP1, BASE
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
+  |   li NARGS8:RC, 16			// 2 args for func(t, k).
+  |  b ->vm_call_dispatch_f
   |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets1:
-  |->vmeta_tsets:
-  |  NYI
+  |  evmergelo STR:RC, TISSTR, STR:RC
+  |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+  |   decode_RB8 RB, INS
+  |  evstdd STR:RC, 0(CARG3)
+  |   add CARG2, BASE, RB
+  |  b >1
   |
-  |->vmeta_tsetb:
-  |  NYI
+  |->vmeta_tsets:
+  |  evmergelo TAB:RB, TISTAB, TAB:RB
+  |  la CARG2, DISPATCH_GL(tmptv)(DISPATCH)
+  |   evmergelo STR:RC, TISSTR, STR:RC
+  |  evstdd TAB:RB, 0(CARG2)
+  |   la CARG3, DISPATCH_GL(tmptv2)(DISPATCH)
+  |   evstdd STR:RC, 0(CARG3)
+  |  b >1
+  |
+  |->vmeta_tsetb:			// TMP0 = index
+  |  efdcfsi TMP0, TMP0
+  |   decode_RB8 RB, INS
+  |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+  |   add CARG2, BASE, RB
+  |  evstdd TMP0, 0(CARG3)
+  |  b >1
   |
   |->vmeta_tsetv:
-  |  NYI
+  |  decode_RB8 RB, INS
+  |   decode_RC8 RC, INS
+  |  add CARG2, BASE, RB
+  |   add CARG3, BASE, RC
+  |1:
+  |  stw BASE, L->base
+  |  mr CARG1, L
+  |  stw PC, SAVE_PC
+  |  bl extern lj_meta_tset		// (lua_State *L, TValue *o, TValue *k)
+  |  // Returns TValue * (finished) or NULL (metamethod).
+  |  cmplwi CRET1, 0
+  |   evlddx TMP0, BASE, RA
+  |  beq >3
+  |  // NOBARRIER: lj_meta_tset ensures the table is not black.
+  |   evstdd TMP0, 0(CRET1)
+  |  ins_next
+  |
+  |3:  // Call __newindex metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
+  |  subfic TMP1, BASE, FRAME_CONT
+  |  lwz BASE, L->top
+  |  stw PC, -16(BASE)			// [cont|PC]
+  |   add PC, TMP1, BASE
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
+  |   li NARGS8:RC, 24			// 3 args for func(t, k, v)
+  |  evstdd TMP0, 16(BASE)		// Copy value to third argument.
+  |  b ->vm_call_dispatch_f
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
