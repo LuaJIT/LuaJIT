@@ -4300,7 +4300,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jz >4				// Nothing to copy?
     |  add RD, KBASE			// Compute needed size.
     |  cmp RD, TAB:RB->asize
-    |  jae >5				// Doesn't fit into array part?
+    |  ja >5				// Doesn't fit into array part?
     |  sub RD, KBASE
     |  shl KBASE, 3
     |  add KBASE, TAB:RB->array
