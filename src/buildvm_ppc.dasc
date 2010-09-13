@@ -1773,21 +1773,25 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  efdcmpeq cr1, RC, TMP1
     |   lwz TMP1, TAB:RB->array
     |  crand 4*cr0+gt, 4*cr0+gt, 4*cr1+gt
-    |   slwi TMP2, TMP2, 3
+    |   slwi TMP0, TMP2, 3
     |  ble ->vmeta_tsetv		// Integer key and in array part?
-    |  evlddx TMP0, TMP1, TMP2
-    |  checknil TMP0
-    |  checkok >2
+    |   lbz TMP3, TAB:RB->marked
+    |  evlddx TMP2, TMP1, TMP0
+    |  checknil TMP2
+    |  checkok >3
     |1:
-    |  evstddx SAVE0, TMP1, TMP2
+    |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(table)
+    |   evstddx SAVE0, TMP1, TMP0
+    |  bne >7
+    |2:
     |  ins_next
     |
-    |2:  // Check for __newindex if previous value is nil.
-    |  lwz TAB:TMP3, TAB:RB->metatable
-    |  cmplwi TAB:TMP3, 0
+    |3:  // Check for __newindex if previous value is nil.
+    |  lwz TAB:TMP2, TAB:RB->metatable
+    |  cmplwi TAB:TMP2, 0
     |  beq <1				// No metatable: done.
-    |  lbz TMP0, TAB:TMP3->nomm
-    |  andi. TMP0, TMP0, 1<<MM_newindex
+    |  lbz TMP2, TAB:TMP2->nomm
+    |  andi. TMP2, TMP2, 1<<MM_newindex
     |  bne <1				// 'no __newindex' flag set: done.
     |  b ->vmeta_tsetv
     |
@@ -1795,6 +1799,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checkstr STR:RC			// String key?
     |  checkok ->BC_TSETS_Z
     |  b ->vmeta_tsetv
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMP3, TMP0
+    |  b <2
     break;
   case BC_TSETS:
     |  // RA = src*8, RB = table*8, RC = str_const*8 (~)
