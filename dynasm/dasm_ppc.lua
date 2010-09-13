@@ -849,7 +849,7 @@ end
 ------------------------------------------------------------------------------
 
 local function parse_gpr(expr)
-  local tname, ovreg = match(expr, "^([%w_]+):(r[0-9][0-9]?)$")
+  local tname, ovreg = match(expr, "^([%w_]+):(r[1-3]?[0-9])$")
   local tp = map_type[tname or expr]
   if tp then
     local reg = ovreg or tp.reg
@@ -907,6 +907,9 @@ local function parse_imm(imm, bits, shift, scale, signed)
       end
     end
     werror("out of range immediate `"..imm.."'")
+  elseif match(imm, "^r([1-3]?[0-9])$") or
+	 match(imm, "^([%w_]+):(r[1-3]?[0-9])$") then
+    werror("expected immediate operand, got register")
   else
     waction("IMM", (signed and 32768 or 0)+scale*1024+bits*32+shift, imm)
     return 0
