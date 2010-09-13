@@ -1480,24 +1480,25 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lbz TMP3, UPVAL:RB->marked
     |   lwz CARG2, UPVAL:RB->v
     |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
-    |    lbz TMP2, UPVAL:RB->closed
-    |   evmergehi TMP0, TMP1, TMP1
+    |    lbz TMP0, UPVAL:RB->closed
+    |   evmergehi TMP2, TMP1, TMP1
     |   evstdd TMP1, 0(CARG2)
-    |    cmplwi cr1, TMP2, 0
+    |    cmplwi cr1, TMP0, 0
     |  cror 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
-    |   subi TMP0, TMP0, LJ_TISNUM
+    |   subi TMP2, TMP2, LJ_TISNUM
     |  bne >2				// Upvalue is closed and black?
     |1:
     |  ins_next
     |
     |2:  // Check if new value is collectable.
-    |  cmplwi TMP0, LJ_TISGCV - LJ_TISNUM
+    |  cmplwi TMP2, LJ_TISGCV - LJ_TISNUM
     |  bge <1				// tvisgcv(v)
     |  lbz TMP3, GCOBJ:TMP1->gch.marked
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(v)
     |   la CARG1, GG_DISP2G(DISPATCH)
     |  // Crossed a write barrier. Move the barrier forward.
-    |  bnel extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  beq <1
+    |  bl extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
     |  b <1
     break;
   case BC_USETS:
@@ -1526,7 +1527,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
     |   la CARG1, GG_DISP2G(DISPATCH)
     |  // Crossed a write barrier. Move the barrier forward.
-    |  bnel extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  beq <1
+    |  bl extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
     |  b <1
     break;
   case BC_USETN:
