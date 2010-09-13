@@ -355,7 +355,7 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
   global_State *g = G(L);
   BCReg slots;
   setcframe_pc(cf, pc);
-  slots = cur_topslot(pt, pc, cframe_multres(cf));
+  slots = cur_topslot(pt, pc, cframe_multres_n(cf));
   L->top = L->base + slots;  /* Fix top. */
 #if LJ_HASJIT
   {
