@@ -2068,7 +2068,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwz INS, -4(TMP1)
     |  decode_RA8 RA, INS
     |  sub TMP1, BASE, RA
-    |  lwz LFUNC:TMP1, FRAME_FUNC(TMP1)
+    |  lwz LFUNC:TMP1, FRAME_FUNC-8(TMP1)
     |  lwz TMP1, LFUNC:TMP1->pc
     |  lwz KBASE, PC2PROTO(k)(TMP1)	// Need to prepare KBASE.
     |  b <4
