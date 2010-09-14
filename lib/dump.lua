@@ -59,8 +59,8 @@ local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
 local funcinfo, funcbc = jutil.funcinfo, jutil.funcbc
 local traceinfo, traceir, tracek = jutil.traceinfo, jutil.traceir, jutil.tracek
-local tracemc, traceexitstub = jutil.tracemc, jutil.traceexitstub
-local tracesnap = jutil.tracesnap
+local tracemc, tracesnap = jutil.tracemc, jutil.tracesnap
+local traceexitstub, ircalladdr = jutil.traceexitstub, jutil.ircalladdr
 local bit = require("bit")
 local band, shl, shr = bit.band, bit.lshift, bit.rshift
 local sub, gsub, format = string.sub, string.gsub, string.format
@@ -82,6 +82,10 @@ local nexitsym = 0
 -- Fill symbol table with trace exit addresses.
 local function fillsymtab(nexit)
   local t = symtab
+  if nexitsym == 0 then
+    local ircall = vmdef.ircall
+    for i=0,#ircall do t[ircalladdr(i)] = ircall[i] end
+  end
   if nexit > nexitsym then
     for i=nexitsym,nexit-1 do t[traceexitstub(i)] = tostring(i) end
     nexitsym = nexit

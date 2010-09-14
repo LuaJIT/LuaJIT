@@ -370,7 +370,18 @@ LJLIB_CF(jit_util_traceexitstub)
   ExitNo exitno = (ExitNo)lj_lib_checkint(L, 1);
   jit_State *J = L2J(L);
   if (exitno < EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR) {
-    setnumV(L->top-1, cast_num((intptr_t)exitstub_addr(J, exitno)));
+    setnumV(L->top-1, cast_num((uintptr_t)exitstub_addr(J, exitno)));
+    return 1;
+  }
+  return 0;
+}
+
+/* local addr = jit.util.ircalladdr(idx) */
+LJLIB_CF(jit_util_ircalladdr)
+{
+  uint32_t idx = (uint32_t)lj_lib_checkint(L, 1);
+  if (idx < IRCALL__MAX) {
+    setnumV(L->top-1, cast_num((uintptr_t)(void *)lj_ir_callinfo[idx].func));
     return 1;
   }
   return 0;
@@ -389,6 +400,7 @@ static int trace_nojit(lua_State *L)
 #define lj_cf_jit_util_tracesnap	trace_nojit
 #define lj_cf_jit_util_tracemc		trace_nojit
 #define lj_cf_jit_util_traceexitstub	trace_nojit
+#define lj_cf_jit_util_ircalladdr	trace_nojit
 
 #endif
 
