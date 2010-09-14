@@ -102,9 +102,6 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
   IRRef lim = xref;  /* Search limit. */
   IRRef ref;
 
-  if (IR(xr->op1)->o != IR_FLOAD)  /* Varargs have no corresponding stores. */
-    goto cselim;
-
   /* Search for conflicting stores. */
   ref = J->chain[fins->o+IRDELTA_L2S];
   while (ref > xref) {

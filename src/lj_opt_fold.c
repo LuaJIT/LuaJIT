@@ -1308,6 +1308,7 @@ LJFOLDF(fload_str_len_snew)
 }
 
 LJFOLD(FLOAD any IRFL_STR_LEN)
+LJFOLD(VLOAD any any)  /* Vararg loads have no corresponding stores. */
 LJFOLDX(lj_opt_cse)
 
 /* All other field loads need alias analysis. */

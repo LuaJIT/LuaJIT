@@ -96,7 +96,7 @@ typedef struct ASMState {
 #define neverfuse(as)		(as->fuseref == FUSE_DISABLED)
 #define opisfusableload(o) \
   ((o) == IR_ALOAD || (o) == IR_HLOAD || (o) == IR_ULOAD || \
-   (o) == IR_FLOAD || (o) == IR_SLOAD || (o) == IR_XLOAD)
+   (o) == IR_FLOAD || (o) == IR_XLOAD || (o) == IR_SLOAD || (o) == IR_VLOAD)
 
 /* Instruction selection for XMM moves. */
 #define XMM_MOVRR(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVSD : XO_MOVAPS)
@@ -1315,6 +1315,9 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 	asm_fusexref(as, IR(ir->op1), xallow);
 	return RID_MRM;
       }
+    } else if (ir->o == IR_VLOAD) {
+      asm_fuseahuref(as, ir->op1, xallow);
+      return RID_MRM;
     }
   }
   if (!(as->freeset & allow) &&
@@ -1978,7 +1981,7 @@ static Reg asm_load_lightud64(ASMState *as, IRIns *ir, int typecheck)
 }
 #endif
 
-static void asm_ahuload(ASMState *as, IRIns *ir)
+static void asm_ahuvload(ASMState *as, IRIns *ir)
 {
   lua_assert(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t));
 #if LJ_64
@@ -3385,7 +3388,9 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_STRREF: asm_strref(as, ir); break;
 
   /* Loads and stores. */
-  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: asm_ahuload(as, ir); break;
+  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+    asm_ahuvload(as, ir);
+    break;
   case IR_FLOAD: case IR_XLOAD: asm_fxload(as, ir); break;
   case IR_SLOAD: asm_sload(as, ir); break;
 

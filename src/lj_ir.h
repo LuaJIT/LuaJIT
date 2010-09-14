@@ -95,8 +95,9 @@
   _(HLOAD,	L , ref, ___) \
   _(ULOAD,	L , ref, ___) \
   _(FLOAD,	L , ref, lit) \
-  _(SLOAD,	L , lit, lit) \
   _(XLOAD,	L , ref, lit) \
+  _(SLOAD,	L , lit, lit) \
+  _(VLOAD,	L , ref, ___) \
   \
   _(ASTORE,	S , ref, ref) \
   _(HSTORE,	S , ref, ref) \

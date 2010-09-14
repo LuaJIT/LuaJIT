@@ -1998,7 +1998,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	  IRType t = itype2irt(&J->L->base[i-1-nvararg]);
 	  TRef aref = emitir(IRT(IR_AREF, IRT_PTR),
 			     vbase, lj_ir_kint(J, (int32_t)i));
-	  TRef tr = emitir(IRTG(IR_ALOAD, t), aref, 0);
+	  TRef tr = emitir(IRTG(IR_VLOAD, t), aref, 0);
 	  if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
 	  J->base[dst+i] = tr;
 	}
@@ -2044,7 +2044,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
 	t = itype2irt(&J->L->base[idx-2-nvararg]);
 	aref = emitir(IRT(IR_AREF, IRT_PTR), vbase, tridx);
-	tr = emitir(IRTG(IR_ALOAD, t), aref, 0);
+	tr = emitir(IRTG(IR_VLOAD, t), aref, 0);
 	if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
       }
       J->base[dst-2] = tr;
