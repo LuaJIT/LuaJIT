@@ -230,6 +230,7 @@ static void gc_marktrace(global_State *g, TraceNo traceno)
 static void gc_traverse_trace(global_State *g, GCtrace *T)
 {
   IRRef ref;
+  if (T->traceno == 0) return;
   for (ref = T->nk; ref < REF_TRUE; ref++) {
     IRIns *ir = &T->ir[ref];
     if (ir->o == IR_KGC)
@@ -242,8 +243,7 @@ static void gc_traverse_trace(global_State *g, GCtrace *T)
 }
 
 /* The current trace is a GC root while not anchored in the prototype (yet). */
-#define gc_traverse_curtrace(g) \
-  { if (G2J(g)->cur.traceno != 0) gc_traverse_trace(g, &G2J(g)->cur); }
+#define gc_traverse_curtrace(g)	gc_traverse_trace(g, &G2J(g)->cur)
 #else
 #define gc_traverse_curtrace(g)	UNUSED(g)
 #endif
