@@ -407,6 +407,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   srwi CARG2, RA, 3
   |2:
   |  // L->base = new base, L->top = top
+  |   stw PC, SAVE_PC
   |  mr CARG1, L
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |  lwz BASE, L->base
