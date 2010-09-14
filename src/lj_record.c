@@ -1986,6 +1986,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
     if (nresults >= 0) {  /* Known fixed number of results. */
       ptrdiff_t i;
       if (nvararg > 0) {
+	ptrdiff_t nload = nvararg >= nresults ? nresults : nvararg;
 	TRef vbase;
 	if (nvararg >= nresults)
 	  emitir(IRTGI(IR_GE), fr, lj_ir_kint(J, frofs+8*(int32_t)nresults));
@@ -1993,7 +1994,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	  emitir(IRTGI(IR_EQ), fr, lj_ir_kint(J, frame_ftsz(J->L->base-1)));
 	vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
 	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
-	for (i = 0; i < nvararg; i++) {
+	for (i = 0; i < nload; i++) {
 	  IRType t = itype2irt(&J->L->base[i-1-nvararg]);
 	  TRef aref = emitir(IRT(IR_AREF, IRT_PTR),
 			     vbase, lj_ir_kint(J, (int32_t)i));
