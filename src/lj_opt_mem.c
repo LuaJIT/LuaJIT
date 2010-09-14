@@ -102,13 +102,16 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
   IRRef lim = xref;  /* Search limit. */
   IRRef ref;
 
+  if (IR(xr->op1)->o != IR_FLOAD)  /* Varargs have no corresponding stores. */
+    goto cselim;
+
   /* Search for conflicting stores. */
   ref = J->chain[fins->o+IRDELTA_L2S];
   while (ref > xref) {
     IRIns *store = IR(ref);
     switch (aa_ahref(J, xr, IR(store->op1))) {
     case ALIAS_NO:   break;  /* Continue searching. */
-    case ALIAS_MAY:  lim = ref; goto conflict;  /* Limit search for load. */
+    case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
     }
     ref = store->prev;
@@ -129,7 +132,7 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	while (ref2 > tab) {
 	  IRIns *newref = IR(ref2);
 	  if (irt_isnum(IR(newref->op2)->t))
-	    goto conflict;
+	    goto cselim;
 	  ref2 = newref->prev;
 	}
       }
@@ -142,7 +145,7 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	IRIns *store = IR(ref);
 	switch (aa_ahref(J, xr, IR(store->op1))) {
 	case ALIAS_NO:   break;  /* Continue searching. */
-	case ALIAS_MAY:  goto conflict;  /* Conflicting store. */
+	case ALIAS_MAY:  goto cselim;  /* Conflicting store. */
 	case ALIAS_MUST: return store->op2;  /* Store forwarding. */
 	}
 	ref = store->prev;
@@ -167,7 +170,7 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
     }
   }
 
-conflict:
+cselim:
   /* Try to find a matching load. Below the conflicting store, if any. */
   ref = J->chain[fins->o];
   while (ref > lim) {
@@ -333,13 +336,13 @@ TRef LJ_FASTCALL lj_opt_fwd_uload(jit_State *J)
     IRIns *store = IR(ref);
     switch (aa_uref(xr, IR(store->op1))) {
     case ALIAS_NO:   break;  /* Continue searching. */
-    case ALIAS_MAY:  lim = ref; goto conflict;  /* Limit search for load. */
+    case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
     }
     ref = store->prev;
   }
 
-conflict:
+cselim:
   /* Try to find a matching load. Below the conflicting store, if any. */
   return lj_opt_cselim(J, lim);
 }
@@ -417,7 +420,7 @@ TRef LJ_FASTCALL lj_opt_fwd_fload(jit_State *J)
     IRIns *store = IR(ref);
     switch (aa_fref(fins, IR(store->op1))) {
     case ALIAS_NO:   break;  /* Continue searching. */
-    case ALIAS_MAY:  lim = ref; goto conflict;  /* Limit search for load. */
+    case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
     }
     ref = store->prev;
@@ -430,7 +433,7 @@ TRef LJ_FASTCALL lj_opt_fwd_fload(jit_State *J)
       return lj_ir_knull(J, IRT_TAB);
   }
 
-conflict:
+cselim:
   /* Try to find a matching load. Below the conflicting store, if any. */
   return lj_opt_cselim(J, lim);
 }
