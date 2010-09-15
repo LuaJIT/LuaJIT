@@ -2102,7 +2102,68 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_VARG:
-    |  NYI
+    |  // RA = base*8, RB = (nresults+1)*8, RC = numparams*8
+    |  lwz TMP0, FRAME_PC(BASE)
+    |  add RC, BASE, RC
+    |   add RA, BASE, RA
+    |  addi RC, RC, FRAME_VARG
+    |   add TMP2, RA, RB
+    |  subi TMP3, BASE, 8		// TMP3 = vtop
+    |  sub RC, RC, TMP0			// RC = vbase
+    |  // Note: RC may now be even _above_ BASE if nargs was < numparams.
+    |  cmplwi cr1, RB, 0
+    |   sub. TMP1, TMP3, RC
+    |  beq cr1, >5			// Copy all varargs?
+    |   subi TMP2, TMP2, 16
+    |   ble >2				// No vararg slots?
+    |1:  // Copy vararg slots to destination slots.
+    |  evldd TMP0, 0(RC)
+    |   addi RC, RC, 8
+    |  evstdd TMP0, 0(RA)
+    |  cmplw RA, TMP2
+    |   cmplw cr1, RC, TMP3
+    |  bge >3				// All destination slots filled?
+    |    addi RA, RA, 8
+    |   blt cr1, <1			// More vararg slots?
+    |2:  // Fill up remainder with nil.
+    |  evstdd TISNIL, 0(RA)
+    |  cmplw RA, TMP2
+    |   addi RA, RA, 8
+    |  blt <2
+    |3:
+    |  ins_next
+    |
+    |5:  // Copy all varargs.
+    |  lwz TMP0, L->maxstack
+    |   li MULTRES, 8			// MULTRES = (0+1)*8
+    |  ble <3				// No vararg slots?
+    |  add TMP2, RA, TMP1
+    |  cmplw TMP2, TMP0
+    |   addi MULTRES, TMP1, 8
+    |  bgt >7
+    |6:
+    |  evldd TMP0, 0(RC)
+    |   addi RC, RC, 8
+    |  evstdd TMP0, 0(RA)
+    |  cmplw RC, TMP3
+    |   addi RA, RA, 8
+    |  blt <6				// More vararg slots?
+    |  b <3
+    |
+    |7:  // Grow stack for varargs.
+    |  mr CARG1, L
+    |   stw RA, L->top
+    |  sub SAVE0, RC, BASE		// Need delta, because BASE may change.
+    |   stw BASE, L->base
+    |  sub RA, RA, BASE
+    |   stw PC, SAVE_PC
+    |  srwi CARG2, TMP1, 3
+    |  bl extern lj_state_growstack	// (lua_State *L, int n)
+    |  lwz BASE, L->base
+    |  add RA, BASE, RA
+    |  add RC, BASE, SAVE0
+    |  subi TMP3, BASE, 8
+    |  b <6
     break;
 
   /* -- Returns ----------------------------------------------------------- */
