@@ -1207,18 +1207,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addi PC, PC, 4
     |  evlddx TMP1, BASE, RD
     |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
-    |   lwz INS, -4(PC)
+    |   lwz TMP2, -4(PC)
     |  evmergehi RB, TMP0, TMP1
-    |   decode_RD4 TMP2, INS
+    |   decode_RD4 TMP2, TMP2
     |  checknum RB
     |   add TMP2, TMP2, TMP3
     |  checkanyfail ->vmeta_comp
-    if (op == BC_ISLT || op == BC_ISGE) {
-      |  efdcmplt TMP0, TMP1
-    } else {
-      |  efdcmpgt TMP0, TMP1
+    |  efdcmplt TMP0, TMP1
+    if (op == BC_ISLE || op == BC_ISGT) {
+      |  efdcmpeq cr1, TMP0, TMP1
+      |  cror 4*cr0+gt, 4*cr0+gt, 4*cr1+gt
     }
-    if (op == BC_ISLT || op == BC_ISGT) {
+    if (op == BC_ISLT || op == BC_ISLE) {
       |  iselgt PC, TMP2, PC
     } else {
       |  iselgt PC, PC, TMP2
