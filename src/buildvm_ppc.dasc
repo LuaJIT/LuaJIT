@@ -1313,15 +1313,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  evlddx TMP1, KBASE, RD
     |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
     |   lwz INS, -4(PC)
-    |  efdcmpeq TMP0, TMP1		// NYI: avoid comparison with NaN.
+    |  checknum TMP0
+    |  checkfail >5
+    |  efdcmpeq TMP0, TMP1
+    |1:
     |   decode_RD4 TMP2, INS
     |   add TMP2, TMP2, TMP3
     if (vk) {
       |  iselgt PC, TMP2, PC
+      |5:
     } else {
       |  iselgt PC, PC, TMP2
     }
+    |3:
     |  ins_next
+    if (!vk) {
+      |5:
+      |  decode_RD4 TMP2, INS
+      |  add PC, TMP2, TMP3
+      |  b <3
+    }
     break;
 
   case BC_ISEQP: case BC_ISNEP:
