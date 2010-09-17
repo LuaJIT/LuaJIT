@@ -159,18 +159,25 @@
 |.macro decode_OP1, dst, ins; rlwinm dst, ins, 0, 24, 31; .endmacro
 |.macro decode_RD4, dst, ins; rlwinm dst, ins, 18, 14, 29; .endmacro
 |
-|// Instruction decode+dispatch.
-|.macro ins_NEXT
+|// Instruction fetch.
+|.macro ins_NEXT1
 |  lwz INS, 0(PC)
 |   addi PC, PC, 4
-|  decode_OP4 TMP0, INS
+|.endmacro
+|// Instruction decode+dispatch.
+|.macro ins_NEXT2
+|  decode_OP4 TMP1, INS
 |   decode_RB8 RB, INS
-|  lwzx TMP0, DISPATCH, TMP0
 |   decode_RD8 RD, INS
+|  lwzx TMP0, DISPATCH, TMP1
+|   decode_RA8 RA, INS
 |   decode_RC8 RC, INS
 |  mtctr TMP0
-|   decode_RA8 RA, INS
 |  bctr
+|.endmacro
+|.macro ins_NEXT
+|  ins_NEXT1
+|  ins_NEXT2
 |.endmacro
 |
 |// Instruction footer.
@@ -178,10 +185,17 @@
 |  // Replicated dispatch. Less unpredictable branches, but higher I-Cache use.
 |  .define ins_next, ins_NEXT
 |  .define ins_next_, ins_NEXT
+|  .define ins_next1, ins_NEXT1
+|  .define ins_next2, ins_NEXT2
 |.else
 |  // Common dispatch. Lower I-Cache use, only one (very) unpredictable branch.
 |  // Affects only certain kinds of benchmarks (and only with -j off).
 |  .macro ins_next
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next1
+|  .endmacro
+|  .macro ins_next2
 |    b ->ins_next
 |  .endmacro
 |  .macro ins_next_
@@ -196,9 +210,9 @@
 |  lwz PC, LFUNC:RB->pc
 |  lwz INS, 0(PC)
 |   addi PC, PC, 4
-|  decode_OP4 TMP0, INS
+|  decode_OP4 TMP1, INS
 |   decode_RA8 RA, INS
-|  lwzx TMP0, DISPATCH, TMP0
+|  lwzx TMP0, DISPATCH, TMP1
 |   add RA, RA, BASE
 |  mtctr TMP0
 |  bctr
@@ -1404,17 +1418,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_MOV:
     |  // RA = dst*8, RD = src*8
+    |  ins_next1
     |  evlddx TMP0, BASE, RD
     |  evstddx TMP0, BASE, RA
-    |  ins_next_
+    |  ins_next2
     break;
   case BC_NOT:
     |  // RA = dst*8, RD = src*8
+    |  ins_next1
     |  lwzx TMP0, BASE, RD
     |  subfic TMP1, TMP0, LJ_TTRUE
     |  adde TMP0, TMP0, TMP1
     |  stwx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_UNM:
     |  // RA = dst*8, RD = src*8
@@ -1425,8 +1441,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   evmergelo TMP1, TMP1, TMP2
     |  checkfail ->vmeta_unm
     |  evxor TMP0, TMP0, TMP1
+    |  ins_next1
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_LEN:
     |  // RA = dst*8, RD = src*8
@@ -1435,9 +1452,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checkfail >2
     |  lwz CRET1, STR:CARG1->len
     |1:
+    |  ins_next1
     |  efdcfsi TMP0, CRET1
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     |2:
     |  checktab CARG1
     |  checkfail ->vmeta_len
@@ -1476,9 +1494,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |.macro ins_arith, ins
     |  ins_arithpre TMP0, TMP1
+    |  ins_next1
     |  ins TMP0, TMP0, TMP1
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     |.endmacro
 
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
@@ -1499,9 +1518,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  efddiv CARG2, RD, SAVE0
     |  bl ->vm_floor			// floor(b/c)
     |  efdmul TMP0, CRET2, SAVE0
+    |  ins_next1
     |  efdsub TMP0, RD, TMP0		// b - floor(b/c)*c
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_MODNV: case BC_MODVV:
     |  ins_arithpre RD, SAVE0
@@ -1544,33 +1564,37 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_KSTR:
     |  // RA = dst*8, RD = str_const*8 (~)
+    |  ins_next1
     |  srwi TMP1, RD, 1
     |  subfic TMP1, TMP1, -4
     |  lwzx TMP0, KBASE, TMP1		// KBASE-4-str_const*4
     |  evmergelo TMP0, TISSTR, TMP0
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
     |  srwi TMP1, RD, 3
     |  extsh TMP1, TMP1
+    |  ins_next1
     |  efdcfsi TMP0, TMP1
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_KNUM:
     |  // RA = dst*8, RD = num_const*8
     |  evlddx TMP0, KBASE, RD
+    |  ins_next1
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_KPRI:
     |  // RA = dst*8, RD = primitive_type*8 (~)
     |  srwi TMP1, RD, 3
     |  not TMP0, TMP1
+    |  ins_next1
     |  stwx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_KNIL:
     |  // RA = base*8, RD = end*8
@@ -1581,13 +1605,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmpw RA, RD
     |   addi RA, RA, 8
     |  blt <1
-    |  ins_next
+    |  ins_next_
     break;
 
   /* -- Upvalue and function ops ------------------------------------------ */
 
   case BC_UGET:
     |  // RA = dst*8, RD = uvnum*8
+    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RD, RD, 1
     |   addi RD, RD, offsetof(GCfuncL, uvptr)
@@ -1595,7 +1620,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwz TMP1, UPVAL:RB->v
     |  evldd TMP0, 0(TMP1)
     |  evstddx TMP0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
   case BC_USETV:
     |  // RA = uvnum*8, RD = src*8
@@ -1630,6 +1655,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETS:
     |  // RA = uvnum*8, RD = str_const*8 (~)
+    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi TMP1, RD, 1
     |    srwi RA, RA, 1
@@ -1646,7 +1672,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   evstdd STR:TMP1, 0(CARG2)
     |  bne >2
     |1:
-    |  ins_next
+    |  ins_next2
     |
     |2:  // Check if string is white and ensure upvalue is closed.
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(str)
@@ -1660,6 +1686,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETN:
     |  // RA = uvnum*8, RD = num_const*8
+    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RA, RA, 1
     |   addi RA, RA, offsetof(GCfuncL, uvptr)
@@ -1667,10 +1694,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwzx UPVAL:RB, LFUNC:RB, RA
     |  lwz TMP1, UPVAL:RB->v
     |  evstdd TMP0, 0(TMP1)
-    |  ins_next
+    |  ins_next2
     break;
   case BC_USETP:
     |  // RA = uvnum*8, RD = primitive_type*8 (~)
+    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RA, RA, 1
     |   addi RA, RA, offsetof(GCfuncL, uvptr)
@@ -1679,7 +1707,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    not TMP0, TMP0
     |  lwz TMP1, UPVAL:RB->v
     |  stw TMP0, 0(TMP1)
-    |  ins_next
+    |  ins_next2
     break;
 
   case BC_UCLO:
@@ -1870,8 +1898,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checknil TMP1
     |  checkok >5
     |1:
+    |  ins_next1
     |  evstddx TMP1, BASE, RA
-    |  ins_next
+    |  ins_next2
     |
     |5:  // Check for __index if table value is nil.
     |  lwz TAB:TMP2, TAB:RB->metatable
@@ -2289,9 +2318,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bgt >6
     |   sub BASE, TMP2, RA
     |  lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+    |  ins_next1
     |  lwz TMP1, LFUNC:TMP1->pc
     |  lwz KBASE, PC2PROTO(k)(TMP1)
-    |  ins_next
+    |  ins_next2
     |
     |6:  // Fill up results with nil.
     |  subi TMP1, RD, 8
@@ -2330,9 +2360,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bgt >6
     |   sub BASE, TMP2, RA
     |  lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+    |  ins_next1
     |  lwz TMP1, LFUNC:TMP1->pc
     |  lwz KBASE, PC2PROTO(k)(TMP1)
-    |  ins_next
+    |  ins_next2
     |
     |6:  // Fill up results with nil.
     |  subi TMP1, RD, 8
@@ -2361,20 +2392,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     vk = (op == BC_IFORL || op == BC_JFORL);
     |  add RA, BASE, RA
     |  evldd TMP1, FORL_IDX*8(RA)
-    |  evldd TMP2, FORL_STOP*8(RA)
     |  evldd TMP3, FORL_STEP*8(RA)
+    |  evldd TMP2, FORL_STOP*8(RA)
     if (!vk) {
       |  evcmpgtu cr0, TMP1, TISNUM
-      |  evcmpgtu cr1, TMP2, TISNUM
       |  evcmpgtu cr7, TMP3, TISNUM
-      |  cror 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
+      |  evcmpgtu cr1, TMP2, TISNUM
       |  cror 4*cr0+lt, 4*cr0+lt, 4*cr7+lt
+      |  cror 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
       |  blt ->vmeta_for
     }
     if (vk) {
       |  efdadd TMP1, TMP1, TMP3
-    }
-    if (vk) {
       |  evstdd TMP1, FORL_IDX*8(RA)
     }
     |   evcmpgts TMP3, TISNIL
@@ -2480,13 +2509,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmplw RA, TMP2
     |   slwi TMP1, TMP1, 3
     |  bgt ->vm_growstack_l
+    |  ins_next1
     |2:
     |  cmplw NARGS8:RC, TMP1		// Check for missing parameters.
     |  ble >3
     if (op == BC_JFUNCF) {
       |  NYI
     } else {
-      |  ins_next
+      |  ins_next2
     }
     |
     |3:  // Clear missing parameters.
@@ -2516,6 +2546,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lbz TMP2, -4+PC2PROTO(numparams)(PC)
     |   mr RA, BASE
     |   mr RC, TMP1
+    |  ins_next1
     |  cmpwi TMP2, 0
     |   addi BASE, TMP1, 8
     |  beq >3
@@ -2531,7 +2562,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addi TMP1, TMP1, 8
     |  bne <1
     |3:
-    |  ins_next
+    |  ins_next2
     |
     |4:  // Clear missing parameters.
     |  evmr TMP0, TISNIL
@@ -2542,18 +2573,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_FUNCCW:
     |  // BASE = new base, RA = BASE+framesize*8, RB = CFUNC, RC = nargs*8
     if (op == BC_FUNCC) {
-      |  lwz TMP0, CFUNC:RB->f
+      |  lwz TMP3, CFUNC:RB->f
     } else {
-      |  lwz TMP0, DISPATCH_GL(wrapf)(DISPATCH)
+      |  lwz TMP3, DISPATCH_GL(wrapf)(DISPATCH)
     }
     |   add TMP1, RA, NARGS8:RC
     |   lwz TMP2, L->maxstack
     |    add RC, BASE, NARGS8:RC
     |   stw BASE, L->base
-    |  mtctr TMP0
     |   cmplw TMP1, TMP2
     |    stw RC, L->top
     |     li_vmstate C
+    |  mtctr TMP3
     if (op == BC_FUNCCW) {
       |  lwz CARG2, CFUNC:RB->f
     }
