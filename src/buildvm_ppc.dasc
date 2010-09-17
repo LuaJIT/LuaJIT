@@ -523,8 +523,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, RA = resultptr, RB = meta base
   |  bctr				// Jump to continuation.
   |
-  |->cont_cat:
-  |  NYI
+  |->cont_cat:				// RA = resultptr, RB = meta base
+  |  lwz INS, -4(PC)
+  |   subi CARG2, RB, 16
+  |  decode_RB8 SAVE0, INS
+  |   evldd TMP0, 0(RA)
+  |  add TMP1, BASE, SAVE0
+  |   stw BASE, L->base
+  |  cmplw TMP1, CARG2
+  |   sub CARG3, CARG2, TMP1
+  |  decode_RA8 RA, INS
+  |   evstdd TMP0, 0(CARG2)
+  |  bne ->BC_CAT_Z
+  |   evstddx TMP0, BASE, RA
+  |  b ->cont_nop
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
@@ -1509,7 +1521,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_CAT:
-    |  NYI
+    |  // RA = dst*8, RB = src_start*8, RC = src_end*8
+    |  sub CARG3, RC, RB
+    |   stw BASE, L->base
+    |  add CARG2, BASE, RC
+    |  mr SAVE0, RB
+    |->BC_CAT_Z:
+    |   stw PC, SAVE_PC
+    |  mr CARG1, L
+    |  srwi CARG3, CARG3, 3
+    |  bl extern lj_meta_cat		// (lua_State *L, TValue *top, int left)
+    |  // Returns NULL (finished) or TValue * (metamethod).
+    |  cmplwi CRET1, 0
+    |   lwz BASE, L->base
+    |  bne ->vmeta_binop
+    |  evlddx TMP0, BASE, SAVE0		// Copy result from RB to RA.
+    |  evstddx TMP0, BASE, RA
+    |  ins_next
     break;
 
   /* -- Constant ops ------------------------------------------------------ */
