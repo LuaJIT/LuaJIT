@@ -665,7 +665,25 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Comparison metamethods ---------------------------------------------
   |
   |->vmeta_comp:
-  |  NYI
+  |  mr CARG1, L
+  |   subi PC, PC, 4
+  |  add CARG2, BASE, RA
+  |   stw PC, SAVE_PC
+  |  add CARG3, BASE, RD
+  |   stw BASE, L->base
+  |  decode_OP1 CARG4, INS
+  |  bl extern lj_meta_comp  // (lua_State *L, TValue *o1, *o2, int op)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |3:
+  |  cmplwi CRET1, 1
+  |  bgt ->vmeta_binop
+  |4:
+  |  lwz INS, 0(PC)
+  |   addi PC, PC, 4
+  |  decode_RD4 TMP2, INS
+  |  addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+  |  add TMP2, TMP2, TMP3
+  |  isellt PC, PC, TMP2
   |->cont_nop:
   |  ins_next
   |
@@ -676,14 +694,27 @@ static void build_subroutines(BuildCtx *ctx)
   |   evstddx TMP0, BASE, TMP1
   |  b ->cont_nop
   |
-  |->cont_condt:
-  |  NYI
+  |->cont_condt:			// RA = resultptr
+  |  lwz TMP0, 0(RA)
+  |   li TMP1, LJ_TTRUE
+  |  cmplw TMP1, TMP0			// Branch if result is true.
+  |  b <4
   |
-  |->cont_condf:
-  |  NYI
+  |->cont_condf:			// RA = resultptr
+  |  lwz TMP0, 0(RA)
+  |   li TMP1, LJ_TFALSE
+  |  cmplw TMP0, TMP1			// Branch if result is false.
+  |  b <4
   |
   |->vmeta_equal:
-  |  NYI
+  |  // CARG2, CARG3, CARG4 are already set by BC_ISEQV/BC_ISNEV.
+  |  subi PC, PC, 4
+  |   stw BASE, L->base
+  |  mr CARG1, L
+  |   stw PC, SAVE_PC
+  |  bl extern lj_meta_equal  // (lua_State *L, GCobj *o1, *o2, int ne)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |  b <3
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -1255,17 +1286,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQV: case BC_ISNEV:
     vk = op == BC_ISEQV;
     |  // RA = src1*8, RD = src2*8, JMP with RD = target
-    |  evlddx TMP0, BASE, RA
+    |  evlddx CARG2, BASE, RA
     |   addi PC, PC, 4
-    |  evlddx TMP1, BASE, RD
+    |  evlddx CARG3, BASE, RD
     |   addis TMP3, PC, -(BCBIAS_J*4 >> 16)
-    |   lwz INS, -4(PC)
-    |  evmergehi RB, TMP0, TMP1
-    |   decode_RD4 TMP2, INS
+    |   lwz TMP2, -4(PC)
+    |  evmergehi RB, CARG2, CARG3
+    |   decode_RD4 TMP2, TMP2
     |  checknum RB
     |   add TMP2, TMP2, TMP3
     |  checkanyfail >5
-    |  efdcmpeq TMP0, TMP1
+    |  efdcmpeq CARG2, CARG3
     if (vk) {
       |  iselgt PC, TMP2, PC
     } else {
@@ -1275,7 +1306,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     |
     |5:  // Either or both types are not numbers.
-    |  evcmpeq TMP0, TMP1
+    |  evcmpeq CARG2, CARG3
     |   not TMP3, RB
     |   cmplwi cr1, TMP3, ~LJ_TISPRI		// Primitive?
     |  crorc 4*cr7+lt, 4*cr0+so, 4*cr0+lt	// 1: Same tv or different type.
@@ -1298,12 +1329,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |  // Different tables or userdatas. Need to check __eq metamethod.
     |  // Field metatable must be at same offset for GCtab and GCudata!
-    |  lwz TAB:TMP3, TAB:TMP1->metatable
-    |   li RB, 1-vk			// ne = 0 or 1.
-    |  cmplwi TAB:TMP3, 0
+    |  lwz TAB:TMP2, TAB:CARG2->metatable
+    |   li CARG4, 1-vk			// ne = 0 or 1.
+    |  cmplwi TAB:TMP2, 0
     |  beq <1				// No metatable?
-    |  lbz TMP0, TAB:TMP3->nomm
-    |  andi. TMP0, TMP0, 1<<MM_eq
+    |  lbz TMP2, TAB:TMP2->nomm
+    |  andi. TMP2, TMP2, 1<<MM_eq
     |  bne <1				// Or 'no __eq' flag set?
     |  mr PC, SAVE0			// Restore old PC.
     |  b ->vmeta_equal			// Handle __eq metamethod.
