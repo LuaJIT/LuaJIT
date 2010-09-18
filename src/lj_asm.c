@@ -1148,7 +1148,8 @@ static void asm_fusearef(ASMState *as, IRIns *ir, RegSet allow)
     /* Fuse a constant ADD (e.g. t[i+1]) into the offset.
     ** Doesn't help much without ABCelim, but reduces register pressure.
     */
-    if (mayfuse(as, ir->op2) && ra_noreg(irx->r) &&
+    if (!LJ_64 &&  /* Has bad effects with negative index on x64. */
+	mayfuse(as, ir->op2) && ra_noreg(irx->r) &&
 	irx->o == IR_ADD && irref_isk(irx->op2)) {
       as->mrm.ofs += 8*IR(irx->op2)->i;
       as->mrm.idx = (uint8_t)ra_alloc1(as, irx->op1, allow);
@@ -1236,7 +1237,7 @@ static void asm_fusestrref(ASMState *as, IRIns *ir, RegSet allow)
   } else {
     Reg r;
     /* Fuse a constant add into the offset, e.g. string.sub(s, i+10). */
-    if (!LJ_64 &&  /* NYI: has bad effects with negative index on x64. */
+    if (!LJ_64 &&  /* Has bad effects with negative index on x64. */
 	mayfuse(as, ir->op2) && irr->o == IR_ADD && irref_isk(irr->op2)) {
       as->mrm.ofs += IR(irr->op2)->i;
       r = ra_alloc1(as, irr->op1, allow);
