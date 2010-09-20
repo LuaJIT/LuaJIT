@@ -37,54 +37,79 @@ typedef enum {
 
 /* -- ALOAD/HLOAD forwarding and ASTORE/HSTORE elimination ---------------- */
 
+/* Alias analysis for two different table references. */
+static AliasRet aa_table(jit_State *J, IRRef ta, IRRef tb)
+{
+  IRIns *ir, *taba = IR(ta), *tabb = IR(tb);
+  int newa, newb;
+  lua_assert(ta != tb);
+  /* Disambiguate new allocations. */
+  newa = (taba->o == IR_TNEW || taba->o == IR_TDUP);
+  newb = (tabb->o == IR_TNEW || tabb->o == IR_TDUP);
+  if (newa && newb)
+    return ALIAS_NO;  /* Two different allocations never alias. */
+  if (newb) {  /* At least one allocation? */
+    IRRef tmp = ta; ta = tb; tb = tmp;
+  } else if (!newa) {
+    return ALIAS_MAY;  /* Anything else: we just don't know. */
+  }
+  /* Now ta holds the allocation, tb the other table reference.
+  ** The allocation might be stored and reloaded as tb. So perform a
+  ** simplified escape analysis: check for intervening stores which have
+  ** the allocation as the right operand.
+  */
+  for (ir = IR(ta+1); ir < IR(tb); ir++)
+    if (ir->op2 == ta &&
+	(ir->o == IR_ASTORE || ir->o == IR_HSTORE ||
+	 ir->o == IR_USTORE || ir->o == IR_FSTORE))
+      return ALIAS_MAY;  /* Allocation was stored and might alias. */
+  return ALIAS_NO;  /* Allocation doesn't alias the other reference. */
+}
+
 /* Alias analysis for array and hash access using key-based disambiguation. */
 static AliasRet aa_ahref(jit_State *J, IRIns *refa, IRIns *refb)
 {
   IRRef ka = refa->op2;
   IRRef kb = refb->op2;
   IRIns *keya, *keyb;
+  IRRef ta, tb;
   if (refa == refb)
     return ALIAS_MUST;  /* Shortcut for same refs. */
   keya = IR(ka);
   if (keya->o == IR_KSLOT) { ka = keya->op1; keya = IR(ka); }
   keyb = IR(kb);
   if (keyb->o == IR_KSLOT) { kb = keyb->op1; keyb = IR(kb); }
+  ta = (refa->o==IR_HREFK || refa->o==IR_AREF) ? IR(refa->op1)->op1 : refa->op1;
+  tb = (refb->o==IR_HREFK || refb->o==IR_AREF) ? IR(refb->op1)->op1 : refb->op1;
   if (ka == kb) {
     /* Same key. Check for same table with different ref (NEWREF vs. HREF). */
-    IRIns *ta = refa;
-    IRIns *tb = refb;
-    if (ta->o == IR_HREFK || ta->o == IR_AREF) ta = IR(ta->op1);
-    if (tb->o == IR_HREFK || tb->o == IR_AREF) tb = IR(tb->op1);
-    if (ta->op1 == tb->op1)
+    if (ta == tb)
       return ALIAS_MUST;  /* Same key, same table. */
     else
-      return ALIAS_MAY;  /* Same key, possibly different table. */
+      return aa_table(J, ta, tb);  /* Same key, possibly different table. */
   }
   if (irref_isk(ka) && irref_isk(kb))
     return ALIAS_NO;  /* Different constant keys. */
   if (refa->o == IR_AREF) {
     /* Disambiguate array references based on index arithmetic. */
+    int32_t ofsa = 0, ofsb = 0;
+    IRRef basea = ka, baseb = kb;
     lua_assert(refb->o == IR_AREF);
-    if (refa->op1 == refb->op1) {
-      /* Same table, different non-const array keys. */
-      int32_t ofsa = 0, ofsb = 0;
-      IRRef basea = ka, baseb = kb;
-      /* Gather base and offset from t[base] or t[base+-ofs]. */
-      if (keya->o == IR_ADD && irref_isk(keya->op2)) {
-	basea = keya->op1;
-	ofsa = IR(keya->op2)->i;
-	if (basea == kb && ofsa != 0)
-	  return ALIAS_NO;  /* t[base+-ofs] vs. t[base]. */
-      }
-      if (keyb->o == IR_ADD && irref_isk(keyb->op2)) {
-	baseb = keyb->op1;
-	ofsb = IR(keyb->op2)->i;
-	if (ka == baseb && ofsb != 0)
-	  return ALIAS_NO;  /* t[base] vs. t[base+-ofs]. */
-      }
-      if (basea == baseb && ofsa != ofsb)
-	return ALIAS_NO;  /* t[base+-o1] vs. t[base+-o2] and o1 != o2. */
+    /* Gather base and offset from t[base] or t[base+-ofs]. */
+    if (keya->o == IR_ADD && irref_isk(keya->op2)) {
+      basea = keya->op1;
+      ofsa = IR(keya->op2)->i;
+      if (basea == kb && ofsa != 0)
+	return ALIAS_NO;  /* t[base+-ofs] vs. t[base]. */
     }
+    if (keyb->o == IR_ADD && irref_isk(keyb->op2)) {
+      baseb = keyb->op1;
+      ofsb = IR(keyb->op2)->i;
+      if (ka == baseb && ofsb != 0)
+	return ALIAS_NO;  /* t[base] vs. t[base+-ofs]. */
+    }
+    if (basea == baseb && ofsa != ofsb)
+      return ALIAS_NO;  /* t[base+-o1] vs. t[base+-o2] and o1 != o2. */
   } else {
     /* Disambiguate hash references based on the type of their keys. */
     lua_assert((refa->o==IR_HREF || refa->o==IR_HREFK || refa->o==IR_NEWREF) &&
@@ -92,7 +117,10 @@ static AliasRet aa_ahref(jit_State *J, IRIns *refa, IRIns *refb)
     if (!irt_sametype(keya->t, keyb->t))
       return ALIAS_NO;  /* Different key types. */
   }
-  return ALIAS_MAY;  /* Anything else: we just don't know. */
+  if (ta == tb)
+    return ALIAS_MAY;  /* Same table, cannot disambiguate keys. */
+  else
+    return aa_table(J, ta, tb);  /* Try to disambiguate tables. */
 }
 
 /* Array and hash load forwarding. */
