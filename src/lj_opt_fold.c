@@ -1233,23 +1233,15 @@ LJFOLDF(fwd_href_tdup)
 }
 
 /* We can safely FOLD/CSE array/hash refs and field loads, since there
-** are no corresponding stores. But NEWREF may invalidate all of them.
-** Lacking better disambiguation for table references, these optimizations
-** are simply disabled across any NEWREF.
+** are no corresponding stores. But we need to check for any NEWREF with
+** an aliased table, as it may invalidate all of the pointers and fields.
 ** Only HREF needs the NEWREF check -- AREF and HREFK already depend on
 ** FLOADs. And NEWREF itself is treated like a store (see below).
 */
-LJFOLD(HREF any any)
-LJFOLDF(cse_href)
-{
-  TRef tr = lj_opt_cse(J);
-  return tref_ref(tr) < J->chain[IR_NEWREF] ? EMITFOLD : tr;
-}
-
 LJFOLD(FLOAD TNEW IRFL_TAB_ASIZE)
 LJFOLDF(fload_tab_tnew_asize)
 {
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fins->op1 > J->chain[IR_NEWREF])
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && lj_opt_fwd_tptr(J, fins->op1))
     return INTFOLD(fleft->op1);
   return NEXTFOLD;
 }
@@ -1257,7 +1249,7 @@ LJFOLDF(fload_tab_tnew_asize)
 LJFOLD(FLOAD TNEW IRFL_TAB_HMASK)
 LJFOLDF(fload_tab_tnew_hmask)
 {
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fins->op1 > J->chain[IR_NEWREF])
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && lj_opt_fwd_tptr(J, fins->op1))
     return INTFOLD((1 << fleft->op2)-1);
   return NEXTFOLD;
 }
@@ -1265,7 +1257,7 @@ LJFOLDF(fload_tab_tnew_hmask)
 LJFOLD(FLOAD TDUP IRFL_TAB_ASIZE)
 LJFOLDF(fload_tab_tdup_asize)
 {
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fins->op1 > J->chain[IR_NEWREF])
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && lj_opt_fwd_tptr(J, fins->op1))
     return INTFOLD((int32_t)ir_ktab(IR(fleft->op1))->asize);
   return NEXTFOLD;
 }
@@ -1273,11 +1265,12 @@ LJFOLDF(fload_tab_tdup_asize)
 LJFOLD(FLOAD TDUP IRFL_TAB_HMASK)
 LJFOLDF(fload_tab_tdup_hmask)
 {
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fins->op1 > J->chain[IR_NEWREF])
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && lj_opt_fwd_tptr(J, fins->op1))
     return INTFOLD((int32_t)ir_ktab(IR(fleft->op1))->hmask);
   return NEXTFOLD;
 }
 
+LJFOLD(HREF any any)
 LJFOLD(FLOAD any IRFL_TAB_ARRAY)
 LJFOLD(FLOAD any IRFL_TAB_NODE)
 LJFOLD(FLOAD any IRFL_TAB_ASIZE)
@@ -1285,7 +1278,7 @@ LJFOLD(FLOAD any IRFL_TAB_HMASK)
 LJFOLDF(fload_tab_ah)
 {
   TRef tr = lj_opt_cse(J);
-  return tref_ref(tr) < J->chain[IR_NEWREF] ? EMITFOLD : tr;
+  return lj_opt_fwd_tptr(J, tref_ref(tr)) ? tr : EMITFOLD;
 }
 
 /* Strings are immutable, so we can safely FOLD/CSE the related FLOAD. */

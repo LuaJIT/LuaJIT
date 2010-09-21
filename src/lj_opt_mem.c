@@ -277,6 +277,20 @@ int LJ_FASTCALL lj_opt_fwd_href_nokey(jit_State *J)
   return 1;  /* No conflict. Can fold to niltv. */
 }
 
+/* Check whether there's no aliasing NEWREF for the left operand. */
+int LJ_FASTCALL lj_opt_fwd_tptr(jit_State *J, IRRef lim)
+{
+  IRRef ta = fins->op1;
+  IRRef ref = J->chain[IR_NEWREF];
+  while (ref > lim) {
+    IRIns *newref = IR(ref);
+    if (ta == newref->op1 || aa_table(J, ta, newref->op1) != ALIAS_NO)
+      return 0;  /* Conflict. */
+    ref = newref->prev;
+  }
+  return 1;  /* No conflict. Can safely FOLD/CSE. */
+}
+
 /* ASTORE/HSTORE elimination. */
 TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J)
 {
