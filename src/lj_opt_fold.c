@@ -374,6 +374,14 @@ LJFOLDF(kfold_intcomp)
   }
 }
 
+LJFOLD(UGE any KINT)
+LJFOLDF(kfold_intcomp0)
+{
+  if (fright->i == 0)
+    return DROPFOLD;
+  return NEXTFOLD;
+}
+
 LJFOLD(CALLN CARG IRCALL_lj_str_cmp)
 LJFOLDF(kfold_strcmp)
 {
