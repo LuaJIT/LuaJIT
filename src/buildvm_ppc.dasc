@@ -391,12 +391,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  rlwinm sp, CARG1, 0, 0, 29
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  lwz L, SAVE_L
+  |     evsplati TISNUM, LJ_TISNUM+1	// Setup type comparison constants.
+  |     evsplati TISFUNC, LJ_TFUNC
+  |     lus TOBIT, 0x4338
+  |     evsplati TISTAB, LJ_TTAB
+  |     li TMP0, 0
   |  lwz BASE, L->base
-  |  li TMP1, LJ_TFALSE
+  |     evmergelo TOBIT, TOBIT, TMP0
   |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |     evsplati TISSTR, LJ_TSTR
+  |  li TMP1, LJ_TFALSE
+  |     evsplati TISNIL, LJ_TNIL
   |    li_vmstate INTERP
   |  lwz PC, FRAME_PC(BASE)		// Fetch PC of previous frame.
-  |  subi RA, BASE, 8			// Results start at BASE-8.
+  |  la RA, -8(BASE)			// Results start at BASE-8.
   |   addi DISPATCH, DISPATCH, GG_G2DISP
   |  stw TMP1, 0(RA)			// Prepend false to error message.
   |  li RD, 16				// 2 results: false + error message.
