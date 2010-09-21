@@ -38,7 +38,7 @@
 |.define TISFUNC,	r25
 |.define TISNIL,	r26
 |.define TOBIT,		r27
-|.define ZERO,		TOBIT   // Zero in lo word.
+|.define ZERO,		TOBIT	// Zero in lo word.
 |.endif
 |
 |// The following temporaries are not saved across C calls, except for RA.
