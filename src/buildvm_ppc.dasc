@@ -542,12 +542,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub BASE, BASE, TMP1		// Restore caller BASE.
   |    lwz LFUNC:TMP1, FRAME_FUNC(BASE)
   |   subi TMP2, RD, 8
-  |  mtctr TMP0
   |    lwz PC, -16(RB)			// Restore PC from [cont|PC].
   |    lwz TMP1, LFUNC:TMP1->pc
   |   evstddx TISNIL, RA, TMP2		// Ensure one valid arg.
   |    lwz KBASE, PC2PROTO(k)(TMP1)
   |  // BASE = base, RA = resultptr, RB = meta base
+  |  mtctr TMP0
   |  bctr				// Jump to continuation.
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
