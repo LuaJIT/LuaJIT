@@ -43,6 +43,7 @@ static AliasRet aa_table(jit_State *J, IRRef ta, IRRef tb)
   IRIns *ir, *taba = IR(ta), *tabb = IR(tb);
   int newa, newb;
   lua_assert(ta != tb);
+  lua_assert(irt_istab(taba->t) && irt_istab(tabb->t));
   /* Disambiguate new allocations. */
   newa = (taba->o == IR_TNEW || taba->o == IR_TDUP);
   newb = (tabb->o == IR_TNEW || tabb->o == IR_TDUP);
@@ -435,12 +436,14 @@ doemit:
 ** Field loads are cheap and field stores are rare.
 ** Simple disambiguation based on field types is good enough.
 */
-static AliasRet aa_fref(IRIns *refa, IRIns *refb)
+static AliasRet aa_fref(jit_State *J, IRIns *refa, IRIns *refb)
 {
   if (refa->op2 != refb->op2)
     return ALIAS_NO;  /* Different fields. */
   if (refa->op1 == refb->op1)
     return ALIAS_MUST;  /* Same field, same object. */
+  else if (refa->op2 >= IRFL_TAB_META && refa->op2 <= IRFL_TAB_NOMM)
+    return aa_table(J, refa->op1, refb->op1);  /* Disambiguate tables. */
   else
     return ALIAS_MAY;  /* Same field, possibly different object. */
 }
@@ -457,7 +460,7 @@ TRef LJ_FASTCALL lj_opt_fwd_fload(jit_State *J)
   ref = J->chain[IR_FSTORE];
   while (ref > oref) {
     IRIns *store = IR(ref);
-    switch (aa_fref(fins, IR(store->op1))) {
+    switch (aa_fref(J, fins, IR(store->op1))) {
     case ALIAS_NO:   break;  /* Continue searching. */
     case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
@@ -487,7 +490,7 @@ TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J)
   IRRef ref = *refp;
   while (ref > fref) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
-    switch (aa_fref(xr, IR(store->op1))) {
+    switch (aa_fref(J, xr, IR(store->op1))) {
     case ALIAS_NO:
       break;  /* Continue searching. */
     case ALIAS_MAY:
