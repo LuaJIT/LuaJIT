@@ -1225,9 +1225,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  efddiv CRET2, CARG2, CARG4; evmergehi CRET1, CRET2, CRET2; blr
   |2:
   |   cmplwi CARG5, 5; beq >1; bgt >2
-  |  evmr CARG3, CARG2; efddiv CRET2, CARG2, CARG4
+  |  evmr CARG3, CARG2; efddiv CRET2, CARG2, CARG4; evmr RB, CARG4
   |  mflr SAVE0; bl ->vm_floor; mtlr SAVE0
-  |  efdmul CRET2, CRET2, CARG4; efdsub CRET2, CARG3, CRET2
+  |  efdmul CRET2, CRET2, RB; efdsub CRET2, CARG3, CRET2
   |  evmergehi CRET1, CRET2, CRET2; blr
   |1:
   |  b extern pow
