@@ -37,6 +37,8 @@
 |.define TISTAB,	r24
 |.define TISFUNC,	r25
 |.define TISNIL,	r26
+|.define TOBIT,		r27
+|.define ZERO,		TOBIT   // Zero in lo word.
 |.endif
 |
 |// The following temporaries are not saved across C calls, except for RA.
@@ -476,13 +478,16 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz TMP1, L->top
   |    evsplati TISFUNC, LJ_TFUNC
   |  add PC, PC, BASE
-  |    li_vmstate INTERP
   |    evsplati TISTAB, LJ_TTAB
+  |    lus TOBIT, 0x4338
+  |    li TMP0, 0
   |  sub PC, PC, TMP2			// PC = frame delta + frame type
-  |    st_vmstate
   |    evsplati TISSTR, LJ_TSTR
   |   sub NARGS8:RC, TMP1, BASE
+  |    evmergelo TOBIT, TOBIT, TMP0
+  |    li_vmstate INTERP
   |    evsplati TISNIL, LJ_TNIL
+  |    st_vmstate
   |
   |->vm_call_dispatch:
   |  // TMP2 = old base, BASE = new base, RC = nargs*8, PC = caller PC
@@ -500,7 +505,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
   |  saveregs
   |  mr L, CARG1
-  |  mtctr CARG4
   |   lwz TMP0, L:CARG1->stack
   |  stw CARG1, SAVE_L
   |   lwz TMP1, L->top
@@ -512,6 +516,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   stw TMP0, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |  stw TMP2, SAVE_ERRF		// No error function.
   |    stw TMP1, SAVE_CFRAME
+  |  mtctr CARG4
   |  bctrl			// (lua_State *L, lua_CFunction func, void *ud)
   |  mr. BASE, CRET1
   |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
