@@ -2328,18 +2328,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   lwz INS, -4(PC)
     |  cmpwi RD, 8
     |   subi TMP2, BASE, 8
+    |   subi RC, RD, 8
     |   decode_RB8 RB, INS
     |  beq >3
     |   li TMP1, 0
     |2:
     |  addi TMP3, TMP1, 8
     |   evlddx TMP0, RA, TMP1
-    |  cmpw TMP3, RD
+    |  cmpw TMP3, RC
     |   evstddx TMP0, TMP2, TMP1
     |  beq >3
     |  addi TMP1, TMP3, 8
     |   evlddx TMP0, RA, TMP3
-    |  cmpw TMP1, RD
+    |  cmpw TMP1, RC
     |   evstddx TMP0, TMP2, TMP3
     |  bne <2
     |3:
