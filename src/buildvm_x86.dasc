@@ -1722,6 +1722,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov FCARG2, PC
   |  mov FCARG1, L:RB
   |  call extern lj_state_growstack@8	// (lua_State *L, int n)
+  |.if X64
+  |  mov L:PC, TMP1
+  |.else
+  |  mov L:PC, ARG1
+  |.endif
   |  mov BASE, L:RB->base
   |  jmp <4				// Retry the stack move.
   |.endmacro
