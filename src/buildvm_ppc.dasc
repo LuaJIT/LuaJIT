@@ -446,7 +446,46 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_resume:				// Setup C frame and resume thread.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1 = 0, ptrdiff_t ef = 0)
+  |  saveregs
+  |  mr L, CARG1
+  |    lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |  mr BASE, CARG2
+  |    lbz TMP1, L->status
+  |   stw L, SAVE_L
+  |  li PC, FRAME_CP
+  |  addi TMP0, sp, CFRAME_RESUME
+  |    addi DISPATCH, DISPATCH, GG_G2DISP
+  |   stw CARG3, SAVE_NRES
+  |    cmplwi TMP1, 0
+  |   stw CARG3, SAVE_ERRF
+  |  stw TMP0, L->cframe
+  |   stw CARG3, SAVE_CFRAME
+  |   stw CARG1, SAVE_PC		// Any value outside of bytecode is ok.
+  |    beq >3
+  |
+  |  // Resume after yield (like a return).
+  |  mr RA, BASE
+  |   lwz BASE, L->base
+  |    evsplati TISNUM, LJ_TISNUM+1	// Setup type comparison constants.
+  |   lwz TMP1, L->top
+  |    evsplati TISFUNC, LJ_TFUNC
+  |    lus TOBIT, 0x4338
+  |    evsplati TISTAB, LJ_TTAB
+  |  lwz PC, FRAME_PC(BASE)
+  |    li TMP2, 0
+  |    evsplati TISSTR, LJ_TSTR
+  |   sub RD, TMP1, BASE
+  |    evmergelo TOBIT, TOBIT, TMP2
+  |    stb TMP3, L->status
+  |  andi. TMP0, PC, FRAME_TYPE
+  |    li_vmstate INTERP
+  |   addi RD, RD, 8
+  |    evsplati TISNIL, LJ_TNIL
+  |   mr MULTRES, RD
+  |    st_vmstate
+  |  beq ->BC_RET_Z
+  |  b ->vm_return
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
   |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
@@ -491,7 +530,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_call_dispatch:
   |  // TMP2 = old base, BASE = new base, RC = nargs*8, PC = caller PC
-  |  // NYI: reschedule.
   |  li TMP0, -8
   |  evlddx LFUNC:RB, BASE, TMP0
   |  checkfunc LFUNC:RB
