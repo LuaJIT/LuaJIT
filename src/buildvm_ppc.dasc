@@ -1128,13 +1128,53 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
-  |  NYI
+  |  lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
+  |  andi. TMP0, TMP3, HOOK_ACTIVE	// Hook already active?
+  |  beq >1
+  |5:  // Re-dispatch to static ins.
+  |  addi TMP1, TMP1, GG_DISP2STATIC	// Assumes decode_OP4 TMP1, INS.
+  |  lwzx TMP0, DISPATCH, TMP1
+  |  mtctr TMP0
+  |  bctr
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
-  |  NYI
+  |  lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
+  |  lwz TMP2, DISPATCH_GL(hookcount)(DISPATCH)
+  |  andi. TMP0, TMP3, HOOK_ACTIVE	// Hook already active?
+  |   rlwinm TMP0, TMP3, 31-LUA_HOOKLINE, 31, 0
+  |  bne <5
+  |
+  |   cmpwi cr1, TMP0, 0
+  |  addic. TMP2, TMP2, -1
+  |   beq cr1, <5
+  |  stw TMP2, DISPATCH_GL(hookcount)(DISPATCH)
+  |  beq >1
+  |   bge cr1, <5
+  |1:
+  |  mr CARG1, L
+  |   stw MULTRES, SAVE_MULTRES
+  |  mr CARG2, PC
+  |   stw BASE, L->base
+  |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
+  |  bl extern lj_dispatch_ins		// (lua_State *L, const BCIns *pc)
+  |3:
+  |  lwz BASE, L->base
+  |4:  // Re-dispatch to static ins.
+  |  lwz INS, -4(PC)
+  |  decode_OP4 TMP1, INS
+  |   decode_RB8 RB, INS
+  |  addi TMP1, TMP1, GG_DISP2STATIC
+  |   decode_RD8 RD, INS
+  |  lwzx TMP0, DISPATCH, TMP1
+  |   decode_RA8 RA, INS
+  |   decode_RC8 RC, INS
+  |  mtctr TMP0
+  |  bctr
   |
   |->cont_hook:				// Continue from hook yield.
-  |  NYI
+  |  addi PC, PC, 4
+  |  lwz MULTRES, -20(RB)		// Restore MULTRES for *M ins.
+  |  b <4
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
