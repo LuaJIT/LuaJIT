@@ -1182,12 +1182,32 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-  |  NYI
+  |  mr CARG2, PC
+#if LJ_HASJIT
+  |  b >1
+#endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
 #if LJ_HASJIT
-  |  NYI
+  |  ori CARG2, PC, 1
+  |1:
 #endif
+  |  add TMP0, BASE, RC
+  |   stw PC, SAVE_PC
+  |  mr CARG1, L
+  |   stw BASE, L->base
+  |  sub RA, RA, BASE
+  |   stw TMP0, L->top
+  |  bl extern lj_dispatch_call		// (lua_State *L, const BCIns *pc)
+  |  // Returns ASMFunction.
+  |  lwz BASE, L->base
+  |   lwz TMP0, L->top
+  |   stw ZERO, SAVE_PC			// Invalidate for subsequent line hook.
+  |  sub NARGS8:RC, TMP0, BASE
+  |  add RA, BASE, RA
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+  |  mtctr CRET1
+  |  bctr
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
