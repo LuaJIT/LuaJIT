@@ -32,7 +32,7 @@
 **
 ** - EXT requires unwind tables for *all* functions on the C stack between
 **   the pcall/catch and the error/throw. This is the default on x64,
-**   but needs to be manually enabled on x86 for non-C++ code.
+**   but needs to be manually enabled on x86/PPC for non-C++ code.
 **
 ** - INT is faster when actually throwing errors (but this happens rarely).
 **   Setting up error handlers is zero-cost in any case.
@@ -48,9 +48,9 @@
 **   the wrapper function feature. Lua errors thrown through C++ frames
 **   cannot be caught by C++ code and C++ destructors are not run.
 **
-** INT is the default on x86 systems, EXT is the default on x64 systems.
+** EXT is the default on x64 systems, INT is the default on all other systems.
 **
-** EXT can only be manually enabled on POSIX/x86 systems using DWARF2 stack
+** EXT can be manually enabled on POSIX systems using GCC and DWARF2 stack
 ** unwinding with -DLUAJIT_UNWIND_EXTERNAL. *All* C code must be compiled
 ** with -funwind-tables (or -fexceptions). This includes LuaJIT itself (set
 ** TARGET_CFLAGS), all of your C/Lua binding code, all loadable C modules
@@ -64,11 +64,7 @@
 */
 
 #if defined(__GNUC__)
-#if LJ_TARGET_X86
-#ifdef LUAJIT_UNWIND_EXTERNAL
-#define LJ_UNWIND_EXT	1
-#endif
-#elif LJ_TARGET_X64
+#if LJ_TARGET_X64 || defined(LUAJIT_UNWIND_EXTERNAL)
 #define LJ_UNWIND_EXT	1
 #endif
 #elif defined(LUA_USE_WIN)
@@ -579,15 +575,15 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
 #if LJ_UNWIND_EXT
     cf = err_unwind(L, cf, errcode);
     if (cf) {
-      _Unwind_SetGR(ctx, 0, errcode);
+      _Unwind_SetGR(ctx, LJ_TARGET_EHRETREG, errcode);
       _Unwind_SetIP(ctx, (_Unwind_Ptr)(cframe_unwind_ff(cf) ?
 				       lj_vm_unwind_ff_eh :
 				       lj_vm_unwind_c_eh));
       return _URC_INSTALL_CONTEXT;
     }
 #else
-    /* This is not the proper way to escape from the unwinder. We get away
-    ** with it on x86 because the interpreter restores all callee-saved regs.
+    /* This is not the proper way to escape from the unwinder. We get away with
+    ** it on x86/PPC because the interpreter restores all callee-saved regs.
     */
     lj_err_throw(L, errcode);
 #endif
@@ -713,8 +709,8 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
   ** unwound. We have no choice but to call the panic function and exit.
   **
   ** Usually this is caused by a C function without unwind information.
-  ** This should never happen on x64, but may happen on x86 if you've
-  ** manually enabled LUAJIT_UNWIND_EXTERNAL and forgot to recompile *every*
+  ** This should never happen on x64, but may happen if you've manually
+  ** enabled LUAJIT_UNWIND_EXTERNAL and forgot to recompile *every*
   ** non-C++ file with -funwind-tables.
   */
   if (G(L)->panic)
