@@ -104,10 +104,6 @@ typedef uintptr_t BloomFilter;
 
 #if defined(__GNUC__)
 
-#if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
-#error "sorry, need GCC 3.4 or newer"
-#endif
-
 #define LJ_NORET	__attribute__((noreturn))
 #define LJ_ALIGN(n)	__attribute__((aligned(n)))
 #define LJ_INLINE	inline
@@ -140,7 +136,7 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 #define lj_fls(x)	((uint32_t)(__builtin_clz(x)^31))
 #endif
 
-#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 3
+#if (__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
   return (uint32_t)__builtin_bswap32((int32_t)x);

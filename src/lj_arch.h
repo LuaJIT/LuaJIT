@@ -86,6 +86,23 @@
 #error "No target architecture defined"
 #endif
 
+/* Check for minimum required compiler versions. */
+#if defined(__GNUC__)
+#if LJ_TARGET_X64
+#if __GNUC__ < 4
+#error "Need at least GCC 4.0 or newer"
+#endif
+#elif LJ_TARGET_PPC
+#if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
+#error "Need at least GCC 4.3 or newer"
+#endif
+#else
+#if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
+#error "Need at least GCC 3.4 or newer"
+#endif
+#endif
+#endif
+
 /* Check target-specific constraints. */
 #ifndef _BUILDVM_H
 #if LJ_TARGET_PPC
