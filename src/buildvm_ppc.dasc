@@ -878,22 +878,30 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_1, name
   |->ff_ .. name:
-  |  NYI
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG1, 0(BASE)
+  |  blt ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_2, name
   |->ff_ .. name:
-  |  NYI
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG1, 0(BASE)
+  |   evldd CARG2, 8(BASE)
+  |  blt ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_n, name
   |  .ffunc_1 name
-  |  NYI
+  |  checknum CARG1
+  |  checkfail ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_nn, name
   |  .ffunc_2 name
-  |  NYI
+  |  evmergehi TMP0, CARG1, CARG2
+  |  checknum TMP0
+  |  checkanyfail ->fff_fallback
   |.endmacro
   |
   |.macro ffgccheck
@@ -978,10 +986,35 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |  // Fallthrough.
   |
+  |->fff_restv:
+  |  // CRET1 = TValue result.
+  |  lwz PC, FRAME_PC(BASE)
+  |   la RA, -8(BASE)
+  |  evstdd CRET1, 0(RA)
   |->fff_res1:
-  |  NYI
+  |  // RA = results, PC = return.
+  |  li RD, (1+1)*8
   |->fff_res:
-  |  NYI
+  |  // RA = results, RD = (nresults+1)*8, PC = return.
+  |  andi. TMP0, PC, FRAME_TYPE
+  |   mr MULTRES, RD
+  |  bne ->vm_return
+  |  lwz INS, -4(PC)
+  |  decode_RB8 RB, INS
+  |5:
+  |  cmplw RB, RD			// More results expected?
+  |   decode_RA8 TMP0, INS
+  |  bgt >6
+  |  ins_next1
+  |  // Adjust BASE. KBASE is assumed to be set for the calling frame.
+  |   sub BASE, RA, TMP0
+  |  ins_next2
+  |
+  |6:  // Fill up results with nil.
+  |  subi TMP1, RD, 8
+  |   addi RD, RD, 8
+  |  evstddx TISNIL, RA, TMP1
+  |  b <5
   |
   |.macro math_extern, func
   |  .ffunc math_ .. func
