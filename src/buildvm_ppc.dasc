@@ -2451,11 +2451,100 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  NYI
+    |  // RA = base*8, (RB = (nresults+1)*8 (2+1)*8, RC = (nargs+1)*8 (2+1)*8)
+#if LJ_HASJIT
+    |  // NYI: add hotloop, record BC_ITERN.
+#endif
+    |  add RA, BASE, RA
+    |  lwz TAB:RB, -12(RA)
+    |  lwz RC, -4(RA)			// Get index from control var.
+    |  lwz TMP0, TAB:RB->asize
+    |  lwz TMP1, TAB:RB->array
+    |   addi PC, PC, 4
+    |1:  // Traverse array part.
+    |  cmplw RC, TMP0
+    |   slwi TMP3, RC, 3
+    |  bge >5				// Index points after array part?
+    |  evlddx TMP2, TMP1, TMP3
+    |  checknil TMP2
+    |     lwz INS, -4(PC)
+    |  checkok >4
+    |   efdcfsi TMP0, RC
+    |    addi RC, RC, 1
+    |     addis TMP3, PC, -(BCBIAS_J*4 >> 16)
+    |  evstdd TMP2, 8(RA)
+    |     decode_RD4 TMP1, INS
+    |    stw RC, -4(RA)			// Update control var.
+    |     add PC, TMP1, TMP3
+    |   evstdd TMP0, 0(RA)
+    |3:
+    |  ins_next
+    |
+    |4:  // Skip holes in array part.
+    |  addi RC, RC, 1
+    |  b <1
+    |
+    |5:  // Traverse hash part.
+    |  lwz TMP1, TAB:RB->hmask
+    |  sub RC, RC, TMP0
+    |   lwz TMP2, TAB:RB->node
+    |6:
+    |  cmplw RC, TMP1			// End of iteration? Branch to ITERL+1.
+    |   slwi TMP3, RC, 5
+    |  bgt <3
+    |   slwi RB, RC, 3
+    |   sub TMP3, TMP3, RB
+    |  evlddx RB, TMP2, TMP3
+    |   add NODE:TMP3, TMP2, TMP3
+    |  checknil RB
+    |     lwz INS, -4(PC)
+    |  checkok >7
+    |   evldd TMP3, NODE:TMP3->key
+    |     addis TMP2, PC, -(BCBIAS_J*4 >> 16)
+    |  evstdd RB, 8(RA)
+    |    add RC, RC, TMP0
+    |     decode_RD4 TMP1, INS
+    |   evstdd TMP3, 0(RA)
+    |    addi RC, RC, 1
+    |     add PC, TMP1, TMP2
+    |    stw RC, -4(RA)			// Update control var.
+    |  b <3
+    |
+    |7:  // Skip holes in hash part.
+    |  addi RC, RC, 1
+    |  b <6
     break;
 
   case BC_ISNEXT:
-    |  NYI
+    |  // RA = base*8, RD = target (points to ITERN)
+    |  add RA, BASE, RA
+    |   li TMP2, -24
+    |  evlddx CFUNC:TMP1, RA, TMP2
+    |   lwz TMP2, -16(RA)
+    |    lwz TMP3, -8(RA)
+    |  evmergehi TMP0, CFUNC:TMP1, CFUNC:TMP1
+    |   cmpwi cr0, TMP2, LJ_TTAB
+    |  cmpwi cr1, TMP0, LJ_TFUNC
+    |    cmpwi cr6, TMP3, LJ_TNIL
+    |  bne cr1, >5
+    |  lbz TMP1, CFUNC:TMP1->ffid
+    |   crand 4*cr0+eq, 4*cr0+eq, 4*cr6+eq
+    |  cmpwi cr7, TMP1, FF_next_N
+    |    srwi TMP0, RD, 1
+    |  crand 4*cr0+eq, 4*cr0+eq, 4*cr7+eq
+    |    add TMP3, PC, TMP0
+    |  bne cr0, >5
+    |  stw ZERO, -4(RA)			// Initialize control var.
+    |    addis PC, TMP3, -(BCBIAS_J*4 >> 16)
+    |1:
+    |  ins_next
+    |5:  // Despecialize bytecode if any of the checks fail.
+    |  li TMP0, BC_JMP
+    |   li TMP1, BC_ITERC
+    |  stb TMP0, -1(PC)
+    |    addis PC, TMP3, -(BCBIAS_J*4 >> 16)
+    |   stb TMP1, 3(PC)
+    |  b <1
     break;
 
   case BC_VARG:
