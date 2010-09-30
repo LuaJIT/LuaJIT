@@ -2030,41 +2030,13 @@ static void parse_repeat(LexState *ls, BCLine line)
   scope_end(fs);  /* End loop scope. */
 }
 
-/* Parse body of a 'for' statement. */
-static void parse_for_body(LexState *ls, BCReg base, BCLine line,
-			   BCReg nvars, int isnum)
-{
-  FuncScope bl;
-  FuncState *fs = ls->fs;
-  BCPos loop, loopend;
-  var_add(ls, 3);  /* Hidden control variables. */
-  lex_check(ls, TK_do);
-  loop = isnum ? bcemit_AJ(fs, BC_FORI, base, NO_JMP) :
-		 bcemit_AJ(fs, BC_JMP, fs->freereg, NO_JMP);
-  scope_begin(fs, &bl, 0);  /* Scope for visible variables. */
-  var_add(ls, nvars);
-  bcreg_reserve(fs, nvars);
-  parse_block(ls);
-  scope_end(fs);
-  /* Perform loop inversion. Loop control instructions are at the end. */
-  if (isnum) {
-    loopend = bcemit_AJ(fs, BC_FORL, base, NO_JMP);
-    jmp_patchins(fs, loop, fs->pc);
-  } else {
-    jmp_patchins(fs, loop, fs->pc);
-    bcemit_ABC(fs, BC_ITERC, base+3, nvars+1, 2+1);
-    loopend = bcemit_AJ(fs, BC_ITERL, base+3, NO_JMP);
-    fs->bcbase[loopend-1].line = line;
-  }
-  fs->bcbase[loopend].line = line;  /* Fix line for control ins. */
-  jmp_patchins(fs, loopend, loop+1);
-}
-
 /* Parse numeric 'for'. */
 static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
 {
   FuncState *fs = ls->fs;
   BCReg base = fs->freereg;
+  FuncScope bl;
+  BCPos loop, loopend;
   /* Hidden control variables. */
   var_new_lit(ls, FORL_IDX, "(for index)");
   var_new_lit(ls, FORL_STOP, "(for limit)");
@@ -2081,7 +2053,51 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
     bcemit_AD(fs, BC_KSHORT, fs->freereg, 1);  /* Default step is 1. */
     bcreg_reserve(fs, 1);
   }
-  parse_for_body(ls, base, line, 1, 1);
+  var_add(ls, 3);  /* Hidden control variables. */
+  lex_check(ls, TK_do);
+  loop = bcemit_AJ(fs, BC_FORI, base, NO_JMP);
+  scope_begin(fs, &bl, 0);  /* Scope for visible variables. */
+  var_add(ls, 1);
+  bcreg_reserve(fs, 1);
+  parse_block(ls);
+  scope_end(fs);
+  /* Perform loop inversion. Loop control instructions are at the end. */
+  loopend = bcemit_AJ(fs, BC_FORL, base, NO_JMP);
+  fs->bcbase[loopend].line = line;  /* Fix line for control ins. */
+  jmp_patchins(fs, loopend, loop+1);
+  jmp_patchins(fs, loop, fs->pc);
+}
+
+/* Try to predict whether the iterator is next() and specialize the bytecode.
+** Detecting next() and pairs() by name is simplistic, but quite effective.
+** The interpreter backs off if the check for the closure fails at runtime.
+*/
+static int predict_next(LexState *ls, FuncState *fs, BCPos pc)
+{
+  BCIns ins = fs->bcbase[pc].ins;
+  GCstr *name;
+  cTValue *o;
+  switch (bc_op(ins)) {
+  case BC_MOV:
+    name = gco2str(gcref(var_get(ls, fs, bc_d(ins)).name));
+    break;
+  case BC_UGET:
+    name = gco2str(gcref(ls->vstack[fs->uvloc[bc_d(ins)].vidx].name));
+    break;
+  case BC_GGET:
+    /* There's no inverse index (yet), so lookup the strings. */
+    o = lj_tab_getstr(fs->kt, lj_str_newlit(ls->L, "pairs"));
+    if (o && tvisnum(o) && o->u32.lo == bc_d(ins))
+      return 1;
+    o = lj_tab_getstr(fs->kt, lj_str_newlit(ls->L, "next"));
+    if (o && tvisnum(o) && o->u32.lo == bc_d(ins))
+      return 1;
+    return 0;
+  default:
+    return 0;
+  }
+  return (name->len == 5 && !strcmp(strdata(name), "pairs")) ||
+	 (name->len == 4 && !strcmp(strdata(name), "next"));
 }
 
 /* Parse 'for' iterator. */
@@ -2091,7 +2107,10 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   ExpDesc e;
   BCReg nvars = 0;
   BCLine line;
-  BCReg base = fs->freereg;
+  BCReg base = fs->freereg + 3;
+  BCPos loop, loopend, exprpc = fs->pc;
+  FuncScope bl;
+  int isnext;
   /* Hidden control variables. */
   var_new_lit(ls, nvars++, "(for generator)");
   var_new_lit(ls, nvars++, "(for state)");
@@ -2104,7 +2123,22 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   line = ls->linenumber;
   assign_adjust(ls, 3, expr_list(ls, &e), &e);
   bcreg_bump(fs, 3);  /* The iterator needs another 3 slots (func + 2 args). */
-  parse_for_body(ls, base, line, nvars - 3, 0);
+  isnext = (nvars <= 5 && predict_next(ls, fs, exprpc));
+  var_add(ls, 3);  /* Hidden control variables. */
+  lex_check(ls, TK_do);
+  loop = bcemit_AJ(fs, isnext ? BC_ISNEXT : BC_JMP, base, NO_JMP);
+  scope_begin(fs, &bl, 0);  /* Scope for visible variables. */
+  var_add(ls, nvars-3);
+  bcreg_reserve(fs, nvars-3);
+  parse_block(ls);
+  scope_end(fs);
+  /* Perform loop inversion. Loop control instructions are at the end. */
+  jmp_patchins(fs, loop, fs->pc);
+  bcemit_ABC(fs, isnext ? BC_ITERN : BC_ITERC, base, nvars-3+1, 2+1);
+  loopend = bcemit_AJ(fs, BC_ITERL, base, NO_JMP);
+  fs->bcbase[loopend-1].line = line;  /* Fix line for control ins. */
+  fs->bcbase[loopend].line = line;
+  jmp_patchins(fs, loopend, loop+1);
 }
 
 /* Parse 'for' statement. */

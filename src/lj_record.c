@@ -2477,6 +2477,8 @@ void lj_record_ins(jit_State *J)
       break;
     }
     /* fallthrough */
+  case BC_ITERN:
+  case BC_ISNEXT:
   case BC_CAT:
   case BC_UCLO:
   case BC_FNEW:

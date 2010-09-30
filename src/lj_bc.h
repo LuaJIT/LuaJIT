@@ -154,6 +154,8 @@
   _(CALLMT,	base,	___,	lit,	call) \
   _(CALLT,	base,	___,	lit,	call) \
   _(ITERC,	base,	lit,	lit,	call) \
+  _(ITERN,	base,	lit,	lit,	call) \
+  _(ISNEXT,	base,	___,	jump,	___) \
   _(VARG,	base,	lit,	lit,	___) \
   \
   /* Returns. */ \
@@ -220,6 +222,9 @@ LJ_STATIC_ASSERT((int)BC_FUNCF + 1 == (int)BC_IFUNCF);
 LJ_STATIC_ASSERT((int)BC_FUNCF + 2 == (int)BC_JFUNCF);
 LJ_STATIC_ASSERT((int)BC_FUNCV + 1 == (int)BC_IFUNCV);
 LJ_STATIC_ASSERT((int)BC_FUNCV + 2 == (int)BC_JFUNCV);
+
+/* This solves a circular dependency problem, change as needed. */
+#define FF_next_N	15
 
 /* Stack slots used by FORI/FORL, relative to operand A. */
 enum {

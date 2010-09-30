@@ -240,6 +240,9 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
 
 /* -- Base library: iterators --------------------------------------------- */
 
+/* This solves a circular dependency problem -- change FF_next_N as needed. */
+LJ_STATIC_ASSERT((int)FF_next == FF_next_N);
+
 LJLIB_ASM(next)
 {
   lj_lib_checktab(L, 1);

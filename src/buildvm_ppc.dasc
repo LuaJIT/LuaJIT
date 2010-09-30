@@ -2450,6 +2450,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_call
     break;
 
+  case BC_ITERN:
+    |  NYI
+    break;
+
+  case BC_ISNEXT:
+    |  NYI
+    break;
+
   case BC_VARG:
     |  // RA = base*8, RB = (nresults+1)*8, RC = numparams*8
     |  lwz TMP0, FRAME_PC(BASE)
