@@ -140,6 +140,8 @@
 |// These basic macros should really be part of DynASM.
 |.macro srwi, rx, ry, n; rlwinm rx, ry, 32-n, n, 31; .endmacro
 |.macro slwi, rx, ry, n; rlwinm rx, ry, n, 0, 31-n; .endmacro
+|.macro rotlwi, rx, ry, n; rlwinm rx, ry, n, 0, 31; .endmacro
+|.macro rotlw, rx, ry, rn; rlwnm rx, ry, rn, 0, 31; .endmacro
 |.macro subi, rx, ry, i; addi rx, ry, -i; .endmacro
 |
 |// Trap for not-yet-implemented parts.
@@ -1103,45 +1105,66 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Bit library --------------------------------------------------------
   |
-  |.ffunc_n bit_tobit
-  |  NYI
-  |
   |.macro .ffunc_bit, name
-  |  .ffunc_n name
-  |  NYI
+  |  .ffunc_n bit_..name
+  |  efdadd CARG1, CARG1, TOBIT
   |.endmacro
+  |
+  |.ffunc_bit tobit
+  |->fff_resbit:
+  |  efdcfsi CRET1, CARG1
+  |  b ->fff_restv
   |
   |.macro .ffunc_bit_op, name, ins
   |  .ffunc_bit name
-  |  NYI
+  |   li TMP1, 8
+  |1:
+  |  evlddx CARG2, BASE, TMP1
+  |  cmplw cr1, TMP1, NARGS8:RC
+  |   checknum CARG2
+  |  bge cr1, ->fff_resbit
+  |   checkfail ->fff_fallback
+  |  efdadd CARG2, CARG2, TOBIT
+  |  ins CARG1, CARG1, CARG2
+  |   addi TMP1, TMP1, 8
+  |  b <1
   |.endmacro
   |
-  |.ffunc_bit_op bit_band, and
-  |.ffunc_bit_op bit_bor, or
-  |.ffunc_bit_op bit_bxor, xor
+  |.ffunc_bit_op band, and
+  |.ffunc_bit_op bor, or
+  |.ffunc_bit_op bxor, xor
   |
-  |.ffunc_bit bit_bswap
-  |  NYI
+  |.ffunc_bit bswap
+  |  rotlwi TMP0, CARG1, 8
+  |  rlwimi TMP0, CARG1, 24, 0, 7
+  |  rlwimi TMP0, CARG1, 24, 16, 23
+  |  efdcfsi CRET1, TMP0
+  |  b ->fff_restv
   |
-  |.ffunc_bit bit_bnot
-  |  NYI
+  |.ffunc_bit bnot
+  |  not TMP0, CARG1
+  |  efdcfsi CRET1, TMP0
+  |  b ->fff_restv
   |
-  |->fff_resbit:
-  |  NYI
-  |
-  |->fff_fallback_bit_op:
-  |  NYI
-  |
-  |.macro .ffunc_bit_sh, name, ins
-  |  .ffunc_nn name
-  |  NYI
+  |.macro .ffunc_bit_sh, name, ins, shmod
+  |  .ffunc_nn bit_..name
+  |  efdadd CARG2, CARG2, TOBIT
+  |   efdadd CARG1, CARG1, TOBIT
+  |.if shmod == 1
+  |  rlwinm CARG2, CARG2, 0, 27, 31
+  |.elif shmod == 2
+  |  neg CARG2, CARG2
+  |.endif
+  |  ins TMP0, CARG1, CARG2
+  |  efdcfsi CRET1, TMP0
+  |  b ->fff_restv
   |.endmacro
   |
-  |.ffunc_bit_sh bit_lshift, shl
-  |.ffunc_bit_sh bit_rshift, shr
-  |.ffunc_bit_sh bit_arshift, sar
-  |.ffunc_bit_sh bit_rol, rol
-  |.ffunc_bit_sh bit_ror, ror
+  |.ffunc_bit_sh lshift, slw, 1
+  |.ffunc_bit_sh rshift, srw, 1
+  |.ffunc_bit_sh arshift, sraw, 1
+  |.ffunc_bit_sh rol, rotlw, 0
+  |.ffunc_bit_sh ror, rotlw, 2
   |
   |//-----------------------------------------------------------------------
   |
