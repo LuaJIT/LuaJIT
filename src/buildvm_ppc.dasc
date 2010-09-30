@@ -1169,7 +1169,50 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->fff_fallback:			// Call fast function fallback handler.
-  |  NYI
+  |  // BASE = new base, RB = CFUNC, RC = nargs*8
+  |  lwz TMP3, CFUNC:RB->f
+  |    add TMP1, BASE, NARGS8:RC
+  |   lwz PC, FRAME_PC(BASE)		// Fallback may overwrite PC.
+  |    addi TMP0, TMP1, 8*LUA_MINSTACK-8
+  |     lwz TMP2, L->maxstack
+  |   stw PC, SAVE_PC			// Redundant (but a defined value).
+  |  cmplw TMP0, TMP2
+  |     stw BASE, L->base
+  |    stw TMP1, L->top
+  |   mr CARG1, L
+  |  bgt >5				// Need to grow stack.
+  |  mtctr TMP3
+  |  bctrl				// (lua_State *L)
+  |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
+  |  lwz BASE, L->base
+  |  cmpwi CRET1, 0
+  |   slwi RD, CRET1, 3
+  |   la RA, -8(BASE)
+  |  bgt ->fff_res			// Returned nresults+1?
+  |1:  // Returned 0: retry fast path.
+  |  lwz TMP0, L->top
+  |   lwz LFUNC:RB, FRAME_FUNC(BASE)
+  |  sub NARGS8:RC, TMP0, BASE
+  |  bne >2				// Returned -1?
+  |  ins_callt				// Returned 0: retry fast path.
+  |
+  |2:  // Reconstruct previous base for vmeta_call during tailcall.
+  |  andi. TMP0, PC, FRAME_TYPE
+  |   rlwinm TMP1, PC, 0, 0, 28
+  |  bne >3
+  |  lwz INS, -4(PC)
+  |  decode_RA8 TMP1, INS
+  |3:
+  |  sub TMP2, BASE, TMP1
+  |  b ->vm_call_dispatch		// Resolve again for tailcall.
+  |
+  |5:  // Grow stack for fallback handler.
+  |  mr CARG1, L
+  |  li CARG2, LUA_MINSTACK
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  lwz BASE, L->base
+  |  cmpw TMP0, TMP0			// Set 4*cr0+eq.
+  |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
   |  NYI
