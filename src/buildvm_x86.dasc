@@ -449,11 +449,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |  sub RD, 1
   |  jz >2
-  |1:
-  |  mov RB, [BASE+RA]			// Move results down.
+  |1:  // Move results down.
+  |.if X64
+  |  mov RBa, [BASE+RA]
+  |  mov [BASE-8], RBa
+  |.else
+  |  mov RB, [BASE+RA]
   |  mov [BASE-8], RB
   |  mov RB, [BASE+RA+4]
   |  mov [BASE-4], RB
+  |.endif
   |  add BASE, 8
   |  sub RD, 1
   |  jnz <1
@@ -769,19 +774,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov CARG3d, RA
   |  mov L:CARG1d, SAVE_L
   |  mov L:CARG1d->base, BASE
-  |  mov CARG2d, [RC+4]
-  |  mov RC, [RC]
-  |  mov [RB+4], CARG2d
-  |  mov [RB], RC
+  |  mov RCa, [RC]
+  |  mov [RB], RCa
   |  mov CARG2d, RB
   |.elif X64
   |  mov L:CARG1d, SAVE_L
   |  mov L:CARG1d->base, BASE
   |  mov CARG3d, RA
-  |  mov RA, [RC+4]
-  |  mov RC, [RC]
-  |  mov [RB+4], RA
-  |  mov [RB], RC
+  |  mov RAa, [RC]
+  |  mov [RB], RAa
   |  mov CARG2d, RB
   |.else
   |  mov ARG3, RA
@@ -850,10 +851,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jz >3
   |->cont_ra:				// BASE = base, RC = result
   |  movzx RA, PC_RA
+  |.if X64
+  |  mov RBa, [RC]
+  |  mov [BASE+RA*8], RBa
+  |.else
   |  mov RB, [RC+4]
   |  mov RC, [RC]
   |  mov [BASE+RA*8+4], RB
   |  mov [BASE+RA*8], RC
+  |.endif
   |  ins_next
   |
   |3:  // Call __index metamethod.
@@ -923,10 +929,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jz >3
   |  // NOBARRIER: lj_meta_tset ensures the table is not black.
   |  movzx RA, PC_RA
+  |.if X64
+  |  mov RBa, [BASE+RA*8]
+  |  mov [RC], RBa
+  |.else
   |  mov RB, [BASE+RA*8+4]
   |  mov RA, [BASE+RA*8]
   |  mov [RC+4], RB
   |  mov [RC], RA
+  |.endif
   |->cont_nop:				// BASE = base, (RC = result)
   |  ins_next
   |
@@ -935,10 +946,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RA, L:RB->top
   |  mov [RA-12], PC			// [cont|PC]
   |  movzx RC, PC_RA
-  |  mov RB, [BASE+RC*8+4]		// Copy value to third argument.
+  |  // Copy value to third argument.
+  |.if X64
+  |  mov RBa, [BASE+RC*8]
+  |  mov [RA+16], RBa
+  |.else
+  |  mov RB, [BASE+RC*8+4]
   |  mov RC, [BASE+RC*8]
   |  mov [RA+20], RB
   |  mov [RA+16], RC
+  |.endif
   |  lea PC, [RA+FRAME_CONT]
   |  sub PC, BASE
   |  mov LFUNC:RB, [RA-8]		// Guaranteed to be a function here.
@@ -1249,10 +1266,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RA, BASE
   |1:
   |  add RA, 8
+  |.if X64
+  |  mov RBa, [RA]
+  |  mov [RA-8], RBa
+  |.else
   |  mov RB, [RA+4]
   |  mov [RA-4], RB
   |  mov RB, [RA]
   |  mov [RA-8], RB
+  |.endif
   |  sub RD, 1
   |  jnz <1
   |2:
@@ -1377,11 +1399,18 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  call extern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
   |  // cTValue * returned in eax (RD).
   |  mov BASE, RB			// Restore BASE.
-  |  mov RB, [RD]			// Copy table slot.
+  |  // Copy table slot.
+  |.if X64
+  |  mov RBa, [RD]
+  |  mov PC, [BASE-4]
+  |  mov [BASE-8], RBa
+  |.else
+  |  mov RB, [RD]
   |  mov RD, [RD+4]
   |  mov PC, [BASE-4]
   |  mov [BASE-8], RB
   |  mov [BASE-4], RD
+  |.endif
   |  jmp ->fff_res1
   |
   |//-- Base library: conversions ------------------------------------------
@@ -1453,7 +1482,14 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // Flag returned in eax (RD).
   |  mov BASE, L:RB->base
   |  test RD, RD;  jz >3		// End of traversal?
-  |  mov RB, [BASE+8]			// Copy key and value to results.
+  |  // Copy key and value to results.
+  |.if X64
+  |  mov RBa, [BASE+8]
+  |  mov RDa, [BASE+16]
+  |  mov [BASE-8], RBa
+  |  mov [BASE], RDa
+  |.else
+  |  mov RB, [BASE+8]
   |  mov RD, [BASE+12]
   |  mov [BASE-8], RB
   |  mov [BASE-4], RD
@@ -1461,6 +1497,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RD, [BASE+20]
   |  mov [BASE], RB
   |  mov [BASE+4], RD
+  |.endif
   |->fff_res2:
   |  mov RD, 1+2
   |  jmp ->fff_res
@@ -1508,10 +1545,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  add RD, TAB:RB->array
   |1:
   |  cmp dword [RD+4], LJ_TNIL;  je ->fff_res0
-  |  mov RB, [RD]			// Copy array slot.
+  |  // Copy array slot.
+  |.if X64
+  |  mov RBa, [RD]
+  |  mov [BASE], RBa
+  |.else
+  |  mov RB, [RD]
   |  mov RD, [RD+4]
   |  mov [BASE], RB
   |  mov [BASE+4], RD
+  |.endif
   |  jmp ->fff_res2
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  cmp dword TAB:RB->hmask, 0; je ->fff_res0
@@ -1623,10 +1666,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  cmp PC, RA
   |  je >3
   |2:  // Move args to coroutine.
+  |.if X64
+  |  mov RCa, [PC+RB]
+  |  mov [PC-8], RCa
+  |.else
   |  mov RC, [PC+RB+4]
   |  mov [PC-4], RC
   |  mov RC, [PC+RB]
   |  mov [PC-8], RC
+  |.endif
   |  sub PC, 8
   |  cmp PC, RA
   |  jne <2
@@ -1667,10 +1715,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RB, BASE
   |  sub RBa, RAa
   |5:  // Move results from coroutine.
+  |.if X64
+  |  mov RDa, [RA]
+  |  mov [RA+RB], RDa
+  |.else
   |  mov RD, [RA]
   |  mov [RA+RB], RD
   |  mov RD, [RA+4]
   |  mov [RA+RB+4], RD
+  |.endif
   |  add RA, 8
   |  cmp RA, KBASE
   |  jne <5
@@ -1699,10 +1752,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov RA, L:PC->top
   |  sub RA, 8
   |  mov L:PC->top, RA			// Clear error from coroutine stack.
-  |  mov RD, [RA]			// Copy error message.
+  |  // Copy error message.
+  |.if X64
+  |  mov RDa, [RA]
+  |  mov [BASE], RDa
+  |.else
+  |  mov RD, [RA]
   |  mov [BASE], RD
   |  mov RD, [RA+4]
   |  mov [BASE+4], RD
+  |.endif
   |  mov RD, 1+2			// nresults+1 = 1 + false + error.
   |  jmp <7
   |.else
@@ -3525,10 +3584,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 
   case BC_MOV:
     |  ins_AD	// RA = dst, RD = src
+    |.if X64
+    |  mov RBa, [BASE+RD*8]
+    |  mov [BASE+RA*8], RBa
+    |.else
     |  mov RB, [BASE+RD*8+4]
-    |  mov RD, [BASE+RD*8]		// Overwrites RD.
+    |  mov RD, [BASE+RD*8]
     |  mov [BASE+RA*8+4], RB
     |  mov [BASE+RA*8], RD
+    |.endif
     |  ins_next_
     break;
   case BC_NOT:
@@ -3702,10 +3766,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  jnz ->vmeta_binop
     |  movzx RB, PC_RB			// Copy result to Stk[RA] from Stk[RB].
     |  movzx RA, PC_RA
+    |.if X64
+    |  mov RCa, [BASE+RB*8]
+    |  mov [BASE+RA*8], RCa
+    |.else
     |  mov RC, [BASE+RB*8+4]
     |  mov RB, [BASE+RB*8]
     |  mov [BASE+RA*8+4], RC
     |  mov [BASE+RA*8], RB
+    |.endif
     |  ins_next
     break;
 
@@ -3767,10 +3836,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov LFUNC:RB, [BASE-8]
     |  mov UPVAL:RB, [LFUNC:RB+RD*4+offsetof(GCfuncL, uvptr)]
     |  mov RB, UPVAL:RB->v
+    |.if X64
+    |  mov RDa, [RB]
+    |  mov [BASE+RA*8], RDa
+    |.else
     |  mov RD, [RB+4]
     |  mov RB, [RB]
     |  mov [BASE+RA*8+4], RD
     |  mov [BASE+RA*8], RB
+    |.endif
     |  ins_next
     break;
   case BC_USETV:
@@ -4021,20 +4095,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  add RC, TAB:RB->array
     |  cmp dword [RC+4], LJ_TNIL	// Avoid overwriting RB in fastpath.
     |  je >2
-    |1:
-    |  mov RB, [RC]			// Get array slot.
+    |  // Get array slot.
+    |.if X64
+    |  mov RBa, [RC]
+    |  mov [BASE+RA*8], RBa
+    |.else
+    |  mov RB, [RC]
     |  mov RC, [RC+4]
     |  mov [BASE+RA*8], RB
     |  mov [BASE+RA*8+4], RC
+    |.endif
+    |1:
     |  ins_next
     |
     |2:  // Check for __index if table value is nil.
     |  cmp dword TAB:RB->metatable, 0	// Shouldn't overwrite RA for fastpath.
-    |  jz <1
+    |  jz >3
     |  mov TAB:RA, TAB:RB->metatable
     |  test byte TAB:RA->nomm, 1<<MM_index
     |  jz ->vmeta_tgetv			// 'no __index' flag NOT set: check.
     |  movzx RA, PC_RA			// Restore RA.
+    |3:
+    |  mov dword [BASE+RA*8+4], LJ_TNIL
     |  jmp <1
     |
     |5:  // String key?
@@ -4062,16 +4144,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  cmp dword [RA+4], LJ_TNIL	// Avoid overwriting RB in fastpath.
     |  je >5				// Key found, but nil value?
     |  movzx RC, PC_RA
-    |  mov RB, [RA]			// Get node value.
+    |  // Get node value.
+    |.if X64
+    |  mov RBa, [RA]
+    |  mov [BASE+RC*8], RBa
+    |.else
+    |  mov RB, [RA]
     |  mov RA, [RA+4]
     |  mov [BASE+RC*8], RB
-    |2:
     |  mov [BASE+RC*8+4], RA
+    |.endif
+    |2:
     |  ins_next
     |
     |3:
     |  movzx RC, PC_RA
-    |  mov RA, LJ_TNIL
+    |  mov dword [BASE+RC*8+4], LJ_TNIL
     |  jmp <2
     |
     |4:  // Follow hash chain.
@@ -4098,20 +4186,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  add RC, TAB:RB->array
     |  cmp dword [RC+4], LJ_TNIL	// Avoid overwriting RB in fastpath.
     |  je >2
-    |1:
-    |  mov RB, [RC]			// Get array slot.
+    |  // Get array slot.
+    |.if X64
+    |  mov RBa, [RC]
+    |  mov [BASE+RA*8], RBa
+    |.else
+    |  mov RB, [RC]
     |  mov RC, [RC+4]
     |  mov [BASE+RA*8], RB
     |  mov [BASE+RA*8+4], RC
+    |.endif
+    |1:
     |  ins_next
     |
     |2:  // Check for __index if table value is nil.
     |  cmp dword TAB:RB->metatable, 0	// Shouldn't overwrite RA for fastpath.
-    |  jz <1
+    |  jz >3
     |  mov TAB:RA, TAB:RB->metatable
     |  test byte TAB:RA->nomm, 1<<MM_index
     |  jz ->vmeta_tgetb			// 'no __index' flag NOT set: check.
     |  movzx RA, PC_RA			// Restore RA.
+    |3:
+    |  mov dword [BASE+RA*8+4], LJ_TNIL
     |  jmp <1
     break;
 
@@ -4146,11 +4242,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |1:
     |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jnz >7
-    |2:
-    |  mov RB, [BASE+RA*8+4]		// Set array slot.
+    |2:  // Set array slot.
+    |.if X64
+    |  mov RBa, [BASE+RA*8]
+    |  mov [RC], RBa
+    |.else
+    |  mov RB, [BASE+RA*8+4]
     |  mov RA, [BASE+RA*8]
     |  mov [RC+4], RB
     |  mov [RC], RA
+    |.endif
     |  ins_next
     |
     |3:  // Check for __newindex if previous value is nil.
@@ -4195,12 +4296,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |2:
     |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jnz >7
-    |3:
+    |3:  // Set node value.
     |  movzx RC, PC_RA
-    |  mov RB, [BASE+RC*8+4]		// Set node value.
+    |.if X64
+    |  mov RBa, [BASE+RC*8]
+    |  mov [RA], RBa
+    |.else
+    |  mov RB, [BASE+RC*8+4]
     |  mov RC, [BASE+RC*8]
     |  mov [RA+4], RB
     |  mov [RA], RC
+    |.endif
     |  ins_next
     |
     |4:  // Check for __newindex if previous value is nil.
@@ -4268,11 +4374,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |1:
     |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jnz >7
-    |2:
-    |  mov RB, [BASE+RA*8+4]		// Set array slot.
+    |2:	 // Set array slot.
+    |.if X64
+    |  mov RAa, [BASE+RA*8]
+    |  mov [RC], RAa
+    |.else
+    |  mov RB, [BASE+RA*8+4]
     |  mov RA, [BASE+RA*8]
     |  mov [RC+4], RB
     |  mov [RC], RA
+    |.endif
     |  ins_next
     |
     |3:  // Check for __newindex if previous value is nil.
@@ -4310,11 +4421,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  shl KBASE, 3
     |  add KBASE, TAB:RB->array
     |3:  // Copy result slots to table.
+    |.if X64
+    |  mov RBa, [RA]
+    |  add RA, 8
+    |  mov [KBASE], RBa
+    |.else
     |  mov RB, [RA]
     |  mov [KBASE], RB
     |  mov RB, [RA+4]
     |  add RA, 8
     |  mov [KBASE+4], RB
+    |.endif
     |  add KBASE, 8
     |  sub RD, 1
     |  jnz <3
@@ -4382,13 +4499,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov MULTRES, NARGS:RD
     |  sub NARGS:RD, 1
     |  jz >3
-    |2:
-    |  mov RB, [RA]			// Move args down.
+    |2:  // Move args down.
+    |.if X64
+    |  mov RBa, [RA]
+    |  add RA, 8
+    |  mov [KBASE], RBa
+    |.else
+    |  mov RB, [RA]
     |  mov [KBASE], RB
     |  mov RB, [RA+4]
-    |  mov [KBASE+4], RB
-    |  add KBASE, 8
     |  add RA, 8
+    |  mov [KBASE+4], RB
+    |.endif
+    |  add KBASE, 8
     |  sub NARGS:RD, 1
     |  jnz <2
     |
@@ -4427,6 +4550,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_ITERC:
     |  ins_A	// RA = base, (RB = nresults+1,) RC = nargs+1 (2+1)
     |  lea RA, [BASE+RA*8+8]		// fb = base+1
+    |.if X64
+    |  mov RBa, [RA-24]			// Copy state. fb[0] = fb[-3].
+    |  mov RCa, [RA-16]			// Copy control var. fb[1] = fb[-2].
+    |  mov [RA], RBa
+    |  mov [RA+8], RCa
+    |.else
     |  mov RB, [RA-24]			// Copy state. fb[0] = fb[-3].
     |  mov RC, [RA-20]
     |  mov [RA], RB
@@ -4435,6 +4564,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov RC, [RA-12]
     |  mov [RA+8], RB
     |  mov [RA+12], RC
+    |.endif
     |  mov LFUNC:RB, [RA-32]		// Copy callable. fb[-1] = fb[-4]
     |  mov RC, [RA-28]
     |  mov [RA-8], LFUNC:RB
@@ -4459,11 +4589,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  cmp KBASE, BASE			// No vararg slots?
     |  jnb >2
     |1:  // Copy vararg slots to destination slots.
+    |.if X64
+    |  mov RCa, [KBASE-8]
+    |  add KBASE, 8
+    |  mov [RA], RCa
+    |.else
     |  mov RC, [KBASE-8]
     |  mov [RA], RC
     |  mov RC, [KBASE-4]
     |  add KBASE, 8
     |  mov [RA+4], RC
+    |.endif
     |  add RA, 8
     |  cmp RA, RB			// All destination slots filled?
     |  jnb >3
@@ -4492,11 +4628,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  cmp RC, L:RB->maxstack
     |  ja >7				// Need to grow stack?
     |6:  // Copy all vararg slots.
+    |.if X64
+    |  mov RCa, [KBASE-8]
+    |  add KBASE, 8
+    |  mov [RA], RCa
+    |.else
     |  mov RC, [KBASE-8]
     |  mov [RA], RC
     |  mov RC, [KBASE-4]
     |  add KBASE, 8
     |  mov [RA+4], RC
+    |.endif
     |  add RA, 8
     |  cmp KBASE, BASE			// No more vararg slots?
     |  jb <6
@@ -4541,11 +4683,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  mov KBASE, BASE		// Use KBASE for result move.
       |  sub RD, 1
       |  jz >3
-      |2:
-      |  mov RB, [KBASE+RA]		// Move results down.
+      |2:  // Move results down.
+      |.if X64
+      |  mov RBa, [KBASE+RA]
+      |  mov [KBASE-8], RBa
+      |.else
+      |  mov RB, [KBASE+RA]
       |  mov [KBASE-8], RB
       |  mov RB, [KBASE+RA+4]
       |  mov [KBASE-4], RB
+      |.endif
       |  add KBASE, 8
       |  sub RD, 1
       |  jnz <2
@@ -4557,10 +4704,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  ja >6
       break;
     case BC_RET1:
+      |.if X64
+      |  mov RBa, [BASE+RA]
+      |  mov [BASE-8], RBa
+      |.else
       |  mov RB, [BASE+RA+4]
       |  mov [BASE-4], RB
       |  mov RB, [BASE+RA]
       |  mov [BASE-8], RB
+      |.endif
       /* fallthrough */
     case BC_RET0:
       |5:
