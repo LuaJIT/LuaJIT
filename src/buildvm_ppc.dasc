@@ -939,14 +939,43 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Base library: iterators -------------------------------------------
   |
-  |.ffunc_1 next
-  |  NYI
-  |
-  |->fff_res2:
-  |  NYI
+  |.ffunc next
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |   evstddx TISNIL, BASE, NARGS8:RC	// Set missing 2nd arg to nil.
+  |  checktab TAB:CARG2
+  |   lwz PC, FRAME_PC(BASE)
+  |  checkfail ->fff_fallback
+  |   stw BASE, L->base			// Add frame since C call can throw.
+  |  mr CARG1, L
+  |   stw BASE, L->top			// Dummy frame length is ok.
+  |  la CARG3, 8(BASE)
+  |   stw PC, SAVE_PC
+  |  bl extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
+  |  // Returns 0 at end of traversal.
+  |  cmplwi CRET1, 0
+  |   evmr CRET1, TISNIL
+  |  beq ->fff_restv			// End of traversal: return nil.
+  |  evldd TMP0, 8(BASE)		// Copy key and value to results.
+  |   la RA, -8(BASE)
+  |  evldd TMP1, 16(BASE)
+  |  evstdd TMP0, 0(RA)
+  |   li RD, (2+1)*8
+  |  evstdd TMP1, 8(RA)
+  |  b ->fff_res
   |
   |.ffunc_1 pairs
-  |  NYI
+  |  checktab TAB:CARG1
+  |   lwz PC, FRAME_PC(BASE)
+  |  checkfail ->fff_fallback
+  |  evldd CFUNC:TMP0, CFUNC:RB->upvalue[0]
+  |  la RA, -8(BASE)
+  |   evstdd TAB:CARG1, 0(BASE)
+  |   evstdd TISNIL, 8(BASE)
+  |  li RD, (3+1)*8
+  |  evstdd CFUNC:TMP0, 0(RA)
+  |  b ->fff_res
   |
   |.ffunc_1 ipairs_aux
   |  NYI
