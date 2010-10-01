@@ -1032,11 +1032,31 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Base library: catch errors ----------------------------------------
   |
-  |.ffunc_1 pcall
-  |  NYI
+  |.ffunc pcall
+  |  cmplwi NARGS8:RC, 8
+  |   lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
+  |  blt ->fff_fallback
+  |   mr TMP2, BASE
+  |   la BASE, 8(BASE)
+  |  // Remember active hook before pcall.
+  |  rlwinm TMP3, TMP3, 32-HOOK_ACTIVE_SHIFT, 31, 31
+  |   subi NARGS8:RC, NARGS8:RC, 8
+  |  addi PC, TMP3, 8+FRAME_PCALL
+  |  b ->vm_call_dispatch
   |
   |.ffunc_2 xpcall
-  |  NYI
+  |  lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
+  |   mr TMP2, BASE
+  |  checkfunc CARG2			// Traceback must be a function.
+  |  checkfail ->fff_fallback
+  |   la BASE, 16(BASE)
+  |  // Remember active hook before pcall.
+  |  rlwinm TMP3, TMP3, 32-HOOK_ACTIVE_SHIFT, 31, 31
+  |   evstdd CARG2, 0(TMP2)		// Swap function and traceback.
+  |  subi NARGS8:RC, NARGS8:RC, 16
+  |   evstdd CARG1, 8(TMP2)
+  |  addi PC, TMP3, 16+FRAME_PCALL
+  |  b ->vm_call_dispatch
   |
   |//-- Coroutine library --------------------------------------------------
   |
