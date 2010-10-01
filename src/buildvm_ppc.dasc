@@ -977,14 +977,58 @@ static void build_subroutines(BuildCtx *ctx)
   |  evstdd CFUNC:TMP0, 0(RA)
   |  b ->fff_res
   |
-  |.ffunc_1 ipairs_aux
-  |  NYI
-  |
-  |->fff_res0:
-  |  NYI
+  |.ffunc_2 ipairs_aux
+  |  checktab TAB:CARG1
+  |   lwz PC, FRAME_PC(BASE)
+  |  checkfail ->fff_fallback
+  |  checknum CARG2
+  |    lus TMP3, 0x3ff0
+  |  checkfail ->fff_fallback
+  |  efdctsi TMP2, CARG2
+  |   lwz TMP0, TAB:CARG1->asize
+  |    evmergelo TMP3, TMP3, ZERO
+  |   lwz TMP1, TAB:CARG1->array
+  |  efdadd CARG2, CARG2, TMP3
+  |  addi TMP2, TMP2, 1
+  |   la RA, -8(BASE)
+  |  cmplw TMP0, TMP2
+  |   slwi TMP3, TMP2, 3
+  |  ble >2				// Not in array part?
+  |  evlddx TMP1, TMP1, TMP3
+  |1:
+  |  checknil TMP1
+  |   li RD, (0+1)*8
+  |  checkok ->fff_res			// End of iteration, return 0 results.
+  |  evstdd CARG2, 0(RA)
+  |   li RD, (2+1)*8
+  |  evstdd TMP1, 8(RA)
+  |  b ->fff_res
+  |2:  // Check for empty hash part first. Otherwise call C function.
+  |  lwz TMP0, TAB:CARG1->hmask
+  |  cmplwi TMP0, 0
+  |   li RD, (0+1)*8
+  |  beq ->fff_res
+  |   mr CARG2, TMP2
+  |  bl extern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |  // Returns cTValue * or NULL.
+  |  cmplwi CRET1, 0
+  |   li RD, (0+1)*8
+  |  beq ->fff_res
+  |  evldd TMP1, 0(CRET1)
+  |  b <1
   |
   |.ffunc_1 ipairs
-  |  NYI
+  |  checktab TAB:CARG1
+  |   lwz PC, FRAME_PC(BASE)
+  |  checkfail ->fff_fallback
+  |  evldd CFUNC:TMP0, CFUNC:RB->upvalue[0]
+  |  la RA, -8(BASE)
+  |    evsplati TMP1, 0
+  |   evstdd TAB:CARG1, 0(BASE)
+  |    evstdd TMP1, 8(BASE)
+  |  li RD, (3+1)*8
+  |  evstdd CFUNC:TMP0, 0(RA)
+  |  b ->fff_res
   |
   |//-- Base library: catch errors ----------------------------------------
   |
