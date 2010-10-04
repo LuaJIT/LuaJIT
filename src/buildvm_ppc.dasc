@@ -913,10 +913,39 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: checks -----------------------------------------------
   |
   |.ffunc assert
-  |  NYI
+  |  cmplwi NARGS8:RC, 8
+  |   evldd TMP0, 0(BASE)
+  |  blt ->fff_fallback
+  |  evaddw TMP1, TISNIL, TISNIL	// Synthesize LJ_TFALSE.
+  |  la RA, -8(BASE)
+  |   evcmpltu cr1, TMP0, TMP1
+  |    lwz PC, FRAME_PC(BASE)
+  |  bge cr1, ->fff_fallback
+  |   evstdd TMP0, 0(RA)
+  |  addi RD, NARGS8:RC, 8		// Compute (nresults+1)*8.
+  |   beq ->fff_res			// Done if exactly 1 argument.
+  |  li TMP1, 8
+  |  subi RC, RC, 8
+  |1:
+  |  cmplw TMP1, RC
+  |   evlddx TMP0, BASE, TMP1
+  |   evstddx TMP0, RA, TMP1
+  |    addi TMP1, TMP1, 8
+  |  bne <1
+  |  b ->fff_res
   |
   |.ffunc type
-  |  NYI
+  |  cmplwi NARGS8:RC, 8
+  |   lwz CARG1, 0(BASE)
+  |  blt ->fff_fallback
+  |    li TMP2, ~LJ_TNUMX
+  |  cmplw CARG1, TISNUM
+  |  not TMP1, CARG1
+  |  isellt TMP1, TMP2, TMP1
+  |  slwi TMP1, TMP1, 3
+  |   la TMP2, CFUNC:RB->upvalue
+  |  evlddx STR:CRET1, TMP2, TMP1
+  |  b ->fff_restv
   |
   |//-- Base library: getters and setters ---------------------------------
   |
