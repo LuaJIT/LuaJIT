@@ -126,7 +126,7 @@ running inside a C function under the Lua interpreter.</dd>
 <dt>Q: Why doesn't my favorite power-patch for Lua apply against LuaJIT?</dt>
 <dd>Because it's a completely redesigned VM and has very little code
 in common with Lua anymore. Also, if the patch introduces changes to
-the Lua semantics, this would need to be reflected everywhere in the
+the Lua semantics, these would need to be reflected everywhere in the
 VM, from the interpreter up to all stages of the compiler.<br> Please
 use only standard Lua language constructs. For many common needs you
 can use source transformations or use wrapper or proxy functions.
@@ -139,8 +139,8 @@ The compiler will happily optimize away such indirections.</dd>
 machine code. This means the code generator must be ported to each
 architecture. And the fast interpreter is written in assembler and
 must be ported, too. This is quite an undertaking.<br> Currently only
-x86 and x64 CPUs are supported. Other architectures will follow based
-on sufficient user demand and/or sponsoring.</dd>
+x86, x64 and PPC/e500v2 CPUs are supported. Other architectures will follow
+based on sufficient user demand and/or sponsoring.</dd>
 </dl>
 
 <dl>

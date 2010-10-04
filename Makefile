@@ -1,13 +1,14 @@
 ##############################################################################
 # LuaJIT top level Makefile for installation. Requires GNU Make.
 #
+# Please read doc/install.html before changing any variables!
+#
 # Suitable for POSIX platforms (Linux, *BSD, OSX etc.).
 # Note: src/Makefile has many more configurable options.
 #
-# ##### This Makefile is NOT useful for installation on Windows! #####
+# ##### This Makefile is NOT useful for Windows! #####
 # For MSVC, please follow the instructions given in src/msvcbuild.bat.
 # For MinGW and Cygwin, cd to src and run make with the Makefile there.
-# NYI: add wininstall.bat
 #
 # Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
 ##############################################################################
@@ -22,8 +23,8 @@ NODOTABIVER=  51
 
 ##############################################################################
 #
-# Change the installation path as needed and modify src/luaconf.h accordingly.
-# Note: PREFIX must be an absolute path!
+# Change the installation path as needed. This automatically adjusts
+# the paths in src/luaconf.h, too. Note: PREFIX must be an absolute path!
 #
 export PREFIX= /usr/local
 ##############################################################################

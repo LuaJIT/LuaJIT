@@ -1,6 +1,8 @@
 ##############################################################################
 # LuaJIT Makefile. Requires GNU Make.
 #
+# Please read doc/install.html before changing any variables!
+#
 # Suitable for POSIX platforms (Linux, *BSD, OSX etc.).
 # Also works with MinGW and Cygwin on Windows.
 # Please check msvcbuild.bat for building with MSVC on Windows.

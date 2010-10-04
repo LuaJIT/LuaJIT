@@ -11,16 +11,20 @@
 <style type="text/css">
 table.compat {
   line-height: 1.2;
-  width: 40em;
+  width: 47em;
 }
 tr.compathead td {
   font-weight: bold;
 }
+td {
+  border-left: 1px solid #bfcfff;
+  border-right: 1px solid #bfcfff;
+}
 td.compatos {
-  width: 40%;
+  width: 25%;
 }
 td.compatcc {
-  width: 30%;
+  width: 25%;
   vertical-align: top;
 }
 </style>
@@ -68,35 +72,40 @@ For the impatient (on POSIX systems):
 make &amp;&amp; sudo make install
 </pre>
 <p>
-LuaJIT currently builds out-of-the box on most x86 or x64 systems.
+LuaJIT currently builds out-of-the box on most systems.
 Here's the compatibility matrix for the supported combinations of
 operating system, CPU and compilers:
 </p>
 <table class="compat">
 <tr class="compathead">
-<td class="compatos">Operating system</td>
+<td class="compatos">OS / CPU</td>
 <td class="compatcc">x86 (32 bit)</td>
 <td class="compatcc">x64 (64 bit)</td>
+<td class="compatcc">PPC/e500v2</td>
 </tr>
 <tr class="odd separate">
-<td class="compatos">Linux</td>
+<td class="compatos"><a href="#posix">Linux</a></td>
 <td class="compatcc">GCC 4.x<br>GCC 3.4</td>
 <td class="compatcc">GCC 4.x</td>
+<td class="compatcc">GCC 4.3+</td>
 </tr>
 <tr class="even">
-<td class="compatos">Windows 98/XP/Vista/7</td>
+<td class="compatos"><a href="#windows">Windows<br>98/XP/Vista/7</a></td>
 <td class="compatcc">MSVC (EE)<br>Windows SDK<br>MinGW (GCC)<br>Cygwin (GCC)</td>
 <td class="compatcc">MSVC + SDK v7.0<br>Windows SDK v7.0</td>
+<td class="compatcc">&nbsp;</td>
 </tr>
 <tr class="odd">
-<td class="compatos">OSX 10.3-10.6</td>
+<td class="compatos"><a href="#posix">OSX 10.3-10.6</a></td>
 <td class="compatcc">GCC 4.x<br>GCC 3.4</td>
 <td class="compatcc">GCC 4.x</td>
+<td class="compatcc">&nbsp;</td>
 </tr>
 <tr class="even">
-<td class="compatos">*BSD, other</td>
+<td class="compatos"><a href="#posix">*BSD, other</a></td>
 <td class="compatcc">GCC 4.x<br>GCC 3.4</td>
 <td class="compatcc">(not supported)</td>
+<td class="compatcc">&nbsp;</td>
 </tr>
 </table>
 
@@ -147,10 +156,12 @@ which is probably the default on your system, anyway. Simply run:
 make
 </pre>
 <p>
-This always builds a native x86 or x64 binary, depending on your OS.
+This always builds a native x86, x64 or PPC binary, depending on the host OS
+you're running this command on. Check the section on
+<a href="#cross">cross-compilation</a> for more options.
 </p>
 <p>
-By default modules are only searched under the prefix <tt>/usr/local</tt>.
+By default, modules are only searched under the prefix <tt>/usr/local</tt>.
 You can add an extra prefix to the search paths by appending the
 <tt>PREFIX</tt> option, e.g.:
 </p>
@@ -283,7 +294,7 @@ directory where <tt>luajit.exe</tt> is installed
 (see <tt>src/luaconf.h</tt>).
 </p>
 
-<h2>Cross-compiling LuaJIT</h2>
+<h2 id="cross">Cross-compiling LuaJIT</h2>
 <p>
 The build system has limited support for cross-compilation. For details
 check the comments in <tt>src/Makefile</tt>. Here are some popular examples:
@@ -303,36 +314,130 @@ installing the <tt>mingw32</tt> package and running:
 <pre class="code">
 make HOST_CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
 </pre>
+<p>
+You can cross-compile for a PPC/e500v2 target on an x86 or x64 host system
+using a standard GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
+The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
+of the toolchain:
+</p>
+<pre class="code">
+make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe- TARGET=ppcspe
+</pre>
 
-<h2>Embedding LuaJIT</h2>
+<h2 id="embed">Embedding LuaJIT</h2>
 <p>
 LuaJIT is API-compatible with Lua 5.1. If you've already embedded Lua
 into your application, you probably don't need to do anything to switch
-to LuaJIT, except link with a different library. Additional hints:
+to LuaJIT, except link with a different library:
 </p>
 <ul>
+<li>It's strongly suggested to build LuaJIT separately using the supplied
+build system. Please do <em>not</em> attempt to integrate the individual
+source files into your build tree. You'll most likely get the internal build
+dependencies wrong or mess up the compiler flags. Treat LuaJIT like any
+other external library and link your application with either the dynamic
+or static library, depending on your needs.</li>
+<li>If you want to load C modules compiled for plain Lua
+with <tt>require()</tt>, you need to make sure the public symbols
+(e.g. <tt>lua_pushnumber</tt>) are exported, too:
+<ul><li>On POSIX systems you can either link to the shared library
+or link the static library into your application. In the latter case
+you'll need to export all public symbols from your main executable
+(e.g. <tt>-Wl,-E</tt> on Linux) and add the external dependencies
+(e.g. <tt>-lm -ldl</tt> on Linux).</li>
+<li>Since Windows symbols are bound to a specific DLL name, you need to
+link to the <tt>lua51.dll</tt> created by the LuaJIT build (do not rename
+the DLL). You may link LuaJIT statically on Windows only if you don't
+intend to load Lua/C modules at runtime.
+</li></ul>
+</li>
+<li>
+If you're building a 64 bit application on OSX which links directly or
+indirectly against LuaJIT, you need to link your main executable
+with these flags:
+<pre class="code">
+-pagezero_size 10000 -image_base 100000000
+</pre>
+Also, it's recommended to <tt>rebase</tt> all (self-compiled) shared libraries
+which are loaded at runtime on OSX/x64 (e.g. C extension modules for Lua).
+See: <tt>man rebase</tt>
+</li>
+</ul>
+<p>Additional hints for initializing LuaJIT using the C API functions:</p>
+<ul>
+<li>Here's a
+<a href="http://lua-users.org/wiki/SimpleLuaApiExample"><span class="ext">&raquo;</span>&nbsp;simple example</a>
+for embedding Lua or LuaJIT into your application.</li>
 <li>Make sure you use <tt>luaL_newstate</tt>. Avoid using
 <tt>lua_newstate</tt>, since this uses the (slower) default memory
 allocator from your system (no support for this on x64).</tt></li>
 <li>Make sure you use <tt>luaL_openlibs</tt> and not the old Lua 5.0 style
 of calling <tt>luaopen_base</tt> etc. directly.</li>
-<li>To change which standard libraries to load, copy <tt>src/lib_init.c</tt>
-to your project and modify it accordingly. Make sure the <tt>jit</tt>
-library is loaded or the JIT compiler will not be activated.</li>
-<li>Here's a
-<a href="http://lua-users.org/wiki/SimpleLuaApiExample"><span class="ext">&raquo;</span>&nbsp;simple example</a>.</li>
+<li>To change or extend the list of standard libraries to load, copy
+<tt>src/lib_init.c</tt> to your project and modify it accordingly.
+Make sure the <tt>jit</tt> library is loaded or the JIT compiler
+will not be activated.</li>
+<li>The <tt>bit.*</tt> module for bitwise operations
+is already built-in. There's no need to statically link
+<a href="http://bitop.luajit.org/"><span class="ext">&raquo;</span>&nbsp;Lua BitOp</a> to your application.</li>
+</ul>
+
+<h2 id="distro">Hints for Distribution Maintainers</h2>
+<p>
+The LuaJIT build system has extra provisions for the needs of most
+POSIX-based distributions. If you're a package maintainer for
+a distribution, <em>please</em> make use of these features and
+avoid patching, subverting, autotoolizing or messing up the build system
+in unspeakable ways.
+</p>
+<p>
+There should be absolutely no need to patch <tt>luaconf.h</tt> or any
+of the Makefiles. And please do not hand-pick files for your packages &mdash;
+simply use whatever <tt>make install</tt> creates. There's a reason
+for all of the files <em>and</em> directories it creates.
+</p>
+<p>
+The build system uses GNU make and autodetects most settings based on
+the host you're building it on. This should work fine for native builds,
+even when sandboxed. You may need to pass some of the following flags to
+<em>both</em> the <tt>make</tt> and the <tt>make install</tt> command lines
+for a regular distribution build:
+</p>
+<ul>
+<li><tt>PREFIX</tt> overrides the installation path and should usually
+be set to <tt>/usr</tt>. Setting this also changes the module paths and
+the <tt>-rpath</tt> of the shared library.</li>
+<li><tt>DESTDIR</tt> is an absolute path which allows you to install
+to a shadow tree instead of the root tree of the build system.</li>
+<li>Have a look at the top-level <tt>Makefile</tt> and <tt>src/Makefile</tt>
+for additional variables to tweak. The following variables <em>may</em> be
+overriden, but it's <em>not</em> recommended, except for special needs
+like cross-builds:
+<tt>BUILDMODE, CC, HOST_CC, STATIC_CC, DYNAMIC_CC, CFLAGS, HOST_CFLAGS,
+TARGET_CFLAGS, LDFLAGS, HOST_LDFLAGS, TARGET_LDFLAGS, TARGET_SHLDFLAGS,
+LIBS, HOST_LIBS, TARGET_LIBS, CROSS, HOST_SYS, TARGET_SYS</tt></li>
 </ul>
 <p>
-64 bit applications on OSX must be linked with these options
-(only the main executable):
+The build system has a special target for an amalgamated build, i.e.
+<tt>make amalg</tt>. This compiles the LuaJIT core as one huge C file
+and allows GCC to generate faster and shorter code. Alas, this requires
+lots of memory during the build. This may be a problem for some users,
+that's why it's not enabled by default. But it shouldn't be a problem for
+most build farms. It's recommended that binary distributions use this
+target for their LuaJIT builds.
+</p>
+<p>
+The tl;dr version of the above:
 </p>
 <pre class="code">
--pagezero_size 10000 -image_base 100000000
+make amalg PREFIX=/usr && \
+make install PREFIX=/usr DESTDIR=/tmp/buildroot
 </pre>
 <p>
-It's recommended to <tt>rebase</tt> all (self-compiled) shared libraries
-which are loaded at runtime on OSX/x64 (e.g. C extension modules for Lua).
-See: <tt>man rebase</tt>
+Finally, if you encounter any difficulties, please
+<a href="contact.html">contact me</a> first, instead of releasing a broken
+package onto unsuspecting users. Because they'll usually gonna complain
+to me (the upstream) and not you (the package maintainer), anyway.
 </p>
 <br class="flush">
 </div>

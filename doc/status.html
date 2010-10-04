@@ -67,30 +67,31 @@ This is a list of the things you should know about the LuaJIT 2.0 beta test:
 </p>
 <ul>
 <li>
-The JIT compiler only generates code for CPUs with support for
-<b>SSE2</b> instructions. I.e. you need at least a P4, Core 2/i5/i7
-or K8/K10 to get the full benefit.<br>
-If you run LuaJIT on older CPUs without SSE2 support, the JIT compiler
-is disabled and the VM falls back to the interpreter.
-Run the command line executable without arguments to show the current status 
-(<tt>JIT: ON</tt> or <tt>JIT: OFF</tt>).
-</li>
-<li>
 Obviously there will be many <b>bugs</b> in a VM which has been
 rewritten from the ground up. Please report your findings together with
-the circumstances needed to reproduce the bug. If possible reduce the
-problem down to a simple test cases.<br>
+the circumstances needed to reproduce the bug. If possible, reduce the
+problem down to a simple test case.<br>
 There is no formal bug tracker at the moment. The best place for
 discussion is the
 <a href="http://www.lua.org/lua-l.html"><span class="ext">&raquo;</span>&nbsp;Lua mailing list</a>. Of course
-you may also send your bug report directly to me, especially when they
-contains lengthy debug output. Please check the
-<a href="contact.html">Contact</a> page for details.
+you may also send your bug reports <a href="contact.html">directly to me</a>,
+especially when they contain lengthy debug output or if you require
+confidentiality.
+</li>
+<li>
+The JIT compiler only generates code for CPUs with support for
+<b>SSE2</b> instructions. I.e. you need at least a P4, Core 2/i3/i5/i7,
+Atom or K8/K10 to get the full benefit.<br>
+If you run LuaJIT on older CPUs without SSE2 support, the JIT compiler
+is disabled and the VM falls back to the LuaJIT interpreter. This is faster
+than the Lua interpreter, but not nearly as fast as the JIT compiler of course.
+Run the command line executable without arguments to show the current status
+(<tt>JIT: ON</tt> or <tt>JIT: OFF</tt>).
 </li>
 <li>
 The VM is complete in the sense that it <b>should</b> run all Lua code
 just fine. It's considered a serious bug if the VM crashes or produces
-unexpected results &mdash; please report it. There are only very few
+unexpected results &mdash; please report this. There are only very few
 known incompatibilities with standard Lua:
 <ul>
 <li>
@@ -125,12 +126,12 @@ demonstrable need is shown.
 <li>
 The <b>JIT compiler</b> is not complete (yet) and falls back to the
 interpreter in some cases. All of this works transparently, so unless
-you use <tt>-jv</tt>, you'll probably never notice (the interpreter is quite
-fast, too). Here are the known issues:
+you use <tt>-jv</tt>, you'll probably never notice (the interpreter is
+<a href="http://luajit.org/performance.html"><span class="ext">&raquo;</span>&nbsp;quite fast</a>, too). Here are the known issues:
 <ul>
 <li>
-Many known issues cause a <b>NYI</b> (not yet implemented) trace abort
-message. E.g. for calls to vararg functions or many string library
+Most known issues cause a <b>NYI</b> (not yet implemented) trace abort
+message. E.g. for calls to some internal library
 functions. Reporting these is only mildly useful, except if you have good
 example code that shows the problem. Obviously, reports accompanied with
 a patch to fix the issue are more than welcome. But please check back
@@ -138,7 +139,7 @@ with me, before writing major improvements, to avoid duplication of
 effort.
 </li>
 <li>
-The trace compiler currently does not back off specialization for
+The trace compiler currently doesn't back off specialization for
 function call dispatch. It should really fall back to specializing on
 the prototype, not the closure identity. This can lead to the so-called
 "trace explosion" problem with <b>closure-heavy programming</b>. The
@@ -191,20 +192,20 @@ overriding goal for a low-footprint, low-overhead JIT compiler.
 <li>
 More <b>optimizations</b> will be added in parallel to the last step on
 an as-needed basis. Sinking of stores
-to aggregates and sinking of allocations are high on the list. Faster
-handling of NEWREF and better alias analysis are desirable, too. More
-complex optimizations with less pay-off, such as value-range-propagation
+to aggregates and sinking of allocations are high on the list.
+More complex optimizations with less pay-off, such as value-range-propagation
 (VRP) will have to wait.
 </li>
 <li>
 LuaJIT 2.0 has been designed with <b>portability</b> in mind.
 Nonetheless, it compiles to native code and needs to be adapted to each
-architecture. Porting the compiler backend is probably the easier task,
-but a key element of its design is the fast interpreter, written in
-machine-specific assembler.<br>
-An x64 port is already available, thanks to the
+architecture. The two major work items are porting the the fast interpreter,
+which is written in assembler, and porting the compiler backend.
+Most other portability issues like endianess or 32 vs. 64&nbsp;bit CPUs
+have already been taken care of.<br>
+Several ports are already available, thanks to the
 <a href="sponsors.html">LuaJIT sponsorship program</a>.
-Other ports will follow &mdash; companies which are
+More ports will follow in the future &mdash; companies which are
 interested in sponsoring a port to a particular architecture, please
 use the given contact address.
 </li>
@@ -230,9 +231,10 @@ for efficient <b>vectorization</b>.
 Currently Lua is missing a standard library for access to <b>structured
 binary data</b> and <b>arrays/buffers</b> holding low-level data types.
 Allowing calls to arbitrary C functions (<b>FFI</b>) would obviate the
-need to write manual bindings. A variety of extension modules is floating
-around, with different scope and capabilities. Alas, none of them has been
-designed with a JIT compiler in mind.
+need to write manual bindings. A variety of Lua extension modules are
+available, with different scope and capabilities. Alas, none of them has been
+designed with a JIT compiler in mind. An FFI for LuaJIT is currently
+in the design phase, but there's no ETA, yet.
 </li>
 </ul>
 <br class="flush">
