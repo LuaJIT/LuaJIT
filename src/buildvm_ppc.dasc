@@ -908,7 +908,10 @@ static void build_subroutines(BuildCtx *ctx)
   |.endmacro
   |
   |.macro ffgccheck
-  |  NYI
+  |  lwz TMP0, DISPATCH_GL(gc.total)(DISPATCH)
+  |  lwz TMP1, DISPATCH_GL(gc.threshold)(DISPATCH)
+  |  cmplw TMP0, TMP1
+  |  bgel ->fff_gcstep
   |.endmacro
   |
   |//-- Base library: checks -----------------------------------------------
@@ -1029,10 +1032,38 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: conversions ------------------------------------------
   |
   |.ffunc tonumber
-  |  NYI
+  |  // Only handles the number case inline (without a base argument).
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG1, 0(BASE)
+  |  bne ->fff_fallback			// Exactly one argument.
+  |  checknum CARG1
+  |  checkok ->fff_restv
+  |  b ->fff_fallback
   |
   |.ffunc_1 tostring
-  |  NYI
+  |  // Only handles the string or number case inline.
+  |  checkstr CARG1
+  |  // A __tostring method in the string base metatable is ignored.
+  |  checkok ->fff_restv		// String key?
+  |  // Handle numbers inline, unless a number base metatable is present.
+  |  lwz TMP0, DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM])(DISPATCH)
+  |  checknum CARG1
+  |  cmplwi cr1, TMP0, 0
+  |   stw BASE, L->base			// Add frame since C call can throw.
+  |.if SPE
+  |  crand 4*cr0+eq, 4*cr0+lt, 4*cr1+eq
+  |.else
+  |.error "NYI"
+  |.endif
+  |   stw PC, SAVE_PC			// Redundant (but a defined value).
+  |  bne ->fff_fallback
+  |  ffgccheck
+  |  mr CARG1, L
+  |  mr CARG2, BASE
+  |  bl extern lj_str_fromnum		// (lua_State *L, lua_Number *np)
+  |  // Returns GCstr *.
+  |  evmergelo STR:CRET1, TISSTR, STR:CRET1
+  |  b ->fff_restv
   |
   |//-- Base library: iterators -------------------------------------------
   |
@@ -1405,7 +1436,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
-  |  NYI
+  |  // BASE = new base, RC = nargs*8
+  |  mflr SAVE0
+  |   stw BASE, L->base
+  |  add TMP0, BASE, NARGS8:RC
+  |   stw PC, SAVE_PC			// Redundant (but a defined value).
+  |  stw TMP0, L->top
+  |  mr CARG1, L
+  |  bl extern lj_gc_step		// (lua_State *L)
+  |   lwz BASE, L->base
+  |  mtlr SAVE0
+  |    lwz TMP0, L->top
+  |   sub NARGS8:RC, TMP0, BASE
+  |   lwz CFUNC:RB, FRAME_FUNC(BASE)
+  |  blr
   |
   |//-----------------------------------------------------------------------
   |//-- Special dispatch targets -------------------------------------------
