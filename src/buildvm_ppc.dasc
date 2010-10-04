@@ -1322,7 +1322,12 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Table library ------------------------------------------------------
   |
   |.ffunc_1 table_getn
-  |  NYI
+  |  checktab CARG1
+  |  checkfail ->fff_fallback
+  |  bl extern lj_tab_len		// (GCtab *t)
+  |  // Returns uint32_t (but less than 2^31).
+  |  efdcfsi CRET1, CRET1
+  |  b ->fff_restv
   |
   |//-- Bit library --------------------------------------------------------
   |
