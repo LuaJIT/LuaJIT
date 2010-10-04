@@ -240,6 +240,7 @@
 |.macro checkok, label; blt label; .endmacro
 |.macro checkfail, label; bge label; .endmacro
 |.macro checkanyfail, label; bns label; .endmacro
+|.macro checkallok, label; bso label; .endmacro
 |.endif
 |
 |.macro branch_RD
@@ -950,13 +951,80 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: getters and setters ---------------------------------
   |
   |.ffunc_1 getmetatable
-  |  NYI
+  |  checktab CARG1
+  |   evmergehi TMP1, CARG1, CARG1
+  |  checkfail >6
+  |1:  // Field metatable must be at same offset for GCtab and GCudata!
+  |  lwz TAB:RB, TAB:CARG1->metatable
+  |2:
+  |  evmr CRET1, TISNIL
+  |   cmplwi TAB:RB, 0
+  |  lwz STR:RC, DISPATCH_GL(gcroot[GCROOT_MMNAME+MM_metatable])(DISPATCH)
+  |   beq ->fff_restv
+  |  lwz TMP0, TAB:RB->hmask
+  |   evmergelo CRET1, TISTAB, TAB:RB	// Use metatable as default result.
+  |  lwz TMP1, STR:RC->hash
+  |  lwz NODE:TMP2, TAB:RB->node
+  |   evmergelo STR:RC, TISSTR, STR:RC
+  |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+  |  slwi TMP0, TMP1, 5
+  |  slwi TMP1, TMP1, 3
+  |  sub TMP1, TMP0, TMP1
+  |  add NODE:TMP2, NODE:TMP2, TMP1	// node = tab->node + (idx*32-idx*8)
+  |3:  // Rearranged logic, because we expect _not_ to find the key.
+  |  evldd TMP0, NODE:TMP2->key
+  |   evldd TMP1, NODE:TMP2->val
+  |  evcmpeq TMP0, STR:RC
+  |   lwz NODE:TMP2, NODE:TMP2->next
+  |  checkallok >5
+  |   cmplwi NODE:TMP2, 0
+  |   beq ->fff_restv			// Not found, keep default result.
+  |   b <3
+  |5:
+  |  checknil TMP1
+  |  checkok ->fff_restv		// Ditto for nil value.
+  |  evmr CRET1, TMP1			// Return value of mt.__metatable.
+  |  b ->fff_restv
+  |
+  |6:
+  |  cmpwi TMP1, LJ_TUDATA
+  |   not TMP1, TMP1
+  |  beq <1
+  |  checknum CARG1
+  |   slwi TMP1, TMP1, 2
+  |   li TMP2, 4*~LJ_TNUMX
+  |  isellt TMP1, TMP2, TMP1
+  |   la TMP2, DISPATCH_GL(gcroot[GCROOT_BASEMT])(DISPATCH)
+  |  lwzx TAB:RB, TMP2, TMP1
+  |  b <2
   |
   |.ffunc_2 setmetatable
-  |  NYI
+  |  // Fast path: no mt for table yet and not clearing the mt.
+  |  evmergehi TMP0, TAB:CARG1, TAB:CARG2
+  |  checktab TMP0
+  |  checkanyfail ->fff_fallback
+  |  lwz TAB:TMP1, TAB:CARG1->metatable
+  |  cmplwi TAB:TMP1, 0
+  |   lbz TMP3, TAB:CARG1->marked
+  |  bne ->fff_fallback
+  |   andi. TMP0, TMP3, LJ_GC_BLACK	// isblack(table)
+  |    stw TAB:CARG2, TAB:CARG1->metatable
+  |   beq ->fff_restv
+  |  barrierback TAB:CARG1, TMP3, TMP0
+  |  b ->fff_restv
   |
-  |.ffunc_2 rawget
-  |  NYI
+  |.ffunc rawget
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |  checktab CARG2
+  |   la CARG3, 8(BASE)
+  |  checkfail ->fff_fallback
+  |   mr CARG1, L
+  |  bl extern lj_tab_get  // (lua_State *L, GCtab *t, cTValue *key)
+  |  // Returns cTValue *.
+  |  evldd CRET1, 0(CRET1)
+  |  b ->fff_restv
   |
   |//-- Base library: conversions ------------------------------------------
   |
