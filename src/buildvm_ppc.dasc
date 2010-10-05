@@ -1206,7 +1206,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Math library -------------------------------------------------------
   |
   |.ffunc_n math_abs
-  |  NYI
+  |  efdabs CRET1, CARG1
   |  // Fallthrough.
   |
   |->fff_restv:
@@ -1241,12 +1241,30 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro math_extern, func
   |  .ffunc math_ .. func
-  |  NYI
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |  checknum CARG2
+  |   evmergehi CARG1, CARG2, CARG2
+  |  checkfail ->fff_fallback
+  |  bl extern func
+  |  evmergelo CRET1, CRET1, CRET2
+  |  b ->fff_restv
   |.endmacro
   |
   |.macro math_extern2, func
   |  .ffunc math_ .. func
-  |  NYI
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG2, 0(BASE)
+  |   evldd CARG4, 8(BASE)
+  |  blt ->fff_fallback
+  |  evmergehi CARG1, CARG4, CARG2
+  |  checknum CARG1
+  |   evmergehi CARG3, CARG4, CARG4
+  |  checkanyfail ->fff_fallback
+  |  bl extern func
+  |  evmergelo CRET1, CRET1, CRET2
+  |  b ->fff_restv
   |.endmacro
   |
   |  math_extern floor
@@ -1271,7 +1289,9 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->ff_math_deg:
   |.ffunc_1 math_rad
-  |  NYI
+  |  evldd CARG2, CFUNC:RB->upvalue[0]
+  |  efdmul CRET1, CARG1, CARG2
+  |  b ->fff_restv
   |
   |.ffunc_nn math_ldexp;	NYI
   |.ffunc_n math_frexp;		NYI
@@ -1279,7 +1299,20 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro math_minmax, name, cmpop
   |  .ffunc_1 name
-  |  NYI
+  |  checknum CARG1
+  |   li TMP1, 8
+  |  checkfail ->fff_fallback
+  |1:
+  |  evlddx CARG2, BASE, TMP1
+  |  cmplw cr1, TMP1, NARGS8:RC
+  |   checknum CARG2
+  |  bge cr1, ->fff_restv		// Ok, since CRET1 = CARG1.
+  |   checkfail ->fff_fallback
+  |  cmpop CARG2, CARG1
+  |   addi TMP1, TMP1, 8
+  |  crmove 4*cr0+lt, 4*cr0+gt
+  |  evsel CARG1, CARG2, CARG1
+  |  b <1
   |.endmacro
   |
   |  math_minmax math_min, efdtstlt
