@@ -1293,9 +1293,53 @@ static void build_subroutines(BuildCtx *ctx)
   |  efdmul CRET1, CARG1, CARG2
   |  b ->fff_restv
   |
-  |.ffunc_nn math_ldexp;	NYI
-  |.ffunc_n math_frexp;		NYI
-  |.ffunc_n math_modf;		NYI
+  |.ffunc math_ldexp
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG2, 0(BASE)
+  |   evldd CARG4, 8(BASE)
+  |  blt ->fff_fallback
+  |  evmergehi CARG1, CARG4, CARG2
+  |  checknum CARG1
+  |  checkanyfail ->fff_fallback
+  |  efdctsi CARG3, CARG4
+  |  bl extern ldexp
+  |  evmergelo CRET1, CRET1, CRET2
+  |  b ->fff_restv
+  |
+  |.ffunc math_frexp
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |  checknum CARG2
+  |   evmergehi CARG1, CARG2, CARG2
+  |  checkfail ->fff_fallback
+  |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
+  |   lwz PC, FRAME_PC(BASE)
+  |  bl extern frexp
+  |   lwz TMP1, DISPATCH_GL(tmptv)(DISPATCH)
+  |  evmergelo CRET1, CRET1, CRET2
+  |   efdcfsi CRET2, TMP1
+  |   la RA, -8(BASE)
+  |  evstdd CRET1, 0(RA)
+  |  li RD, (2+1)*8
+  |   evstdd CRET2, 8(RA)
+  |  b ->fff_res
+  |
+  |.ffunc math_modf
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |  checknum CARG2
+  |   evmergehi CARG1, CARG2, CARG2
+  |  checkfail ->fff_fallback
+  |  la CARG3, -8(BASE)
+  |   lwz PC, FRAME_PC(BASE)
+  |  bl extern modf
+  |  evmergelo CRET1, CRET1, CRET2
+  |   la RA, -8(BASE)
+  |  evstdd CRET1, 0(BASE)
+  |  li RD, (2+1)*8
+  |  b ->fff_res
   |
   |.macro math_minmax, name, cmpop
   |  .ffunc_1 name
