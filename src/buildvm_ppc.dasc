@@ -1267,8 +1267,23 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_restv
   |.endmacro
   |
-  |  math_extern floor
-  |  math_extern ceil
+  |.macro math_round, func
+  |  .ffunc math_ .. func
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  blt ->fff_fallback
+  |  checknum CARG2
+  |   evmergehi CARG1, CARG2, CARG2
+  |  checkfail ->fff_fallback
+  |   lwz PC, FRAME_PC(BASE)
+  |  bl ->vm_..func.._hilo;
+  |  la RA, -8(BASE)
+  |  evstdd CRET2, 0(RA)
+  |  b ->fff_res1
+  |.endmacro
+  |
+  |  math_round floor
+  |  math_round ceil
   |
   |  math_extern sqrt
   |  math_extern log
