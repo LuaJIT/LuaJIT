@@ -1915,12 +1915,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_UNM:
     |  // RA = dst*8, RD = src*8
     |  evlddx TMP0, BASE, RD
-    |   lus TMP1, 0x8000
-    |   li TMP2, 0
     |  checknum TMP0
-    |   evmergelo TMP1, TMP1, TMP2
     |  checkfail ->vmeta_unm
-    |  evxor TMP0, TMP0, TMP1
+    |  efdneg TMP0, TMP0
     |  ins_next1
     |  evstddx TMP0, BASE, RA
     |  ins_next2
