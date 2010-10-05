@@ -1303,7 +1303,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 fmod
   |
   |->ff_math_deg:
-  |.ffunc_1 math_rad
+  |.ffunc_n math_rad
   |  evldd CARG2, CFUNC:RB->upvalue[0]
   |  efdmul CRET1, CARG1, CARG2
   |  b ->fff_restv
