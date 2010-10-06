@@ -907,6 +907,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checkanyfail ->fff_fallback
   |.endmacro
   |
+  |// Inlined GC threshold check. Caveat: uses TMP0 and TMP1.
   |.macro ffgccheck
   |  lwz TMP0, DISPATCH_GL(gc.total)(DISPATCH)
   |  lwz TMP1, DISPATCH_GL(gc.threshold)(DISPATCH)
@@ -1380,16 +1381,52 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- String library -----------------------------------------------------
   |
   |.ffunc_1 string_len
-  |  NYI
+  |  checkstr STR:CARG1
+  |  checkfail ->fff_fallback
+  |  lwz TMP0, STR:CARG1->len
+  |  efdcfsi CRET1, TMP0
+  |  b ->fff_restv
   |
   |.ffunc string_byte			// Only handle the 1-arg case here.
-  |  NYI
+  |  cmplwi NARGS8:RC, 8
+  |   evldd STR:CARG1, 0(BASE)
+  |  bne ->fff_fallback			// Need exactly 1 argument.
+  |  checkstr STR:CARG1
+  |   la RA, -8(BASE)
+  |  checkfail ->fff_fallback
+  |  lwz TMP0, STR:CARG1->len
+  |   li RD, (0+1)*8
+  |    lbz TMP1, STR:CARG1[1]		// Access is always ok (NUL at end).
+  |   li TMP2, (1+1)*8
+  |  cmplwi TMP0, 0
+  |   lwz PC, FRAME_PC(BASE)
+  |    efdcfsi CRET1, TMP1
+  |  iseleq RD, RD, TMP2
+  |    evstdd CRET1, 0(RA)
+  |  b ->fff_res
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
-  |  NYI
-  |
+  |  ffgccheck
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG1, 0(BASE)
+  |  bne ->fff_fallback			// Exactly 1 argument.
+  |  checknum CARG1
+  |   la CARG2, DISPATCH_GL(tmptv)(DISPATCH)
+  |  checkfail ->fff_fallback
+  |  efdctsiz TMP0, CARG1
+  |   li CARG3, 1
+  |  cmplwi TMP0, 255
+  |   stb TMP0, 0(CARG2)
+  |  bgt ->fff_fallback
   |->fff_newstr:
-  |  NYI
+  |  mr CARG1, L
+  |  stw BASE, L->base
+  |  stw PC, SAVE_PC
+  |  bl extern lj_str_new		// (lua_State *L, char *str, size_t l)
+  |  // Returns GCstr *.
+  |  lwz BASE, L->base
+  |   evmergelo STR:CRET1, TISSTR, STR:CRET1
+  |  b ->fff_restv
   |
   |.ffunc string_sub
   |  NYI
