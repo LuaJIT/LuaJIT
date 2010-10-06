@@ -1431,22 +1431,94 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc string_sub
   |  NYI
   |
-  |->fff_emptystr:  // Range underflow.
-  |  NYI
+  |.ffunc string_rep			// Only handle the 1-char case inline.
+  |  ffgccheck
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG1, 0(BASE)
+  |   evldd CARG2, 8(BASE)
+  |  blt ->fff_fallback
+  |  checknum CARG2
+  |  checkfail ->fff_fallback
+  |  checkstr STR:CARG1
+  |   efdctsiz CARG3, CARG2
+  |  checkfail ->fff_fallback
+  |   lwz TMP0, STR:CARG1->len
+  |  cmpwi CARG3, 0
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |  ble >2				// Count <= 0? (or non-int)
+  |   cmplwi TMP0, 1
+  |  subi TMP2, CARG3, 1
+  |   blt >2				// Zero length string?
+  |  cmplw cr1, TMP1, CARG3
+  |   bne ->fff_fallback		// Fallback for > 1-char strings.
+  |   lbz TMP0, STR:CARG1[1]
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
+  |  blt cr1, ->fff_fallback
+  |1:  // Fill buffer with char. Yes, this is suboptimal code (do you care?).
+  |  cmplwi TMP2, 0
+  |   stbx TMP0, CARG2, TMP2
+  |   subi TMP2, TMP2, 1
+  |  bne <1
+  |  b ->fff_newstr
+  |2:  // Return empty string.
+  |  la STR:CRET1, DISPATCH_GL(strempty)(DISPATCH)
+  |  evmergelo CRET1, TISSTR, STR:CRET1
+  |  b ->fff_restv
   |
-  |.ffunc_2 string_rep			// Only handle the 1-char case inline.
-  |  NYI
+  |.ffunc string_reverse
+  |  ffgccheck
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG1, 0(BASE)
+  |  blt ->fff_fallback
+  |  checkstr STR:CARG1
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |  checkfail ->fff_fallback
+  |  lwz CARG3, STR:CARG1->len
+  |   la CARG1, #STR(STR:CARG1)
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
+  |   li TMP2, 0
+  |  cmplw TMP1, CARG3
+  |   subi TMP3, CARG3, 1
+  |  blt ->fff_fallback
+  |1:  // Reverse string copy.
+  |  cmpwi TMP3, 0
+  |   lbzx TMP1, CARG1, TMP2
+  |  blt ->fff_newstr
+  |   stbx TMP1, CARG2, TMP3
+  |  subi TMP3, TMP3, 1
+  |  addi TMP2, TMP2, 1
+  |  b <1
   |
-  |.ffunc_1 string_reverse
-  |  NYI
-  |
-  |.macro ffstring_case, name, lo, hi
-  |  .ffunc_1 name
-  |  NYI
+  |.macro ffstring_case, name, lo
+  |  .ffunc name
+  |  ffgccheck
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG1, 0(BASE)
+  |  blt ->fff_fallback
+  |  checkstr STR:CARG1
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |  checkfail ->fff_fallback
+  |  lwz CARG3, STR:CARG1->len
+  |   la CARG1, #STR(STR:CARG1)
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
+  |  cmplw TMP1, CARG3
+  |   li TMP2, 0
+  |  blt ->fff_fallback
+  |1:  // ASCII case conversion.
+  |  cmplw TMP2, CARG3
+  |   lbzx TMP1, CARG1, TMP2
+  |  bge ->fff_newstr
+  |   subi TMP0, TMP1, lo
+  |    xori TMP3, TMP1, 0x20
+  |   cmplwi TMP0, 26
+  |   isellt TMP1, TMP3, TMP1
+  |   stbx TMP1, CARG2, TMP2
+  |  addi TMP2, TMP2, 1
+  |  b <1
   |.endmacro
   |
-  |ffstring_case string_lower, 0x41, 0x5a
-  |ffstring_case string_upper, 0x61, 0x7a
+  |ffstring_case string_lower, 0x41
+  |ffstring_case string_upper, 0x61
   |
   |//-- Table library ------------------------------------------------------
   |
