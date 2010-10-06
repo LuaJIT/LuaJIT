@@ -1429,7 +1429,51 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_restv
   |
   |.ffunc string_sub
-  |  NYI
+  |  ffgccheck
+  |  cmplwi NARGS8:RC, 16
+  |   evldd CARG3, 16(BASE)
+  |   evldd STR:CARG1, 0(BASE)
+  |  blt ->fff_fallback
+  |   evldd CARG2, 8(BASE)
+  |   li TMP2, -1
+  |  beq >1
+  |  checknum CARG3
+  |  checkfail ->fff_fallback
+  |  efdctsiz TMP2, CARG3
+  |1:
+  |  checknum CARG2
+  |  checkfail ->fff_fallback
+  |  checkstr STR:CARG1
+  |   efdctsiz TMP1, CARG2
+  |  checkfail ->fff_fallback
+  |   lwz TMP0, STR:CARG1->len
+  |  cmplw TMP0, TMP2			// len < end? (unsigned compare)
+  |   add TMP3, TMP2, TMP0
+  |  blt >5
+  |2:
+  |  cmpwi TMP1, 0			// start <= 0?
+  |   add TMP3, TMP1, TMP0
+  |  ble >7
+  |3:
+  |  sub. CARG3, TMP2, TMP1
+  |    addi CARG2, STR:CARG1, #STR-1
+  |   addi CARG3, CARG3, 1
+  |    add CARG2, CARG2, TMP1
+  |  isellt CARG3, r0, CARG3
+  |  b ->fff_newstr
+  |
+  |5:  // Negative end or overflow.
+  |  cmpw TMP0, TMP2
+  |   addi TMP3, TMP3, 1
+  |  iselgt TMP2, TMP3, TMP0		// end = end > len ? len : end+len+1
+  |  b <2
+  |
+  |7:  // Negative start or underflow.
+  |   cmpwi cr1, TMP3, 0
+  |  iseleq TMP1, r0, TMP3
+  |   isel TMP1, r0, TMP1, 4*cr1+lt
+  |  addi TMP1, TMP1, 1			// start = 1 + (start ? start+len : 0)
+  |  b <3
   |
   |.ffunc string_rep			// Only handle the 1-char case inline.
   |  ffgccheck
