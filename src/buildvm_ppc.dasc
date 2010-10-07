@@ -2815,9 +2815,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwz TMP0, TAB:RB->hmask
     |  lwz TMP1, STR:RC->hash
     |  lwz NODE:TMP2, TAB:RB->node
-    |    li TMP3, 0
     |   evmergelo STR:RC, TISSTR, STR:RC
-    |    stb TMP3, TAB:RB->nomm		// Clear metamethod cache.
+    |    stb ZERO, TAB:RB->nomm		// Clear metamethod cache.
     |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
     |    evlddx SAVE0, BASE, RA
     |  slwi TMP0, TMP1, 5
