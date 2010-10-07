@@ -1192,17 +1192,137 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro coroutine_resume_wrap, resume
   |.if resume
   |.ffunc_1 coroutine_resume
+  |  evmergehi TMP0, L:CARG1, L:CARG1
   |.else
   |.ffunc coroutine_wrap_aux
+  |  lwz L:CARG1, CFUNC:RB->upvalue[0].gcr
   |.endif
-  |  NYI
+  |.if resume
+  |  cmpwi TMP0, LJ_TTHREAD
+  |  bne ->fff_fallback
+  |.endif
+  |  lbz TMP0, L:CARG1->status
+  |   lwz TMP1, L:CARG1->cframe
+  |    lwz CARG2, L:CARG1->top
+  |  cmplwi cr0, TMP0, LUA_YIELD
+  |    lwz TMP2, L:CARG1->base
+  |   cmplwi cr1, TMP1, 0
+  |   lwz TMP0, L:CARG1->maxstack
+  |    cmplw cr7, CARG2, TMP2
+  |   lwz PC, FRAME_PC(BASE)
+  |  crorc 4*cr6+lt, 4*cr0+gt, 4*cr1+eq		// st>LUA_YIELD || cframe!=0
+  |   add TMP2, CARG2, NARGS8:RC
+  |  crandc 4*cr6+gt, 4*cr7+eq, 4*cr0+eq	// base==top && st!=LUA_YIELD
+  |   cmplw cr1, TMP2, TMP0
+  |  cror 4*cr6+lt, 4*cr6+lt, 4*cr6+gt
+  |   stw PC, SAVE_PC
+  |  cror 4*cr6+lt, 4*cr6+lt, 4*cr1+gt		// cond1 || cond2 || stackov
+  |   stw BASE, L->base
+  |  blt cr6, ->fff_fallback
+  |1:
+  |.if resume
+  |  addi BASE, BASE, 8			// Keep resumed thread in stack for GC.
+  |  subi NARGS8:RC, NARGS8:RC, 8
+  |  subi TMP2, TMP2, 8
+  |.endif
+  |  stw TMP2, L:CARG1->top
+  |  li TMP1, 0
+  |  stw BASE, L->top
+  |2:  // Move args to coroutine.
+  |  cmpw TMP1, NARGS8:RC
+  |   evlddx TMP0, BASE, TMP1
+  |  beq >3
+  |   evstddx TMP0, CARG2, TMP1
+  |  addi TMP1, TMP1, 8
+  |  b <2
+  |3:
+  |  li CARG3, 0
+  |   mr L:SAVE0, L:CARG1
+  |  li CARG4, 0
+  |  bl ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
+  |  // Returns thread status.
+  |4:
+  |  lwz TMP2, L:SAVE0->base
+  |   cmplwi CRET1, LUA_YIELD
+  |  lwz TMP3, L:SAVE0->top
+  |    li_vmstate INTERP
+  |  lwz BASE, L->base
+  |    st_vmstate
+  |   bgt >8
+  |  sub RD, TMP3, TMP2
+  |   lwz TMP0, L->maxstack
+  |  cmplwi RD, 0
+  |   add TMP1, BASE, RD
+  |  beq >6				// No results?
+  |  cmplw TMP1, TMP0
+  |   li TMP1, 0
+  |  bgt >9				// Need to grow stack?
+  |
+  |  subi TMP3, RD, 8
+  |   stw TMP2, L:SAVE0->top		// Clear coroutine stack.
+  |5:  // Move results from coroutine.
+  |  cmplw TMP1, TMP3
+  |   evlddx TMP0, TMP2, TMP1
+  |   evstddx TMP0, BASE, TMP1
+  |    addi TMP1, TMP1, 8
+  |  bne <5
+  |6:
+  |  andi. TMP0, PC, FRAME_TYPE
+  |.if resume
+  |  li TMP1, LJ_TTRUE
+  |   la RA, -8(BASE)
+  |  stw TMP1, -8(BASE)			// Prepend true to results.
+  |  addi RD, RD, 16
+  |.else
+  |  mr RA, BASE
+  |  addi RD, RD, 8
+  |.endif
+  |7:
+  |    stw PC, SAVE_PC
+  |   mr MULTRES, RD
+  |  beq ->BC_RET_Z
+  |  b ->vm_return
+  |
+  |8:  // Coroutine returned with error (at co->top-1).
+  |.if resume
+  |  andi. TMP0, PC, FRAME_TYPE
+  |  la TMP3, -8(TMP3)
+  |   li TMP1, LJ_TFALSE
+  |  evldd TMP0, 0(TMP3)
+  |   stw TMP3, L:SAVE0->top		// Remove error from coroutine stack.
+  |    li RD, (2+1)*8
+  |   stw TMP1, -8(BASE)		// Prepend false to results.
+  |    la RA, -8(BASE)
+  |  evstdd TMP0, 0(BASE)		// Copy error message.
+  |  b <7
+  |.else
+  |  mr CARG1, L
+  |  mr CARG2, L:SAVE0
+  |  bl extern lj_ffh_coroutine_wrap_err  // (lua_State *L, lua_State *co)
+  |.endif
+  |
+  |9:  // Handle stack expansion on return from yield.
+  |  mr CARG1, L
+  |  srwi CARG2, RD, 3
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  li CRET1, 0
+  |  b <4
   |.endmacro
   |
   |  coroutine_resume_wrap 1		// coroutine.resume
   |  coroutine_resume_wrap 0		// coroutine.wrap
   |
   |.ffunc coroutine_yield
-  |  NYI
+  |  lwz TMP0, L->cframe
+  |   add TMP1, BASE, NARGS8:RC
+  |   stw BASE, L->base
+  |  andi. TMP0, TMP0, CFRAME_RESUME
+  |   stw TMP1, L->top
+  |    li CRET1, LUA_YIELD
+  |  beq ->fff_fallback
+  |   stw ZERO, L->cframe
+  |    stb CRET1, L->status
+  |  b ->vm_leave_unw
   |
   |//-- Math library -------------------------------------------------------
   |
