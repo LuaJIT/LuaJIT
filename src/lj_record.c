@@ -2015,6 +2015,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       TRef tr = TREF_NIL;
       ptrdiff_t idx = select_mode(J, tridx, &J->L->base[dst-1]);
       if (idx < 0) goto nyivarg;
+      if (idx != 0 && !tref_isinteger(tridx))
+	tridx = emitir(IRTGI(IR_TOINT), tridx, IRTOINT_INDEX);
       if (idx != 0 && tref_isk(tridx)) {
 	emitir(IRTGI(idx <= nvararg ? IR_GE : IR_LT),
 	       fr, lj_ir_kint(J, frofs+8*(int32_t)idx));
