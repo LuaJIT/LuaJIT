@@ -130,6 +130,7 @@ static LJ_NORET LJ_NOINLINE void asm_mclimit(ASMState *as)
 
 #define emit_i8(as, i)		(*--as->mcp = (MCode)(i))
 #define emit_i32(as, i)		(*(int32_t *)(as->mcp-4) = (i), as->mcp -= 4)
+#define emit_u32(as, u)		(*(uint32_t *)(as->mcp-4) = (u), as->mcp -= 4)
 
 #define emit_x87op(as, xo) \
   (*(uint16_t *)(as->mcp-2) = (uint16_t)(xo), as->mcp -= 2)
@@ -1683,8 +1684,13 @@ static void asm_href(ASMState *as, IRIns *ir)
       emit_rmro(as, XO_UCOMISD, key, dest, offsetof(Node, key.n));
       emit_sjcc(as, CC_A, l_next);
       /* The type check avoids NaN penalties and complaints from Valgrind. */
+#if LJ_64
+      emit_u32(as, LJ_TISNUM);
+      emit_rmro(as, XO_ARITHi, XOg_CMP, dest, offsetof(Node, key.it));
+#else
       emit_i8(as, ~IRT_NUM);
       emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
+#endif
     }
 #if LJ_64
   } else if (irt_islightud(kt)) {
@@ -2004,10 +2010,15 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     asm_fuseahuref(as, ir->op1, RSET_GPR);
   }
   /* Always do the type check, even if the load result is unused. */
-  asm_guardcc(as, irt_isnum(ir->t) ? CC_A : CC_NE);
-  emit_i8(as, ~irt_type(ir->t));
   as->mrm.ofs += 4;
-  emit_mrm(as, XO_ARITHi8, XOg_CMP, RID_MRM);
+  asm_guardcc(as, irt_isnum(ir->t) ? CC_A : CC_NE);
+  if (LJ_64 && irt_isnum(ir->t)) {
+    emit_u32(as, LJ_TISNUM);
+    emit_mrm(as, XO_ARITHi, XOg_CMP, RID_MRM);
+  } else {
+    emit_i8(as, ~irt_type(ir->t));
+    emit_mrm(as, XO_ARITHi8, XOg_CMP, RID_MRM);
+  }
 }
 
 static void asm_ahustore(ASMState *as, IRIns *ir)
@@ -2085,8 +2096,13 @@ static void asm_sload(ASMState *as, IRIns *ir)
   if ((ir->op2 & IRSLOAD_TYPECHECK)) {
     /* Need type check, even if the load result is unused. */
     asm_guardcc(as, irt_isnum(t) ? CC_A : CC_NE);
-    emit_i8(as, ~irt_type(t));
-    emit_rmro(as, XO_ARITHi8, XOg_CMP, base, ofs+4);
+    if (LJ_64 && irt_isnum(t)) {
+      emit_u32(as, LJ_TISNUM);
+      emit_rmro(as, XO_ARITHi, XOg_CMP, base, ofs+4);
+    } else {
+      emit_i8(as, ~irt_type(t));
+      emit_rmro(as, XO_ARITHi8, XOg_CMP, base, ofs+4);
+    }
   }
 }
 
