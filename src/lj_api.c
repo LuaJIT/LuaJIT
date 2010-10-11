@@ -196,7 +196,11 @@ LUA_API int lua_type(lua_State *L, int idx)
     return LUA_TNONE;
   } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
     uint32_t t = ~itype(o);
+#if LJ_64
+    int tt = (int)((U64x(7506,98042110) >> 4*t) & 15u);
+#else
     int tt = (int)(((t < 8 ? 0x98042110 : 0x7506) >> 4*(t&7)) & 15u);
+#endif
     lua_assert(tt != LUA_TNIL || tvisnil(o));
     return tt;
   }
