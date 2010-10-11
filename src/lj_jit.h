@@ -218,7 +218,7 @@ typedef struct ScEvEntry {
   IRRef1 stop;		/* Constant stop reference. */
   IRRef1 step;		/* Constant step reference. */
   IRType1 t;		/* Scalar type. */
-  uint8_t dir;		/* Direction. 0: +, 1: -. */
+  uint8_t dir;		/* Direction. 1: +, 0: -. */
 } ScEvEntry;
 
 /* 128 bit SIMD constants. */

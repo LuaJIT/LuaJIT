@@ -1290,8 +1290,8 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
-      if ((!irt_isint(ir->t) || (ir->op2 & IRSLOAD_FRAME)) &&
-	  !(ir->op2 & IRSLOAD_PARENT) && noconflict(as, ref, IR_RETF)) {
+      if (!(ir->op2 & (IRSLOAD_PARENT|IRSLOAD_CONVERT)) &&
+	  noconflict(as, ref, IR_RETF)) {
 	as->mrm.base = (uint8_t)ra_alloc1(as, REF_BASE, xallow);
 	as->mrm.ofs = 8*((int32_t)ir->op1-1) + ((ir->op2&IRSLOAD_FRAME)?4:0);
 	as->mrm.idx = RID_NONE;
@@ -2061,8 +2061,9 @@ static void asm_sload(ASMState *as, IRIns *ir)
   IRType1 t = ir->t;
   Reg base;
   lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
-  lua_assert(irt_isguard(ir->t) || !(ir->op2 & IRSLOAD_TYPECHECK));
-  if (irt_isint(t) && irt_isguard(t)) {
+  lua_assert(irt_isguard(t) || !(ir->op2 & IRSLOAD_TYPECHECK));
+  lua_assert(!irt_isint(t) || (ir->op2 & (IRSLOAD_CONVERT|IRSLOAD_FRAME)));
+  if ((ir->op2 & IRSLOAD_CONVERT) && irt_isguard(t)) {
     Reg left = ra_scratch(as, RSET_FPR);
     asm_tointg(as, ir, left);  /* Frees dest reg. Do this before base alloc. */
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
@@ -2078,11 +2079,11 @@ static void asm_sload(ASMState *as, IRIns *ir)
     return;
 #endif
   } else if (ra_used(ir)) {
-    RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
+    RegSet allow = irt_isnum(t) ? RSET_FPR : RSET_GPR;
     Reg dest = ra_dest(as, ir, allow);
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
     lua_assert(irt_isnum(t) || irt_isint(t) || irt_isaddr(t));
-    if (irt_isint(t) && !(ir->op2 & IRSLOAD_FRAME))
+    if ((ir->op2 & IRSLOAD_CONVERT))
       emit_rmro(as, XO_CVTSD2SI, dest, base, ofs);
     else if (irt_isnum(t))
       emit_rmro(as, XMM_MOVRM(as), dest, base, ofs);

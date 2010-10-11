@@ -298,11 +298,11 @@ static TRef fori_arg(jit_State *J, const BCIns *fori, BCReg slot, IRType t)
   TRef tr = J->base[slot];
   if (!tr) {
     tr = find_kinit(J, fori, slot, t);
-    if (!tr) {
-      if (t == IRT_INT)
-	t |= IRT_GUARD;
-      tr = sloadt(J, (int32_t)slot, t, IRSLOAD_READONLY|IRSLOAD_INHERIT);
-    }
+    if (!tr)
+      tr = sloadt(J, (int32_t)slot,
+	     t == IRT_INT ? (IRT_INT|IRT_GUARD) : t,
+	     t == IRT_INT ? (IRSLOAD_CONVERT|IRSLOAD_READONLY|IRSLOAD_INHERIT) :
+			    (IRSLOAD_READONLY|IRSLOAD_INHERIT));
   }
   return tr;
 }
@@ -2512,6 +2512,7 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
   cTValue *forbase = &J->L->base[ra];
   IRType t = (J->flags & JIT_F_OPT_NARROW) ? lj_opt_narrow_forl(forbase)
 					   : IRT_NUM;
+  TRef start;
   TRef stop = fori_arg(J, fori, ra+FORL_STOP, t);
   TRef step = fori_arg(J, fori, ra+FORL_STEP, t);
   int dir = (0 <= numV(&forbase[FORL_STEP]));
@@ -2548,10 +2549,11 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
     emitir(IRTGI(dir ? IR_LE : IR_GE), stop, lj_ir_kint(J, k));
   }
   J->scev.start = tref_ref(find_kinit(J, fori, ra+FORL_IDX, IRT_INT));
-  if (t == IRT_INT && !J->scev.start)
-    t |= IRT_GUARD;
-  J->base[ra+FORL_EXT] = sloadt(J, (int32_t)(ra+FORL_IDX), t, IRSLOAD_INHERIT);
-  J->scev.idx = tref_ref(J->base[ra+FORL_EXT]);
+  start = sloadt(J, (int32_t)(ra+FORL_IDX),
+	    (t == IRT_INT && !J->scev.start) ? (IRT_INT|IRT_GUARD) : t,
+	    t == IRT_INT ? (IRSLOAD_CONVERT|IRSLOAD_INHERIT) : IRSLOAD_INHERIT);
+  J->base[ra+FORL_EXT] = start;
+  J->scev.idx = tref_ref(start);
   J->maxslot = ra+FORL_EXT+1;
 }
 
