@@ -11,21 +11,30 @@
 <style type="text/css">
 table.compat {
   line-height: 1.2;
-  width: 47em;
+  width: 600px;
 }
 tr.compathead td {
   font-weight: bold;
+  border-bottom: 2px solid #bfcfff;
+}
+tr.compathead td.compatos {
+  vertical-align: top;
 }
 td {
-  border-left: 1px solid #bfcfff;
-  border-right: 1px solid #bfcfff;
+  border: 1px solid #bfcfff;
+  font-size: 90%;
+  height: 2.5em;
+}
+td.compatcpu {
+  width: 16%;
+  border-right: 2px solid #bfcfff;
 }
 td.compatos {
-  width: 25%;
+  width: 21%;
+  vertical-align: middle;
 }
-td.compatcc {
-  width: 25%;
-  vertical-align: top;
+td.compatno {
+  background-color: #d0d0d0;
 }
 </style>
 </head>
@@ -78,34 +87,32 @@ operating system, CPU and compilers:
 </p>
 <table class="compat">
 <tr class="compathead">
-<td class="compatos">OS / CPU</td>
-<td class="compatcc">x86 (32 bit)</td>
-<td class="compatcc">x64 (64 bit)</td>
-<td class="compatcc">PPC/e500v2</td>
+<td class="compatcpu">CPU / OS</td>
+<td class="compatos"><a href="#posix">Linux</a></td>
+<td class="compatos"><a href="#posix">OSX<br>10.3-10.6</a></td>
+<td class="compatos"><a href="#posix">*BSD, other</a></td>
+<td class="compatos"><a href="#windows">Windows<br>98/XP/Vista/7</a></td>
 </tr>
 <tr class="odd separate">
-<td class="compatos"><a href="#posix">Linux</a></td>
-<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
-<td class="compatcc">GCC 4.x</td>
-<td class="compatcc">GCC 4.3+</td>
+<td class="compatcpu">x86 (32 bit)</td>
+<td class="compatos">GCC 4.x<br>GCC 3.4</td>
+<td class="compatos">GCC 4.x<br>GCC 3.4</td>
+<td class="compatos">GCC 4.x<br>GCC 3.4</td>
+<td class="compatos">MSVC, MSVC/EE<br>WinSDK<br>MinGW, Cygwin</td>
 </tr>
 <tr class="even">
-<td class="compatos"><a href="#windows">Windows<br>98/XP/Vista/7</a></td>
-<td class="compatcc">MSVC (EE)<br>Windows SDK<br>MinGW (GCC)<br>Cygwin (GCC)</td>
-<td class="compatcc">MSVC + SDK v7.0<br>Windows SDK v7.0</td>
-<td class="compatcc">&nbsp;</td>
+<td class="compatcpu">x64 (64 bit)</td>
+<td class="compatos">GCC 4.x</td>
+<td class="compatos">GCC 4.x</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
 </tr>
 <tr class="odd">
-<td class="compatos"><a href="#posix">OSX 10.3-10.6</a></td>
-<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
-<td class="compatcc">GCC 4.x</td>
-<td class="compatcc">&nbsp;</td>
-</tr>
-<tr class="even">
-<td class="compatos"><a href="#posix">*BSD, other</a></td>
-<td class="compatcc">GCC 4.x<br>GCC 3.4</td>
-<td class="compatcc">(not supported)</td>
-<td class="compatcc">&nbsp;</td>
+<td class="compatcpu">PPC/e500v2</td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
 </tr>
 </table>
 
@@ -120,9 +127,9 @@ hold all user-configurable settings:
 <li><tt>Makefile</tt> has settings for <b>installing</b> LuaJIT (POSIX
 only).</li>
 <li><tt>src/Makefile</tt> has settings for <b>compiling</b> LuaJIT
-under POSIX, MinGW and Cygwin.</li>
+under POSIX, MinGW or Cygwin.</li>
 <li><tt>src/msvcbuild.bat</tt> has settings for compiling LuaJIT with
-MSVC.</li>
+MSVC or WinSDK.</li>
 </ul>
 <p>
 Please read the instructions given in these files, before changing
@@ -133,14 +140,13 @@ any settings.
 <h3>Prerequisites</h3>
 <p>
 Depending on your distribution, you may need to install a package for
-GCC (GCC 3.4 or later required), the development headers and/or a
-complete SDK. E.g. on a current Debian/Ubuntu, install <tt>libc6-dev</tt>
-with the package manager.
+GCC, the development headers and/or a complete SDK. E.g. on a current
+Debian/Ubuntu, install <tt>libc6-dev</tt> with the package manager.
 </p>
 <p>
-Download the current source package (pick the .tar.gz), if you haven't
-already done so. Move it to a directory of your choice, open a
-terminal window and change to this directory. Now unpack the archive
+Download the current source package of LuaJIT (pick the .tar.gz),
+if you haven't already done so. Move it to a directory of your choice,
+open a terminal window and change to this directory. Now unpack the archive
 and change to the newly created directory:
 </p>
 <pre class="code">
