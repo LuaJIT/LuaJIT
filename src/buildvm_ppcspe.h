@@ -12,7 +12,7 @@
 #define DASM_SECTION_CODE_OP	0
 #define DASM_SECTION_CODE_SUB	1
 #define DASM_MAXSECTION		2
-static const unsigned int build_actionlist[4905] = {
+static const unsigned int build_actionlist[4907] = {
 0x00010001,
 0x00060014,
 0x72000000,
@@ -4187,8 +4187,10 @@ static const unsigned int build_actionlist[4905] = {
 0x00098200,
 0x7e439378,
 0x9201000c,
+0x7d956378,
 0x48000001,
 0x0003002e,
+0x7eacab78,
 0x48000000,
 0x0005000b,
 0x00060011,
@@ -5674,69 +5676,69 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TSETM:
     dasm_put(Dst, 4122, 32-3, Dt6(->asize), 31-3, Dt6(->marked), Dt6(->array), LJ_GC_BLACK, Dt1(->base), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->marked), Dt6(->gclist));
-    dasm_put(Dst, 4189);
+    dasm_put(Dst, 4191);
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
 
   case BC_CALLM:
-    dasm_put(Dst, 4192);
+    dasm_put(Dst, 4194);
     break;
   case BC_CALL:
-    dasm_put(Dst, 4194, Dt7(->pc));
+    dasm_put(Dst, 4196, Dt7(->pc));
     break;
 
   case BC_CALLMT:
-    dasm_put(Dst, 4214);
+    dasm_put(Dst, 4216);
     break;
   case BC_CALLT:
-    dasm_put(Dst, 4216, FRAME_TYPE, Dt7(->ffid), FRAME_VARG, Dt7(->pc), -4-8, Dt7(->pc), PC2PROTO(k), FRAME_TYPEP);
-    dasm_put(Dst, 4281, FRAME_TYPE);
+    dasm_put(Dst, 4218, FRAME_TYPE, Dt7(->ffid), FRAME_VARG, Dt7(->pc), -4-8, Dt7(->pc), PC2PROTO(k), FRAME_TYPEP);
+    dasm_put(Dst, 4283, FRAME_TYPE);
     break;
 
   case BC_ITERC:
-    dasm_put(Dst, 4288, Dt7(->pc));
+    dasm_put(Dst, 4290, Dt7(->pc));
     break;
 
   case BC_ITERN:
 #if LJ_HASJIT
 #endif
-    dasm_put(Dst, 4314, Dt6(->asize), Dt6(->array), 31-3, -(BCBIAS_J*4 >> 16), Dt6(->hmask), Dt6(->node), 31-5, 31-3, DtB(->key), -(BCBIAS_J*4 >> 16));
-    dasm_put(Dst, 4393);
+    dasm_put(Dst, 4316, Dt6(->asize), Dt6(->array), 31-3, -(BCBIAS_J*4 >> 16), Dt6(->hmask), Dt6(->node), 31-5, 31-3, DtB(->key), -(BCBIAS_J*4 >> 16));
+    dasm_put(Dst, 4395);
     break;
 
   case BC_ISNEXT:
-    dasm_put(Dst, 4397, LJ_TTAB, LJ_TFUNC, LJ_TNIL, Dt8(->ffid), FF_next_N, 32-1, -(BCBIAS_J*4 >> 16), BC_JMP, BC_ITERC, -(BCBIAS_J*4 >> 16));
+    dasm_put(Dst, 4399, LJ_TTAB, LJ_TFUNC, LJ_TNIL, Dt8(->ffid), FF_next_N, 32-1, -(BCBIAS_J*4 >> 16), BC_JMP, BC_ITERC, -(BCBIAS_J*4 >> 16));
     break;
 
   case BC_VARG:
-    dasm_put(Dst, 4448, FRAME_VARG, Dt1(->maxstack), Dt1(->top), Dt1(->base), 32-3, Dt1(->base));
-    dasm_put(Dst, 4528);
+    dasm_put(Dst, 4450, FRAME_VARG, Dt1(->maxstack), Dt1(->top), Dt1(->base), 32-3, Dt1(->base));
+    dasm_put(Dst, 4530);
     break;
 
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
-    dasm_put(Dst, 4534);
+    dasm_put(Dst, 4536);
     break;
 
   case BC_RET:
-    dasm_put(Dst, 4536, FRAME_TYPE, FRAME_VARG, Dt7(->pc), PC2PROTO(k), FRAME_TYPEP);
+    dasm_put(Dst, 4538, FRAME_TYPE, FRAME_VARG, Dt7(->pc), PC2PROTO(k), FRAME_TYPEP);
     break;
 
   case BC_RET0: case BC_RET1:
-    dasm_put(Dst, 4606, FRAME_TYPE, FRAME_VARG);
+    dasm_put(Dst, 4608, FRAME_TYPE, FRAME_VARG);
     if (op == BC_RET1) {
-      dasm_put(Dst, 4619);
+      dasm_put(Dst, 4621);
     }
-    dasm_put(Dst, 4622, Dt7(->pc), PC2PROTO(k));
+    dasm_put(Dst, 4624, Dt7(->pc), PC2PROTO(k));
     break;
 
   /* -- Loops and branches ------------------------------------------------ */
 
   case BC_FORL:
 #if LJ_HASJIT
-    dasm_put(Dst, 4650);
+    dasm_put(Dst, 4652);
 #endif
     break;
 
@@ -5748,35 +5750,35 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_FORI:
   case BC_IFORL:
     vk = (op == BC_IFORL || op == BC_JFORL);
-    dasm_put(Dst, 4652, FORL_IDX*8, FORL_STEP*8, FORL_STOP*8);
+    dasm_put(Dst, 4654, FORL_IDX*8, FORL_STEP*8, FORL_STOP*8);
     if (!vk) {
-      dasm_put(Dst, 4660);
+      dasm_put(Dst, 4662);
     }
     if (vk) {
-      dasm_put(Dst, 4668, FORL_IDX*8);
+      dasm_put(Dst, 4670, FORL_IDX*8);
     }
-    dasm_put(Dst, 4672, FORL_EXT*8);
+    dasm_put(Dst, 4674, FORL_EXT*8);
     if (op != BC_JFORL) {
-      dasm_put(Dst, 4680, 32-1);
+      dasm_put(Dst, 4682, 32-1);
       if (op == BC_JFORI) {
-	dasm_put(Dst, 4684, -(BCBIAS_J*4 >> 16));
+	dasm_put(Dst, 4686, -(BCBIAS_J*4 >> 16));
       } else {
-	dasm_put(Dst, 4687, -(BCBIAS_J*4 >> 16));
+	dasm_put(Dst, 4689, -(BCBIAS_J*4 >> 16));
       }
     }
     if (op == BC_FORI) {
-      dasm_put(Dst, 4690);
-    } else if (op == BC_IFORL) {
       dasm_put(Dst, 4692);
+    } else if (op == BC_IFORL) {
+      dasm_put(Dst, 4694);
     } else {
-      dasm_put(Dst, 4694, BC_JLOOP);
+      dasm_put(Dst, 4696, BC_JLOOP);
     }
-    dasm_put(Dst, 4697);
+    dasm_put(Dst, 4699);
     break;
 
   case BC_ITERL:
 #if LJ_HASJIT
-    dasm_put(Dst, 4712);
+    dasm_put(Dst, 4714);
 #endif
     break;
 
@@ -5785,40 +5787,40 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IITERL:
-    dasm_put(Dst, 4714);
+    dasm_put(Dst, 4716);
     if (op == BC_JITERL) {
-      dasm_put(Dst, 4720);
+      dasm_put(Dst, 4722);
     } else {
-      dasm_put(Dst, 4722, 32-1, -(BCBIAS_J*4 >> 16));
+      dasm_put(Dst, 4724, 32-1, -(BCBIAS_J*4 >> 16));
     }
-    dasm_put(Dst, 4729);
+    dasm_put(Dst, 4731);
     break;
 
   case BC_LOOP:
 #if LJ_HASJIT
-    dasm_put(Dst, 4741);
+    dasm_put(Dst, 4743);
 #endif
     break;
 
   case BC_ILOOP:
-    dasm_put(Dst, 4743);
+    dasm_put(Dst, 4745);
     break;
 
   case BC_JLOOP:
 #if LJ_HASJIT
-    dasm_put(Dst, 4754);
+    dasm_put(Dst, 4756);
 #endif
     break;
 
   case BC_JMP:
-    dasm_put(Dst, 4756, 32-1, -(BCBIAS_J*4 >> 16));
+    dasm_put(Dst, 4758, 32-1, -(BCBIAS_J*4 >> 16));
     break;
 
   /* -- Function headers -------------------------------------------------- */
 
   case BC_FUNCF:
 #if LJ_HASJIT
-    dasm_put(Dst, 4772);
+    dasm_put(Dst, 4774);
 #endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     break;
@@ -5828,38 +5830,38 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IFUNCF:
-    dasm_put(Dst, 4774, Dt1(->maxstack), -4+PC2PROTO(numparams), -4+PC2PROTO(k), 31-3);
+    dasm_put(Dst, 4776, Dt1(->maxstack), -4+PC2PROTO(numparams), -4+PC2PROTO(k), 31-3);
     if (op == BC_JFUNCF) {
-      dasm_put(Dst, 4792);
-    } else {
       dasm_put(Dst, 4794);
+    } else {
+      dasm_put(Dst, 4796);
     }
-    dasm_put(Dst, 4803);
+    dasm_put(Dst, 4805);
     break;
 
   case BC_JFUNCV:
 #if !LJ_HASJIT
     break;
 #endif
-    dasm_put(Dst, 4809);
+    dasm_put(Dst, 4811);
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    dasm_put(Dst, 4811, Dt1(->maxstack), 8+FRAME_VARG, -4+PC2PROTO(k), -4+PC2PROTO(numparams));
+    dasm_put(Dst, 4813, Dt1(->maxstack), 8+FRAME_VARG, -4+PC2PROTO(k), -4+PC2PROTO(numparams));
     break;
 
   case BC_FUNCC:
   case BC_FUNCCW:
     if (op == BC_FUNCC) {
-      dasm_put(Dst, 4861, Dt8(->f));
+      dasm_put(Dst, 4863, Dt8(->f));
     } else {
-      dasm_put(Dst, 4864, DISPATCH_GL(wrapf));
+      dasm_put(Dst, 4866, DISPATCH_GL(wrapf));
     }
-    dasm_put(Dst, 4867, Dt1(->maxstack), Dt1(->base), Dt1(->top), ~LJ_VMST_C);
+    dasm_put(Dst, 4869, Dt1(->maxstack), Dt1(->base), Dt1(->top), ~LJ_VMST_C);
     if (op == BC_FUNCCW) {
-      dasm_put(Dst, 4880, Dt8(->f));
+      dasm_put(Dst, 4882, Dt8(->f));
     }
-    dasm_put(Dst, 4883, DISPATCH_GL(vmstate), Dt1(->top), 31-3, Dt1(->base), ~LJ_VMST_INTERP, DISPATCH_GL(vmstate));
+    dasm_put(Dst, 4885, DISPATCH_GL(vmstate), Dt1(->top), 31-3, Dt1(->base), ~LJ_VMST_INTERP, DISPATCH_GL(vmstate));
     break;
 
   /* ---------------------------------------------------------------------- */
@@ -5879,7 +5881,7 @@ static int build_backend(BuildCtx *ctx)
 
   build_subroutines(ctx);
 
-  dasm_put(Dst, 4904);
+  dasm_put(Dst, 4906);
   for (op = 0; op < BC__MAX; op++)
     build_ins(ctx, (BCOp)op, op);
 

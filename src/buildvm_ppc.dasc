@@ -2948,8 +2948,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   stw BASE, L->base
     |  mr CARG1, L
     |   stw PC, SAVE_PC
+    |  mr SAVE0, RD
     |  bl extern lj_tab_reasize		// (lua_State *L, GCtab *t, int nasize)
     |  // Must not reallocate the stack.
+    |  mr RD, SAVE0
     |  b <1
     |
     |7:  // Possible table write barrier for any value. Skip valiswhite check.
