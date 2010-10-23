@@ -173,7 +173,7 @@ static void read_string(LexState *ls, int delim, TValue *tv)
 	    c = 10*c + (ls->current-'0');
 	    next(ls);
 	  } while (++i<3 && lj_ctype_isdigit(ls->current));
-	  if (c > UCHAR_MAX)
+	  if (c > 255)
 	    lj_lex_error(ls, TK_string, LJ_ERR_XESC);
 	  save(ls, c);
 	}
