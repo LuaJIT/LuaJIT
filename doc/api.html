@@ -259,7 +259,7 @@ applies recursively to all sub-functions of the function with
 <tt>LUAJIT_MODE_ALLSUBFUNC</tt>.
 </p>
 
-<h3 id="mode_engine"><tt>luaJIT_setmode(L, trace,<br>
+<h3 id="mode_trace"><tt>luaJIT_setmode(L, trace,<br>
 &nbsp;&nbsp;LUAJIT_MODE_TRACE|LUAJIT_MODE_FLUSH)</tt></h3>
 <p>
 Flushes the specified root trace and all of its side traces from the cache.
@@ -267,7 +267,7 @@ The code for the trace will be retained as long as there are any other
 traces which link to it.
 </p>
 
-<h3 id="mode_engine"><tt>luaJIT_setmode(L, idx, LUAJIT_MODE_WRAPCFUNC|flag)</tt></h3>
+<h3 id="mode_wrapcfunc"><tt>luaJIT_setmode(L, idx, LUAJIT_MODE_WRAPCFUNC|flag)</tt></h3>
 <p>
 This mode defines a wrapper function for calls to C functions. If
 called with <tt>LUAJIT_MODE_ON</tt>, the stack index at <tt>idx</tt>
