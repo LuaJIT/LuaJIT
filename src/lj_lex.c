@@ -46,16 +46,22 @@ static int fillbuf(LexState *ls)
   return char2int(*(ls->p++));
 }
 
-static void save(LexState *ls, int c)
+static LJ_NOINLINE void save_grow(LexState *ls, int c)
 {
-  if (ls->sb.n + 1 > ls->sb.sz) {
-    MSize newsize;
-    if (ls->sb.sz >= LJ_MAX_STR/2)
-      lj_lex_error(ls, 0, LJ_ERR_XELEM);
-    newsize = ls->sb.sz * 2;
-    lj_str_resizebuf(ls->L, &ls->sb, newsize);
-  }
-  ls->sb.buf[ls->sb.n++] = cast(char, c);
+  MSize newsize;
+  if (ls->sb.sz >= LJ_MAX_STR/2)
+    lj_lex_error(ls, 0, LJ_ERR_XELEM);
+  newsize = ls->sb.sz * 2;
+  lj_str_resizebuf(ls->L, &ls->sb, newsize);
+  ls->sb.buf[ls->sb.n++] = (char)c;
+}
+
+static LJ_AINLINE void save(LexState *ls, int c)
+{
+  if (LJ_UNLIKELY(ls->sb.n + 1 > ls->sb.sz))
+    save_grow(ls, c);
+  else
+    ls->sb.buf[ls->sb.n++] = (char)c;
 }
 
 static void inclinenumber(LexState *ls)
@@ -73,18 +79,14 @@ static void inclinenumber(LexState *ls)
 
 static void read_numeral(LexState *ls, TValue *tv)
 {
+  int c;
   lua_assert(lj_ctype_isdigit(ls->current));
   do {
+    c = ls->current;
     save_and_next(ls);
-  } while (lj_ctype_isdigit(ls->current) || ls->current == '.');
-  if (ls->current == 'e' || ls->current == 'E' ||
-      ls->current == 'p' || ls->current == 'P') {
-    save_and_next(ls);
-    if (ls->current == '+' || ls->current == '-')
-      save_and_next(ls);
-  }
-  while (lj_ctype_isident(ls->current))
-    save_and_next(ls);
+  } while (lj_ctype_isident(ls->current) || ls->current == '.' ||
+	   ((ls->current == '-' || ls->current == '+') &&
+	    ((c & ~0x20) == 'E' || (c & ~0x20) == 'P')));
   save(ls, '\0');
   if (!lj_str_numconv(ls->sb.buf, tv))
     lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
