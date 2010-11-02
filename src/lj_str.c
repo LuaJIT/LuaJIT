@@ -186,12 +186,14 @@ int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
     uint32_t k = (uint32_t)(*p++ - '0');
     if (k == 0 && ((*p & ~0x20) == 'X')) {
       p++;
-      while (lj_ctype_isxdigit(*p)) {
+      if (!lj_ctype_isxdigit(*p))
+	return 0;  /* Don't accept '0x' without hex digits. */
+      do {
 	if (k >= 0x10000000) goto parsedbl;
 	k = (k << 4) + (*p & 15u);
 	if (!lj_ctype_isdigit(*p)) k += 9;
 	p++;
-      }
+      } while (lj_ctype_isxdigit(*p));
     } else {
       while ((uint32_t)(*p - '0') < 10) {
 	if (k >= 0x19999999) goto parsedbl;
@@ -209,10 +211,10 @@ parsedbl:
     TValue tv;
     char *endptr;
     setnumV(&tv, lua_str2number(s, &endptr));
-    if (endptr == s) return 0;  /* conversion failed */
+    if (endptr == s) return 0;  /* Conversion failed. */
     if (LJ_UNLIKELY(*endptr != '\0')) {
       while (lj_ctype_isspace((uint8_t)*endptr)) endptr++;
-      if (*endptr != '\0') return 0;  /* invalid trailing characters? */
+      if (*endptr != '\0') return 0;  /* Invalid trailing characters? */
     }
     if (LJ_LIKELY(!tvisnan(&tv)))
       setnumV(n, numV(&tv));
