@@ -1614,11 +1614,13 @@ static MCode *merge_href_niltv(ASMState *as, IRIns *ir)
   /* Assumes nothing else generates NE of HREF. */
   if ((ir[1].o == IR_NE || ir[1].o == IR_EQ) && ir[1].op1 == as->curins &&
       ra_hasreg(ir->r)) {
-    if (LJ_64 && *as->mcp != XI_ARITHi)
-      as->mcp += 7+6;
-    else
-      as->mcp += 6+6;  /* Kill cmp reg, imm32 + jz exit. */
-    return as->mcp + *(int32_t *)(as->mcp-4);  /* Return exit address. */
+    MCode *p = as->mcp;
+    p += (LJ_64 && *p != XI_ARITHi) ? 7+6 : 6+6;
+    /* Ensure no loop branch inversion happened. */
+    if (p[-6] == 0x0f && p[-5] == XI_JCCn+(CC_NE^(ir[1].o & 1))) {
+      as->mcp = p;  /* Kill cmp reg, imm32 + jz exit. */
+      return p + *(int32_t *)(p-4);  /* Return exit address. */
+    }
   }
   return NULL;
 }
