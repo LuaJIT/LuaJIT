@@ -13,19 +13,19 @@ table.compat {
   line-height: 1.2;
   width: 600px;
 }
-tr.compathead td {
+table.compat td {
+  border: 1px solid #bfcfff;
+  font-size: 90%;
+  height: 2.5em;
+}
+table.compat tr.compathead td {
   font-weight: bold;
   border-bottom: 2px solid #bfcfff;
 }
 tr.compathead td.compatos {
   vertical-align: top;
 }
-td {
-  border: 1px solid #bfcfff;
-  font-size: 90%;
-  height: 2.5em;
-}
-td.compatcpu {
+table.compat td.compatcpu {
   width: 16%;
   border-right: 2px solid #bfcfff;
 }
@@ -52,8 +52,13 @@ td.compatno {
 <a class="current" href="install.html">Installation</a>
 </li><li>
 <a href="running.html">Running</a>
+</li></ul>
 </li><li>
-<a href="api.html">API Extensions</a>
+<a href="extensions.html">Extensions</a>
+<ul><li>
+<a href="ext_jit.html">jit.* Library</a>
+</li><li>
+<a href="ext_c_api.html">Lua/C API</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
