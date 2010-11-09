@@ -26,7 +26,7 @@
 
 #include "lj_gc.c"
 #include "lj_err.c"
-#include "lj_ctype.c"
+#include "lj_char.c"
 #include "lj_bc.c"
 #include "lj_obj.c"
 #include "lj_str.c"

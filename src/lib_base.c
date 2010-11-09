@@ -25,7 +25,7 @@
 #include "lj_bc.h"
 #include "lj_ff.h"
 #include "lj_dispatch.h"
-#include "lj_ctype.h"
+#include "lj_char.h"
 #include "lj_lib.h"
 
 /* -- Base library: checks ------------------------------------------------ */
@@ -197,7 +197,7 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
       lj_err_arg(L, 2, LJ_ERR_BASERNG);
     ul = strtoul(p, &ep, base);
     if (p != ep) {
-      while (lj_ctype_isspace((unsigned char)(*ep))) ep++;
+      while (lj_char_isspace((unsigned char)(*ep))) ep++;
       if (*ep == '\0') {
 	setnumV(L->base-1, cast_num(ul));
 	return FFH_RES(1);

@@ -289,7 +289,7 @@ LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o \
 	 lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o
 LJLIB_C= $(LJLIB_O:.o=.c)
 
-LJCORE_O= lj_gc.o lj_err.o lj_ctype.o lj_bc.o lj_obj.o \
+LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o \
 	  lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o \
 	  lj_state.o lj_dispatch.o lj_vmevent.o lj_api.o \
 	  lj_lex.o lj_parse.o \
