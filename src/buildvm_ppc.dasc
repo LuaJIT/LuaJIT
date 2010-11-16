@@ -1681,8 +1681,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <1
   |.endmacro
   |
-  |ffstring_case string_lower, 0x41
-  |ffstring_case string_upper, 0x61
+  |ffstring_case string_lower, 65
+  |ffstring_case string_upper, 97
   |
   |//-- Table library ------------------------------------------------------
   |
