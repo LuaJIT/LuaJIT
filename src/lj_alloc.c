@@ -72,7 +72,7 @@
 
 #define IS_DIRECT_BIT		(SIZE_T_ONE)
 
-#ifdef LUA_USE_WIN
+#if LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -166,13 +166,12 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #if LJ_64
 /* 64 bit mode needs special support for allocating memory in the lower 2GB. */
 
-#if defined(__linux__)
+#if LJ_TARGET_LINUX
 
 /* Actually this only gives us max. 1GB in current Linux kernels. */
 #define CALL_MMAP(s)	mmap(NULL, (s), MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0)
 
-#elif (defined(__MACH__) && defined(__APPLE__)) || \
-      defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 
 /* OSX and FreeBSD mmap() use a naive first-fit linear search.
 ** That's perfect for us. Except that -pagezero_size must be set for OSX,
@@ -233,7 +232,7 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
 #define DIRECT_MMAP(s)		CALL_MMAP(s)
 #define CALL_MUNMAP(a, s)	munmap((a), (s))
 
-#ifdef __linux__
+#if LJ_TARGET_LINUX
 /* Need to define _GNU_SOURCE to get the mremap prototype. */
 #define CALL_MREMAP(addr, osz, nsz, mv) mremap((addr), (osz), (nsz), (mv))
 #define CALL_MREMAP_NOMOVE	0
@@ -420,7 +419,7 @@ typedef struct malloc_state *mstate;
   (((S) + (DEFAULT_GRANULARITY - SIZE_T_ONE))\
    & ~(DEFAULT_GRANULARITY - SIZE_T_ONE))
 
-#ifdef LUA_USE_WIN
+#if LJ_TARGET_WINDOWS
 #define mmap_align(S)	granularity_align(S)
 #else
 #define mmap_align(S)	page_align(S)

@@ -17,15 +17,15 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#ifdef LUA_USE_POSIX
+#include "lj_obj.h"
+#include "lj_err.h"
+#include "lj_lib.h"
+
+#if LJ_TARGET_POSIX
 #include <unistd.h>
 #else
 #include <stdio.h>
 #endif
-
-#include "lj_obj.h"
-#include "lj_err.h"
-#include "lj_lib.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -66,7 +66,7 @@ LJLIB_CF(os_rename)
 
 LJLIB_CF(os_tmpname)
 {
-#ifdef LUA_USE_POSIX
+#if LJ_TARGET_POSIX
   char buf[15+1];
   int fp;
   strcpy(buf, "/tmp/lua_XXXXXX");

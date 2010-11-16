@@ -114,9 +114,9 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
   if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_FILE) {
     ok = (fclose(iof->fp) == 0);
   } else if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_PIPE) {
-#if defined(LUA_USE_POSIX)
+#if LJ_TARGET_POSIX
     ok = (pclose(iof->fp) != -1);
-#elif defined(LUA_USE_WIN)
+#elif LJ_TARGET_WINDOWS
     ok = (_pclose(iof->fp) != -1);
 #else
     ok = 0;
@@ -289,7 +289,7 @@ LJLIB_CF(io_method_seek)
     ,
     ofs = 0;
   )
-#if defined(LUA_USE_POSIX)
+#if LJ_TARGET_POSIX
   res = fseeko(fp, (int64_t)ofs, opt);
 #elif _MSC_VER >= 1400
   res = _fseeki64(fp, (int64_t)ofs, opt);
@@ -300,7 +300,7 @@ LJLIB_CF(io_method_seek)
 #endif
   if (res)
     return io_pushresult(L, 0, NULL);
-#if defined(LUA_USE_POSIX)
+#if LJ_TARGET_POSIX
   ofs = cast_num(ftello(fp));
 #elif _MSC_VER >= 1400
   ofs = cast_num(_ftelli64(fp));
@@ -374,13 +374,13 @@ LJLIB_CF(io_open)
 
 LJLIB_CF(io_popen)
 {
-#if defined(LUA_USE_POSIX) || defined(LUA_USE_WIN)
+#if LJ_TARGET_POSIX || LJ_TARGET_WINDOWS
   const char *fname = strdata(lj_lib_checkstr(L, 1));
   GCstr *s = lj_lib_optstr(L, 2);
   const char *mode = s ? strdata(s) : "r";
   IOFileUD *iof = io_file_new(L);
   iof->type = IOFILE_TYPE_PIPE;
-#ifdef LUA_USE_POSIX
+#if LJ_TARGET_POSIX
   fflush(NULL);
   iof->fp = popen(fname, mode);
 #else

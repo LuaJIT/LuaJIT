@@ -18,10 +18,12 @@
 #include "lualib.h"
 #include "luajit.h"
 
-#if defined(LUA_USE_POSIX)
+#include "lj_arch.h"
+
+#if LJ_TARGET_POSIX
 #include <unistd.h>
 #define lua_stdin_is_tty()	isatty(0)
-#elif defined(LUA_USE_WIN)
+#elif LJ_TARGET_WINDOWS
 #include <io.h>
 #ifdef __BORLANDC__
 #define lua_stdin_is_tty()	isatty(_fileno(stdin))

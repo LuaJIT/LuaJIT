@@ -335,7 +335,7 @@ static const ELFheader elfhdr_template = {
   .eclass = LJ_64 ? 2 : 1,
   .eendian = LJ_ENDIAN_SELECT(1, 2),
   .eversion = 1,
-#if defined(__linux__)
+#if LJ_TARGET_LINUX
   .eosabi = 0,  /* Nope, it's not 3. */
 #elif defined(__FreeBSD__)
   .eosabi = 9,

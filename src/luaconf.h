@@ -9,19 +9,8 @@
 #include <limits.h>
 #include <stddef.h>
 
-/* Try to determine supported features for a couple of standard platforms. */
-#if defined(_WIN32)
-#define LUA_USE_WIN
-#define LUA_DL_DLL
-#elif defined(__linux__) || defined(__solaris__) || defined(__CYGWIN__) || \
-      defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
-      defined(__FreeBSD_kernel__) || (defined(__MACH__) && defined(__APPLE__))
-#define LUA_USE_POSIX
-#define LUA_DL_DLOPEN
-#endif
-
 /* Default path for loading Lua and C modules with require(). */
-#ifdef LUA_USE_WIN
+#if defined(_WIN32)
 /*
 ** In Windows, any exclamation mark ('!') in the path is replaced by the
 ** path of the directory of the executable file of the current process.
@@ -58,7 +47,7 @@
 #define LUA_INIT	"LUA_INIT"
 
 /* Special file system characters. */
-#ifdef LUA_USE_WIN
+#if defined(_WIN32)
 #define LUA_DIRSEP	"\\"
 #else
 #define LUA_DIRSEP	"/"

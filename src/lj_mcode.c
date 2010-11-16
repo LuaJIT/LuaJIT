@@ -19,7 +19,7 @@
 
 /* -- OS-specific functions ----------------------------------------------- */
 
-#if defined(LUA_USE_WIN)
+#if LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -49,7 +49,7 @@ static void mcode_setprot(void *p, size_t sz, DWORD prot)
   VirtualProtect(p, sz, prot, &oprot);
 }
 
-#elif defined(LUA_USE_POSIX)
+#elif LJ_TARGET_POSIX
 
 #include <sys/mman.h>
 
@@ -82,7 +82,7 @@ static void mcode_setprot(void *p, size_t sz, int prot)
 
 #elif LJ_64
 
-#error "Missing OS support for allocating executable memory"
+#error "Missing OS support for explicit placement of executable memory"
 
 #else
 

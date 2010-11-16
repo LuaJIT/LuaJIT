@@ -336,7 +336,7 @@ ifeq (Windows,$(TARGET_SYS))
   LUAJIT_SO= $(TARGET_DLLNAME)
   LUAJIT_T= luajit.exe
   ifneq ($(HOST_SYS),$(TARGET_SYS))
-    HOST_XCFLAGS+= -malign-double
+    HOST_XCFLAGS+= -malign-double -DLUAJIT_OS=LUAJIT_OS_WINDOWS
   endif
   # Mixed mode is not supported on Windows. And static mode doesn't work well.
   # C modules cannot be loaded, because they bind to lua51.dll.

@@ -49,7 +49,7 @@ LJ_FUNC int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst);
 #define lj_lib_upvalue(L, n) \
   (&gcref((L->base-1)->fr.func)->fn.c.upvalue[(n)-1])
 
-#ifdef LUA_USE_WIN
+#if LJ_TARGET_WINDOWS
 #define lj_lib_checkfpu(L) \
   do { setnumV(L->top++, (lua_Number)1437217655); \
     if (lua_tointeger(L, -1) != 1437217655) lj_err_caller(L, LJ_ERR_BADFPU); \

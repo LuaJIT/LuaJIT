@@ -69,7 +69,7 @@ enum {
 #define CFRAME_SIZE_JIT		CFRAME_SIZE
 #define CFRAME_SHIFT_MULTRES	0
 #elif LJ_TARGET_X64
-#if _WIN64
+#if LJ_ABI_WIN
 #define CFRAME_OFS_PREV		(13*8)
 #define CFRAME_OFS_PC		(25*4)
 #define CFRAME_OFS_L		(24*4)

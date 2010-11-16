@@ -23,7 +23,7 @@
 #include "lj_dispatch.h"
 #include "luajit.h"
 
-#ifdef LUA_USE_WIN
+#if defined(_WIN32)
 #include <fcntl.h>
 #include <io.h>
 #endif
@@ -64,11 +64,12 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #define DASM_ALIGNED_WRITES	1
 
 /* Embed architecture-specific DynASM encoder and backend. */
-#if LJ_TARGET_X86ORX64
+#if LJ_TARGET_X86
 #include "../dynasm/dasm_x86.h"
-#if LJ_32
 #include "buildvm_x86.h"
-#elif defined(_WIN64)
+#elif LJ_TARGET_X64
+#include "../dynasm/dasm_x86.h"
+#if LJ_ABI_WIN
 #include "buildvm_x64win.h"
 #else
 #include "buildvm_x64.h"
@@ -449,7 +450,7 @@ int main(int argc, char **argv)
 
   if (ctx->outname[0] == '-' && ctx->outname[1] == '\0') {
     ctx->fp = stdout;
-#ifdef LUA_USE_WIN
+#if defined(_WIN32)
     if (binmode)
       _setmode(_fileno(stdout), _O_BINARY);  /* Yuck. */
 #endif

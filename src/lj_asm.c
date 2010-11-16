@@ -1345,7 +1345,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   for (n = 0; n < nargs; n++) {  /* Setup args. */
     IRIns *ir = IR(args[n]);
     Reg r;
-#if LJ_64 && defined(_WIN64)
+#if LJ_64 && LJ_ABI_WIN
     /* Windows/x64 argument registers are strictly positional. */
     r = irt_isnum(ir->t) ? (fpr <= REGARG_LASTFPR ? fpr : 0) : (gprs & 31);
     fpr++; gprs >>= 5;
@@ -3518,11 +3518,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
 #if LJ_64
       /* NYI: add stack slots for x64 calls with many args. */
-#ifdef _WIN64
-      lua_assert(CCI_NARGS(ci) <= 4);
-#else
-      lua_assert(CCI_NARGS(ci) <= 6);  /* Safe lower bound. */
-#endif
+      lua_assert(CCI_NARGS(ci) <= (LJ_ABI_WIN ? 4 : 6));
       ir->prev = REGSP_HINT(irt_isnum(ir->t) ? RID_FPRET : RID_RET);
 #else
       /* NYI: not fastcall-aware, but doesn't matter (yet). */

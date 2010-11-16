@@ -719,7 +719,7 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
   return (int32_t)o.u32.lo;
 }
 
-#if (defined(__i386__) || defined(_M_IX86)) && !defined(__SSE2__)
+#if LJ_TARGET_X86 && !defined(__SSE2__)
 #define lj_num2int(n)   lj_num2bit((n))
 #else
 #define lj_num2int(n)   ((int32_t)(n))

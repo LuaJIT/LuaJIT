@@ -40,7 +40,7 @@ enum {
 
   /* These definitions must match with the *.dasc file(s): */
   RID_BASE = RID_EDX,		/* Interpreter BASE. */
-#if LJ_64 && !defined(_WIN64)
+#if LJ_64 && !LJ_ABI_WIN
   RID_PC = RID_EBX,		/* Interpreter PC. */
   RID_DISPATCH = RID_R14D,	/* Interpreter DISPATCH table. */
 #else
@@ -74,7 +74,7 @@ enum {
 /* ABI-specific register sets. */
 #define RSET_ACD	(RID2RSET(RID_EAX)|RID2RSET(RID_ECX)|RID2RSET(RID_EDX))
 #if LJ_64
-#ifdef _WIN64
+#if LJ_ABI_WIN
 /* Windows x64 ABI. */
 #define RSET_SCRATCH \
   (RSET_ACD|RSET_RANGE(RID_R8D, RID_R11D+1)|RSET_RANGE(RID_XMM0, RID_XMM5+1))
@@ -117,7 +117,7 @@ enum {
 ** SPS_FIRST: First spill slot for general use. Reserve min. two 32 bit slots.
 */
 #if LJ_64
-#ifdef _WIN64
+#if LJ_ABI_WIN
 #define SPS_FIXED	(4*2)
 #define SPS_FIRST	(4*2)	/* Don't use callee register save area. */
 #else

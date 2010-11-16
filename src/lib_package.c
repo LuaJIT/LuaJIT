@@ -27,7 +27,7 @@
 #define PACKAGE_LIB_FAIL	"open"
 #define setprogdir(L)		((void)0)
 
-#if defined(LUA_DL_DLOPEN)
+#if LJ_TARGET_DLOPEN
 
 #include <dlfcn.h>
 
@@ -50,7 +50,7 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
   return f;
 }
 
-#elif defined(LUA_DL_DLL)
+#elif LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -107,7 +107,7 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
 #undef PACKAGE_LIB_FAIL
 #define PACKAGE_LIB_FAIL	"absent"
 
-#define DLMSG	"dynamic libraries not enabled; check your Lua installation"
+#define DLMSG	"dynamic libraries not enabled; no support for target OS"
 
 static void ll_unloadlib(void *lib)
 {

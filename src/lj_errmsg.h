@@ -57,7 +57,7 @@ ERRDEF(NOENV,	"no calling environment")
 ERRDEF(CYIELD,	"attempt to yield across C-call boundary")
 ERRDEF(BADLU,	"bad light userdata pointer")
 ERRDEF(NOGCMM,	"bad action while in __gc metamethod")
-#ifdef LUA_USE_WIN
+#if LJ_TARGET_WINDOWS
 ERRDEF(BADFPU,	"bad FPU precision (use D3DCREATE_FPU_PRESERVE with DirectX)")
 #endif
 

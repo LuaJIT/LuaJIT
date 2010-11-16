@@ -63,14 +63,10 @@
 ** EXT is mandatory on POSIX/x64 since the interpreter doesn't save r12/r13.
 */
 
-#if defined(__GNUC__)
-#if LJ_TARGET_X64 || defined(LUAJIT_UNWIND_EXTERNAL)
+#if defined(__GNUC__) && (LJ_TARGET_X64 || defined(LUAJIT_UNWIND_EXTERNAL))
 #define LJ_UNWIND_EXT	1
-#endif
-#elif defined(LUA_USE_WIN)
-#if LJ_TARGET_X64
+#elif LJ_TARGET_X64 && LJ_TARGET_WINDOWS
 #define LJ_UNWIND_EXT	1
-#endif
 #endif
 
 /* -- Error messages ------------------------------------------------------ */
@@ -604,7 +600,7 @@ static void err_raise_ext(int errcode)
 }
 #endif
 
-#elif defined(_WIN64)
+#elif LJ_TARGET_X64 && LJ_TARGET_WINDOWS
 
 /*
 ** Someone in Redmond owes me several days of my life. A lot of this is
