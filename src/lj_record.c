@@ -1358,12 +1358,36 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
   UNUSED(rd);
 }
 
-static TValue *recff_tostring_cp(lua_State *L, lua_CFunction dummy, void *ud)
+static TValue *recff_metacall_cp(lua_State *L, lua_CFunction dummy, void *ud)
 {
   jit_State *J = (jit_State *)ud;
   rec_tailcall(J, 0, 1);
   UNUSED(L); UNUSED(dummy);
   return NULL;
+}
+
+static int recff_metacall(jit_State *J, RecordFFData *rd, MMS mm)
+{
+  RecordIndex ix;
+  ix.tab = J->base[0];
+  copyTV(J->L, &ix.tabv, &rd->argv[0]);
+  if (rec_mm_lookup(J, &ix, mm)) {  /* Has metamethod? */
+    int errcode;
+    /* Temporarily insert metamethod below object. */
+    J->base[1] = J->base[0];
+    J->base[0] = ix.mobj;
+    copyTV(J->L, &rd->argv[1], &rd->argv[0]);
+    copyTV(J->L, &rd->argv[0], &ix.mobjv);
+    /* Need to protect rec_tailcall because it may throw. */
+    errcode = lj_vm_cpcall(J->L, NULL, J, recff_metacall_cp);
+    /* Always undo Lua stack changes to avoid confusing the interpreter. */
+    copyTV(J->L, &rd->argv[0], &rd->argv[1]);
+    if (errcode)
+      lj_err_throw(J->L, errcode);  /* Propagate errors. */
+    rd->nres = -1;  /* Pending call. */
+    return 1;  /* Tailcalled to metamethod. */
+  }
+  return 0;
 }
 
 static void LJ_FASTCALL recff_tostring(jit_State *J, RecordFFData *rd)
@@ -1372,25 +1396,8 @@ static void LJ_FASTCALL recff_tostring(jit_State *J, RecordFFData *rd)
   if (tref_isstr(tr)) {
     /* Ignore __tostring in the string base metatable. */
     /* Pass on result in J->base[0]. */
-  } else {
-    RecordIndex ix;
-    ix.tab = tr;
-    copyTV(J->L, &ix.tabv, &rd->argv[0]);
-    if (rec_mm_lookup(J, &ix, MM_tostring)) {  /* Has __tostring metamethod? */
-      int errcode;
-      /* Temporarily insert metamethod below object. */
-      J->base[1] = tr;
-      J->base[0] = ix.mobj;
-      copyTV(J->L, &rd->argv[1], &rd->argv[0]);
-      copyTV(J->L, &rd->argv[0], &ix.mobjv);
-      /* Need to protect rec_tailcall because it may throw. */
-      errcode = lj_vm_cpcall(J->L, NULL, J, recff_tostring_cp);
-      /* Always undo Lua stack changes to avoid confusing the interpreter. */
-      copyTV(J->L, &rd->argv[0], &rd->argv[1]);
-      if (errcode)
-	lj_err_throw(J->L, errcode);  /* Propagate errors. */
-      rd->nres = -1;  /* Pending call. */
-    } else if (tref_isnumber(tr)) {
+  } else if (!recff_metacall(J, rd, MM_tostring)) {
+    if (tref_isnumber(tr)) {
       J->base[0] = emitir(IRT(IR_TOSTR, IRT_STR), tr, 0);
     } else if (tref_ispri(tr)) {
       J->base[0] = lj_ir_kstr(J, strV(&J->fn->c.upvalue[tref_type(tr)]));
@@ -1419,13 +1426,15 @@ static void LJ_FASTCALL recff_ipairs_aux(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_ipairs(jit_State *J, RecordFFData *rd)
 {
-  TRef tab = J->base[0];
-  if (tref_istab(tab)) {
-    J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
-    J->base[1] = tab;
-    J->base[2] = lj_ir_kint(J, 0);
-    rd->nres = 3;
-  }  /* else: Interpreter will throw. */
+  if (!recff_metacall(J, rd, MM_ipairs)) {
+    TRef tab = J->base[0];
+    if (tref_istab(tab)) {
+      J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
+      J->base[1] = tab;
+      J->base[2] = lj_ir_kint(J, 0);
+      rd->nres = 3;
+    }  /* else: Interpreter will throw. */
+  }
 }
 
 static void LJ_FASTCALL recff_pcall(jit_State *J, RecordFFData *rd)

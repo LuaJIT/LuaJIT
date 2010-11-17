@@ -1509,8 +1509,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp ->fff_res1
   |
   |.ffunc_1 pairs
-  |  mov CFUNC:RB, [BASE-8]
+  |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
+  |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
+  |  mov CFUNC:RB, [BASE-8]
   |  mov CFUNC:RD, CFUNC:RB->upvalue[0]
   |  mov PC, [BASE-4]
   |  mov dword [BASE-4], LJ_TFUNC
@@ -1571,8 +1573,10 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  jmp ->fff_res
   |
   |.ffunc_1 ipairs
-  |  mov CFUNC:RB, [BASE-8]
+  |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
+  |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
+  |  mov CFUNC:RB, [BASE-8]
   |  mov CFUNC:RD, CFUNC:RB->upvalue[0]
   |  mov PC, [BASE-4]
   |  mov dword [BASE-4], LJ_TFUNC
