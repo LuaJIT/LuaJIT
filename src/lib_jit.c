@@ -52,7 +52,7 @@ static int setjitmode(lua_State *L, int mode)
     if ((mode & LUAJIT_MODE_MASK) == LUAJIT_MODE_ENGINE)
       lj_err_caller(L, LJ_ERR_NOJIT);
   err:
-    lj_err_arg(L, 1, LJ_ERR_NOLFUNC);
+    lj_err_argt(L, 1, LUA_TFUNCTION);
   }
   return 0;
 }
