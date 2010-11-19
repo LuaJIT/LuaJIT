@@ -62,6 +62,11 @@ CCWARN= -Wall
 # Note that most of these are NOT suitable for benchmarking or release mode!
 XCFLAGS=
 #
+# Enable some upwards-compatible features from Lua 5.2 that are unlikely
+# to break existing code (e.g. __pairs). Note that this does not provide
+# full compatibility with Lua 5.2 at this time.
+#XCFLAGS+= -DLUAJIT_ENABLE_LUA52COMPAT
+#
 # Disable the use of CMOV and FCOMI*/FUCOMI* instructions in the interpreter.
 # This is only necessary if you intend to run the code on REALLY ANCIENT CPUs
 # (before Pentium Pro, or on the VIA C3). This generally slows down the

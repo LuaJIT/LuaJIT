@@ -1511,7 +1511,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.ffunc_1 pairs
   |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
   |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
+#endif
   |  mov CFUNC:RB, [BASE-8]
   |  mov CFUNC:RD, CFUNC:RB->upvalue[0]
   |  mov PC, [BASE-4]
@@ -1575,7 +1577,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.ffunc_1 ipairs
   |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
   |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
+#endif
   |  mov CFUNC:RB, [BASE-8]
   |  mov CFUNC:RD, CFUNC:RB->upvalue[0]
   |  mov PC, [BASE-4]

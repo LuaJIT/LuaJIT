@@ -249,6 +249,7 @@ LJLIB_ASM(next)
   return FFH_UNREACHABLE;
 }
 
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
 static int ffh_pairs(lua_State *L, MMS mm)
 {
   TValue *o = lj_lib_checkany(L, 1);
@@ -264,6 +265,9 @@ static int ffh_pairs(lua_State *L, MMS mm)
     return FFH_RES(3);
   }
 }
+#else
+#define ffh_pairs(L, mm)	(lj_lib_checktab(L, 1), FFH_UNREACHABLE)
+#endif
 
 LJLIB_PUSH(lastcl)
 LJLIB_ASM(pairs)
