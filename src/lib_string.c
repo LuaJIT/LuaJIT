@@ -653,20 +653,18 @@ static void addquoted(lua_State *L, luaL_Buffer *b, int arg)
   const char *s = strdata(str);
   luaL_addchar(b, '"');
   while (len--) {
-    switch (*s) {
-    case '"': case '\\': case '\n':
+    if (*s == '"' || *s == '\\' || *s == '\n') {
       luaL_addchar(b, '\\');
       luaL_addchar(b, *s);
-      break;
-    case '\r':
-      luaL_addlstring(b, "\\r", 2);
-      break;
-    case '\0':
-      luaL_addlstring(b, "\\000", 4);
-      break;
-    default:
+    } else if (lj_char_iscntrl(uchar(*s))) {
+      uint32_t c1, c2, c3;
+      luaL_addchar(b, '\\');
+      c1 = uchar(*s); c3 = c1 % 10; c1 /= 10; c2 = c1 % 10; c1 /= 10;
+      if (c1 + lj_char_isdigit(uchar(s[1]))) luaL_addchar(b, '0' + c1);
+      if (c2 + (c1 + lj_char_isdigit(uchar(s[1])))) luaL_addchar(b, '0' + c2);
+      luaL_addchar(b, '0' + c3);
+    } else {
       luaL_addchar(b, *s);
-      break;
     }
     s++;
   }
