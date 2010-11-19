@@ -181,9 +181,9 @@ static const char *classend(MatchState *ms, const char *p)
 }
 
 static const unsigned char match_class_map[32] = {
-  0, LJ_CHAR_ALPHA, 0, LJ_CHAR_CNTRL, LJ_CHAR_DIGIT, 0,0,0,0,0,0,0,
-  LJ_CHAR_LOWER, 0,0,0, LJ_CHAR_PUNCT, 0,0, LJ_CHAR_SPACE, 0,
-  LJ_CHAR_UPPER, 0, LJ_CHAR_ALNUM, LJ_CHAR_XDIGIT, 0,0,0,0,0,0,0
+  0,LJ_CHAR_ALPHA,0,LJ_CHAR_CNTRL,LJ_CHAR_DIGIT,0,0,LJ_CHAR_GRAPH,0,0,0,0,
+  LJ_CHAR_LOWER,0,0,0,LJ_CHAR_PUNCT,0,0,LJ_CHAR_SPACE,0,
+  LJ_CHAR_UPPER,0,LJ_CHAR_ALNUM,LJ_CHAR_XDIGIT,0,0,0,0,0,0,0
 };
 
 static int match_class(int c, int cl)
