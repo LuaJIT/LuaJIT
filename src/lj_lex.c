@@ -154,7 +154,7 @@ static void read_string(LexState *ls, int delim, TValue *tv)
       continue;
     case '\\': {
       int c;
-      next(ls);  /* do not save the `\' */
+      next(ls);  /* Skip the '\\'. */
       switch (ls->current) {
       case 'a': c = '\a'; break;
       case 'b': c = '\b'; break;
@@ -163,20 +163,36 @@ static void read_string(LexState *ls, int delim, TValue *tv)
       case 'r': c = '\r'; break;
       case 't': c = '\t'; break;
       case 'v': c = '\v'; break;
+      case 'x':  /* Hexadecimal escape '\xXX'. */
+	c = (next(ls) & 15u) << 4;
+	if (!lj_char_isdigit(ls->current)) {
+	  if (!lj_char_isxdigit(ls->current)) goto err_xesc;
+	  c += 9 << 4;
+	}
+	c += (next(ls) & 15u);
+	if (!lj_char_isdigit(ls->current)) {
+	  if (!lj_char_isxdigit(ls->current)) goto err_xesc;
+	  c += 9;
+	}
+	break;
       case '\n': case '\r': save(ls, '\n'); inclinenumber(ls); continue;
-      case END_OF_STREAM: continue;  /* will raise an error next loop */
+      case END_OF_STREAM: continue;
       default:
 	if (!lj_char_isdigit(ls->current)) {
-	  save_and_next(ls);  /* handles \\, \", \', and \? */
-	} else {  /* \xxx */
-	  int i = 0;
-	  c = 0;
-	  do {
-	    c = 10*c + (ls->current-'0');
-	    next(ls);
-	  } while (++i<3 && lj_char_isdigit(ls->current));
-	  if (c > 255)
-	    lj_lex_error(ls, TK_string, LJ_ERR_XESC);
+	  save_and_next(ls);  /* Handles '\\', '\"' and "\'". */
+	} else {  /* Decimal escape '\ddd'. */
+	  c = (ls->current - '0');
+	  if (lj_char_isdigit(next(ls))) {
+	    c = c*10 + (ls->current - '0');
+	    if (lj_char_isdigit(next(ls))) {
+	      c = c*10 + (ls->current - '0');
+	      if (c > 255) {
+	      err_xesc:
+		lj_lex_error(ls, TK_string, LJ_ERR_XESC);
+	      }
+	      next(ls);
+	    }
+	  }
 	  save(ls, c);
 	}
 	continue;
