@@ -225,12 +225,12 @@ static void auxsort(lua_State *L, int l, int u)
     for (;;) {  /* invariant: a[l..i] <= P <= a[j..u] */
       /* repeat ++i until a[i] >= P */
       while (lua_rawgeti(L, 1, ++i), sort_comp(L, -1, -2)) {
-	if (i>u) lj_err_caller(L, LJ_ERR_TABSORT);
+	if (i>=u) lj_err_caller(L, LJ_ERR_TABSORT);
 	lua_pop(L, 1);  /* remove a[i] */
       }
       /* repeat --j until a[j] <= P */
       while (lua_rawgeti(L, 1, --j), sort_comp(L, -3, -1)) {
-	if (j<l) lj_err_caller(L, LJ_ERR_TABSORT);
+	if (j<=l) lj_err_caller(L, LJ_ERR_TABSORT);
 	lua_pop(L, 1);  /* remove a[j] */
       }
       if (j<i) {
