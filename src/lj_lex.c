@@ -175,6 +175,11 @@ static void read_string(LexState *ls, int delim, TValue *tv)
 	  c += 9;
 	}
 	break;
+      case '*':  /* Skip whitespace. */
+	next(ls);
+	while (lj_char_isspace(ls->current))
+	  if (currIsNewline(ls)) inclinenumber(ls); else next(ls);
+	continue;
       case '\n': case '\r': save(ls, '\n'); inclinenumber(ls); continue;
       case END_OF_STREAM: continue;
       default:
