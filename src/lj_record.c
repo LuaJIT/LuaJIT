@@ -426,7 +426,8 @@ static int innerloopleft(jit_State *J, const BCIns *pc)
   ptrdiff_t i;
   for (i = 0; i < PENALTY_SLOTS; i++)
     if (mref(J->penalty[i].pc, const BCIns) == pc) {
-      if (J->penalty[i].reason == LJ_TRERR_LLEAVE &&
+      if ((J->penalty[i].reason == LJ_TRERR_LLEAVE ||
+	   J->penalty[i].reason == LJ_TRERR_LINNER) &&
 	  J->penalty[i].val >= 2*PENALTY_MIN)
 	return 1;
       break;
