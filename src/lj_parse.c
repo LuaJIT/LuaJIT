@@ -1752,14 +1752,18 @@ static void parse_break(LexState *ls)
 {
   FuncState *fs = ls->fs;
   FuncScope *bl;
+  BCReg savefr;
   int upval = 0;
   for (bl = fs->bl; bl && !bl->isbreakable; bl = bl->prev)
     upval |= bl->upval;  /* Collect upvalues in intervening scopes. */
   if (!bl)  /* Error if no breakable scope found. */
     err_syntax(ls, LJ_ERR_XBREAK);
+  savefr = fs->freereg;
+  fs->freereg = bl->nactvar;  /* Shrink slots to help data-flow analysis. */
   if (upval)
     bcemit_AJ(fs, BC_UCLO, bl->nactvar, 0);  /* Close upvalues. */
   jmp_append(fs, &bl->breaklist, bcemit_jmp(fs));
+  fs->freereg = savefr;
 }
 
 /* Check for end of block. */
