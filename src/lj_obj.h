@@ -165,6 +165,7 @@ typedef const TValue cTValue;
 /* More external and GCobj tags for internal objects. */
 #define LAST_TT		LUA_TTHREAD
 #define LUA_TPROTO	(LAST_TT+1)
+#define LUA_TCDATA	(LAST_TT+2)
 
 /* Internal object tags.
 **
@@ -196,10 +197,11 @@ typedef const TValue cTValue;
 #define LJ_TPROTO		(~7u)
 #define LJ_TFUNC		(~8u)
 #define LJ_TTRACE		(~9u)
-#define LJ_TTAB			(~10u)
-#define LJ_TUDATA		(~11u)
+#define LJ_TCDATA		(~10u)
+#define LJ_TTAB			(~11u)
+#define LJ_TUDATA		(~12u)
 /* This is just the canonical number type used in some places. */
-#define LJ_TNUMX		(~12u)
+#define LJ_TNUMX		(~13u)
 
 #if LJ_64
 #define LJ_TISNUM		0xfffeffffu
@@ -250,6 +252,28 @@ enum {
 
 #define uddata(u)	((void *)((u)+1))
 #define sizeudata(u)	(sizeof(struct GCudata)+(u)->len)
+
+/* -- C data object ------------------------------------------------------- */
+
+/* C data object. Payload follows. */
+typedef struct GCcdata {
+  GCHeader;
+  uint16_t typeid;	/* C type ID. */
+} GCcdata;
+
+/* Prepended to variable-sized or realigned C data objects. */
+typedef struct GCcdataVar {
+  uint16_t offset;	/* Offset to allocated memory (relative to GCcdata). */
+  uint16_t extra;	/* Extra space allocated (incl. GCcdata + GCcdatav). */
+  MSize len;		/* Size of payload. */
+} GCcdataVar;
+
+#define cdataptr(cd)	((void *)((cd)+1))
+#define cdataisv(cd)	((cd)->marked & 0x80)
+#define cdatav(cd)	((GCcdataVar *)((char *)(cd) - sizeof(GCcdataVar)))
+#define cdatavlen(cd)	check_exp(cdataisv(cd), cdatav(cd)->len)
+#define sizecdatav(cd)	(cdatavlen(cd) + cdatav(cd)->extra)
+#define memcdatav(cd)	((void *)((char *)(cd) - cdatav(cd)->offset))
 
 /* -- Prototype object ---------------------------------------------------- */
 
@@ -498,6 +522,7 @@ typedef struct global_State {
   BCIns bc_cfunc_ext;	/* Bytecode for external C function calls. */
   GCRef jit_L;		/* Current JIT code lua_State or NULL. */
   MRef jit_base;	/* Current JIT code L->base. */
+  MRef ctype_state;	/* Pointer to C type state. */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
 } global_State;
 
@@ -582,6 +607,7 @@ typedef union GCobj {
   lua_State th;
   GCproto pt;
   GCfunc fn;
+  GCcdata cd;
   GCtab tab;
   GCudata ud;
 } GCobj;
@@ -592,6 +618,7 @@ typedef union GCobj {
 #define gco2th(o)	check_exp((o)->gch.gct == ~LJ_TTHREAD, &(o)->th)
 #define gco2pt(o)	check_exp((o)->gch.gct == ~LJ_TPROTO, &(o)->pt)
 #define gco2func(o)	check_exp((o)->gch.gct == ~LJ_TFUNC, &(o)->fn)
+#define gco2cd(o)	check_exp((o)->gch.gct == ~LJ_TCDATA, &(o)->cd)
 #define gco2tab(o)	check_exp((o)->gch.gct == ~LJ_TTAB, &(o)->tab)
 #define gco2ud(o)	check_exp((o)->gch.gct == ~LJ_TUDATA, &(o)->ud)
 
@@ -619,6 +646,7 @@ typedef union GCobj {
 #define tvisfunc(o)	(itype(o) == LJ_TFUNC)
 #define tvisthread(o)	(itype(o) == LJ_TTHREAD)
 #define tvisproto(o)	(itype(o) == LJ_TPROTO)
+#define tviscdata(o)	(itype(o) == LJ_TCDATA)
 #define tvistab(o)	(itype(o) == LJ_TTAB)
 #define tvisudata(o)	(itype(o) == LJ_TUDATA)
 #define tvisnum(o)	(itype(o) <= LJ_TISNUM)
@@ -657,6 +685,7 @@ typedef union GCobj {
 #define funcV(o)	check_exp(tvisfunc(o), &gcval(o)->fn)
 #define threadV(o)	check_exp(tvisthread(o), &gcval(o)->th)
 #define protoV(o)	check_exp(tvisproto(o), &gcval(o)->pt)
+#define cdataV(o)	check_exp(tviscdata(o), &gcval(o)->cd)
 #define tabV(o)		check_exp(tvistab(o), &gcval(o)->tab)
 #define udataV(o)	check_exp(tvisudata(o), &gcval(o)->ud)
 #define numV(o)		check_exp(tvisnum(o), (o)->n)
@@ -703,6 +732,7 @@ define_setV(setstrV, GCstr, LJ_TSTR)
 define_setV(setthreadV, lua_State, LJ_TTHREAD)
 define_setV(setprotoV, GCproto, LJ_TPROTO)
 define_setV(setfuncV, GCfunc, LJ_TFUNC)
+define_setV(setcdataV, GCcdata, LJ_TCDATA)
 define_setV(settabV, GCtab, LJ_TTAB)
 define_setV(setudataV, GCudata, LJ_TUDATA)
 
@@ -734,7 +764,7 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 /* -- Miscellaneous object handling --------------------------------------- */
 
 /* Names and maps for internal and external object tags. */
-LJ_DATA const char *const lj_obj_typename[1+LUA_TPROTO+1];
+LJ_DATA const char *const lj_obj_typename[1+LUA_TCDATA+1];
 LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 
 #define typename(o)	(lj_obj_itypename[itypemap(o)])

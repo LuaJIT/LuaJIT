@@ -55,8 +55,9 @@ LJLIB_PUSH("thread")
 LJLIB_PUSH("proto")
 LJLIB_PUSH("function")
 LJLIB_PUSH("trace")
+LJLIB_PUSH("cdata")
 LJLIB_PUSH("table")
-LJLIB_PUSH(top-8)  /* userdata */
+LJLIB_PUSH(top-9)  /* userdata */
 LJLIB_PUSH("number")
 LJLIB_ASM_(type)		LJLIB_REC(.)
 /* Recycle the lj_lib_checkany(L, 1) from assert. */

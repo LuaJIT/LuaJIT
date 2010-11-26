@@ -316,6 +316,7 @@ typedef enum {
   IRT_PROTO,
   IRT_FUNC,
   IRT_9,		/* Unused (map of LJ_TTRACE). */
+  IRT_CDATA,
   IRT_TAB,
   IRT_UDATA,
   /* ... until here. */
@@ -329,7 +330,7 @@ typedef enum {
   IRT_U8,
   IRT_I16,
   IRT_U16,
-  /* There is room for 14 more types. */
+  /* There is room for 13 more types. */
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */

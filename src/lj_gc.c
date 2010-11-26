@@ -373,6 +373,7 @@ static const GCFreeFunc gc_freefunc[] = {
 #else
   (GCFreeFunc)0,
 #endif
+  (GCFreeFunc)0,  /* Placeholder for C data. */
   (GCFreeFunc)lj_tab_free,
   (GCFreeFunc)lj_udata_free
 };

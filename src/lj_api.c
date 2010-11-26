@@ -197,9 +197,9 @@ LUA_API int lua_type(lua_State *L, int idx)
   } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
     uint32_t t = ~itype(o);
 #if LJ_64
-    int tt = (int)((U64x(7506,98042110) >> 4*t) & 15u);
+    int tt = (int)((U64x(75a06,98042110) >> 4*t) & 15u);
 #else
-    int tt = (int)(((t < 8 ? 0x98042110 : 0x7506) >> 4*(t&7)) & 15u);
+    int tt = (int)(((t < 8 ? 0x98042110u : 0x75a06u) >> 4*(t&7)) & 15u);
 #endif
     lua_assert(tt != LUA_TNIL || tvisnil(o));
     return tt;
@@ -525,6 +525,8 @@ LUA_API const void *lua_topointer(lua_State *L, int idx)
     return uddata(udataV(o));
   else if (tvislightud(o))
     return lightudV(o);
+  else if (tviscdata(o))
+    return cdataptr(cdataV(o));
   else if (tvisgcv(o))
     return gcV(o);
   else
