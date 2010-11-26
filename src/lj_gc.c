@@ -65,7 +65,7 @@ static void gc_mark(global_State *g, GCobj *o)
     gc_marktv(g, uvval(uv));
     if (uv->closed)
       gray2black(o);  /* Closed upvalues are never gray. */
-  } else if (o->gch.gct != ~LJ_TSTR) {
+  } else if (o->gch.gct != ~LJ_TSTR && o->gch.gct != ~LJ_TCDATA) {
     lua_assert(o->gch.gct == ~LJ_TFUNC || o->gch.gct == ~LJ_TTAB ||
 	       o->gch.gct == ~LJ_TTHREAD || o->gch.gct == ~LJ_TPROTO);
     setgcrefr(o->gch.gclist, g->gc.gray);
