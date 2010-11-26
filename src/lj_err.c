@@ -904,7 +904,8 @@ LJ_NOINLINE void lj_err_optype_call(lua_State *L, TValue *o)
 LJ_NOINLINE void lj_err_callermsg(lua_State *L, const char *msg)
 {
   cTValue *frame = L->base-1;
-  cTValue *pframe = frame_islua(frame) ? frame_prevl(frame) : NULL;
+  cTValue *pframe = frame_islua(frame) ? frame_prevl(frame) :
+		    frame_iscont(frame) ? frame_prevd(frame) : NULL;
   err_loc(L, msg, pframe, frame);
   lj_err_run(L);
 }
