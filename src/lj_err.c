@@ -903,9 +903,12 @@ LJ_NOINLINE void lj_err_optype_call(lua_State *L, TValue *o)
 /* Error in context of caller. */
 LJ_NOINLINE void lj_err_callermsg(lua_State *L, const char *msg)
 {
-  cTValue *frame = L->base-1;
-  cTValue *pframe = frame_islua(frame) ? frame_prevl(frame) :
-		    frame_iscont(frame) ? frame_prevd(frame) : NULL;
+  TValue *frame = L->base-1;
+  TValue *pframe = NULL;
+  if (frame_islua(frame))
+    pframe = frame_prevl(frame);
+  else if (frame_iscont(frame))
+    L->base = (pframe = frame_prevd(frame))+1;  /* Remove metamethod frame. */
   err_loc(L, msg, pframe, frame);
   lj_err_run(L);
 }
