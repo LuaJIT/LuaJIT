@@ -29,7 +29,7 @@ int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b)
     uint32_t va = *(const uint32_t *)(strdata(a)+i);
     uint32_t vb = *(const uint32_t *)(strdata(b)+i);
     if (va != vb) {
-#if LJ_ARCH_ENDIAN == LUAJIT_LE
+#if LJ_LE
       va = lj_bswap(va); vb = lj_bswap(vb);
 #endif
       i -= n;
@@ -53,7 +53,7 @@ static LJ_AINLINE int str_fastcmp(const char *a, const char *b, MSize len)
     uint32_t v = *(const uint32_t *)(a+i) ^ *(const uint32_t *)(b+i);
     if (v) {
       i -= len;
-#if LJ_ARCH_ENDIAN == LUAJIT_LE
+#if LJ_LE
       return (int32_t)i >= -3 ? (v << (32+(i<<3))) : 1;
 #else
       return (int32_t)i >= -3 ? (v >> (32+(i<<3))) : 1;

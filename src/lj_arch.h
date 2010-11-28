@@ -96,7 +96,6 @@
 #define LJ_ARCH_NAME		"x86"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#define LJ_ARCH_BITENDIAN	LUAJIT_LE
 #define LJ_ARCH_HASFPU		1
 #define LJ_ABI_WIN		LJ_TARGET_WINDOWS
 #define LJ_TARGET_X86		1
@@ -110,7 +109,6 @@
 #define LJ_ARCH_NAME		"x64"
 #define LJ_ARCH_BITS		64
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#define LJ_ARCH_BITENDIAN	LUAJIT_LE
 #define LJ_ARCH_HASFPU		1
 #define LJ_ABI_WIN		LJ_TARGET_WINDOWS
 #define LJ_TARGET_X64		1
@@ -128,7 +126,6 @@
 #define LJ_ARCH_NAME		"ppcspe"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
-#define LJ_ARCH_BITENDIAN	LUAJIT_BE
 #define LJ_ARCH_HASFPU		1
 #define LJ_ABI_SOFTFP		1
 #define LJ_ABI_EABI		1
@@ -187,9 +184,13 @@
 #endif
 
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
+#define LJ_LE			0
+#define LJ_BE			1
 #define LJ_ENDIAN_SELECT(le, be)	be
 #define LJ_ENDIAN_LOHI(lo, hi)		hi lo
 #else
+#define LJ_LE			1
+#define LJ_BE			0
 #define LJ_ENDIAN_SELECT(le, be)	le
 #define LJ_ENDIAN_LOHI(lo, hi)		lo hi
 #endif
