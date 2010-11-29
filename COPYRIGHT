@@ -24,9 +24,9 @@ THE SOFTWARE.
 [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 
 ===============================================================================
-[ LuaJIT includes code from Lua 5.1, which has this license statement: ]
+[ LuaJIT includes code from Lua 5.1/5.2, which has this license statement: ]
 
-Copyright (C) 1994-2008 Lua.org, PUC-Rio.
+Copyright (C) 1994-2010 Lua.org, PUC-Rio.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
