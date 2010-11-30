@@ -499,7 +499,7 @@ LUALIB_API int luaopen_package(lua_State *L)
   lua_setfield(L, -2, "config");
   luaL_findtable(L, LUA_REGISTRYINDEX, "_LOADED", 16);
   lua_setfield(L, -2, "loaded");
-  lua_newtable(L);
+  luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD", 4);
   lua_setfield(L, -2, "preload");
   lua_pushvalue(L, LUA_GLOBALSINDEX);
   luaL_register(L, NULL, package_global);

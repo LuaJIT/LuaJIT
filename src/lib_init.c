@@ -11,7 +11,7 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-static const luaL_Reg lualibs[] = {
+static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
   { LUA_LOADLIBNAME,	luaopen_package },
   { LUA_TABLIBNAME,	luaopen_table },
@@ -25,13 +25,24 @@ static const luaL_Reg lualibs[] = {
   { NULL,		NULL }
 };
 
+static const luaL_Reg lj_lib_preload[] = {
+  { NULL,		NULL }
+};
+
 LUALIB_API void luaL_openlibs(lua_State *L)
 {
-  const luaL_Reg *lib = lualibs;
-  for (; lib->func; lib++) {
+  const luaL_Reg *lib;
+  for (lib = lj_lib_load; lib->func; lib++) {
     lua_pushcfunction(L, lib->func);
     lua_pushstring(L, lib->name);
     lua_call(L, 1, 0);
   }
+  luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD",
+		 sizeof(lj_lib_preload)/sizeof(lj_lib_preload[0])-1);
+  for (lib = lj_lib_preload; lib->func; lib++) {
+    lua_pushcfunction(L, lib->func);
+    lua_setfield(L, -2, lib->name);
+  }
+  lua_pop(L, 1);
 }
 
