@@ -88,6 +88,12 @@ BUILDMODE= mixed
 # recompile with "make clean", followed by "make".
 XCFLAGS=
 #
+# Permanently disable the FFI extension to reduce the size of the LuaJIT
+# executable. But please consider that the FFI library is compiled-in,
+# but NOT loaded by default. It only allocates any memory, if you actually
+# make use of it.
+#XCFLAGS+= -DLUAJIT_DISABLE_FFI
+#
 # Enable some upwards-compatible features from Lua 5.2 that are unlikely
 # to break existing code (e.g. __pairs). Note that this does not provide
 # full compatibility with Lua 5.2 at this time.

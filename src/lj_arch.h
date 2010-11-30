@@ -183,6 +183,13 @@
 #define LJ_HASJIT		1
 #endif
 
+/* Disable or enable the FFI extension. */
+#if defined(LUAJIT_DISABLE_FFI) || defined(LJ_ARCH_NOFFI)
+#define LJ_HASFFI		0
+#else
+#define LJ_HASFFI		1
+#endif
+
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
 #define LJ_LE			0
 #define LJ_BE			1
