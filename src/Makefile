@@ -17,10 +17,12 @@ ABIVER=  5.1
 NODOTABIVER= 51
 
 ##############################################################################
-# Compiler options: change them as needed. This mainly affects the speed of
-# the JIT compiler itself, not the speed of the JIT compiled code.
-# Turn any of the optional settings on by removing the '#' in front of them.
-# You need to 'make clean' and 'make' again, if you change any options.
+#############################  COMPILER OPTIONS  #############################
+##############################################################################
+# These options mainly affect the speed of the JIT compiler itself, not the
+# speed of the JIT-compiled code. Turn any of the optional settings on by
+# removing the '#' in front of them. Make sure you force a full recompile
+# with "make clean", followed by "make" if you change any options.
 #
 # LuaJIT builds as a native 32 or 64 bit binary by default.
 CC= gcc
@@ -38,10 +40,15 @@ CCOPT= -O2 -fomit-frame-pointer
 # Note: it's no longer recommended to use -O3 with GCC 4.x.
 # The I-Cache bloat usually outweighs the benefits from aggressive inlining.
 #
-# It's recommended to compile at least for i686. By default the assembler part
-# of the interpreter makes use of CMOV/FCOMI*/FUCOMI* instructions, anyway.
-# For GCC 4.2 or higher and if you don't intend to distribute the
-# binaries to a different machine you could also use: -march=native
+# Target-specific compiler options:
+#
+# x86 only: it's recommended to compile at least for i686. By default the
+# assembler part of the interpreter makes use of CMOV/FCOMI*/FUCOMI*
+# instructions, anyway.
+#
+# x86/x64 only: For GCC 4.2 or higher and if you don't intend to distribute
+# the binaries to a different machine you could also use: -march=native
+#
 CCOPT_X86= -march=i686
 CCOPT_X64=
 CCOPT_PPCSPE=
@@ -57,9 +64,28 @@ CCWARN= -Wall
 ##############################################################################
 
 ##############################################################################
-# Compile time definitions: change them as needed, but make sure you force
-# a full recompile with "make clean", followed by "make".
-# Note that most of these are NOT suitable for benchmarking or release mode!
+################################  BUILD MODE  ################################
+##############################################################################
+# The default build mode is mixed mode on POSIX. On Windows this is the same
+# as dynamic mode.
+#
+# Mixed mode creates a static + dynamic library and a statically linked luajit.
+BUILDMODE= mixed
+#
+# Static mode creates a static library and a statically linked luajit.
+#BUILDMODE= static
+#
+# Dynamic mode creates a dynamic library and a dynamically linked luajit.
+# Note: this executable will only run when the library is installed!
+#BUILDMODE= dynamic
+#
+##############################################################################
+
+##############################################################################
+#################################  FEATURES  #################################
+##############################################################################
+# Enable/disable these features as needed, but make sure you force a full
+# recompile with "make clean", followed by "make".
 XCFLAGS=
 #
 # Enable some upwards-compatible features from Lua 5.2 that are unlikely
@@ -67,13 +93,10 @@ XCFLAGS=
 # full compatibility with Lua 5.2 at this time.
 #XCFLAGS+= -DLUAJIT_ENABLE_LUA52COMPAT
 #
-# Disable the use of CMOV and FCOMI*/FUCOMI* instructions in the interpreter.
-# This is only necessary if you intend to run the code on REALLY ANCIENT CPUs
-# (before Pentium Pro, or on the VIA C3). This generally slows down the
-# interpreter. Don't bother if your OS wouldn't run on them, anyway.
-#XCFLAGS+= -DLUAJIT_CPU_NOCMOV
+# Disable the JIT compiler, i.e. turn LuaJIT into a pure interpreter.
+#XCFLAGS+= -DLUAJIT_DISABLE_JIT
 #
-# Use SSE2 instructions instead of x87 instructions in the x86 interpreter
+# x86 only: use SSE2 instead of x87 instructions in the interpreter
 # (always enabled for x64). A pure interpreter built with this flag won't
 # run on older CPUs (before P4 or K8). There isn't much of a speed
 # difference, so this is not enabled by default.
@@ -81,8 +104,20 @@ XCFLAGS=
 # CPU feature detection before emitting code for SSE2 up to SSE4.1.
 #XCFLAGS+= -DLUAJIT_CPU_SSE2
 #
-# Disable the JIT compiler, i.e. turn LuaJIT into a pure interpreter:
-#XCFLAGS+= -DLUAJIT_DISABLE_JIT
+# x86 only: Disable the use of CMOV and FCOMI*/FUCOMI* instructions in the
+# interpreter. Do this only if you intend to use REALLY ANCIENT CPUs
+# (before Pentium Pro, or on the VIA C3). This generally slows down the
+# interpreter. Don't bother if your OS wouldn't run on them, anyway.
+#XCFLAGS+= -DLUAJIT_CPU_NOCMOV
+#
+##############################################################################
+
+##############################################################################
+############################  DEBUGGING SUPPORT  #############################
+##############################################################################
+# Enable these options as needed, but make sure you force a full recompile
+# with "make clean", followed by "make".
+# Note that most of these are NOT suitable for benchmarking or release mode!
 #
 # Use the system provided memory allocator (realloc) instead of the
 # bundled memory allocator. This is slower, but sometimes helpful for
@@ -108,29 +143,14 @@ XCFLAGS=
 #XCFLAGS+= -DLUA_USE_ASSERT
 #
 ##############################################################################
-
-##############################################################################
-# Build mode: override the mode as needed. Default is mixed mode on POSIX.
-# On Windows this is the same as dynamic mode.
-#
-# Mixed mode creates a static + dynamic library and a statically linked luajit.
-BUILDMODE= mixed
-#
-# Static mode creates a static library and a statically linked luajit.
-#BUILDMODE= static
-#
-# Dynamic mode creates a dynamic library and a dynamically linked luajit.
-# Note: this executable will only run when the library is installed!
-#BUILDMODE= dynamic
-##############################################################################
-# You probably don't need to change anything below this line.
+# You probably don't need to change anything below this line!
 ##############################################################################
 
 ##############################################################################
 # Flags and options for host and target.
 ##############################################################################
 
-# You may also override the following variables at the make command line:
+# You can override the following variables at the make command line:
 #   CC       HOST_CC       STATIC_CC       DYNAMIC_CC
 #   CFLAGS   HOST_CFLAGS   TARGET_CFLAGS
 #   LDFLAGS  HOST_LDFLAGS  TARGET_LDFLAGS  TARGET_SHLDFLAGS
