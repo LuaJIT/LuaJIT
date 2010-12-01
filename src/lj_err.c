@@ -72,12 +72,10 @@
 /* -- Error messages ------------------------------------------------------ */
 
 /* Error message strings. */
-static const char *lj_err_allmsg =
+LJ_DATADEF const char *lj_err_allmsg =
 #define ERRDEF(name, msg)	msg "\0"
 #include "lj_errmsg.h"
 ;
-
-#define err2msg(em)	(lj_err_allmsg+(int)(em))
 
 /* -- Frame and function introspection ------------------------------------ */
 
