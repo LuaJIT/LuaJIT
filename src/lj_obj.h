@@ -761,13 +761,6 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 #define lj_num2int(n)   ((int32_t)(n))
 #endif
 
-/* Truncate towards zero. */
-#define lj_trnum2int32(n)	((int32_t)(n))
-#define lj_trnum2uint32(n)	((uint32_t)(n))
-#define lj_trnum2int64(n)	((int64_t)(n))
-#define lj_trnum2uint64(n) \
-  ((uint64_t)(int64_t)((n)- 9223372036854775808.0) + U64x(80000000,00000000))
-
 /* -- Miscellaneous object handling --------------------------------------- */
 
 /* Names and maps for internal and external object tags. */
