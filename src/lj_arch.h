@@ -79,7 +79,7 @@
 #elif LUAJIT_OS == LUAJIT_OS_BSD
 #define LJ_OS_NAME	"BSD"
 #elif LUAJIT_OS == LUAJIT_OS_POSIX
-#define LJ_OS_NAME	"Posix"
+#define LJ_OS_NAME	"POSIX"
 #else
 #define LJ_OS_NAME	"Other"
 #endif
