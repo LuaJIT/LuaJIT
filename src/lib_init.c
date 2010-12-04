@@ -11,6 +11,8 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#include "lj_arch.h"
+
 static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
   { LUA_LOADLIBNAME,	luaopen_package },
@@ -26,6 +28,9 @@ static const luaL_Reg lj_lib_load[] = {
 };
 
 static const luaL_Reg lj_lib_preload[] = {
+#if LJ_HASFFI
+  { LUA_FFILIBNAME,	luaopen_ffi },
+#endif
   { NULL,		NULL }
 };
 

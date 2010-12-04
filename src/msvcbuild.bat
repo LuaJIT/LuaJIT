@@ -20,7 +20,7 @@
 @set LJLIB=lib /nologo
 @set DASMDIR=..\dynasm
 @set DASM=lua %DASMDIR%\dynasm.lua
-@set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c
+@set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c
 
 if not exist buildvm_x86.h^
   %DASM% -LN -o buildvm_x86.h buildvm_x86.dasc
