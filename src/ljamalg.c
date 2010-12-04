@@ -40,6 +40,7 @@
 #include "lj_api.c"
 #include "lj_lex.c"
 #include "lj_parse.c"
+#include "lj_ctype.c"
 #include "lj_lib.c"
 #include "lj_ir.c"
 #include "lj_opt_mem.c"

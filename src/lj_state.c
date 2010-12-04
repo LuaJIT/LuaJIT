@@ -18,8 +18,8 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_frame.h"
-#if LJ_HASJIT
-#include "lj_mcode.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
 #endif
 #include "lj_trace.h"
 #include "lj_dispatch.h"
@@ -160,6 +160,9 @@ static void close_state(lua_State *L)
   lua_assert(gcref(g->gc.root) == obj2gco(L));
   lua_assert(g->strnum == 0);
   lj_trace_freestate(g);
+#if LJ_HASFFI
+  lj_ctype_freestate(g);
+#endif
   lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
   lj_str_freebuf(g, &g->tmpbuf);
   lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
