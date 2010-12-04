@@ -22,6 +22,10 @@
 #include "lj_tab.h"
 #include "lj_meta.h"
 #include "lj_state.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#include "lj_cconv.h"
+#endif
 #include "lj_bc.h"
 #include "lj_ff.h"
 #include "lj_dispatch.h"
@@ -190,6 +194,14 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
       setnumV(L->base-1, numV(o));
       return FFH_RES(1);
     }
+#if LJ_HASFFI
+    if (tviscdata(o)) {
+      CTState *cts = ctype_cts(L);
+      lj_cconv_ct_tv(cts, ctype_get(cts, CTID_DOUBLE),
+		     (uint8_t *)&(L->base-1)->n, o, CCF_CAST);
+      return FFH_RES(1);
+    }
+#endif
   } else {
     const char *p = strdata(lj_lib_checkstr(L, 1));
     char *ep;
