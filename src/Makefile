@@ -327,7 +327,7 @@ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o \
 	  lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o \
 	  lj_opt_dce.o lj_opt_loop.o \
 	  lj_mcode.o lj_snap.o lj_record.o lj_asm.o lj_trace.o lj_gdbjit.o \
-	  lj_ctype.o \
+	  lj_ctype.o lj_cdata.o lj_cconv.o \
 	  lj_lib.o lj_alloc.o lib_aux.o \
 	  $(LJLIB_O) lib_init.o
 

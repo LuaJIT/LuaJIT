@@ -19,6 +19,9 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#if LJ_HASFFI
+#include "lj_cdata.h"
+#endif
 #include "lj_trace.h"
 #include "lj_vm.h"
 
@@ -373,7 +376,11 @@ static const GCFreeFunc gc_freefunc[] = {
 #else
   (GCFreeFunc)0,
 #endif
-  (GCFreeFunc)0,  /* Placeholder for C data. */
+#if LJ_HASFFI
+  (GCFreeFunc)lj_cdata_free,
+#else
+  (GCFreeFunc)0,
+#endif
   (GCFreeFunc)lj_tab_free,
   (GCFreeFunc)lj_udata_free
 };

@@ -137,6 +137,23 @@ ERRDEF(XSYNTAX,	"syntax error")
 ERRDEF(XBREAK,	"no loop to break")
 ERRDEF(XFOR,	LUA_QL("=") " or " LUA_QL("in") " expected")
 
+#if LJ_HASFFI
+/* FFI errors. */
+ERRDEF(FFI_INVTYPE,	"invalid C type")
+ERRDEF(FFI_INVSIZE,	"size of C type is unknown or too large")
+ERRDEF(FFI_BADSCL,	"bad storage class")
+ERRDEF(FFI_DECLSPEC,	"declaration specifier expected")
+ERRDEF(FFI_BADTAG,	"undeclared or implicit tag " LUA_QS)
+ERRDEF(FFI_REDEF,	"attempt to redefine " LUA_QS)
+ERRDEF(FFI_INITOV,	"too many initializers for " LUA_QS)
+ERRDEF(FFI_BADCONV,	"cannot convert " LUA_QS " to " LUA_QS)
+ERRDEF(FFI_BADMEMBER,	LUA_QS " has no member named " LUA_QS)
+ERRDEF(FFI_BADIDX,	LUA_QS " cannot be indexed")
+ERRDEF(FFI_WRCONST,	"attempt to write to constant location")
+ERRDEF(FFI_NYIPACKBIT,	"NYI: packed bit fields")
+ERRDEF(FFI_NYICALL,	"NYI: C function calls")
+#endif
+
 #undef ERRDEF
 
 /* Detecting unused error messages:
