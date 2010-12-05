@@ -1699,7 +1699,7 @@ if x64 then
 	end
 	op64 = params[2]
 	opcode = 0xb8 + (a.reg%8) -- !x64: no VREG support.
-        rex = a.reg > 7 and 9 or 8
+	rex = a.reg > 7 and 9 or 8
       end
     end
     wputop(sz, opcode, rex)
