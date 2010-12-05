@@ -384,15 +384,23 @@ static void emit_loadi(ASMState *as, Reg r, int32_t i)
   emit_loadi(as, (r), ptr2addr((addr)))
 
 #if LJ_64
-/* mov r, imm64 */
-static void emit_loadu64(ASMState *as, Reg r, uint64_t i)
+/* mov r, imm64 or shorter 32 bit extended load. */
+static void emit_loadu64(ASMState *as, Reg r, uint64_t u64)
 {
-  MCode *p = as->mcp;
-  *(uint64_t *)(p-8) = i;
-  p[-9] = (MCode)(XI_MOVri+(r&7));
-  p[-10] = 0x48 + ((r>>3)&1);
-  p -= 10;
-  as->mcp = p;
+  if (checku32(u64)) {  /* 32 bit load clears upper 32 bits. */
+    emit_loadi(as, r, (int32_t)u64);
+  } else if (checki32((int64_t)u64)) {  /* Sign-extended 32 bit load. */
+    MCode *p = as->mcp;
+    *(int32_t *)(p-4) = (int32_t)u64;
+    as->mcp = emit_opm(XO_MOVmi, XM_REG, REX_64, r, p, -4);
+  } else {  /* Full-size 64 bit load. */
+    MCode *p = as->mcp;
+    *(uint64_t *)(p-8) = u64;
+    p[-9] = (MCode)(XI_MOVri+(r&7));
+    p[-10] = 0x48 + ((r>>3)&1);
+    p -= 10;
+    as->mcp = p;
+  }
 }
 #endif
 
@@ -618,6 +626,10 @@ static Reg ra_rematk(ASMState *as, IRIns *ir)
   } else if (ir->o == IR_KPRI) {  /* REF_NIL stores ASMREF_L register. */
     lua_assert(irt_isnil(ir->t));
     emit_getgl(as, r, jit_L);
+#if LJ_64  /* NYI: 32 bit register pairs. */
+  } else if (ir->o == IR_KINT64) {
+    emit_loadu64(as, r, ir_kint64(ir)->u64);
+#endif
   } else {
     lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
 	       ir->o == IR_KPTR || ir->o == IR_KNULL);
@@ -909,6 +921,11 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
 	  emit_loadn(as, dest, tv);
 	  return;
 	}
+#if LJ_64  /* NYI: 32 bit register pairs. */
+      } else if (ir->o == IR_KINT64) {
+	emit_loadu64(as, dest, ir_kint64(ir)->u64);
+	return;
+#endif
       } else {
 	lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
 		   ir->o == IR_KPTR || ir->o == IR_KNULL);
@@ -1343,7 +1360,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   lua_assert(!(nargs > 2 && (ci->flags&CCI_FASTCALL)));  /* Avoid stack adj. */
   emit_call(as, ci->func);
   for (n = 0; n < nargs; n++) {  /* Setup args. */
-    IRIns *ir = IR(args[n]);
+    IRRef ref = args[n];
+    IRIns *ir = IR(ref);
     Reg r;
 #if LJ_64 && LJ_ABI_WIN
     /* Windows/x64 argument registers are strictly positional. */
@@ -1364,38 +1382,42 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     }
 #endif
     if (r) {  /* Argument is in a register. */
-      if (r < RID_MAX_GPR && args[n] < ASMREF_TMP1) {
-	emit_loadi(as, r, ir->i);
+      if (r < RID_MAX_GPR && ref < ASMREF_TMP1) {
+#if LJ_64  /* NYI: 32 bit register pairs. */
+	if (ir->o == IR_KINT64)
+	  emit_loadu64(as, r, ir_kint64(ir)->u64);
+	else
+#endif
+	  emit_loadi(as, r, ir->i);
       } else {
 	lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
 	if (ra_hasreg(ir->r)) {
 	  ra_noweak(as, ir->r);
 	  ra_movrr(as, ir, r, ir->r);
 	} else {
-	  ra_allocref(as, args[n], RID2RSET(r));
+	  ra_allocref(as, ref, RID2RSET(r));
 	}
       }
     } else if (irt_isnum(ir->t)) {  /* FP argument is on stack. */
-      if (!LJ_64 && (ofs & 4) && irref_isk(args[n])) {
+      if (LJ_32 && (ofs & 4) && irref_isk(ref)) {
 	/* Split stores for unaligned FP consts. */
 	emit_movmroi(as, RID_ESP, ofs, (int32_t)ir_knum(ir)->u32.lo);
 	emit_movmroi(as, RID_ESP, ofs+4, (int32_t)ir_knum(ir)->u32.hi);
       } else {
 	if ((allow & RSET_FPR) == RSET_EMPTY)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
-	r = ra_alloc1(as, args[n], allow & RSET_FPR);
+	r = ra_alloc1(as, ref, allow & RSET_FPR);
 	allow &= ~RID2RSET(r);
 	emit_rmro(as, XO_MOVSDto, r, RID_ESP, ofs);
       }
       ofs += 8;
     } else {  /* Non-FP argument is on stack. */
-      /* NYI: no widening for 64 bit parameters on x64. */
-      if (args[n] < ASMREF_TMP1) {
+      if (LJ_32 && ref < ASMREF_TMP1) {
 	emit_movmroi(as, RID_ESP, ofs, ir->i);
       } else {
 	if ((allow & RSET_GPR) == RSET_EMPTY)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
-	r = ra_alloc1(as, args[n], allow & RSET_GPR);
+	r = ra_alloc1(as, ref, allow & RSET_GPR);
 	allow &= ~RID2RSET(r);
 	emit_movtomro(as, REX_64IR(ir, r), RID_ESP, ofs);
       }
@@ -1936,8 +1958,9 @@ static void asm_fstore(ASMState *as, IRIns *ir)
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
-  lua_assert(!(irref_isk(ir->op2) && irt_is64(ir->t)));  /* NYI: KINT64. */
-  if (!irref_isk(ir->op2) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
+  if (!irref_isk(ir->op2) || irt_isi16(ir->t) || irt_isu16(ir->t) ||
+      (LJ_64 && irt_is64(ir->t) &&
+       !checki32((int64_t)ir_k64(IR(ir->op2))->u64))) {
     RegSet allow8 = (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = ra_alloc1(as, ir->op2, allow8);
     rset_clear(allow, src);
@@ -2496,7 +2519,7 @@ static void asm_add(ASMState *as, IRIns *ir)
   if (irt_isnum(ir->t))
     asm_fparith(as, ir, XO_ADDSD);
   else if ((as->flags & JIT_F_LEA_AGU) || as->testmcp == as->mcp ||
-	   !asm_lea(as, ir))
+	   irt_is64(ir->t) || !asm_lea(as, ir))
     asm_intarith(as, ir, XOg_ADD);
 }
 
@@ -2615,7 +2638,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
       else if ((cc & 0xa) == 0x2) cc ^= 5;  /* A <-> B, AE <-> BE */
       lref = ir->op2; rref = ir->op1;
     }
-    if (irref_isk(rref)) {
+    if (irref_isk(rref) && IR(rref)->o != IR_KINT64) {
       IRIns *irl = IR(lref);
       int32_t imm = IR(rref)->i;
       /* Check wether we can use test ins. Not for unsigned, since CF=0. */

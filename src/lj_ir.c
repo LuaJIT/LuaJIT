@@ -167,88 +167,95 @@ found:
   return TREF(ref, IRT_INT);
 }
 
-/* The MRef inside the KNUM IR instruction holds the address of the constant
-** (an aligned double or a special 64 bit pattern). The KNUM constants
-** themselves are stored in a chained array and shared across traces.
+/* The MRef inside the KNUM/KINT64 IR instructions holds the address of the
+** 64 bit constant. The constants themselves are stored in a chained array
+** and shared across traces.
 **
 ** Rationale for choosing this data structure:
 ** - The address of the constants is embedded in the generated machine code
 **   and must never move. A resizable array or hash table wouldn't work.
-** - Most apps need very few non-integer constants (less than a dozen).
+** - Most apps need very few non-32 bit integer constants (less than a dozen).
 ** - Linear search is hard to beat in terms of speed and low complexity.
 */
-typedef struct KNumArray {
+typedef struct K64Array {
   MRef next;			/* Pointer to next list. */
   MSize numk;			/* Number of used elements in this array. */
-  TValue k[LJ_MIN_KNUMSZ];	/* Array of constants. */
-} KNumArray;
+  TValue k[LJ_MIN_K64SZ];	/* Array of constants. */
+} K64Array;
 
 /* Free all chained arrays. */
-void lj_ir_knum_freeall(jit_State *J)
+void lj_ir_k64_freeall(jit_State *J)
 {
-  KNumArray *kn;
-  for (kn = mref(J->knum, KNumArray); kn; ) {
-    KNumArray *next = mref(kn->next, KNumArray);
-    lj_mem_free(J2G(J), kn, sizeof(KNumArray));
-    kn = next;
+  K64Array *k;
+  for (k = mref(J->k64, K64Array); k; ) {
+    K64Array *next = mref(k->next, K64Array);
+    lj_mem_free(J2G(J), k, sizeof(K64Array));
+    k = next;
   }
 }
 
-/* Find KNUM constant in chained array or add it. */
-static cTValue *ir_knum_find(jit_State *J, uint64_t nn)
+/* Find 64 bit constant in chained array or add it. */
+static cTValue *ir_k64_find(jit_State *J, uint64_t u64)
 {
-  KNumArray *kn, *knp = NULL;
+  K64Array *k, *kp = NULL;
   TValue *ntv;
   MSize idx;
   /* Search for the constant in the whole chain of arrays. */
-  for (kn = mref(J->knum, KNumArray); kn; kn = mref(kn->next, KNumArray)) {
-    knp = kn;  /* Remember previous element in list. */
-    for (idx = 0; idx < kn->numk; idx++) {  /* Search one array. */
-      TValue *tv = &kn->k[idx];
-      if (tv->u64 == nn)  /* Needed for +-0/NaN/absmask. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
+    kp = k;  /* Remember previous element in list. */
+    for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
+      TValue *tv = &k->k[idx];
+      if (tv->u64 == u64)  /* Needed for +-0/NaN/absmask. */
 	return tv;
     }
   }
   /* Constant was not found, need to add it. */
-  if (!(knp && knp->numk < LJ_MIN_KNUMSZ)) {  /* Allocate a new array. */
-    KNumArray *nkn = lj_mem_newt(J->L, sizeof(KNumArray), KNumArray);
-    setmref(nkn->next, NULL);
-    nkn->numk = 0;
-    if (knp)
-      setmref(knp->next, nkn);  /* Chain to the end of the list. */
+  if (!(kp && kp->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
+    K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
+    setmref(kn->next, NULL);
+    kn->numk = 0;
+    if (kp)
+      setmref(kp->next, kn);  /* Chain to the end of the list. */
     else
-      setmref(J->knum, nkn);  /* Link first array. */
-    knp = nkn;
+      setmref(J->k64, kn);  /* Link first array. */
+    kp = kn;
   }
-  ntv = &knp->k[knp->numk++];  /* Add to current array. */
-  ntv->u64 = nn;
+  ntv = &kp->k[kp->numk++];  /* Add to current array. */
+  ntv->u64 = u64;
   return ntv;
 }
 
-/* Intern FP constant, given by its address. */
-TRef lj_ir_knum_addr(jit_State *J, cTValue *tv)
+/* Intern 64 bit constant, given by its address. */
+TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
-  for (ref = J->chain[IR_KNUM]; ref; ref = cir[ref].prev)
-    if (ir_knum(&cir[ref]) == tv)
+  IRType t = op == IR_KNUM ? IRT_NUM : IRT_I64;
+  for (ref = J->chain[op]; ref; ref = cir[ref].prev)
+    if (ir_k64(&cir[ref]) == tv)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
   lua_assert(checkptr32(tv));
   setmref(ir->ptr, tv);
-  ir->t.irt = IRT_NUM;
-  ir->o = IR_KNUM;
-  ir->prev = J->chain[IR_KNUM];
-  J->chain[IR_KNUM] = (IRRef1)ref;
+  ir->t.irt = t;
+  ir->o = op;
+  ir->prev = J->chain[op];
+  J->chain[op] = (IRRef1)ref;
 found:
-  return TREF(ref, IRT_NUM);
+  return TREF(ref, t);
 }
 
 /* Intern FP constant, given by its 64 bit pattern. */
-TRef lj_ir_knum_nn(jit_State *J, uint64_t nn)
+TRef lj_ir_knum_u64(jit_State *J, uint64_t u64)
 {
-  return lj_ir_knum_addr(J, ir_knum_find(J, nn));
+  return lj_ir_k64(J, IR_KNUM, ir_k64_find(J, u64));
+}
+
+/* Intern 64 bit integer constant. */
+TRef lj_ir_kint64(jit_State *J, uint64_t u64)
+{
+  return lj_ir_k64(J, IR_KINT64, ir_k64_find(J, u64));
 }
 
 /* Check whether a number is int and return it. -0 is NOT considered an int. */
@@ -373,6 +380,9 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   } else if (irt_isnum(ir->t)) {
     lua_assert(ir->o == IR_KNUM);
     setnumV(tv, ir_knum(ir)->n);
+  } else if (irt_is64(ir->t)) {
+    lua_assert(ir->o == IR_KINT64);
+    setnumV(tv, (int64_t)ir_kint64(ir)->u64);  /* NYI: use FFI int64_t. */
   } else if (irt_ispri(ir->t)) {
     lua_assert(ir->o == IR_KPRI);
     setitype(tv, irt_toitype(ir->t));

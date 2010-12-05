@@ -1863,7 +1863,8 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
     case IR_KPRI: tr = TREF_PRI(irt_type(ir->t)); break;
     case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
     case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
-    case IR_KNUM: tr = lj_ir_knum_addr(J, ir_knum(ir)); break;
+    case IR_KNUM: tr = lj_ir_k64(J, IR_KNUM, ir_knum(ir)); break;
+    case IR_KINT64: tr = lj_ir_k64(J, IR_KINT64, ir_kint64(ir)); break;
     case IR_KPTR:  tr = lj_ir_kptr(J, ir_kptr(ir)); break;  /* Continuation. */
     /* Inherited SLOADs don't need a guard or type check. */
     case IR_SLOAD:

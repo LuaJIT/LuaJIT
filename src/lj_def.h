@@ -62,7 +62,7 @@ typedef unsigned __int32 uintptr_t;
 #define LJ_MIN_SBUF	32		/* Min. string buffer length. */
 #define LJ_MIN_VECSZ	8		/* Min. size for growable vectors. */
 #define LJ_MIN_IRSZ	32		/* Min. size for growable IR. */
-#define LJ_MIN_KNUMSZ	16		/* Min. size for chained KNUM array. */
+#define LJ_MIN_K64SZ	16		/* Min. size for chained K64Array. */
 
 /* JIT compiler limits. */
 #define LJ_MAX_JSLOTS	250		/* Max. # of stack slots for a trace. */
@@ -90,6 +90,7 @@ typedef unsigned __int32 uintptr_t;
 #define checki16(x)	((x) == (int32_t)(int16_t)(x))
 #define checku16(x)	((x) == (int32_t)(uint16_t)(x))
 #define checki32(x)	((x) == (int32_t)(x))
+#define checku32(x)	((x) == (uint32_t)(x))
 #define checkptr32(x)	((uintptr_t)(x) == (uint32_t)(uintptr_t)(x))
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */

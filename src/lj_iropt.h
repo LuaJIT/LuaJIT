@@ -39,10 +39,11 @@ static LJ_AINLINE IRRef lj_ir_nextins(jit_State *J)
 
 /* Interning of constants. */
 LJ_FUNC TRef LJ_FASTCALL lj_ir_kint(jit_State *J, int32_t k);
-LJ_FUNC void lj_ir_knum_freeall(jit_State *J);
-LJ_FUNC TRef lj_ir_knum_addr(jit_State *J, cTValue *tv);
-LJ_FUNC TRef lj_ir_knum_nn(jit_State *J, uint64_t nn);
+LJ_FUNC void lj_ir_k64_freeall(jit_State *J);
+LJ_FUNC TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv);
+LJ_FUNC TRef lj_ir_knum_u64(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_knumint(jit_State *J, lua_Number n);
+LJ_FUNC TRef lj_ir_kint64(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t);
 LJ_FUNC TRef lj_ir_kptr(jit_State *J, void *ptr);
 LJ_FUNC TRef lj_ir_knull(jit_State *J, IRType t);
@@ -52,7 +53,7 @@ static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 {
   TValue tv;
   tv.n = n;
-  return lj_ir_knum_nn(J, tv.u64);
+  return lj_ir_knum_u64(J, tv.u64);
 }
 
 #define lj_ir_kstr(J, str)	lj_ir_kgc(J, obj2gco((str)), IRT_STR)
@@ -60,13 +61,13 @@ static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 #define lj_ir_kfunc(J, func)	lj_ir_kgc(J, obj2gco((func)), IRT_FUNC)
 
 /* Special FP constants. */
-#define lj_ir_knum_zero(J)	lj_ir_knum_nn(J, U64x(00000000,00000000))
-#define lj_ir_knum_one(J)	lj_ir_knum_nn(J, U64x(3ff00000,00000000))
-#define lj_ir_knum_tobit(J)	lj_ir_knum_nn(J, U64x(43380000,00000000))
+#define lj_ir_knum_zero(J)	lj_ir_knum_u64(J, U64x(00000000,00000000))
+#define lj_ir_knum_one(J)	lj_ir_knum_u64(J, U64x(3ff00000,00000000))
+#define lj_ir_knum_tobit(J)	lj_ir_knum_u64(J, U64x(43380000,00000000))
 
 /* Special 128 bit SIMD constants. */
-#define lj_ir_knum_abs(J)	lj_ir_knum_addr(J, LJ_KSIMD(J, LJ_KSIMD_ABS))
-#define lj_ir_knum_neg(J)	lj_ir_knum_addr(J, LJ_KSIMD(J, LJ_KSIMD_NEG))
+#define lj_ir_knum_abs(J)	lj_ir_k64(J, IR_KNUM, LJ_KSIMD(J, LJ_KSIMD_ABS))
+#define lj_ir_knum_neg(J)	lj_ir_k64(J, IR_KNUM, LJ_KSIMD(J, LJ_KSIMD_NEG))
 
 /* Access to constants. */
 LJ_FUNC void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir);

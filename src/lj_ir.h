@@ -12,6 +12,24 @@
 
 /* IR instruction definition. Order matters, see below. */
 #define IRDEF(_) \
+  /* Guarded assertions. */ \
+  /* Must be properly aligned to flip opposites (^1) and (un)ordered (^4). */ \
+  _(LT,		N , ref, ref) \
+  _(GE,		N , ref, ref) \
+  _(LE,		N , ref, ref) \
+  _(GT,		N , ref, ref) \
+  \
+  _(ULT,	N , ref, ref) \
+  _(UGE,	N , ref, ref) \
+  _(ULE,	N , ref, ref) \
+  _(UGT,	N , ref, ref) \
+  \
+  _(EQ,		C , ref, ref) \
+  _(NE,		C , ref, ref) \
+  \
+  _(ABC,	N , ref, ref) \
+  _(RETF,	S , ref, ref) \
+  \
   /* Miscellaneous ops. */ \
   _(NOP,	N , ___, ___) \
   _(BASE,	N , lit, lit) \
@@ -26,25 +44,8 @@
   _(KPTR,	N , cst, ___) \
   _(KNULL,	N , cst, ___) \
   _(KNUM,	N , cst, ___) \
+  _(KINT64,	N , cst, ___) \
   _(KSLOT,	N , ref, lit) \
-  \
-  /* Guarded assertions. */ \
-  /* Must be properly aligned to flip opposites (^1) and (un)ordered (^4). */ \
-  _(EQ,		C , ref, ref) \
-  _(NE,		C , ref, ref) \
-  \
-  _(ABC,	N , ref, ref) \
-  _(RETF,	S , ref, ref) \
-  \
-  _(LT,		N , ref, ref) \
-  _(GE,		N , ref, ref) \
-  _(LE,		N , ref, ref) \
-  _(GT,		N , ref, ref) \
-  \
-  _(ULT,	N , ref, ref) \
-  _(UGE,	N , ref, ref) \
-  _(ULE,	N , ref, ref) \
-  _(UGT,	N , ref, ref) \
   \
   /* Bit ops. */ \
   _(BNOT,	N , ref, ___) \
@@ -536,6 +537,9 @@ typedef union IRIns {
 #define ir_ktab(ir)	(gco2tab(ir_kgc((ir))))
 #define ir_kfunc(ir)	(gco2func(ir_kgc((ir))))
 #define ir_knum(ir)	check_exp((ir)->o == IR_KNUM, mref((ir)->ptr, cTValue))
+#define ir_kint64(ir)	check_exp((ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
+#define ir_k64(ir) \
+  check_exp((ir)->o == IR_KNUM || (ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
 #define ir_kptr(ir)	check_exp((ir)->o == IR_KPTR, mref((ir)->ptr, void))
 
 LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);

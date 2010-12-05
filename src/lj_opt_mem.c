@@ -188,7 +188,7 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	tv = lj_tab_get(J->L, ir_ktab(IR(ir->op1)), &keyv);
 	lua_assert(itype2irt(tv) == irt_type(fins->t));
 	if (irt_isnum(fins->t))
-	  return lj_ir_knum_nn(J, tv->u64);
+	  return lj_ir_knum_u64(J, tv->u64);
 	else
 	  return lj_ir_kstr(J, strV(tv));
       }
