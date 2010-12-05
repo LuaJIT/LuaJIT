@@ -680,7 +680,10 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
 /* Generic move between two regs. */
 static void ra_movrr(ASMState *as, IRIns *ir, Reg r1, Reg r2)
 {
-  emit_rr(as, r1 < RID_MAX_GPR ? XO_MOV : XMM_MOVRR(as), REX_64IR(ir, r1), r2);
+  if (r1 < RID_MAX_GPR)
+    emit_rr(as, XO_MOV, REX_64IR(ir, r1), r2);
+  else
+    emit_rr(as, XMM_MOVRR(as), r1, r2);
 }
 
 /* Restore a register (marked as free). Rematerialize or force a spill. */
@@ -698,8 +701,10 @@ static Reg ra_restore(ASMState *as, IRRef ref)
     if (!rset_test(as->weakset, r)) {  /* Only restore non-weak references. */
       ra_modified(as, r);
       RA_DBGX((as, "restore   $i $r", ir, r));
-      emit_rmro(as, r < RID_MAX_GPR ? XO_MOV : XMM_MOVRM(as),
-		REX_64IR(ir, r), RID_ESP, ofs);
+      if (r < RID_MAX_GPR)
+	emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
+      else
+	emit_rmro(as, XMM_MOVRM(as), r, RID_ESP, ofs);
     }
     return r;
   }
@@ -709,8 +714,10 @@ static Reg ra_restore(ASMState *as, IRRef ref)
 static void ra_save(ASMState *as, IRIns *ir, Reg r)
 {
   RA_DBGX((as, "save      $i $r", ir, r));
-  emit_rmro(as, r < RID_MAX_GPR ? XO_MOVto : XO_MOVSDto,
-	    REX_64IR(ir, r), RID_ESP, sps_scale(ir->s));
+  if (r < RID_MAX_GPR)
+    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), RID_ESP, sps_scale(ir->s));
+  else
+    emit_rmro(as, XO_MOVSDto, r, RID_ESP, sps_scale(ir->s));
 }
 
 #define MINCOST(r) \
@@ -3213,8 +3220,10 @@ static void asm_head_side(ASMState *as)
       if (ra_hasspill(regsp_spill(rs))) {
 	int32_t ofs = sps_scale(regsp_spill(rs));
 	ra_free(as, r);
-	emit_rmro(as, r < RID_MAX_GPR ? XO_MOV : XMM_MOVRM(as),
-		  REX_64IR(ir, r), RID_ESP, ofs);
+	if (r < RID_MAX_GPR)
+	  emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
+	else
+	  emit_rmro(as, XMM_MOVRM(as), r, RID_ESP, ofs);
 	checkmclim(as);
       }
     }
