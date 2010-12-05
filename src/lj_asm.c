@@ -631,7 +631,7 @@ static int32_t ra_spill(ASMState *as, IRIns *ir)
 {
   int32_t slot = ir->s;
   if (!ra_hasspill(slot)) {
-    if (irt_isnum(ir->t) || (LJ_64 && irt_islightud(ir->t))) {
+    if (irt_is64(ir->t)) {
       slot = as->evenspill;
       as->evenspill += 2;
     } else if (as->oddspill) {
@@ -661,14 +661,14 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
   return r;
 }
 
-/* Use 64 bit operations to handle 64 bit lightuserdata. */
-#define REX_64LU(ir, r) \
-  ((r) | ((LJ_64 && irt_islightud((ir)->t)) ? REX_64 : 0))
+/* Use 64 bit operations to handle 64 bit IR types. */
+#define REX_64IR(ir, r) \
+  ((r) | ((LJ_64 && irt_is64((ir)->t)) ? REX_64 : 0))
 
 /* Generic move between two regs. */
 static void ra_movrr(ASMState *as, IRIns *ir, Reg r1, Reg r2)
 {
-  emit_rr(as, r1 < RID_MAX_GPR ? XO_MOV : XMM_MOVRR(as), REX_64LU(ir, r1), r2);
+  emit_rr(as, r1 < RID_MAX_GPR ? XO_MOV : XMM_MOVRR(as), REX_64IR(ir, r1), r2);
 }
 
 /* Restore a register (marked as free). Rematerialize or force a spill. */
@@ -687,7 +687,7 @@ static Reg ra_restore(ASMState *as, IRRef ref)
       ra_modified(as, r);
       RA_DBGX((as, "restore   $i $r", ir, r));
       emit_rmro(as, r < RID_MAX_GPR ? XO_MOV : XMM_MOVRM(as),
-		REX_64LU(ir, r), RID_ESP, ofs);
+		REX_64IR(ir, r), RID_ESP, ofs);
     }
     return r;
   }
@@ -698,7 +698,7 @@ static void ra_save(ASMState *as, IRIns *ir, Reg r)
 {
   RA_DBGX((as, "save      $i $r", ir, r));
   emit_rmro(as, r < RID_MAX_GPR ? XO_MOVto : XO_MOVSDto,
-	    REX_64LU(ir, r), RID_ESP, sps_scale(ir->s));
+	    REX_64IR(ir, r), RID_ESP, sps_scale(ir->s));
 }
 
 #define MINCOST(r) \
@@ -1397,7 +1397,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
 	r = ra_alloc1(as, args[n], allow & RSET_GPR);
 	allow &= ~RID2RSET(r);
-	emit_movtomro(as, REX_64LU(ir, r), RID_ESP, ofs);
+	emit_movtomro(as, REX_64IR(ir, r), RID_ESP, ofs);
       }
       ofs += sizeof(intptr_t);
     }
@@ -1849,7 +1849,7 @@ static void asm_newref(ASMState *as, IRIns *ir)
     /* Otherwise use g->tmptv to hold the TValue. */
     if (!irref_isk(ir->op2)) {
       Reg src = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, tmp));
-      emit_movtomro(as, REX_64LU(irkey, src), tmp, 0);
+      emit_movtomro(as, REX_64IR(irkey, src), tmp, 0);
     } else if (!irt_ispri(irkey->t)) {
       emit_movmroi(as, tmp, 0, irkey->i);
     }
@@ -1918,13 +1918,11 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   case IRT_U8: xo = XO_MOVZXb; break;
   case IRT_I16: xo = XO_MOVSXw; break;
   case IRT_U16: xo = XO_MOVZXw; break;
-#if LJ_64
-  case IRT_LIGHTUD:
-    dest |= REX_64;
-    /* fallthrough */
-#endif
   default:
-    lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
+    if (LJ_64 && irt_is64(ir->t))
+      dest |= REX_64;
+    else
+      lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
     xo = XO_MOV;
     break;
   }
@@ -1938,6 +1936,7 @@ static void asm_fstore(ASMState *as, IRIns *ir)
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
+  lua_assert(!(irref_isk(ir->op2) && irt_is64(ir->t)));  /* NYI: KINT64. */
   if (!irref_isk(ir->op2) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
     RegSet allow8 = (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = ra_alloc1(as, ir->op2, allow8);
@@ -1953,7 +1952,10 @@ static void asm_fstore(ASMState *as, IRIns *ir)
     case IRT_LIGHTUD: lua_assert(0);  /* NYI: mask 64 bit lightuserdata. */
 #endif
     default:
-      lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
+      if (LJ_64 && irt_is64(ir->t))
+	src |= REX_64;
+      else
+	lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
       xo = XO_MOVto;
       break;
     }
@@ -1963,7 +1965,7 @@ static void asm_fstore(ASMState *as, IRIns *ir)
       emit_i8(as, IR(ir->op2)->i);
       emit_mrm(as, XO_MOVmib, 0, RID_MRM);
     } else {
-      lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
+      lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
       emit_i32(as, IR(ir->op2)->i);
       emit_mrm(as, XO_MOVmi, 0, RID_MRM);
     }
@@ -2664,7 +2666,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
-	  emit_rr(as, XO_TEST, REX_64LU(ir, left), left);
+	  emit_rr(as, XO_TEST, REX_64IR(ir, left), left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
@@ -2683,7 +2685,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
       Reg left = ra_alloc1(as, lref, RSET_GPR);
       Reg right = asm_fuseload(as, rref, rset_exclude(RSET_GPR, left));
       asm_guardcc(as, cc);
-      emit_mrm(as, XO_CMP, REX_64LU(ir, left), right);
+      emit_mrm(as, XO_CMP, REX_64IR(ir, left), right);
     }
   }
 }
@@ -2762,7 +2764,7 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
       lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
       if (!irref_isk(ref)) {
 	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
-	emit_movtomro(as, REX_64LU(ir, src), RID_BASE, ofs);
+	emit_movtomro(as, REX_64IR(ir, src), RID_BASE, ofs);
       } else if (!irt_ispri(ir->t)) {
 	emit_movmroi(as, RID_BASE, ofs, ir->i);
       }
@@ -3189,7 +3191,7 @@ static void asm_head_side(ASMState *as)
 	int32_t ofs = sps_scale(regsp_spill(rs));
 	ra_free(as, r);
 	emit_rmro(as, r < RID_MAX_GPR ? XO_MOV : XMM_MOVRM(as),
-		  REX_64LU(ir, r), RID_ESP, ofs);
+		  REX_64IR(ir, r), RID_ESP, ofs);
 	checkmclim(as);
       }
     }

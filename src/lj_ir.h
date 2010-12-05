@@ -315,7 +315,7 @@ typedef enum {
   IRT_THREAD,
   IRT_PROTO,
   IRT_FUNC,
-  IRT_9,		/* Unused (map of LJ_TTRACE). */
+  IRT_P64,		/* IRT_P64 never escapes the IR (map of LJ_TTRACE). */
   IRT_CDATA,
   IRT_TAB,
   IRT_UDATA,
@@ -325,12 +325,15 @@ typedef enum {
   ** a TValue after implicit or explicit conversion (TONUM). Their types
   ** must be contiguous and next to IRT_NUM (see the typerange macros below).
   */
-  IRT_INT,
   IRT_I8,
   IRT_U8,
   IRT_I16,
   IRT_U16,
-  /* There is room for 13 more types. */
+  IRT_INT,
+  IRT_U32,
+  IRT_I64,
+  IRT_U64,
+  /* There is room for 10 more types. */
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
@@ -370,10 +373,16 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isu8(t)		(irt_type(t) == IRT_U8)
 #define irt_isi16(t)		(irt_type(t) == IRT_I16)
 #define irt_isu16(t)		(irt_type(t) == IRT_U16)
+#define irt_isu32(t)		(irt_type(t) == IRT_U32)
 
-#define irt_isinteger(t)	(irt_typerange((t), IRT_INT, IRT_U16))
+#define irt_isinteger(t)	(irt_typerange((t), IRT_I8, IRT_INT))
 #define irt_isgcv(t)		(irt_typerange((t), IRT_STR, IRT_UDATA))
 #define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD, IRT_UDATA))
+
+#define IRT_IS64 \
+  ((1u<<IRT_NUM) | (1u<<IRT_I64) | (1u<<IRT_U64) | (1u<<IRT_P64) | \
+   (LJ_64 ? (1u<<IRT_LIGHTUD) : 0))
+#define irt_is64(t)		((IRT_IS64 >> irt_type(t)) & 1)
 
 static LJ_AINLINE IRType itype2irt(const TValue *tv)
 {
@@ -469,8 +478,8 @@ typedef uint32_t TRef;
 #define tref_isbool(tr)		(tref_typerange((tr), IRT_FALSE, IRT_TRUE))
 #define tref_ispri(tr)		(tref_typerange((tr), IRT_NIL, IRT_TRUE))
 #define tref_istruecond(tr)	(!tref_typerange((tr), IRT_NIL, IRT_FALSE))
-#define tref_isinteger(tr)	(tref_typerange((tr), IRT_INT, IRT_U16))
-#define tref_isnumber(tr)	(tref_typerange((tr), IRT_NUM, IRT_U16))
+#define tref_isinteger(tr)	(tref_typerange((tr), IRT_I8, IRT_INT))
+#define tref_isnumber(tr)	(tref_typerange((tr), IRT_NUM, IRT_INT))
 #define tref_isnumber_str(tr)	(tref_isnumber((tr)) || tref_isstr((tr)))
 #define tref_isgcv(tr)		(tref_typerange((tr), IRT_STR, IRT_UDATA))
 
