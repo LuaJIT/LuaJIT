@@ -661,6 +661,25 @@ LJFOLDF(simplify_intsub_k)
   return RETRYFOLD;
 }
 
+LJFOLD(ADD any KINT64)
+LJFOLDF(simplify_intadd_k64)
+{
+  if (ir_kint64(fright)->u64 == 0)  /* i + 0 ==> i */
+    return LEFTFOLD;
+  return NEXTFOLD;
+}
+
+LJFOLD(SUB any KINT64)
+LJFOLDF(simplify_intsub_k64)
+{
+  uint64_t k = ir_kint64(fright)->u64;
+  if (k == 0)  /* i - 0 ==> i */
+    return LEFTFOLD;
+  fins->o = IR_ADD;  /* i - k ==> i + (-k) */
+  fins->op2 = (IRRef1)lj_ir_kint64(J, -k);  /* Overflow for -2^63 ok. */
+  return RETRYFOLD;
+}
+
 LJFOLD(SUB any any)
 LJFOLD(SUBOV any any)
 LJFOLDF(simplify_intsub)
