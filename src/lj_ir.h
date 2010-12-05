@@ -363,7 +363,6 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_ispri(t)		((uint32_t)irt_type(t) <= IRT_TRUE)
 #define irt_islightud(t)	(irt_type(t) == IRT_LIGHTUD)
 #define irt_isstr(t)		(irt_type(t) == IRT_STR)
-#define irt_isfunc(t)		(irt_type(t) == IRT_FUNC)
 #define irt_istab(t)		(irt_type(t) == IRT_TAB)
 #define irt_isnum(t)		(irt_type(t) == IRT_NUM)
 #define irt_isint(t)		(irt_type(t) == IRT_INT)

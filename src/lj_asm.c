@@ -1690,7 +1690,7 @@ static void asm_href(ASMState *as, IRIns *ir)
       emit_u32(as, LJ_TISNUM);
       emit_rmro(as, XO_ARITHi, XOg_CMP, dest, offsetof(Node, key.it));
 #else
-      emit_i8(as, ~IRT_NUM);
+      emit_i8(as, LJ_TISNUM);
       emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
 #endif
     }
@@ -1709,7 +1709,7 @@ static void asm_href(ASMState *as, IRIns *ir)
       emit_sjcc(as, CC_NE, l_next);
     }
     lua_assert(!irt_isnil(kt));
-    emit_i8(as, ~irt_type(kt));
+    emit_i8(as, irt_toitype(kt));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
   }
   emit_sfixup(as, l_loop);
@@ -1791,11 +1791,11 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
     lua_assert(irt_isnum(irkey->t) || irt_isgcv(irkey->t));
     /* Assumes -0.0 is already canonicalized to +0.0. */
     emit_loadu64(as, key, irt_isnum(irkey->t) ? ir_knum(irkey)->u64 :
-			  ((uint64_t)~irt_type(irkey->t) << 32) |
+			  ((uint64_t)irt_toitype(irkey->t) << 32) |
 			  (uint64_t)(uint32_t)ptr2addr(ir_kgc(irkey)));
   } else {
     lua_assert(!irt_isnil(irkey->t));
-    emit_i8(as, ~irt_type(irkey->t));
+    emit_i8(as, irt_toitype(irkey->t));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, node,
 	      ofs + (int32_t)offsetof(Node, key.it));
   }
@@ -1819,7 +1819,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
       emit_sjcc(as, CC_NE, l_exit);
     }
     lua_assert(!irt_isnil(irkey->t));
-    emit_i8(as, ~irt_type(irkey->t));
+    emit_i8(as, irt_toitype(irkey->t));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, node,
 	      ofs + (int32_t)offsetof(Node, key.it));
   }
@@ -2018,7 +2018,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     emit_u32(as, LJ_TISNUM);
     emit_mrm(as, XO_ARITHi, XOg_CMP, RID_MRM);
   } else {
-    emit_i8(as, ~irt_type(ir->t));
+    emit_i8(as, irt_toitype(ir->t));
     emit_mrm(as, XO_ARITHi8, XOg_CMP, RID_MRM);
   }
 }
@@ -2052,7 +2052,7 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
       emit_mrm(as, XO_MOVmi, 0, RID_MRM);
     }
     as->mrm.ofs += 4;
-    emit_i32(as, (int32_t)~irt_type(ir->t));
+    emit_i32(as, (int32_t)irt_toitype(ir->t));
     emit_mrm(as, XO_MOVmi, 0, RID_MRM);
   }
 }
@@ -2103,7 +2103,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
       emit_u32(as, LJ_TISNUM);
       emit_rmro(as, XO_ARITHi, XOg_CMP, base, ofs+4);
     } else {
-      emit_i8(as, ~irt_type(t));
+      emit_i8(as, irt_toitype(t));
       emit_rmro(as, XO_ARITHi8, XOg_CMP, base, ofs+4);
     }
   }
