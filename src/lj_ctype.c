@@ -392,7 +392,7 @@ static void ctype_preptype(CTRepr *ctr, CType *ct, CTInfo qual, const char *t)
   ctype_prepqual(ctr, qual);
 }
 
-void ctype_repr(CTRepr *ctr, CTypeID id)
+static void ctype_repr(CTRepr *ctr, CTypeID id)
 {
   CType *ct = ctype_get(ctr->cts, id);
   CTInfo qual = 0;
