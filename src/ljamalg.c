@@ -54,6 +54,7 @@
 #include "lj_mcode.c"
 #include "lj_snap.c"
 #include "lj_record.c"
+#include "lj_ffrecord.c"
 #include "lj_asm.c"
 #include "lj_trace.c"
 #include "lj_gdbjit.c"
