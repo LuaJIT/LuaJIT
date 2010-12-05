@@ -311,12 +311,12 @@ TRef lj_ir_kptr(jit_State *J, void *ptr)
   ref = ir_nextk(J);
   ir = IR(ref);
   setmref(ir->ptr, ptr);
-  ir->t.irt = IRT_PTR;
+  ir->t.irt = IRT_P32;
   ir->o = IR_KPTR;
   ir->prev = J->chain[IR_KPTR];
   J->chain[IR_KPTR] = (IRRef1)ref;
 found:
-  return TREF(ref, IRT_PTR);
+  return TREF(ref, IRT_P32);
 }
 
 /* Intern typed NULL constant. */
@@ -352,12 +352,12 @@ TRef lj_ir_kslot(jit_State *J, TRef key, IRRef slot)
   ref = ir_nextk(J);
   ir = IR(ref);
   ir->op12 = op12;
-  ir->t.irt = IRT_PTR;
+  ir->t.irt = IRT_P32;
   ir->o = IR_KSLOT;
   ir->prev = J->chain[IR_KSLOT];
   J->chain[IR_KSLOT] = (IRRef1)ref;
 found:
-  return TREF(ref, IRT_PTR);
+  return TREF(ref, IRT_P32);
 }
 
 /* -- Access to IR constants ---------------------------------------------- */

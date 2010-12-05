@@ -243,7 +243,7 @@ typedef struct CCallInfo {
   _(lj_str_fromnum,	2,  FN, STR, CCI_L) \
   _(lj_tab_new1,	2,  FS, TAB, CCI_L) \
   _(lj_tab_dup,		2,  FS, TAB, CCI_L) \
-  _(lj_tab_newkey,	3,   S, PTR, CCI_L) \
+  _(lj_tab_newkey,	3,   S, P32, CCI_L) \
   _(lj_tab_len,		1,  FL, INT, 0) \
   _(lj_gc_step_jit,	2,  FS, NIL, CCI_L) \
   _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
@@ -311,7 +311,7 @@ typedef enum {
   IRT_LIGHTUD,
   /* GCobj types are from here ... */
   IRT_STR,
-  IRT_PTR,		/* IRT_PTR never escapes the IR (map of LJ_TUPVAL). */
+  IRT_P32,		/* IRT_P32 never escapes the IR (map of LJ_TUPVAL). */
   IRT_THREAD,
   IRT_PROTO,
   IRT_FUNC,

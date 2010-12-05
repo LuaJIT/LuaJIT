@@ -161,7 +161,7 @@ static void LJ_FASTCALL recff_setmetatable(jit_State *J, RecordFFData *rd)
     ix.tab = tr;
     copyTV(J->L, &ix.tabv, &rd->argv[0]);
     lj_record_mm_lookup(J, &ix, MM_metatable); /* Guard for no __metatable. */
-    fref = emitir(IRT(IR_FREF, IRT_PTR), tr, IRFL_TAB_META);
+    fref = emitir(IRT(IR_FREF, IRT_P32), tr, IRFL_TAB_META);
     mtref = tref_isnil(mt) ? lj_ir_knull(J, IRT_TAB) : mt;
     emitir(IRT(IR_FSTORE, IRT_TAB), fref, mtref);
     if (!tref_isnil(mt))
@@ -214,7 +214,7 @@ int32_t lj_ffrecord_select_mode(jit_State *J, TRef tr, TValue *tv)
     if (strV(tv)->len == 1) {
       emitir(IRT(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, strV(tv)));
     } else {
-      TRef trptr = emitir(IRT(IR_STRREF, IRT_PTR), tr, 0);
+      TRef trptr = emitir(IRT(IR_STRREF, IRT_P32), tr, 0);
       TRef trchar = emitir(IRT(IR_XLOAD, IRT_U8), trptr, IRXLOAD_READONLY);
       emitir(IRT(IR_EQ, IRT_INT), trchar, lj_ir_kint(J, '#'));
     }
@@ -626,7 +626,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       /* Also handle empty range here, to avoid extra traces. */
       TRef trptr, trslen = emitir(IRTI(IR_SUB), trend, trstart);
       emitir(IRTGI(IR_GE), trslen, tr0);
-      trptr = emitir(IRT(IR_STRREF, IRT_PTR), trstr, trstart);
+      trptr = emitir(IRT(IR_STRREF, IRT_P32), trstr, trstart);
       J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), trptr, trslen);
     } else {  /* Range underflow: return empty string. */
       emitir(IRTGI(IR_LT), trend, trstart);
@@ -642,7 +642,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       rd->nres = len;
       for (i = 0; i < len; i++) {
 	TRef tmp = emitir(IRTI(IR_ADD), trstart, lj_ir_kint(J, (int32_t)i));
-	tmp = emitir(IRT(IR_STRREF, IRT_PTR), trstr, tmp);
+	tmp = emitir(IRT(IR_STRREF, IRT_P32), trstr, tmp);
 	J->base[i] = emitir(IRT(IR_XLOAD, IRT_U8), tmp, IRXLOAD_READONLY);
       }
     } else {  /* Empty range or range underflow: return no results. */
@@ -746,7 +746,7 @@ static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
   ptrdiff_t i = rd->data == 0 ? 1 : 0;
   for (; J->base[i]; i++) {
     TRef str = lj_ir_tostr(J, J->base[i]);
-    TRef buf = emitir(IRT(IR_STRREF, IRT_PTR), str, zero);
+    TRef buf = emitir(IRT(IR_STRREF, IRT_P32), str, zero);
     TRef len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
     if (tref_isk(len) && IR(tref_ref(len))->i == 1) {
       TRef tr = emitir(IRT(IR_XLOAD, IRT_U8), buf, IRXLOAD_READONLY);

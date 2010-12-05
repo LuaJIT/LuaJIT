@@ -594,7 +594,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     } else {  /* Return to lower frame. Guard for the target we return to. */
       TRef trpt = lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);
       TRef trpc = lj_ir_kptr(J, (void *)frame_pc(frame));
-      emitir(IRTG(IR_RETF, IRT_PTR), trpt, trpc);
+      emitir(IRTG(IR_RETF, IRT_P32), trpt, trpc);
       J->retdepth++;
       J->needsnap = 1;
       lua_assert(J->baseslot == 1);
@@ -826,12 +826,12 @@ static void rec_idx_abc(jit_State *J, TRef asizeref, TRef ikey, uint32_t asize)
       /* Runtime value for stop of loop is within bounds? */
       if ((int64_t)stop + ofs < (int64_t)asize) {
 	/* Emit invariant bounds check for stop. */
-	emitir(IRTG(IR_ABC, IRT_PTR), asizeref, ofs == 0 ? J->scev.stop :
+	emitir(IRTG(IR_ABC, IRT_P32), asizeref, ofs == 0 ? J->scev.stop :
 	       emitir(IRTI(IR_ADD), J->scev.stop, ofsref));
 	/* Emit invariant bounds check for start, if not const or negative. */
 	if (!(J->scev.dir && J->scev.start &&
 	      (int64_t)IR(J->scev.start)->i + ofs >= 0))
-	  emitir(IRTG(IR_ABC, IRT_PTR), asizeref, ikey);
+	  emitir(IRTG(IR_ABC, IRT_P32), asizeref, ikey);
 	return;
       }
     }
@@ -861,8 +861,8 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
       if ((MSize)k < t->asize) {  /* Currently an array key? */
 	TRef arrayref;
 	rec_idx_abc(J, asizeref, ikey, t->asize);
-	arrayref = emitir(IRT(IR_FLOAD, IRT_PTR), ix->tab, IRFL_TAB_ARRAY);
-	return emitir(IRT(IR_AREF, IRT_PTR), arrayref, ikey);
+	arrayref = emitir(IRT(IR_FLOAD, IRT_P32), ix->tab, IRFL_TAB_ARRAY);
+	return emitir(IRT(IR_AREF, IRT_P32), arrayref, ikey);
       } else {  /* Currently not in array (may be an array extension)? */
 	emitir(IRTGI(IR_ULE), asizeref, ikey);  /* Inv. bounds check. */
 	if (k == 0 && tref_isk(key))
@@ -894,13 +894,13 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
       TRef node, kslot;
       TRef hm = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_HMASK);
       emitir(IRTGI(IR_EQ), hm, lj_ir_kint(J, (int32_t)t->hmask));
-      node = emitir(IRT(IR_FLOAD, IRT_PTR), ix->tab, IRFL_TAB_NODE);
+      node = emitir(IRT(IR_FLOAD, IRT_P32), ix->tab, IRFL_TAB_NODE);
       kslot = lj_ir_kslot(J, key, hslot / sizeof(Node));
-      return emitir(IRTG(IR_HREFK, IRT_PTR), node, kslot);
+      return emitir(IRTG(IR_HREFK, IRT_P32), node, kslot);
     }
   }
   /* Fall back to a regular hash lookup. */
-  return emitir(IRT(IR_HREF, IRT_PTR), ix->tab, key);
+  return emitir(IRT(IR_HREF, IRT_P32), ix->tab, key);
 }
 
 /* Determine whether a key is NOT one of the fast metamethod names. */
@@ -979,7 +979,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
     IRType t = itype2irt(oldv);
     TRef res;
     if (oldv == niltvg(J2G(J))) {
-      emitir(IRTG(IR_EQ, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+      emitir(IRTG(IR_EQ, IRT_P32), xref, lj_ir_kptr(J, niltvg(J2G(J))));
       res = TREF_NIL;
     } else {
       res = emitir(IRTG(loadop, t), xref, 0);
@@ -1001,7 +1001,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
       if (hasmm)
 	emitir(IRTG(loadop, IRT_NIL), xref, 0);  /* Guard for nil value. */
       else if (xrefop == IR_HREF)
-	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_PTR),
+	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_P32),
 	       xref, lj_ir_kptr(J, niltvg(J2G(J))));
       if (ix->idxchain && lj_record_mm_lookup(J, ix, MM_newindex)) {
 	lua_assert(hasmm);
@@ -1012,13 +1012,13 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 	TRef key = ix->key;
 	if (tref_isinteger(key))  /* NEWREF needs a TValue as a key. */
 	  key = emitir(IRTN(IR_TONUM), key, 0);
-	xref = emitir(IRT(IR_NEWREF, IRT_PTR), ix->tab, key);
+	xref = emitir(IRT(IR_NEWREF, IRT_P32), ix->tab, key);
 	keybarrier = 0;  /* NEWREF already takes care of the key barrier. */
       }
     } else if (!lj_opt_fwd_wasnonnil(J, loadop, tref_ref(xref))) {
       /* Cannot derive that the previous value was non-nil, must do checks. */
       if (xrefop == IR_HREF)  /* Guard against store to niltv. */
-	emitir(IRTG(IR_NE, IRT_PTR), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+	emitir(IRTG(IR_NE, IRT_P32), xref, lj_ir_kptr(J, niltvg(J2G(J))));
       if (ix->idxchain) {  /* Metamethod lookup required? */
 	/* A check for NULL metatable is cheaper (hoistable) than a load. */
 	if (!mt) {
@@ -1039,7 +1039,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
       emitir(IRT(IR_TBAR, IRT_NIL), ix->tab, 0);
     /* Invalidate neg. metamethod cache for stores with certain string keys. */
     if (!nommstr(J, ix->key)) {
-      TRef fref = emitir(IRT(IR_FREF, IRT_PTR), ix->tab, IRFL_TAB_NOMM);
+      TRef fref = emitir(IRT(IR_FREF, IRT_P32), ix->tab, IRFL_TAB_NOMM);
       emitir(IRT(IR_FSTORE, IRT_U8), fref, lj_ir_kint(J, 0));
     }
     J->needsnap = 1;
@@ -1075,10 +1075,10 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 	}
       }
     }
-    uref = tref_ref(emitir(IRTG(IR_UREFO, IRT_PTR), fn, uv));
+    uref = tref_ref(emitir(IRTG(IR_UREFO, IRT_P32), fn, uv));
   } else {
     needbarrier = 1;
-    uref = tref_ref(emitir(IRTG(IR_UREFC, IRT_PTR), fn, uv));
+    uref = tref_ref(emitir(IRTG(IR_UREFC, IRT_P32), fn, uv));
   }
   if (val == 0) {  /* Upvalue load */
     IRType t = itype2irt(uvval(uvp));
@@ -1218,10 +1218,10 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	else
 	  emitir(IRTGI(IR_EQ), fr, lj_ir_kint(J, frame_ftsz(J->L->base-1)));
 	vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
-	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
+	vbase = emitir(IRT(IR_ADD, IRT_P32), vbase, lj_ir_kint(J, frofs-8));
 	for (i = 0; i < nload; i++) {
 	  IRType t = itype2irt(&J->L->base[i-1-nvararg]);
-	  TRef aref = emitir(IRT(IR_AREF, IRT_PTR),
+	  TRef aref = emitir(IRT(IR_AREF, IRT_P32),
 			     vbase, lj_ir_kint(J, (int32_t)i));
 	  TRef tr = emitir(IRTG(IR_VLOAD, t), aref, 0);
 	  if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
@@ -1268,9 +1268,9 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       if (idx != 0 && idx <= nvararg) {
 	IRType t;
 	TRef aref, vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
-	vbase = emitir(IRT(IR_ADD, IRT_PTR), vbase, lj_ir_kint(J, frofs-8));
+	vbase = emitir(IRT(IR_ADD, IRT_P32), vbase, lj_ir_kint(J, frofs-8));
 	t = itype2irt(&J->L->base[idx-2-nvararg]);
-	aref = emitir(IRT(IR_AREF, IRT_PTR), vbase, tridx);
+	aref = emitir(IRT(IR_AREF, IRT_P32), vbase, tridx);
 	tr = emitir(IRTG(IR_VLOAD, t), aref, 0);
 	if (irtype_ispri(t)) tr = TREF_PRI(t);  /* Canonicalize primitives. */
       }
@@ -1913,7 +1913,7 @@ void lj_record_setup(jit_State *J)
   J->bc_extent = ~(MSize)0;
 
   /* Emit instructions for fixed references. Also triggers initial IR alloc. */
-  emitir_raw(IRT(IR_BASE, IRT_PTR), J->parent, J->exitno);
+  emitir_raw(IRT(IR_BASE, IRT_P32), J->parent, J->exitno);
   for (i = 0; i <= 2; i++) {
     IRIns *ir = IR(REF_NIL-i);
     ir->i = 0;
