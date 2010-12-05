@@ -674,8 +674,12 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
 }
 
 /* Use 64 bit operations to handle 64 bit IR types. */
-#define REX_64IR(ir, r) \
-  ((r) | ((LJ_64 && irt_is64((ir)->t)) ? REX_64 : 0))
+#if LJ_64
+#define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
+#else
+/* NYI: 32 bit register pairs. */
+#define REX_64IR(ir, r)		check_exp(!irt_is64((ir)->t), (r))
+#endif
 
 /* Generic move between two regs. */
 static void ra_movrr(ASMState *as, IRIns *ir, Reg r1, Reg r2)
@@ -1121,6 +1125,22 @@ IRFLDEF(FLOFS)
 
 /* Limit linear search to this distance. Avoids O(n^2) behavior. */
 #define CONFLICT_SEARCH_LIM	31
+
+/* Check if a reference is a signed 32 bit constant. */
+static int asm_isk32(ASMState *as, IRRef ref, int32_t *k)
+{
+  if (irref_isk(ref)) {
+    IRIns *ir = IR(ref);
+    if (ir->o != IR_KINT64) {
+      *k = ir->i;
+      return 1;
+    } else if (checki32((int64_t)ir_kint64(ir)->u64)) {
+      *k = (int32_t)ir_kint64(ir)->u64;
+      return 1;
+    }
+  }
+  return 0;
+}
 
 /* Check if there's no conflicting instruction between curins and ref. */
 static int noconflict(ASMState *as, IRRef ref, IROp conflict)
@@ -1962,12 +1982,11 @@ static void asm_fstore(ASMState *as, IRIns *ir)
 {
   RegSet allow = RSET_GPR;
   Reg src = RID_NONE;
+  int32_t k = 0;
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
-  if (!irref_isk(ir->op2) || irt_isi16(ir->t) || irt_isu16(ir->t) ||
-      (LJ_64 && irt_is64(ir->t) &&
-       !checki32((int64_t)ir_k64(IR(ir->op2))->u64))) {
+  if (!asm_isk32(as, ir->op2, &k) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
     RegSet allow8 = (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = ra_alloc1(as, ir->op2, allow8);
     rset_clear(allow, src);
@@ -1992,12 +2011,13 @@ static void asm_fstore(ASMState *as, IRIns *ir)
     emit_mrm(as, xo, src, RID_MRM);
   } else {
     if (irt_isi8(ir->t) || irt_isu8(ir->t)) {
-      emit_i8(as, IR(ir->op2)->i);
+      emit_i8(as, k);
       emit_mrm(as, XO_MOVmib, 0, RID_MRM);
     } else {
-      lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
-      emit_i32(as, IR(ir->op2)->i);
-      emit_mrm(as, XO_MOVmi, 0, RID_MRM);
+      lua_assert(irt_is64(ir->t) || irt_isint(ir->t) || irt_isu32(ir->t) ||
+		 irt_isaddr(ir->t));
+      emit_i32(as, k);
+      emit_mrm(as, XO_MOVmi, REX_64IR(ir, 0), RID_MRM);
     }
   }
 }
@@ -2420,6 +2440,7 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   IRRef rref = ir->op2;
   RegSet allow = RSET_GPR;
   Reg dest, right;
+  int32_t k = 0;
   if (as->testmcp == as->mcp) {  /* Drop test r,r instruction. */
     as->testmcp = NULL;
     as->mcp += (LJ_64 && *as->mcp != XI_TEST) ? 3 : 2;
@@ -2432,7 +2453,7 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   dest = ra_dest(as, ir, allow);
   if (lref == rref) {
     right = dest;
-  } else if (ra_noreg(right) && !irref_isk(rref)) {
+  } else if (ra_noreg(right) && !asm_isk32(as, rref, &k)) {
     if (swapops(as, ir)) {
       IRRef tmp = lref; lref = rref; rref = tmp;
     }
@@ -2442,9 +2463,9 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   if (irt_isguard(ir->t))  /* For IR_ADDOV etc. */
     asm_guardcc(as, CC_O);
   if (ra_hasreg(right))
-    emit_mrm(as, XO_ARITH(xa), dest, right);
+    emit_mrm(as, XO_ARITH(xa), REX_64IR(ir, dest), right);
   else
-    emit_gri(as, XG_ARITHi(xa), dest, IR(ir->op2)->i);
+    emit_gri(as, XG_ARITHi(xa), REX_64IR(ir, dest), k);
   ra_left(as, dest, lref);
 }
 
@@ -2533,19 +2554,15 @@ static void asm_add(ASMState *as, IRIns *ir)
 static void asm_bitnot(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  emit_rr(as, XO_GROUP3, XOg_NOT, dest);
+  emit_rr(as, XO_GROUP3, REX_64IR(ir, XOg_NOT), dest);
   ra_left(as, dest, ir->op1);
 }
 
 static void asm_bitswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  MCode *p = as->mcp;
-  p[-1] = (MCode)(XI_BSWAP+(dest&7));
-  p[-2] = 0x0f;
-  p -= 2;
-  REXRB(p, 0, dest);
-  as->mcp = p;
+  as->mcp = emit_op(XO_BSWAP + ((dest&7) << 24),
+		    REX_64IR(ir, dest), 0, 0, as->mcp, 1);
   ra_left(as, dest, ir->op1);
 }
 
@@ -2560,8 +2577,8 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
     shift = irr->i & 31;  /* Handle shifts of 0..31 bits. */
     switch (shift) {
     case 0: return;
-    case 1: emit_rr(as, XO_SHIFT1, (Reg)xs, dest); break;
-    default: emit_shifti(as, xs, dest, shift); break;
+    case 1: emit_rr(as, XO_SHIFT1, REX_64IR(ir, xs), dest); break;
+    default: emit_shifti(as, REX_64IR(ir, xs), dest, shift); break;
     }
   } else {  /* Variable shifts implicitly use register cl (i.e. ecx). */
     RegSet allow = rset_exclude(RSET_GPR, RID_ECX);
@@ -2573,7 +2590,7 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
       ra_scratch(as, RID2RSET(RID_ECX));
     }
     dest = ra_dest(as, ir, allow);
-    emit_rr(as, XO_SHIFTcl, (Reg)xs, dest);
+    emit_rr(as, XO_SHIFTcl, REX_64IR(ir, xs), dest);
     if (right != RID_ECX) {
       ra_noweak(as, right);
       emit_rr(as, XO_MOV, RID_ECX, right);
@@ -2638,6 +2655,8 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
   } else {
     IRRef lref = ir->op1, rref = ir->op2;
     IROp leftop = (IROp)(IR(lref)->o);
+    Reg r64 = REX_64IR(ir, 0);
+    int32_t imm = 0;
     lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
     /* Swap constants (only for ABC) and fusable loads to the right. */
     if (irref_isk(lref) || (!irref_isk(rref) && opisfusableload(leftop))) {
@@ -2645,26 +2664,25 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
       else if ((cc & 0xa) == 0x2) cc ^= 5;  /* A <-> B, AE <-> BE */
       lref = ir->op2; rref = ir->op1;
     }
-    if (irref_isk(rref) && IR(rref)->o != IR_KINT64) {
+    if (asm_isk32(as, rref, &imm)) {
       IRIns *irl = IR(lref);
-      int32_t imm = IR(rref)->i;
       /* Check wether we can use test ins. Not for unsigned, since CF=0. */
       int usetest = (imm == 0 && (cc & 0xa) != 0x2);
       if (usetest && irl->o == IR_BAND && irl+1 == ir && !ra_used(irl)) {
 	/* Combine comp(BAND(ref, r/imm), 0) into test mrm, r/imm. */
 	Reg right, left = RID_NONE;
 	RegSet allow = RSET_GPR;
-	if (!irref_isk(irl->op2)) {
+	if (!asm_isk32(as, irl->op2, &imm)) {
 	  left = ra_alloc1(as, irl->op2, allow);
 	  rset_clear(allow, left);
 	}
 	right = asm_fuseload(as, irl->op1, allow);
 	asm_guardcc(as, cc);
-	if (irref_isk(irl->op2)) {
-	  emit_i32(as, IR(irl->op2)->i);
-	  emit_mrm(as, XO_GROUP3, XOg_TEST, right);
+	if (ra_noreg(left)) {
+	  emit_i32(as, imm);
+	  emit_mrm(as, XO_GROUP3, r64 + XOg_TEST, right);
 	} else {
-	  emit_mrm(as, XO_TEST, left, right);
+	  emit_mrm(as, XO_TEST, r64 + left, right);
 	}
       } else {
 	Reg left;
@@ -2687,7 +2705,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	    asm_guardcc(as, cc);
 	    emit_i8(as, imm);
 	    emit_mrm(as, (irt_isi8(origt) || irt_isu8(origt)) ?
-			 XO_ARITHib : XO_ARITHiw8, XOg_CMP, RID_MRM);
+			 XO_ARITHib : XO_ARITHiw8, r64 + XOg_CMP, RID_MRM);
 	    return;
 	  }  /* Otherwise handle register case as usual. */
 	} else {
@@ -2696,7 +2714,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
-	  emit_rr(as, XO_TEST, REX_64IR(ir, left), left);
+	  emit_rr(as, XO_TEST, r64 + left, left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
@@ -2708,14 +2726,14 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	    emit_i32(as, imm);
 	    xo = XO_ARITHi;
 	  }
-	  emit_mrm(as, xo, XOg_CMP, left);
+	  emit_mrm(as, xo, r64 + XOg_CMP, left);
 	}
       }
     } else {
       Reg left = ra_alloc1(as, lref, RSET_GPR);
       Reg right = asm_fuseload(as, rref, rset_exclude(RSET_GPR, left));
       asm_guardcc(as, cc);
-      emit_mrm(as, XO_CMP, REX_64IR(ir, left), right);
+      emit_mrm(as, XO_CMP, r64 + left, right);
     }
   }
 }

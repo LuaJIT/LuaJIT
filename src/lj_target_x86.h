@@ -187,7 +187,6 @@ typedef enum {
   XI_PUSHi8 =	0x6a,
   XI_TEST =	0x85,
   XI_MOVmi =	0xc7,
-  XI_BSWAP =	0xc8, /* Really 0fc8+r. */
 
   /* Note: little-endian byte-order! */
   XI_FLDZ =	0xeed9,
@@ -230,6 +229,7 @@ typedef enum {
   XO_MOVZXw =	XO_0f(b7),
   XO_MOVSXb =	XO_0f(be),
   XO_MOVSXw =	XO_0f(bf),
+  XO_BSWAP =	XO_0f(c8),
 
   XO_MOVSD =	XO_f20f(10),
   XO_MOVSDto =	XO_f20f(11),
