@@ -1357,19 +1357,8 @@ LJFOLDF(xload_kptr)
   return NEXTFOLD;
 }
 
-/* CSE for XLOAD depends on the type, but not on the IRXLOAD_* flags. */
 LJFOLD(XLOAD any any)
-LJFOLDF(fwd_xload)
-{
-  IRRef ref = J->chain[IR_XLOAD];
-  IRRef op1 = fins->op1;
-  while (ref > op1) {
-    if (IR(ref)->op1 == op1 && irt_sametype(IR(ref)->t, fins->t))
-      return ref;
-    ref = IR(ref)->prev;
-  }
-  return EMITFOLD;
-}
+LJFOLDX(lj_opt_fwd_xload)
 
 /* -- Write barriers ------------------------------------------------------ */
 

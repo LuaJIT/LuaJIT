@@ -104,6 +104,7 @@
   _(HSTORE,	S , ref, ref) \
   _(USTORE,	S , ref, ref) \
   _(FSTORE,	S , ref, ref) \
+  _(XSTORE,	S , ref, ref) \
   \
   /* Allocations. */ \
   _(SNEW,	N , ref, ref) /* CSE is ok, so not marked as A. */ \
@@ -152,6 +153,7 @@ LJ_STATIC_ASSERT(((int)IR_LT^4) == (int)IR_ULT);
 LJ_STATIC_ASSERT((int)IR_HLOAD + IRDELTA_L2S == (int)IR_HSTORE);
 LJ_STATIC_ASSERT((int)IR_ULOAD + IRDELTA_L2S == (int)IR_USTORE);
 LJ_STATIC_ASSERT((int)IR_FLOAD + IRDELTA_L2S == (int)IR_FSTORE);
+LJ_STATIC_ASSERT((int)IR_XLOAD + IRDELTA_L2S == (int)IR_XSTORE);
 
 /* -- Named IR literals --------------------------------------------------- */
 

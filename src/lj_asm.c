@@ -1357,7 +1357,8 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       /* Generic fusion is only ok for 32 bit operand (but see asm_comp).
       ** Fusing unaligned memory operands is ok on x86 (except for SIMD types).
       */
-      if (irt_isint(ir->t) || irt_isaddr(ir->t)) {
+      if ((irt_isint(ir->t) || irt_isaddr(ir->t)) &&
+	  noconflict(as, ref, IR_XSTORE)) {
 	asm_fusexref(as, IR(ir->op1), xallow);
 	return RID_MRM;
       }
@@ -1978,7 +1979,7 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   emit_mrm(as, xo, dest, RID_MRM);
 }
 
-static void asm_fstore(ASMState *as, IRIns *ir)
+static void asm_fxstore(ASMState *as, IRIns *ir)
 {
   RegSet allow = RSET_GPR;
   Reg src = RID_NONE;
@@ -1991,7 +1992,11 @@ static void asm_fstore(ASMState *as, IRIns *ir)
     src = ra_alloc1(as, ir->op2, allow8);
     rset_clear(allow, src);
   }
-  asm_fusefref(as, IR(ir->op1), allow);
+  if (ir->o == IR_FSTORE)
+    asm_fusefref(as, IR(ir->op1), allow);
+  else
+    asm_fusexref(as, IR(ir->op1), allow);
+    /* ir->op2 is ignored -- unaligned stores are ok on x86. */
   if (ra_hasreg(src)) {
     x86Op xo;
     switch (irt_type(ir->t)) {
@@ -3467,7 +3472,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_SLOAD: asm_sload(as, ir); break;
 
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
-  case IR_FSTORE: asm_fstore(as, ir); break;
+  case IR_FSTORE: case IR_XSTORE: asm_fxstore(as, ir); break;
 
   /* Allocations. */
   case IR_SNEW: asm_snew(as, ir); break;

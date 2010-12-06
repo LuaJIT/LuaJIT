@@ -523,6 +523,50 @@ doemit:
   return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
 }
 
+/* -- XLOAD forwarding ---------------------------------------------------- */
+
+/* NYI: Alias analysis for XLOAD/XSTORE. */
+static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *refb)
+{
+  UNUSED(J); UNUSED(refa); UNUSED(refb);
+  return ALIAS_MAY;
+}
+
+/* XLOAD forwarding. */
+TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
+{
+  IRRef xref = fins->op1;
+  IRRef lim = xref;  /* Search limit. */
+  IRIns *xr = IR(xref);
+  IRRef ref;
+
+  if ((fins->op2 & IRXLOAD_READONLY))
+    goto cselim;
+
+  /* Search for conflicting stores. */
+  ref = J->chain[IR_XSTORE];
+  while (ref > xref) {
+    IRIns *store = IR(ref);
+    switch (aa_xref(J, xr, IR(store->op1))) {
+    case ALIAS_NO:   break;  /* Continue searching. */
+    case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
+    case ALIAS_MUST: return store->op2;  /* Store forwarding. */
+    }
+    ref = store->prev;
+  }
+
+cselim:
+  /* Try to find a matching load. Below the conflicting store, if any. */
+  ref = J->chain[IR_XLOAD];
+  while (ref > lim) {
+    /* CSE for XLOAD depends on the type, but not on the IRXLOAD_* flags. */
+    if (IR(ref)->op1 == fins->op1 && irt_sametype(IR(ref)->t, fins->t))
+      return ref;
+    ref = IR(ref)->prev;
+  }
+  return lj_ir_emit(J);
+}
+
 /* -- Forwarding of lj_tab_len -------------------------------------------- */
 
 /* This is rather simplistic right now, but better than nothing. */
