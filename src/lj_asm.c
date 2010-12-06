@@ -2482,6 +2482,31 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   ra_left(as, dest, lref);
 }
 
+static void asm_intmul(ASMState *as, IRIns *ir)
+{
+  IRRef lref = ir->op1;
+  IRRef rref = ir->op2;
+  int32_t k = 0;
+  if (asm_isk32(as, rref, &k)) {
+    /* NYI: use lea/shl/add/sub (FOLD only does 2^k) depending on CPU. */
+    Reg dest = ra_dest(as, ir, RSET_GPR);
+    Reg left = asm_fuseload(as, lref, RSET_GPR);
+    x86Op xo;
+    if (checki8(k)) {
+      emit_i8(as, k);
+      xo = XO_IMULi8;
+    } else {
+      emit_i32(as, k);
+      xo = XO_IMULi;
+    }
+    emit_rr(as, xo, REX_64IR(ir, dest), left);
+  } else {
+    /* NYI: integer multiply of non-constant operands. */
+    setintV(&as->J->errinfo, ir->o);
+    lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+  }
+}
+
 /* LEA is really a 4-operand ADD with an independent destination register,
 ** up to two source registers and an immediate. One register can be scaled
 ** by 1, 2, 4 or 8. This can be used to avoid moves or to fuse several
@@ -3445,7 +3470,12 @@ static void asm_ir(ASMState *as, IRIns *ir)
     else  /* Note: no need for LEA trick here. i-k is encoded as i+(-k). */
       asm_intarith(as, ir, XOg_SUB);
     break;
-  case IR_MUL: asm_fparith(as, ir, XO_MULSD); break;
+  case IR_MUL:
+    if (irt_isnum(ir->t))
+      asm_fparith(as, ir, XO_MULSD);
+    else
+      asm_intmul(as, ir);
+    break;
   case IR_DIV: asm_fparith(as, ir, XO_DIVSD); break;
 
   case IR_NEG: asm_fparith(as, ir, XO_XORPS); break;

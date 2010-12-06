@@ -218,6 +218,7 @@ typedef enum {
   XO_SHIFTi =	XO_(c1),
   XO_SHIFT1 =	XO_(d1),
   XO_SHIFTcl =	XO_(d3),
+  XO_IMULi =	XO_(69),
   XO_IMULi8 =	XO_(6b),
   XO_CMP =	XO_(3b),
   XO_TEST =	XO_(85),

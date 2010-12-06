@@ -197,6 +197,7 @@ static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
   switch (op) {
   case IR_ADD: k1 += k2; break;
   case IR_SUB: k1 -= k2; break;
+  case IR_MUL: k1 *= k2; break;
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
@@ -212,6 +213,7 @@ static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
 
 LJFOLD(ADD KINT KINT)
 LJFOLD(SUB KINT KINT)
+LJFOLD(MUL KINT KINT)
 LJFOLD(BAND KINT KINT)
 LJFOLD(BOR KINT KINT)
 LJFOLD(BXOR KINT KINT)
@@ -680,6 +682,43 @@ LJFOLDF(simplify_intsub_k64)
   return RETRYFOLD;
 }
 
+static TRef simplify_intmul_k(jit_State *J, int32_t k)
+{
+  /* Note: many more simplifications are possible, e.g. 2^k1 +- 2^k2.
+  ** But this is mainly intended for simple address arithmetic.
+  ** Also it's easier for the backend to optimize the original multiplies.
+  */
+  if (k == 1) {  /* i * 1 ==> i */
+    return LEFTFOLD;
+  } else if ((k & (k-1)) == 0) {  /* i * 2^k ==> i << k */
+    fins->o = IR_BSHL;
+    fins->op2 = lj_ir_kint(J, lj_fls((uint32_t)k));
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(MUL any KINT)
+LJFOLDF(simplify_intmul_k32)
+{
+  if (fright->i == 0)  /* i * 0 ==> 0 */
+    return INTFOLD(0);
+  else if (fright->i > 0)
+    return simplify_intmul_k(J, fright->i);
+  return NEXTFOLD;
+}
+
+LJFOLD(MUL any KINT64)
+LJFOLDF(simplify_intmul_k64)
+
+{
+  if (ir_kint64(fright)->u64 == 0)  /* i * 0 ==> 0 */
+    return lj_ir_kint64(J, 0);
+  else if (ir_kint64(fright)->u64 < 0x80000000u)
+    return simplify_intmul_k(J, (int32_t)ir_kint64(fright)->u64);
+  return NEXTFOLD;
+}
+
 LJFOLD(SUB any any)
 LJFOLD(SUBOV any any)
 LJFOLDF(simplify_intsub)
@@ -816,16 +855,17 @@ LJFOLD(BROL any KINT)
 LJFOLD(BROR any KINT)
 LJFOLDF(simplify_shift_ik)
 {
-  int32_t k = (fright->i & 31);
+  int32_t mask = irt_is64(fins->t) ? 63 : 31;
+  int32_t k = (fright->i & mask);
   if (k == 0)  /* i o 0 ==> i */
     return LEFTFOLD;
-  if (k != fright->i) {  /* i o k ==> i o (k & 31) */
+  if (k != fright->i) {  /* i o k ==> i o (k & mask) */
     fins->op2 = (IRRef1)lj_ir_kint(J, k);
     return RETRYFOLD;
   }
-  if (fins->o == IR_BROR) {  /* bror(i, k) ==> brol(i, (-k)&31) */
+  if (fins->o == IR_BROR) {  /* bror(i, k) ==> brol(i, (-k)&mask) */
     fins->o = IR_BROL;
-    fins->op2 = (IRRef1)lj_ir_kint(J, (-k)&31);
+    fins->op2 = (IRRef1)lj_ir_kint(J, (-k)&mask);
     return RETRYFOLD;
   }
   return NEXTFOLD;
@@ -841,9 +881,10 @@ LJFOLDF(simplify_shift_andk)
   IRIns *irk = IR(fright->op2);
   PHIBARRIER(fright);
   if ((fins->o < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
-      irk->o == IR_KINT) {  /* i o (j & 31) ==> i o j */
-    int32_t k = irk->i & 31;
-    if (k == 31) {
+      irk->o == IR_KINT) {  /* i o (j & mask) ==> i o j */
+    int32_t mask = irt_is64(fins->t) ? 63 : 31;
+    int32_t k = irk->i & mask;
+    if (k == mask) {
       fins->op2 = fright->op1;
       return RETRYFOLD;
     }
@@ -870,9 +911,29 @@ LJFOLDF(simplify_shift2_ki)
   return NEXTFOLD;
 }
 
+LJFOLD(BSHL KINT64 any)
+LJFOLD(BSHR KINT64 any)
+LJFOLDF(simplify_shift1_ki64)
+{
+  if (ir_kint64(fleft)->u64 == 0)  /* 0 o i ==> 0 */
+    return LEFTFOLD;
+  return NEXTFOLD;
+}
+
+LJFOLD(BSAR KINT64 any)
+LJFOLD(BROL KINT64 any)
+LJFOLD(BROR KINT64 any)
+LJFOLDF(simplify_shift2_ki64)
+{
+  if (ir_kint64(fleft)->u64 == 0 || (int64_t)ir_kint64(fleft)->u64 == -1)
+    return LEFTFOLD;  /* 0 o i ==> 0; -1 o i ==> -1 */
+  return NEXTFOLD;
+}
+
 /* -- Reassociation ------------------------------------------------------- */
 
 LJFOLD(ADD ADD KINT)
+LJFOLD(MUL MUL KINT)
 LJFOLD(BAND BAND KINT)
 LJFOLD(BOR BOR KINT)
 LJFOLD(BXOR BXOR KINT)
@@ -924,14 +985,15 @@ LJFOLDF(reassoc_shift)
   IRIns *irk = IR(fleft->op2);
   PHIBARRIER(fleft);  /* The (shift any KINT) rule covers k2 == 0 and more. */
   if (irk->o == IR_KINT) {  /* (i o k1) o k2 ==> i o (k1 + k2) */
-    int32_t k = (irk->i & 31) + (fright->i & 31);
-    if (k > 31) {  /* Combined shift too wide? */
+    int32_t mask = irt_is64(fins->t) ? 63 : 31;
+    int32_t k = (irk->i & mask) + (fright->i & mask);
+    if (k > mask) {  /* Combined shift too wide? */
       if (fins->o == IR_BSHL || fins->o == IR_BSHR)
-	return INTFOLD(0);
+	return mask == 31 ? INTFOLD(0) : lj_ir_kint64(J, 0);
       else if (fins->o == IR_BSAR)
-	k = 31;
+	k = mask;
       else
-	k &= 31;
+	k &= mask;
     }
     fins->op1 = fleft->op1;
     fins->op2 = (IRRef1)lj_ir_kint(J, k);
