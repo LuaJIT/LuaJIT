@@ -338,6 +338,9 @@ typedef enum {
   IRT_U64,
   /* There is room for 10 more types. */
 
+  /* Native pointer type. */
+  IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
+
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
   IRT_ISPHI = 0x40,	/* Instruction is left or right PHI operand. */

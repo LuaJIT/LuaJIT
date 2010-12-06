@@ -733,8 +733,8 @@ static TRef recff_io_fp(jit_State *J, uint32_t id)
     tr = emitir(IRT(IR_FLOAD, IRT_U8), ud, IRFL_UDATA_UDTYPE);
     emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
   }
-  fp = emitir(IRT(IR_FLOAD, IRT_LIGHTUD), ud, IRFL_UDATA_FILE);
-  emitir(IRTG(IR_NE, IRT_LIGHTUD), fp, lj_ir_knull(J, IRT_LIGHTUD));
+  fp = emitir(IRT(IR_FLOAD, IRT_PTR), ud, IRFL_UDATA_FILE);
+  emitir(IRTG(IR_NE, IRT_PTR), fp, lj_ir_knull(J, IRT_PTR));
   return fp;
 }
 
