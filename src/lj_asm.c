@@ -1297,14 +1297,21 @@ static void asm_fusestrref(ASMState *as, IRIns *ir, RegSet allow)
   }
 }
 
-static void asm_fusexref(ASMState *as, IRIns *ir, RegSet allow)
+static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
 {
+  IRIns *ir = IR(ref);
   if (ir->o == IR_KPTR) {
     as->mrm.ofs = ir->i;
     as->mrm.base = as->mrm.idx = RID_NONE;
-  } else {
-    lua_assert(ir->o == IR_STRREF);
+  } else if (ir->o == IR_STRREF) {
     asm_fusestrref(as, ir, allow);
+  } else if (mayfuse(as, ref) && ir->o == IR_ADD &&
+	     asm_isk32(as, ir->op2, &as->mrm.ofs)) {
+    /* NYI: gather index and shifts. */
+    as->mrm.idx = RID_NONE;
+    as->mrm.base = (uint8_t)ra_alloc1(as, ir->op1, allow);
+  } else {
+    as->mrm.base = (uint8_t)ra_alloc1(as, ref, allow);
   }
 }
 
@@ -1360,7 +1367,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       */
       if ((irt_isint(ir->t) || irt_isaddr(ir->t)) &&
 	  noconflict(as, ref, IR_XSTORE)) {
-	asm_fusexref(as, IR(ir->op1), xallow);
+	asm_fusexref(as, ir->op1, xallow);
 	return RID_MRM;
       }
     } else if (ir->o == IR_VLOAD) {
@@ -1962,7 +1969,7 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   if (ir->o == IR_FLOAD)
     asm_fusefref(as, ir, RSET_GPR);
   else
-    asm_fusexref(as, IR(ir->op1), RSET_GPR);
+    asm_fusexref(as, ir->op1, RSET_GPR);
     /* ir->op2 is ignored -- unaligned loads are ok on x86. */
   switch (irt_type(ir->t)) {
   case IRT_I8: xo = XO_MOVSXb; break;
@@ -1996,7 +2003,7 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   if (ir->o == IR_FSTORE)
     asm_fusefref(as, IR(ir->op1), allow);
   else
-    asm_fusexref(as, IR(ir->op1), allow);
+    asm_fusexref(as, ir->op1, allow);
     /* ir->op2 is ignored -- unaligned stores are ok on x86. */
   if (ra_hasreg(src)) {
     x86Op xo;
