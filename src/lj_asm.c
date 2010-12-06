@@ -684,6 +684,7 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
 /* Generic move between two regs. */
 static void ra_movrr(ASMState *as, IRIns *ir, Reg r1, Reg r2)
 {
+  UNUSED(ir);
   if (r1 < RID_MAX_GPR)
     emit_rr(as, XO_MOV, REX_64IR(ir, r1), r2);
   else
