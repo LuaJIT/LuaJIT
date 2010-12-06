@@ -1363,10 +1363,10 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 	return RID_MRM;
       }
     } else if (ir->o == IR_XLOAD) {
-      /* Generic fusion is only ok for 32 bit operand (but see asm_comp).
+      /* Generic fusion is not ok for 8/16 bit operands (but see asm_comp).
       ** Fusing unaligned memory operands is ok on x86 (except for SIMD types).
       */
-      if ((irt_isint(ir->t) || irt_isaddr(ir->t)) &&
+      if ((!irt_typerange(ir->t, IRT_I8, IRT_U16)) &&
 	  noconflict(as, ref, IR_XSTORE)) {
 	asm_fusexref(as, ir->op1, xallow);
 	return RID_MRM;
@@ -1995,6 +1995,7 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   case IRT_U8: xo = XO_MOVZXb; break;
   case IRT_I16: xo = XO_MOVSXw; break;
   case IRT_U16: xo = XO_MOVZXw; break;
+  case IRT_NUM: xo = XMM_MOVRM(as); break;
   default:
     if (LJ_64 && irt_is64(ir->t))
       dest |= REX_64;
@@ -2029,6 +2030,7 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
     switch (irt_type(ir->t)) {
     case IRT_I8: case IRT_U8: xo = XO_MOVtob; src |= FORCE_REX; break;
     case IRT_I16: case IRT_U16: xo = XO_MOVtow; break;
+    case IRT_NUM: xo = XO_MOVSDto; break;
 #if LJ_64
     case IRT_LIGHTUD: lua_assert(0);  /* NYI: mask 64 bit lightuserdata. */
 #endif
