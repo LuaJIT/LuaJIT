@@ -2613,9 +2613,9 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
   if (irref_isk(rref)) {  /* Constant shifts. */
     int shift;
     dest = ra_dest(as, ir, RSET_GPR);
-    shift = irr->i & 31;  /* Handle shifts of 0..31 bits. */
+    shift = irr->i & (irt_is64(ir->t) ? 63 : 31);
     switch (shift) {
-    case 0: return;
+    case 0: break;
     case 1: emit_rr(as, XO_SHIFT1, REX_64IR(ir, xs), dest); break;
     default: emit_shifti(as, REX_64IR(ir, xs), dest, shift); break;
     }
