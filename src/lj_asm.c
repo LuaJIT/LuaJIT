@@ -1300,17 +1300,18 @@ static void asm_fusestrref(ASMState *as, IRIns *ir, RegSet allow)
 static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
 {
   IRIns *ir = IR(ref);
+  as->mrm.idx = RID_NONE;
   if (ir->o == IR_KPTR) {
     as->mrm.ofs = ir->i;
-    as->mrm.base = as->mrm.idx = RID_NONE;
+    as->mrm.base = RID_NONE;
   } else if (ir->o == IR_STRREF) {
     asm_fusestrref(as, ir, allow);
   } else if (mayfuse(as, ref) && ir->o == IR_ADD &&
 	     asm_isk32(as, ir->op2, &as->mrm.ofs)) {
     /* NYI: gather index and shifts. */
-    as->mrm.idx = RID_NONE;
     as->mrm.base = (uint8_t)ra_alloc1(as, ir->op1, allow);
   } else {
+    as->mrm.ofs = 0;
     as->mrm.base = (uint8_t)ra_alloc1(as, ref, allow);
   }
 }
