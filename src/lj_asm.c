@@ -1595,6 +1595,24 @@ static void asm_tobit(ASMState *as, IRIns *ir)
   ra_left(as, tmp, ir->op1);
 }
 
+static void asm_toi64(ASMState *as, IRIns *ir)
+{
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  IRRef lref = ir->op1;
+  lua_assert(LJ_64);  /* NYI: 32 bit register pairs. */
+  if (ir->op2 == IRTOINT_TRUNCI64) {
+    Reg left = asm_fuseload(as, lref, RSET_FPR);
+    emit_mrm(as, XO_CVTTSD2SI, dest|REX_64, left);
+  } else if (ir->op2 == IRTOINT_ZEXT64) {
+    /* Nothing to do. This assumes 32 bit regs are already zero-extended. */
+    ra_left(as, dest, lref);  /* But may need to move regs. */
+  } else {
+    Reg left = asm_fuseload(as, lref, RSET_GPR);
+    emit_mrm(as, XO_MOVSXd, dest|REX_64, left);
+    lua_assert(ir->op2 == IRTOINT_SEXT64);
+  }
+}
+
 static void asm_strto(ASMState *as, IRIns *ir)
 {
   /* Force a spill slot for the destination register (if any). */
@@ -3531,6 +3549,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
       asm_toint(as, ir); break;
     break;
   case IR_TOBIT: asm_tobit(as, ir); break;
+  case IR_TOI64: asm_toi64(as, ir); break;
   case IR_TOSTR: asm_tostr(as, ir); break;
   case IR_STRTO: asm_strto(as, ir); break;
 

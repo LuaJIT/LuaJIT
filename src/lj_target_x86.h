@@ -230,6 +230,7 @@ typedef enum {
   XO_MOVZXw =	XO_0f(b7),
   XO_MOVSXb =	XO_0f(be),
   XO_MOVSXw =	XO_0f(bf),
+  XO_MOVSXd =	XO_(63),
   XO_BSWAP =	XO_0f(c8),
 
   XO_MOVSD =	XO_f20f(10),

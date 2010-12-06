@@ -270,6 +270,23 @@ LJFOLDF(kfold_toint)
   return INTFOLD(k);
 }
 
+LJFOLD(TOI64 KINT any)
+LJFOLDF(kfold_toi64_kint)
+{
+  lua_assert(fins->op2 == IRTOINT_ZEXT64 || fins->op2 == IRTOINT_SEXT64);
+  if (fins->op2 == IRTOINT_ZEXT64)
+    return lj_ir_kint64(J, (int64_t)(uint32_t)fleft->i);
+  else
+    return lj_ir_kint64(J, (int64_t)(int32_t)fleft->i);
+}
+
+LJFOLD(TOI64 KNUM any)
+LJFOLDF(kfold_toi64_knum)
+{
+  lua_assert(fins->op2 == IRTOINT_TRUNCI64);
+  return lj_ir_kint64(J, (int64_t)knumleft);
+}
+
 LJFOLD(TOSTR KNUM)
 LJFOLDF(kfold_tostr_knum)
 {
@@ -469,6 +486,15 @@ LJFOLDF(shortcut_leftleft_across_phi)
 {
   /* Fold even across PHI to avoid expensive int->num->int conversions. */
   return fleft->op1;  /* f(g(x)) ==> x */
+}
+
+LJFOLD(TOI64 TONUM any)
+LJFOLDF(shortcut_leftleft_toint64)
+{
+  /* Fold even across PHI to avoid expensive int->num->int64 conversions. */
+  fins->op1 = fleft->op1;   /* (int64_t)(double)(int)x ==> (int64_t)x */
+  fins->op2 = IRTOINT_SEXT64;
+  return RETRYFOLD;
 }
 
 /* -- FP algebraic simplifications ---------------------------------------- */

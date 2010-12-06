@@ -219,7 +219,8 @@ span.irt_int, span.irt_i8, span.irt_u8, span.irt_i16, span.irt_u16 { color: #b04
 
 local colorize, irtype
 
--- Lookup table to convert some literals into names.
+-- Lookup tables to convert some literals into names.
+local tointname = { [0] = "check", "index", "", "Z", "S", "T", }
 local litname = {
   ["SLOAD "] = setmetatable({}, { __index = function(t, mode)
     local s = ""
@@ -233,7 +234,8 @@ local litname = {
     return s
   end}),
   ["XLOAD "] = { [0] = "", "R", "U", "RU", },
-  ["TOINT "] = { [0] = "check", "index", "", },
+  ["TOINT "] = tointname,
+  ["TOI64 "] = tointname,
   ["FLOAD "] = vmdef.irfield,
   ["FREF  "] = vmdef.irfield,
   ["FPMATH"] = vmdef.irfpm,

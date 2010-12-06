@@ -119,6 +119,7 @@
   _(TONUM,	N , ref, ___) \
   _(TOINT,	N , ref, lit) \
   _(TOBIT,	N , ref, ref) \
+  _(TOI64,	N , ref, lit) \
   _(TOSTR,	N , ref, ___) \
   _(STRTO,	N , ref, ___) \
   \
@@ -204,11 +205,14 @@ IRFLDEF(FLENUM)
 #define IRXLOAD_READONLY	1	/* Load from read-only data. */
 #define IRXLOAD_UNALIGNED	2	/* Unaligned load. */
 
-/* TOINT mode, stored in op2. Ordered by strength of the checks. */
+/* TOINT/TOI64 mode, stored in op2. Ordered by strength of the checks. */
 #define IRTOINT_CHECK		0	/* Number checked for integerness. */
 #define IRTOINT_INDEX		1	/* Checked + special backprop rules. */
 #define IRTOINT_ANY		2	/* Any FP number is ok. */
-#define IRTOINT_TOBIT		3	/* Cache only: TOBIT conversion. */
+#define IRTOINT_ZEXT64		3	/* Convert uint32_t to int64_t. */
+#define IRTOINT_SEXT64		4	/* Convert int32_t to int64_t. */
+#define IRTOINT_TRUNCI64	5	/* Truncate number to int64_t. */
+#define IRTOINT_TOBIT		6	/* Cache only: TOBIT conversion. */
 
 /* C call info for CALL* instructions. */
 typedef struct CCallInfo {
