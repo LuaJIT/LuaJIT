@@ -859,6 +859,11 @@ LJFOLDF(simplify_shift_ik)
   int32_t k = (fright->i & mask);
   if (k == 0)  /* i o 0 ==> i */
     return LEFTFOLD;
+  if (k == 1 && fins->o == IR_BSHL) {  /* i << 1 ==> i + i */
+    fins->o = IR_ADD;
+    fins->op2 = fins->op1;
+    return RETRYFOLD;
+  }
   if (k != fright->i) {  /* i o k ==> i o (k & mask) */
     fins->op2 = (IRRef1)lj_ir_kint(J, k);
     return RETRYFOLD;
