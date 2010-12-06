@@ -381,7 +381,7 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   case IR_KPTR: case IR_KNULL: setlightudV(tv, mref(ir->ptr, void)); break;
   case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
   /* NYI: use FFI int64_t. */
-  case IR_KINT64: setnumV(tv, (int64_t)ir_kint64(ir)->u64); break;
+  case IR_KINT64: setnumV(tv, (lua_Number)(int64_t)ir_kint64(ir)->u64); break;
   default: lua_assert(0); break;
   }
 }

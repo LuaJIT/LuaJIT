@@ -676,7 +676,7 @@ LJFOLDF(simplify_intsub_k64)
   if (k == 0)  /* i - 0 ==> i */
     return LEFTFOLD;
   fins->o = IR_ADD;  /* i - k ==> i + (-k) */
-  fins->op2 = (IRRef1)lj_ir_kint64(J, -k);  /* Overflow for -2^63 ok. */
+  fins->op2 = (IRRef1)lj_ir_kint64(J, (uint64_t)-(int64_t)k);
   return RETRYFOLD;
 }
 
