@@ -374,26 +374,15 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
 {
   UNUSED(L);
   lua_assert(ir->o != IR_KSLOT);  /* Common mistake. */
-  if (irt_isint(ir->t)) {
-    lua_assert(ir->o == IR_KINT);
-    setintV(tv, ir->i);
-  } else if (irt_isnum(ir->t)) {
-    lua_assert(ir->o == IR_KNUM);
-    setnumV(tv, ir_knum(ir)->n);
-  } else if (irt_is64(ir->t)) {
-    lua_assert(ir->o == IR_KINT64);
-    setnumV(tv, (int64_t)ir_kint64(ir)->u64);  /* NYI: use FFI int64_t. */
-  } else if (irt_ispri(ir->t)) {
-    lua_assert(ir->o == IR_KPRI);
-    setitype(tv, irt_toitype(ir->t));
-  } else {
-    if (ir->o == IR_KGC) {
-      lua_assert(irt_isgcv(ir->t));
-      setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t));
-    } else {
-      lua_assert(ir->o == IR_KPTR || ir->o == IR_KNULL);
-      setlightudV(tv, mref(ir->ptr, void));
-    }
+  switch (ir->o) {
+  case IR_KPRI: setitype(tv, irt_toitype(ir->t)); break;
+  case IR_KINT: setintV(tv, ir->i); break;
+  case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
+  case IR_KPTR: case IR_KNULL: setlightudV(tv, mref(ir->ptr, void)); break;
+  case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
+  /* NYI: use FFI int64_t. */
+  case IR_KINT64: setnumV(tv, (int64_t)ir_kint64(ir)->u64); break;
+  default: lua_assert(0); break;
   }
 }
 
