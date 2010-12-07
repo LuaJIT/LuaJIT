@@ -2010,14 +2010,18 @@ static void asm_fxload(ASMState *as, IRIns *ir)
 static void asm_fxstore(ASMState *as, IRIns *ir)
 {
   RegSet allow = RSET_GPR;
-  Reg src = RID_NONE;
+  Reg src = RID_NONE, osrc = RID_NONE;
   int32_t k = 0;
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
   if (!asm_isk32(as, ir->op2, &k) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
     RegSet allow8 = (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
-    src = ra_alloc1(as, ir->op2, allow8);
+    src = osrc = ra_alloc1(as, ir->op2, allow8);
+    if (!LJ_64 && !rset_test(allow8, src)) {  /* Already in wrong register. */
+      rset_clear(allow, osrc);
+      src = ra_scratch(as, allow8);
+    }
     rset_clear(allow, src);
   }
   if (ir->o == IR_FSTORE)
@@ -2043,6 +2047,10 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
       break;
     }
     emit_mrm(as, xo, src, RID_MRM);
+    if (!LJ_64 && src != osrc) {
+      ra_noweak(as, osrc);
+      emit_rr(as, XO_MOV, src, osrc);
+    }
   } else {
     if (irt_isi8(ir->t) || irt_isu8(ir->t)) {
       emit_i8(as, k);
