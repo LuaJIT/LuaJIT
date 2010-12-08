@@ -1144,16 +1144,21 @@ static int asm_isk32(ASMState *as, IRRef ref, int32_t *k)
   return 0;
 }
 
-/* Check if there's no conflicting instruction between curins and ref. */
-static int noconflict(ASMState *as, IRRef ref, IROp conflict)
+/* Check if there's no conflicting instruction between curins and ref.
+** Also avoid fusing loads if there are multiple references.
+*/
+static int noconflict(ASMState *as, IRRef ref, IROp conflict, int noload)
 {
   IRIns *ir = as->ir;
   IRRef i = as->curins;
   if (i > ref + CONFLICT_SEARCH_LIM)
     return 0;  /* Give up, ref is too far away. */
-  while (--i > ref)
+  while (--i > ref) {
     if (ir[i].o == conflict)
       return 0;  /* Conflict found. */
+    else if (!noload && (ir[i].op1 == ref || ir[i].op2 == ref))
+      return 0;
+  }
   return 1;  /* Ok, no conflict. */
 }
 
@@ -1167,7 +1172,7 @@ static IRRef asm_fuseabase(ASMState *as, IRRef ref)
     lua_assert(irb->op2 == IRFL_TAB_ARRAY);
     /* We can avoid the FLOAD of t->array for colocated arrays. */
     if (ira->o == IR_TNEW && ira->op1 <= LJ_MAX_COLOSIZE &&
-	noconflict(as, irb->op1, IR_NEWREF)) {
+	noconflict(as, irb->op1, IR_NEWREF, 1)) {
       as->mrm.ofs = (int32_t)sizeof(GCtab);  /* Ofs to colocated array. */
       return irb->op1;  /* Table obj. */
     }
@@ -1377,7 +1382,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
       if (!(ir->op2 & (IRSLOAD_PARENT|IRSLOAD_CONVERT)) &&
-	  noconflict(as, ref, IR_RETF)) {
+	  noconflict(as, ref, IR_RETF, 0)) {
 	as->mrm.base = (uint8_t)ra_alloc1(as, REF_BASE, xallow);
 	as->mrm.ofs = 8*((int32_t)ir->op1-1) + ((ir->op2&IRSLOAD_FRAME)?4:0);
 	as->mrm.idx = RID_NONE;
@@ -1386,12 +1391,12 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
     } else if (ir->o == IR_FLOAD) {
       /* Generic fusion is only ok for 32 bit operand (but see asm_comp). */
       if ((irt_isint(ir->t) || irt_isaddr(ir->t)) &&
-	  noconflict(as, ref, IR_FSTORE)) {
+	  noconflict(as, ref, IR_FSTORE, 0)) {
 	asm_fusefref(as, ir, xallow);
 	return RID_MRM;
       }
     } else if (ir->o == IR_ALOAD || ir->o == IR_HLOAD || ir->o == IR_ULOAD) {
-      if (noconflict(as, ref, ir->o + IRDELTA_L2S)) {
+      if (noconflict(as, ref, ir->o + IRDELTA_L2S, 0)) {
 	asm_fuseahuref(as, ir->op1, xallow);
 	return RID_MRM;
       }
@@ -1400,7 +1405,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       ** Fusing unaligned memory operands is ok on x86 (except for SIMD types).
       */
       if ((!irt_typerange(ir->t, IRT_I8, IRT_U16)) &&
-	  noconflict(as, ref, IR_XSTORE)) {
+	  noconflict(as, ref, IR_XSTORE, 0)) {
 	asm_fusexref(as, ir->op1, xallow);
 	return RID_MRM;
       }
