@@ -1307,12 +1307,44 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
     as->mrm.base = RID_NONE;
   } else if (ir->o == IR_STRREF) {
     asm_fusestrref(as, ir, allow);
-  } else if (mayfuse(as, ref) && ir->o == IR_ADD &&
-	     asm_isk32(as, ir->op2, &as->mrm.ofs)) {
-    /* NYI: gather index and shifts. */
-    as->mrm.base = (uint8_t)ra_alloc1(as, ir->op1, allow);
   } else {
     as->mrm.ofs = 0;
+    if (mayfuse(as, ref) && ir->o == IR_ADD && ra_noreg(ir->r)) {
+      /* Gather (base+idx*sz)+ofs as emitted by cdata ptr/array indexing. */
+      IRIns *irx;
+      IRRef idx;
+      Reg r;
+      if (asm_isk32(as, ir->op2, &as->mrm.ofs)) {  /* Recognize x+ofs. */
+	ref = ir->op1;
+	ir = IR(ref);
+	if (!(ir->o == IR_ADD && mayfuse(as, ref) && ra_noreg(ir->r)))
+	  goto noadd;
+      }
+      as->mrm.scale = XM_SCALE1;
+      idx = ir->op1;
+      ref = ir->op2;
+      irx = IR(idx);
+      if (!(irx->o == IR_BSHL || irx->o == IR_ADD)) {  /* Try other operand. */
+	idx = ir->op2;
+	ref = ir->op1;
+	irx = IR(idx);
+      }
+      if (mayfuse(as, idx) && ra_noreg(irx->r)) {
+	if (irx->o == IR_BSHL && irref_isk(irx->op2) && IR(irx->op2)->i <= 3) {
+	  /* Recognize idx<<b with b = 0-3, corresponding to sz = (1),2,4,8. */
+	  idx = irx->op1;
+	  as->mrm.scale = (uint8_t)(IR(irx->op2)->i << 6);
+	} else if (irx->o == IR_ADD && irx->op1 == irx->op2) {
+	  /* FOLD does idx*2 ==> idx<<1 ==> idx+idx. */
+	  idx = irx->op1;
+	  as->mrm.scale = XM_SCALE2;
+	}
+      }
+      r = ra_alloc1(as, idx, allow);
+      rset_clear(allow, r);
+      as->mrm.idx = (uint8_t)r;
+    }
+  noadd:
     as->mrm.base = (uint8_t)ra_alloc1(as, ref, allow);
   }
 }
