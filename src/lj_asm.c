@@ -2016,7 +2016,7 @@ static void asm_strref(ASMState *as, IRIns *ir)
 
 static void asm_fxload(ASMState *as, IRIns *ir)
 {
-  Reg dest = ra_dest(as, ir, RSET_GPR);
+  Reg dest = ra_dest(as, ir, irt_isnum(ir->t) ? RSET_FPR : RSET_GPR);
   x86Op xo;
   if (ir->o == IR_FLOAD)
     asm_fusefref(as, ir, RSET_GPR);
@@ -2049,7 +2049,8 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
   if (!asm_isk32(as, ir->op2, &k) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
-    RegSet allow8 = (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
+    RegSet allow8 = irt_isnum(ir->t) ? RSET_FPR :
+		    (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = osrc = ra_alloc1(as, ir->op2, allow8);
     if (!LJ_64 && !rset_test(allow8, src)) {  /* Already in wrong register. */
       rset_clear(allow, osrc);
