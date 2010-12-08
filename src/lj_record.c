@@ -667,6 +667,19 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
       ix->mt = TREF_NIL;
       return 0;  /* No metamethod. */
     }
+#if LJ_HASFFI
+    /* The cdata metatable is treated as immutable. */
+    if (tref_iscdata(ix->tab)) {
+      cTValue *mo = lj_tab_getstr(mt, mmname_str(J2G(J), mm));
+      if (!mo || tvisnil(mo))
+	return 0;  /* No metamethod. */
+      setfuncV(J->L, &ix->mobjv, funcV(mo));
+      ix->mobj = lj_ir_kfunc(J, funcV(mo));  /* Immutable metamethod. */
+      ix->mtv = mt;
+      ix->mt = TREF_NIL;  /* Dummy value for comparison semantics. */
+      return 1;  /* Got cdata metamethod. */
+    }
+#endif
     ix->mt = mix.tab = lj_ir_ktab(J, mt);
     goto nocheck;
   }
