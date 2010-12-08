@@ -331,9 +331,21 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
       idx = emitir(IRT(IR_TOINT, IRT_INTP), idx, IRTOINT_ANY);
 #endif
     if (ctype_ispointer(ct->info)) {
-      sid = ctype_cid(ct->info);
-      idx = emitir(IRT(IR_MUL, IRT_INTP), idx,
-		   lj_ir_kintp(J, lj_ctype_size(cts, sid)));
+      ptrdiff_t sz = (ptrdiff_t)lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
+      IRIns *ir = IR(tref_ref(idx));
+      if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) &&
+	  ir->o == IR_ADD && irref_isk(ir->op2)) {
+	/* This would be rather difficult in FOLD, so do it here:
+	** (base+(idx+k)*sz)+ofs ==> (base+idx*sz)+(ofs+k*sz)
+	*/
+	idx = ir->op1;
+#if LJ_64
+	ofs += (int64_t)ir_kint64(IR(ir->op2))->u64 * sz;
+#else
+	ofs += IR(ir->op2)->i * sz;
+#endif
+      }
+      idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
     }
   } else if (tref_isstr(idx)) {
