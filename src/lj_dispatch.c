@@ -388,9 +388,12 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 static int call_init(lua_State *L, GCfunc *fn)
 {
   if (isluafunc(fn)) {
-    int numparams = funcproto(fn)->numparams;
+    GCproto *pt = funcproto(fn);
+    int numparams = pt->numparams;
     int gotparams = (int)(L->top - L->base);
-    lj_state_checkstack(L, (MSize)numparams);
+    int need = pt->framesize;
+    if ((pt->flags & PROTO_IS_VARARG)) need += 1+gotparams;
+    lj_state_checkstack(L, (MSize)need);
     numparams -= gotparams;
     return numparams >= 0 ? numparams : 0;
   } else {
