@@ -193,15 +193,15 @@ typedef struct NarrowConv {
 } NarrowConv;
 
 /* Lookup a reference in the backpropagation cache. */
-static IRRef narrow_bpc_get(jit_State *J, IRRef1 key, IRRef mode)
+static BPropEntry *narrow_bpc_get(jit_State *J, IRRef1 key, IRRef mode)
 {
   ptrdiff_t i;
   for (i = 0; i < BPROP_SLOTS; i++) {
     BPropEntry *bp = &J->bpropcache[i];
     if (bp->key == key && bp->mode <= mode)  /* Stronger checks are ok, too. */
-      return bp->val;
+      return bp;
   }
-  return 0;
+  return NULL;
 }
 
 /* Add an entry to the backpropagation cache. */
@@ -225,6 +225,10 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   /* Check the easy cases first. */
   if (ir->o == IR_TONUM) {  /* Undo inverse conversion. */
     *nc->sp++ = NARROWINS(NARROW_REF, ir->op1);
+    if (nc->mode == IRTOINT_TRUNCI64) {
+      *nc->sp++ = NARROWINS(NARROW_REF, IRTOINT_SEXT64);
+      *nc->sp++ = NARROWINS(IRT(IR_TOI64, IRT_I64), 0);
+    }
     return 0;
   } else if (ir->o == IR_KNUM) {  /* Narrow FP constant. */
     lua_Number n = ir_knum(ir)->n;
@@ -257,12 +261,17 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   /* Backpropagate across ADD/SUB. */
   if (ir->o == IR_ADD || ir->o == IR_SUB) {
     /* Try cache lookup first. */
-    IRRef bpref, mode = nc->mode;
+    IRRef mode = nc->mode;
+    BPropEntry *bp;
     if (mode == IRTOINT_INDEX && depth > 0)
       mode = IRTOINT_CHECK;  /* Inner conversions need a stronger check. */
-    bpref = narrow_bpc_get(nc->J, (IRRef1)ref, mode);
-    if (bpref) {
-      *nc->sp++ = NARROWINS(NARROW_REF, bpref);
+    bp = narrow_bpc_get(nc->J, (IRRef1)ref, mode);
+    if (bp) {
+      *nc->sp++ = NARROWINS(NARROW_REF, bp->val);
+      if (mode == IRTOINT_TRUNCI64 && mode != bp->mode) {
+	*nc->sp++ = NARROWINS(NARROW_REF, IRTOINT_SEXT64);
+	*nc->sp++ = NARROWINS(IRT(IR_TOI64, IRT_I64), 0);
+      }
       return 0;
     }
     if (++depth < NARROW_MAX_BACKPROP && nc->sp < nc->maxsp) {
@@ -270,7 +279,8 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
       int count = narrow_conv_backprop(nc, ir->op1, depth);
       count += narrow_conv_backprop(nc, ir->op2, depth);
       if (count <= nc->lim) {  /* Limit total number of conversions. */
-	*nc->sp++ = NARROWINS(IRTI(ir->o), ref);
+	IRType t = mode == IRTOINT_TRUNCI64 ? IRT_I64 : IRT_INT;
+	*nc->sp++ = NARROWINS(IRT(ir->o, t), ref);
 	return count;
       }
       nc->sp = savesp;  /* Too many conversions, need to backtrack. */
@@ -301,7 +311,9 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
       *sp++ = emitir_raw(convot, ref, convop2);  /* Raw emit avoids a loop. */
     } else if (op == NARROW_INT) {
       lua_assert(next < last);
-      *sp++ = lj_ir_kint(J, *next++);
+      *sp++ = nc->mode == IRTOINT_TRUNCI64 ?
+	      lj_ir_kint64(J, (int64_t)(int32_t)*next++) :
+	      lj_ir_kint(J, *next++);
     } else {  /* Regular IROpT. Pops two operands and pushes one result. */
       IRRef mode = nc->mode;
       lua_assert(sp >= nc->stack+2);
@@ -316,7 +328,8 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
       }
       sp[-1] = emitir(op+guardot, sp[-1], sp[0]);
       /* Add to cache. */
-      narrow_bpc_set(J, narrow_ref(ref), narrow_ref(sp[-1]), mode);
+      if (narrow_ref(ref))
+	narrow_bpc_set(J, narrow_ref(ref), narrow_ref(sp[-1]), mode);
     }
   }
   lua_assert(sp == nc->stack+1);
