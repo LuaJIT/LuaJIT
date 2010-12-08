@@ -983,6 +983,20 @@ LJFOLDF(reassoc_intarith_k)
   return NEXTFOLD;
 }
 
+LJFOLD(ADD ADD KINT64)
+LJFOLDF(reassoc_intarith_k64)
+{
+  IRIns *irk = IR(fleft->op2);
+  if (irk->o == IR_KINT64) {
+    uint64_t k = ir_kint64(irk)->u64 + ir_kint64(fright)->u64;
+    PHIBARRIER(fleft);
+    fins->op1 = fleft->op1;
+    fins->op2 = (IRRef1)lj_ir_kint64(J, k);
+    return RETRYFOLD;  /* (i o k1) o k2 ==> i o (k1 o k2) */
+  }
+  return NEXTFOLD;
+}
+
 LJFOLD(MIN MIN any)
 LJFOLD(MAX MAX any)
 LJFOLD(BAND BAND any)
