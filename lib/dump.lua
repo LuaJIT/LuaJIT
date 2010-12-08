@@ -307,7 +307,7 @@ local function printsnap(tr, snap)
 	out:write(formatk(tr, ref))
       else
 	local m, ot, op1, op2 = traceir(tr, ref)
-	out:write(colorize(format("%04d", ref), band(ot, 15)))
+	out:write(colorize(format("%04d", ref), band(ot, 31)))
       end
       out:write(band(sn, 0x10000) == 0 and " " or "|") -- SNAP_FRAME
     else
