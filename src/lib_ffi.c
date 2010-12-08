@@ -78,7 +78,7 @@ static void *ffi_checkptr(lua_State *L, int narg, CTypeID id)
 
 #define LJLIB_MODULE_ffi_meta
 
-LJLIB_CF(ffi_meta___index)
+LJLIB_CF(ffi_meta___index)	LJLIB_REC(cdata_index 0)
 {
   CTState *cts = ctype_cts(L);
   CTInfo qual = 0;
@@ -92,7 +92,7 @@ LJLIB_CF(ffi_meta___index)
   return 1;
 }
 
-LJLIB_CF(ffi_meta___newindex)
+LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
 {
   CTState *cts = ctype_cts(L);
   CTInfo qual = 0;

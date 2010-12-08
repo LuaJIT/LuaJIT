@@ -21,6 +21,8 @@
 #include "lj_iropt.h"
 #include "lj_trace.h"
 #include "lj_record.h"
+#include "lj_ffrecord.h"
+#include "lj_crecord.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 
@@ -54,13 +56,6 @@
 ** LJLIB_REC() annotation. This allows handling similar functionality
 ** in a common handler.
 */
-
-/* Data used by handlers to record a fast function. */
-typedef struct RecordFFData {
-  TValue *argv;		/* Runtime argument values. */
-  ptrdiff_t nres;	/* Number of returned results (defaults to 1). */
-  uint32_t data;	/* Per-ffid auxiliary data (opcode, literal etc.). */
-} RecordFFData;
 
 /* Type of handler to record a fast function. */
 typedef void (LJ_FASTCALL *RecordFunc)(jit_State *J, RecordFFData *rd);

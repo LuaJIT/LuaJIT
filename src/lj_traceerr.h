@@ -34,6 +34,9 @@ TREDEF(NOMM,	"missing metamethod")
 TREDEF(IDXLOOP,	"looping index lookup")
 TREDEF(NYITMIX,	"NYI: mixed sparse/dense table")
 
+/* Recording C data operations. */
+TREDEF(NYICONV,	"NYI: unsupported C type conversion")
+
 /* Optimizations. */
 TREDEF(GFAIL,	"guard would always fail")
 TREDEF(PHIOV,	"too many PHIs")

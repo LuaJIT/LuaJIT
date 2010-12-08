@@ -49,6 +49,12 @@ LJ_FUNC TRef lj_ir_kptr(jit_State *J, void *ptr);
 LJ_FUNC TRef lj_ir_knull(jit_State *J, IRType t);
 LJ_FUNC TRef lj_ir_kslot(jit_State *J, TRef key, IRRef slot);
 
+#if LJ_64
+#define lj_ir_kintp(J, k)	lj_ir_kint64(J, (uint64_t)(k))
+#else
+#define lj_ir_kintp(J, k)	lj_ir_kint(J, (int32_t)(k))
+#endif
+
 static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 {
   TValue tv;

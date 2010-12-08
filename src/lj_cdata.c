@@ -89,7 +89,7 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
     ptrdiff_t idx = LJ_64 ? (ptrdiff_t)numV(key) :
 			    (ptrdiff_t)lj_num2int(numV(key));
     if (ctype_ispointer(ct->info)) {
-      CTSize sz = lj_ctype_size(cts, ctype_cid(ct->info));
+      CTSize sz = lj_ctype_size(cts, ctype_cid(ct->info));  /* Element size. */
       if (sz != CTSIZE_INVALID) {
 	if (ctype_isptr(ct->info))
 	  p = (uint8_t *)cdata_getptr(p, ct->size);

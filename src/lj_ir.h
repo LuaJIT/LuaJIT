@@ -184,7 +184,9 @@ IRFPMDEF(FPMENUM)
   _(TAB_NOMM,	offsetof(GCtab, nomm)) \
   _(UDATA_META,	offsetof(GCudata, metatable)) \
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
-  _(UDATA_FILE,	sizeof(GCudata))
+  _(UDATA_FILE,	sizeof(GCudata)) \
+  _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
+  _(CDATA_DATA, sizeof(GCcdata))
 
 typedef enum {
 #define FLENUM(name, ofs)	IRFL_##name,
@@ -342,8 +344,9 @@ typedef enum {
   IRT_U64,
   /* There is room for 10 more types. */
 
-  /* Native pointer type. */
+  /* Native pointer type and the corresponding integer type. */
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
+  IRT_INTP = LJ_64 ? IRT_I64 : IRT_INT,
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
@@ -485,6 +488,7 @@ typedef uint32_t TRef;
 #define tref_istrue(tr)		(tref_istype((tr), IRT_TRUE))
 #define tref_isstr(tr)		(tref_istype((tr), IRT_STR))
 #define tref_isfunc(tr)		(tref_istype((tr), IRT_FUNC))
+#define tref_iscdata(tr)	(tref_istype((tr), IRT_CDATA))
 #define tref_istab(tr)		(tref_istype((tr), IRT_TAB))
 #define tref_isudata(tr)	(tref_istype((tr), IRT_UDATA))
 #define tref_isnum(tr)		(tref_istype((tr), IRT_NUM))
