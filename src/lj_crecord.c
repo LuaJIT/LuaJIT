@@ -352,6 +352,8 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     }
   } else if (tref_isstr(idx)) {
     GCstr *name = strV(&rd->argv[1]);
+    /* Always specialize to the field name. */
+    emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
     if (ctype_isstruct(ct->info)) {
       CTSize fofs;
       CType *fct = lj_ctype_getfield(cts, ct, name, &fofs);
