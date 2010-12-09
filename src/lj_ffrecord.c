@@ -207,11 +207,11 @@ int32_t lj_ffrecord_select_mode(jit_State *J, TRef tr, TValue *tv)
 {
   if (tref_isstr(tr) && *strVdata(tv) == '#') {  /* select('#', ...) */
     if (strV(tv)->len == 1) {
-      emitir(IRT(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, strV(tv)));
+      emitir(IRTG(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, strV(tv)));
     } else {
       TRef trptr = emitir(IRT(IR_STRREF, IRT_P32), tr, 0);
       TRef trchar = emitir(IRT(IR_XLOAD, IRT_U8), trptr, IRXLOAD_READONLY);
-      emitir(IRT(IR_EQ, IRT_INT), trchar, lj_ir_kint(J, '#'));
+      emitir(IRTG(IR_EQ, IRT_INT), trchar, lj_ir_kint(J, '#'));
     }
     return 0;
   } else {  /* select(n, ...) */
