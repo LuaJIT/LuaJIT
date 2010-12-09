@@ -2483,9 +2483,12 @@ static int swapops(ASMState *as, IRIns *ir)
     return 1;  /* Swap if left already has a register. */
   if (ra_samehint(ir->r, irr->r))
     return 1;  /* Swap if dest and right have matching hints. */
-  if (ir->op1 < as->loopref && !irt_isphi(irl->t) &&
-      !(ir->op2 < as->loopref && !irt_isphi(irr->t)))
-    return 1;  /* Swap invariants to the right. */
+  if (as->curins > as->loopref) {  /* In variant part? */
+    if (ir->op2 < as->loopref && !irt_isphi(irr->t))
+      return 0;  /* Keep invariants on the right. */
+    if (ir->op1 < as->loopref && !irt_isphi(irl->t))
+      return 1;  /* Swap invariants to the right. */
+  }
   if (opisfusableload(irl->o))
     return 1;  /* Swap fusable loads to the right. */
   return 0;  /* Otherwise don't swap. */
