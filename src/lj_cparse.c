@@ -851,18 +851,23 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
 	if (!(info & CTF_BOOL)) {
 	  CTSize msize = ctype_msizeP(decl->attr);
 	  CTSize vsize = ctype_vsizeP(decl->attr);
-	  if (msize && (!(info & CTF_FP) || (msize == 4 || msize == 8)))
+	  if (msize && (!(info & CTF_FP) || (msize == 4 || msize == 8))) {
+	    CTSize malign = lj_fls(msize);
+	    if (malign > 4) malign = 4;  /* Limit alignment. */
+	    CTF_INSERT(info, ALIGN, malign);
 	    size = msize;  /* Override size via mode. */
+	  }
 	  if (vsize) {  /* Vector size set? */
 	    CTSize esize = lj_fls(size);
 	    if (vsize >= esize) {
 	      /* Intern the element type first. */
 	      id = lj_ctype_intern(cp->cts, info, size);
 	      /* Then create a vector (array) with vsize alignment. */
+	      size = (1u << vsize);
+	      if (vsize > 4) vsize = 4;  /* Limit alignment. */
 	      if (ctype_align(info) > vsize) vsize = ctype_align(info);
 	      info = CTINFO(CT_ARRAY, (info & CTF_QUAL) + CTF_VECTOR +
 				      CTALIGN(vsize));
-	      size = (1u << vsize);
 	    }
 	  }
 	}
