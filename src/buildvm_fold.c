@@ -110,6 +110,11 @@ static uint32_t nexttoken(char **pp, int allowlit, int allowany)
       for (i = 0; ircall_names[i]; i++)
 	if (!strcmp(ircall_names[i], p+7))
 	  return i;
+    } else if (allowlit && *p >= '0' && *p <= '9') {
+      for (i = 0; *p >= '0' && *p <= '9'; p++)
+	i = i*10 + (*p - '0');
+      if (*p == '\0')
+	return i;
     } else if (allowany && !strcmp("any", p)) {
       return 0xff;
     } else {
