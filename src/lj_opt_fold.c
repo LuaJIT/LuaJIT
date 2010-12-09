@@ -644,8 +644,8 @@ LJFOLD(TOINT ADD any)
 LJFOLD(TOINT SUB any)
 LJFOLD(TOBIT ADD KNUM)
 LJFOLD(TOBIT SUB KNUM)
-LJFOLD(TOI64 ADD any)
-LJFOLD(TOI64 SUB any)
+LJFOLD(TOI64 ADD 5)  /* IRTOINT_TRUNCI64 */
+LJFOLD(TOI64 SUB 5)  /* IRTOINT_TRUNCI64 */
 LJFOLDF(narrow_convert)
 {
   PHIBARRIER(fleft);
@@ -667,6 +667,47 @@ LJFOLDF(cse_toint)
 	return ref;
   }
   return EMITFOLD;  /* No fallthrough to regular CSE. */
+}
+
+/* -- Strength reduction of widening -------------------------------------- */
+
+LJFOLD(TOI64 any 3)  /* IRTOINT_ZEXT64 */
+LJFOLDF(simplify_zext64)
+{
+#if LJ_TARGET_X64
+  /* Eliminate widening. All 32 bit ops implicitly zero-extend the result. */
+  return LEFTFOLD;
+#else
+  UNUSED(J);
+  return NEXTFOLD;
+#endif
+}
+
+LJFOLD(TOI64 any 4)  /* IRTOINT_SEXT64 */
+LJFOLDF(simplify_sext64)
+{
+  IRRef ref = fins->op1;
+  int64_t ofs = 0;
+  if (fleft->o == IR_ADD && irref_isk(fleft->op2)) {
+    ofs = (int64_t)IR(fleft->op2)->i;
+    ref = fleft->op1;
+  }
+  /* Use scalar evolution analysis results to strength-reduce sign-extension. */
+  if (ref == J->scev.idx) {
+    IRRef lo = J->scev.dir ? J->scev.start : J->scev.stop;
+    lua_assert(irt_isint(J->scev.t));
+    if (lo && IR(lo)->i + ofs >= 0) {
+#if LJ_TARGET_X64
+      /* Eliminate widening. All 32 bit ops do an implicit zero-extension. */
+      return LEFTFOLD;
+#else
+      /* Reduce to a (cheaper) zero-extension. */
+      fins->op2 = IRTOINT_ZEXT64;
+      return RETRYFOLD;
+#endif
+    }
+  }
+  return NEXTFOLD;
 }
 
 /* -- Integer algebraic simplifications ----------------------------------- */

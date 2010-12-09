@@ -335,15 +335,17 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
       IRIns *ir = IR(tref_ref(idx));
       if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) &&
 	  ir->o == IR_ADD && irref_isk(ir->op2)) {
+	IRIns *irk = IR(ir->op2);
+	idx = ir->op1;
 	/* This would be rather difficult in FOLD, so do it here:
 	** (base+(idx+k)*sz)+ofs ==> (base+idx*sz)+(ofs+k*sz)
 	*/
-	idx = ir->op1;
 #if LJ_64
-	ofs += (int64_t)ir_kint64(IR(ir->op2))->u64 * sz;
-#else
-	ofs += IR(ir->op2)->i * sz;
+	if (irk->o == IR_KINT64)
+	  ofs += (ptrdiff_t)ir_kint64(irk)->u64 * sz;
+	else
 #endif
+	  ofs += (ptrdiff_t)irk->i * sz;
       }
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
