@@ -88,7 +88,7 @@ LJ_FUNC void lj_gc_barriertrace(global_State *g, uint32_t traceno);
 
 /* Allocator. */
 LJ_FUNC void *lj_mem_realloc(lua_State *L, void *p, MSize osz, MSize nsz);
-LJ_FUNC void *lj_mem_newgco(lua_State *L, MSize size);
+LJ_FUNC void * LJ_FASTCALL lj_mem_newgco(lua_State *L, MSize size);
 LJ_FUNC void *lj_mem_grow(lua_State *L, void *p,
 			  MSize *szp, MSize lim, MSize esz);
 

@@ -777,7 +777,7 @@ void *lj_mem_realloc(lua_State *L, void *p, MSize osz, MSize nsz)
 }
 
 /* Allocate new GC object and link it to the root set. */
-void *lj_mem_newgco(lua_State *L, MSize size)
+void * LJ_FASTCALL lj_mem_newgco(lua_State *L, MSize size)
 {
   global_State *g = G(L);
   GCobj *o = (GCobj *)g->allocf(g->allocd, NULL, 0, size);
