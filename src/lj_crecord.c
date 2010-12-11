@@ -238,6 +238,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
 
 static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
 {
+  CTState *cts = ctype_ctsG(J2G(J));
   CTInfo sinfo = s->info;
   lua_assert(!ctype_isenum(sinfo));
   if (ctype_isnum(sinfo)) {
@@ -249,8 +250,8 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
     return emitir(IRT(IR_XLOAD, t), sp, 0);
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
     /* Create reference. */
-    UNUSED(sid); lj_trace_err(J, LJ_TRERR_NYICONV);
-    return 0;
+    CTypeID refid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);
+    return emitir(IRTG(IR_CNEWI, IRT_CDATA), sp, lj_ir_kint(J, refid));
   } else {
   copyval:  /* Copy value. */
     lj_trace_err(J, LJ_TRERR_NYICONV);
@@ -281,7 +282,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
     s = ctype_raw(cts, sid);
     if (ctype_isptr(s->info)) {
       IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
-      sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_DATA);
+      sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_INIT1);
       if (ctype_isref(s->info))
 	s = ctype_rawchild(cts, s);
       else
@@ -316,7 +317,7 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
   if (ctype_isptr(ct->info)) {
     IRType t = (LJ_64 && ct->size == 8) ? IRT_P64 : IRT_P32;
     if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
-    ptr = emitir(IRT(IR_FLOAD, t), ptr, IRFL_CDATA_DATA);
+    ptr = emitir(IRT(IR_FLOAD, t), ptr, IRFL_CDATA_INIT1);
     ofs = 0;
   }
 

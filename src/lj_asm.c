@@ -14,6 +14,9 @@
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_frame.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#endif
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
@@ -2279,6 +2282,91 @@ static void asm_tdup(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
 }
 
+#if LJ_HASFFI
+static RegSet asm_cnew_init(ASMState *as, IRRef ref, int32_t ofs, RegSet allow)
+{
+  IRIns *ir = IR(ref);
+  if (irref_isk(ref)) {
+#if LJ_64
+    if (ir->o == IR_KNUM || ir->o == IR_KINT64) {
+      uint64_t k = ir_k64(ir)->u64;
+      if (checki32((int64_t)k)) {
+	emit_i32(as, (int32_t)k);
+	emit_rmro(as, XO_MOVmi, REX_64, RID_RET, ofs);
+      } else {
+	emit_movtomro(as, RID_ECX|REX_64, RID_RET, ofs);
+	emit_loadu64(as, RID_ECX, k);
+      }
+    } else {
+      emit_movmroi(as, RID_RET, ofs, ir->i);
+    }
+#else
+    if (ir->o == IR_KNUM) {
+      emit_rmro(as, XO_MOVSDto, RID_XMM0, RID_RET, ofs);
+      emit_loadn(as, RID_XMM0, ir_k64(ir));
+    } else if (ir->o == IR_KINT64) {
+      uint64_t k = ir_k64(ir)->u64;
+      emit_movmroi(as, RID_RET, ofs, (int32_t)k);
+      emit_movmroi(as, RID_RET, ofs+4, (int32_t)(k >> 32));
+    } else {
+      emit_movmroi(as, RID_RET, ofs, ir->i);
+    }
+#endif
+  } else {
+    Reg r;
+    if (irt_isnum(ir->t)) {
+      r = ra_alloc1(as, ref, (RSET_FPR & allow));
+      emit_rmro(as, XO_MOVSDto, r, RID_RET, ofs);
+    } else {
+      r = ra_alloc1(as, ref, (RSET_GPR & allow));
+      emit_movtomro(as, REX_64IR(ir, r), RID_RET, ofs);
+    }
+    rset_clear(allow, r);
+  }
+  return allow;
+}
+
+static void asm_cnew(ASMState *as, IRIns *ir)
+{
+  CTState *cts = ctype_ctsG(J2G(as->J));
+  CTypeID typeid = (CTypeID)IR(ir->op2)->i;
+  CTSize sz = (ir->o == IR_CNEWI || ir->op1 == REF_NIL) ?
+	      lj_ctype_size(cts, typeid) : (CTSize)IR(ir->op1)->i;
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
+  IRRef args[2];
+  lua_assert(sz != CTSIZE_INVALID);
+
+  args[0] = ASMREF_L;     /* lua_State *L */
+  args[1] = ASMREF_TMP1;  /* MSize size   */
+  as->gcsteps++;
+  asm_setupresult(as, ir, ci);  /* GCobj * */
+
+  /* Initialize immutable cdata object. */
+  if (ir->o == IR_CNEWI) {
+    RegSet allow = ~RSET_SCRATCH;
+    IRRef ref = ir->op1;
+    if (IR(ref)->o == IR_CARG) {  /* 2nd initializer. */
+      IRIns *ira = IR(ref);
+      allow = asm_cnew_init(as, ira->op2, sizeof(GCcdata) + (sz>>1), allow);
+      ref = ira->op1;
+    }
+    asm_cnew_init(as, ref, sizeof(GCcdata), allow);  /* 1st initializer. */
+  }
+
+  /* Combine initialization of marked, gct and typeid. */
+  emit_movtomro(as, RID_ECX, RID_RET, offsetof(GCcdata, marked));
+  emit_gri(as, XG_ARITHi(XOg_OR), RID_ECX,
+	   (int32_t)((~LJ_TCDATA<<8)+(typeid<<16)));
+  emit_gri(as, XG_ARITHi(XOg_AND), RID_ECX, LJ_GC_WHITES);
+  emit_opgl(as, XO_MOVZXb, RID_ECX, gc.currentwhite);
+
+  asm_gencall(as, ci, args);
+  emit_loadi(as, ra_releasetmp(as, ASMREF_TMP1), (int32_t)(sz+sizeof(GCcdata)));
+}
+#else
+#define asm_cnew(as, ir)	((void)0)
+#endif
+
 /* -- Write barriers ------------------------------------------------------ */
 
 static void asm_tbar(ASMState *as, IRIns *ir)
@@ -3587,6 +3675,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_SNEW: asm_snew(as, ir); break;
   case IR_TNEW: asm_tnew(as, ir); break;
   case IR_TDUP: asm_tdup(as, ir); break;
+  case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
 
   /* Write barriers. */
   case IR_TBAR: asm_tbar(as, ir); break;
@@ -3704,7 +3793,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       if (as->evenspill < 3)  /* lj_str_new and lj_tab_newkey need 3 args. */
 	as->evenspill = 3;
 #endif
-    case IR_TNEW: case IR_TDUP: case IR_TOSTR:
+    case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)
 	as->modset = RSET_SCRATCH;

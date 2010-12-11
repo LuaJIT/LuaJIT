@@ -107,9 +107,11 @@
   _(XSTORE,	S , ref, ref) \
   \
   /* Allocations. */ \
-  _(SNEW,	N , ref, ref) /* CSE is ok, so not marked as A. */ \
+  _(SNEW,	N , ref, ref)  /* CSE is ok, not marked as A. */ \
   _(TNEW,	AW, lit, lit) \
   _(TDUP,	AW, ref, ___) \
+  _(CNEW,	AW, ref, ref) \
+  _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
   /* Write barriers. */ \
   _(TBAR,	S , ref, ___) \
@@ -186,7 +188,9 @@ IRFPMDEF(FPMENUM)
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
   _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
-  _(CDATA_DATA, sizeof(GCcdata))
+  _(CDATA_INIT1, sizeof(GCcdata)) \
+  _(CDATA_INIT2_4, sizeof(GCcdata)+4) \
+  _(CDATA_INIT2_8, sizeof(GCcdata)+8)
 
 typedef enum {
 #define FLENUM(name, ofs)	IRFL_##name,
@@ -256,6 +260,7 @@ typedef struct CCallInfo {
   _(lj_tab_len,		1,  FL, INT, 0) \
   _(lj_gc_step_jit,	2,  FS, NIL, CCI_L) \
   _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
+  _(lj_mem_newgco,	2,  FS, P32, CCI_L) \
   _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
   _(sinh,		1,  N, NUM, 0) \
   _(cosh,		1,  N, NUM, 0) \
@@ -297,6 +302,7 @@ typedef enum {
 
 #define IRM_W			0x80
 
+#define IRM_NW			(IRM_N|IRM_W)
 #define IRM_AW			(IRM_A|IRM_W)
 #define IRM_LW			(IRM_L|IRM_W)
 

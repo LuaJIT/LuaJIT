@@ -152,8 +152,8 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
 */
 #define gcstep_barrier(J, ref) \
   ((ref) < J->chain[IR_LOOP] && \
-   (J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
-    J->chain[IR_SNEW] || J->chain[IR_TOSTR]))
+   (J->chain[IR_SNEW] || J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
+    J->chain[IR_CNEW] || J->chain[IR_CNEWI] || J->chain[IR_TOSTR]))
 
 /* -- Constant folding ---------------------------------------------------- */
 
@@ -1477,7 +1477,37 @@ LJFOLDF(fload_str_len_snew)
   return NEXTFOLD;
 }
 
+/* The C type ID of cdata objects is immutable. */
+LJFOLD(FLOAD CNEW IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_TYPEID)
+LJFOLDF(fload_cdata_typeid_cnewi)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
+    return fleft->op2;  /* No PHI barrier needed. CNEW/CNEWI op2 is const. */
+  return NEXTFOLD;
+}
+
+/* Fixed initializers in cdata objects are immutable. */
+LJFOLD(FLOAD CNEWI IRFL_CDATA_INIT1)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_INIT2_4)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_INIT2_8)
+LJFOLDF(fload_cdata_init_cnew)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
+    IRIns *ir = fleft;
+    PHIBARRIER(fleft);
+    lua_assert(ir->op1 != REF_NIL);
+    if (IR(ir->op1)->o == IR_CARG) ir = IR(ir->op1);
+    return fins->op2 == IRFL_CDATA_INIT1 ? ir->op1 : ir->op2;
+  }
+  return NEXTFOLD;
+}
+
 LJFOLD(FLOAD any IRFL_STR_LEN)
+LJFOLD(FLOAD any IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD any IRFL_CDATA_INIT1)
+LJFOLD(FLOAD any IRFL_CDATA_INIT2_4)
+LJFOLD(FLOAD any IRFL_CDATA_INIT2_8)
 LJFOLD(VLOAD any any)  /* Vararg loads have no corresponding stores. */
 LJFOLDX(lj_opt_cse)
 
@@ -1564,6 +1594,7 @@ LJFOLD(CALLL any any)  /* Safeguard fallback. */
 LJFOLD(RETF any any)  /* Modifies BASE. */
 LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
+LJFOLD(CNEW any any)
 LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */
