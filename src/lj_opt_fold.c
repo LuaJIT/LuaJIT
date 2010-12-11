@@ -155,7 +155,7 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
    (J->chain[IR_SNEW] || J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
     J->chain[IR_CNEW] || J->chain[IR_CNEWI] || J->chain[IR_TOSTR]))
 
-/* -- Constant folding ---------------------------------------------------- */
+/* -- Constant folding for FP numbers ------------------------------------- */
 
 LJFOLD(ADD KNUM KNUM)
 LJFOLD(SUB KNUM KNUM)
@@ -191,6 +191,24 @@ LJFOLDF(kfold_powi)
   lua_Number y = lj_vm_foldarith(a, b, IR_POWI - IR_ADD);
   return lj_ir_knum(J, y);
 }
+
+/* Must not use kfold_kref for numbers (could be NaN). */
+LJFOLD(EQ KNUM KNUM)
+LJFOLD(NE KNUM KNUM)
+LJFOLD(LT KNUM KNUM)
+LJFOLD(GE KNUM KNUM)
+LJFOLD(LE KNUM KNUM)
+LJFOLD(GT KNUM KNUM)
+LJFOLD(ULT KNUM KNUM)
+LJFOLD(UGE KNUM KNUM)
+LJFOLD(ULE KNUM KNUM)
+LJFOLD(UGT KNUM KNUM)
+LJFOLDF(kfold_numcomp)
+{
+  return CONDFOLD(lj_ir_numcmp(knumleft, knumright, (IROp)fins->o));
+}
+
+/* -- Constant folding for 32 bit integers -------------------------------- */
 
 static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
 {
@@ -238,6 +256,98 @@ LJFOLDF(kfold_bswap)
 {
   return INTFOLD((int32_t)lj_bswap((uint32_t)fleft->i));
 }
+
+LJFOLD(LT KINT KINT)
+LJFOLD(GE KINT KINT)
+LJFOLD(LE KINT KINT)
+LJFOLD(GT KINT KINT)
+LJFOLD(ULT KINT KINT)
+LJFOLD(UGE KINT KINT)
+LJFOLD(ULE KINT KINT)
+LJFOLD(UGT KINT KINT)
+LJFOLD(ABC KINT KINT)
+LJFOLDF(kfold_intcomp)
+{
+  int32_t a = fleft->i, b = fright->i;
+  switch ((IROp)fins->o) {
+  case IR_LT: return CONDFOLD(a < b);
+  case IR_GE: return CONDFOLD(a >= b);
+  case IR_LE: return CONDFOLD(a <= b);
+  case IR_GT: return CONDFOLD(a > b);
+  case IR_ULT: return CONDFOLD((uint32_t)a < (uint32_t)b);
+  case IR_UGE: return CONDFOLD((uint32_t)a >= (uint32_t)b);
+  case IR_ULE: return CONDFOLD((uint32_t)a <= (uint32_t)b);
+  case IR_ABC:
+  case IR_UGT: return CONDFOLD((uint32_t)a > (uint32_t)b);
+  default: lua_assert(0); return FAILFOLD;
+  }
+}
+
+LJFOLD(UGE any KINT)
+LJFOLDF(kfold_intcomp0)
+{
+  if (fright->i == 0)
+    return DROPFOLD;
+  return NEXTFOLD;
+}
+
+/* -- Constant folding for strings ---------------------------------------- */
+
+LJFOLD(SNEW KPTR KINT)
+LJFOLDF(kfold_snew_kptr)
+{
+  GCstr *s = lj_str_new(J->L, (const char *)ir_kptr(fleft), (size_t)fright->i);
+  return lj_ir_kstr(J, s);
+}
+
+LJFOLD(SNEW any KINT)
+LJFOLDF(kfold_snew_empty)
+{
+  if (fright->i == 0)
+    return lj_ir_kstr(J, lj_str_new(J->L, "", 0));
+  return NEXTFOLD;
+}
+
+LJFOLD(STRREF KGC KINT)
+LJFOLDF(kfold_strref)
+{
+  GCstr *str = ir_kstr(fleft);
+  lua_assert((MSize)fright->i < str->len);
+  return lj_ir_kptr(J, (char *)strdata(str) + fright->i);
+}
+
+LJFOLD(STRREF SNEW any)
+LJFOLDF(kfold_strref_snew)
+{
+  PHIBARRIER(fleft);
+  if (irref_isk(fins->op2) && fright->i == 0) {
+    return fleft->op1;  /* strref(snew(ptr, len), 0) ==> ptr */
+  } else {
+    /* Reassociate: strref(snew(strref(str, a), len), b) ==> strref(str, a+b) */
+    IRIns *ir = IR(fleft->op1);
+    IRRef1 str = ir->op1;  /* IRIns * is not valid across emitir. */
+    lua_assert(ir->o == IR_STRREF);
+    PHIBARRIER(ir);
+    fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2);  /* Clobbers fins! */
+    fins->op1 = str;
+    fins->ot = IRT(IR_STRREF, IRT_P32);
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(CALLN CARG IRCALL_lj_str_cmp)
+LJFOLDF(kfold_strcmp)
+{
+  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
+    GCstr *a = ir_kstr(IR(fleft->op1));
+    GCstr *b = ir_kstr(IR(fleft->op2));
+    return INTFOLD(lj_str_cmp(a, b));
+  }
+  return NEXTFOLD;
+}
+
+/* -- Constant folding of conversions ------------------------------------- */
 
 LJFOLD(TONUM KINT)
 LJFOLDF(kfold_tonum)
@@ -308,109 +418,7 @@ LJFOLDF(kfold_strto)
   return FAILFOLD;
 }
 
-LJFOLD(SNEW KPTR KINT)
-LJFOLDF(kfold_snew_kptr)
-{
-  GCstr *s = lj_str_new(J->L, (const char *)ir_kptr(fleft), (size_t)fright->i);
-  return lj_ir_kstr(J, s);
-}
-
-LJFOLD(SNEW any KINT)
-LJFOLDF(kfold_snew_empty)
-{
-  if (fright->i == 0)
-    return lj_ir_kstr(J, lj_str_new(J->L, "", 0));
-  return NEXTFOLD;
-}
-
-LJFOLD(STRREF KGC KINT)
-LJFOLDF(kfold_strref)
-{
-  GCstr *str = ir_kstr(fleft);
-  lua_assert((MSize)fright->i < str->len);
-  return lj_ir_kptr(J, (char *)strdata(str) + fright->i);
-}
-
-LJFOLD(STRREF SNEW any)
-LJFOLDF(kfold_strref_snew)
-{
-  PHIBARRIER(fleft);
-  if (irref_isk(fins->op2) && fright->i == 0) {
-    return fleft->op1;  /* strref(snew(ptr, len), 0) ==> ptr */
-  } else {
-    /* Reassociate: strref(snew(strref(str, a), len), b) ==> strref(str, a+b) */
-    IRIns *ir = IR(fleft->op1);
-    IRRef1 str = ir->op1;  /* IRIns * is not valid across emitir. */
-    lua_assert(ir->o == IR_STRREF);
-    PHIBARRIER(ir);
-    fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2);  /* Clobbers fins! */
-    fins->op1 = str;
-    fins->ot = IRT(IR_STRREF, IRT_P32);
-    return RETRYFOLD;
-  }
-  return NEXTFOLD;
-}
-
-/* Must not use kfold_kref for numbers (could be NaN). */
-LJFOLD(EQ KNUM KNUM)
-LJFOLD(NE KNUM KNUM)
-LJFOLD(LT KNUM KNUM)
-LJFOLD(GE KNUM KNUM)
-LJFOLD(LE KNUM KNUM)
-LJFOLD(GT KNUM KNUM)
-LJFOLD(ULT KNUM KNUM)
-LJFOLD(UGE KNUM KNUM)
-LJFOLD(ULE KNUM KNUM)
-LJFOLD(UGT KNUM KNUM)
-LJFOLDF(kfold_numcomp)
-{
-  return CONDFOLD(lj_ir_numcmp(knumleft, knumright, (IROp)fins->o));
-}
-
-LJFOLD(LT KINT KINT)
-LJFOLD(GE KINT KINT)
-LJFOLD(LE KINT KINT)
-LJFOLD(GT KINT KINT)
-LJFOLD(ULT KINT KINT)
-LJFOLD(UGE KINT KINT)
-LJFOLD(ULE KINT KINT)
-LJFOLD(UGT KINT KINT)
-LJFOLD(ABC KINT KINT)
-LJFOLDF(kfold_intcomp)
-{
-  int32_t a = fleft->i, b = fright->i;
-  switch ((IROp)fins->o) {
-  case IR_LT: return CONDFOLD(a < b);
-  case IR_GE: return CONDFOLD(a >= b);
-  case IR_LE: return CONDFOLD(a <= b);
-  case IR_GT: return CONDFOLD(a > b);
-  case IR_ULT: return CONDFOLD((uint32_t)a < (uint32_t)b);
-  case IR_UGE: return CONDFOLD((uint32_t)a >= (uint32_t)b);
-  case IR_ULE: return CONDFOLD((uint32_t)a <= (uint32_t)b);
-  case IR_ABC:
-  case IR_UGT: return CONDFOLD((uint32_t)a > (uint32_t)b);
-  default: lua_assert(0); return FAILFOLD;
-  }
-}
-
-LJFOLD(UGE any KINT)
-LJFOLDF(kfold_intcomp0)
-{
-  if (fright->i == 0)
-    return DROPFOLD;
-  return NEXTFOLD;
-}
-
-LJFOLD(CALLN CARG IRCALL_lj_str_cmp)
-LJFOLDF(kfold_strcmp)
-{
-  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
-    GCstr *a = ir_kstr(IR(fleft->op1));
-    GCstr *b = ir_kstr(IR(fleft->op2));
-    return INTFOLD(lj_str_cmp(a, b));
-  }
-  return NEXTFOLD;
-}
+/* -- Constant folding of equality checks --------------------------------- */
 
 /* Don't constant-fold away FLOAD checks against KNULL. */
 LJFOLD(EQ FLOAD KNULL)
