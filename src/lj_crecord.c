@@ -274,7 +274,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
     sp = lj_ir_kint(J, tref_istrue(sp) ? 1 : 0);
     sid = CTID_BOOL;
   } else if (tref_isnil(sp)) {
-    sp = lj_ir_knull(J, IRT_PTR);
+    sp = lj_ir_kptr(J, NULL);
   } else if (tref_isudata(sp)) {
     sp = emitir(IRT(IR_ADD, IRT_P32), sp, lj_ir_kint(J, sizeof(GCcdata)));
   } else {  /* NYI: tref_isstr(sp), tref_istab(sp), tref_islightud(sp). */
