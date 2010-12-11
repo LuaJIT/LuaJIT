@@ -94,8 +94,8 @@ typedef unsigned __int32 uintptr_t;
 #define checkptr32(x)	((uintptr_t)(x) == (uint32_t)(uintptr_t)(x))
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */
-#define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(32-(n))))
-#define lj_ror(x, n)	(((x)<<(32-(n))) | ((x)>>(n)))
+#define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(8*sizeof(x)-(n))))
+#define lj_ror(x, n)	(((x)<<(8*sizeof(x)-(n))) | ((x)>>(n)))
 
 /* A really naive Bloom filter. But sufficient for our needs. */
 typedef uintptr_t BloomFilter;
@@ -143,11 +143,28 @@ static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
   return (uint32_t)__builtin_bswap32((int32_t)x);
 }
+
+static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
+{
+  return (uint64_t)__builtin_bswap64((int64_t)x);
+}
 #elif defined(__i386__) || defined(__x86_64__)
 static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
   uint32_t r; __asm__("bswap %0" : "=r" (r) : "0" (x)); return r;
 }
+
+#if defined(__i386__)
+static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
+{
+  return ((uint64_t)lj_bswap((uint32_t)x)<<32) | lj_bswap((uint32_t)(x>>32));
+}
+#else
+static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
+{
+  uint64_t r; __asm__("bswap %0" : "=r" (r) : "0" (x)); return r;
+}
+#endif
 #else
 #error "missing define for lj_bswap()"
 #endif
@@ -174,6 +191,7 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 }
 
 #define lj_bswap(x)	(_byteswap_ulong((x)))
+#define lj_bswap64(x)	(_byteswap_uint64((x)))
 
 #else
 #error "missing defines for your compiler"
