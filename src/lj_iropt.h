@@ -105,6 +105,7 @@ enum {
 };
 
 #define INTFOLD(k)	((J->fold.ins.i = (k)), (TRef)KINTFOLD)
+#define INT64FOLD(k)	(lj_ir_kint64(J, (k)))
 #define CONDFOLD(cond)	((TRef)FAILFOLD + (TRef)(cond))
 #define LEFTFOLD	(J->fold.ins.op1)
 #define RIGHTFOLD	(J->fold.ins.op2)
