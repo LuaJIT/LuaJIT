@@ -304,6 +304,27 @@ doconv:
 
 /* -- C data metamethods -------------------------------------------------- */
 
+/* This would be rather difficult in FOLD, so do it here:
+** (base+k)+(idx*sz)+ofs ==> (base+idx*sz)+(ofs+k)
+** (base+(idx+k)*sz)+ofs ==> (base+idx*sz)+(ofs+k*sz)
+*/
+static TRef crec_reassoc_ofs(jit_State *J, TRef tr, ptrdiff_t *ofsp, MSize sz)
+{
+  IRIns *ir = IR(tref_ref(tr));
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) &&
+      ir->o == IR_ADD && irref_isk(ir->op2)) {
+    IRIns *irk = IR(ir->op2);
+    tr = ir->op1;
+#if LJ_64
+    if (irk->o == IR_KINT64)
+      *ofsp += (ptrdiff_t)ir_kint64(irk)->u64 * sz;
+    else
+#endif
+      *ofsp += (ptrdiff_t)irk->i * sz;
+  }
+  return tr;
+}
+
 void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
 {
   TRef idx, ptr = J->base[0];
@@ -333,22 +354,9 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
 #endif
     if (ctype_ispointer(ct->info)) {
       ptrdiff_t sz = (ptrdiff_t)lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
-      IRIns *ir = IR(tref_ref(idx));
-      if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) &&
-	  ir->o == IR_ADD && irref_isk(ir->op2)) {
-	IRIns *irk = IR(ir->op2);
-	idx = ir->op1;
-	/* This would be rather difficult in FOLD, so do it here:
-	** (base+(idx+k)*sz)+ofs ==> (base+idx*sz)+(ofs+k*sz)
-	*/
-#if LJ_64
-	if (irk->o == IR_KINT64)
-	  ofs += (ptrdiff_t)ir_kint64(irk)->u64 * sz;
-	else
-#endif
-	  ofs += (ptrdiff_t)irk->i * sz;
-      }
+      idx = crec_reassoc_ofs(J, idx, &ofs, sz);
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
+      ptr = crec_reassoc_ofs(J, ptr, &ofs, 1);
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
     }
   } else if (tref_isstr(idx)) {
