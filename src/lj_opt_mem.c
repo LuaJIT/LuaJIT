@@ -526,20 +526,22 @@ doemit:
 /* -- XLOAD forwarding and XSTORE elimination ----------------------------- */
 
 /* Alias analysis for XLOAD/XSTORE. */
-static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *refb)
+static AliasRet aa_xref(jit_State *J, IRIns *xa, IRIns *xb)
 {
   ptrdiff_t ofsa = 0, ofsb = 0;
+  IRIns *refa = IR(xa->op1), *refb = IR(xb->op1);
   IRIns *basea = refa, *baseb = refb;
-  if (refa == refb)
-    return ALIAS_MUST;  /* Shortcut for same refs. */
   /* This implements (very) strict aliasing rules.
   ** Different types do NOT alias, except for differences in signedness.
   ** NYI: this also prevents type punning through unions.
   */
-  if (!(irt_sametype(refa->t, refb->t) ||
-	(irt_typerange(refa->t, IRT_I8, IRT_INT) &&
-	 ((refa->t.irt - IRT_I8) ^ (refb->t.irt - IRT_I8)) == 1)))
+  if (irt_sametype(xa->t, xb->t)) {
+    if (refa == refb)
+      return ALIAS_MUST;  /* Shortcut for same refs with identical type. */
+  } else if (!(irt_typerange(xa->t, IRT_I8, IRT_INT) &&
+	       ((xa->t.irt - IRT_I8) ^ (xb->t.irt - IRT_I8)) == 1)) {
     return ALIAS_NO;
+  }
   /* Offset-based disambiguation. */
   if (refa->o == IR_ADD && irref_isk(refa->op2)) {
     IRIns *irk = IR(refa->op2);
@@ -577,7 +579,6 @@ TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
 {
   IRRef xref = fins->op1;
   IRRef lim = xref;  /* Search limit. */
-  IRIns *xr = IR(xref);
   IRRef ref;
 
   if ((fins->op2 & IRXLOAD_READONLY))
@@ -587,7 +588,7 @@ TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
   ref = J->chain[IR_XSTORE];
   while (ref > xref) {
     IRIns *store = IR(ref);
-    switch (aa_xref(J, xr, IR(store->op1))) {
+    switch (aa_xref(J, fins, store)) {
     case ALIAS_NO:   break;  /* Continue searching. */
     case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
@@ -612,12 +613,11 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
 {
   IRRef xref = fins->op1;
   IRRef val = fins->op2;  /* Stored value reference. */
-  IRIns *xr = IR(xref);
   IRRef1 *refp = &J->chain[IR_XSTORE];
   IRRef ref = *refp;
   while (ref > xref) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
-    switch (aa_xref(J, xr, IR(store->op1))) {
+    switch (aa_xref(J, fins, store)) {
     case ALIAS_NO:
       break;  /* Continue searching. */
     case ALIAS_MAY:
