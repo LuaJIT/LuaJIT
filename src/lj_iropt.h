@@ -127,6 +127,7 @@ LJ_FUNC int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_dse_ustore(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J);
+LJ_FUNC TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J);
 
 /* Narrowing. */
 LJ_FUNC TRef LJ_FASTCALL lj_opt_narrow_convert(jit_State *J);

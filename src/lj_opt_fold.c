@@ -1696,6 +1696,9 @@ LJFOLDX(lj_opt_dse_ustore)
 LJFOLD(FSTORE any any)
 LJFOLDX(lj_opt_dse_fstore)
 
+LJFOLD(XSTORE any any)
+LJFOLDX(lj_opt_dse_xstore)
+
 LJFOLD(NEWREF any any)  /* Treated like a store. */
 LJFOLD(CALLS any any)
 LJFOLD(CALLL any any)  /* Safeguard fallback. */

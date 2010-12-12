@@ -523,12 +523,52 @@ doemit:
   return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
 }
 
-/* -- XLOAD forwarding ---------------------------------------------------- */
+/* -- XLOAD forwarding and XSTORE elimination ----------------------------- */
 
-/* NYI: Alias analysis for XLOAD/XSTORE. */
+/* Alias analysis for XLOAD/XSTORE. */
 static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *refb)
 {
-  UNUSED(J); UNUSED(refa); UNUSED(refb);
+  ptrdiff_t ofsa = 0, ofsb = 0;
+  IRIns *basea = refa, *baseb = refb;
+  if (refa == refb)
+    return ALIAS_MUST;  /* Shortcut for same refs. */
+  /* This implements (very) strict aliasing rules.
+  ** Different types do NOT alias, except for differences in signedness.
+  ** NYI: this also prevents type punning through unions.
+  */
+  if (!(irt_sametype(refa->t, refb->t) ||
+	(irt_typerange(refa->t, IRT_I8, IRT_INT) &&
+	 ((refa->t.irt - IRT_I8) ^ (refb->t.irt - IRT_I8)) == 1)))
+    return ALIAS_NO;
+  /* Offset-based disambiguation. */
+  if (refa->o == IR_ADD && irref_isk(refa->op2)) {
+    IRIns *irk = IR(refa->op2);
+    basea = IR(refa->op1);
+    ofsa = (LJ_64 && irk->o == IR_KINT64) ? (ptrdiff_t)ir_k64(irk)->u64 :
+					    (ptrdiff_t)irk->i;
+    if (basea == refb && ofsa != 0)
+      return ALIAS_NO;  /* base+-ofs vs. base. */
+  }
+  if (refb->o == IR_ADD && irref_isk(refb->op2)) {
+    IRIns *irk = IR(refb->op2);
+    baseb = IR(refb->op1);
+    ofsb = (LJ_64 && irk->o == IR_KINT64) ? (ptrdiff_t)ir_k64(irk)->u64 :
+					    (ptrdiff_t)irk->i;
+    if (refa == baseb && ofsb != 0)
+      return ALIAS_NO;  /* base vs. base+-ofs. */
+  }
+  if (basea == baseb) {
+    /* This assumes strictly-typed, non-overlapping accesses. */
+    if (ofsa != ofsb)
+      return ALIAS_NO;  /* base+-o1 vs. base+-o2 and o1 != o2. */
+    /* Unsigned vs. signed access to the same address.
+    ** Really ALIAS_MUST, but store forwarding would lose the type.
+    ** This is rare, so return ALIAS_MAY for now.
+    */
+    return ALIAS_MAY;
+  }
+  /* NYI: structural disambiguation. */
+  /* NYI: disambiguate new allocations. */
   return ALIAS_MAY;
 }
 
@@ -565,6 +605,49 @@ cselim:
     ref = IR(ref)->prev;
   }
   return lj_ir_emit(J);
+}
+
+/* XSTORE elimination. */
+TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
+{
+  IRRef xref = fins->op1;
+  IRRef val = fins->op2;  /* Stored value reference. */
+  IRIns *xr = IR(xref);
+  IRRef1 *refp = &J->chain[IR_XSTORE];
+  IRRef ref = *refp;
+  while (ref > xref) {  /* Search for redundant or conflicting stores. */
+    IRIns *store = IR(ref);
+    switch (aa_xref(J, xr, IR(store->op1))) {
+    case ALIAS_NO:
+      break;  /* Continue searching. */
+    case ALIAS_MAY:
+      if (store->op2 != val)  /* Conflict if the value is different. */
+	goto doemit;
+      break;  /* Otherwise continue searching. */
+    case ALIAS_MUST:
+      if (store->op2 == val)  /* Same value: drop the new store. */
+	return DROPFOLD;
+      /* Different value: try to eliminate the redundant store. */
+      if (ref > J->chain[IR_LOOP]) {  /* Quick check to avoid crossing LOOP. */
+	IRIns *ir;
+	/* Check for any intervening guards or any XLOADs (no AA performed). */
+	for (ir = IR(J->cur.nins-1); ir > store; ir--)
+	  if (irt_isguard(ir->t) || ir->o == IR_XLOAD)
+	    goto doemit;  /* No elimination possible. */
+	/* Remove redundant store from chain and replace with NOP. */
+	*refp = store->prev;
+	store->o = IR_NOP;  /* Unchained NOP -- does anybody care? */
+	store->t.irt = IRT_NIL;
+	store->op1 = store->op2 = 0;
+	store->prev = 0;
+	/* Now emit the new store instead. */
+      }
+      goto doemit;
+    }
+    ref = *(refp = &store->prev);
+  }
+doemit:
+  return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
 }
 
 /* -- Forwarding of lj_tab_len -------------------------------------------- */
