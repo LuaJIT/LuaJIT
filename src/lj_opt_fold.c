@@ -778,6 +778,7 @@ LJFOLDF(simplify_zext64)
 {
 #if LJ_TARGET_X64
   /* Eliminate widening. All 32 bit ops implicitly zero-extend the result. */
+  PHIBARRIER(fleft);
   return LEFTFOLD;
 #else
   UNUSED(J);
@@ -790,6 +791,7 @@ LJFOLDF(simplify_sext64)
 {
   IRRef ref = fins->op1;
   int64_t ofs = 0;
+  PHIBARRIER(fleft);
   if (fleft->o == IR_ADD && irref_isk(fleft->op2)) {
     ofs = (int64_t)IR(fleft->op2)->i;
     ref = fleft->op1;
