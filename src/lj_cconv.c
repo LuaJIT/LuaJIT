@@ -373,28 +373,6 @@ copyval:  /* Copy value. */
 
 /* -- C type to TValue conversion ----------------------------------------- */
 
-/* Copy value to new cdata. Strip attributes and qualifiers. */
-static GCcdata *cconv_copyval(CTState *cts, CTypeID id, void *sp)
-{
-  CType *ct = ctype_raw(cts, id);
-  CTInfo info = ct->info;
-  CTSize size = ct->size;
-  GCcdata *cd;
-  lua_assert(ctype_isnum(info) || ctype_isenum(info) ||
-	     ctype_isptr(info) || ctype_isvalarray(info));
-  if (LJ_UNLIKELY((info & CTF_QUAL))) {  /* Any qualifiers to strip? */
-    if (ctype_isarray(info)) {
-      CType *cct = ctype_child(cts, ct);
-      id = lj_ctype_intern(cts, (cct->info & ~CTF_QUAL), cct->size);
-      info = ((info & ~CTMASK_CID) + id);
-    }
-    id = lj_ctype_intern(cts, (info & ~CTF_QUAL), size);
-  }
-  cd = lj_cdata_new(cts, id, size);
-  memcpy(cdataptr(cd), sp, size);
-  return cd;
-}
-
 /* Convert C type to TValue. Caveat: expects to get the raw CType! */
 void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
 		    TValue *o, uint8_t *sp)
@@ -423,8 +401,15 @@ void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
     /* Create reference. */
     setcdataV(cts->L, o, lj_cdata_newref(cts, sp, sid));
   } else {
+    GCcdata *cd;
+    CTSize sz;
   copyval:  /* Copy value. */
-    setcdataV(cts->L, o, cconv_copyval(cts, sid, sp));
+    sz = s->size;
+    lua_assert(sz != CTSIZE_INVALID);
+    /* Attributes are stripped, qualifiers are kept (but mostly ignored). */
+    cd = lj_cdata_new(cts, ctype_typeid(cts, s), sz);
+    setcdataV(cts->L, o, cd);
+    memcpy(cdataptr(cd), sp, sz);
   }
 }
 
