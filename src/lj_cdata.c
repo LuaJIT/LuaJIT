@@ -78,6 +78,7 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
     ct = ctype_child(cts, ct);
   }
 
+collect_attrib:
   /* Skip attributes and collect qualifiers. */
   while (ctype_isattrib(ct->info)) {
     if (ctype_attrib(ct->info) == CTA_QUAL) *qual |= ct->size;
@@ -102,17 +103,14 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
   } else if (tvisstr(key)) {  /* String key. */
     GCstr *name = strV(key);
     if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
-      CType *cct = ctype_child(cts, ct);
-      if (ctype_isstruct(cct->info)) {
+      if (ctype_isstruct(ctype_rawchild(cts, ct)->info)) {
 	p = (uint8_t *)cdata_getptr(p, ct->size);
-	ct = cct;
-	goto index_struct;
+	ct = ctype_child(cts, ct);
+	goto collect_attrib;
       }
     } if (ctype_isstruct(ct->info)) {
       CTSize ofs;
-      CType *fct;
-    index_struct:
-      fct = lj_ctype_getfield(cts, ct, name, &ofs);
+      CType *fct = lj_ctype_getfield(cts, ct, name, &ofs);
       if (fct) {
 	*pp = p + ofs;
 	return fct;

@@ -363,9 +363,17 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     GCstr *name = strV(&rd->argv[1]);
     /* Always specialize to the field name. */
     emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
-    if (ctype_isstruct(ct->info)) {
+    if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
+      CType *cct = ctype_rawchild(cts, ct);
+      if (ctype_isstruct(cct->info)) {
+        ct = cct;
+        goto index_struct;
+      }
+    } else if (ctype_isstruct(ct->info)) {
       CTSize fofs;
-      CType *fct = lj_ctype_getfield(cts, ct, name, &fofs);
+      CType *fct;
+index_struct:
+      fct = lj_ctype_getfield(cts, ct, name, &fofs);
       if (fct) {
 	if (ctype_isconstval(fct->info)) {
 	  if (fct->size >= 0x80000000u &&
