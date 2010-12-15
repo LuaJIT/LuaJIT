@@ -244,19 +244,37 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
   if (ctype_isnum(sinfo)) {
     IRType t = crec_ct2irt(s);
     if ((sinfo & CTF_BOOL))
-      lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: specialize to the result. */
-    if (t == IRT_CDATA) goto copyval;
+      goto err_nyi;  /* NYI: specialize to the result. */
+    if (t == IRT_CDATA)
+      goto err_nyi;  /* NYI: copyval of >64 bit integers. */
+    if ((sinfo & CTF_BOOL) || t == IRT_CDATA)
     if (t == IRT_U32) lj_trace_err(J, LJ_TRERR_NYICONV);
     return emitir(IRT(IR_XLOAD, t), sp, 0);
+  } else if (ctype_isptr(sinfo)) {
+    IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
+    sp = emitir(IRT(IR_XLOAD, t), sp, 0);
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
-    /* Create reference. */
-    CTypeID refid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);
-    return emitir(IRTG(IR_CNEWI, IRT_CDATA), sp, lj_ir_kint(J, refid));
+    sid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);  /* Create ref. */
+  } else if (ctype_iscomplex(sinfo)) {
+    IRType t = s->size == 2*sizeof(double) ? IRT_NUM : IRT_CDATA;
+    ptrdiff_t esz = (ptrdiff_t)(s->size >> 1);
+    TRef ptr, tr1, tr2, dp;
+    if (t == IRT_CDATA) goto err_nyi;  /* NYI: float IRType. */
+    dp = emitir(IRTG(IR_CNEW, IRT_CDATA), TREF_NIL, lj_ir_kint(J, sid));
+    tr1 = emitir(IRT(IR_XLOAD, t), sp, 0);
+    ptr = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, esz));
+    tr2 = emitir(IRT(IR_XLOAD, t), ptr, 0);
+    ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, sizeof(GCcdata)));
+    emitir(IRT(IR_XSTORE, t), ptr, tr1);
+    ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, sizeof(GCcdata)+esz));
+    emitir(IRT(IR_XSTORE, t), ptr, tr2);
+    return dp;
   } else {
-  copyval:  /* Copy value. */
+    /* NYI: copyval of vectors. */
+  err_nyi:
     lj_trace_err(J, LJ_TRERR_NYICONV);
-    return 0;
   }
+  return emitir(IRTG(IR_CNEWI, IRT_CDATA), sp, lj_ir_kint(J, sid));
 }
 
 /* -- Convert TValue to C type (store) ------------------------------------ */
@@ -340,6 +358,7 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
     ptr = emitir(IRT(IR_FLOAD, t), ptr, IRFL_CDATA_INIT1);
     ofs = 0;
+    ptr = crec_reassoc_ofs(J, ptr, &ofs, 1);
   }
 
   idx = J->base[1];
@@ -356,7 +375,6 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
       ptrdiff_t sz = (ptrdiff_t)lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
       idx = crec_reassoc_ofs(J, idx, &ofs, sz);
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
-      ptr = crec_reassoc_ofs(J, ptr, &ofs, 1);
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
     }
   } else if (tref_isstr(idx)) {
@@ -366,8 +384,8 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
       CType *cct = ctype_rawchild(cts, ct);
       if (ctype_isstruct(cct->info)) {
-        ct = cct;
-        goto index_struct;
+	ct = cct;
+	goto index_struct;
       }
     } else if (ctype_isstruct(ct->info)) {
       CTSize fofs;
