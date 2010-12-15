@@ -511,7 +511,7 @@ static int trace_abort(jit_State *J)
       frame = J->L->base-1;
       pc = J->pc;
       while (!isluafunc(frame_func(frame))) {
-	pc = frame_pc(frame) - 1;
+	pc = (frame_iscont(frame) ? frame_contpc(frame) : frame_pc(frame)) - 1;
 	frame = frame_prev(frame);
       }
       fn = frame_func(frame);
