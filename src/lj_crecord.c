@@ -260,7 +260,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
     ptrdiff_t esz = (ptrdiff_t)(s->size >> 1);
     TRef ptr, tr1, tr2, dp;
     if (t == IRT_CDATA) goto err_nyi;  /* NYI: float IRType. */
-    dp = emitir(IRTG(IR_CNEW, IRT_CDATA), TREF_NIL, lj_ir_kint(J, sid));
+    dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, sid), TREF_NIL);
     tr1 = emitir(IRT(IR_XLOAD, t), sp, 0);
     ptr = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, esz));
     tr2 = emitir(IRT(IR_XLOAD, t), ptr, 0);
@@ -274,7 +274,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
   err_nyi:
     lj_trace_err(J, LJ_TRERR_NYICONV);
   }
-  return emitir(IRTG(IR_CNEWI, IRT_CDATA), sp, lj_ir_kint(J, sid));
+  return emitir(IRTG(IR_CNEWP, IRT_CDATA), lj_ir_kint(J, sid), sp);
 }
 
 /* -- Convert TValue to C type (store) ------------------------------------ */
@@ -300,7 +300,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
     s = ctype_raw(cts, sid);
     if (ctype_isptr(s->info)) {
       IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
-      sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_INIT1);
+      sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_PTR);
       if (ctype_isref(s->info))
 	s = ctype_rawchild(cts, s);
       else
@@ -356,7 +356,7 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
   if (ctype_isptr(ct->info)) {
     IRType t = (LJ_64 && ct->size == 8) ? IRT_P64 : IRT_P32;
     if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
-    ptr = emitir(IRT(IR_FLOAD, t), ptr, IRFL_CDATA_INIT1);
+    ptr = emitir(IRT(IR_FLOAD, t), ptr, IRFL_CDATA_PTR);
     ofs = 0;
     ptr = crec_reassoc_ofs(J, ptr, &ofs, 1);
   }

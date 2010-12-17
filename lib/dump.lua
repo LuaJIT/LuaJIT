@@ -418,16 +418,12 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 		       band(ot, 64) == 0 and " " or "+",
 		       irtype[t], op))
       local m1 = band(m, 3)
-      local op4 = sub(op, 1, 4)
-      if op4 == "CALL" then
+      if sub(op, 1, 4) == "CALL" then
 	out:write(format("%-10s  (", vmdef.ircall[op2]))
 	if op1 ~= -1 then dumpcallargs(tr, op1) end
 	out:write(")")
-      elseif op4 == "CNEW" then
-	out:write(formatk(tr, op2))
-	if op1 ~= -1 then
-	  out:write("  ("); dumpcallargs(tr, op1); out:write(")")
-	end
+      elseif op == "CNEW  " and op2 == -1 then
+	out:write(formatk(tr, op1))
       elseif m1 ~= 3 then -- op1 != IRMnone
 	if op1 < 0 then
 	  out:write(formatk(tr, op1))

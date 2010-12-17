@@ -111,7 +111,7 @@
   _(TNEW,	AW, lit, lit) \
   _(TDUP,	AW, ref, ___) \
   _(CNEW,	AW, ref, ref) \
-  _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
+  _(CNEWP,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
   /* Write barriers. */ \
   _(TBAR,	S , ref, ___) \
@@ -188,9 +188,7 @@ IRFPMDEF(FPMENUM)
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
   _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
-  _(CDATA_INIT1, sizeof(GCcdata)) \
-  _(CDATA_INIT2_4, sizeof(GCcdata)+4) \
-  _(CDATA_INIT2_8, sizeof(GCcdata)+8)
+  _(CDATA_PTR, sizeof(GCcdata))
 
 typedef enum {
 #define FLENUM(name, ofs)	IRFL_##name,
