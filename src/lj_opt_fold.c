@@ -1603,7 +1603,7 @@ LJFOLDF(fload_cdata_init_cnew)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     IRIns *ir = fleft;
-    PHIBARRIER(fleft);
+    /* Fold even across PHI to avoid expensive allocations. */
     lua_assert(ir->op1 != REF_NIL);
     if (IR(ir->op1)->o == IR_CARG) ir = IR(ir->op1);
     return fins->op2 == IRFL_CDATA_INIT1 ? ir->op1 : ir->op2;
