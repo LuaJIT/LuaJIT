@@ -555,10 +555,10 @@ static AliasRet aa_cnew(jit_State *J, IRIns *refa, IRIns *refb)
 }
 
 /* Alias analysis for XLOAD/XSTORE. */
-static AliasRet aa_xref(jit_State *J, IRIns *xa, IRIns *xb)
+static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
 {
   ptrdiff_t ofsa = 0, ofsb = 0;
-  IRIns *refa = IR(xa->op1), *refb = IR(xb->op1);
+  IRIns *refb = IR(xb->op1);
   IRIns *basea = refa, *baseb = refb;
   /* This implements (very) strict aliasing rules.
   ** Different types do NOT alias, except for differences in signedness.
@@ -602,10 +602,72 @@ static AliasRet aa_xref(jit_State *J, IRIns *xa, IRIns *xb)
   return aa_cnew(J, basea, baseb);  /* Try to disambiguate allocations. */
 }
 
+/* Return CSEd reference or 0. Caveat: swaps lower ref to the right! */
+static IRRef reassoc_trycse(jit_State *J, IROp op, IRRef op1, IRRef op2)
+{
+  IRRef ref = J->chain[op];
+  IRRef lim = op1;
+  if (op2 > lim) { lim = op2; op2 = op1; op1 = lim; }
+  while (ref > lim) {
+    IRIns *ir = IR(ref);
+    if (ir->op1 == op1 && ir->op2 == op2)
+      return ref;
+    ref = ir->prev;
+  }
+  return 0;
+}
+
+/* Reassociate index references. */
+static IRRef reassoc_xref(jit_State *J, IRIns *ir)
+{
+  ptrdiff_t ofs = 0;
+  if (ir->o == IR_ADD && irref_isk(ir->op2)) {  /* Get constant offset. */
+    IRIns *irk = IR(ir->op2);
+    ofs = (LJ_64 && irk->o == IR_KINT64) ? (ptrdiff_t)ir_k64(irk)->u64 :
+					   (ptrdiff_t)irk->i;
+    ir = IR(ir->op1);
+  }
+  if (ir->o == IR_ADD) {  /* Add of base + index. */
+    /* Index ref > base ref for loop-carried dependences. Only check op1. */
+    IRIns *ir2, *ir1 = IR(ir->op1);
+    int32_t shift = 0;
+    IRRef idxref;
+    /* Determine index shifts. Don't bother with IR_MUL here. */
+    if (ir1->o == IR_BSHL && irref_isk(ir1->op2))
+      shift = IR(ir1->op2)->i;
+    else if (ir1->o == IR_ADD && ir1->op1 == ir1->op2)
+      shift = 1;
+    else
+      ir1 = ir;
+    ir2 = IR(ir1->op1);
+    /* A non-reassociated add. Must be a loop-carried dependence. */
+    if (ir2->o == IR_ADD && irt_isint(ir2->t) && irref_isk(ir2->op2))
+      ofs += (ptrdiff_t)IR(ir2->op2)->i << shift;
+    else
+      return 0;
+    idxref = ir2->op1;
+    /* Try to CSE the reassociated chain. Give up if not found. */
+    if (ir1 != ir &&
+	!(idxref = reassoc_trycse(J, ir1->o, idxref,
+				  ir1->o == IR_BSHL ? ir1->op2 : idxref)))
+      return 0;
+    if (!(idxref = reassoc_trycse(J, IR_ADD, idxref, ir->op2)))
+      return 0;
+    if (ofs != 0) {
+      IRRef refk = tref_ref(lj_ir_kintp(J, ofs));
+      if (!(idxref = reassoc_trycse(J, IR_ADD, idxref, refk)))
+	return 0;
+    }
+    return idxref;  /* Success, found a reassociated index reference. Phew. */
+  }
+  return 0;  /* Failure. */
+}
+
 /* XLOAD forwarding. */
 TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
 {
   IRRef xref = fins->op1;
+  IRIns *xr = IR(xref);
   IRRef lim = xref;  /* Search limit. */
   IRRef ref;
 
@@ -614,9 +676,10 @@ TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
 
   /* Search for conflicting stores. */
   ref = J->chain[IR_XSTORE];
+retry:
   while (ref > xref) {
     IRIns *store = IR(ref);
-    switch (aa_xref(J, fins, store)) {
+    switch (aa_xref(J, xr, fins, store)) {
     case ALIAS_NO:   break;  /* Continue searching. */
     case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
     case ALIAS_MUST: return store->op2;  /* Store forwarding. */
@@ -629,9 +692,20 @@ cselim:
   ref = J->chain[IR_XLOAD];
   while (ref > lim) {
     /* CSE for XLOAD depends on the type, but not on the IRXLOAD_* flags. */
-    if (IR(ref)->op1 == fins->op1 && irt_sametype(IR(ref)->t, fins->t))
+    if (IR(ref)->op1 == xref && irt_sametype(IR(ref)->t, fins->t))
       return ref;
     ref = IR(ref)->prev;
+  }
+
+  /* Reassociate XLOAD across PHIs to handle a[i-1] forwarding case. */
+  if (!(fins->op2 & IRXLOAD_READONLY) && J->chain[IR_LOOP] &&
+      xref == fins->op1 && (xref = reassoc_xref(J, xr)) != 0) {
+    ref = J->chain[IR_XSTORE];
+    while (ref > lim)  /* Skip stores that have already been checked. */
+      ref = IR(ref)->prev;
+    lim = xref;
+    xr = IR(xref);
+    goto retry;  /* Retry with the reassociated reference. */
   }
   return lj_ir_emit(J);
 }
@@ -640,12 +714,13 @@ cselim:
 TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
 {
   IRRef xref = fins->op1;
+  IRIns *xr = IR(xref);
   IRRef val = fins->op2;  /* Stored value reference. */
   IRRef1 *refp = &J->chain[IR_XSTORE];
   IRRef ref = *refp;
   while (ref > xref) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
-    switch (aa_xref(J, fins, store)) {
+    switch (aa_xref(J, xr, fins, store)) {
     case ALIAS_NO:
       break;  /* Continue searching. */
     case ALIAS_MAY:
