@@ -280,7 +280,7 @@ local function formatk(tr, idx)
   elseif tn == "table" then
     s = format("{%p}", k)
   elseif tn == "userdata" then
-    if t == 11 then
+    if t == 12 then
       s = format("userdata:%p", k)
     else
       s = format("[%p]", k)
