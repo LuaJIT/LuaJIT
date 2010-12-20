@@ -2056,7 +2056,8 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
-  if (!asm_isk32(as, ir->op2, &k) || irt_isi16(ir->t) || irt_isu16(ir->t)) {
+  if (irt_isi16(ir->t) || irt_isu16(ir->t) || irt_isnum(ir->t) ||
+      !asm_isk32(as, ir->op2, &k)) {
     RegSet allow8 = irt_isnum(ir->t) ? RSET_FPR :
 		    (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = osrc = ra_alloc1(as, ir->op2, allow8);
