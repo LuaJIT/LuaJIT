@@ -37,10 +37,22 @@ typedef enum {
 
 /* -- ALOAD/HLOAD forwarding and ASTORE/HSTORE elimination ---------------- */
 
+/* Simplified escape analysis: check for intervening stores. */
+static AliasRet aa_escape(jit_State *J, IRIns *ir, IRIns *stop)
+{
+  IRRef ref = ir - J->cur.ir;  /* The reference that might be stored. */
+  for (ir++; ir < stop; ir++)
+    if (ir->op2 == ref &&
+	(ir->o == IR_ASTORE || ir->o == IR_HSTORE ||
+	 ir->o == IR_USTORE || ir->o == IR_FSTORE))
+      return ALIAS_MAY;  /* Reference was stored and might alias. */
+  return ALIAS_NO;  /* Reference was not stored. */
+}
+
 /* Alias analysis for two different table references. */
 static AliasRet aa_table(jit_State *J, IRRef ta, IRRef tb)
 {
-  IRIns *ir, *taba = IR(ta), *tabb = IR(tb);
+  IRIns *taba = IR(ta), *tabb = IR(tb);
   int newa, newb;
   lua_assert(ta != tb);
   lua_assert(irt_istab(taba->t) && irt_istab(tabb->t));
@@ -50,21 +62,11 @@ static AliasRet aa_table(jit_State *J, IRRef ta, IRRef tb)
   if (newa && newb)
     return ALIAS_NO;  /* Two different allocations never alias. */
   if (newb) {  /* At least one allocation? */
-    IRRef tmp = ta; ta = tb; tb = tmp;
+    IRIns *tmp = taba; taba = tabb; tabb = tmp;
   } else if (!newa) {
     return ALIAS_MAY;  /* Anything else: we just don't know. */
   }
-  /* Now ta holds the allocation, tb the other table reference.
-  ** The allocation might be stored and reloaded as tb. So perform a
-  ** simplified escape analysis: check for intervening stores which have
-  ** the allocation as the right operand.
-  */
-  for (ir = IR(ta+1); ir < IR(tb); ir++)
-    if (ir->op2 == ta &&
-	(ir->o == IR_ASTORE || ir->o == IR_HSTORE ||
-	 ir->o == IR_USTORE || ir->o == IR_FSTORE))
-      return ALIAS_MAY;  /* Allocation was stored and might alias. */
-  return ALIAS_NO;  /* Allocation doesn't alias the other reference. */
+  return aa_escape(J, taba, tabb);
 }
 
 /* Alias analysis for array and hash access using key-based disambiguation. */
@@ -525,6 +527,33 @@ doemit:
 
 /* -- XLOAD forwarding and XSTORE elimination ----------------------------- */
 
+/* Find cdata allocation for a reference (if any). */
+static IRIns *aa_findcnew(jit_State *J, IRIns *ir)
+{
+  while (ir->o == IR_ADD) {
+    if (!irref_isk(ir->op1)) {
+      IRIns *ir1 = aa_findcnew(J, IR(ir->op1));  /* Left-recursion. */
+      if (ir1) return ir1;
+    }
+    if (irref_isk(ir->op2)) return NULL;
+    ir = IR(ir->op2);  /* Flatten right-recursion. */
+  }
+  return ir->o == IR_CNEW ? ir : NULL;
+}
+
+/* Alias analysis for two cdata allocations. */
+static AliasRet aa_cnew(jit_State *J, IRIns *refa, IRIns *refb)
+{
+  IRIns *cnewa = aa_findcnew(J, refa);
+  IRIns *cnewb = aa_findcnew(J, refb);
+  if (cnewa == cnewb)
+    return ALIAS_MAY;  /* Same allocation or neither is an allocation. */
+  if (cnewa && cnewb)
+    return ALIAS_NO;  /* Two different allocations never alias. */
+  if (cnewb) { cnewa = cnewb; refb = refa; }
+  return aa_escape(J, cnewa, refb);
+}
+
 /* Alias analysis for XLOAD/XSTORE. */
 static AliasRet aa_xref(jit_State *J, IRIns *xa, IRIns *xb)
 {
@@ -570,8 +599,7 @@ static AliasRet aa_xref(jit_State *J, IRIns *xa, IRIns *xb)
     return ALIAS_MAY;
   }
   /* NYI: structural disambiguation. */
-  /* NYI: disambiguate new allocations. */
-  return ALIAS_MAY;
+  return aa_cnew(J, basea, baseb);  /* Try to disambiguate allocations. */
 }
 
 /* XLOAD forwarding. */
