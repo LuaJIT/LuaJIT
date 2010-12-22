@@ -40,7 +40,7 @@ typedef enum {
 /* Simplified escape analysis: check for intervening stores. */
 static AliasRet aa_escape(jit_State *J, IRIns *ir, IRIns *stop)
 {
-  IRRef ref = ir - J->cur.ir;  /* The reference that might be stored. */
+  IRRef ref = (IRRef)(ir - J->cur.ir);  /* The ref that might be stored. */
   for (ir++; ir < stop; ir++)
     if (ir->op2 == ref &&
 	(ir->o == IR_ASTORE || ir->o == IR_HSTORE ||

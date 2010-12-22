@@ -372,7 +372,7 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
       idx = emitir(IRT(IR_TOINT, IRT_INTP), idx, IRTOINT_ANY);
 #endif
     if (ctype_ispointer(ct->info)) {
-      ptrdiff_t sz = (ptrdiff_t)lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
+      CTSize sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
       idx = crec_reassoc_ofs(J, idx, &ofs, sz);
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
