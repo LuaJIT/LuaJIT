@@ -109,7 +109,7 @@ LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
 /* Forward declaration. */
 static int lj_cf_ffi_new(lua_State *L);
 
-LJLIB_CF(ffi_meta___call)
+LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
 {
   GCcdata *cd = ffi_checkcdata(L, 1);
   if (cd->typeid == CTID_CTYPEID)
@@ -163,7 +163,7 @@ LJLIB_CF(ffi_cdef)
   return 0;
 }
 
-LJLIB_CF(ffi_new)
+LJLIB_CF(ffi_new)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);
   CTypeID id = ffi_checkctype(L, cts);

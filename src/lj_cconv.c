@@ -693,7 +693,7 @@ static void cconv_struct_init(CTState *cts, CType *d, CTSize sz, uint8_t *dp,
 ** This is true if an aggregate is to be initialized with a value.
 ** Valarrays are treated as values here so ct_tv handles (V|C, I|F).
 */
-static int cconv_multi_init(CTState *cts, CType *d, TValue *o)
+int lj_cconv_multi_init(CTState *cts, CType *d, TValue *o)
 {
   if (!(ctype_isrefarray(d->info) || ctype_isstruct(d->info)))
     return 0;  /* Destination is not an aggregate. */
@@ -713,7 +713,7 @@ void lj_cconv_ct_init(CTState *cts, CType *d, CTSize sz,
 {
   if (len == 0)
     memset(dp, 0, sz);
-  else if (len == 1 && !cconv_multi_init(cts, d, o))
+  else if (len == 1 && !lj_cconv_multi_init(cts, d, o))
     lj_cconv_ct_tv(cts, d, dp, o, 0);
   else if (ctype_isarray(d->info))  /* Also handles valarray init with len>1. */
     cconv_array_init(cts, d, sz, dp, o, len);
