@@ -3801,8 +3801,11 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       break;
     /* Non-constant shift counts need to be in RID_ECX. */
     case IR_BSHL: case IR_BSHR: case IR_BSAR: case IR_BROL: case IR_BROR:
-      if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r))
+      if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r)) {
 	IR(ir->op2)->r = REGSP_HINT(RID_ECX);
+	if (inloop)
+	  rset_set(as->modset, RID_ECX);
+      }
       break;
     /* Do not propagate hints across type conversions. */
     case IR_TONUM: case IR_TOINT: case IR_TOBIT:
