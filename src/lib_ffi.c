@@ -74,6 +74,41 @@ static void *ffi_checkptr(lua_State *L, int narg, CTypeID id)
   return p;
 }
 
+typedef struct FFIArith {
+  uint8_t *p[2];
+  CType *ct[2];
+} FFIArith;
+
+/* Check arguments for arithmetic metamethods. */
+static void ffi_checkarith(lua_State *L, FFIArith *fa)
+{
+  CTState *cts = ctype_cts(L);
+  TValue *o = L->base;
+  MSize i;
+  if (o+1 >= L->top)
+    lj_err_argt(L, 1, LUA_TCDATA);
+  for (i = 0; i < 2; i++, o++) {
+    if (tviscdata(o)) {
+      GCcdata *cd = cdataV(o);
+      CTypeID id = (CTypeID)cd->typeid;
+      CType *ct = ctype_get(cts, id);
+      uint8_t *p = (uint8_t *)cdataptr(cd);
+      if (ctype_isref(ct->info)) {
+	lua_assert(ct->size == CTSIZE_PTR);
+	p = *(uint8_t **)p;
+	id = ctype_cid(ct->info);
+      }
+      fa->ct[i] = ctype_raw(cts, id);
+      fa->p[i] = p;
+    } else if (tvisnum(o)) {
+      fa->ct[i] = ctype_get(cts, CTID_DOUBLE);
+      fa->p[i] = (uint8_t *)&o->n;
+    } else {
+      lj_err_optype(L, o, LJ_ERR_OPARITH);
+    }
+  }
+}
+
 /* -- C type metamethods -------------------------------------------------- */
 
 #define LJLIB_MODULE_ffi_meta
@@ -116,6 +151,81 @@ LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
     return lj_cf_ffi_new(L);
   lj_err_caller(L, LJ_ERR_FFI_NYICALL);
   return 0;  /* unreachable */
+}
+
+/* Pointer arithmetic. */
+static int ffi_arith_ptr(lua_State *L, FFIArith *fa, int sub)
+{
+  CTState *cts = ctype_cts(L);
+  CType *ctp = fa->ct[0];
+  uint8_t *pp = fa->p[0];
+  ptrdiff_t idx;
+  CTSize sz;
+  CTypeID id;
+  GCcdata *cd;
+  if (ctype_isptr(ctp->info) || ctype_isrefarray(ctp->info)) {
+    if (sub &&
+	(ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
+      /* Pointer difference. */
+      intptr_t diff;
+      if (!lj_cconv_compatptr(cts, ctp, fa->ct[1], CCF_IGNQUAL))
+	lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
+      sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
+      if (sz == 0 || sz == CTSIZE_INVALID)
+	lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
+      if (ctype_isptr(ctp->info))
+	pp = (uint8_t *)cdata_getptr(pp, ctp->size);
+      if (ctype_isptr(fa->ct[1]->info))
+	fa->p[1] = (uint8_t *)cdata_getptr(fa->p[1], fa->ct[1]->size);
+      diff = ((intptr_t)pp - (intptr_t)fa->p[1]) / (int32_t)sz;
+      /* All valid pointer differences on x64 are in (-2^47, +2^47),
+      ** which fits into a double without loss of precision.
+      */
+      setnumV(L->top-1, (lua_Number)diff);
+      return 1;
+    }
+    lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[1],
+		   (uint8_t *)&idx, fa->p[1], 0);
+    if (sub) idx = -idx;
+  } else if (!sub &&
+      (ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
+    /* Swap pointer and index. */
+    ctp = fa->ct[1]; pp = fa->p[1];
+    lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[0],
+		   (uint8_t *)&idx, fa->p[0], 0);
+  } else {
+    return 0;
+  }
+  sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
+  if (sz == CTSIZE_INVALID)
+    lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
+  if (ctype_isptr(ctp->info))
+    pp = (uint8_t *)cdata_getptr(pp, ctp->size);
+  pp += idx*(int32_t)sz;  /* Compute pointer + index. */
+  id = lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(ctp->info)),
+		       CTSIZE_PTR);
+  cd = lj_cdata_new(cts, id, CTSIZE_PTR);
+  *(uint8_t **)cdataptr(cd) = pp;
+  setcdataV(L, L->top-1, cd);
+  return 1;
+}
+
+LJLIB_CF(ffi_meta___add)
+{
+  FFIArith fa;
+  ffi_checkarith(L, &fa);
+  if (!ffi_arith_ptr(L, &fa, 0))
+    lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
+  return 1;
+}
+
+LJLIB_CF(ffi_meta___sub)
+{
+  FFIArith fa;
+  ffi_checkarith(L, &fa);
+  if (!ffi_arith_ptr(L, &fa, 1))
+    lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
+  return 1;
 }
 
 LJLIB_CF(ffi_meta___tostring)

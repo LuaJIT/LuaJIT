@@ -63,7 +63,7 @@ static CType *cconv_childqual(CTState *cts, CType *ct, CTInfo *qual)
 /* Check for compatible types when converting to a pointer.
 ** Note: these checks are more relaxed than what C99 mandates.
 */
-static int cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags)
+int lj_cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags)
 {
   if (!((flags & CCF_CAST) || d == s)) {
     CTInfo dqual = 0, squal = 0;
@@ -73,7 +73,7 @@ static int cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags)
     if ((flags & CCF_SAME)) {
       if (dqual != squal)
 	return 0;  /* Different qualifiers. */
-    } else {
+    } else if (!(flags & CCF_IGNQUAL)) {
       if ((dqual & squal) != squal)
 	return 0;  /* Discarded qualifiers. */
       if (ctype_isvoid(d->info) || ctype_isvoid(s->info))
@@ -87,7 +87,7 @@ static int cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags)
 	return 0;  /* Different numeric types. */
     } else if (ctype_ispointer(d->info)) {
       /* Check child types for compatibility. */
-      return cconv_compatptr(cts, d, s, flags|CCF_SAME);
+      return lj_cconv_compatptr(cts, d, s, flags|CCF_SAME);
     } else if (ctype_isstruct(d->info)) {
       if (d != s)
 	return 0;  /* Must be exact same type for struct/union. */
@@ -339,20 +339,20 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
     goto conv_I_F;
 
   case CCX(P, P):
-    if (!cconv_compatptr(cts, d, s, flags)) goto err_conv;
+    if (!lj_cconv_compatptr(cts, d, s, flags)) goto err_conv;
     cdata_setptr(dp, dsize, cdata_getptr(sp, ssize));
     break;
 
   case CCX(P, A):
   case CCX(P, S):
-    if (!cconv_compatptr(cts, d, s, flags)) goto err_conv;
+    if (!lj_cconv_compatptr(cts, d, s, flags)) goto err_conv;
     cdata_setptr(dp, dsize, sp);
     break;
 
   /* Destination is an array. */
   case CCX(A, A):
     if ((flags & CCF_CAST) || (d->info & CTF_VLA) || d->size != s->size ||
-	d->size == CTSIZE_INVALID || !cconv_compatptr(cts, d, s, flags))
+	d->size == CTSIZE_INVALID || !lj_cconv_compatptr(cts, d, s, flags))
       goto err_conv;
     goto copyval;
 
