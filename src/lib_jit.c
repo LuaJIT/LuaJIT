@@ -371,7 +371,7 @@ LJLIB_CF(jit_util_traceexitstub)
   ExitNo exitno = (ExitNo)lj_lib_checkint(L, 1);
   jit_State *J = L2J(L);
   if (exitno < EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR) {
-    setnumV(L->top-1, cast_num((uintptr_t)exitstub_addr(J, exitno)));
+    setnumV(L->top-1, cast_num((intptr_t)exitstub_addr(J, exitno)));
     return 1;
   }
   return 0;
