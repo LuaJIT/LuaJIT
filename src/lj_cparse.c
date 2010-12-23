@@ -164,7 +164,7 @@ static CPToken cp_integer(CPState *cp)
     do {
       n = n*10 + (cp->c - '0');
     } while (lj_char_isdigit(cp_get(cp)));
-  } else if (cp_get(cp) == 'x') {  /* Hexadeximal. */
+  } else if ((cp_get(cp)& ~0x20) == 'X') {  /* Hexadecimal. */
     if (!lj_char_isxdigit(cp_get(cp)))
       cp_err(cp, LJ_ERR_XNUMBER);
     do {
