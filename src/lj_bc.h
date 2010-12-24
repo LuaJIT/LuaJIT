@@ -121,6 +121,7 @@
   \
   /* Constant ops. */ \
   _(KSTR,	dst,	___,	str,	___) \
+  _(KCDATA,	dst,	___,	cdata,	___) \
   _(KSHORT,	dst,	___,	lits,	___) \
   _(KNUM,	dst,	___,	num,	___) \
   _(KPRI,	dst,	___,	pri,	___) \
@@ -234,7 +235,7 @@ enum {
 /* Bytecode operand modes. ORDER BCMode */
 typedef enum {
   BCMnone, BCMdst, BCMbase, BCMvar, BCMrbase, BCMuv,  /* Mode A must be <= 7 */
-  BCMlit, BCMlits, BCMpri, BCMnum, BCMstr, BCMtab, BCMfunc, BCMjump,
+  BCMlit, BCMlits, BCMpri, BCMnum, BCMstr, BCMtab, BCMfunc, BCMjump, BCMcdata,
   BCM_max
 } BCMode;
 #define BCM___		BCMnone

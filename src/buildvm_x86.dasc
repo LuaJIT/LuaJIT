@@ -3795,6 +3795,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov [BASE+RA*8], RD
     |  ins_next
     break;
+  case BC_KCDATA:
+#if LJ_HASFFI
+    |  ins_AND	// RA = dst, RD = cdata const (~)
+    |  mov RD, [KBASE+RD*4]
+    |  mov dword [BASE+RA*8+4], LJ_TCDATA
+    |  mov [BASE+RA*8], RD
+    |  ins_next
+#endif
+    break;
   case BC_KSHORT:
     |  ins_AD	// RA = dst, RD = signed int16 literal
     if (sse) {

@@ -1982,6 +1982,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_KSTR:
     dasm_put(Dst, 11907, LJ_TSTR);
     break;
+  case BC_KCDATA:
+#if LJ_HASFFI
+    dasm_put(Dst, 11907, LJ_TCDATA);
+#endif
+    break;
   case BC_KSHORT:
     if (sse) {
       dasm_put(Dst, 11940);

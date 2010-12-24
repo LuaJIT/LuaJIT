@@ -45,6 +45,15 @@ static LJ_AINLINE GCcdata *lj_cdata_new(CTState *cts, CTypeID id, CTSize sz)
   return cd;
 }
 
+/* Variant which works without a valid CTState. */
+static LJ_AINLINE GCcdata *lj_cdata_new_(lua_State *L, CTypeID id, CTSize sz)
+{
+  GCcdata *cd = (GCcdata *)lj_mem_newgco(L, sizeof(GCcdata) + sz);
+  cd->gct = ~LJ_TCDATA;
+  cd->typeid = id;
+  return cd;
+}
+
 LJ_FUNC GCcdata *lj_cdata_newref(CTState *cts, const void *pp, CTypeID id);
 LJ_FUNC GCcdata *lj_cdata_newv(CTState *cts, CTypeID id, CTSize sz,
 			       CTSize align);

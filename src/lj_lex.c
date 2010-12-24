@@ -13,6 +13,12 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#if LJ_HASFFI
+#include "lj_tab.h"
+#include "lj_ctype.h"
+#include "lj_cdata.h"
+#include "lualib.h"
+#endif
 #include "lj_lex.h"
 #include "lj_parse.h"
 #include "lj_char.h"
@@ -77,7 +83,64 @@ static void inclinenumber(LexState *ls)
 
 /* -- Scanner for terminals ----------------------------------------------- */
 
-static void read_numeral(LexState *ls, TValue *tv)
+#if LJ_HASFFI
+/* Load FFI library on-demand. Needed if we create cdata objects. */
+static void lex_loadffi(lua_State *L)
+{
+  cTValue *tmp;
+  luaopen_ffi(L);
+  tmp = lj_tab_getstr(tabV(registry(L)), lj_str_newlit(L, "_LOADED"));
+  if (tmp && tvistab(tmp)) {
+    GCtab *t = tabV(tmp);
+    copyTV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "ffi")), L->top-1);
+    lj_gc_anybarriert(L, t);
+  }
+  L->top--;
+}
+
+/* Parse 64 bit integer. */
+static int lex_number64(LexState *ls, TValue *tv)
+{
+  uint64_t n = 0;
+  uint8_t *p = (uint8_t *)ls->sb.buf;
+  CTypeID id = CTID_INT64;
+  GCcdata *cd;
+  int numl = 0;
+  if (p[0] == '0' && (p[1] & ~0x20) == 'X') {  /* Hexadecimal. */
+    p += 2;
+    if (!lj_char_isxdigit(*p)) return 0;
+    do {
+      n = n*16 + (*p & 15);
+      if (!lj_char_isdigit(*p)) n += 9;
+      p++;
+    } while (lj_char_isxdigit(*p));
+  } else {  /* Decimal. */
+    if (!lj_char_isdigit(*p)) return 0;
+    do {
+      n = n*10 + (*p - '0');
+      p++;
+    } while (lj_char_isdigit(*p));
+  }
+  for (;;) {  /* Parse suffixes. */
+    if ((*p & ~0x20) == 'U')
+      id = CTID_UINT64;
+    else if ((*p & ~0x20) == 'L')
+      numl++;
+    else
+      break;
+    p++;
+  }
+  if (numl != 2 || *p != '\0') return 0;
+  /* Return cdata holding a 64 bit integer. */
+  cd = lj_cdata_new_(ls->L, id, 8);
+  *(uint64_t *)cdataptr(cd) = n;
+  lj_parse_keepcdata(ls, tv, cd);
+  return 1;  /* Ok. */
+}
+#endif
+
+/* Parse a number literal. */
+static void lex_number(LexState *ls, TValue *tv)
 {
   int c;
   lua_assert(lj_char_isdigit(ls->current));
@@ -87,9 +150,31 @@ static void read_numeral(LexState *ls, TValue *tv)
   } while (lj_char_isident(ls->current) || ls->current == '.' ||
 	   ((ls->current == '-' || ls->current == '+') &&
 	    ((c & ~0x20) == 'E' || (c & ~0x20) == 'P')));
+#if LJ_HASFFI
+  c &= ~0x20;
+  if ((c == 'I' || c == 'L' || c == 'U') && !ctype_ctsG(G(ls->L)))
+    lex_loadffi(ls->L);
+  if (c == 'I')  /* Parse imaginary part of complex number. */
+    ls->sb.n--;
+#endif
   save(ls, '\0');
-  if (!lj_str_numconv(ls->sb.buf, tv))
-    lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
+#if LJ_HASFFI
+  if ((c == 'L' || c == 'U') && lex_number64(ls, tv)) {  /* Parse 64 bit int. */
+    return;
+  } else
+#endif
+  if (lj_str_numconv(ls->sb.buf, tv)) {
+#if LJ_HASFFI
+    if (c == 'I') {  /* Return cdata holding a complex number. */
+      GCcdata *cd = lj_cdata_new_(ls->L, CTID_COMPLEX_DOUBLE, 2*sizeof(double));
+      ((double *)cdataptr(cd))[0] = 0;
+      ((double *)cdataptr(cd))[1] = tv->n;
+      lj_parse_keepcdata(ls, tv, cd);
+    }
+#endif
+    return;
+  }
+  lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
 }
 
 static int skip_sep(LexState *ls)
@@ -224,7 +309,7 @@ static int llex(LexState *ls, TValue *tv)
     if (lj_char_isident(ls->current)) {
       GCstr *s;
       if (lj_char_isdigit(ls->current)) {  /* Numeric literal. */
-	read_numeral(ls, tv);
+	lex_number(ls, tv);
 	return TK_number;
       }
       /* Identifier or reserved word. */
@@ -306,7 +391,7 @@ static int llex(LexState *ls, TValue *tv)
       } else if (!lj_char_isdigit(ls->current)) {
 	return '.';
       } else {
-	read_numeral(ls, tv);
+	lex_number(ls, tv);
 	return TK_number;
       }
     case END_OF_STREAM:

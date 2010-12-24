@@ -2430,6 +2430,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  evstddx TMP0, BASE, RA
     |  ins_next2
     break;
+  case BC_KCDATA:
+#if LJ_HASFFI
+    |  // RA = dst*8, RD = cdata_const*8 (~)
+    |  ins_next1
+    |  srwi TMP1, RD, 1
+    |  subfic TMP1, TMP1, -4
+    |  lwzx TMP0, KBASE, TMP1		// KBASE-4-cdata_const*4
+    |  li TMP2, LJ_TCDATA
+    |  evmergelo TMP0, TMP2, TMP0
+    |  evstddx TMP0, BASE, RA
+    |  ins_next2
+#endif
+    break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
     |  srwi TMP1, RD, 3

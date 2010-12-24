@@ -474,7 +474,8 @@ LUALIB_API int luaopen_ffi(lua_State *L)
   lj_ctype_init(L);
   LJ_LIB_REG_(L, NULL, ffi_meta);
   /* NOBARRIER: basemt is a GC root. */
-  setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top-1)));
+  L->top--;
+  setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top)));
   lua_pushliteral(L, LJ_OS_NAME);
   lua_pushliteral(L, LJ_ARCH_NAME);
   LJ_LIB_REG_(L, NULL, ffi);  /* Note: no global "ffi" created! */
