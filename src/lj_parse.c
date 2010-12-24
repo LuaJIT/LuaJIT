@@ -61,12 +61,12 @@ typedef struct ExpDesc {
 } ExpDesc;
 
 /* Macros for expressions. */
-#define expr_hasnojump(e)	((e)->t != (e)->f)
+#define expr_hasjump(e)	((e)->t != (e)->f)
 
 #define expr_isk(e)		((e)->k <= VKLAST)
-#define expr_isk_nojump(e)	(expr_isk(e) && !expr_hasnojump(e))
+#define expr_isk_nojump(e)	(expr_isk(e) && !expr_hasjump(e))
 #define expr_isnumk(e)		((e)->k == VKNUM)
-#define expr_isnumk_nojump(e)	(expr_isnumk(e) && !expr_hasnojump(e))
+#define expr_isnumk_nojump(e)	(expr_isnumk(e) && !expr_hasjump(e))
 #define expr_isstrk(e)		((e)->k == VKSTR)
 
 #define expr_numV(e)		check_exp(expr_isnumk((e)), numV(&(e)->u.nval))
@@ -500,7 +500,7 @@ static void expr_toreg(FuncState *fs, ExpDesc *e, BCReg reg)
   expr_toreg_nobranch(fs, e, reg);
   if (e->k == VJMP)
     jmp_append(fs, &e->t, e->u.s.info);  /* Add it to the true jump list. */
-  if (expr_hasnojump(e)) {  /* Discharge expression with branches. */
+  if (expr_hasjump(e)) {  /* Discharge expression with branches. */
     BCPos jend, jfalse = NO_JMP, jtrue = NO_JMP;
     if (jmp_novalue(fs, e->t) || jmp_novalue(fs, e->f)) {
       BCPos jval = (e->k == VJMP) ? NO_JMP : bcemit_jmp(fs);
@@ -533,7 +533,7 @@ static BCReg expr_toanyreg(FuncState *fs, ExpDesc *e)
 {
   expr_discharge(fs, e);
   if (e->k == VNONRELOC) {
-    if (!expr_hasnojump(e)) return e->u.s.info;  /* Already in a register. */
+    if (!expr_hasjump(e)) return e->u.s.info;  /* Already in a register. */
     if (e->u.s.info >= fs->nactvar) {
       expr_toreg(fs, e, e->u.s.info);  /* Discharge to temp. register. */
       return e->u.s.info;
@@ -546,7 +546,7 @@ static BCReg expr_toanyreg(FuncState *fs, ExpDesc *e)
 /* Partially discharge expression to a value. */
 static void expr_toval(FuncState *fs, ExpDesc *e)
 {
-  if (expr_hasnojump(e))
+  if (expr_hasjump(e))
     expr_toanyreg(fs, e);
   else
     expr_discharge(fs, e);
@@ -671,7 +671,7 @@ static void bcemit_branch_t(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     invertcond(fs, e), pc = e->u.s.info;
-  else if (e->k == VKFALSE && !expr_hasnojump(e))
+  else if (e->k == VKFALSE && !expr_hasjump(e))
     pc = bcemit_jmp(fs);  /* Always jump. */
   else
     pc = bcemit_branch(fs, e, 0);
@@ -689,7 +689,7 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     pc = e->u.s.info;
-  else if (e->k == VKTRUE && !expr_hasnojump(e))
+  else if (e->k == VKTRUE && !expr_hasjump(e))
     pc = bcemit_jmp(fs);  /* Always jump. */
   else
     pc = bcemit_branch(fs, e, 1);
