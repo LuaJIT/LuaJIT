@@ -22,7 +22,7 @@ lib_debug.o: lib_debug.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h \
  lj_def.h lj_arch.h lj_err.h lj_errmsg.h lj_lib.h lj_libdef.h
 lib_ffi.o: lib_ffi.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
  lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_ctype.h lj_cparse.h \
- lj_cdata.h lj_cconv.h lj_lib.h lj_libdef.h
+ lj_cdata.h lj_cconv.h lj_ff.h lj_ffdef.h lj_lib.h lj_libdef.h
 lib_init.o: lib_init.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h
 lib_io.o: lib_io.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
  lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_ff.h lj_ffdef.h \

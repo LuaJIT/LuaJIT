@@ -66,6 +66,8 @@ LJ_FUNC void lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp);
 LJ_FUNC void lj_cdata_set(CTState *cts, CType *d, uint8_t *dp, TValue *o,
 			  CTInfo qual);
 
+LJ_FUNC uint64_t lj_cdata_powi64(uint64_t x, uint64_t k, int isunsigned);
+
 #endif
 
 #endif

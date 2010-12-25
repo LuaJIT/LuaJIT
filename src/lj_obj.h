@@ -738,6 +738,8 @@ define_setV(setudataV, GCudata, LJ_TUDATA)
 
 #define setnumV(o, x)		((o)->n = (x))
 #define setnanV(o)		((o)->u64 = U64x(fff80000,00000000))
+#define setpinfV(o)		((o)->u64 = U64x(7ff00000,00000000))
+#define setminfV(o)		((o)->u64 = U64x(fff00000,00000000))
 #define setintV(o, i)		((o)->n = cast_num((int32_t)(i)))
 
 /* Copy tagged values. */

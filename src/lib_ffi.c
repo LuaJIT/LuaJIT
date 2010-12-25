@@ -21,6 +21,7 @@
 #include "lj_cparse.h"
 #include "lj_cdata.h"
 #include "lj_cconv.h"
+#include "lj_ff.h"
 #include "lj_lib.h"
 
 /* -- C type checks ------------------------------------------------------- */
@@ -80,9 +81,8 @@ typedef struct FFIArith {
 } FFIArith;
 
 /* Check arguments for arithmetic metamethods. */
-static void ffi_checkarith(lua_State *L, FFIArith *fa)
+static void ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
 {
-  CTState *cts = ctype_cts(L);
   TValue *o = L->base;
   MSize i;
   if (o+1 >= L->top)
@@ -154,17 +154,18 @@ LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
 }
 
 /* Pointer arithmetic. */
-static int ffi_arith_ptr(lua_State *L, FFIArith *fa, int sub)
+static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
 {
-  CTState *cts = ctype_cts(L);
   CType *ctp = fa->ct[0];
   uint8_t *pp = fa->p[0];
   ptrdiff_t idx;
   CTSize sz;
   CTypeID id;
   GCcdata *cd;
+  if (!(mm == MM_add || mm == MM_sub))
+    return 0;
   if (ctype_isptr(ctp->info) || ctype_isrefarray(ctp->info)) {
-    if (sub &&
+    if (mm == MM_sub &&
 	(ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
       /* Pointer difference. */
       intptr_t diff;
@@ -184,11 +185,13 @@ static int ffi_arith_ptr(lua_State *L, FFIArith *fa, int sub)
       setnumV(L->top-1, (lua_Number)diff);
       return 1;
     }
+    if (!ctype_isnum(fa->ct[1]->info)) return 0;
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[1],
 		   (uint8_t *)&idx, fa->p[1], 0);
-    if (sub) idx = -idx;
-  } else if (!sub &&
+    if (mm == MM_sub) idx = -idx;
+  } else if (mm == MM_add &&
       (ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
+    if (!ctype_isnum(ctp->info)) return 0;
     /* Swap pointer and index. */
     ctp = fa->ct[1]; pp = fa->p[1];
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[0],
@@ -210,22 +213,114 @@ static int ffi_arith_ptr(lua_State *L, FFIArith *fa, int sub)
   return 1;
 }
 
+/* 64 bit integer arithmetic. */
+static int ffi_arith_int64(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
+{
+  if (ctype_isnum(fa->ct[0]->info) && fa->ct[0]->size <= 8 &&
+      ctype_isnum(fa->ct[1]->info) && fa->ct[1]->size <= 8) {
+    CTypeID id = (((fa->ct[0]->info & CTF_UNSIGNED) && fa->ct[0]->size == 8) ||
+		  ((fa->ct[1]->info & CTF_UNSIGNED) && fa->ct[1]->size == 8)) ?
+		 CTID_UINT64 : CTID_INT64;
+    CType *ct = ctype_get(cts, id);
+    GCcdata *cd;
+    uint64_t u0, u1, *up;
+    lj_cconv_ct_ct(cts, ct, fa->ct[0], (uint8_t *)&u0, fa->p[0], 0);
+    if (mm != MM_unm)
+      lj_cconv_ct_ct(cts, ct, fa->ct[1], (uint8_t *)&u1, fa->p[1], 0);
+    if ((mm == MM_div || mm == MM_mod)) {
+      if (u1 == 0) {  /* Division by zero. */
+	if (u0 == 0)
+	  setnanV(L->top-1);
+	else if (id == CTID_INT64 && (int64_t)u0 < 0)
+	  setminfV(L->top-1);
+	else
+	  setpinfV(L->top-1);
+	return 1;
+      } else if (id == CTID_INT64 && (int64_t)u1 == -1 &&
+		 u0 == U64x(80000000,00000000)) {  /* MIN64 / -1. */
+	if (mm == MM_div) id = CTID_UINT64; else u0 = 0;
+	mm = MM_unm;  /* Result is 0x8000000000000000ULL or 0LL. */
+      }
+    }
+    cd = lj_cdata_new(cts, id, 8);
+    up = (uint64_t *)cdataptr(cd);
+    setcdataV(L, L->top-1, cd);
+    switch (mm) {
+    case MM_add: *up = u0 + u1; break;
+    case MM_sub: *up = u0 - u1; break;
+    case MM_mul: *up = u0 * u1; break;
+    case MM_div:
+      if (id == CTID_INT64)
+	*up = (uint64_t)((int64_t)u0 / (int64_t)u1);
+      else
+	*up = u0 / u1;
+      break;
+    case MM_mod:
+      if (id == CTID_INT64)
+	*up = (uint64_t)((int64_t)u0 % (int64_t)u1);
+      else
+	*up = u0 % u1;
+      break;
+    case MM_pow: *up = lj_cdata_powi64(u0, u1, (id == CTID_UINT64)); break;
+    case MM_unm: *up = -u0; break;
+    default: lua_assert(0); break;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+/* cdata arithmetic. */
+static int ffi_arith(lua_State *L)
+{
+  CTState *cts = ctype_cts(L);
+  FFIArith fa;
+  MMS mm = (MMS)(curr_func(L)->c.ffid - (int)FF_ffi_meta___add + (int)MM_add);
+  ffi_checkarith(L, cts, &fa);
+  if (!ffi_arith_int64(L, cts, &fa, mm) &&
+      !ffi_arith_ptr(L, cts, &fa, mm)) {
+    const char *repr[2];
+    int i;
+    for (i = 0; i < 2; i++)
+      repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, fa.ct[i]), NULL));
+    lj_err_callerv(L, LJ_ERR_FFI_BADARITH, repr[0], repr[1]);
+  }
+  return 1;
+}
+
 LJLIB_CF(ffi_meta___add)
 {
-  FFIArith fa;
-  ffi_checkarith(L, &fa);
-  if (!ffi_arith_ptr(L, &fa, 0))
-    lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
-  return 1;
+  return ffi_arith(L);
 }
 
 LJLIB_CF(ffi_meta___sub)
 {
-  FFIArith fa;
-  ffi_checkarith(L, &fa);
-  if (!ffi_arith_ptr(L, &fa, 1))
-    lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
-  return 1;
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___mul)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___div)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___mod)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___pow)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___unm)
+{
+  return ffi_arith(L);
 }
 
 LJLIB_CF(ffi_meta___tostring)
