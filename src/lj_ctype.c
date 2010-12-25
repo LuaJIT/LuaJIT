@@ -450,8 +450,8 @@ static void ctype_repr(CTRepr *ctr, CTypeID id)
       ctr->needsp = 1;
       break;
     case CT_ARRAY:
-      ctr->needsp = 1;
       if (ctype_isrefarray(info)) {
+	ctr->needsp = 1;
 	if (ptrto) { ptrto = 0; ctype_prepc(ctr, '('); ctype_appc(ctr, ')'); }
 	ctype_appc(ctr, '[');
 	if (size != CTSIZE_INVALID) {
