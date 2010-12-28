@@ -1654,6 +1654,99 @@ static void asm_toi64(ASMState *as, IRIns *ir)
   }
 }
 
+static void asm_conv(ASMState *as, IRIns *ir)
+{
+  IRType st = (IRType)(ir->op2 & 0x1f);
+  int st64 = (st == IRT_I64 || st == IRT_U64 || (LJ_64 && st == IRT_P64));
+  int stfp = (st == IRT_NUM || st == IRT_FLOAT);
+  IRRef lref = ir->op1;
+  lua_assert(irt_type(ir->t) != st);
+  if (irt_isnum(ir->t) || irt_isfloat(ir->t)) {
+    Reg dest = ra_dest(as, ir, RSET_FPR);
+    if (stfp) {  /* FP to FP conversion. */
+      Reg left = asm_fuseload(as, lref, RSET_FPR);
+      emit_mrm(as, st == IRT_NUM ? XO_CVTSD2SS : XO_CVTSS2SD, dest, left);
+      if (left == dest) return;  /* Avoid the XO_XORPS. */
+#if LJ_32
+    } else if (st >= IRT_U32) {
+      /* NYI: 64 bit integer or uint32_t to number conversion. */
+      setintV(&as->J->errinfo, ir->o);
+      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+      return;
+#endif
+    } else {  /* Integer to FP conversion. */
+      Reg left = (LJ_64 && st == IRT_U32) ? ra_allocref(as, lref, RSET_GPR) :
+					    asm_fuseload(as, lref, RSET_GPR);
+      emit_mrm(as, irt_isnum(ir->t) ? XO_CVTSI2SD : XO_CVTSI2SS,
+	       dest|((LJ_64 && (st64 || st == IRT_U32)) ? REX_64 : 0), left);
+    }
+    if (!(as->flags & JIT_F_SPLIT_XMM))
+      emit_rr(as, XO_XORPS, dest, dest);  /* Avoid partial register stall. */
+  } else if (stfp) {  /* FP to integer conversion. */
+    if (irt_isguard(ir->t)) {
+      lua_assert(!irt_is64(ir->t));  /* No support for checked 64 bit conv. */
+      asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
+#if LJ_32
+    } else if (irt_isi64(ir->t) || irt_isu64(ir->t) || irt_isu32(ir->t)) {
+      /* NYI: number to 64 bit integer or uint32_t conversion. */
+      setintV(&as->J->errinfo, ir->o);
+      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+#else
+    } else if (irt_isu64(ir->t)) {
+      /* NYI: number to uint64_t conversion. */
+      setintV(&as->J->errinfo, ir->o);
+      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+#endif
+    } else {
+      Reg dest = ra_dest(as, ir, RSET_GPR);
+      Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
+      x86Op op = st == IRT_NUM ?
+		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
+		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
+      if (LJ_64 && irt_isu32(ir->t))
+	emit_rr(as, XO_MOV, dest, dest);  /* Zero upper 32 bits. */
+      emit_mrm(as, op,
+	       dest|((LJ_64 &&
+		      (irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
+	       left);
+    }
+  } else {  /* Integer to integer conversion. Only need 32/64 bit variants. */
+    if (irt_is64(ir->t)) {
+#if LJ_32
+      /* NYI: conversion to 64 bit integers. */
+      setintV(&as->J->errinfo, ir->o);
+      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+#else
+      Reg dest = ra_dest(as, ir, RSET_GPR);
+      if (st64 || !(ir->op2 & IRCONV_SEXT)) {
+	/* 64/64 bit no-op (cast) or 32 to 64 bit zero extension. */
+	ra_left(as, dest, lref);  /* Do nothing, but may need to move regs. */
+      } else {  /* 32 to 64 bit sign extension. */
+	Reg left = asm_fuseload(as, lref, RSET_GPR);
+	emit_mrm(as, XO_MOVSXd, dest|REX_64, left);
+      }
+#endif
+    } else {
+      Reg dest = ra_dest(as, ir, RSET_GPR);
+      if (st64) {
+#if LJ_32
+	/* NYI: conversion from 64 bit integers. */
+	setintV(&as->J->errinfo, ir->o);
+	lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+#else
+	Reg left = asm_fuseload(as, lref, RSET_GPR);
+	/* This is either a 32 bit reg/reg mov which zeroes the hi-32 bits
+	** or a load of the lower 32 bits from a 64 bit address.
+	*/
+	emit_mrm(as, XO_MOV, dest, left);
+#endif
+      } else {  /* 32/32 bit no-op (cast). */
+	ra_left(as, dest, lref);  /* Do nothing, but may need to move regs. */
+      }
+    }
+  }
+}
+
 static void asm_strto(ASMState *as, IRIns *ir)
 {
   /* Force a spill slot for the destination register (if any). */
@@ -3666,6 +3759,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
     break;
   case IR_TOBIT: asm_tobit(as, ir); break;
   case IR_TOI64: asm_toi64(as, ir); break;
+  case IR_CONV: asm_conv(as, ir); break;
   case IR_TOSTR: asm_tostr(as, ir); break;
   case IR_STRTO: asm_strto(as, ir); break;
 
@@ -3808,7 +3902,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       }
       break;
     /* Do not propagate hints across type conversions. */
-    case IR_TONUM: case IR_TOINT: case IR_TOBIT:
+    case IR_CONV: case IR_TONUM: case IR_TOINT: case IR_TOBIT:
       break;
     default:
       /* Propagate hints across likely 'op reg, imm' or 'op reg'. */

@@ -251,6 +251,11 @@ typedef enum {
   XO_CVTSI2SD =	XO_f20f(2a),
   XO_CVTSD2SI =	XO_f20f(2d),
   XO_CVTTSD2SI=	XO_f20f(2c),
+  XO_CVTSI2SS =	XO_f30f(2a),
+  XO_CVTSS2SI =	XO_f30f(2d),
+  XO_CVTTSS2SI=	XO_f30f(2c),
+  XO_CVTSS2SD =	XO_f30f(5a),
+  XO_CVTSD2SS =	XO_f20f(5a),
   XO_MOVD =	XO_660f(6e),
   XO_MOVDto =	XO_660f(7e),
 

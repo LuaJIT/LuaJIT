@@ -118,6 +118,7 @@
   _(OBAR,	S , ref, ref) \
   \
   /* Type conversions. */ \
+  _(CONV,	N , ref, lit) \
   _(TONUM,	N , ref, ___) \
   _(TOINT,	N , ref, lit) \
   _(TOBIT,	N , ref, ref) \
@@ -217,6 +218,16 @@ IRFLDEF(FLENUM)
 #define IRTOINT_SEXT64		4	/* Convert int32_t to int64_t. */
 #define IRTOINT_TRUNCI64	5	/* Truncate number to int64_t. */
 #define IRTOINT_TOBIT		6	/* Cache only: TOBIT conversion. */
+
+/* CONV mode, stored in op2. Lowest 8 bits is the IRType of the source. */
+#define IRCONV_TRUNC		0x100	/* Truncate number to integer. */
+#define IRCONV_SEXT		0x200	/* Sign-extend integer to integer. */
+#define IRCONV_CSH		10
+/* Number to integer conversion mode. Ordered by strength of the checks. */
+#define IRCONV_TOBIT  (0<<IRCONV_CSH)	/* None. Cache only: TOBIT conv. */
+#define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
+#define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
+#define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
 
 /* C call info for CALL* instructions. */
 typedef struct CCallInfo {

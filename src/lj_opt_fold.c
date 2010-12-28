@@ -771,6 +771,28 @@ LJFOLDF(cse_toint)
   return EMITFOLD;  /* No fallthrough to regular CSE. */
 }
 
+/* Special CSE rule for CONV. */
+LJFOLD(CONV any any)
+LJFOLDF(cse_conv)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
+    IRRef op1 = fins->op1, op2 = (fins->op2 & IRCONV_MODEMASK);
+    uint8_t guard = irt_isguard(fins->t);
+    IRRef ref = J->chain[IR_CONV];
+    while (ref > op1) {
+      IRIns *ir = IR(ref);
+      /* CSE also depends on the target type!
+      ** OTOH commoning with stronger checks is ok, too.
+      */
+      if (ir->op1 == op1 && irt_sametype(ir->t, fins->t) &&
+	  (ir->op2 & IRCONV_MODEMASK) == op2 && irt_isguard(ir->t) >= guard)
+	return ref;
+      ref = ir->prev;
+    }
+  }
+  return EMITFOLD;  /* No fallthrough to regular CSE. */
+}
+
 /* -- Strength reduction of widening -------------------------------------- */
 
 LJFOLD(TOI64 any 3)  /* IRTOINT_ZEXT64 */
