@@ -315,38 +315,24 @@ LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
 
 /* -- IR instruction types ------------------------------------------------ */
 
+/* Map of itypes to non-negative numbers. ORDER LJ_T.
+** LJ_TUPVAL/LJ_TTRACE never appear in a TValue. Use these itypes for
+** IRT_P32 and IRT_P64, which never escape the IR.
+** The various integers are only used in the IR and can only escape to
+** a TValue after implicit or explicit conversion. Their types must be
+** contiguous and next to IRT_NUM (see the typerange macros below).
+*/
+#define IRTDEF(_) \
+  _(NIL) _(FALSE) _(TRUE) _(LIGHTUD) _(STR) _(P32) _(THREAD) \
+  _(PROTO) _(FUNC) _(P64) _(CDATA) _(TAB) _(UDATA) \
+  _(FLOAT) _(NUM) _(I8) _(U8) _(I16) _(U16) _(INT) _(U32) _(I64) _(U64) \
+  /* There is room for 10 more types. */
+
 /* IR result type and flags (8 bit). */
 typedef enum {
-  /* Map of itypes to non-negative numbers. ORDER LJ_T */
-  IRT_NIL,
-  IRT_FALSE,
-  IRT_TRUE,
-  IRT_LIGHTUD,
-  /* GCobj types are from here ... */
-  IRT_STR,
-  IRT_P32,		/* IRT_P32 never escapes the IR (map of LJ_TUPVAL). */
-  IRT_THREAD,
-  IRT_PROTO,
-  IRT_FUNC,
-  IRT_P64,		/* IRT_P64 never escapes the IR (map of LJ_TTRACE). */
-  IRT_CDATA,
-  IRT_TAB,
-  IRT_UDATA,
-  /* ... until here. */
-  IRT_NUM,
-  /* The various integers are only used in the IR and can only escape to
-  ** a TValue after implicit or explicit conversion (TONUM). Their types
-  ** must be contiguous and next to IRT_NUM (see the typerange macros below).
-  */
-  IRT_I8,
-  IRT_U8,
-  IRT_I16,
-  IRT_U16,
-  IRT_INT,
-  IRT_U32,
-  IRT_I64,
-  IRT_U64,
-  /* There is room for 10 more types. */
+#define IRTENUM(name)	IRT_##name,
+IRTDEF(IRTENUM)
+#undef IRTENUM
 
   /* Native pointer type and the corresponding integer type. */
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
@@ -384,6 +370,7 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_islightud(t)	(irt_type(t) == IRT_LIGHTUD)
 #define irt_isstr(t)		(irt_type(t) == IRT_STR)
 #define irt_istab(t)		(irt_type(t) == IRT_TAB)
+#define irt_isfloat(t)		(irt_type(t) == IRT_FLOAT)
 #define irt_isnum(t)		(irt_type(t) == IRT_NUM)
 #define irt_isint(t)		(irt_type(t) == IRT_INT)
 #define irt_isi8(t)		(irt_type(t) == IRT_I8)
@@ -391,6 +378,8 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isi16(t)		(irt_type(t) == IRT_I16)
 #define irt_isu16(t)		(irt_type(t) == IRT_U16)
 #define irt_isu32(t)		(irt_type(t) == IRT_U32)
+#define irt_isi64(t)		(irt_type(t) == IRT_I64)
+#define irt_isu64(t)		(irt_type(t) == IRT_U64)
 
 #define irt_isinteger(t)	(irt_typerange((t), IRT_I8, IRT_INT))
 #define irt_isgcv(t)		(irt_typerange((t), IRT_STR, IRT_UDATA))
