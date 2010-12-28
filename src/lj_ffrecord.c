@@ -266,6 +266,10 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
 	recff_nyiu(J);  /* Would need an inverted STRTO for this case. */
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
     }
+#if LJ_HASFFI
+  } else if (tref_iscdata(tr)) {
+    recff_nyiu(J);
+#endif
   } else {
     tr = TREF_NIL;
   }

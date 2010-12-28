@@ -273,13 +273,14 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
       goto err_nyi;  /* NYI: specialize to the result. */
     if (t == IRT_CDATA)
       goto err_nyi;  /* NYI: copyval of >64 bit integers. */
-    if ((sinfo & CTF_BOOL) || t == IRT_CDATA)
-    if (t == IRT_U32) lj_trace_err(J, LJ_TRERR_NYICONV);
+    if (t >= IRT_U32)
+      goto err_nyi;  /* NYI: on-trace handling of U32/I64/U64. */
     return emitir(IRT(IR_XLOAD, t), sp, 0);
   } else if (ctype_isptr(sinfo)) {
     IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
     sp = emitir(IRT(IR_XLOAD, t), sp, 0);
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
+    cts->L = J->L;
     sid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);  /* Create ref. */
   } else if (ctype_iscomplex(sinfo)) {
     IRType t = s->size == 2*sizeof(double) ? IRT_NUM : IRT_CDATA;
