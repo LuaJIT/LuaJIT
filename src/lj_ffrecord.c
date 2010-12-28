@@ -127,7 +127,13 @@ static void LJ_FASTCALL recff_assert(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_type(jit_State *J, RecordFFData *rd)
 {
   /* Arguments already specialized. Result is a constant string. Neat, huh? */
-  IRType t = tref_isinteger(J->base[0]) ? IRT_NUM : tref_type(J->base[0]);
+  uint32_t t;
+  if (tvisnum(&rd->argv[0]))
+    t = ~LJ_TNUMX;
+  else if (LJ_64 && tvislightud(&rd->argv[0]))
+    t = ~LJ_TLIGHTUD;
+  else
+    t = ~itype(&rd->argv[0]);
   J->base[0] = lj_ir_kstr(J, strV(&J->fn->c.upvalue[t]));
   UNUSED(rd);
 }
