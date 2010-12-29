@@ -2130,6 +2130,7 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   case IRT_I16: xo = XO_MOVSXw; break;
   case IRT_U16: xo = XO_MOVZXw; break;
   case IRT_NUM: xo = XMM_MOVRM(as); break;
+  case IRT_FLOAT: xo = XO_MOVSS; break;
   default:
     if (LJ_64 && irt_is64(ir->t))
       dest |= REX_64;
@@ -2149,9 +2150,10 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
-  if (irt_isi16(ir->t) || irt_isu16(ir->t) || irt_isnum(ir->t) ||
+  if (irt_isi16(ir->t) || irt_isu16(ir->t) ||
+      irt_isnum(ir->t) || irt_isfloat(ir->t) ||
       !asm_isk32(as, ir->op2, &k)) {
-    RegSet allow8 = irt_isnum(ir->t) ? RSET_FPR :
+    RegSet allow8 = (irt_isnum(ir->t) || irt_isfloat(ir->t)) ? RSET_FPR :
 		    (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = osrc = ra_alloc1(as, ir->op2, allow8);
     if (!LJ_64 && !rset_test(allow8, src)) {  /* Already in wrong register. */
@@ -2171,6 +2173,7 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
     case IRT_I8: case IRT_U8: xo = XO_MOVtob; src |= FORCE_REX; break;
     case IRT_I16: case IRT_U16: xo = XO_MOVtow; break;
     case IRT_NUM: xo = XO_MOVSDto; break;
+    case IRT_FLOAT: xo = XO_MOVSSto; break;
 #if LJ_64
     case IRT_LIGHTUD: lua_assert(0);  /* NYI: mask 64 bit lightuserdata. */
 #endif
