@@ -335,7 +335,8 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
 
   case CCX(P, F):
     if (!(flags & CCF_CAST) || !(flags & CCF_FROMTV)) goto err_conv;
-    dinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
+    /* The signed conversion is cheaper. x64 really has 47 bit pointers. */
+    dinfo = CTINFO(CT_NUM, (LJ_64 && dsize == 8) ? 0 : CTF_UNSIGNED);
     goto conv_I_F;
 
   case CCX(P, P):

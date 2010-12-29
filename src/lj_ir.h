@@ -222,6 +222,7 @@ IRFLDEF(FLENUM)
 /* CONV mode, stored in op2. Lowest 8 bits is the IRType of the source. */
 #define IRCONV_TRUNC		0x100	/* Truncate number to integer. */
 #define IRCONV_SEXT		0x200	/* Sign-extend integer to integer. */
+#define IRCONV_MODEMASK		0x3ff
 #define IRCONV_CSH		10
 /* Number to integer conversion mode. Ordered by strength of the checks. */
 #define IRCONV_TOBIT  (0<<IRCONV_CSH)	/* None. Cache only: TOBIT conv. */
@@ -348,6 +349,7 @@ IRTDEF(IRTENUM)
   /* Native pointer type and the corresponding integer type. */
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
   IRT_INTP = LJ_64 ? IRT_I64 : IRT_INT,
+  IRT_UINTP = LJ_64 ? IRT_U64 : IRT_U32,
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */

@@ -90,8 +90,10 @@ static IRType crec_ct2irt(CType *ct)
 {
   if (LJ_LIKELY(ctype_isnum(ct->info))) {
     if ((ct->info & CTF_FP)) {
-      if (ct->size == sizeof(double))  /* NYI: float IRType. */
+      if (ct->size == sizeof(double))
 	return IRT_NUM;
+      else if (ct->size == sizeof(float))
+	return IRT_FLOAT;
     } else {
       uint32_t b = lj_fls(ct->size);
       if (b <= 3)
@@ -99,16 +101,21 @@ static IRType crec_ct2irt(CType *ct)
     }
   } else if (ctype_isptr(ct->info)) {
     return (LJ_64 && ct->size == 8) ? IRT_P64 : IRT_P32;
+  } else if (ctype_iscomplex(ct->info)) {
+    if (ct->size == 2*sizeof(double))
+      return IRT_NUM;
+    else if (ct->size == 2*sizeof(float))
+      return IRT_FLOAT;
   }
   return IRT_CDATA;
 }
 
 static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
 {
-  CTState *cts = ctype_ctsG(J2G(J));
   CTSize dsize = d->size, ssize = s->size;
   CTInfo dinfo = d->info, sinfo = s->info;
   IRType dt = crec_ct2irt(d);
+  IRType st = crec_ct2irt(s);
 
   if (ctype_type(dinfo) > CT_MAYCONVERT || ctype_type(sinfo) > CT_MAYCONVERT)
     goto err_conv;
@@ -134,90 +141,77 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
   case CCX(I, B):
   case CCX(I, I):
   conv_I_I:
-    lua_assert(ssize >= 4);
-    if (dsize > 8 || ssize > 8) goto err_nyi;
-    if (dsize > ssize)  /* Zero-extend or sign-extend 32 to 64 bit integer. */
-      sp = emitir(IRT(IR_TOI64, dt), sp,
-		  (sinfo&CTF_UNSIGNED) ? IRTOINT_ZEXT64 : IRTOINT_SEXT64);
+    if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
+#if LJ_64
+    /* Sign-extend 32 to 64 bit integer. */
+    if (dsize == 8 && ssize < 8 && !(sinfo & CTF_UNSIGNED))
+      sp = emitir(IRT(IR_CONV, dt), sp, IRT_INT|IRCONV_SEXT);
+    /* All other conversions are no-ops on x64. */
+#else
+    if (dsize == 8 && ssize < 8)  /* Extend to 64 bit integer. */
+      sp = emitir(IRT(IR_CONV, dt), sp,
+		  (st < IRT_INT ? IRT_INT : st) |
+		  ((sinfo & CTF_UNSIGNED) ? 0 : IRCONV_SEXT));
+    else if (dsize < 8 && ssize == 8)  /* Truncate from 64 bit integer. */
+      sp = emitir(IRT(IR_CONV, dt < IRT_INT ? IRT_INT : dt), sp, st);
+#endif
   xstore:
     emitir(IRT(IR_XSTORE, dt), dp, sp);
     break;
-  case CCX(I, F):
-  conv_I_F:
-    if (dsize > 8 || ssize != sizeof(double)) goto err_nyi;
-    if (dsize == 8) {
-      if (dt == IRT_U64) goto err_nyi;
-      sp = emitir(IRT(IR_TOI64, dt), sp, IRTOINT_TRUNCI64);
-    } else {
-      sp = emitir(IRTI(IR_TOINT), sp, IRTOINT_ANY);  /* NYI: should truncate. */
-    }
-    goto xstore;
   case CCX(I, C):
-    if (ssize != 2*sizeof(double)) goto err_nyi;
-    sp = emitir(IRT(IR_XLOAD, IRT_NUM), sp, 0);  /* Load re. */
-    s = ctype_child(cts, s);
-    sinfo = s->info;
-    ssize = s->size;
-    goto conv_I_F;  /* Just convert re. */
+    sp = emitir(IRT(IR_XLOAD, st), sp, 0);  /* Load re. */
+    /* fallthrough */
+  case CCX(I, F):
+    if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
+    sp = emitir(IRT(IR_CONV, dsize < 4 ? IRT_INT : dt), sp, st|IRCONV_TRUNC);
+    goto xstore;
   case CCX(I, P):
   case CCX(I, A):
     sinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
     ssize = CTSIZE_PTR;
-    /*
-    ** Note: Overriding the size is also required for pointers, since
-    ** crec_ct_tv passes IRT_P32/IRT_P64 independently of the C type size.
-    ** This avoids unnecessary zero-extensions on x64.
-    */
+    st = IRT_UINTP;
     goto conv_I_I;
 
   /* Destination is a floating-point number. */
   case CCX(F, B):
   case CCX(F, I):
   conv_F_I:
-    if (dsize != sizeof(double) || ssize > 4) goto err_nyi;
-    if (ssize == 4 && (sinfo & CTF_UNSIGNED)) goto err_nyi;
-    sp = emitir(IRTI(IR_TONUM), sp, 0);
-    goto xstore;
-  case CCX(F, F):
-  conv_F_F:
-    if (dsize != sizeof(double) || ssize != sizeof(double)) goto err_nyi;
+    if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
+    sp = emitir(IRT(IR_CONV, dt), sp, st < IRT_INT ? IRT_INT : st);
     goto xstore;
   case CCX(F, C):
-    if (ssize != 2*sizeof(double)) goto err_nyi;
-    sp = emitir(IRT(IR_XLOAD, IRT_NUM), sp, 0);  /* Load re. */
-    s = ctype_child(cts, s);
-    sinfo = s->info;
-    ssize = s->size;
-    goto conv_F_F;  /* Ignore im, and convert from re. */
+    sp = emitir(IRT(IR_XLOAD, st), sp, 0);  /* Load re. */
+    /* fallthrough */
+  case CCX(F, F):
+  conv_F_F:
+    if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
+    if (dt != st) sp = emitir(IRT(IR_CONV, dt), sp, st);
+    goto xstore;
 
   /* Destination is a complex number. */
   case CCX(C, I):
   case CCX(C, F):
-    d = ctype_child(cts, d);
-    dinfo = d->info;
-    dsize = d->size;
-    dt = crec_ct2irt(d);
-    if (dt == IRT_CDATA) goto err_nyi;
     {  /* Clear im. */
-      TRef dpim = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, dsize));
-      emitir(IRT(IR_XSTORE, IRT_NUM), dpim, lj_ir_knum(J, 0));
+      TRef ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, (dsize >> 1)));
+      emitir(IRT(IR_XSTORE, dt), ptr, lj_ir_knum(J, 0));
     }
     /* Convert to re. */
     if ((sinfo & CTF_FP)) goto conv_F_F; else goto conv_F_I;
 
   case CCX(C, C):
-    d = ctype_child(cts, d);
-    dinfo = d->info;
-    dsize = d->size;
-    dt = crec_ct2irt(d);
-    if (dt == IRT_CDATA) goto err_nyi;
+    if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
     {
-      TRef spim = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, dsize));
-      TRef re = emitir(IRT(IR_XLOAD, IRT_NUM), sp, 0);
-      TRef im = emitir(IRT(IR_XLOAD, IRT_NUM), spim, 0);
-      TRef dpim = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, dsize));
-      emitir(IRT(IR_XSTORE, IRT_NUM), dp, re);
-      emitir(IRT(IR_XSTORE, IRT_NUM), dpim, im);
+      TRef re, im, ptr;
+      re = emitir(IRT(IR_XLOAD, st), sp, 0);
+      ptr = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, (ssize >> 1)));
+      im = emitir(IRT(IR_XLOAD, st), ptr, 0);
+      if (dt != st) {
+	re = emitir(IRT(IR_CONV, dt), re, st);
+	im = emitir(IRT(IR_CONV, dt), im, st);
+      }
+      emitir(IRT(IR_XSTORE, dt), dp, re);
+      ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, (dsize >> 1)));
+      emitir(IRT(IR_XSTORE, dt), ptr, im);
     }
     break;
 
@@ -230,19 +224,23 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
 
   /* Destination is a pointer. */
   case CCX(P, P):
-    /* Note: ok on x64, since all 32 bit ops clear the upper part of the reg. */
-    goto xstore;
   case CCX(P, A):
   case CCX(P, S):
-    ssize = CTSIZE_PTR;
-    sinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
-    /* fallthrough */
+    /* There are only 32 bit pointers/addresses on 32 bit machines.
+    ** Also ok on x64, since all 32 bit ops clear the upper part of the reg.
+    */
+    goto xstore;
   case CCX(P, I):
-    dinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
-    goto conv_I_I;
+    if (st == IRT_CDATA) goto err_nyi;
+    if (!LJ_64 && ssize == 8)  /* Truncate from 64 bit integer. */
+      sp = emitir(IRT(IR_CONV, IRT_U32), sp, st);
+    goto xstore;
   case CCX(P, F):
-    dinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
-    goto conv_I_F;
+    if (st == IRT_CDATA) goto err_nyi;
+    /* The signed conversion is cheaper. x64 really has 47 bit pointers. */
+    sp = emitir(IRT(IR_CONV, (LJ_64 && dsize == 8) ? IRT_I64 : IRT_U32),
+		sp, st|IRCONV_TRUNC);
+    goto xstore;
 
   /* Destination is an array. */
   case CCX(A, A):
@@ -269,24 +267,32 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
   lua_assert(!ctype_isenum(sinfo));
   if (ctype_isnum(sinfo)) {
     IRType t = crec_ct2irt(s);
+    TRef tr;
     if ((sinfo & CTF_BOOL))
       goto err_nyi;  /* NYI: specialize to the result. */
     if (t == IRT_CDATA)
       goto err_nyi;  /* NYI: copyval of >64 bit integers. */
-    if (t >= IRT_U32)
-      goto err_nyi;  /* NYI: on-trace handling of U32/I64/U64. */
-    return emitir(IRT(IR_XLOAD, t), sp, 0);
+    tr = emitir(IRT(IR_XLOAD, t), sp, 0);
+    if (t == IRT_FLOAT || t == IRT_U32) {  /* Keep uint32_t/float as numbers. */
+      tr = emitir(IRT(IR_CONV, IRT_NUM), tr, t);
+    } else if (t == IRT_I64 || t == IRT_U64) {  /* Box 64 bit integer. */
+      TRef dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, sid), TREF_NIL);
+      TRef ptr = emitir(IRT(IR_ADD, IRT_PTR), dp,
+			lj_ir_kintp(J, sizeof(GCcdata)));
+      emitir(IRT(IR_XSTORE, t), ptr, tr);
+      return dp;
+    }
+    return tr;
   } else if (ctype_isptr(sinfo)) {
     IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
     sp = emitir(IRT(IR_XLOAD, t), sp, 0);
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
     cts->L = J->L;
     sid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);  /* Create ref. */
-  } else if (ctype_iscomplex(sinfo)) {
-    IRType t = s->size == 2*sizeof(double) ? IRT_NUM : IRT_CDATA;
+  } else if (ctype_iscomplex(sinfo)) {  /* Unbox/box complex. */
+    IRType t = s->size == 2*sizeof(double) ? IRT_NUM : IRT_FLOAT;
     ptrdiff_t esz = (ptrdiff_t)(s->size >> 1);
     TRef ptr, tr1, tr2, dp;
-    if (t == IRT_CDATA) goto err_nyi;  /* NYI: float IRType. */
     dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, sid), TREF_NIL);
     tr1 = emitir(IRT(IR_XLOAD, t), sp, 0);
     ptr = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, esz));
@@ -301,6 +307,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
   err_nyi:
     lj_trace_err(J, LJ_TRERR_NYICONV);
   }
+  /* Box pointer or ref. */
   return emitir(IRTG(IR_CNEWP, IRT_CDATA), lj_ir_kint(J, sid), sp);
 }
 
