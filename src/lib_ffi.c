@@ -123,7 +123,8 @@ LJLIB_CF(ffi_meta___index)	LJLIB_REC(cdata_index 0)
   if (!(o+1 < L->top && tviscdata(o)))  /* Also checks for presence of key. */
     lj_err_argt(L, 1, LUA_TCDATA);
   ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
-  lj_cdata_get(cts, ct, L->top-1, p);
+  if (lj_cdata_get(cts, ct, L->top-1, p))
+    lj_gc_check(L);
   return 1;
 }
 
@@ -210,6 +211,7 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
   cd = lj_cdata_new(cts, id, CTSIZE_PTR);
   *(uint8_t **)cdataptr(cd) = pp;
   setcdataV(L, L->top-1, cd);
+  lj_gc_check(L);
   return 1;
 }
 
@@ -265,6 +267,7 @@ static int ffi_arith_int64(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
     case MM_unm: *up = -u0; break;
     default: lua_assert(0); break;
     }
+    lj_gc_check(L);
     return 1;
   }
   return 0;
@@ -335,14 +338,16 @@ LJLIB_CF(ffi_meta___tostring)
     CType *ct = ctype_raw(ctype_cts(L), id);
     if (ctype_iscomplex(ct->info)) {
       setstrV(L, L->top-1, lj_ctype_repr_complex(L, cdataptr(cd), ct->size));
-      return 1;
+      goto checkgc;
     } else if (ct->size == 8 && ctype_isinteger(ct->info)) {
       setstrV(L, L->top-1, lj_ctype_repr_int64(L, *(uint64_t *)cdataptr(cd),
 					       (ct->info & CTF_UNSIGNED)));
-      return 1;
+      goto checkgc;
     }
   }
   lj_str_pushf(L, msg, strdata(lj_ctype_repr(L, id, NULL)), cdataptr(cd));
+checkgc:
+  lj_gc_check(L);
   return 1;
 }
 
@@ -402,6 +407,7 @@ LJLIB_CF(ffi_typeof)
   GCcdata *cd = lj_cdata_new(cts, CTID_CTYPEID, 4);
   *(CTypeID *)cdataptr(cd) = id;
   setcdataV(L, L->top-1, cd);
+  lj_gc_check(L);
   return 1;
 }
 

@@ -154,16 +154,15 @@ static void cdata_getconst(CTState *cts, TValue *o, CType *ct)
 }
 
 /* Get C data value and convert to TValue. */
-void lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
+int lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
 {
   CTypeID sid;
 
   if (ctype_isconstval(s->info)) {
     cdata_getconst(cts, o, s);
-    return;
+    return 0;  /* No GC step needed. */
   } else if (ctype_isbitfield(s->info)) {
-    lj_cconv_tv_bf(cts, s, o, sp);
-    return;
+    return lj_cconv_tv_bf(cts, s, o, sp);
   }
 
   /* Get child type of pointer/array/field. */
@@ -183,7 +182,7 @@ void lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
   while (ctype_isattrib(s->info) || ctype_isenum(s->info))
     s = ctype_child(cts, s);
 
-  lj_cconv_tv_ct(cts, s, sid, o, sp);
+  return lj_cconv_tv_ct(cts, s, sid, o, sp);
 }
 
 /* -- C data setters ------------------------------------------------------ */

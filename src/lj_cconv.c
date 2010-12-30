@@ -375,8 +375,8 @@ copyval:  /* Copy value. */
 /* -- C type to TValue conversion ----------------------------------------- */
 
 /* Convert C type to TValue. Caveat: expects to get the raw CType! */
-void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
-		    TValue *o, uint8_t *sp)
+int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
+		   TValue *o, uint8_t *sp)
 {
   CTInfo sinfo = s->info;
   lua_assert(!ctype_isenum(sinfo));
@@ -398,9 +398,11 @@ void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
       setboolV(o, tmpbool);
     else
       lua_assert(tvisnum(o));
+    return 0;
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
     /* Create reference. */
     setcdataV(cts->L, o, lj_cdata_newref(cts, sp, sid));
+    return 1;  /* Need GC step. */
   } else {
     GCcdata *cd;
     CTSize sz;
@@ -411,11 +413,12 @@ void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
     cd = lj_cdata_new(cts, ctype_typeid(cts, s), sz);
     setcdataV(cts->L, o, cd);
     memcpy(cdataptr(cd), sp, sz);
+    return 1;  /* Need GC step. */
   }
 }
 
 /* Convert bitfield to TValue. */
-void lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp)
+int lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp)
 {
   CTInfo info = s->info;
   CTSize pos, bsz;
@@ -445,6 +448,7 @@ void lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp)
     lua_assert(bsz == 1);
     setboolV(o, (val >> pos) & 1);
   }
+  return 0;  /* No GC step needed. */
 }
 
 /* -- TValue to C type conversion ----------------------------------------- */

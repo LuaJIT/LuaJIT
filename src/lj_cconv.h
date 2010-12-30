@@ -52,9 +52,9 @@ static LJ_AINLINE uint32_t cconv_idx(CTInfo info)
 LJ_FUNC int lj_cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags);
 LJ_FUNC void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
 			    uint8_t *dp, uint8_t *sp, CTInfo flags);
-LJ_FUNC void lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
-			    TValue *o, uint8_t *sp);
-LJ_FUNC void lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp);
+LJ_FUNC int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
+			   TValue *o, uint8_t *sp);
+LJ_FUNC int lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp);
 LJ_FUNC void lj_cconv_ct_tv(CTState *cts, CType *d,
 			    uint8_t *dp, TValue *o, CTInfo flags);
 LJ_FUNC void lj_cconv_bf_tv(CTState *cts, CType *d, uint8_t *dp, TValue *o);
