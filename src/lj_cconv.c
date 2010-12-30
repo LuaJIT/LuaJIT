@@ -200,13 +200,8 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
     } else if (dsize == 8) {
       if (!(dinfo & CTF_UNSIGNED))
 	*(int64_t *)dp = (int64_t)n;
-#ifdef _MSC_VER
-      else if (n >= 9223372036854775808.0)  /* They think it's a feature. */
-	*(uint64_t *)dp = (uint64_t)(int64_t)(n - 9223372036854775808.0) +
-			  U64x(80000000,00000000);
-#endif
       else
-	*(uint64_t *)dp = (uint64_t)n;
+	*(uint64_t *)dp = lj_num2u64(n);
     } else {
       goto err_conv;  /* NYI: conversion to >64 bit integers. */
     }
