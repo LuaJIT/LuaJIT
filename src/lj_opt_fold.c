@@ -441,52 +441,12 @@ LJFOLDF(kfold_strcmp)
 
 /* -- Constant folding of conversions ------------------------------------- */
 
-LJFOLD(TONUM KINT)
-LJFOLDF(kfold_tonum)
-{
-  return lj_ir_knum(J, cast_num(fleft->i));
-}
-
 LJFOLD(TOBIT KNUM KNUM)
 LJFOLDF(kfold_tobit)
 {
   TValue tv;
   tv.n = knumleft + knumright;
   return INTFOLD((int32_t)tv.u32.lo);
-}
-
-LJFOLD(TOINT KNUM any)
-LJFOLDF(kfold_toint)
-{
-  lua_Number n = knumleft;
-  int32_t k = lj_num2int(n);
-  if (irt_isguard(fins->t) && n != cast_num(k)) {
-    /* We're about to create a guard which always fails, like TOINT +1.5.
-    ** Some pathological loops cause this during LICM, e.g.:
-    **   local x,k,t = 0,1.5,{1,[1.5]=2}
-    **   for i=1,200 do x = x+ t[k]; k = k == 1 and 1.5 or 1 end
-    **   assert(x == 300)
-    */
-    return FAILFOLD;
-  }
-  return INTFOLD(k);
-}
-
-LJFOLD(TOI64 KINT any)
-LJFOLDF(kfold_toi64_kint)
-{
-  lua_assert(fins->op2 == IRTOINT_ZEXT64 || fins->op2 == IRTOINT_SEXT64);
-  if (fins->op2 == IRTOINT_ZEXT64)
-    return INT64FOLD((uint64_t)(uint32_t)fleft->i);
-  else
-    return INT64FOLD((uint64_t)(int32_t)fleft->i);
-}
-
-LJFOLD(TOI64 KNUM any)
-LJFOLDF(kfold_toi64_knum)
-{
-  lua_assert(fins->op2 == IRTOINT_TRUNCI64);
-  return INT64FOLD((uint64_t)(int64_t)knumleft);
 }
 
 LJFOLD(CONV KINT IRCONV_NUM_INT)
@@ -613,9 +573,6 @@ LJFOLDF(shortcut_round)
   return NEXTFOLD;
 }
 
-LJFOLD(FPMATH TONUM IRFPM_FLOOR)
-LJFOLD(FPMATH TONUM IRFPM_CEIL)
-LJFOLD(FPMATH TONUM IRFPM_TRUNC)
 LJFOLD(ABS ABS KNUM)
 LJFOLDF(shortcut_left)
 {
@@ -638,32 +595,6 @@ LJFOLDF(shortcut_leftleft)
 {
   PHIBARRIER(fleft);  /* See above. Fold would be ok, but not beneficial. */
   return fleft->op1;  /* f(g(x)) ==> x */
-}
-
-LJFOLD(TONUM TOINT)
-LJFOLDF(shortcut_leftleft_toint)
-{
-  PHIBARRIER(fleft);
-  if (irt_isguard(fleft->t))  /* Only safe with a guarded TOINT. */
-    return fleft->op1;  /* f(g(x)) ==> x */
-  return NEXTFOLD;
-}
-
-LJFOLD(TOINT TONUM any)
-LJFOLD(TOBIT TONUM KNUM)  /* The inverse must NOT be shortcut! */
-LJFOLDF(shortcut_leftleft_across_phi)
-{
-  /* Fold even across PHI to avoid expensive int->num->int conversions. */
-  return fleft->op1;  /* f(g(x)) ==> x */
-}
-
-LJFOLD(TOI64 TONUM any)
-LJFOLDF(shortcut_leftleft_toint64)
-{
-  /* Fold even across PHI to avoid expensive int->num->int64 conversions. */
-  fins->op1 = fleft->op1;   /* (int64_t)(double)(int)x ==> (int64_t)x */
-  fins->op2 = IRTOINT_SEXT64;
-  return RETRYFOLD;
 }
 
 /* -- FP algebraic simplifications ---------------------------------------- */
@@ -967,63 +898,6 @@ LJFOLDF(narrow_convert)
     return NEXTFOLD;
   lua_assert(fins->o != IR_CONV || (fins->op2&IRCONV_CONVMASK) != IRCONV_TOBIT);
   return lj_opt_narrow_convert(J);
-}
-
-/* Relaxed CSE rule for TOINT allows commoning with stronger checks, too. */
-LJFOLD(TOINT any any)
-LJFOLDF(cse_toint)
-{
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
-    IRRef ref, op1 = fins->op1;
-    uint8_t guard = irt_isguard(fins->t);
-    for (ref = J->chain[IR_TOINT]; ref > op1; ref = IR(ref)->prev)
-      if (IR(ref)->op1 == op1 && irt_isguard(IR(ref)->t) >= guard)
-	return ref;
-  }
-  return EMITFOLD;  /* No fallthrough to regular CSE. */
-}
-
-/* -- Strength reduction of widening -------------------------------------- */
-
-LJFOLD(TOI64 any 3)  /* IRTOINT_ZEXT64 */
-LJFOLDF(simplify_zext64)
-{
-#if LJ_TARGET_X64
-  /* Eliminate widening. All 32 bit ops implicitly zero-extend the result. */
-  PHIBARRIER(fleft);
-  return LEFTFOLD;
-#else
-  UNUSED(J);
-  return NEXTFOLD;
-#endif
-}
-
-LJFOLD(TOI64 any 4)  /* IRTOINT_SEXT64 */
-LJFOLDF(simplify_sext64)
-{
-  IRRef ref = fins->op1;
-  int64_t ofs = 0;
-  PHIBARRIER(fleft);
-  if (fleft->o == IR_ADD && irref_isk(fleft->op2)) {
-    ofs = (int64_t)IR(fleft->op2)->i;
-    ref = fleft->op1;
-  }
-  /* Use scalar evolution analysis results to strength-reduce sign-extension. */
-  if (ref == J->scev.idx) {
-    IRRef lo = J->scev.dir ? J->scev.start : J->scev.stop;
-    lua_assert(irt_isint(J->scev.t));
-    if (lo && IR(lo)->i + ofs >= 0) {
-#if LJ_TARGET_X64
-      /* Eliminate widening. All 32 bit ops do an implicit zero-extension. */
-      return LEFTFOLD;
-#else
-      /* Reduce to a (cheaper) zero-extension. */
-      fins->op2 = IRTOINT_ZEXT64;
-      return RETRYFOLD;
-#endif
-    }
-  }
-  return NEXTFOLD;
 }
 
 /* -- Integer algebraic simplifications ----------------------------------- */

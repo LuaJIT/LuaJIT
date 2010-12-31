@@ -119,10 +119,7 @@
   \
   /* Type conversions. */ \
   _(CONV,	N , ref, lit) \
-  _(TONUM,	N , ref, ___) \
-  _(TOINT,	N , ref, lit) \
   _(TOBIT,	N , ref, ref) \
-  _(TOI64,	N , ref, lit) \
   _(TOSTR,	N , ref, ___) \
   _(STRTO,	N , ref, ___) \
   \
@@ -210,15 +207,6 @@ IRFLDEF(FLENUM)
 #define IRXLOAD_READONLY	1	/* Load from read-only data. */
 #define IRXLOAD_UNALIGNED	2	/* Unaligned load. */
 
-/* TOINT/TOI64 mode, stored in op2. Ordered by strength of the checks. */
-#define IRTOINT_CHECK		0	/* Number checked for integerness. */
-#define IRTOINT_INDEX		1	/* Checked + special backprop rules. */
-#define IRTOINT_ANY		2	/* Any FP number is ok. */
-#define IRTOINT_ZEXT64		3	/* Convert uint32_t to int64_t. */
-#define IRTOINT_SEXT64		4	/* Convert int32_t to int64_t. */
-#define IRTOINT_TRUNCI64	5	/* Truncate number to int64_t. */
-#define IRTOINT_TOBIT		6	/* Cache only: TOBIT conversion. */
-
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */
 #define IRCONV_DSTMASK		0x03e0	/* Dest. IRType (also in ir->t). */
@@ -234,7 +222,6 @@ IRFLDEF(FLENUM)
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
-
 
 /* C call info for CALL* instructions. */
 typedef struct CCallInfo {

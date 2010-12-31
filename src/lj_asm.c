@@ -1594,15 +1594,6 @@ static void asm_retf(ASMState *as, IRIns *ir)
 
 /* -- Type conversions ---------------------------------------------------- */
 
-static void asm_tonum(ASMState *as, IRIns *ir)
-{
-  Reg dest = ra_dest(as, ir, RSET_FPR);
-  Reg left = asm_fuseload(as, ir->op1, RSET_GPR);
-  emit_mrm(as, XO_CVTSI2SD, dest, left);
-  if (!(as->flags & JIT_F_SPLIT_XMM))
-    emit_rr(as, XO_XORPS, dest, dest);  /* Avoid partial register stall. */
-}
-
 static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
 {
   Reg tmp = ra_scratch(as, rset_exclude(RSET_FPR, left));
@@ -1617,13 +1608,6 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
   /* Can't fuse since left is needed twice. */
 }
 
-static void asm_toint(ASMState *as, IRIns *ir)
-{
-  Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
-  emit_mrm(as, XO_CVTSD2SI, dest, left);
-}
-
 static void asm_tobit(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
@@ -1634,24 +1618,6 @@ static void asm_tobit(ASMState *as, IRIns *ir)
   emit_rr(as, XO_MOVDto, tmp, dest);
   emit_mrm(as, XO_ADDSD, tmp, right);
   ra_left(as, tmp, ir->op1);
-}
-
-static void asm_toi64(ASMState *as, IRIns *ir)
-{
-  Reg dest = ra_dest(as, ir, RSET_GPR);
-  IRRef lref = ir->op1;
-  lua_assert(LJ_64);  /* NYI: 32 bit register pairs. */
-  if (ir->op2 == IRTOINT_TRUNCI64) {
-    Reg left = asm_fuseload(as, lref, RSET_FPR);
-    emit_mrm(as, XO_CVTTSD2SI, dest|REX_64, left);
-  } else if (ir->op2 == IRTOINT_ZEXT64) {
-    /* Nothing to do. This assumes 32 bit regs are already zero-extended. */
-    ra_left(as, dest, lref);  /* But may need to move regs. */
-  } else {
-    Reg left = asm_fuseload(as, lref, RSET_GPR);
-    emit_mrm(as, XO_MOVSXd, dest|REX_64, left);
-    lua_assert(ir->op2 == IRTOINT_SEXT64);
-  }
 }
 
 static void asm_conv(ASMState *as, IRIns *ir)
@@ -2499,7 +2465,7 @@ static void asm_x87load(ASMState *as, IRRef ref)
       emit_x87op(as, XI_FLD1);
     else
       emit_rma(as, XO_FLDq, XOg_FLDq, tv);
-  } else if (ir->o == IR_TONUM && !ra_used(ir) &&
+  } else if (ir->o == IR_CONV && ir->op2 == IRCONV_NUM_INT && !ra_used(ir) &&
 	     !irref_isk(ir->op1) && mayfuse(as, ir->op1)) {
     IRIns *iri = IR(ir->op1);
     emit_rmro(as, XO_FILDd, XOg_FILDd, RID_ESP, ra_spill(as, iri));
@@ -3753,15 +3719,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_OBAR: asm_obar(as, ir); break;
 
   /* Type conversions. */
-  case IR_TONUM: asm_tonum(as, ir); break;
-  case IR_TOINT:
-    if (irt_isguard(ir->t))
-      asm_tointg(as, ir, ra_alloc1(as, ir->op1, RSET_FPR));
-    else
-      asm_toint(as, ir); break;
-    break;
   case IR_TOBIT: asm_tobit(as, ir); break;
-  case IR_TOI64: asm_toi64(as, ir); break;
   case IR_CONV: asm_conv(as, ir); break;
   case IR_TOSTR: asm_tostr(as, ir); break;
   case IR_STRTO: asm_strto(as, ir); break;
@@ -3905,7 +3863,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       }
       break;
     /* Do not propagate hints across type conversions. */
-    case IR_CONV: case IR_TONUM: case IR_TOINT: case IR_TOBIT:
+    case IR_CONV: case IR_TOBIT:
       break;
     default:
       /* Propagate hints across likely 'op reg, imm' or 'op reg'. */
