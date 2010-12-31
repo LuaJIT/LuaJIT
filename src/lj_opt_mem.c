@@ -567,7 +567,7 @@ static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
   if (irt_sametype(xa->t, xb->t)) {
     if (refa == refb)
       return ALIAS_MUST;  /* Shortcut for same refs with identical type. */
-  } else if (!(irt_typerange(xa->t, IRT_I8, IRT_INT) &&
+  } else if (!(irt_typerange(xa->t, IRT_I8, IRT_U64) &&
 	       ((xa->t.irt - IRT_I8) ^ (xb->t.irt - IRT_I8)) == 1)) {
     return ALIAS_NO;
   }
@@ -592,11 +592,7 @@ static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
     /* This assumes strictly-typed, non-overlapping accesses. */
     if (ofsa != ofsb)
       return ALIAS_NO;  /* base+-o1 vs. base+-o2 and o1 != o2. */
-    /* Unsigned vs. signed access to the same address.
-    ** Really ALIAS_MUST, but store forwarding would lose the type.
-    ** This is rare, so return ALIAS_MAY for now.
-    */
-    return ALIAS_MAY;
+    return ALIAS_MUST;  /* Unsigned vs. signed access to the same address. */
   }
   /* NYI: structural disambiguation. */
   return aa_cnew(J, basea, baseb);  /* Try to disambiguate allocations. */
@@ -682,7 +678,25 @@ retry:
     switch (aa_xref(J, xr, fins, store)) {
     case ALIAS_NO:   break;  /* Continue searching. */
     case ALIAS_MAY:  lim = ref; goto cselim;  /* Limit search for load. */
-    case ALIAS_MUST: return store->op2;  /* Store forwarding. */
+    case ALIAS_MUST:
+      /* Emit conversion if the loaded type doesn't match the forwarded type. */
+      if (!irt_sametype(fins->t, IR(store->op2)->t)) {
+	IRType st = irt_type(fins->t);
+	if (st == IRT_I8 || st == IRT_I16) {  /* Trunc + sign-extend. */
+	  st |= IRCONV_SEXT;
+	} else if (st == IRT_U8 || st == IRT_U16) {  /* Trunc + zero-extend. */
+	} else if (st == IRT_INT && irt_isu32(IR(store->op2)->t)) {
+	  st = IRT_U32;  /* Needs dummy CONV.int.u32. */
+	} else {  /* I64/U64 are boxed, U32 is hidden behind a CONV.num.u32. */
+	  goto store_fwd;
+	}
+	fins->ot = IRTI(IR_CONV);
+	fins->op1 = store->op2;
+	fins->op2 = (IRT_INT<<5)|st;
+	return RETRYFOLD;
+      }
+    store_fwd:
+      return store->op2;  /* Store forwarding. */
     }
     ref = store->prev;
   }
