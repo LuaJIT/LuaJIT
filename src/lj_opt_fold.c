@@ -781,11 +781,9 @@ LJFOLDF(cse_conv)
     IRRef ref = J->chain[IR_CONV];
     while (ref > op1) {
       IRIns *ir = IR(ref);
-      /* CSE also depends on the target type!
-      ** OTOH commoning with stronger checks is ok, too.
-      */
-      if (ir->op1 == op1 && irt_sametype(ir->t, fins->t) &&
-	  (ir->op2 & IRCONV_MODEMASK) == op2 && irt_isguard(ir->t) >= guard)
+      /* Commoning with stronger checks is ok. */
+      if (ir->op1 == op1 && (ir->op2 & IRCONV_MODEMASK) == op2 &&
+	  irt_isguard(ir->t) >= guard)
 	return ref;
       ref = ir->prev;
     }
@@ -1773,7 +1771,7 @@ retry:
     key += (uint32_t)IR(fins->op2)->o;
     *fright = *IR(fins->op2);
   } else {
-    key += (fins->op2 & 0xffu);  /* For IRFPM_* and IRFL_*. */
+    key += (fins->op2 & 0x3ffu);  /* Literal mask. Must include IRCONV_*MASK. */
   }
 
   /* Check for a match in order from most specific to least specific. */

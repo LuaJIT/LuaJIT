@@ -1656,7 +1656,7 @@ static void asm_toi64(ASMState *as, IRIns *ir)
 
 static void asm_conv(ASMState *as, IRIns *ir)
 {
-  IRType st = (IRType)(ir->op2 & 0x1f);
+  IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
   int st64 = (st == IRT_I64 || st == IRT_U64 || (LJ_64 && st == IRT_P64));
   int stfp = (st == IRT_NUM || st == IRT_FLOAT);
   IRRef lref = ir->op1;

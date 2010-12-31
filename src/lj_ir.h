@@ -219,11 +219,13 @@ IRFLDEF(FLENUM)
 #define IRTOINT_TRUNCI64	5	/* Truncate number to int64_t. */
 #define IRTOINT_TOBIT		6	/* Cache only: TOBIT conversion. */
 
-/* CONV mode, stored in op2. Lowest 8 bits is the IRType of the source. */
-#define IRCONV_TRUNC		0x100	/* Truncate number to integer. */
-#define IRCONV_SEXT		0x200	/* Sign-extend integer to integer. */
-#define IRCONV_MODEMASK		0x3ff
-#define IRCONV_CSH		10
+/* CONV mode, stored in op2. */
+#define IRCONV_SRCMASK		0x001f	/* Source IRType. */
+#define IRCONV_DSTMASK		0x03e0	/* Dest. IRType (also in ir->t). */
+#define IRCONV_TRUNC		0x0400	/* Truncate number to integer. */
+#define IRCONV_SEXT		0x0800	/* Sign-extend integer to integer. */
+#define IRCONV_MODEMASK		0x0fff
+#define IRCONV_CSH		12
 /* Number to integer conversion mode. Ordered by strength of the checks. */
 #define IRCONV_TOBIT  (0<<IRCONV_CSH)	/* None. Cache only: TOBIT conv. */
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */

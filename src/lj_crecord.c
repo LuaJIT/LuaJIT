@@ -29,6 +29,9 @@
 /* Pass IR on to next optimization in chain (FOLD). */
 #define emitir(ot, a, b)	(lj_ir_set(J, (ot), (a), (b)), lj_opt_fold(J))
 
+#define emitconv(a, dt, st, flags) \
+  emitir(IRT(IR_CONV, (dt)), (a), (st)|((dt) << 5)|(flags))
+
 /* -- C type checks ------------------------------------------------------- */
 
 static GCcdata *argv2cdata(jit_State *J, TRef tr, cTValue *o)
@@ -145,15 +148,14 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
 #if LJ_64
     /* Sign-extend 32 to 64 bit integer. */
     if (dsize == 8 && ssize < 8 && !(sinfo & CTF_UNSIGNED))
-      sp = emitir(IRT(IR_CONV, dt), sp, IRT_INT|IRCONV_SEXT);
+      sp = emitconv(sp, dt, IRT_INT, IRCONV_SEXT);
     /* All other conversions are no-ops on x64. */
 #else
     if (dsize == 8 && ssize < 8)  /* Extend to 64 bit integer. */
-      sp = emitir(IRT(IR_CONV, dt), sp,
-		  (st < IRT_INT ? IRT_INT : st) |
-		  ((sinfo & CTF_UNSIGNED) ? 0 : IRCONV_SEXT));
+      sp = emitconv(sp, dt, ssize < 4 ? IRT_INT : st,
+		    (sinfo & CTF_UNSIGNED) ? 0 : IRCONV_SEXT);
     else if (dsize < 8 && ssize == 8)  /* Truncate from 64 bit integer. */
-      sp = emitir(IRT(IR_CONV, dt < IRT_INT ? IRT_INT : dt), sp, st);
+      sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, 0);
 #endif
   xstore:
     emitir(IRT(IR_XSTORE, dt), dp, sp);
@@ -163,7 +165,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
     /* fallthrough */
   case CCX(I, F):
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-    sp = emitir(IRT(IR_CONV, dsize < 4 ? IRT_INT : dt), sp, st|IRCONV_TRUNC);
+    sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, IRCONV_TRUNC);
     goto xstore;
   case CCX(I, P):
   case CCX(I, A):
@@ -177,7 +179,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
   case CCX(F, I):
   conv_F_I:
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-    sp = emitir(IRT(IR_CONV, dt), sp, st < IRT_INT ? IRT_INT : st);
+    sp = emitconv(sp, dt, ssize < 4 ? IRT_INT : st, 0);
     goto xstore;
   case CCX(F, C):
     sp = emitir(IRT(IR_XLOAD, st), sp, 0);  /* Load re. */
@@ -185,7 +187,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
   case CCX(F, F):
   conv_F_F:
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-    if (dt != st) sp = emitir(IRT(IR_CONV, dt), sp, st);
+    if (dt != st) sp = emitconv(sp, dt, st, 0);
     goto xstore;
 
   /* Destination is a complex number. */
@@ -206,8 +208,8 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
       ptr = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, (ssize >> 1)));
       im = emitir(IRT(IR_XLOAD, st), ptr, 0);
       if (dt != st) {
-	re = emitir(IRT(IR_CONV, dt), re, st);
-	im = emitir(IRT(IR_CONV, dt), im, st);
+	re = emitconv(re, dt, st, 0);
+	im = emitconv(im, dt, st, 0);
       }
       emitir(IRT(IR_XSTORE, dt), dp, re);
       ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, (dsize >> 1)));
@@ -233,13 +235,13 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
   case CCX(P, I):
     if (st == IRT_CDATA) goto err_nyi;
     if (!LJ_64 && ssize == 8)  /* Truncate from 64 bit integer. */
-      sp = emitir(IRT(IR_CONV, IRT_U32), sp, st);
+      sp = emitconv(sp, IRT_U32, st, 0);
     goto xstore;
   case CCX(P, F):
     if (st == IRT_CDATA) goto err_nyi;
     /* The signed conversion is cheaper. x64 really has 47 bit pointers. */
-    sp = emitir(IRT(IR_CONV, (LJ_64 && dsize == 8) ? IRT_I64 : IRT_U32),
-		sp, st|IRCONV_TRUNC);
+    sp = emitconv(sp, (LJ_64 && dsize == 8) ? IRT_I64 : IRT_U32,
+		  st, IRCONV_TRUNC);
     goto xstore;
 
   /* Destination is an array. */
@@ -274,7 +276,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
       goto err_nyi;  /* NYI: copyval of >64 bit integers. */
     tr = emitir(IRT(IR_XLOAD, t), sp, 0);
     if (t == IRT_FLOAT || t == IRT_U32) {  /* Keep uint32_t/float as numbers. */
-      tr = emitir(IRT(IR_CONV, IRT_NUM), tr, t);
+      tr = emitconv(tr, IRT_NUM, t, 0);
     } else if (t == IRT_I64 || t == IRT_U64) {  /* Box 64 bit integer. */
       TRef dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, sid), TREF_NIL);
       TRef ptr = emitir(IRT(IR_ADD, IRT_PTR), dp,
@@ -567,5 +569,6 @@ void LJ_FASTCALL recff_ffi_new(jit_State *J, RecordFFData *rd)
 
 #undef IR
 #undef emitir
+#undef emitconv
 
 #endif

@@ -253,6 +253,13 @@ IRDEF(IRNAME)
   NULL
 };
 
+const char *const irt_names[] = {
+#define IRTNAME(name)	#name,
+IRTDEF(IRTNAME)
+#undef IRTNAME
+  NULL
+};
+
 const char *const irfpm_names[] = {
 #define FPMNAME(name)		#name,
 IRFPMDEF(FPMNAME)
