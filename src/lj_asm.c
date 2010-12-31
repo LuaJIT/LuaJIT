@@ -1676,7 +1676,30 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		      (irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
 	       left);
     }
-  } else {  /* Integer to integer conversion. Only need 32/64 bit variants. */
+  } else if (st >= IRT_I8 && st <= IRT_U16) {  /* Extend to 32 bit integer. */
+    Reg left, dest = ra_dest(as, ir, RSET_GPR);
+    RegSet allow = RSET_GPR;
+    x86Op op;
+    lua_assert(irt_isint(ir->t) || irt_isu32(ir->t));
+    if (st == IRT_I8) {
+      op = XO_MOVSXb; allow = RSET_GPR8; dest |= FORCE_REX;
+    } else if (st == IRT_U8) {
+      op = XO_MOVZXb; allow = RSET_GPR8; dest |= FORCE_REX;
+    } else if (st == IRT_I16) {
+      op = XO_MOVSXw;
+    } else {
+      op = XO_MOVZXw;
+    }
+    left = asm_fuseload(as, ir->op1, allow);
+    /* Add extra MOV if source is already in wrong register. */
+    if (!LJ_64 && left != RID_MRM && !rset_test(allow, left)) {
+      Reg tmp = ra_scratch(as, allow);
+      emit_rr(as, op, dest, tmp);
+      emit_rr(as, XO_MOV, tmp, left);
+    } else {
+      emit_mrm(as, op, dest, left);
+    }
+  } else {  /* 32/64 bit integer conversions. */
     if (irt_is64(ir->t)) {
 #if LJ_32
       /* NYI: conversion to 64 bit integers. */
