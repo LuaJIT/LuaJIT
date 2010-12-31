@@ -124,7 +124,7 @@ static uint32_t nexttoken(char **pp, int allowlit, int allowany)
       if (*p == '\0')
 	return i;
     } else if (allowany && !strcmp("any", p)) {
-      return 0xff;
+      return allowany;
     } else {
       for (i = 0; ir_names[i]; i++)
 	if (!strcmp(ir_names[i], p))
@@ -140,9 +140,9 @@ static uint32_t nexttoken(char **pp, int allowlit, int allowany)
 static void foldrule(char *p)
 {
   uint32_t op = nexttoken(&p, 0, 0);
-  uint32_t left = nexttoken(&p, 0, 1);
-  uint32_t right = nexttoken(&p, 1, 1);
-  uint32_t key = (funcidx << 24) | (op << 16) | (left << 8) | right;
+  uint32_t left = nexttoken(&p, 0, 0x7f);
+  uint32_t right = nexttoken(&p, 1, 0x3ff);
+  uint32_t key = (funcidx << 24) | (op << 17) | (left << 10) | right;
   uint32_t i;
   if (nkeys >= BUILD_MAX_FOLD) {
     fprintf(stderr, "Error: too many fold rules, increase BUILD_MAX_FOLD.\n");

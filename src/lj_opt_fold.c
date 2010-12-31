@@ -489,6 +489,73 @@ LJFOLDF(kfold_toi64_knum)
   return INT64FOLD((uint64_t)(int64_t)knumleft);
 }
 
+LJFOLD(CONV KINT IRCONV_NUM_INT)
+LJFOLDF(kfold_conv_kint_num)
+{
+  return lj_ir_knum(J, cast_num(fleft->i));
+}
+
+LJFOLD(CONV KINT IRCONV_I64_INT)
+LJFOLD(CONV KINT IRCONV_U64_INT)
+LJFOLDF(kfold_conv_kint_i64)
+{
+  return INT64FOLD((uint64_t)(int64_t)fleft->i);
+}
+
+LJFOLD(CONV KINT64 IRCONV_NUM_I64)
+LJFOLDF(kfold_conv_kint64_num_i64)
+{
+  return lj_ir_knum(J, cast_num((int64_t)ir_kint64(fleft)->u64));
+}
+
+LJFOLD(CONV KINT64 IRCONV_NUM_U64)
+LJFOLDF(kfold_conv_kint64_num_u64)
+{
+  return lj_ir_knum(J, cast_num(ir_kint64(fleft)->u64));
+}
+
+LJFOLD(CONV KINT64 IRCONV_INT_I64)
+LJFOLD(CONV KINT64 IRCONV_U32_I64)
+LJFOLDF(kfold_conv_kint64_int_i64)
+{
+  return INTFOLD((int32_t)ir_kint64(fleft)->u64);
+}
+
+LJFOLD(CONV KNUM IRCONV_INT_NUM)
+LJFOLDF(kfold_conv_knum_int_num)
+{
+  lua_Number n = knumleft;
+  if (!(fins->op2 & IRCONV_TRUNC)) {
+    int32_t k = lj_num2int(n);
+    if (irt_isguard(fins->t) && n != cast_num(k)) {
+      /* We're about to create a guard which always fails, like CONV +1.5.
+      ** Some pathological loops cause this during LICM, e.g.:
+      **   local x,k,t = 0,1.5,{1,[1.5]=2}
+      **   for i=1,200 do x = x+ t[k]; k = k == 1 and 1.5 or 1 end
+      **   assert(x == 300)
+      */
+      return FAILFOLD;
+    }
+    return INTFOLD(k);
+  } else {
+    return INTFOLD((int32_t)n);
+  }
+}
+
+LJFOLD(CONV KNUM IRCONV_I64_NUM)
+LJFOLDF(kfold_conv_knum_i64_num)
+{
+  lua_assert((fins->op2 & IRCONV_TRUNC));
+  return INT64FOLD((uint64_t)(int64_t)knumleft);
+}
+
+LJFOLD(CONV KNUM IRCONV_U64_NUM)
+LJFOLDF(kfold_conv_knum_u64_num)
+{
+  lua_assert((fins->op2 & IRCONV_TRUNC));
+  return INT64FOLD(lj_num2u64(knumleft));
+}
+
 LJFOLD(TOSTR KNUM)
 LJFOLDF(kfold_tostr_knum)
 {
@@ -740,8 +807,152 @@ LJFOLDF(simplify_powi_kx)
   return NEXTFOLD;
 }
 
-/* -- FP conversion narrowing --------------------------------------------- */
+/* -- Simplify conversions ------------------------------------------------ */
 
+LJFOLD(CONV CONV IRCONV_NUM_INT)  /* _NUM */
+LJFOLDF(shortcut_conv_num_int)
+{
+  PHIBARRIER(fleft);
+  /* Only safe with a guarded conversion to int. */
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_NUM && irt_isguard(fleft->t))
+    return fleft->op1;  /* f(g(x)) ==> x */
+  return NEXTFOLD;
+}
+
+LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
+LJFOLDF(simplify_conv_int_num)
+{
+  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT)
+    return fleft->op1;
+  return NEXTFOLD;
+}
+
+LJFOLD(CONV CONV IRCONV_U32_NUM)  /* _U32*/
+LJFOLDF(simplify_conv_u32_num)
+{
+  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32)
+    return fleft->op1;
+  return NEXTFOLD;
+}
+
+LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32*/
+LJFOLDF(simplify_conv_i64_num)
+{
+  PHIBARRIER(fleft);
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT) {
+    /* Reduce to a sign-extension. */
+    fins->op1 = fleft->op1;
+    fins->op2 = ((IRT_I64<<5)|IRT_INT|IRCONV_SEXT);
+    return RETRYFOLD;
+  } else if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
+#if LJ_TARGET_X64
+    return fleft->op1;
+#else
+    /* Reduce to a zero-extension. */
+    fins->op1 = fleft->op1;
+    fins->op2 = (IRT_I64<<5)|IRT_U32;
+    return RETRYFOLD;
+#endif
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _U32*/
+LJFOLDF(simplify_conv_u64_num)
+{
+  PHIBARRIER(fleft);
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
+#if LJ_TARGET_X64
+    return fleft->op1;
+#else
+    /* Reduce to a zero-extension. */
+    fins->op1 = fleft->op1;
+    fins->op2 = (IRT_U64<<5)|IRT_U32;
+    return RETRYFOLD;
+#endif
+  }
+  return NEXTFOLD;
+}
+
+/* Shortcut TOBIT + IRT_NUM <- IRT_INT/IRT_U32 conversion. */
+LJFOLD(TOBIT CONV KNUM)
+LJFOLDF(simplify_tobit_conv)
+{
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT ||
+      (fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
+    /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+    lua_assert(irt_isnum(fleft->t));
+    return fleft->op1;
+  }
+  return NEXTFOLD;
+}
+
+/* Shortcut floor/ceil/round + IRT_NUM <- IRT_INT/IRT_U32 conversion. */
+LJFOLD(FPMATH CONV IRFPM_FLOOR)
+LJFOLD(FPMATH CONV IRFPM_CEIL)
+LJFOLD(FPMATH CONV IRFPM_TRUNC)
+LJFOLDF(simplify_floor_conv)
+{
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT ||
+      (fleft->op2 & IRCONV_SRCMASK) == IRT_U32)
+    return LEFTFOLD;
+  return NEXTFOLD;
+}
+
+/* Strength reduction of widening. */
+LJFOLD(CONV any IRCONV_I64_INT)
+LJFOLDF(simplify_conv_sext)
+{
+  IRRef ref = fins->op1;
+  int64_t ofs = 0;
+  if (!(fins->op2 & IRCONV_SEXT))
+    return NEXTFOLD;
+  PHIBARRIER(fleft);
+  if (fleft->o == IR_ADD && irref_isk(fleft->op2)) {
+    ofs = (int64_t)IR(fleft->op2)->i;
+    ref = fleft->op1;
+  }
+  /* Use scalar evolution analysis results to strength-reduce sign-extension. */
+  if (ref == J->scev.idx) {
+    IRRef lo = J->scev.dir ? J->scev.start : J->scev.stop;
+    lua_assert(irt_isint(J->scev.t));
+    if (lo && IR(lo)->i + ofs >= 0) {
+#if LJ_TARGET_X64
+      /* Eliminate widening. All 32 bit ops do an implicit zero-extension. */
+      return LEFTFOLD;
+#else
+      /* Reduce to a (cheaper) zero-extension. */
+      fins->op2 &= ~IRCONV_SEXT;
+      return RETRYFOLD;
+#endif
+    }
+  }
+  return NEXTFOLD;
+}
+
+/* Special CSE rule for CONV. */
+LJFOLD(CONV any any)
+LJFOLDF(cse_conv)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
+    IRRef op1 = fins->op1, op2 = (fins->op2 & IRCONV_MODEMASK);
+    uint8_t guard = irt_isguard(fins->t);
+    IRRef ref = J->chain[IR_CONV];
+    while (ref > op1) {
+      IRIns *ir = IR(ref);
+      /* Commoning with stronger checks is ok. */
+      if (ir->op1 == op1 && (ir->op2 & IRCONV_MODEMASK) == op2 &&
+	  irt_isguard(ir->t) >= guard)
+	return ref;
+      ref = ir->prev;
+    }
+  }
+  return EMITFOLD;  /* No fallthrough to regular CSE. */
+}
+
+/* FP conversion narrowing. */
 LJFOLD(TOINT ADD any)
 LJFOLD(TOINT SUB any)
 LJFOLD(TOBIT ADD KNUM)
@@ -767,26 +978,6 @@ LJFOLDF(cse_toint)
     for (ref = J->chain[IR_TOINT]; ref > op1; ref = IR(ref)->prev)
       if (IR(ref)->op1 == op1 && irt_isguard(IR(ref)->t) >= guard)
 	return ref;
-  }
-  return EMITFOLD;  /* No fallthrough to regular CSE. */
-}
-
-/* Special CSE rule for CONV. */
-LJFOLD(CONV any any)
-LJFOLDF(cse_conv)
-{
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
-    IRRef op1 = fins->op1, op2 = (fins->op2 & IRCONV_MODEMASK);
-    uint8_t guard = irt_isguard(fins->t);
-    IRRef ref = J->chain[IR_CONV];
-    while (ref > op1) {
-      IRIns *ir = IR(ref);
-      /* Commoning with stronger checks is ok. */
-      if (ir->op1 == op1 && (ir->op2 & IRCONV_MODEMASK) == op2 &&
-	  irt_isguard(ir->t) >= guard)
-	return ref;
-      ref = ir->prev;
-    }
   }
   return EMITFOLD;  /* No fallthrough to regular CSE. */
 }
@@ -1723,12 +1914,12 @@ LJFOLDX(lj_ir_emit)
 
 /* Every entry in the generated hash table is a 32 bit pattern:
 **
-** xxxxxxxx iiiiiiii llllllll rrrrrrrr
+** xxxxxxxx iiiiiii lllllll rrrrrrrrrr
 **
-** xxxxxxxx = 8 bit index into fold function table
-** iiiiiiii = 8 bit folded instruction opcode
-** llllllll = 8 bit left instruction opcode
-** rrrrrrrr = 8 bit right instruction opcode or 8 bits from literal field
+**   xxxxxxxx = 8 bit index into fold function table
+**    iiiiiii = 7 bit folded instruction opcode
+**    lllllll = 7 bit left instruction opcode
+** rrrrrrrrrr = 8 bit right instruction opcode or 10 bits from literal field
 */
 
 #include "lj_folddef.h"
@@ -1762,9 +1953,9 @@ TRef LJ_FASTCALL lj_opt_fold(jit_State *J)
   /* Fold engine start/retry point. */
 retry:
   /* Construct key from opcode and operand opcodes (unless literal/none). */
-  key = ((uint32_t)fins->o << 16);
+  key = ((uint32_t)fins->o << 17);
   if (fins->op1 >= J->cur.nk) {
-    key += (uint32_t)IR(fins->op1)->o << 8;
+    key += (uint32_t)IR(fins->op1)->o << 10;
     *fleft = *IR(fins->op1);
   }
   if (fins->op2 >= J->cur.nk) {
@@ -1777,7 +1968,7 @@ retry:
   /* Check for a match in order from most specific to least specific. */
   any = 0;
   for (;;) {
-    uint32_t k = key | any;
+    uint32_t k = key | (any & 0x1ffff);
     uint32_t h = fold_hashkey(k);
     uint32_t fh = fold_hash[h];  /* Lookup key in semi-perfect hash table. */
     if ((fh & 0xffffff) == k || (fh = fold_hash[h+1], (fh & 0xffffff) == k)) {
@@ -1785,9 +1976,9 @@ retry:
       if (ref != NEXTFOLD)
 	break;
     }
-    if (any == 0xffff)  /* Exhausted folding. Pass on to CSE. */
+    if (any == 0xfffff)  /* Exhausted folding. Pass on to CSE. */
       return lj_opt_cse(J);
-    any = (any | (any >> 8)) ^ 0xff00;
+    any = (any | (any >> 10)) ^ 0xffc00;
   }
 
   /* Return value processing, ordered by frequency. */
