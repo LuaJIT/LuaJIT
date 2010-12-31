@@ -1641,7 +1641,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       return;
 #endif
     } else {  /* Integer to FP conversion. */
-      Reg left = (LJ_64 && st == IRT_U32) ? ra_allocref(as, lref, RSET_GPR) :
+      Reg left = (LJ_64 && st == IRT_U32) ? ra_alloc1(as, lref, RSET_GPR) :
 					    asm_fuseload(as, lref, RSET_GPR);
       emit_mrm(as, irt_isnum(ir->t) ? XO_CVTSI2SD : XO_CVTSI2SS,
 	       dest|((LJ_64 && (st64 || st == IRT_U32)) ? REX_64 : 0), left);
