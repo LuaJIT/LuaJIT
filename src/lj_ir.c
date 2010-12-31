@@ -393,7 +393,7 @@ TRef LJ_FASTCALL lj_ir_tonum(jit_State *J, TRef tr)
 {
   if (!tref_isnum(tr)) {
     if (tref_isinteger(tr))
-      tr = emitir(IRTN(IR_TONUM), tr, 0);
+      tr = emitir(IRTN(IR_CONV), tr, IRCONV_NUM_INT);
     else if (tref_isstr(tr))
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
     else
@@ -434,7 +434,7 @@ TRef LJ_FASTCALL lj_ir_toint(jit_State *J, TRef tr)
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
     else if (!tref_isnum(tr))
       lj_trace_err(J, LJ_TRERR_BADTYPE);
-    tr = emitir(IRTI(IR_TOINT), tr, IRTOINT_ANY);
+    tr = emitir(IRTI(IR_CONV), tr, IRCONV_INT_NUM|IRCONV_ANY);
   }
   return tr;
 }

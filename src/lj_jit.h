@@ -205,7 +205,7 @@ typedef struct HotPenalty {
 typedef struct BPropEntry {
   IRRef1 key;		/* Key: original reference. */
   IRRef1 val;		/* Value: reference after conversion. */
-  IRRef mode;		/* Mode for this entry (currently IRTOINT_*). */
+  IRRef mode;		/* Mode for this entry (currently IRCONV_*). */
 } BPropEntry;
 
 /* Number of slots for the backpropagation cache. Must be a power of 2. */

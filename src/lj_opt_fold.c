@@ -796,9 +796,9 @@ LJFOLDF(simplify_powi_kx)
 {
   lua_Number n = knumleft;
   if (n == 2.0) {  /* 2.0 ^ i ==> ldexp(1.0, tonum(i)) */
-    fins->o = IR_TONUM;
+    fins->o = IR_CONV;
     fins->op1 = fins->op2;
-    fins->op2 = 0;
+    fins->op2 = IRCONV_NUM_INT;
     fins->op2 = (IRRef1)lj_opt_fold(J);
     fins->op1 = (IRRef1)lj_ir_knum_one(J);
     fins->o = IR_LDEXP;
@@ -953,18 +953,19 @@ LJFOLDF(cse_conv)
 }
 
 /* FP conversion narrowing. */
-LJFOLD(TOINT ADD any)
-LJFOLD(TOINT SUB any)
 LJFOLD(TOBIT ADD KNUM)
 LJFOLD(TOBIT SUB KNUM)
-LJFOLD(TOI64 ADD 5)  /* IRTOINT_TRUNCI64 */
-LJFOLD(TOI64 SUB 5)  /* IRTOINT_TRUNCI64 */
+LJFOLD(CONV ADD IRCONV_INT_NUM)
+LJFOLD(CONV SUB IRCONV_INT_NUM)
+LJFOLD(CONV ADD IRCONV_I64_NUM)
+LJFOLD(CONV SUB IRCONV_I64_NUM)
 LJFOLDF(narrow_convert)
 {
   PHIBARRIER(fleft);
   /* Narrowing ignores PHIs and repeating it inside the loop is not useful. */
   if (J->chain[IR_LOOP])
     return NEXTFOLD;
+  lua_assert(fins->o != IR_CONV || (fins->op2&IRCONV_CONVMASK) != IRCONV_TOBIT);
   return lj_opt_narrow_convert(J);
 }
 

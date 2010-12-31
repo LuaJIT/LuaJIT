@@ -169,10 +169,10 @@ int lj_record_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
     if (ta != tb) {
       /* Widen mixed number/int comparisons to number/number comparison. */
       if (ta == IRT_INT && tb == IRT_NUM) {
-	a = emitir(IRTN(IR_TONUM), a, 0);
+	a = emitir(IRTN(IR_CONV), a, IRCONV_NUM_INT);
 	ta = IRT_NUM;
       } else if (ta == IRT_NUM && tb == IRT_INT) {
-	b = emitir(IRTN(IR_TONUM), b, 0);
+	b = emitir(IRTN(IR_CONV), b, IRCONV_NUM_INT);
       } else {
 	return 2;  /* Two different types are never equal. */
       }
@@ -199,7 +199,7 @@ static void canonicalize_slots(jit_State *J)
     if (tref_isinteger(tr)) {
       IRIns *ir = IR(tref_ref(tr));
       if (!(ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_READONLY)))
-	J->slot[s] = emitir(IRTN(IR_TONUM), tr, 0);
+	J->slot[s] = emitir(IRTN(IR_CONV), tr, IRCONV_NUM_INT);
     }
   }
 }
@@ -869,7 +869,7 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
     if ((MSize)k < LJ_MAX_ASIZE && n == cast_num(k)) {
       TRef asizeref, ikey = key;
       if (!tref_isinteger(ikey))
-	ikey = emitir(IRTGI(IR_TOINT), ikey, IRTOINT_INDEX);
+	ikey = emitir(IRTGI(IR_CONV), ikey, IRCONV_INT_NUM|IRCONV_INDEX);
       asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
       if ((MSize)k < t->asize) {  /* Currently an array key? */
 	TRef arrayref;
@@ -898,7 +898,7 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
 
   /* Otherwise the key is located in the hash part. */
   if (tref_isinteger(key))  /* Hash keys are based on numbers, not ints. */
-    ix->key = key = emitir(IRTN(IR_TONUM), key, 0);
+    ix->key = key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
   if (tref_isk(key)) {
     /* Optimize lookup of constant hash keys. */
     MSize hslot = (MSize)((char *)ix->oldv - (char *)&noderef(t->node)[0].val);
@@ -1024,7 +1024,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
       if (oldv == niltvg(J2G(J))) {  /* Need to insert a new key. */
 	TRef key = ix->key;
 	if (tref_isinteger(key))  /* NEWREF needs a TValue as a key. */
-	  key = emitir(IRTN(IR_TONUM), key, 0);
+	  key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
 	xref = emitir(IRT(IR_NEWREF, IRT_P32), ix->tab, key);
 	keybarrier = 0;  /* NEWREF already takes care of the key barrier. */
       }
@@ -1046,7 +1046,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
       keybarrier = 0;  /* Previous non-nil value kept the key alive. */
     }
     if (tref_isinteger(ix->val))  /* Convert int to number before storing. */
-      ix->val = emitir(IRTN(IR_TONUM), ix->val, 0);
+      ix->val = emitir(IRTN(IR_CONV), ix->val, IRCONV_NUM_INT);
     emitir(IRT(loadop+IRDELTA_L2S, tref_type(ix->val)), xref, ix->val);
     if (keybarrier || tref_isgcv(ix->val))
       emitir(IRT(IR_TBAR, IRT_NIL), ix->tab, 0);
@@ -1100,7 +1100,7 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
     return res;
   } else {  /* Upvalue store. */
     if (tref_isinteger(val))  /* Convert int to number before storing. */
-      val = emitir(IRTN(IR_TONUM), val, 0);
+      val = emitir(IRTN(IR_CONV), val, IRCONV_NUM_INT);
     emitir(IRT(IR_USTORE, tref_type(val)), uref, val);
     if (needbarrier && tref_isgcv(val))
       emitir(IRT(IR_OBAR, IRT_NIL), uref, val);
@@ -1254,7 +1254,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       ptrdiff_t idx = lj_ffrecord_select_mode(J, tridx, &J->L->base[dst-1]);
       if (idx < 0) goto nyivarg;
       if (idx != 0 && !tref_isinteger(tridx))
-	tridx = emitir(IRTGI(IR_TOINT), tridx, IRTOINT_INDEX);
+	tridx = emitir(IRTGI(IR_CONV), tridx, IRCONV_INT_NUM|IRCONV_INDEX);
       if (idx != 0 && tref_isk(tridx)) {
 	emitir(IRTGI(idx <= nvararg ? IR_GE : IR_LT),
 	       fr, lj_ir_kint(J, frofs+8*(int32_t)idx));
@@ -1418,10 +1418,10 @@ void lj_record_ins(jit_State *J)
       if (ta != tc) {
 	/* Widen mixed number/int comparisons to number/number comparison. */
 	if (ta == IRT_INT && tc == IRT_NUM) {
-	  ra = emitir(IRTN(IR_TONUM), ra, 0);
+	  ra = emitir(IRTN(IR_CONV), ra, IRCONV_NUM_INT);
 	  ta = IRT_NUM;
 	} else if (ta == IRT_NUM && tc == IRT_INT) {
-	  rc = emitir(IRTN(IR_TONUM), rc, 0);
+	  rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
 	} else if (!((ta == IRT_FALSE || ta == IRT_TRUE) &&
 		     (tc == IRT_FALSE || tc == IRT_TRUE))) {
 	  break;  /* Interpreter will throw for two different types. */

@@ -165,7 +165,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
     /* fallthrough */
   case CCX(I, F):
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-    sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, IRCONV_TRUNC);
+    sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, IRCONV_TRUNC|IRCONV_ANY);
     goto xstore;
   case CCX(I, P):
   case CCX(I, A):
@@ -241,7 +241,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
     if (st == IRT_CDATA) goto err_nyi;
     /* The signed conversion is cheaper. x64 really has 47 bit pointers. */
     sp = emitconv(sp, (LJ_64 && dsize == 8) ? IRT_I64 : IRT_U32,
-		  st, IRCONV_TRUNC);
+		  st, IRCONV_TRUNC|IRCONV_ANY);
     goto xstore;
 
   /* Destination is an array. */
@@ -401,11 +401,13 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
   if (tref_isnumber(idx)) {
     /* The size of a ptrdiff_t is target-specific. */
 #if LJ_64
-    idx = emitir(IRT(IR_TOI64, IRT_INTP), idx,
-		 tref_isinteger(idx) ? IRTOINT_SEXT64 : IRTOINT_TRUNCI64);
+    if (tref_isnum(idx))
+      idx = emitconv(idx, IRT_I64, IRT_NUM, IRCONV_TRUNC|IRCONV_ANY);
+    else
+      idx = emitconv(idx, IRT_I64, IRT_INT, IRCONV_SEXT);
 #else
-    if (!tref_isinteger(idx))
-      idx = emitir(IRT(IR_TOINT, IRT_INTP), idx, IRTOINT_ANY);
+    if (tref_isnum(idx))
+      idx = emitconv(idx, IRT_INT, IRT_NUM, IRCONV_TRUNC|IRCONV_ANY);
 #endif
     if (ctype_ispointer(ct->info)) {
       CTSize sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));

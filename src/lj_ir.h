@@ -222,15 +222,19 @@ IRFLDEF(FLENUM)
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */
 #define IRCONV_DSTMASK		0x03e0	/* Dest. IRType (also in ir->t). */
+#define IRCONV_NUM_INT		((IRT_NUM<<5)|IRT_INT)
+#define IRCONV_INT_NUM		((IRT_INT<<5)|IRT_NUM)
 #define IRCONV_TRUNC		0x0400	/* Truncate number to integer. */
 #define IRCONV_SEXT		0x0800	/* Sign-extend integer to integer. */
 #define IRCONV_MODEMASK		0x0fff
+#define IRCONV_CONVMASK		0xf000
 #define IRCONV_CSH		12
 /* Number to integer conversion mode. Ordered by strength of the checks. */
 #define IRCONV_TOBIT  (0<<IRCONV_CSH)	/* None. Cache only: TOBIT conv. */
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
+
 
 /* C call info for CALL* instructions. */
 typedef struct CCallInfo {

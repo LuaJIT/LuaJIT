@@ -301,7 +301,7 @@ static void loop_unroll(jit_State *J)
 	/* Check all loop-carried dependencies for type instability. */
 	if (!irt_sametype(t, irr->t)) {
 	  if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num case. */
-	    subst[ins] = tref_ref(emitir(IRTN(IR_TONUM), ref, 0));
+	    subst[ins] = tref_ref(emitir(IRTN(IR_CONV), ref, IRCONV_NUM_INT));
 	  else if (!(irt_isinteger(t) && irt_isinteger(irr->t)))
 	    lj_trace_err(J, LJ_TRERR_TYPEINS);
 	}

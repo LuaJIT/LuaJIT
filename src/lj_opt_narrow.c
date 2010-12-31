@@ -89,16 +89,17 @@
 /* -- Elimination of narrowing type conversions --------------------------- */
 
 /* Narrowing of index expressions and bit operations is demand-driven. The
-** trace recorder emits a narrowing type conversion (TOINT or TOBIT) in
-** all of these cases (e.g. array indexing or string indexing). FOLD
+** trace recorder emits a narrowing type conversion (CONV.int.num or TOBIT)
+** in all of these cases (e.g. array indexing or string indexing). FOLD
 ** already takes care of eliminating simple redundant conversions like
-** TOINT(TONUM(x)) ==> x.
+** CONV.int.num(CONV.num.int(x)) ==> x.
 **
 ** But the surrounding code is FP-heavy and all arithmetic operations are
 ** performed on FP numbers. Consider a common example such as 'x=t[i+1]',
 ** with 'i' already an integer (due to induction variable narrowing). The
-** index expression would be recorded as TOINT(ADD(TONUM(i), 1)), which is
-** clearly suboptimal.
+** index expression would be recorded as
+**   CONV.int.num(ADD(CONV.num.int(i), 1))
+** which is clearly suboptimal.
 **
 ** One can do better by recursively backpropagating the narrowing type
 ** conversion across FP arithmetic operations. This turns FP ops into
@@ -106,9 +107,10 @@
 ** the conversion they also need to check for overflow. Currently only ADD
 ** and SUB are supported.
 **
-** The above example can be rewritten as ADDOV(TOINT(TONUM(i)), 1) and
-** then into ADDOV(i, 1) after folding of the conversions. The original FP
-** ops remain in the IR and are eliminated by DCE since all references to
+** The above example can be rewritten as
+**   ADDOV(CONV.int.num(CONV.num.int(i)), 1)
+** and then into ADDOV(i, 1) after folding of the conversions. The original
+** FP ops remain in the IR and are eliminated by DCE since all references to
 ** them are gone.
 **
 ** Special care has to be taken to avoid narrowing across an operation
@@ -173,6 +175,7 @@
 enum {
   NARROW_REF,		/* Push ref. */
   NARROW_CONV,		/* Push conversion of ref. */
+  NARROW_SEXT,		/* Push sign-extension of ref. */
   NARROW_INT		/* Push KINT ref. The next code holds an int32_t. */
 };
 
@@ -188,7 +191,8 @@ typedef struct NarrowConv {
   NarrowIns *sp;	/* Current stack pointer. */
   NarrowIns *maxsp;	/* Maximum stack pointer minus redzone. */
   int lim;		/* Limit on the number of emitted conversions. */
-  IRRef mode;		/* Conversion mode (IRTOINT_*). */
+  IRRef mode;		/* Conversion mode (IRCONV_*). */
+  IRType t;		/* Destination type: IRT_INT or IRT_I64. */
   NarrowIns stack[NARROW_MAX_STACK];  /* Stack holding stack-machine code. */
 } NarrowConv;
 
@@ -198,7 +202,9 @@ static BPropEntry *narrow_bpc_get(jit_State *J, IRRef1 key, IRRef mode)
   ptrdiff_t i;
   for (i = 0; i < BPROP_SLOTS; i++) {
     BPropEntry *bp = &J->bpropcache[i];
-    if (bp->key == key && bp->mode <= mode)  /* Stronger checks are ok, too. */
+    /* Stronger checks are ok, too. */
+    if (bp->key == key && bp->mode >= mode &&
+	((bp->mode ^ mode) & IRCONV_MODEMASK) == 0)
       return bp;
   }
   return NULL;
@@ -223,16 +229,16 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   IRRef cref;
 
   /* Check the easy cases first. */
-  if (ir->o == IR_TONUM) {  /* Undo inverse conversion. */
-    *nc->sp++ = NARROWINS(NARROW_REF, ir->op1);
-    if (nc->mode == IRTOINT_TRUNCI64) {
-      *nc->sp++ = NARROWINS(NARROW_REF, IRTOINT_SEXT64);
-      *nc->sp++ = NARROWINS(IRT(IR_TOI64, IRT_I64), 0);
-    }
+  if (ir->o == IR_CONV && (ir->op2 & IRCONV_SRCMASK) == IRT_INT) {
+    if (nc->t == IRT_I64)
+      *nc->sp++ = NARROWINS(NARROW_SEXT, ir->op1);  /* Reduce to sign-ext. */
+    else
+      *nc->sp++ = NARROWINS(NARROW_REF, ir->op1);  /* Undo conversion. */
     return 0;
   } else if (ir->o == IR_KNUM) {  /* Narrow FP constant. */
     lua_Number n = ir_knum(ir)->n;
-    if (nc->mode == IRTOINT_TOBIT) {  /* Allows a wider range of constants. */
+    if ((nc->mode & IRCONV_CONVMASK) == IRCONV_TOBIT) {
+      /* Allows a wider range of constants. */
       int64_t k64 = (int64_t)n;
       if (n == cast_num(k64)) {  /* Only if constant doesn't lose precision. */
 	*nc->sp++ = NARROWINS(NARROW_INT, 0);
@@ -251,36 +257,46 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   }
 
   /* Try to CSE the conversion. Stronger checks are ok, too. */
-  for (cref = J->chain[fins->o]; cref > ref; cref = IR(cref)->prev)
-    if (IR(cref)->op1 == ref &&
-	irt_isguard(IR(cref)->t) >= irt_isguard(fins->t)) {
+  cref = J->chain[fins->o];
+  while (cref > ref) {
+    IRIns *cr = IR(cref);
+    if (cr->op1 == ref &&
+	(fins->o == IR_TOBIT ||
+	 ((cr->op2 & IRCONV_MODEMASK) == (nc->mode & IRCONV_MODEMASK) &&
+	  irt_isguard(cr->t) >= irt_isguard(fins->t)))) {
       *nc->sp++ = NARROWINS(NARROW_REF, cref);
       return 0;  /* Already there, no additional conversion needed. */
     }
+    cref = cr->prev;
+  }
 
   /* Backpropagate across ADD/SUB. */
   if (ir->o == IR_ADD || ir->o == IR_SUB) {
     /* Try cache lookup first. */
     IRRef mode = nc->mode;
     BPropEntry *bp;
-    if (mode == IRTOINT_INDEX && depth > 0)
-      mode = IRTOINT_CHECK;  /* Inner conversions need a stronger check. */
+    /* Inner conversions need a stronger check. */
+    if ((mode & IRCONV_CONVMASK) == IRCONV_INDEX && depth > 0)
+      mode += IRCONV_CHECK-IRCONV_INDEX;
     bp = narrow_bpc_get(nc->J, (IRRef1)ref, mode);
     if (bp) {
       *nc->sp++ = NARROWINS(NARROW_REF, bp->val);
-      if (mode == IRTOINT_TRUNCI64 && mode != bp->mode) {
-	*nc->sp++ = NARROWINS(NARROW_REF, IRTOINT_SEXT64);
-	*nc->sp++ = NARROWINS(IRT(IR_TOI64, IRT_I64), 0);
-      }
       return 0;
+    } else if (nc->t == IRT_I64) {
+      /* Try sign-extending from an existing (checked) conversion to int. */
+      mode = (IRT_INT<<5)|IRT_NUM|IRCONV_INDEX;
+      bp = narrow_bpc_get(nc->J, (IRRef1)ref, mode);
+      if (bp) {
+	*nc->sp++ = NARROWINS(NARROW_SEXT, bp->val);
+	return 0;
+      }
     }
     if (++depth < NARROW_MAX_BACKPROP && nc->sp < nc->maxsp) {
       NarrowIns *savesp = nc->sp;
       int count = narrow_conv_backprop(nc, ir->op1, depth);
       count += narrow_conv_backprop(nc, ir->op2, depth);
       if (count <= nc->lim) {  /* Limit total number of conversions. */
-	IRType t = mode == IRTOINT_TRUNCI64 ? IRT_I64 : IRT_INT;
-	*nc->sp++ = NARROWINS(IRT(ir->o, t), ref);
+	*nc->sp++ = NARROWINS(IRT(ir->o, nc->t), ref);
 	return count;
       }
       nc->sp = savesp;  /* Too many conversions, need to backtrack. */
@@ -309,9 +325,12 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
       *sp++ = ref;
     } else if (op == NARROW_CONV) {
       *sp++ = emitir_raw(convot, ref, convop2);  /* Raw emit avoids a loop. */
+    } else if (op == NARROW_SEXT) {
+      *sp++ = emitir(IRT(IR_CONV, IRT_I64), ref,
+		     (IRT_I64<<5)|IRT_INT|IRCONV_SEXT);
     } else if (op == NARROW_INT) {
       lua_assert(next < last);
-      *sp++ = nc->mode == IRTOINT_TRUNCI64 ?
+      *sp++ = nc->t == IRT_I64 ?
 	      lj_ir_kint64(J, (int64_t)(int32_t)*next++) :
 	      lj_ir_kint(J, *next++);
     } else {  /* Regular IROpT. Pops two operands and pushes one result. */
@@ -319,12 +338,12 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
       lua_assert(sp >= nc->stack+2);
       sp--;
       /* Omit some overflow checks for array indexing. See comments above. */
-      if (mode == IRTOINT_INDEX) {
+      if ((mode & IRCONV_CONVMASK) == IRCONV_INDEX) {
 	if (next == last && irref_isk(narrow_ref(sp[0])) &&
 	  (uint32_t)IR(narrow_ref(sp[0]))->i + 0x40000000 < 0x80000000)
 	  guardot = 0;
-	else
-	  mode = IRTOINT_CHECK;  /* Otherwise cache a stronger check. */
+	else  /* Otherwise cache a stronger check. */
+	  mode += IRCONV_CHECK-IRCONV_INDEX;
       }
       sp[-1] = emitir(op+guardot, sp[-1], sp[0]);
       /* Add to cache. */
@@ -344,8 +363,9 @@ TRef LJ_FASTCALL lj_opt_narrow_convert(jit_State *J)
     nc.J = J;
     nc.sp = nc.stack;
     nc.maxsp = &nc.stack[NARROW_MAX_STACK-4];
+    nc.t = irt_type(fins->t);
     if (fins->o == IR_TOBIT) {
-      nc.mode = IRTOINT_TOBIT;  /* Used only in the backpropagation cache. */
+      nc.mode = IRCONV_TOBIT;  /* Used only in the backpropagation cache. */
       nc.lim = 2;  /* TOBIT can use a more optimistic rule. */
     } else {
       nc.mode = fins->op2;
@@ -401,7 +421,8 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
     if (!tref_isinteger(rc)) {
       if (tref_isstr(rc))
 	rc = emitir(IRTG(IR_STRTO, IRT_NUM), rc, 0);
-      rc = emitir(IRTGI(IR_TOINT), rc, IRTOINT_CHECK); /* Guarded TOINT! */
+      /* Guarded conversion to integer! */
+      rc = emitir(IRTGI(IR_CONV), rc, IRCONV_INT_NUM|IRCONV_CHECK);
     }
     if (!tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
       tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536-2147483647-1));
