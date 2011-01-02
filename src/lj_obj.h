@@ -767,8 +767,7 @@ static LJ_AINLINE uint64_t lj_num2u64(lua_Number n)
 {
 #ifdef _MSC_VER
   if (n >= 9223372036854775808.0)  /* They think it's a feature. */
-    return (uint64_t)(int64_t)(n - 9223372036854775808.0) +
-	   U64x(80000000,00000000);
+    return (uint64_t)(int64_t)(n - 18446744073709551616.0);
   else
 #endif
     return (uint64_t)n;

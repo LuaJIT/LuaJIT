@@ -1641,8 +1641,19 @@ static void asm_conv(ASMState *as, IRIns *ir)
       return;
 #endif
     } else {  /* Integer to FP conversion. */
-      Reg left = (LJ_64 && st == IRT_U32) ? ra_alloc1(as, lref, RSET_GPR) :
-					    asm_fuseload(as, lref, RSET_GPR);
+      Reg tmp = (LJ_64 && st == IRT_U64) ? ra_scratch(as, RSET_GPR) : RID_NONE;
+      Reg left = (LJ_64 && (st == IRT_U32 || st == IRT_U64)) ?
+		 ra_alloc1(as, lref, RSET_GPR) :
+		 asm_fuseload(as, lref, RSET_GPR);
+      if (LJ_64 && st == IRT_U64) {
+	Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, dest));
+	MCLabel l_end = emit_label(as);
+	emit_rr(as, XO_ADDSD, dest, tmpn);
+	emit_rr(as, XO_MOVD, tmpn|REX_64, tmp);
+	emit_loadu64(as, tmp, U64x(43f00000,00000000));
+	emit_sjcc(as, CC_NS, l_end);
+	emit_rr(as, XO_TEST, left|REX_64, left);
+      }
       emit_mrm(as, irt_isnum(ir->t) ? XO_CVTSI2SD : XO_CVTSI2SS,
 	       dest|((LJ_64 && (st64 || st == IRT_U32)) ? REX_64 : 0), left);
     }
@@ -1657,24 +1668,32 @@ static void asm_conv(ASMState *as, IRIns *ir)
       /* NYI: number to 64 bit integer or uint32_t conversion. */
       setintV(&as->J->errinfo, ir->o);
       lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-#else
-    } else if (irt_isu64(ir->t)) {
-      /* NYI: number to uint64_t conversion. */
-      setintV(&as->J->errinfo, ir->o);
-      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
 #endif
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      Reg left = asm_fuseload(as, ir->op1, RSET_FPR);
       x86Op op = st == IRT_NUM ?
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
-      if (LJ_64 && irt_isu32(ir->t))
-	emit_rr(as, XO_MOV, dest, dest);  /* Zero upper 32 bits. */
-      emit_mrm(as, op,
-	       dest|((LJ_64 &&
-		      (irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
-	       left);
+      if (LJ_64 && irt_isu64(ir->t)) {
+	Reg left = ra_alloc1(as, lref, RSET_FPR);
+	Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, left));
+	MCLabel l_end = emit_label(as);
+	emit_rr(as, op, dest|REX_64, tmpn);
+	emit_rr(as, XO_ADDSD, tmpn, left);
+	emit_rr(as, XO_MOVD, tmpn|REX_64, dest);
+	emit_loadu64(as, dest, U64x(c3f00000,00000000));
+	emit_sjcc(as, CC_NS, l_end);
+	emit_rr(as, XO_TEST, dest|REX_64, dest);
+	emit_rr(as, op, dest|REX_64, left);
+      } else {
+	Reg left = asm_fuseload(as, lref, RSET_FPR);
+	if (LJ_64 && irt_isu32(ir->t))
+	  emit_rr(as, XO_MOV, dest, dest);  /* Zero upper 32 bits. */
+	emit_mrm(as, op,
+		 dest|((LJ_64 &&
+			(irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
+		 left);
+      }
     }
   } else if (st >= IRT_I8 && st <= IRT_U16) {  /* Extend to 32 bit integer. */
     Reg left, dest = ra_dest(as, ir, RSET_GPR);
@@ -1690,7 +1709,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
     } else {
       op = XO_MOVZXw;
     }
-    left = asm_fuseload(as, ir->op1, allow);
+    left = asm_fuseload(as, lref, allow);
     /* Add extra MOV if source is already in wrong register. */
     if (!LJ_64 && left != RID_MRM && !rset_test(allow, left)) {
       Reg tmp = ra_scratch(as, allow);
