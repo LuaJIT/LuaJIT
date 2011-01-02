@@ -439,6 +439,34 @@ LJFOLDF(kfold_strcmp)
   return NEXTFOLD;
 }
 
+/* -- Constant folding of pointer arithmetic ------------------------------ */
+
+LJFOLD(ADD KGC KINT)
+LJFOLD(ADD KGC KINT64)
+LJFOLDF(kfold_add_kgc)
+{
+  GCobj *o = ir_kgc(fleft);
+#if LJ_64
+  ptrdiff_t ofs = (ptrdiff_t)ir_kint64(fright)->u64;
+#else
+  ptrdiff_t ofs = fright->i;
+#endif
+  return lj_ir_kptr(J, (char *)o + ofs);
+}
+
+LJFOLD(ADD KPTR KINT)
+LJFOLD(ADD KPTR KINT64)
+LJFOLDF(kfold_add_kptr)
+{
+  void *p = ir_kptr(fleft);
+#if LJ_64
+  ptrdiff_t ofs = (ptrdiff_t)ir_kint64(fright)->u64;
+#else
+  ptrdiff_t ofs = fright->i;
+#endif
+  return lj_ir_kptr(J, (char *)p + ofs);
+}
+
 /* -- Constant folding of conversions ------------------------------------- */
 
 LJFOLD(TOBIT KNUM KNUM)
@@ -1462,18 +1490,23 @@ LJFOLDF(comm_bxor)
 
 /* -- Simplification of compound expressions ------------------------------ */
 
-static int32_t kfold_xload(IRIns *ir, const void *p)
+static TRef kfold_xload(jit_State *J, IRIns *ir, const void *p)
 {
+  int32_t k;
 #if !LJ_TARGET_X86ORX64
 #error "Missing support for unaligned loads"
 #endif
   switch (irt_type(ir->t)) {
-  case IRT_I8: return (int32_t)*(int8_t *)p;
-  case IRT_U8: return (int32_t)*(uint8_t *)p;
-  case IRT_I16: return (int32_t)*(int16_t *)p;
-  case IRT_U16: return (int32_t)*(uint16_t *)p;
-  default: lua_assert(irt_isint(ir->t)); return (int32_t)*(int32_t *)p;
+  case IRT_NUM: return lj_ir_knum_u64(J, *(uint64_t *)p);
+  case IRT_I8: k = (int32_t)*(int8_t *)p; break;
+  case IRT_U8: k = (int32_t)*(uint8_t *)p; break;
+  case IRT_I16: k = (int32_t)*(int16_t *)p; break;
+  case IRT_U16: k = (int32_t)*(uint16_t *)p; break;
+  case IRT_INT: case IRT_U32: k = *(int32_t *)p; break;
+  case IRT_I64: case IRT_U64: return lj_ir_kint64(J, *(uint64_t *)p);
+  default: return 0;
   }
+  return lj_ir_kint(J, k);
 }
 
 /* Turn: string.sub(str, a, b) == kstr
@@ -1508,7 +1541,7 @@ LJFOLDF(merge_eqne_snew_kgc)
 			       IRTI(IR_XLOAD));
       TRef tmp = emitir(ot, strref,
 			IRXLOAD_READONLY | (len > 1 ? IRXLOAD_UNALIGNED : 0));
-      TRef val = lj_ir_kint(J, kfold_xload(IR(tref_ref(tmp)), strdata(kstr)));
+      TRef val = kfold_xload(J, IR(tref_ref(tmp)), strdata(kstr));
       if (len == 3)
 	tmp = emitir(IRTI(IR_BAND), tmp,
 		     lj_ir_kint(J, LJ_ENDIAN_SELECT(0x00ffffff, 0xffffff00)));
@@ -1672,9 +1705,17 @@ LJFOLDF(fload_str_len_snew)
 }
 
 /* The C type ID of cdata objects is immutable. */
+LJFOLD(FLOAD KGC IRFL_CDATA_TYPEID)
+LJFOLDF(fload_cdata_typeid_kgc)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
+    return INTFOLD((int32_t)ir_kcdata(fleft)->typeid);
+  return NEXTFOLD;
+}
+
 LJFOLD(FLOAD CNEW IRFL_CDATA_TYPEID)
 LJFOLD(FLOAD CNEWP IRFL_CDATA_TYPEID)
-LJFOLDF(fload_cdata_typeid_cnewi)
+LJFOLDF(fload_cdata_typeid_cnew)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
     return fleft->op1;  /* No PHI barrier needed. CNEW/CNEWP op1 is const. */
@@ -1683,7 +1724,7 @@ LJFOLDF(fload_cdata_typeid_cnewi)
 
 /* Pointer cdata objects are immutable. */
 LJFOLD(FLOAD CNEWP IRFL_CDATA_PTR)
-LJFOLDF(fload_cdata_ptr_cnewi)
+LJFOLDF(fload_cdata_ptr_cnew)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
     return fleft->op2;  /* Fold even across PHI to avoid allocations. */
@@ -1716,10 +1757,8 @@ LJFOLDF(fwd_sload)
 LJFOLD(XLOAD KPTR any)
 LJFOLDF(xload_kptr)
 {
-  /* Only fold read-only integer loads for now. */
-  if ((fins->op2 & IRXLOAD_READONLY) && irt_isinteger(fins->t))
-    return INTFOLD(kfold_xload(fins, ir_kptr(fleft)));
-  return NEXTFOLD;
+  TRef tr = kfold_xload(J, fins, ir_kptr(fleft));
+  return tr ? tr : NEXTFOLD;
 }
 
 LJFOLD(XLOAD any any)

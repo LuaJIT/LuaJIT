@@ -1563,6 +1563,11 @@ void lj_record_ins(jit_State *J)
       J->base[ra++] = TREF_NIL;
     if (rc >= J->maxslot) J->maxslot = rc+1;
     break;
+#if LJ_HASFFI
+  case BC_KCDATA:
+    rc = lj_ir_kgc(J, proto_kgc(J->pt, ~(ptrdiff_t)rc), IRT_CDATA);
+    break;
+#endif
 
   /* -- Upvalue and function ops ------------------------------------------ */
 
