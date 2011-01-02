@@ -268,7 +268,8 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
     }
 #if LJ_HASFFI
   } else if (tref_iscdata(tr)) {
-    recff_nyiu(J);
+    lj_crecord_tonumber(J, rd);
+    return;
 #endif
   } else {
     tr = TREF_NIL;

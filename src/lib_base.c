@@ -198,7 +198,7 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
     if (tviscdata(o)) {
       CTState *cts = ctype_cts(L);
       lj_cconv_ct_tv(cts, ctype_get(cts, CTID_DOUBLE),
-		     (uint8_t *)&(L->base-1)->n, o, CCF_CAST);
+		     (uint8_t *)&(L->base-1)->n, o, 0);
       return FFH_RES(1);
     }
 #endif

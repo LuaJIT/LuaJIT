@@ -569,6 +569,34 @@ void LJ_FASTCALL recff_ffi_new(jit_State *J, RecordFFData *rd)
   crec_alloc(J, rd, argv2ctype(J, J->base[0], &rd->argv[0]));
 }
 
+/* -- Miscellaneous library functions ------------------------------------- */
+
+void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
+{
+  CTypeID sid = argv2cdata(J, J->base[0], &rd->argv[0])->typeid;
+  CTState *cts = ctype_ctsG(J2G(J));
+  CType *s = ctype_raw(cts, sid);
+  TRef sp = J->base[0];
+  if (ctype_isref(s->info)) {
+    sp = emitir(IRT(IR_FLOAD, IRT_PTR), sp, IRFL_CDATA_PTR);
+    s = ctype_rawchild(cts, s);
+  } else {
+    sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCcdata)));
+  }
+  if (ctype_isenum(s->info)) s = ctype_child(cts, s);
+  if (ctype_isnum(s->info) || ctype_iscomplex(s->info)) {
+    IRType t = crec_ct2irt(s);
+    if (t != IRT_CDATA) {
+      TRef tr = emitir(IRT(IR_XLOAD, t), sp, 0);  /* Load number value. */
+      if (t == IRT_FLOAT || t == IRT_U32 || t == IRT_I64 || t == IRT_U64)
+	tr = emitconv(tr, IRT_NUM, t, 0);
+      J->base[0] = tr;
+      return;
+    }
+  }
+  lj_trace_err(J, LJ_TRERR_BADTYPE);
+}
+
 #undef IR
 #undef emitir
 #undef emitconv
