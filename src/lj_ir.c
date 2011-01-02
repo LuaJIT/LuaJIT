@@ -21,6 +21,10 @@
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#include "lj_cdata.h"
+#endif
 #include "lj_lib.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
@@ -380,8 +384,14 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
   case IR_KPTR: case IR_KNULL: setlightudV(tv, mref(ir->ptr, void)); break;
   case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
-  /* NYI: use FFI int64_t. */
-  case IR_KINT64: setnumV(tv, (lua_Number)(int64_t)ir_kint64(ir)->u64); break;
+#if LJ_HASFFI
+  case IR_KINT64: {
+    GCcdata *cd = lj_cdata_new_(L, CTID_INT64, 8);
+    *(uint64_t *)cdataptr(cd) = ir_kint64(ir)->u64;
+    setcdataV(L, tv, cd);
+    break;
+    }
+#endif
   default: lua_assert(0); break;
   }
 }
