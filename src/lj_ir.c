@@ -195,7 +195,7 @@ void lj_ir_k64_freeall(jit_State *J)
 }
 
 /* Find 64 bit constant in chained array or add it. */
-static cTValue *ir_k64_find(jit_State *J, uint64_t u64)
+cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
 {
   K64Array *k, *kp = NULL;
   TValue *ntv;
@@ -249,13 +249,13 @@ found:
 /* Intern FP constant, given by its 64 bit pattern. */
 TRef lj_ir_knum_u64(jit_State *J, uint64_t u64)
 {
-  return lj_ir_k64(J, IR_KNUM, ir_k64_find(J, u64));
+  return lj_ir_k64(J, IR_KNUM, lj_ir_k64_find(J, u64));
 }
 
 /* Intern 64 bit integer constant. */
 TRef lj_ir_kint64(jit_State *J, uint64_t u64)
 {
-  return lj_ir_k64(J, IR_KINT64, ir_k64_find(J, u64));
+  return lj_ir_k64(J, IR_KINT64, lj_ir_k64_find(J, u64));
 }
 
 /* Check whether a number is int and return it. -0 is NOT considered an int. */

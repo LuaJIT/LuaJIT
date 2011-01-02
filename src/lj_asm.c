@@ -1641,18 +1641,15 @@ static void asm_conv(ASMState *as, IRIns *ir)
       return;
 #endif
     } else {  /* Integer to FP conversion. */
-      Reg tmp = (LJ_64 && st == IRT_U64) ? ra_scratch(as, RSET_GPR) : RID_NONE;
       Reg left = (LJ_64 && (st == IRT_U32 || st == IRT_U64)) ?
 		 ra_alloc1(as, lref, RSET_GPR) :
 		 asm_fuseload(as, lref, RSET_GPR);
       if (LJ_64 && st == IRT_U64) {
-	Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, dest));
 	MCLabel l_end = emit_label(as);
-	emit_rr(as, XO_ADDSD, dest, tmpn);
-	emit_rr(as, XO_MOVD, tmpn|REX_64, tmp);
-	emit_loadu64(as, tmp, U64x(43f00000,00000000));
+	const void *k = lj_ir_k64_find(as->J, U64x(43f00000,00000000));
+	emit_rma(as, XO_ADDSD, dest, k);  /* Add 2^64 to compensate. */
 	emit_sjcc(as, CC_NS, l_end);
-	emit_rr(as, XO_TEST, left|REX_64, left);
+	emit_rr(as, XO_TEST, left|REX_64, left);  /* Check if u64 >= 2^63. */
       }
       emit_mrm(as, irt_isnum(ir->t) ? XO_CVTSI2SD : XO_CVTSI2SS,
 	       dest|((LJ_64 && (st64 || st == IRT_U32)) ? REX_64 : 0), left);
@@ -1675,15 +1672,22 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
       if (LJ_64 && irt_isu64(ir->t)) {
-	Reg left = ra_alloc1(as, lref, RSET_FPR);
-	Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, left));
+	const void *k = lj_ir_k64_find(as->J, U64x(c3f00000,00000000));
 	MCLabel l_end = emit_label(as);
-	emit_rr(as, op, dest|REX_64, tmpn);
-	emit_rr(as, XO_ADDSD, tmpn, left);
-	emit_rr(as, XO_MOVD, tmpn|REX_64, dest);
-	emit_loadu64(as, dest, U64x(c3f00000,00000000));
+	Reg left = IR(lref)->r;
+	/* For inputs in [2^63,2^64-1] add -2^64 and convert again. */
+	if (ra_hasreg(left)) {
+	  Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, left));
+	  emit_rr(as, op, dest|REX_64, tmpn);
+	  emit_rr(as, XO_ADDSD, tmpn, left);
+	  emit_rma(as, XMM_MOVRM(as), tmpn, k);
+	} else {
+	  left = ra_allocref(as, lref, RSET_FPR);
+	  emit_rr(as, op, dest|REX_64, left);
+	  emit_rma(as, XO_ADDSD, left, k);
+	}
 	emit_sjcc(as, CC_NS, l_end);
-	emit_rr(as, XO_TEST, dest|REX_64, dest);
+	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest < 2^63. */
 	emit_rr(as, op, dest|REX_64, left);
       } else {
 	Reg left = asm_fuseload(as, lref, RSET_FPR);
