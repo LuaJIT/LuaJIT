@@ -2831,10 +2831,10 @@ static void asm_add(ASMState *as, IRIns *ir)
     asm_intarith(as, ir, XOg_ADD);
 }
 
-static void asm_bitnot(ASMState *as, IRIns *ir)
+static void asm_neg_not(ASMState *as, IRIns *ir, x86Group3 xg)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  emit_rr(as, XO_GROUP3, REX_64IR(ir, XOg_NOT), dest);
+  emit_rr(as, XO_GROUP3, REX_64IR(ir, xg), dest);
   ra_left(as, dest, ir->op1);
 }
 
@@ -3691,7 +3691,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_RETF: asm_retf(as, ir); break;
 
   /* Bit ops. */
-  case IR_BNOT: asm_bitnot(as, ir); break;
+  case IR_BNOT: asm_neg_not(as, ir, XOg_NOT);
   case IR_BSWAP: asm_bitswap(as, ir); break;
 
   case IR_BAND: asm_intarith(as, ir, XOg_AND); break;
@@ -3720,7 +3720,12 @@ static void asm_ir(ASMState *as, IRIns *ir)
     break;
   case IR_DIV: asm_fparith(as, ir, XO_DIVSD); break;
 
-  case IR_NEG: asm_fparith(as, ir, XO_XORPS); break;
+  case IR_NEG:
+    if (irt_isnum(ir->t))
+      asm_fparith(as, ir, XO_XORPS);
+    else
+      asm_neg_not(as, ir, XOg_NEG);
+    break;
   case IR_ABS: asm_fparith(as, ir, XO_ANDPS); break;
 
   case IR_MIN: asm_fparith(as, ir, XO_MINSD); break;
