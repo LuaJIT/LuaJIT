@@ -2713,40 +2713,26 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
       IRRef tmp = lref; lref = rref; rref = tmp;
     }
     right = asm_fuseload(as, rref, rset_clear(allow, dest));
-    /* Note: fuses only with IR_FLOAD for now. */
   }
   if (irt_isguard(ir->t))  /* For IR_ADDOV etc. */
     asm_guardcc(as, CC_O);
-  if (ra_hasreg(right))
-    emit_mrm(as, XO_ARITH(xa), REX_64IR(ir, dest), right);
-  else
-    emit_gri(as, XG_ARITHi(xa), REX_64IR(ir, dest), k);
-  ra_left(as, dest, lref);
-}
-
-static void asm_intmul(ASMState *as, IRIns *ir)
-{
-  IRRef lref = ir->op1;
-  IRRef rref = ir->op2;
-  int32_t k = 0;
-  if (asm_isk32(as, rref, &k)) {
+  if (xa != XOg_X_IMUL) {
+    if (ra_hasreg(right))
+      emit_mrm(as, XO_ARITH(xa), REX_64IR(ir, dest), right);
+    else
+      emit_gri(as, XG_ARITHi(xa), REX_64IR(ir, dest), k);
+  } else if (ra_hasreg(right)) {  /* IMUL r, mrm. */
+    emit_mrm(as, XO_IMUL, REX_64IR(ir, dest), right);
+  } else {  /* IMUL r, r, k. */
     /* NYI: use lea/shl/add/sub (FOLD only does 2^k) depending on CPU. */
-    Reg dest = ra_dest(as, ir, RSET_GPR);
     Reg left = asm_fuseload(as, lref, RSET_GPR);
     x86Op xo;
-    if (checki8(k)) {
-      emit_i8(as, k);
-      xo = XO_IMULi8;
-    } else {
-      emit_i32(as, k);
-      xo = XO_IMULi;
-    }
+    if (checki8(k)) { emit_i8(as, k); xo = XO_IMULi8;
+    } else { emit_i32(as, k); xo = XO_IMULi; }
     emit_rr(as, xo, REX_64IR(ir, dest), left);
-  } else {
-    /* NYI: integer multiply of non-constant operands. */
-    setintV(&as->J->errinfo, ir->o);
-    lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+    return;
   }
+  ra_left(as, dest, lref);
 }
 
 /* LEA is really a 4-operand ADD with an independent destination register,
@@ -3716,7 +3702,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
     if (irt_isnum(ir->t))
       asm_fparith(as, ir, XO_MULSD);
     else
-      asm_intmul(as, ir);
+      asm_intarith(as, ir, XOg_X_IMUL);
     break;
   case IR_DIV: asm_fparith(as, ir, XO_DIVSD); break;
 

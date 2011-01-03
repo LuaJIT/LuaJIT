@@ -218,6 +218,7 @@ typedef enum {
   XO_SHIFTi =	XO_(c1),
   XO_SHIFT1 =	XO_(d1),
   XO_SHIFTcl =	XO_(d3),
+  XO_IMUL =	XO_0f(af),
   XO_IMULi =	XO_(69),
   XO_IMULi8 =	XO_(6b),
   XO_CMP =	XO_(3b),
@@ -278,7 +279,8 @@ typedef uint32_t x86Group;
 #define XO_ARITH(a)	((x86Op)(0x030000fe + ((a)<<27)))
 
 typedef enum {
-  XOg_ADD, XOg_OR, XOg_ADC, XOg_SBB, XOg_AND, XOg_SUB, XOg_XOR, XOg_CMP
+  XOg_ADD, XOg_OR, XOg_ADC, XOg_SBB, XOg_AND, XOg_SUB, XOg_XOR, XOg_CMP,
+  XOg_X_IMUL
 } x86Arith;
 
 typedef enum {
