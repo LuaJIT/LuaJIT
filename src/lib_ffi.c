@@ -291,37 +291,37 @@ static int ffi_arith(lua_State *L)
   return 1;
 }
 
-LJLIB_CF(ffi_meta___add)
+LJLIB_CF(ffi_meta___add)	LJLIB_REC(cdata_arith MM_add)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___sub)
+LJLIB_CF(ffi_meta___sub)	LJLIB_REC(cdata_arith MM_sub)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___mul)
+LJLIB_CF(ffi_meta___mul)	LJLIB_REC(cdata_arith MM_mul)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___div)
+LJLIB_CF(ffi_meta___div)	LJLIB_REC(cdata_arith MM_div)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___mod)
+LJLIB_CF(ffi_meta___mod)	LJLIB_REC(cdata_arith MM_mod)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___pow)
+LJLIB_CF(ffi_meta___pow)	LJLIB_REC(cdata_arith MM_pow)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___unm)
+LJLIB_CF(ffi_meta___unm)	LJLIB_REC(cdata_arith MM_unm)
 {
   return ffi_arith(L);
 }
