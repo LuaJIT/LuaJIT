@@ -235,7 +235,6 @@ void lj_cdata_set(CTState *cts, CType *d, uint8_t *dp, TValue *o, CTInfo qual)
 uint64_t lj_cdata_powi64(uint64_t x, uint64_t k, int isunsigned)
 {
   uint64_t y = 0;
-  int sign = 0;
   if (k == 0)
     return 1;
   if (!isunsigned) {
@@ -249,10 +248,6 @@ uint64_t lj_cdata_powi64(uint64_t x, uint64_t k, int isunsigned)
       else
 	return 0;
     }
-    if ((int64_t)x < 0) {
-      x = -x;
-      sign = (k & 1);
-    }
   }
   for (; (k & 1) == 0; k >>= 1) x *= x;
   y = x;
@@ -265,7 +260,6 @@ uint64_t lj_cdata_powi64(uint64_t x, uint64_t k, int isunsigned)
     }
     y *= x;
   }
-  if (sign) y = (uint64_t)-(int64_t)y;
   return y;
 }
 

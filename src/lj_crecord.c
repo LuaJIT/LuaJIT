@@ -564,8 +564,39 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
 
 static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
 {
-  UNUSED(J); UNUSED(sp); UNUSED(s); UNUSED(mm);
-  return 0;  /* NYI: 64 bit integer arithmetic. */
+  if (ctype_isnum(s[0]->info) && ctype_isnum(s[1]->info)) {
+    IRType dt;
+    CTypeID id;
+    TRef tr, dp, ptr;
+    MSize i;
+    if (((s[0]->info & CTF_UNSIGNED) && s[0]->size == 8) ||
+	((s[1]->info & CTF_UNSIGNED) && s[1]->size == 8)) {
+      dt = IRT_U64; id = CTID_UINT64;
+    } else {
+      dt = IRT_I64; id = CTID_INT64;
+    }
+    for (i = 0; i < 2; i++) {
+      IRType st = tref_type(sp[i]);
+      if (st == IRT_NUM || st == IRT_FLOAT)
+	sp[i] = emitconv(sp[i], dt, st, IRCONV_TRUNC|IRCONV_ANY);
+      else if (!(st == IRT_I64 || st == IRT_U64))
+	sp[i] = emitconv(sp[i], dt, IRT_INT,
+			 ((st - IRT_I8) & 1) ? 0 : IRCONV_SEXT);
+    }
+    if (mm == MM_pow) {
+      tr = lj_ir_call(J, IRCALL_lj_cdata_powi64, sp[0], sp[1],
+		      lj_ir_kint(J, (int)dt-(int)IRT_I64));
+    } else {
+      if (mm == MM_div || mm == MM_mod)
+	return 0;  /* NYI: integer div, mod. */
+      tr = emitir(IRT(mm+(int)IR_ADD-(int)MM_add, dt), sp[0], sp[1]);
+    }
+    dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, id), TREF_NIL);
+    ptr = emitir(IRT(IR_ADD, IRT_PTR), dp, lj_ir_kintp(J, sizeof(GCcdata)));
+    emitir(IRT(IR_XSTORE, dt), ptr, tr);
+    return dp;
+  }
+  return 0;
 }
 
 static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)

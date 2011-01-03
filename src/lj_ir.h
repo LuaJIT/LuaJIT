@@ -251,6 +251,12 @@ typedef struct CCallInfo {
 #define CCI_FASTCALL		0x0800	/* Fastcall convention. */
 
 /* Function definitions for CALL* instructions. */
+#if LJ_HASFFI
+#define IRCALLDEF_FFI(_) \
+  _(lj_cdata_powi64,	3,   N, U64, CCI_NOFPRCLOBBER)
+#else
+#define IRCALLDEF_FFI(_)
+#endif
 #define IRCALLDEF(_) \
   _(lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
   _(lj_str_new,		3,   S, STR, CCI_L) \
@@ -265,6 +271,7 @@ typedef struct CCallInfo {
   _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
   _(lj_mem_newgco,	2,  FS, P32, CCI_L) \
   _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
+  IRCALLDEF_FFI(_) \
   _(sinh,		1,  N, NUM, 0) \
   _(cosh,		1,  N, NUM, 0) \
   _(tanh,		1,  N, NUM, 0) \
