@@ -1582,8 +1582,9 @@ static void cp_decl_func(CPState *cp, CPDecl *fdecl)
     }
     cp->tok = ';';  /* Ok for cp_decl_multi(), error in cp_decl_single(). */
   }
-  cp_add(fdecl, info | (fdecl->fattr & ~CTMASK_CID), nargs);
+  info |= (fdecl->fattr & ~CTMASK_CID);
   fdecl->fattr = 0;
+  fdecl->stack[cp_add(fdecl, info, nargs)].sib = anchor;
 }
 
 /* Parse declarator. */
