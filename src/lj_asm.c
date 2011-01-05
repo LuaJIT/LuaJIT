@@ -713,7 +713,8 @@ static Reg ra_restore(ASMState *as, IRRef ref)
       if (r < RID_MAX_GPR)
 	emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
       else
-	emit_rmro(as, XMM_MOVRM(as), r, RID_ESP, ofs);
+	emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
+		  r, RID_ESP, ofs);
     }
     return r;
   }
@@ -726,7 +727,8 @@ static void ra_save(ASMState *as, IRIns *ir, Reg r)
   if (r < RID_MAX_GPR)
     emit_rmro(as, XO_MOVto, REX_64IR(ir, r), RID_ESP, sps_scale(ir->s));
   else
-    emit_rmro(as, XO_MOVSDto, r, RID_ESP, sps_scale(ir->s));
+    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto,
+	      r, RID_ESP, sps_scale(ir->s));
 }
 
 #define MINCOST(r) \
@@ -1476,7 +1478,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	  ra_allocref(as, ref, RID2RSET(r));
 	}
       }
-    } else if (irt_isnum(ir->t)) {  /* FP argument is on stack. */
+    } else if (irt_isfp(ir->t)) {  /* FP argument is on stack. */
+      lua_assert(!(irt_isfloat(ir->t) && irref_isk(ref)));  /* No float k. */
       if (LJ_32 && (ofs & 4) && irref_isk(ref)) {
 	/* Split stores for unaligned FP consts. */
 	emit_movmroi(as, RID_ESP, ofs, (int32_t)ir_knum(ir)->u32.lo);
@@ -1486,7 +1489,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
 	r = ra_alloc1(as, ref, allow & RSET_FPR);
 	allow &= ~RID2RSET(r);
-	emit_rmro(as, XO_MOVSDto, r, RID_ESP, ofs);
+	emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto,
+		  r, RID_ESP, ofs);
       }
       ofs += 8;
     } else {  /* Non-FP argument is on stack. */
@@ -1514,7 +1518,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
     rset_clear(drop, ir->r);  /* Dest reg handled below. */
   ra_evictset(as, drop);  /* Evictions must be performed first. */
   if (ra_used(ir)) {
-    if (irt_isnum(ir->t)) {
+    if (irt_isfp(ir->t)) {
       int32_t ofs = sps_scale(ir->s); /* Use spill slot or temp slots. */
 #if LJ_64
       if ((ci->flags & CCI_CASTU64)) {
@@ -1535,7 +1539,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       if (ra_hasreg(dest)) {
 	ra_free(as, dest);
 	ra_modified(as, dest);
-	emit_rmro(as, XMM_MOVRM(as), dest, RID_ESP, ofs);
+	emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
+		  dest, RID_ESP, ofs);
       }
       if ((ci->flags & CCI_CASTU64)) {
 	emit_movtomro(as, RID_RET, RID_ESP, ofs);
@@ -1627,7 +1632,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
   int stfp = (st == IRT_NUM || st == IRT_FLOAT);
   IRRef lref = ir->op1;
   lua_assert(irt_type(ir->t) != st);
-  if (irt_isnum(ir->t) || irt_isfloat(ir->t)) {
+  if (irt_isfp(ir->t)) {
     Reg dest = ra_dest(as, ir, RSET_FPR);
     if (stfp) {  /* FP to FP conversion. */
       Reg left = asm_fuseload(as, lref, RSET_FPR);
@@ -1679,12 +1684,12 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	if (ra_hasreg(left)) {
 	  Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, left));
 	  emit_rr(as, op, dest|REX_64, tmpn);
-	  emit_rr(as, XO_ADDSD, tmpn, left);
-	  emit_rma(as, XMM_MOVRM(as), tmpn, k);
+	  emit_rr(as, st == IRT_NUM ? XO_ADDSD : XO_ADDSS, tmpn, left);
+	  emit_rma(as, st == IRT_NUM ? XMM_MOVRM(as) : XO_MOVSS, tmpn, k);
 	} else {
 	  left = ra_allocref(as, lref, RSET_FPR);
 	  emit_rr(as, op, dest|REX_64, left);
-	  emit_rma(as, XO_ADDSD, left, k);
+	  emit_rma(as, st == IRT_NUM ? XO_ADDSD : XO_ADDSS, left, k);
 	}
 	emit_sjcc(as, CC_NS, l_end);
 	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest < 2^63. */
@@ -2162,10 +2167,9 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
-  if (irt_isi16(ir->t) || irt_isu16(ir->t) ||
-      irt_isnum(ir->t) || irt_isfloat(ir->t) ||
+  if (irt_isi16(ir->t) || irt_isu16(ir->t) || irt_isfp(ir->t) ||
       !asm_isk32(as, ir->op2, &k)) {
-    RegSet allow8 = (irt_isnum(ir->t) || irt_isfloat(ir->t)) ? RSET_FPR :
+    RegSet allow8 = irt_isfp(ir->t) ? RSET_FPR :
 		    (irt_isi8(ir->t) || irt_isu8(ir->t)) ? RSET_GPR8 : RSET_GPR;
     src = osrc = ra_alloc1(as, ir->op2, allow8);
     if (!LJ_64 && !rset_test(allow8, src)) {  /* Already in wrong register. */
