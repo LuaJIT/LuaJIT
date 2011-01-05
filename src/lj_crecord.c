@@ -470,6 +470,7 @@ index_struct:
     J->base[0] = crec_tv_ct(J, ct, sid, ptr);
   } else {  /* __newindex metamethod. */
     rd->nres = 0;
+    J->needsnap = 1;
     crec_ct_tv(J, ct, ptr, J->base[2], &rd->argv[2]);
   }
 }
