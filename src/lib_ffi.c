@@ -264,7 +264,7 @@ static int ffi_arith_int64(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
 	*up = u0 % u1;
       break;
     case MM_pow: *up = lj_cdata_powi64(u0, u1, (id == CTID_UINT64)); break;
-    case MM_unm: *up = -u0; break;
+    case MM_unm: *up = (uint64_t)-(int64_t)u0; break;
     default: lua_assert(0); break;
     }
     lj_gc_check(L);
