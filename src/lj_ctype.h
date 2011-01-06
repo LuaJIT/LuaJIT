@@ -35,6 +35,9 @@ enum {
   CT_KW			/* Keyword. */
 };
 
+LJ_STATIC_ASSERT(((int)CT_PTR & (int)CT_ARRAY) == CT_PTR);
+LJ_STATIC_ASSERT(((int)CT_STRUCT & (int)CT_ARRAY) == CT_STRUCT);
+
 /*
 **  ---------- info ------------
 ** |type      flags...  A   cid | size   |  sib  | next  | name  |
@@ -193,9 +196,8 @@ typedef struct CTState {
   (((info) & (CTMASK_NUM|CTF_FP)) == CTINFO(CT_NUM, 0))
 #define ctype_isbool(info) \
   (((info) & (CTMASK_NUM|CTF_BOOL)) == CTINFO(CT_NUM, CTF_BOOL))
-#define ctype_isconstchar(ct) \
-  (((ct)->info & (CTMASK_NUM|CTF_CONST|CTF_BOOL|CTF_FP)) == \
-   CTINFO(CT_NUM, CTF_CONST) && (ct)->size == 1)
+#define ctype_isfp(info) \
+  (((info) & (CTMASK_NUM|CTF_FP)) == CTINFO(CT_NUM, CTF_FP))
 
 #define ctype_ispointer(info) \
   ((ctype_type(info) >> 1) == (CT_PTR >> 1))  /* Pointer or array. */
@@ -204,8 +206,6 @@ typedef struct CTState {
 
 #define ctype_isrefarray(info) \
   (((info) & (CTMASK_NUM|CTF_VECTOR|CTF_COMPLEX)) == CTINFO(CT_ARRAY, 0))
-#define ctype_isvalarray(info) \
-  (ctype_isarray(info) && (info & (CTF_VECTOR|CTF_COMPLEX)))
 #define ctype_isvector(info) \
   (((info) & (CTMASK_NUM|CTF_VECTOR)) == CTINFO(CT_ARRAY, CTF_VECTOR))
 #define ctype_iscomplex(info) \
@@ -216,15 +216,10 @@ typedef struct CTState {
    CTINFO(CT_STRUCT, CTF_VLA))  /* VL array or VL struct. */
 #define ctype_isvlarray(info) \
   (((info) & (CTMASK_NUM|CTF_VLA)) == CTINFO(CT_ARRAY, CTF_VLA))
-#define ctype_isvlstruct(info) \
-  (((info) & (CTMASK_NUM|CTF_VLA)) == CTINFO(CT_STRUCT, CTF_VLA))
 
 #define ctype_isxattrib(info, at) \
   (((info) & (CTMASK_NUM|CTATTRIB(CTMASK_ATTRIB))) == \
    CTINFO(CT_ATTRIB, CTATTRIB(at)))
-
-LJ_STATIC_ASSERT(((int)CT_PTR & (int)CT_ARRAY) == CT_PTR);
-LJ_STATIC_ASSERT(((int)CT_STRUCT & (int)CT_ARRAY) == CT_STRUCT);
 
 /* Target-dependent sizes and alignments. */
 #if LJ_64

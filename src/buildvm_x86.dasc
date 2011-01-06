@@ -3409,6 +3409,101 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |
   |//-----------------------------------------------------------------------
+  |//-- FFI helper functions -----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_ffi_call:
+#if LJ_HASFFI
+  |.if X64
+  |  .type CCSTATE, CCallState, rbx
+  |  push rbp; mov rbp, rsp; push rbx; mov CCSTATE, CARG1
+  |.else
+  |  .type CCSTATE, CCallState, ebx
+  |  push ebp; mov ebp, esp; push ebx; mov CCSTATE, FCARG1
+  |.endif
+  |
+  |  // Readjust stack.
+  |.if X64
+  |  mov eax, CCSTATE->spadj
+  |  sub rsp, rax
+  |.else
+  |  sub esp, CCSTATE->spadj
+  |.endif
+  |
+  |  // Copy stack slots.
+  |  movzx ecx, byte CCSTATE->nsp
+  |  sub ecx, 1
+  |  js >2
+  |1:
+  |.if X64
+  |  mov rax, [CCSTATE+rcx*8+offsetof(CCallState, stack)]
+  |  mov [rsp+rcx*8+CCALL_SPS_EXTRA*8], rax
+  |.else
+  |  mov eax, [CCSTATE+ecx*4+offsetof(CCallState, stack)]
+  |  mov [esp+ecx*4], eax
+  |.endif
+  |  sub ecx, 1
+  |  jns <1
+  |2:
+  |
+  |.if X64
+  |  movzx eax, byte CCSTATE->nfpr
+  |  mov CARG1, CCSTATE->gpr[0]
+  |  mov CARG2, CCSTATE->gpr[1]
+  |  mov CARG3, CCSTATE->gpr[2]
+  |  mov CARG4, CCSTATE->gpr[3]
+  |.if not X64WIN
+  |  mov CARG5, CCSTATE->gpr[4]
+  |  mov CARG6, CCSTATE->gpr[5]
+  |.endif
+  |  test eax, eax; jz >5
+  |  movaps xmm0, CCSTATE->fpr[0]
+  |  movaps xmm1, CCSTATE->fpr[1]
+  |  movaps xmm2, CCSTATE->fpr[2]
+  |  movaps xmm3, CCSTATE->fpr[3]
+  |.if not X64WIN
+  |  cmp eax, 4; jbe >5
+  |  movaps xmm4, CCSTATE->fpr[4]
+  |  movaps xmm5, CCSTATE->fpr[5]
+  |  movaps xmm6, CCSTATE->fpr[6]
+  |  movaps xmm7, CCSTATE->fpr[7]
+  |.endif
+  |5:
+  |.else
+  |  mov FCARG1, CCSTATE->gpr[0]
+  |  mov FCARG2, CCSTATE->gpr[1]
+  |.endif
+  |
+  |  call aword CCSTATE->func
+  |
+  |.if X64
+  |  mov CCSTATE->gpr[0], rax
+  |  movaps CCSTATE->fpr[0], xmm0
+  |.if not X64WIN
+  |  mov CCSTATE->gpr[1], rdx
+  |  movaps CCSTATE->fpr[1], xmm1
+  |.endif
+  |.else
+  |  mov CCSTATE->gpr[0], eax
+  |  mov CCSTATE->gpr[1], edx
+  |  cmp byte CCSTATE->resx87, 1
+  |  jb >7
+  |  je >6
+  |  fstp qword CCSTATE->fpr[0].d[0]
+  |  jmp >7
+  |6:
+  |  fstp dword CCSTATE->fpr[0].f[0]
+  |7:
+  |.endif
+  |
+  |.if X64
+  |  mov rbx, [rbp-8]; leave; ret
+  |.else
+  |  mov ebx, [ebp-4]; leave; ret
+  |.endif
+#endif
+  |
+  |//-----------------------------------------------------------------------
 }
 
 /* Generate the code for a single instruction. */

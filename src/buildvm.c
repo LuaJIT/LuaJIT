@@ -21,6 +21,9 @@
 #include "lj_ir.h"
 #include "lj_frame.h"
 #include "lj_dispatch.h"
+#if LJ_HASFFI
+#include "lj_ccall.h"
+#endif
 #include "luajit.h"
 
 #if defined(_WIN32)

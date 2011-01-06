@@ -21,6 +21,7 @@
 #include "lj_cparse.h"
 #include "lj_cdata.h"
 #include "lj_cconv.h"
+#include "lj_ccall.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -148,10 +149,13 @@ static int lj_cf_ffi_new(lua_State *L);
 LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
 {
   GCcdata *cd = ffi_checkcdata(L, 1);
+  int ret;
   if (cd->typeid == CTID_CTYPEID)
     return lj_cf_ffi_new(L);
-  lj_err_caller(L, LJ_ERR_FFI_NYICALL);
-  return 0;  /* unreachable */
+  if ((ret = lj_ccall_func(L, cd)) < 0)
+    lj_err_callerv(L, LJ_ERR_FFI_BADCALL,
+		   strdata(lj_ctype_repr(L, cd->typeid, NULL)));
+  return ret;
 }
 
 /* Pointer arithmetic. */

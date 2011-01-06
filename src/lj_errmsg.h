@@ -148,11 +148,13 @@ ERRDEF(FFI_REDEF,	"attempt to redefine " LUA_QS)
 ERRDEF(FFI_INITOV,	"too many initializers for " LUA_QS)
 ERRDEF(FFI_BADCONV,	"cannot convert " LUA_QS " to " LUA_QS)
 ERRDEF(FFI_BADARITH,	"attempt to perform arithmetic on " LUA_QS " and " LUA_QS)
+ERRDEF(FFI_BADCALL,	LUA_QS " is not callable")
+ERRDEF(FFI_NUMARG,	"wrong number of arguments for function call")
 ERRDEF(FFI_BADMEMBER,	LUA_QS " has no member named " LUA_QS)
 ERRDEF(FFI_BADIDX,	LUA_QS " cannot be indexed")
 ERRDEF(FFI_WRCONST,	"attempt to write to constant location")
 ERRDEF(FFI_NYIPACKBIT,	"NYI: packed bit fields")
-ERRDEF(FFI_NYICALL,	"NYI: C function calls")
+ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
 #endif
 
 #undef ERRDEF
