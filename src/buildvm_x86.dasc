@@ -3412,7 +3412,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |->vm_ffi_call:
+  |->vm_ffi_call@4:
 #if LJ_HASFFI
   |.if X64
   |  .type CCSTATE, CCallState, rbx
