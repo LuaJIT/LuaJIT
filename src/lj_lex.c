@@ -19,6 +19,7 @@
 #include "lj_cdata.h"
 #include "lualib.h"
 #endif
+#include "lj_state.h"
 #include "lj_lex.h"
 #include "lj_parse.h"
 #include "lj_char.h"
@@ -87,6 +88,7 @@ static void inclinenumber(LexState *ls)
 /* Load FFI library on-demand. Needed if we create cdata objects. */
 static void lex_loadffi(lua_State *L)
 {
+  ptrdiff_t oldtop = savestack(L, L->top);
   cTValue *tmp;
   luaopen_ffi(L);
   tmp = lj_tab_getstr(tabV(registry(L)), lj_str_newlit(L, "_LOADED"));
@@ -95,7 +97,7 @@ static void lex_loadffi(lua_State *L)
     copyTV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "ffi")), L->top-1);
     lj_gc_anybarriert(L, t);
   }
-  L->top--;
+  L->top = restorestack(L, oldtop);
 }
 
 /* Parse 64 bit integer. */
