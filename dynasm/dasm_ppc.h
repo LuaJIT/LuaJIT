@@ -1,6 +1,6 @@
 /*
 ** DynASM PPC encoding engine.
-** Copyright (C) 2005-2010 Mike Pall. All rights reserved.
+** Copyright (C) 2005-2011 Mike Pall. All rights reserved.
 ** Released under the MIT/X license. See dynasm.lua for full copyright notice.
 */
 

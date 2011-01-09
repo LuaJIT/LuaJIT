@@ -1,6 +1,6 @@
 /*
 ** NARROW: Narrowing of numbers to integers (double to int32_t).
-** Copyright (C) 2005-2010 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2011 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_narrow_c

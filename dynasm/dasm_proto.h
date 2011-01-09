@@ -1,6 +1,6 @@
 /*
 ** DynASM encoding engine prototypes.
-** Copyright (C) 2005-2010 Mike Pall. All rights reserved.
+** Copyright (C) 2005-2011 Mike Pall. All rights reserved.
 ** Released under the MIT/X license. See dynasm.lua for full copyright notice.
 */
 
@@ -10,8 +10,8 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-#define DASM_IDENT	"DynASM 1.2.1"
-#define DASM_VERSION	10201	/* 1.2.1 */
+#define DASM_IDENT	"DynASM 1.2.2"
+#define DASM_VERSION	10202	/* 1.2.2 */
 
 #ifndef Dst_DECL
 #define Dst_DECL	dasm_State *Dst

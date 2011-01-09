@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT x64 disassembler wrapper module.
 --
--- Copyright (C) 2005-2010 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2011 Mike Pall. All rights reserved.
 -- Released under the MIT/X license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 -- This module just exports the 64 bit functions from the combined

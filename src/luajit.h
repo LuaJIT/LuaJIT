@@ -1,7 +1,7 @@
 /*
 ** LuaJIT -- a Just-In-Time Compiler for Lua. http://luajit.org/
 **
-** Copyright (C) 2005-2010 Mike Pall. All rights reserved.
+** Copyright (C) 2005-2011 Mike Pall. All rights reserved.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining
 ** a copy of this software and associated documentation files (the
@@ -33,7 +33,7 @@
 #define LUAJIT_VERSION		"LuaJIT 2.0.0-beta5"
 #define LUAJIT_VERSION_NUM	20000  /* Version 2.0.0 = 02.00.00. */
 #define LUAJIT_VERSION_SYM	luaJIT_version_2_0_0_beta5
-#define LUAJIT_COPYRIGHT	"Copyright (C) 2005-2010 Mike Pall"
+#define LUAJIT_COPYRIGHT	"Copyright (C) 2005-2011 Mike Pall"
 #define LUAJIT_URL		"http://luajit.org/"
 
 /* Modes for luaJIT_setmode. */

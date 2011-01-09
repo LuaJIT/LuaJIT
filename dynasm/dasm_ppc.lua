@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- DynASM PPC module.
 --
--- Copyright (C) 2005-2010 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2011 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 
@@ -9,9 +9,9 @@
 local _info = {
   arch =	"ppc",
   description =	"DynASM PPC module",
-  version =	"1.2.1",
-  vernum =	 10201,
-  release =	"2010-XX-XX",
+  version =	"1.2.2",
+  vernum =	 10202,
+  release =	"2011-01-09",
   author =	"Mike Pall",
   license =	"MIT",
 }
