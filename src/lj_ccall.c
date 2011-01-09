@@ -7,6 +7,7 @@
 
 #if LJ_HASFFI
 
+#include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_ctype.h"
@@ -105,9 +106,10 @@ static CTypeID ccall_ctid_vararg(CTState *cts, cTValue *o)
 }
 
 /* Setup arguments for C call. */
-static void ccall_set_args(lua_State *L, CTState *cts, CType *ct,
-			   CCallState *cc)
+static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
+			  CCallState *cc)
 {
+  int gcsteps = 0;
   TValue *o, *top = L->top;
   CTypeID fid;
   CType *ctr;
@@ -257,6 +259,7 @@ static void ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 
   done:
     if (rp) {  /* Pass by reference. */
+      gcsteps++;
       *(void **)dp = rp;
       dp = rp;
     }
@@ -279,24 +282,30 @@ static void ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   cc->spadj = (CCALL_SPS_FREE + CCALL_SPS_EXTRA)*CTSIZE_PTR;
   if (nsp > CCALL_SPS_FREE)
     cc->spadj += (((nsp-CCALL_SPS_FREE)*CTSIZE_PTR + 15u) & ~15u);
+  return gcsteps;
 }
 
 /* Get results from C call. */
 static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
-			     CCallState *cc)
+			     CCallState *cc, int *ret)
 {
   CType *ctr = ctype_rawchild(cts, ct);
   void *sp = &cc->gpr[0];
-  if (ctype_isvoid(ctr->info))
-    return 0;  /* Zero results. */
+  if (ctype_isvoid(ctr->info)) {
+    *ret = 0;  /* Zero results. */
+    return 0;  /* No additional GC step. */
+  }
+  *ret = 1;  /* One result. */
   if (ctype_isstruct(ctr->info)) {
+    /* Return cdata object which is already on top of stack. */
     if (!CCALL_STRUCT_RETREF && !cc->retref) {
       void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
       memcpy(dp, sp, ctr->size);  /* Copy struct return value from GPRs. */
     }
-    return 1;  /* Return cdata object which is already on top of stack. */
+    return 1;  /* One GC step. */
   }
   if (ctype_iscomplex(ctr->info)) {
+    /* Return cdata object which is already on top of stack. */
 #if !CCALL_COMPLEX_RETREF || !CCALL_COMPLEXF_RETREF
     void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
 #if CCALL_COMPLEX_RETREF && !CCALL_COMPLEXF_RETREF
@@ -315,7 +324,7 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
     memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
 #endif
 #endif
-    return 1;  /* Return cdata object which is already on top of stack. */
+    return 1;  /* One GC step. */
   }
 #if CCALL_NUM_FPR
   if (ctype_isfp(ctr->info) || ctype_isvector(ctr->info))
@@ -323,8 +332,7 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
 #endif
   /* No reference types end up here, so there's no need for the CTypeID. */
   lua_assert(!(ctype_isrefarray(ctr->info) || ctype_isstruct(ctr->info)));
-  lj_cconv_tv_ct(cts, ctr, 0, L->top-1, (uint8_t *)sp);
-  return 1;  /* One result. */
+  return lj_cconv_tv_ct(cts, ctr, 0, L->top-1, (uint8_t *)sp);
 }
 
 /* Call C function. */
@@ -338,10 +346,14 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
     ct = ctype_rawchild(cts, ct);
   if (ctype_isfunc(ct->info)) {
     CCallState cc;
+    int gcsteps, ret;
     cc.func = (void (*)(void))cdata_getptr(p, sz);
-    ccall_set_args(L, cts, ct, &cc);
+    gcsteps = ccall_set_args(L, cts, ct, &cc);
     lj_vm_ffi_call(&cc);
-    return ccall_get_results(L, cts, ct, &cc);
+    gcsteps += ccall_get_results(L, cts, ct, &cc, &ret);
+    while (gcsteps-- > 0)
+      lj_gc_check(L);
+    return ret;
   }
   return -1;  /* Not a function. */
 }
