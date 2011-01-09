@@ -560,7 +560,9 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
   GCcdata *cd = argv2cdata(J, J->base[0], &rd->argv[0]);
   if (cd->typeid == CTID_CTYPEID) {
     crec_alloc(J, rd, *(CTypeID *)cdataptr(cd));
-  }  /* else: Interpreter will throw. */
+  } else {
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
 }
 
 static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
