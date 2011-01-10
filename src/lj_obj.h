@@ -247,6 +247,7 @@ typedef struct GCudata {
 enum {
   UDTYPE_USERDATA,	/* Regular userdata. */
   UDTYPE_IO_FILE,	/* I/O library FILE. */
+  UDTYPE_FFI_CLIB,	/* FFI C library namespace. */
   UDTYPE__MAX
 };
 

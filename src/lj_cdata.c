@@ -55,7 +55,8 @@ void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
   if (LJ_LIKELY(!cdataisv(cd))) {
     CType *ct = ctype_raw(ctype_ctsG(g), cd->typeid);
     CTSize sz = ctype_hassize(ct->info) ? ct->size : CTSIZE_PTR;
-    lua_assert(ctype_hassize(ct->info) || ctype_isfunc(ct->info));
+    lua_assert(ctype_hassize(ct->info) || ctype_isfunc(ct->info) ||
+	       ctype_isextern(ct->info));
     lj_mem_free(g, cd, sizeof(GCcdata) + sz);
   } else {
     lj_mem_free(g, memcdatav(cd), sizecdatav(cd));

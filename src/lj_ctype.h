@@ -187,6 +187,7 @@ typedef struct CTState {
 #define ctype_isfield(info)	(ctype_type((info)) == CT_FIELD)
 #define ctype_isbitfield(info)	(ctype_type((info)) == CT_BITFIELD)
 #define ctype_isconstval(info)	(ctype_type((info)) == CT_CONSTVAL)
+#define ctype_isextern(info)	(ctype_type((info)) == CT_EXTERN)
 #define ctype_hassize(info)	(ctype_type((info)) <= CT_HASSIZE)
 
 /* Combined type and flag checks. */

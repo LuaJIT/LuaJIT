@@ -38,7 +38,10 @@ static LJ_AINLINE void cdata_setptr(void *p, CTSize sz, const void *v)
 static LJ_AINLINE GCcdata *lj_cdata_new(CTState *cts, CTypeID id, CTSize sz)
 {
   GCcdata *cd;
-  lua_assert(lj_ctype_size(cts, id) == sz);
+#ifdef LUA_USE_ASSERT
+  CType *ct = ctype_raw(cts, id);
+  lua_assert((ctype_hassize(ct->info) ? ct->size : CTSIZE_PTR) == sz);
+#endif
   cd = (GCcdata *)lj_mem_newgco(cts->L, sizeof(GCcdata) + sz);
   cd->gct = ~LJ_TCDATA;
   cd->typeid = ctype_check(cts, id);

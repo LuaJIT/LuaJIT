@@ -22,6 +22,7 @@
 #include "lj_cdata.h"
 #include "lj_cconv.h"
 #include "lj_ccall.h"
+#include "lj_clib.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -357,6 +358,77 @@ checkgc:
 
 #include "lj_libdef.h"
 
+/* -- C library metamethods ----------------------------------------------- */
+
+#define LJLIB_MODULE_ffi_clib
+
+/* Index C library by a name. */
+static TValue *ffi_clib_index(lua_State *L)
+{
+  TValue *o = L->base;
+  CLibrary *cl;
+  if (!(o < L->top && tvisudata(o) && udataV(o)->udtype == UDTYPE_FFI_CLIB))
+    lj_err_argt(L, 1, LUA_TUSERDATA);
+  cl = (CLibrary *)uddata(udataV(o));
+  if (!(o+1 < L->top && tvisstr(o+1)))
+    lj_err_argt(L, 2, LUA_TSTRING);
+  return lj_clib_index(L, cl, strV(o+1));
+}
+
+LJLIB_CF(ffi_clib___index)
+{
+  TValue *tv = ffi_clib_index(L);
+  if (tviscdata(tv)) {
+    CTState *cts = ctype_cts(L);
+    GCcdata *cd = cdataV(tv);
+    CType *s = ctype_get(cts, cd->typeid);
+    if (ctype_isextern(s->info)) {
+      CTypeID sid = ctype_cid(s->info);
+      void *sp = *(void **)cdataptr(cd);
+      if (lj_cconv_tv_ct(cts, ctype_raw(cts, sid), sid, L->top-1, sp))
+	lj_gc_check(L);
+      return 1;
+    }
+  }
+  copyTV(L, L->top-1, tv);
+  return 1;
+}
+
+LJLIB_CF(ffi_clib___newindex)
+{
+  TValue *tv = ffi_clib_index(L);
+  TValue *o = L->base+2;
+  if (o < L->top && tviscdata(tv)) {
+    CTState *cts = ctype_cts(L);
+    GCcdata *cd = cdataV(tv);
+    CType *d = ctype_get(cts, cd->typeid);
+    if (ctype_isextern(d->info)) {
+      CTInfo qual = 0;
+      for (;;) {  /* Skip attributes and collect qualifiers. */
+	d = ctype_child(cts, d);
+	if (!ctype_isattrib(d->info)) break;
+	if (ctype_attrib(d->info) == CTA_QUAL) qual |= d->size;
+      }
+      if (!((d->info|qual) & CTF_CONST)) {
+	lj_cconv_ct_tv(cts, d, *(void **)cdataptr(cd), o, 0);
+	return 0;
+      }
+    }
+  }
+  lj_err_caller(L, LJ_ERR_FFI_WRCONST);
+  return 0;  /* unreachable */
+}
+
+LJLIB_CF(ffi_clib___gc)
+{
+  TValue *o = L->base;
+  if (o < L->top && tvisudata(o) && udataV(o)->udtype == UDTYPE_FFI_CLIB)
+    lj_clib_unload((CLibrary *)uddata(udataV(o)));
+  return 0;
+}
+
+#include "lj_libdef.h"
+
 /* -- FFI library functions ----------------------------------------------- */
 
 #define LJLIB_MODULE_ffi
@@ -567,6 +639,17 @@ LJLIB_CF(ffi_abi)
 
 #undef H_
 
+LJLIB_PUSH(top-5) LJLIB_SET(!)  /* Store clib metatable in func environment. */
+
+LJLIB_CF(ffi_load)
+{
+  GCstr *name = lj_lib_checkstr(L, 1);
+  int global = (L->base+1 < L->top && tvistruecond(L->base+1));
+  lj_clib_load(L, tabref(curr_func(L)->c.env), name, global);
+  return 1;
+}
+
+LJLIB_PUSH(top-4) LJLIB_SET(C)
 LJLIB_PUSH(top-3) LJLIB_SET(os)
 LJLIB_PUSH(top-2) LJLIB_SET(arch)
 
@@ -579,8 +662,9 @@ LUALIB_API int luaopen_ffi(lua_State *L)
   lj_ctype_init(L);
   LJ_LIB_REG_(L, NULL, ffi_meta);
   /* NOBARRIER: basemt is a GC root. */
-  L->top--;
-  setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top)));
+  setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top-1)));
+  LJ_LIB_REG_(L, NULL, ffi_clib);
+  lj_clib_default(L, tabV(L->top-1));  /* Create ffi.C default namespace. */
   lua_pushliteral(L, LJ_OS_NAME);
   lua_pushliteral(L, LJ_ARCH_NAME);
   LJ_LIB_REG_(L, NULL, ffi);  /* Note: no global "ffi" created! */

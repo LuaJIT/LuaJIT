@@ -21,6 +21,10 @@
 #define _GNU_SOURCE
 #endif
 
+#ifndef WINVER
+#define WINVER 0x0500
+#endif
+
 #include "lua.h"
 #include "lauxlib.h"
 
@@ -44,6 +48,7 @@
 #include "lj_cdata.c"
 #include "lj_cconv.c"
 #include "lj_ccall.c"
+#include "lj_clib.c"
 #include "lj_cparse.c"
 #include "lj_lib.c"
 #include "lj_ir.c"
