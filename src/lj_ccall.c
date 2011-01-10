@@ -340,14 +340,15 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
 {
   CTState *cts = ctype_cts(L);
   CType *ct = ctype_raw(cts, cd->typeid);
-  CTSize sz = ct->size;
-  void *p = cdataptr(cd);
-  if (ctype_isptr(ct->info))
+  CTSize sz = CTSIZE_PTR;
+  if (ctype_isptr(ct->info)) {
+    sz = ct->size;
     ct = ctype_rawchild(cts, ct);
+  }
   if (ctype_isfunc(ct->info)) {
     CCallState cc;
     int gcsteps, ret;
-    cc.func = (void (*)(void))cdata_getptr(p, sz);
+    cc.func = (void (*)(void))cdata_getptr(cdataptr(cd), sz);
     gcsteps = ccall_set_args(L, cts, ct, &cc);
     lj_vm_ffi_call(&cc);
     gcsteps += ccall_get_results(L, cts, ct, &cc, &ret);
