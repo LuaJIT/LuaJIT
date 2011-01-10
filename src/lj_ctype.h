@@ -173,6 +173,7 @@ typedef struct CTState {
 #define ctype_bitcsz(info)	(((info) >> CTSHIFT_BITCSZ) & CTMASK_BITCSZ)
 #define ctype_vsizeP(info)	(((info) >> CTSHIFT_VSIZEP) & CTMASK_VSIZEP)
 #define ctype_msizeP(info)	(((info) >> CTSHIFT_MSIZEP) & CTMASK_MSIZEP)
+#define ctype_cconv(info)	(((info) >> CTSHIFT_CCONV) & CTMASK_CCONV)
 
 /* Simple type checks. */
 #define ctype_isnum(info)	(ctype_type((info)) == CT_NUM)

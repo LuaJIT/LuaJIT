@@ -3428,6 +3428,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  sub rsp, rax
   |.else
   |  sub esp, CCSTATE->spadj
+#if LJ_TARGET_WINDOWS
+  |  mov CCSTATE->spadj, esp
+#endif
   |.endif
   |
   |  // Copy stack slots.
@@ -3494,6 +3497,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |6:
   |  fstp dword CCSTATE->fpr[0].f[0]
   |7:
+#if LJ_TARGET_WINDOWS
+  |  sub CCSTATE->spadj, esp
+#endif
   |.endif
   |
   |.if X64

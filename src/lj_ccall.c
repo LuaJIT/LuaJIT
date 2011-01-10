@@ -14,6 +14,7 @@
 #include "lj_cconv.h"
 #include "lj_cdata.h"
 #include "lj_ccall.h"
+#include "lj_trace.h"
 
 /* Target-specific handling of register arguments. */
 #if LJ_TARGET_X86
@@ -127,7 +128,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 #if LJ_TARGET_X86
   /* x86 has several different calling conventions. */
   cc->resx87 = 0;
-  switch ((ct->info >> CTSHIFT_CCONV) & CTMASK_CCONV) {
+  switch (ctype_cconv(ct->info)) {
   case CTCC_FASTCALL: maxgpr = 2; break;
   case CTCC_THISCALL: maxgpr = 1; break;
   default: maxgpr = 0; break;
@@ -352,6 +353,13 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
     gcsteps = ccall_set_args(L, cts, ct, &cc);
     lj_vm_ffi_call(&cc);
     gcsteps += ccall_get_results(L, cts, ct, &cc, &ret);
+#if LJ_TARGET_X86 && LJ_ABI_WIN
+    /* Automatically detect __stdcall and fix up C function declaration. */
+    if (cc.spadj && ctype_cconv(ct->info) == CTCC_CDECL) {
+      CTF_INSERT(ct->info, CCONV, CTCC_STDCALL);
+      lj_trace_abort(G(L));
+    }
+#endif
     while (gcsteps-- > 0)
       lj_gc_check(L);
     return ret;
