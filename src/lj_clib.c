@@ -31,10 +31,12 @@
 #define CLIB_DEFHANDLE	NULL
 #endif
 
-LJ_NORET LJ_NOINLINE static void clib_error(lua_State *L)
+LJ_NORET LJ_NOINLINE static void clib_error_(lua_State *L)
 {
   lj_err_callermsg(L, dlerror());
 }
+
+#define clib_error(L, fmt, name)	clib_error_(L)
 
 #if LJ_TARGET_OSX
 #define CLIB_SOEXT	"%s.dylib"
@@ -42,27 +44,26 @@ LJ_NORET LJ_NOINLINE static void clib_error(lua_State *L)
 #define CLIB_SOEXT	"%s.so"
 #endif
 
-static const char *clib_extname(lua_State *L, GCstr *name)
+static const char *clib_extname(lua_State *L, const char *name)
 {
-  const char *s = strdata(name);
-  if (!strchr(s, '/')) {
-    if (!strchr(s, '.')) {
-      s = lj_str_pushf(L, CLIB_SOEXT, s);
+  if (!strchr(name, '/')) {
+    if (!strchr(name, '.')) {
+      name = lj_str_pushf(L, CLIB_SOEXT, name);
       L->top--;
     }
-    if (!(s[0] == 'l' && s[1] == 'i' && s[2] == 'b')) {
-      s = lj_str_pushf(L, "lib%s", s);
+    if (!(name[0] == 'l' && name[1] == 'i' && name[2] == 'b')) {
+      name = lj_str_pushf(L, "lib%s", name);
       L->top--;
     }
   }
-  return s;
+  return name;
 }
 
-static void *clib_loadlib(lua_State *L, GCstr *name, int global)
+static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   void *h = dlopen(clib_extname(L, name),
 		   RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
-  if (!h) clib_error(L);
+  if (!h) clib_error_(L);
   return h;
 }
 
@@ -72,10 +73,9 @@ static void clib_unloadlib(CLibrary *cl)
     dlclose(cl->handle);
 }
 
-static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
+static void *clib_getsym(CLibrary *cl, const char *name)
 {
-  void *p = dlsym(cl->handle, strdata(name));
-  if (!p) clib_error(L);
+  void *p = dlsym(cl->handle, name);
   return p;
 }
 
@@ -127,17 +127,16 @@ static int clib_needext(const char *s)
   return 1;
 }
 
-static const char *clib_extname(lua_State *L, GCstr *name)
+static const char *clib_extname(lua_State *L, const char *name)
 {
-  const char *s = strdata(name);
-  if (clib_needext(s)) {
-    s = lj_str_pushf(L, "%s.dll", s);
+  if (clib_needext(name)) {
+    name = lj_str_pushf(L, "%s.dll", name);
     L->top--;
   }
-  return s;
+  return name;
 }
 
-static void *clib_loadlib(lua_State *L, GCstr *name, int global)
+static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   void *h = (void *)LoadLibraryA(clib_extname(L, name));
   if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", strdata(name));
@@ -157,9 +156,8 @@ static void clib_unloadlib(CLibrary *cl)
   }
 }
 
-static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
+static void *clib_getsym(CLibrary *cl, const char *name)
 {
-  const char *sym = strdata(name);
   void *p;
   if (cl->handle == CLIB_DEFHANDLE) {  /* Search default libraries. */
     MSize i;
@@ -183,13 +181,12 @@ static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
 	if (!h) continue;
 	clib_def_handle[i] = (void *)h;
       }
-      p = (void *)GetProcAddress(h, sym);
+      p = (void *)GetProcAddress(h, name);
       if (p) break;
     }
   } else {
-    p = (void *)GetProcAddress((HINSTANCE)cl->handle, sym);
+    p = (void *)GetProcAddress((HINSTANCE)cl->handle, name);
   }
-  if (!p) clib_error(L, "cannot resolve symbol " LUA_QS ": %s", sym);
   return p;
 }
 
@@ -197,7 +194,13 @@ static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
 
 #define CLIB_DEFHANDLE	NULL
 
-static void *clib_loadlib(lua_State *L, GCstr *name, int global)
+LJ_NORET LJ_NOINLINE static void clib_error(lua_State *L, const char *fmt,
+					    const char *name)
+{
+  lj_err_callermsg(L, lj_str_pushf(L, fmt, name, "no support for this OS"));
+}
+
+static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   lj_err_callermsg(L, "no support for loading dynamic libraries for this OS");
   UNUSED(name); UNUSED(global);
@@ -209,9 +212,8 @@ static void clib_unloadlib(CLibrary *cl)
   UNUSED(cl);
 }
 
-static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
+static void *clib_getsym(CLibrary *cl, const char *name)
 {
-  lj_err_callermsg(L, "no support for resolving symbols for this OS");
   UNUSED(cl); UNUSED(name);
   return NULL;
 }
@@ -223,6 +225,22 @@ static void *clib_getsym(lua_State *L, CLibrary *cl, GCstr *name)
 /* Namespace for C library indexing. */
 #define CLNS_INDEX \
   ((1u<<CT_FUNC)|(1u<<CT_EXTERN)|(1u<<CT_CONSTVAL))
+
+#if LJ_TARGET_X86 && LJ_ABI_WIN
+/* Compute argument size for fastcall/stdcall functions. */
+static CTSize clib_func_argsize(CTState *cts, CType *ct)
+{
+  CTSize n = 0;
+  while (ct->sib) {
+    CType *d;
+    ct = ctype_get(cts, ct->sib);
+    lua_assert(ctype_isfield(ct->info));
+    d = ctype_rawchild(cts, ct);
+    n += ((d->size + 3) & ~3);
+  }
+  return n;
+}
+#endif
 
 /* Index a C library by name. */
 TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
@@ -242,9 +260,24 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
       else
 	setnumV(tv, (lua_Number)(int32_t)ct->size);
     } else {
-      void *p = clib_getsym(L, cl, name);
+      void *p = clib_getsym(cl, strdata(name));
       GCcdata *cd;
       lua_assert(ctype_isfunc(ct->info) || ctype_isextern(ct->info));
+#if LJ_TARGET_X86 && LJ_ABI_WIN
+      /* Retry with decorated name for fastcall/stdcall functions. */
+      if (!p && ctype_isfunc(ct->info)) {
+	CTInfo cconv = ctype_cconv(ct->info);
+	if (cconv == CTCC_FASTCALL || cconv == CTCC_STDCALL) {
+	  CTSize sz = clib_func_argsize(cts, ct);
+	  const char *sym = lj_str_pushf(L,
+	    cconv == CTCC_FASTCALL ? "@%s@%d" : "_%s@%d", strdata(name), sz);
+	  L->top--;
+	  p = clib_getsym(cl, sym);
+	}
+      }
+#endif
+      if (!p)
+	clib_error(L, "cannot resolve symbol " LUA_QS ": %s", strdata(name));
       cd = lj_cdata_new(cts, id, CTSIZE_PTR);
       *(void **)cdataptr(cd) = p;
       setcdataV(L, tv, cd);
@@ -272,7 +305,7 @@ static CLibrary *clib_new(lua_State *L, GCtab *mt)
 /* Load a C library. */
 void lj_clib_load(lua_State *L, GCtab *mt, GCstr *name, int global)
 {
-  void *handle = clib_loadlib(L, name, global);
+  void *handle = clib_loadlib(L, strdata(name), global);
   CLibrary *cl = clib_new(L, mt);
   cl->handle = handle;
 }
