@@ -44,9 +44,9 @@
 
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
-    if (nfpr + isfp <= CCALL_NARG_FPR) { \
+    if (nfpr + n <= CCALL_NARG_FPR) { \
       dp = &cc->fpr[nfpr]; \
-      nfpr += isfp; \
+      nfpr += n; \
       goto done; \
     } \
   } else {  /* Try to pass argument in GPRs. */ \
@@ -273,6 +273,13 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 	cc->fpr[ngpr-1].l[0] = cc->gpr[ngpr-1];
     }
 #endif
+#if LJ_TARGET_X64 && !LJ_ABI_WIN
+    if (isfp == 2 && n == 2 &&
+	(uint8_t *)dp == (uint8_t *)&cc->fpr[nfpr-2]) {
+      cc->fpr[nfpr-1].d[0] = cc->fpr[nfpr-2].d[1];
+      cc->fpr[nfpr-2].d[1] = 0;
+    }
+#endif
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
 
@@ -309,20 +316,20 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
     /* Return cdata object which is already on top of stack. */
 #if !CCALL_COMPLEX_RETREF || !CCALL_COMPLEXF_RETREF
     void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
-#if CCALL_COMPLEX_RETREF && !CCALL_COMPLEXF_RETREF
+#if !CCALL_NUM_FPR
+    memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
+#elif CCALL_COMPLEX_RETREF && !CCALL_COMPLEXF_RETREF
     if (ctr->size == 2*sizeof(float))
-      memcpy(dp, sp, ctr->size);  /* Copy complex float from GPRs. */
-#elif CCALL_NUM_FPR
-    /* Copy non-contiguous re/im part from FPRs to cdata object. */
-    if (ctr->size == 2*sizeof(float)) {
-      ((float *)dp)[0] = cc->fpr[0].f[0];
-      ((float *)dp)[1] = cc->fpr[1].f[0];
-    } else {
-      ((double *)dp)[0] = cc->fpr[0].d[0];
-      ((double *)dp)[1] = cc->fpr[1].d[0];
+      *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
+#elif LJ_TARGET_X64
+    if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPR. */
+      *(int64_t *)dp = cc->fpr[0].l[0];
+    } else {  /* Copy non-contiguous complex double from FPRs. */
+      ((int64_t *)dp)[0] = cc->fpr[0].l[0];
+      ((int64_t *)dp)[1] = cc->fpr[1].l[0];
     }
 #else
-    memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
+#error "missing definition for handling of complex return values"
 #endif
 #endif
     return 1;  /* One GC step. */
