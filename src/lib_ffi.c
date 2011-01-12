@@ -94,15 +94,13 @@ static void ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
   for (i = 0; i < 2; i++, o++) {
     if (tviscdata(o)) {
       GCcdata *cd = cdataV(o);
-      CTypeID id = (CTypeID)cd->typeid;
-      CType *ct = ctype_get(cts, id);
+      CType *ct = ctype_raw(cts, (CTypeID)cd->typeid);
       uint8_t *p = (uint8_t *)cdataptr(cd);
-      if (ctype_isref(ct->info)) {
-	lua_assert(ct->size == CTSIZE_PTR);
-	p = *(uint8_t **)p;
-	id = ctype_cid(ct->info);
+      if (ctype_isptr(ct->info)) {
+	p = (uint8_t *)cdata_getptr(p, ct->size);
+	if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
       }
-      fa->ct[i] = ctype_raw(cts, id);
+      fa->ct[i] = ct;
       fa->p[i] = p;
     } else if (tvisnum(o)) {
       fa->ct[i] = ctype_get(cts, CTID_DOUBLE);
@@ -134,10 +132,6 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
       sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
       if (sz == 0 || sz == CTSIZE_INVALID)
 	lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
-      if (ctype_isptr(ctp->info))
-	pp = (uint8_t *)cdata_getptr(pp, ctp->size);
-      if (ctype_isptr(fa->ct[1]->info))
-	fa->p[1] = (uint8_t *)cdata_getptr(fa->p[1], fa->ct[1]->size);
       diff = ((intptr_t)pp - (intptr_t)fa->p[1]) / (int32_t)sz;
       /* All valid pointer differences on x64 are in (-2^47, +2^47),
       ** which fits into a double without loss of precision.
@@ -162,8 +156,6 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
   sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
   if (sz == CTSIZE_INVALID)
     lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
-  if (ctype_isptr(ctp->info))
-    pp = (uint8_t *)cdata_getptr(pp, ctp->size);
   pp += idx*(int32_t)sz;  /* Compute pointer + index. */
   id = lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(ctp->info)),
 		       CTSIZE_PTR);
