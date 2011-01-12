@@ -77,6 +77,8 @@ static void *ffi_checkptr(lua_State *L, int narg, CTypeID id)
   return p;
 }
 
+/* -- C data arithmetic --------------------------------------------------- */
+
 typedef struct FFIArith {
   uint8_t *p[2];
   CType *ct[2];
@@ -109,54 +111,6 @@ static void ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
       lj_err_optype(L, o, LJ_ERR_OPARITH);
     }
   }
-}
-
-/* -- C type metamethods -------------------------------------------------- */
-
-#define LJLIB_MODULE_ffi_meta
-
-LJLIB_CF(ffi_meta___index)	LJLIB_REC(cdata_index 0)
-{
-  CTState *cts = ctype_cts(L);
-  CTInfo qual = 0;
-  CType *ct;
-  uint8_t *p;
-  TValue *o = L->base;
-  if (!(o+1 < L->top && tviscdata(o)))  /* Also checks for presence of key. */
-    lj_err_argt(L, 1, LUA_TCDATA);
-  ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
-  if (lj_cdata_get(cts, ct, L->top-1, p))
-    lj_gc_check(L);
-  return 1;
-}
-
-LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
-{
-  CTState *cts = ctype_cts(L);
-  CTInfo qual = 0;
-  CType *ct;
-  uint8_t *p;
-  TValue *o = L->base;
-  if (!(o+2 < L->top && tviscdata(o)))  /* Also checks for key and value. */
-    lj_err_argt(L, 1, LUA_TCDATA);
-  ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
-  lj_cdata_set(cts, ct, p, o+2, qual);
-  return 0;
-}
-
-/* Forward declaration. */
-static int lj_cf_ffi_new(lua_State *L);
-
-LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
-{
-  GCcdata *cd = ffi_checkcdata(L, 1);
-  int ret;
-  if (cd->typeid == CTID_CTYPEID)
-    return lj_cf_ffi_new(L);
-  if ((ret = lj_ccall_func(L, cd)) < 0)
-    lj_err_callerv(L, LJ_ERR_FFI_BADCALL,
-		   strdata(lj_ctype_repr(L, cd->typeid, NULL)));
-  return ret;
 }
 
 /* Pointer arithmetic. */
@@ -294,6 +248,54 @@ static int ffi_arith(lua_State *L)
     lj_err_callerv(L, LJ_ERR_FFI_BADARITH, repr[0], repr[1]);
   }
   return 1;
+}
+
+/* -- C type metamethods -------------------------------------------------- */
+
+#define LJLIB_MODULE_ffi_meta
+
+LJLIB_CF(ffi_meta___index)	LJLIB_REC(cdata_index 0)
+{
+  CTState *cts = ctype_cts(L);
+  CTInfo qual = 0;
+  CType *ct;
+  uint8_t *p;
+  TValue *o = L->base;
+  if (!(o+1 < L->top && tviscdata(o)))  /* Also checks for presence of key. */
+    lj_err_argt(L, 1, LUA_TCDATA);
+  ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
+  if (lj_cdata_get(cts, ct, L->top-1, p))
+    lj_gc_check(L);
+  return 1;
+}
+
+LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
+{
+  CTState *cts = ctype_cts(L);
+  CTInfo qual = 0;
+  CType *ct;
+  uint8_t *p;
+  TValue *o = L->base;
+  if (!(o+2 < L->top && tviscdata(o)))  /* Also checks for key and value. */
+    lj_err_argt(L, 1, LUA_TCDATA);
+  ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
+  lj_cdata_set(cts, ct, p, o+2, qual);
+  return 0;
+}
+
+/* Forward declaration. */
+static int lj_cf_ffi_new(lua_State *L);
+
+LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
+{
+  GCcdata *cd = ffi_checkcdata(L, 1);
+  int ret;
+  if (cd->typeid == CTID_CTYPEID)
+    return lj_cf_ffi_new(L);
+  if ((ret = lj_ccall_func(L, cd)) < 0)
+    lj_err_callerv(L, LJ_ERR_FFI_BADCALL,
+		   strdata(lj_ctype_repr(L, cd->typeid, NULL)));
+  return ret;
 }
 
 LJLIB_CF(ffi_meta___add)	LJLIB_REC(cdata_arith MM_add)
