@@ -158,7 +158,7 @@ static void clib_unloadlib(CLibrary *cl)
 
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
-  void *p;
+  void *p = NULL;
   if (cl->handle == CLIB_DEFHANDLE) {  /* Search default libraries. */
     MSize i;
     for (i = 0; i < CLIB_HANDLE_MAX; i++) {
