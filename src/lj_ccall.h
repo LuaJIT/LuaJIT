@@ -19,9 +19,6 @@
 #define CCALL_NARG_FPR		0
 #define CCALL_NRET_GPR		2
 #define CCALL_NRET_FPR		1	/* For FP results on x87 stack. */
-#define CCALL_STRUCT_RETREF	1	/* Return structs by reference. */
-#define CCALL_COMPLEX_RETREF	1	/* Return complex by reference. */
-#define CCALL_COMPLEXF_RETREF	0	/* Return complex float by value. */
 #define CCALL_ALIGN_STACKARG	0	/* Don't align argument on stack. */
 #elif LJ_ABI_WIN
 #define CCALL_NARG_GPR		4
@@ -29,9 +26,6 @@
 #define CCALL_NRET_GPR		1
 #define CCALL_NRET_FPR		1
 #define CCALL_SPS_EXTRA		4
-#define CCALL_COMPLEX_ARGREF	1	/* Pass complex by reference. */
-#define CCALL_COMPLEX_RETREF	1	/* Return complex by reference. */
-#define CCALL_COMPLEXF_RETREF	0	/* Return complex float by value. */
 #else
 #define CCALL_NARG_GPR		6
 #define CCALL_NARG_FPR		8
@@ -60,8 +54,6 @@ typedef intptr_t GPRArg;
 #define CCALL_NRET_GPR		4	/* For softfp complex double. */
 #define CCALL_NRET_FPR		0
 #define CCALL_SPS_FREE		0	/* NYI */
-#define CCALL_STRUCT_ARGREF	1	/* Pass structs by reference. */
-#define CCALL_STRUCT_RETREF	1	/* Return structs by reference. */
 
 typedef intptr_t GPRArg;
 
@@ -71,21 +63,6 @@ typedef intptr_t GPRArg;
 
 #ifndef CCALL_SPS_EXTRA
 #define CCALL_SPS_EXTRA		0
-#endif
-#ifndef CCALL_STRUCT_ARGREF
-#define CCALL_STRUCT_ARGREF	0
-#endif
-#ifndef CCALL_STRUCT_RETREF
-#define CCALL_STRUCT_RETREF	0
-#endif
-#ifndef CCALL_COMPLEX_ARGREF
-#define CCALL_COMPLEX_ARGREF	0
-#endif
-#ifndef CCALL_COMPLEX_RETREF
-#define CCALL_COMPLEX_RETREF	0
-#endif
-#ifndef CCALL_COMPLEXF_RETREF
-#define CCALL_COMPLEXF_RETREF	CCALL_COMPLEX_RETREF
 #endif
 #ifndef CCALL_VECTOR_REG
 #define CCALL_VECTOR_REG	0

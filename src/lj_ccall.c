@@ -18,11 +18,52 @@
 
 /* Target-specific handling of register arguments. */
 #if LJ_TARGET_X86
+/* -- x86 calling conventions --------------------------------------------- */
+
+#if LJ_ABI_WIN
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return structs bigger than 8 by reference (on stack only). */ \
+  cc->retref = (sz > 8); \
+  if (cc->retref) cc->stack[nsp++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET CCALL_HANDLE_STRUCTRET
+
+#else
+
+#define CCALL_HANDLE_STRUCTRET \
+  cc->retref = 1;  /* Return all structs by reference (in reg or on stack). */ \
+  if (ngpr < maxgpr) \
+    cc->gpr[ngpr++] = (GPRArg)dp; \
+  else \
+    cc->stack[nsp++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Return complex float in GPRs and complex double by reference. */ \
+  cc->retref = (sz > 8); \
+  if (cc->retref) { \
+    if (ngpr < maxgpr) \
+      cc->gpr[ngpr++] = (GPRArg)dp; \
+    else \
+      cc->stack[nsp++] = (GPRArg)dp; \
+  }
+
+#endif
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (!cc->retref) \
+    *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  ngpr = maxgpr;  /* Pass all structs by value on the stack. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  isfp = 1;  /* Pass complex by value on stack. */
 
 #define CCALL_HANDLE_REGARG \
   if (!isfp) {  /* Only non-FP values may be passed in registers. */ \
     if (n > 1) {  /* Anything > 32 bit is passed on the stack. */ \
-      ngpr = maxgpr;  /* Prevent reordering. */ \
+      if (!LJ_ABI_WIN) ngpr = maxgpr;  /* Prevent reordering. */ \
     } else if (ngpr + 1 <= maxgpr) { \
       dp = &cc->gpr[ngpr]; \
       ngpr += n; \
@@ -31,6 +72,32 @@
   }
 
 #elif LJ_TARGET_X64 && LJ_ABI_WIN
+/* -- Windows/x64 calling conventions ------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return structs of size 1, 2, 4 or 8 in a GPR. */ \
+  cc->retref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8); \
+  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET CCALL_HANDLE_STRUCTRET
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (!cc->retref) \
+    *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass structs of size 1, 2, 4 or 8 in a GPR by value. */ \
+  if (!(sz == 1 || sz == 2 || sz == 4 || sz == 8)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR;  /* Pass all other structs by reference. */ \
+  }
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex float in a GPR and complex double by reference. */ \
+  if (sz != 2*sizeof(float)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  }
 
 /* Windows/x64 argument registers are strictly positional (use ngpr). */
 #define CCALL_HANDLE_REGARG \
@@ -41,6 +108,36 @@
   }
 
 #elif LJ_TARGET_X64
+/* -- POSIX/x64 calling conventions --------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  if (sz <= 16) { \
+    cc->retref = 0; \
+    goto err_nyi;  /* NYI: crazy x64 rules for small structs. */ \
+  } else { \
+    cc->retref = 1;  /* Return all bigger structs by reference. */ \
+    cc->gpr[ngpr++] = (GPRArg)dp; \
+  }
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in one or two FPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPR. */ \
+    *(int64_t *)dp = cc->fpr[0].l[0]; \
+  } else {  /* Copy non-contiguous complex double from FPRs. */ \
+    ((int64_t *)dp)[0] = cc->fpr[0].l[0]; \
+    ((int64_t *)dp)[1] = cc->fpr[1].l[0]; \
+  }
+
+#define CCALL_HANDLE_STRUCTARG \
+  if (sz <= 16) { \
+    goto err_nyi;  /* NYI: crazy x64 rules for small structs. */ \
+  }  /* Pass all other structs by value on stack. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  isfp = 2;  /* Pass complex in FPRs or on stack. Needs postprocessing. */
 
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
@@ -59,6 +156,25 @@
   }
 
 #elif LJ_TARGET_PPCSPE
+/* -- PPC/SPE calling conventions ----------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  cc->retref = 1;  /* Return all structs by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in 2 or 4 GPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+  sz = CTSIZE_PTR;  /* Pass all structs by reference. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex by value in 2 or 4 GPRs. */
 
 /* PPC/SPE has a softfp ABI. */
 #define CCALL_HANDLE_REGARG \
@@ -76,7 +192,7 @@
   }
 
 #else
-#error "missing definition for handling of register arguments"
+#error "missing calling convention definitions for this architecture"
 #endif
 
 /* Infer the destination CTypeID for a vararg argument. */
@@ -146,31 +262,12 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     /* Preallocate cdata object and anchor it after arguments. */
     CTSize sz = ctr->size;
     GCcdata *cd = lj_cdata_new(cts, ctype_cid(ct->info), sz);
+    void *dp = cdataptr(cd);
     setcdataV(L, L->top++, cd);
-    if (ctype_iscomplex(ctr->info)) {
-      cc->retref = (sz == 2*sizeof(float)) ? CCALL_COMPLEXF_RETREF :
-					     CCALL_COMPLEX_RETREF;
+    if (ctype_isstruct(ctr->info)) {
+      CCALL_HANDLE_STRUCTRET
     } else {
-#if CCALL_STRUCT_RETREF
-      cc->retref = 1;  /* Return all structs by reference. */
-#elif LJ_TARGET_X64
-#if LJ_ABI_WIN
-      /* Return structs of size 1, 2, 4 or 8 in a GPR. */
-      cc->retref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8);
-#else
-      if (sz <= 16) goto err_nyi;  /* NYI: crazy x64 rules for structs. */
-      cc->retref = 1;  /* Return all bigger structs by reference. */
-#endif
-#else
-#error "missing definition for handling of struct return values"
-#endif
-    }
-    /* Pass reference to returned aggregate in first argument. */
-    if (cc->retref) {
-      if (ngpr < maxgpr)
-	cc->gpr[ngpr++] = (GPRArg)cdataptr(cd);
-      else
-	cc->stack[nsp++] = (GPRArg)cdataptr(cd);
+      CCALL_HANDLE_COMPLEXRET
     }
 #if LJ_TARGET_X86
   } else if (ctype_isfp(ctr->info)) {
@@ -213,30 +310,10 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 	isfp = 1;
       else
 	goto err_nyi;
-    } else if (ctype_iscomplex(d->info)) {
-#if CCALL_COMPLEX_ARGREF
-      rp = cdataptr(lj_cdata_new(cts, did, sz));
-      sz = CTSIZE_PTR;
-#else
-      isfp = 2;
-#endif
     } else if (ctype_isstruct(d->info)) {
-      int sref = CCALL_STRUCT_ARGREF;
-#if LJ_TARGET_X86
-      ngpr = maxgpr;  /* Pass all structs by value on the stack. */
-#elif LJ_TARGET_X64
-#if LJ_ABI_WIN
-      /* Pass structs of size 1, 2, 4 or 8 in a GPR by value. */
-      sref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8);
-#else
-      if (sz <= 16) goto err_nyi;  /* NYI: crazy x64 rules for structs. */
-      /* Pass all bigger structs by value on the stack. */
-#endif
-#endif
-      if (sref) {  /* Pass struct by reference. */
-	rp = cdataptr(lj_cdata_new(cts, did, sz));
-	sz = CTSIZE_PTR;  /* Pass all other structs by reference. */
-      }
+      CCALL_HANDLE_STRUCTARG
+    } else if (ctype_iscomplex(d->info)) {
+      CCALL_HANDLE_COMPLEXARG
     } else {
       sz = CTSIZE_PTR;
     }
@@ -274,9 +351,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     }
 #endif
 #if LJ_TARGET_X64 && !LJ_ABI_WIN
-    if (isfp == 2 && n == 2 &&
-	(uint8_t *)dp == (uint8_t *)&cc->fpr[nfpr-2]) {
-      cc->fpr[nfpr-1].d[0] = cc->fpr[nfpr-2].d[1];
+    if (isfp == 2 && n == 2 && (uint8_t *)dp == (uint8_t *)&cc->fpr[nfpr-2]) {
+      cc->fpr[nfpr-1].d[0] = cc->fpr[nfpr-2].d[1];  /* Split complex double. */
       cc->fpr[nfpr-2].d[1] = 0;
     }
 #endif
@@ -306,7 +382,7 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
   *ret = 1;  /* One result. */
   if (ctype_isstruct(ctr->info)) {
     /* Return cdata object which is already on top of stack. */
-    if (!CCALL_STRUCT_RETREF && !cc->retref) {
+    if (!cc->retref) {
       void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
       memcpy(dp, sp, ctr->size);  /* Copy struct return value from GPRs. */
     }
@@ -314,24 +390,8 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
   }
   if (ctype_iscomplex(ctr->info)) {
     /* Return cdata object which is already on top of stack. */
-#if !CCALL_COMPLEX_RETREF || !CCALL_COMPLEXF_RETREF
     void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
-#if !CCALL_NUM_FPR
-    memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
-#elif CCALL_COMPLEX_RETREF && !CCALL_COMPLEXF_RETREF
-    if (ctr->size == 2*sizeof(float))
-      *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
-#elif LJ_TARGET_X64
-    if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPR. */
-      *(int64_t *)dp = cc->fpr[0].l[0];
-    } else {  /* Copy non-contiguous complex double from FPRs. */
-      ((int64_t *)dp)[0] = cc->fpr[0].l[0];
-      ((int64_t *)dp)[1] = cc->fpr[1].l[0];
-    }
-#else
-#error "missing definition for handling of complex return values"
-#endif
-#endif
+    CCALL_HANDLE_COMPLEXRET2
     return 1;  /* One GC step. */
   }
 #if CCALL_NUM_FPR
