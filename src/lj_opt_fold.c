@@ -483,6 +483,12 @@ LJFOLDF(kfold_conv_kint_num)
   return lj_ir_knum(J, cast_num(fleft->i));
 }
 
+LJFOLD(CONV KINT IRCONV_NUM_U32)
+LJFOLDF(kfold_conv_kintu32_num)
+{
+  return lj_ir_knum(J, cast_num((uint32_t)fleft->i));
+}
+
 LJFOLD(CONV KINT IRCONV_I64_INT)
 LJFOLD(CONV KINT IRCONV_U64_INT)
 LJFOLDF(kfold_conv_kint_i64)
