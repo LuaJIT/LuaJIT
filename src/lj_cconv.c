@@ -129,10 +129,9 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
   switch (cconv_idx2(dinfo, sinfo)) {
   /* Destination is a bool. */
   case CCX(B, B):
-    *dp = *sp;  /* Source operand already normalized. */
+    *dp = *sp;  /* Source operand is already normalized. */
     break;
-  case CCX(B, I):
-  case CCX(B, P): {
+  case CCX(B, I): {
     MSize i;
     uint8_t b = 0;
     for (i = 0; i < ssize; i++) b |= sp[i];
@@ -147,17 +146,6 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
     *dp = b;
     break;
     }
-  case CCX(B, C): {
-    CType *sc = ctype_child(cts, s);
-    uint8_t c;
-    lj_cconv_ct_ct(cts, d, sc, &c, sp, flags);
-    lj_cconv_ct_ct(cts, d, sc, dp, sp + sc->size, flags);
-    *dp = (*dp | c);
-    break;
-    }
-  case CCX(B, A):
-    *dp = (sp != (uint8_t *)0);
-    break;
 
   /* Destination is an integer. */
   case CCX(I, B):
@@ -347,7 +335,7 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
 
   /* Destination is an array. */
   case CCX(A, A):
-    if ((flags & CCF_CAST) || (d->info & CTF_VLA) || d->size != s->size ||
+    if ((flags & CCF_CAST) || (d->info & CTF_VLA) || dsize != ssize ||
 	d->size == CTSIZE_INVALID || !lj_cconv_compatptr(cts, d, s, flags))
       goto err_conv;
     goto copyval;
@@ -376,23 +364,15 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
   CTInfo sinfo = s->info;
   lua_assert(!ctype_isenum(sinfo));
   if (ctype_isnum(sinfo)) {
-    uint8_t tmpbool;
-    uint8_t *dp;
-    CTypeID did;
     if (!ctype_isbool(sinfo)) {
       if (ctype_isinteger(sinfo) && s->size > 4) goto copyval;
-      dp = (uint8_t *)&o->n;
-      did = CTID_DOUBLE;
-    } else {
-      dp = &tmpbool;
-      did = CTID_BOOL;
-    }
-    lj_cconv_ct_ct(cts, ctype_get(cts, did), s, dp, sp, 0);
-    /* Numbers are NOT canonicalized here! Beware of uninitialized data. */
-    if (did == CTID_BOOL)
-      setboolV(o, tmpbool);
-    else
+      lj_cconv_ct_ct(cts, ctype_get(cts, CTID_DOUBLE), s,
+		     (uint8_t *)&o->n, sp, 0);
+      /* Numbers are NOT canonicalized here! Beware of uninitialized data. */
       lua_assert(tvisnum(o));
+    } else {
+      setboolV(o, (*sp & 1));
+    }
     return 0;
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
     /* Create reference. */
@@ -542,8 +522,12 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
       sid = ctype_cid(s->info);
     }
     s = ctype_raw(cts, sid);
-    if (ctype_isenum(s->info)) s = ctype_child(cts, s);
-    goto doconv;
+    if (ctype_isfunc(s->info)) {
+      sid = lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|sid), CTSIZE_PTR);
+    } else {
+      if (ctype_isenum(s->info)) s = ctype_child(cts, s);
+      goto doconv;
+    }
   } else if (tvisstr(o)) {
     GCstr *str = strV(o);
     if (ctype_isenum(d->info)) {  /* Match string against enum constant. */

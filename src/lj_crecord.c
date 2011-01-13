@@ -133,10 +133,7 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
   case CCX(B, B):
     goto xstore;  /* Source operand is already normalized. */
   case CCX(B, I):
-  case CCX(B, P):
   case CCX(B, F):
-  case CCX(B, C):
-  case CCX(B, A):
     /* NYI: specialize to the result of a comparison against 0. */
     goto err_nyi;
 
@@ -683,6 +680,9 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
       } else if (!(ctype_isptr(ct->info) || ctype_isrefarray(ct->info))) {
 	goto err_type;
       }
+    } else if (tref_isnil(tr)) {
+      tr = lj_ir_kptr(J, NULL);
+      ct = ctype_get(cts, CTID_P_VOID);
     } else if (tref_isinteger(tr)) {
       ct = ctype_get(cts, CTID_INT32);
     } else if (!tref_isnum(tr)) {
