@@ -434,7 +434,7 @@ enum {
 
 #define setvmstate(g, st)	((g)->vmstate = ~LJ_VMST_##st)
 
-/* Metamethods. */
+/* Metamethods. ORDER MM */
 #ifdef LUAJIT_ENABLE_LUA52COMPAT
 #define MMDEF_52(_) _(pairs) _(ipairs)
 #else

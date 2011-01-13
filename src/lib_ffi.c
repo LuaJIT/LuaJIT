@@ -85,9 +85,10 @@ typedef struct FFIArith {
 } FFIArith;
 
 /* Check arguments for arithmetic metamethods. */
-static void ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
+static int ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
 {
   TValue *o = L->base;
+  int ok = 1;
   MSize i;
   if (o+1 >= L->top)
     lj_err_argt(L, 1, LUA_TCDATA);
@@ -105,10 +106,16 @@ static void ffi_checkarith(lua_State *L, CTState *cts, FFIArith *fa)
     } else if (tvisnum(o)) {
       fa->ct[i] = ctype_get(cts, CTID_DOUBLE);
       fa->p[i] = (uint8_t *)&o->n;
+    } else if (tvisnil(o)) {
+      fa->ct[i] = ctype_get(cts, CTID_P_VOID);
+      fa->p[i] = (uint8_t *)0;
     } else {
-      lj_err_optype(L, o, LJ_ERR_OPARITH);
+      fa->ct[i] = NULL;
+      fa->p[i] = NULL;
+      ok = 0;
     }
   }
+  return ok;
 }
 
 /* Pointer arithmetic. */
@@ -120,26 +127,38 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
   CTSize sz;
   CTypeID id;
   GCcdata *cd;
-  if (!(mm == MM_add || mm == MM_sub))
-    return 0;
   if (ctype_isptr(ctp->info) || ctype_isrefarray(ctp->info)) {
-    if (mm == MM_sub &&
+    if ((mm == MM_sub || mm == MM_eq || mm == MM_lt || mm == MM_le) &&
 	(ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
-      /* Pointer difference. */
-      intptr_t diff;
+      uint8_t *pp2 = fa->p[1];
+      if (mm == MM_eq) {  /* Pointer equality. Incompatible pointers are ok. */
+	setboolV(L->top-1, (pp == pp2));
+	return 1;
+      }
       if (!lj_cconv_compatptr(cts, ctp, fa->ct[1], CCF_IGNQUAL))
-	lj_err_caller(L, LJ_ERR_FFI_INVTYPE);
-      sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
-      if (sz == 0 || sz == CTSIZE_INVALID)
-	lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
-      diff = ((intptr_t)pp - (intptr_t)fa->p[1]) / (int32_t)sz;
-      /* All valid pointer differences on x64 are in (-2^47, +2^47),
-      ** which fits into a double without loss of precision.
-      */
-      setnumV(L->top-1, (lua_Number)diff);
-      return 1;
+	return 0;
+      if (mm == MM_sub) {  /* Pointer difference. */
+	intptr_t diff;
+	sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
+	if (sz == 0 || sz == CTSIZE_INVALID)
+	  return 0;
+	diff = ((intptr_t)pp - (intptr_t)pp2) / (int32_t)sz;
+	/* All valid pointer differences on x64 are in (-2^47, +2^47),
+	** which fits into a double without loss of precision.
+	*/
+	setnumV(L->top-1, (lua_Number)diff);
+	return 1;
+      } else if (mm == MM_lt) {  /* Pointer comparison (unsigned). */
+	setboolV(L->top-1, ((uintptr_t)pp < (uintptr_t)pp2));
+	return 1;
+      } else {
+	lua_assert(mm == MM_le);
+	setboolV(L->top-1, ((uintptr_t)pp <= (uintptr_t)pp2));
+	return 1;
+      }
     }
-    if (!ctype_isnum(fa->ct[1]->info)) return 0;
+    if (!((mm == MM_add || mm == MM_sub) &&
+	  ctype_isnum(fa->ct[1]->info))) return 0;
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[1],
 		   (uint8_t *)&idx, fa->p[1], 0);
     if (mm == MM_sub) idx = -idx;
@@ -155,7 +174,7 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
   }
   sz = lj_ctype_size(cts, ctype_cid(ctp->info));  /* Element size. */
   if (sz == CTSIZE_INVALID)
-    lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
+    return 0;
   pp += idx*(int32_t)sz;  /* Compute pointer + index. */
   id = lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(ctp->info)),
 		       CTSIZE_PTR);
@@ -180,7 +199,19 @@ static int ffi_arith_int64(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
     lj_cconv_ct_ct(cts, ct, fa->ct[0], (uint8_t *)&u0, fa->p[0], 0);
     if (mm != MM_unm)
       lj_cconv_ct_ct(cts, ct, fa->ct[1], (uint8_t *)&u1, fa->p[1], 0);
-    if ((mm == MM_div || mm == MM_mod)) {
+    switch (mm) {
+    case MM_eq:
+      setboolV(L->top-1, (u0 == u1));
+      return 1;
+    case MM_lt:
+      setboolV(L->top-1,
+	       id == CTID_INT64 ? ((int64_t)u0 < (int64_t)u1) : (u0 < u1));
+      return 1;
+    case MM_le:
+      setboolV(L->top-1,
+	       id == CTID_INT64 ? ((int64_t)u0 <= (int64_t)u1) : (u0 <= u1));
+      return 1;
+    case MM_div: case MM_mod:
       if (u1 == 0) {  /* Division by zero. */
 	if (u0 == 0)
 	  setnanV(L->top-1);
@@ -194,6 +225,8 @@ static int ffi_arith_int64(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
 	if (mm == MM_div) id = CTID_UINT64; else u0 = 0;
 	mm = MM_unm;  /* Result is 0x8000000000000000ULL or 0LL. */
       }
+      break;
+    default: break;
     }
     cd = lj_cdata_new(cts, id, 8);
     up = (uint64_t *)cdataptr(cd);
@@ -229,17 +262,27 @@ static int ffi_arith(lua_State *L)
 {
   CTState *cts = ctype_cts(L);
   FFIArith fa;
-  MMS mm = (MMS)(curr_func(L)->c.ffid - (int)FF_ffi_meta___add + (int)MM_add);
-  ffi_checkarith(L, cts, &fa);
-  if (!ffi_arith_int64(L, cts, &fa, mm) &&
-      !ffi_arith_ptr(L, cts, &fa, mm)) {
+  MMS mm = (MMS)(curr_func(L)->c.ffid - (int)FF_ffi_meta___eq + (int)MM_eq);
+  if (ffi_checkarith(L, cts, &fa)) {
+    if (ffi_arith_int64(L, cts, &fa, mm) || ffi_arith_ptr(L, cts, &fa, mm))
+      return 1;
+  }
+  /* NYI: per-cdata metamethods. */
+  {
     const char *repr[2];
     int i;
-    for (i = 0; i < 2; i++)
-      repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, fa.ct[i]), NULL));
-    lj_err_callerv(L, LJ_ERR_FFI_BADARITH, repr[0], repr[1]);
+    for (i = 0; i < 2; i++) {
+      if (fa.ct[i])
+	repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, fa.ct[i]), NULL));
+      else
+	repr[i] = typename(&L->base[i]);
+    }
+    lj_err_callerv(L, mm == MM_len ? LJ_ERR_FFI_BADLEN :
+		      mm == MM_concat ? LJ_ERR_FFI_BADCONCAT :
+		      mm < MM_add ? LJ_ERR_FFI_BADCOMP : LJ_ERR_FFI_BADARITH,
+		   repr[0], repr[1]);
   }
-  return 1;
+  return 0;  /* unreachable */
 }
 
 /* -- C type metamethods -------------------------------------------------- */
@@ -273,6 +316,32 @@ LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
   ct = lj_cdata_index(cts, cdataV(o), o+1, &p, &qual);
   lj_cdata_set(cts, ct, p, o+2, qual);
   return 0;
+}
+
+/* The following functions must be in contiguous ORDER MM. */
+LJLIB_CF(ffi_meta___eq)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___len)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___lt)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___le)
+{
+  return ffi_arith(L);
+}
+
+LJLIB_CF(ffi_meta___concat)
+{
+  return ffi_arith(L);
 }
 
 /* Forward declaration. */
@@ -324,6 +393,7 @@ LJLIB_CF(ffi_meta___unm)	LJLIB_REC(cdata_arith MM_unm)
 {
   return ffi_arith(L);
 }
+/* End of contiguous ORDER MM. */
 
 LJLIB_CF(ffi_meta___tostring)
 {

@@ -812,6 +812,23 @@ static void rec_mm_comp(jit_State *J, RecordIndex *ix, int op)
   }
 }
 
+#if LJ_HASFFI
+/* Setup call to cdata comparison metamethod. */
+static void rec_mm_comp_cdata(jit_State *J, RecordIndex *ix, int op, MMS mm)
+{
+  if (tref_iscdata(ix->val)) {
+    ix->tab = ix->val;
+    copyTV(J->L, &ix->tabv, &ix->valv);
+  } else {
+    lua_assert(tref_iscdata(ix->key));
+    ix->tab = ix->key;
+    copyTV(J->L, &ix->tabv, &ix->keyv);
+  }
+  lj_record_mm_lookup(J, ix, mm);
+  rec_mm_callcomp(J, ix, op);
+}
+#endif
+
 /* -- Indexed access ------------------------------------------------------ */
 
 /* Record bounds-check. */
@@ -1410,6 +1427,12 @@ void lj_record_ins(jit_State *J)
   /* -- Comparison ops ---------------------------------------------------- */
 
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
+#if LJ_HASFFI
+    if (tref_iscdata(ra) || tref_iscdata(rc)) {
+      rec_mm_comp_cdata(J, &ix, op, ((int)op & 2) ? MM_le : MM_lt);
+      break;
+    }
+#endif
     /* Emit nothing for two numeric or string consts. */
     if (!(tref_isk2(ra,rc) && tref_isnumber_str(ra) && tref_isnumber_str(rc))) {
       IRType ta = tref_isinteger(ra) ? IRT_INT : tref_type(ra);
@@ -1452,6 +1475,12 @@ void lj_record_ins(jit_State *J)
   case BC_ISEQS: case BC_ISNES:
   case BC_ISEQN: case BC_ISNEN:
   case BC_ISEQP: case BC_ISNEP:
+#if LJ_HASFFI
+    if (tref_iscdata(ra) || tref_iscdata(rc)) {
+      rec_mm_comp_cdata(J, &ix, op, MM_eq);
+      break;
+    }
+#endif
     /* Emit nothing for two non-table, non-udata consts. */
     if (!(tref_isk2(ra, rc) && !(tref_istab(ra) || tref_isudata(ra)))) {
       int diff;

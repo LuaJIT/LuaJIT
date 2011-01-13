@@ -302,10 +302,48 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
   return cast(TValue *, (intptr_t)ne);
 }
 
+#if LJ_HASFFI
+TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
+{
+  ASMFunction cont = (bc_op(ins) & 1) ? lj_cont_condf : lj_cont_condt;
+  int op = (int)bc_op(ins) & ~1;
+  TValue tv;
+  cTValue *mo, *o2, *o1 = &L->base[bc_a(ins)];
+  if (op == BC_ISEQV) {
+    cTValue *o = &L->base[bc_d(ins)];
+    if (tviscdata(o1)) {
+      o2 = o;
+    } else {
+      o2 = o1; o1 = o;
+    }
+  } else if (op == BC_ISEQS) {
+    setstrV(L, &tv, gco2str(proto_kgc(curr_proto(L), ~(ptrdiff_t)bc_d(ins))));
+    o2 = &tv;
+  } else if (op == BC_ISEQN) {
+    o2 = &mref(curr_proto(L)->k, cTValue)[bc_d(ins)];
+  } else {
+    lua_assert(op == BC_ISEQP);
+    setitype(&tv, ~bc_d(ins));
+    o2 = &tv;
+  }
+  mo = lj_meta_lookup(L, o1, MM_eq);
+  if (LJ_LIKELY(!tvisnil(mo)))
+    return mmcall(L, cont, mo, o1, o2);
+  else
+    return cast(TValue *, (intptr_t)(bc_op(ins) & 1));
+}
+#endif
+
 /* Helper for ordered comparisons. String compare, __lt/__le metamethods. */
 TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
 {
-  if (itype(o1) == itype(o2)) {  /* Never called with two numbers. */
+  if (LJ_HASFFI && (tviscdata(o1) || tviscdata(o2))) {
+    ASMFunction cont = (op & 1) ? lj_cont_condf : lj_cont_condt;
+    MMS mm = (op & 2) ? MM_le : MM_lt;
+    cTValue *mo = lj_meta_lookup(L, tviscdata(o1) ? o1 : o2, mm);
+    if (LJ_UNLIKELY(tvisnil(mo))) goto err;
+    return mmcall(L, cont, mo, o1, o2);
+  } else if (itype(o1) == itype(o2)) {  /* Never called with two numbers. */
     if (tvisstr(o1) && tvisstr(o2)) {
       int32_t res = lj_str_cmp(strV(o1), strV(o2));
       return cast(TValue *, (intptr_t)(((op&2) ? res <= 0 : res < 0) ^ (op&1)));

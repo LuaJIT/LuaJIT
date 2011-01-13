@@ -1043,6 +1043,19 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // 0/1 or TValue * (metamethod) returned in eax (RC).
   |  jmp <3
   |
+  |->vmeta_equal_cd:
+#if LJ_HASFFI
+  |  sub PC, 4
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE
+  |  mov FCARG1, L:RB
+  |  mov FCARG2, dword [PC-4]
+  |  mov SAVE_PC, PC
+  |  call extern lj_meta_equal_cd@8	// (lua_State *L, BCIns op)
+  |  // 0/1 or TValue * (metamethod) returned in eax (RC).
+  |  jmp <3
+#endif
+  |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_arith_vn:
@@ -3593,7 +3606,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  movzx RD, PC_RD
       |  branchPC RD
       |2:				// NE: Fallthrough to next instruction.
+      if (!LJ_HASFFI) {
+	|3:
+      }
     } else {
+      if (!LJ_HASFFI) {
+	|3:
+      }
       |2:				// NE: Branch to the target.
       |  movzx RD, PC_RD
       |  branchPC RD
@@ -3603,6 +3622,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |
     if (op == BC_ISEQV || op == BC_ISNEV) {
       |5:  // Either or both types are not numbers.
+      if (LJ_HASFFI) {
+	|  cmp RB, LJ_TCDATA; je ->vmeta_equal_cd
+	|  checktp RA, LJ_TCDATA; je ->vmeta_equal_cd
+      }
       |  checktp RA, RB			// Compare types.
       |  jne <2				// Not the same type?
       |  cmp RB, LJ_TISPRI
@@ -3629,13 +3652,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 	|  mov RB, 1			// ne = 1
       }
       |  jmp ->vmeta_equal		// Handle __eq metamethod.
+    } else if (LJ_HASFFI) {
+      |3:
+      |  cmp RB, LJ_TCDATA; jne <2
+      |  jmp ->vmeta_equal_cd
     }
     break;
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
     |  ins_AND	// RA = src, RD = str const, JMP with RD = target
+    |  mov RB, [BASE+RA*8+4]
     |  add PC, 4
-    |  checkstr RA, >2
+    |  cmp RB, LJ_TSTR; jne >3
     |  mov RA, [BASE+RA*8]
     |  cmp RA, [KBASE+RD*4]
   iseqne_test:
@@ -3648,8 +3676,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_ISEQN: case BC_ISNEN:
     vk = op == BC_ISEQN;
     |  ins_AD	// RA = src, RD = num const, JMP with RD = target
+    |  mov RB, [BASE+RA*8+4]
     |  add PC, 4
-    |  checknum RA, >2
+    |  cmp RB, LJ_TISNUM; ja >3
     if (sse) {
       |  movsd xmm0, qword [KBASE+RD*8]
       |  ucomisd xmm0, qword [BASE+RA*8]
@@ -3662,9 +3691,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
   case BC_ISEQP: case BC_ISNEP:
     vk = op == BC_ISEQP;
     |  ins_AND	// RA = src, RD = primitive type (~), JMP with RD = target
+    |  mov RB, [BASE+RA*8+4]
     |  add PC, 4
-    |  checktp RA, RD
-    goto iseqne_test;
+    |  cmp RB, RD
+    if (!LJ_HASFFI) goto iseqne_test;
+    if (vk) {
+      |  jne >3
+      |  movzx RD, PC_RD
+      |  branchPC RD
+      |2:
+      |  ins_next
+      |3:
+      |  cmp RB, LJ_TCDATA; jne <2
+      |  jmp ->vmeta_equal_cd
+    } else {
+      |  je >2
+      |  cmp RB, LJ_TCDATA; je ->vmeta_equal_cd
+      |  movzx RD, PC_RD
+      |  branchPC RD
+      |2:
+      |  ins_next
+    }
+    break;
 
   /* -- Unary test and copy ops ------------------------------------------- */
 
