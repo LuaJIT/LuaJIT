@@ -328,6 +328,24 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
     sp = lj_ir_kptr(J, NULL);
   } else if (tref_isudata(sp)) {
     sp = emitir(IRT(IR_ADD, IRT_P32), sp, lj_ir_kint(J, sizeof(GCcdata)));
+  } else if (tref_isstr(sp)) {
+    if (ctype_isenum(d->info)) {  /* Match string against enum constant. */
+      GCstr *str = strV(sval);
+      CTSize ofs;
+      CType *cct = lj_ctype_getfield(cts, d, str, &ofs);
+      /* Specialize to the name of the enum constant. */
+      emitir(IRTG(IR_EQ, IRT_STR), sp, lj_ir_kstr(J, str));
+      if (cct && ctype_isconstval(cct->info)) {
+	lua_assert(ctype_child(cts, cct)->size == 4);
+	sp = lj_ir_kint(J, (int32_t)cct->size);
+	sid = ctype_cid(cct->info);
+      }  /* else: interpreter will throw. */
+    } else if (ctype_isrefarray(d->info)) {  /* Copy string to array. */
+      lj_trace_err(J, LJ_TRERR_BADTYPE);  /* NYI */
+    } else {  /* Otherwise pass the string data as a const char[]. */
+      sp = emitir(IRT(IR_STRREF, IRT_P32), sp, lj_ir_kint(J, 0));
+      sid = CTID_A_CCHAR;
+    }
   } else {  /* NYI: tref_isstr(sp), tref_istab(sp), tref_islightud(sp). */
     sid = argv2cdata(J, sp, sval)->typeid;
     s = ctype_raw(cts, sid);
@@ -350,6 +368,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
   }
   s = ctype_get(cts, sid);
 doconv:
+  if (ctype_isenum(d->info)) d = ctype_child(cts, d);
   crec_ct_ct(J, d, s, dp, sp);
 }
 
@@ -459,11 +478,11 @@ index_struct:
   if (ctype_isref(ct->info))
     ptr = emitir(IRT(IR_XLOAD, IRT_PTR), ptr, 0);
 
-  /* Skip attributes and enums. */
-  while (ctype_isattrib(ct->info) || ctype_isenum(ct->info))
-    ct = ctype_child(cts, ct);
+  while (ctype_isattrib(ct->info))
+    ct = ctype_child(cts, ct);  /* Skip attributes. */
 
   if (rd->data == 0) {  /* __index metamethod. */
+    if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);  /* Skip enums. */
     J->base[0] = crec_tv_ct(J, ct, sid, ptr);
   } else {  /* __newindex metamethod. */
     rd->nres = 0;
