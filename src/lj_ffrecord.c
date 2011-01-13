@@ -215,7 +215,7 @@ int32_t lj_ffrecord_select_mode(jit_State *J, TRef tr, TValue *tv)
     if (strV(tv)->len == 1) {
       emitir(IRTG(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, strV(tv)));
     } else {
-      TRef trptr = emitir(IRT(IR_STRREF, IRT_P32), tr, 0);
+      TRef trptr = emitir(IRT(IR_STRREF, IRT_P32), tr, lj_ir_kint(J, 0));
       TRef trchar = emitir(IRT(IR_XLOAD, IRT_U8), trptr, IRXLOAD_READONLY);
       emitir(IRTG(IR_EQ, IRT_INT), trchar, lj_ir_kint(J, '#'));
     }
