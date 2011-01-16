@@ -109,7 +109,10 @@ static void rec_check_slots(jit_State *J)
 	if (tref_isk(tr)) {  /* Compare constants. */
 	  TValue tvk;
 	  lj_ir_kvalue(J->L, &tvk, ir);
-	  lua_assert(lj_obj_equal(tv, &tvk));
+	  if (!(tvisnum(&tvk) && tvisnan(&tvk)))
+	    lua_assert(lj_obj_equal(tv, &tvk));
+	  else
+	    lua_assert(tvisnum(tv) && tvisnan(tv));
 	}
       }
     }
