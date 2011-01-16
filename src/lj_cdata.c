@@ -127,6 +127,17 @@ collect_attrib:
 	  return ct;
 	}
       }
+    } else if (cd->typeid == CTID_CTYPEID) {
+      /* Allow indexing a (pointer to) struct constructor to get constants. */
+      CType *sct = ct = ctype_raw(cts, *(CTypeID *)p);
+      if (ctype_isptr(sct->info))
+	sct = ctype_rawchild(cts, sct);
+      if (ctype_isstruct(sct->info)) {
+	CTSize ofs;
+	CType *fct = lj_ctype_getfield(cts, sct, name, &ofs);
+	if (fct && ctype_isconstval(fct->info))
+	  return fct;
+      }
     }
     {
       GCstr *s = lj_ctype_repr(cts->L, ctype_typeid(cts, ct), NULL);

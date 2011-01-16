@@ -374,6 +374,18 @@ doconv:
 
 /* -- C data metamethods -------------------------------------------------- */
 
+/* Specialize to the CTypeID held by a cdata constructor. */
+static CTypeID crec_constructor(jit_State *J, GCcdata *cd, TRef tr)
+{
+  CTypeID id;
+  lua_assert(tref_iscdata(tr) && cd->typeid == CTID_CTYPEID);
+  id = *(CTypeID *)cdataptr(cd);
+  tr = emitir(IRT(IR_ADD, IRT_PTR), tr, lj_ir_kintp(J, sizeof(GCcdata)));
+  tr = emitir(IRT(IR_XLOAD, IRT_INT), tr, 0);
+  emitir(IRTG(IR_EQ, IRT_INT), tr, lj_ir_kint(J, (int32_t)id));
+  return id;
+}
+
 /* This would be rather difficult in FOLD, so do it here:
 ** (base+k)+(idx*sz)+ofs ==> (base+idx*sz)+(ofs+k)
 ** (base+(idx+k)*sz)+ofs ==> (base+idx*sz)+(ofs+k*sz)
@@ -435,6 +447,8 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     GCstr *name = strV(&rd->argv[1]);
     /* Always specialize to the field name. */
     emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
+    if (cd->typeid == CTID_CTYPEID)
+      ct = ctype_raw(cts, crec_constructor(J, cd, ptr));
     if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
       CType *cct = ctype_rawchild(cts, ct);
       if (ctype_isstruct(cct->info)) {
@@ -575,7 +589,7 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
 {
   GCcdata *cd = argv2cdata(J, J->base[0], &rd->argv[0]);
   if (cd->typeid == CTID_CTYPEID) {
-    crec_alloc(J, rd, *(CTypeID *)cdataptr(cd));
+    crec_alloc(J, rd, crec_constructor(J, cd, J->base[0]));
   } else {
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   }
