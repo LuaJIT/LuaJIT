@@ -113,7 +113,32 @@ static IRType crec_ct2irt(CType *ct)
   return IRT_CDATA;
 }
 
-static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
+/* Determine whether a passed number or cdata number is non-zero. */
+static int crec_isnonzero(CType *s, void *p)
+{
+  if (p == (void *)0)
+    return 0;
+  if (p == (void *)1)
+    return 1;
+  if ((s->info & CTF_FP)) {
+    if (s->size == sizeof(float))
+      return (*(float *)p != 0);
+    else
+      return (*(double *)p != 0);
+  } else {
+    if (s->size == 1)
+      return (*(uint8_t *)p != 0);
+    else if (s->size == 2)
+      return (*(uint16_t *)p != 0);
+    else if (s->size == 4)
+      return (*(uint32_t *)p != 0);
+    else
+      return (*(uint64_t *)p != 0);
+  }
+}
+
+static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
+		       void *svisnz)
 {
   CTSize dsize = d->size, ssize = s->size;
   CTInfo dinfo = d->info, sinfo = s->info;
@@ -134,7 +159,16 @@ static void crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp)
     goto xstore;  /* Source operand is already normalized. */
   case CCX(B, I):
   case CCX(B, F):
-    /* NYI: specialize to the result of a comparison against 0. */
+    if (st != IRT_CDATA) {
+      /* Specialize to the result of a comparison against 0. */
+      TRef zero = (st == IRT_NUM  || st == IRT_FLOAT) ? lj_ir_knum(J, 0) :
+		  (st == IRT_I64 || st == IRT_U64) ? lj_ir_kint64(J, 0) :
+		  lj_ir_kint(J, 0);
+      int isnz = crec_isnonzero(s, svisnz);
+      emitir(IRTG(isnz ? IR_NE : IR_EQ, st), sp, zero);
+      sp = lj_ir_kint(J, isnz);
+      goto xstore;
+    }
     goto err_nyi;
 
   /* Destination is an integer. */
@@ -316,11 +350,14 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
 {
   CTState *cts = ctype_ctsG(J2G(J));
   CTypeID sid = CTID_P_VOID;
+  void *svisnz = 0;
   CType *s;
   if (LJ_LIKELY(tref_isinteger(sp))) {
     sid = CTID_INT32;
+    svisnz = (void *)(intptr_t)(numV(sval) != 0);
   } else if (tref_isnum(sp)) {
     sid = CTID_DOUBLE;
+    svisnz = (void *)(intptr_t)(numV(sval) != 0);
   } else if (tref_isbool(sp)) {
     sp = lj_ir_kint(J, tref_istrue(sp) ? 1 : 0);
     sid = CTID_BOOL;
@@ -337,6 +374,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
       emitir(IRTG(IR_EQ, IRT_STR), sp, lj_ir_kstr(J, str));
       if (cct && ctype_isconstval(cct->info)) {
 	lua_assert(ctype_child(cts, cct)->size == 4);
+	svisnz = (void *)(intptr_t)(cct->size != 0);
 	sp = lj_ir_kint(J, (int32_t)cct->size);
 	sid = ctype_cid(cct->info);
       }  /* else: interpreter will throw. */
@@ -346,16 +384,19 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
       sp = emitir(IRT(IR_STRREF, IRT_P32), sp, lj_ir_kint(J, 0));
       sid = CTID_A_CCHAR;
     }
-  } else {  /* NYI: tref_isstr(sp), tref_istab(sp), tref_islightud(sp). */
+  } else {  /* NYI: tref_istab(sp), tref_islightud(sp). */
     sid = argv2cdata(J, sp, sval)->typeid;
     s = ctype_raw(cts, sid);
+    svisnz = cdataptr(cdataV(sval));
     if (ctype_isptr(s->info)) {
       IRType t = (LJ_64 && s->size == 8) ? IRT_P64 : IRT_P32;
       sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_PTR);
-      if (ctype_isref(s->info))
+      if (ctype_isref(s->info)) {
+	svisnz = *(void **)svisnz;
 	s = ctype_rawchild(cts, s);
-      else
+      } else {
 	goto doconv;  /* The pointer value was loaded, don't load number. */
+      }
     } else {
       sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCcdata)));
     }
@@ -369,7 +410,7 @@ static void crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
   s = ctype_get(cts, sid);
 doconv:
   if (ctype_isenum(d->info)) d = ctype_child(cts, d);
-  crec_ct_ct(J, d, s, dp, sp);
+  crec_ct_ct(J, d, s, dp, sp, svisnz);
 }
 
 /* -- C data metamethods -------------------------------------------------- */
@@ -529,8 +570,10 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
       CType *dc = ctype_rawchild(cts, d);  /* Array element type. */
       CTSize ofs, esize = dc->size;
       TRef sp = 0;
-      TValue *sval = NULL;
+      TValue tv;
+      TValue *sval = &tv;
       MSize i;
+      setnumV(&tv, 0);
       if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info)))
 	lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: init array of aggregates. */
       for (i = 1, ofs = 0; ofs < sz; ofs += esize) {
@@ -554,7 +597,9 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	if (ctype_isfield(df->info)) {
 	  CType *dc;
 	  TRef sp, dp;
-	  TValue *sval;
+	  TValue tv;
+	  TValue *sval = &tv;
+	  setnumV(&tv, 0);
 	  if (!gcref(df->name)) continue;  /* Ignore unnamed fields. */
 	  dc = ctype_rawchild(cts, df);  /* Field type. */
 	  if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info)))
@@ -565,7 +610,6 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	    i++;
 	  } else {
 	    sp = ctype_isnum(dc->info) ? lj_ir_kint(J, 0) : TREF_NIL;
-	    sval = NULL;
 	  }
 	  dp = emitir(IRT(IR_ADD, IRT_PTR), trcd,
 		      lj_ir_kintp(J, df->size + sizeof(GCcdata)));
