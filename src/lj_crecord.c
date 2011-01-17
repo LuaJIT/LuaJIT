@@ -301,8 +301,6 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
   if (ctype_isnum(sinfo)) {
     IRType t = crec_ct2irt(s);
     TRef tr;
-    if ((sinfo & CTF_BOOL))
-      goto err_nyi;  /* NYI: specialize to the result. */
     if (t == IRT_CDATA)
       goto err_nyi;  /* NYI: copyval of >64 bit integers. */
     tr = emitir(IRT(IR_XLOAD, t), sp, 0);
@@ -314,6 +312,11 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
 			lj_ir_kintp(J, sizeof(GCcdata)));
       emitir(IRT(IR_XSTORE, t), ptr, tr);
       return dp;
+    } else if ((sinfo & CTF_BOOL)) {
+      /* Assume not equal to zero. Fixup and emit pending guard later. */
+      lj_ir_set(J, IRTGI(IR_NE), tr, lj_ir_kint(J, 0));
+      J->postproc = LJ_POST_FIXGUARD;
+      tr = TREF_TRUE;
     }
     return tr;
   } else if (ctype_isptr(sinfo)) {

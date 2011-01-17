@@ -371,7 +371,9 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
       /* Numbers are NOT canonicalized here! Beware of uninitialized data. */
       lua_assert(tvisnum(o));
     } else {
-      setboolV(o, (*sp & 1));
+      uint32_t b = ((*sp) & 1);
+      setboolV(o, b);
+      setboolV(&cts->g->tmptv2, b);  /* Remember for trace recorder. */
     }
     return 0;
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
