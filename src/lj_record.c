@@ -819,6 +819,7 @@ static void rec_mm_comp(jit_State *J, RecordIndex *ix, int op)
 /* Setup call to cdata comparison metamethod. */
 static void rec_mm_comp_cdata(jit_State *J, RecordIndex *ix, int op, MMS mm)
 {
+  lj_snap_add(J);
   if (tref_iscdata(ix->val)) {
     ix->tab = ix->val;
     copyTV(J->L, &ix->tabv, &ix->valv);

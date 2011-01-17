@@ -663,7 +663,20 @@ static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
 	sp[i] = emitconv(sp[i], dt, IRT_INT,
 			 ((st - IRT_I8) & 1) ? 0 : IRCONV_SEXT);
     }
-    if (mm == MM_pow) {
+    if (mm < MM_add) {
+      /* Assume true comparison. Fixup and emit pending guard later. */
+      IROp op;
+      if (mm == MM_eq) {
+	op = IR_EQ;
+      } else {
+	op = mm == MM_lt ? IR_LT : IR_LE;
+	if (dt == IRT_U64)
+	  op += (IR_ULT-IR_LT);
+      }
+      lj_ir_set(J, IRTG(op, dt), sp[0], sp[1]);
+      J->postproc = LJ_POST_FIXGUARD;
+      return TREF_TRUE;
+    } else if (mm == MM_pow) {
       tr = lj_ir_call(J, IRCALL_lj_cdata_powi64, sp[0], sp[1],
 		      lj_ir_kint(J, (int)dt-(int)IRT_I64));
     } else {
@@ -683,35 +696,41 @@ static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)
 {
   CTState *cts = ctype_ctsG(J2G(J));
   CType *ctp = s[0];
-  CTSize sz;
-  if (!(mm == MM_add || mm == MM_sub))
-    return 0;
-  if (ctype_ispointer(ctp->info)) {
-    sz = lj_ctype_size(cts, ctype_cid(ctp->info));
-    if (mm == MM_sub && ctype_ispointer(s[1]->info)) {
-      /* Pointer difference. */
-      TRef tr;
-      if (sz == 0 || (sz & (sz-1)) != 0)
-	return 0;  /* NYI: integer division. */
-      tr = emitir(IRT(IR_SUB, IRT_PTR), sp[0], sp[1]);
-      tr = emitir(IRT(IR_BSAR, IRT_INTP), tr, lj_ir_kint(J, lj_fls(sz)));
+  if (ctype_isptr(ctp->info) || ctype_isrefarray(ctp->info)) {
+    if ((mm == MM_sub || mm == MM_eq || mm == MM_lt || mm == MM_le) &&
+	(ctype_isptr(s[1]->info) || ctype_isrefarray(s[1]->info))) {
+      if (mm == MM_sub) {  /* Pointer difference. */
+	TRef tr;
+	CTSize sz = lj_ctype_size(cts, ctype_cid(ctp->info));
+	if (sz == 0 || (sz & (sz-1)) != 0)
+	  return 0;  /* NYI: integer division. */
+	tr = emitir(IRT(IR_SUB, IRT_PTR), sp[0], sp[1]);
+	tr = emitir(IRT(IR_BSAR, IRT_INTP), tr, lj_ir_kint(J, lj_fls(sz)));
 #if LJ_64
-      tr = emitconv(tr, IRT_NUM, IRT_INTP, 0);
+	tr = emitconv(tr, IRT_NUM, IRT_INTP, 0);
 #endif
-      return tr;
+	return tr;
+      } else {  /* Pointer comparison (unsigned). */
+	/* Assume true comparison. Fixup and emit pending guard later. */
+	IROp op = mm == MM_eq ? IR_EQ : mm == MM_lt ? IR_ULT : IR_ULE;
+	lj_ir_set(J, IRTG(op, IRT_PTR), sp[0], sp[1]);
+	J->postproc = LJ_POST_FIXGUARD;
+	return TREF_TRUE;
+      }
     }
-    if (!ctype_isnum(s[1]->info)) return 0;
-  } else if (mm == MM_add &&
-	     ctype_isnum(ctp->info) && ctype_ispointer(s[1]->info)) {
+    if (!((mm == MM_add || mm == MM_sub) && ctype_isnum(s[1]->info)))
+      return 0;
+  } else if (mm == MM_add && ctype_isnum(ctp->info) &&
+	     (ctype_isptr(s[1]->info) || ctype_isrefarray(s[1]->info))) {
     TRef tr = sp[0]; sp[0] = sp[1]; sp[1] = tr;  /* Swap pointer and index. */
     ctp = s[1];
-    sz = lj_ctype_size(cts, ctype_cid(ctp->info));
   } else {
     return 0;
   }
   {
     TRef tr = sp[1];
     IRType t = tref_type(tr);
+    CTSize sz = lj_ctype_size(cts, ctype_cid(ctp->info));
     CTypeID id;
 #if LJ_64
     if (t == IRT_NUM || t == IRT_FLOAT)

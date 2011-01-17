@@ -157,14 +157,13 @@ static int ffi_arith_ptr(lua_State *L, CTState *cts, FFIArith *fa, MMS mm)
 	return 1;
       }
     }
-    if (!((mm == MM_add || mm == MM_sub) &&
-	  ctype_isnum(fa->ct[1]->info))) return 0;
+    if (!((mm == MM_add || mm == MM_sub) && ctype_isnum(fa->ct[1]->info)))
+      return 0;
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[1],
 		   (uint8_t *)&idx, fa->p[1], 0);
     if (mm == MM_sub) idx = -idx;
-  } else if (mm == MM_add &&
+  } else if (mm == MM_add && ctype_isnum(ctp->info) &&
       (ctype_isptr(fa->ct[1]->info) || ctype_isrefarray(fa->ct[1]->info))) {
-    if (!ctype_isnum(ctp->info)) return 0;
     /* Swap pointer and index. */
     ctp = fa->ct[1]; pp = fa->p[1];
     lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), fa->ct[0],
@@ -264,8 +263,10 @@ static int ffi_arith(lua_State *L)
   FFIArith fa;
   MMS mm = (MMS)(curr_func(L)->c.ffid - (int)FF_ffi_meta___eq + (int)MM_eq);
   if (ffi_checkarith(L, cts, &fa)) {
-    if (ffi_arith_int64(L, cts, &fa, mm) || ffi_arith_ptr(L, cts, &fa, mm))
+    if (ffi_arith_int64(L, cts, &fa, mm) || ffi_arith_ptr(L, cts, &fa, mm)) {
+      copyTV(L, &G(L)->tmptv2, L->top-1);  /* Remember for trace recorder. */
       return 1;
+    }
   }
   /* NYI: per-cdata metamethods. */
   {
@@ -319,7 +320,7 @@ LJLIB_CF(ffi_meta___newindex)	LJLIB_REC(cdata_index 1)
 }
 
 /* The following functions must be in contiguous ORDER MM. */
-LJLIB_CF(ffi_meta___eq)
+LJLIB_CF(ffi_meta___eq)		LJLIB_REC(cdata_arith MM_eq)
 {
   return ffi_arith(L);
 }
@@ -329,12 +330,12 @@ LJLIB_CF(ffi_meta___len)
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___lt)
+LJLIB_CF(ffi_meta___lt)		LJLIB_REC(cdata_arith MM_lt)
 {
   return ffi_arith(L);
 }
 
-LJLIB_CF(ffi_meta___le)
+LJLIB_CF(ffi_meta___le)		LJLIB_REC(cdata_arith MM_le)
 {
   return ffi_arith(L);
 }
