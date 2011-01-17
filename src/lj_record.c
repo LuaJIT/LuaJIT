@@ -1365,6 +1365,26 @@ void lj_record_ins(jit_State *J)
   BCOp op;
   TRef ra, rb, rc;
 
+  /* Perform post-processing action before recording the next instruction. */
+  if (LJ_UNLIKELY(J->postproc != LJ_POST_NONE)) {
+    switch (J->postproc) {
+    case LJ_POST_FIXGUARD:  /* Fixup and emit pending guard. */
+      if (!tvistruecond(&J2G(J)->tmptv2)) {
+	BCReg s;
+	J->fold.ins.o ^= 1;  /* Flip guard to opposite. */
+	for (s = 0; s < J->maxslot; s++)  /* Fixup stack slot (if any). */
+	  if (J->base[s] == TREF_TRUE && tvisfalse(&J->L->base[s])) {
+	    J->base[s] = TREF_FALSE;
+	    break;
+	  }
+      }
+      lj_opt_fold(J);  /* Emit pending guard. */
+      break;
+    default: lua_assert(0); break;
+    }
+    J->postproc = LJ_POST_NONE;
+  }
+
   /* Need snapshot before recording next bytecode (e.g. after a store). */
   if (J->needsnap) {
     J->needsnap = 0;

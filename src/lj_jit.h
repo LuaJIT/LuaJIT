@@ -104,8 +104,14 @@ typedef enum {
   LJ_TRACE_START,	/* New trace started. */
   LJ_TRACE_END,		/* End of trace. */
   LJ_TRACE_ASM,		/* Assemble trace. */
-  LJ_TRACE_ERR,		/* Trace aborted with error. */
+  LJ_TRACE_ERR		/* Trace aborted with error. */
 } TraceState;
+
+/* Post-processing action. */
+typedef enum {
+  LJ_POST_NONE,		/* No action. */
+  LJ_POST_FIXGUARD	/* Fixup and emit pending guard. */
+} PostProc;
 
 /* Machine code type. */
 typedef uint8_t MCode;
@@ -283,6 +289,8 @@ typedef struct jit_State {
   SnapShot *snapbuf;	/* Temp. snapshot buffer. */
   SnapEntry *snapmapbuf;  /* Temp. snapshot map buffer. */
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
+
+  PostProc postproc;	/* Required post-processing after execution. */
 
   GCRef *trace;		/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */

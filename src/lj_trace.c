@@ -388,6 +388,7 @@ static void trace_start(jit_State *J)
   J->needsnap = 0;
   J->bcskip = 0;
   J->guardemit.irt = 0;
+  J->postproc = LJ_POST_NONE;
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
   L = J->L;
@@ -454,6 +455,7 @@ static void trace_stop(jit_State *J)
 
   /* Commit new mcode only after all patching is done. */
   lj_mcode_commit(J, J->cur.mcode);
+  J->postproc = LJ_POST_NONE;
   trace_save(J);
 
   L = J->L;
@@ -485,6 +487,7 @@ static int trace_abort(jit_State *J)
   TraceError e = LJ_TRERR_RECERR;
   TraceNo traceno;
 
+  J->postproc = LJ_POST_NONE;
   lj_mcode_abort(J);
   if (tvisnum(L->top-1))
     e = (TraceError)lj_num2int(numV(L->top-1));
