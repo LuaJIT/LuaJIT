@@ -309,13 +309,10 @@ TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
   int op = (int)bc_op(ins) & ~1;
   TValue tv;
   cTValue *mo, *o2, *o1 = &L->base[bc_a(ins)];
+  cTValue *o1mm = o1;
   if (op == BC_ISEQV) {
-    cTValue *o = &L->base[bc_d(ins)];
-    if (tviscdata(o1)) {
-      o2 = o;
-    } else {
-      o2 = o1; o1 = o;
-    }
+    o2 = &L->base[bc_d(ins)];
+    if (!tviscdata(o1mm)) o1mm = o2;
   } else if (op == BC_ISEQS) {
     setstrV(L, &tv, gco2str(proto_kgc(curr_proto(L), ~(ptrdiff_t)bc_d(ins))));
     o2 = &tv;
@@ -326,7 +323,7 @@ TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
     setitype(&tv, ~bc_d(ins));
     o2 = &tv;
   }
-  mo = lj_meta_lookup(L, o1, MM_eq);
+  mo = lj_meta_lookup(L, o1mm, MM_eq);
   if (LJ_LIKELY(!tvisnil(mo)))
     return mmcall(L, cont, mo, o1, o2);
   else
