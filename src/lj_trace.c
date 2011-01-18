@@ -187,12 +187,12 @@ static void trace_unpatch(jit_State *J, GCtrace *T)
   if (op == BC_JMP)
     return;  /* No need to unpatch branches in parent traces (yet). */
   switch (bc_op(*pc)) {
-  case BC_JFORI:
-    lua_assert(op == BC_FORL);
-    setbc_op(pc, BC_FORI);
-    pc += bc_j(*pc);
-    lua_assert(bc_op(*pc) == BC_JFORL && traceref(J, bc_d(*pc)) == T);
+  case BC_JFORL:
+    lua_assert(traceref(J, bc_d(*pc)) == T);
     *pc = T->startins;
+    pc += bc_j(T->startins);
+    lua_assert(bc_op(*pc) == BC_JFORI);
+    setbc_op(pc, BC_FORI);
     break;
   case BC_JLOOP:
     lua_assert(op == BC_LOOP || bc_isret(op));
