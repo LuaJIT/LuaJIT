@@ -636,7 +636,7 @@ static Reg ra_rematk(ASMState *as, IRIns *ir)
 #endif
   } else {
     lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
-	       ir->o == IR_KPTR || ir->o == IR_KNULL);
+	       ir->o == IR_KPTR || ir->o == IR_KKPTR || ir->o == IR_KNULL);
     emit_loadi(as, r, ir->i);
   }
   return r;
@@ -946,7 +946,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
 #endif
       } else {
 	lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
-		   ir->o == IR_KPTR || ir->o == IR_KNULL);
+		   ir->o == IR_KPTR || ir->o == IR_KKPTR || ir->o == IR_KNULL);
 	emit_loadi(as, dest, ir->i);
 	return;
       }
@@ -1312,7 +1312,7 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
 {
   IRIns *ir = IR(ref);
   as->mrm.idx = RID_NONE;
-  if (ir->o == IR_KPTR) {
+  if (ir->o == IR_KPTR || ir->o == IR_KKPTR) {
     as->mrm.ofs = ir->i;
     as->mrm.base = RID_NONE;
   } else if (ir->o == IR_STRREF) {

@@ -385,7 +385,7 @@ LJFOLDF(kfold_int64comp0)
 
 /* -- Constant folding for strings ---------------------------------------- */
 
-LJFOLD(SNEW KPTR KINT)
+LJFOLD(SNEW KKPTR KINT)
 LJFOLDF(kfold_snew_kptr)
 {
   GCstr *s = lj_str_new(J->L, (const char *)ir_kptr(fleft), (size_t)fright->i);
@@ -405,7 +405,7 @@ LJFOLDF(kfold_strref)
 {
   GCstr *str = ir_kstr(fleft);
   lua_assert((MSize)fright->i < str->len);
-  return lj_ir_kptr(J, (char *)strdata(str) + fright->i);
+  return lj_ir_kkptr(J, (char *)strdata(str) + fright->i);
 }
 
 LJFOLD(STRREF SNEW any)
@@ -451,11 +451,13 @@ LJFOLDF(kfold_add_kgc)
 #else
   ptrdiff_t ofs = fright->i;
 #endif
-  return lj_ir_kptr(J, (char *)o + ofs);
+  return lj_ir_kkptr(J, (char *)o + ofs);
 }
 
 LJFOLD(ADD KPTR KINT)
 LJFOLD(ADD KPTR KINT64)
+LJFOLD(ADD KKPTR KINT)
+LJFOLD(ADD KKPTR KINT64)
 LJFOLDF(kfold_add_kptr)
 {
   void *p = ir_kptr(fleft);
@@ -464,7 +466,7 @@ LJFOLDF(kfold_add_kptr)
 #else
   ptrdiff_t ofs = fright->i;
 #endif
-  return lj_ir_kptr(J, (char *)p + ofs);
+  return lj_ir_kptr_(J, fleft->o, (char *)p + ofs);
 }
 
 /* -- Constant folding of conversions ------------------------------------- */
@@ -1574,8 +1576,8 @@ LJFOLD(ALOAD any)
 LJFOLDX(lj_opt_fwd_aload)
 
 /* From HREF fwd (see below). Must eliminate, not supported by fwd/backend. */
-LJFOLD(HLOAD KPTR)
-LJFOLDF(kfold_hload_kptr)
+LJFOLD(HLOAD KKPTR)
+LJFOLDF(kfold_hload_kkptr)
 {
   UNUSED(J);
   lua_assert(ir_kptr(fleft) == niltvg(J2G(J)));
@@ -1625,7 +1627,7 @@ LJFOLD(HREF TNEW any)
 LJFOLDF(fwd_href_tnew)
 {
   if (lj_opt_fwd_href_nokey(J))
-    return lj_ir_kptr(J, niltvg(J2G(J)));
+    return lj_ir_kkptr(J, niltvg(J2G(J)));
   return NEXTFOLD;
 }
 
@@ -1638,7 +1640,7 @@ LJFOLDF(fwd_href_tdup)
   lj_ir_kvalue(J->L, &keyv, fright);
   if (lj_tab_get(J->L, ir_ktab(IR(fleft->op1)), &keyv) == niltvg(J2G(J)) &&
       lj_opt_fwd_href_nokey(J))
-    return lj_ir_kptr(J, niltvg(J2G(J)));
+    return lj_ir_kkptr(J, niltvg(J2G(J)));
   return NEXTFOLD;
 }
 
@@ -1760,7 +1762,8 @@ LJFOLDF(fwd_sload)
   }
 }
 
-LJFOLD(XLOAD KPTR any)
+/* Only fold for KKPTR. The pointer _and_ the contents must be const. */
+LJFOLD(XLOAD KKPTR any)
 LJFOLDF(xload_kptr)
 {
   TRef tr = kfold_xload(J, fins, ir_kptr(fleft));

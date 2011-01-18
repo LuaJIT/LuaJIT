@@ -1013,7 +1013,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
     IRType t = itype2irt(oldv);
     TRef res;
     if (oldv == niltvg(J2G(J))) {
-      emitir(IRTG(IR_EQ, IRT_P32), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+      emitir(IRTG(IR_EQ, IRT_P32), xref, lj_ir_kkptr(J, niltvg(J2G(J))));
       res = TREF_NIL;
     } else {
       res = emitir(IRTG(loadop, t), xref, 0);
@@ -1036,7 +1036,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 	emitir(IRTG(loadop, IRT_NIL), xref, 0);  /* Guard for nil value. */
       else if (xrefop == IR_HREF)
 	emitir(IRTG(oldv == niltvg(J2G(J)) ? IR_EQ : IR_NE, IRT_P32),
-	       xref, lj_ir_kptr(J, niltvg(J2G(J))));
+	       xref, lj_ir_kkptr(J, niltvg(J2G(J))));
       if (ix->idxchain && lj_record_mm_lookup(J, ix, MM_newindex)) {
 	lua_assert(hasmm);
 	goto handlemm;
@@ -1052,7 +1052,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
     } else if (!lj_opt_fwd_wasnonnil(J, loadop, tref_ref(xref))) {
       /* Cannot derive that the previous value was non-nil, must do checks. */
       if (xrefop == IR_HREF)  /* Guard against store to niltv. */
-	emitir(IRTG(IR_NE, IRT_P32), xref, lj_ir_kptr(J, niltvg(J2G(J))));
+	emitir(IRTG(IR_NE, IRT_P32), xref, lj_ir_kkptr(J, niltvg(J2G(J))));
       if (ix->idxchain) {  /* Metamethod lookup required? */
 	/* A check for NULL metatable is cheaper (hoistable) than a load. */
 	if (!mt) {

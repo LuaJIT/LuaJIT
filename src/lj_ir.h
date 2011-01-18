@@ -42,6 +42,7 @@
   _(KINT,	N , cst, ___) \
   _(KGC,	N , cst, ___) \
   _(KPTR,	N , cst, ___) \
+  _(KKPTR,	N , cst, ___) \
   _(KNULL,	N , cst, ___) \
   _(KNUM,	N , cst, ___) \
   _(KINT64,	N , cst, ___) \
@@ -566,7 +567,8 @@ typedef union IRIns {
 #define ir_kint64(ir)	check_exp((ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
 #define ir_k64(ir) \
   check_exp((ir)->o == IR_KNUM || (ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
-#define ir_kptr(ir)	check_exp((ir)->o == IR_KPTR, mref((ir)->ptr, void))
+#define ir_kptr(ir) \
+  check_exp((ir)->o == IR_KPTR || (ir)->o == IR_KKPTR, mref((ir)->ptr, void))
 
 LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 

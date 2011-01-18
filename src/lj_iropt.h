@@ -46,7 +46,7 @@ LJ_FUNC TRef lj_ir_knum_u64(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_knumint(jit_State *J, lua_Number n);
 LJ_FUNC TRef lj_ir_kint64(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t);
-LJ_FUNC TRef lj_ir_kptr(jit_State *J, void *ptr);
+LJ_FUNC TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr);
 LJ_FUNC TRef lj_ir_knull(jit_State *J, IRType t);
 LJ_FUNC TRef lj_ir_kslot(jit_State *J, TRef key, IRRef slot);
 
@@ -66,6 +66,8 @@ static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 #define lj_ir_kstr(J, str)	lj_ir_kgc(J, obj2gco((str)), IRT_STR)
 #define lj_ir_ktab(J, tab)	lj_ir_kgc(J, obj2gco((tab)), IRT_TAB)
 #define lj_ir_kfunc(J, func)	lj_ir_kgc(J, obj2gco((func)), IRT_FUNC)
+#define lj_ir_kptr(J, ptr)	lj_ir_kptr_(J, IR_KPTR, (ptr))
+#define lj_ir_kkptr(J, ptr)	lj_ir_kptr_(J, IR_KKPTR, (ptr))
 
 /* Special FP constants. */
 #define lj_ir_knum_zero(J)	lj_ir_knum_u64(J, U64x(00000000,00000000))

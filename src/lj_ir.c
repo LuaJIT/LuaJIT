@@ -311,21 +311,21 @@ found:
 }
 
 /* Intern 32 bit pointer constant. */
-TRef lj_ir_kptr(jit_State *J, void *ptr)
+TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
   lua_assert((void *)(intptr_t)i32ptr(ptr) == ptr);
-  for (ref = J->chain[IR_KPTR]; ref; ref = cir[ref].prev)
+  for (ref = J->chain[op]; ref; ref = cir[ref].prev)
     if (mref(cir[ref].ptr, void) == ptr)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
   setmref(ir->ptr, ptr);
   ir->t.irt = IRT_P32;
-  ir->o = IR_KPTR;
-  ir->prev = J->chain[IR_KPTR];
-  J->chain[IR_KPTR] = (IRRef1)ref;
+  ir->o = op;
+  ir->prev = J->chain[op];
+  J->chain[op] = (IRRef1)ref;
 found:
   return TREF(ref, IRT_P32);
 }
@@ -382,7 +382,9 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   case IR_KPRI: setitype(tv, irt_toitype(ir->t)); break;
   case IR_KINT: setintV(tv, ir->i); break;
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
-  case IR_KPTR: case IR_KNULL: setlightudV(tv, mref(ir->ptr, void)); break;
+  case IR_KPTR: case IR_KKPTR: case IR_KNULL:
+    setlightudV(tv, mref(ir->ptr, void));
+    break;
   case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
 #if LJ_HASFFI
   case IR_KINT64: {
