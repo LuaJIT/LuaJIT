@@ -1996,6 +1996,7 @@ void lj_record_setup(jit_State *J)
   J->cur.nk = REF_TRUE;
 
   J->startpc = J->pc;
+  setmref(J->cur.startpc, J->pc);
   if (J->parent) {  /* Side trace. */
     GCtrace *T = traceref(J, J->parent);
     TraceNo root = T->root ? T->root : J->parent;

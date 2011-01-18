@@ -709,8 +709,7 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
   GDBJITctx ctx;
   GCproto *pt = &gcref(T->startpt)->pt;
   TraceNo parent = T->ir[REF_BASE].op1;
-  uintptr_t pcofs = (uintptr_t)(T->snap[0].mapofs+T->snap[0].nent);
-  const BCIns *startpc = snap_pc(T->snapmap[pcofs]);
+  const BCIns *startpc = mref(T->startpc, const BCIns);
   ctx.T = T;
   ctx.mcaddr = (uintptr_t)T->mcode;
   ctx.szmcode = T->szmcode;

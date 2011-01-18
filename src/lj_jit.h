@@ -172,9 +172,10 @@ typedef struct GCtrace {
   SnapShot *snap;	/* Snapshot array. */
   SnapEntry *snapmap;	/* Snapshot map. */
   GCRef startpt;	/* Starting prototype. */
+  MRef startpc;		/* Bytecode PC of starting instruction. */
   BCIns startins;	/* Original bytecode of starting instruction. */
-  MCode *mcode;		/* Start of machine code. */
   MSize szmcode;	/* Size of machine code. */
+  MCode *mcode;		/* Start of machine code. */
   MSize mcloop;		/* Offset of loop start in machine code. */
   uint16_t nchild;	/* Number of child traces (root trace only). */
   uint16_t spadjust;	/* Stack pointer adjustment (offset in bytes). */

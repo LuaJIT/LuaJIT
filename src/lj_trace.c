@@ -96,8 +96,7 @@ static void perftools_addtrace(GCtrace *T)
 {
   static FILE *fp;
   GCproto *pt = &gcref(T->startpt)->pt;
-  uintptr_t pcofs = (uintptr_t)(T->snap[0].mapofs+T->snap[0].nent);
-  const BCIns *startpc = snap_pc(T->snapmap[pcofs]);
+  const BCIns *startpc = mref(T->startpc, const BCIns);
   const char *name = strdata(proto_chunkname(pt));
   BCLine lineno;
   if (name[0] == '@' || name[0] == '=')
@@ -183,34 +182,35 @@ void lj_trace_reenableproto(GCproto *pt)
 static void trace_unpatch(jit_State *J, GCtrace *T)
 {
   BCOp op = bc_op(T->startins);
-  MSize pcofs = T->snap[0].mapofs + T->snap[0].nent;
-  BCIns *pc = ((BCIns *)snap_pc(T->snapmap[pcofs])) - 1;
+  BCIns *pc = mref(T->startpc, BCIns);
   UNUSED(J);
-  switch (op) {
-  case BC_FORL:
-    lua_assert(bc_op(*pc) == BC_JFORI);
-    setbc_op(pc, BC_FORI);  /* Unpatch JFORI, too. */
+  if (op == BC_JMP)
+    return;  /* No need to unpatch branches in parent traces (yet). */
+  switch (bc_op(*pc)) {
+  case BC_JFORI:
+    lua_assert(op == BC_FORL);
+    setbc_op(pc, BC_FORI);
     pc += bc_j(*pc);
     lua_assert(bc_op(*pc) == BC_JFORL && traceref(J, bc_d(*pc)) == T);
     *pc = T->startins;
     break;
-  case BC_LOOP:
-    lua_assert(bc_op(*pc) == BC_JLOOP && traceref(J, bc_d(*pc)) == T);
+  case BC_JLOOP:
+    lua_assert(op == BC_LOOP || bc_isret(op));
     *pc = T->startins;
     break;
-  case BC_ITERL:
-    lua_assert(bc_op(*pc) == BC_JMP);
+  case BC_JMP:
+    lua_assert(op == BC_ITERL);
     pc += bc_j(*pc)+2;
-    lua_assert(bc_op(*pc) == BC_JITERL && traceref(J, bc_d(*pc)) == T);
+    if (bc_op(*pc) == BC_JITERL) {
+      lua_assert(traceref(J, bc_d(*pc)) == T);
+      *pc = T->startins;
+    }
+    break;
+  case BC_JFUNCF:
+    lua_assert(op == BC_FUNCF);
     *pc = T->startins;
     break;
-  case BC_FUNCF:
-    lua_assert(bc_op(*pc) == BC_JFUNCF && traceref(J, bc_d(*pc)) == T);
-    *pc = T->startins;
-    break;
-  case BC_JMP:  /* No need to unpatch branches in parent traces (yet). */
-  default:
-    lua_assert(0);
+  default:  /* Already unpatched. */
     break;
   }
 }
@@ -227,11 +227,11 @@ static void trace_flushroot(jit_State *J, GCtrace *T)
     pt->trace = T->nextroot;
   } else {  /* Otherwise search in chain of root traces. */
     GCtrace *T2 = traceref(J, pt->trace);
-    while (T2->nextroot != T->traceno) {
-      lua_assert(T2->nextroot != 0);
-      T2 = traceref(J, T2->nextroot);
-    }
-    T2->nextroot = T->nextroot;  /* Unlink from chain. */
+    for (; T2->nextroot; T2 = traceref(J, T2->nextroot))
+      if (T2->nextroot == T->traceno) {
+	T2->nextroot = T->nextroot;  /* Unlink from chain. */
+	break;
+      }
   }
 }
 
@@ -408,7 +408,7 @@ static void trace_start(jit_State *J)
 /* Stop tracing. */
 static void trace_stop(jit_State *J)
 {
-  BCIns *pc = (BCIns *)J->startpc;  /* Not const here. */
+  BCIns *pc = mref(J->cur.startpc, BCIns);
   BCOp op = bc_op(J->cur.startins);
   GCproto *pt = &gcref(J->cur.startpt)->pt;
   TraceNo traceno = J->cur.traceno;
