@@ -206,7 +206,8 @@ IRFLDEF(FLENUM)
 
 /* XLOAD mode, stored in op2. */
 #define IRXLOAD_READONLY	1	/* Load from read-only data. */
-#define IRXLOAD_UNALIGNED	2	/* Unaligned load. */
+#define IRXLOAD_VOLATILE	2	/* Load from volatile data. */
+#define IRXLOAD_UNALIGNED	4	/* Unaligned load. */
 
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */

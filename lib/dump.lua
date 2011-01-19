@@ -234,7 +234,7 @@ local litname = {
     t[mode] = s
     return s
   end}),
-  ["XLOAD "] = { [0] = "", "R", "U", "RU", },
+  ["XLOAD "] = { [0] = "", "R", "V", "RV", "U", "RU", "VU", "RVU", },
   ["CONV  "] = setmetatable({}, { __index = function(t, mode)
     local s = irtype[band(mode, 31)]
     s = irtype[band(shr(mode, 5), 31)].."."..s

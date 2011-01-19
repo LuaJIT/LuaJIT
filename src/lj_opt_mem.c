@@ -669,6 +669,8 @@ TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
 
   if ((fins->op2 & IRXLOAD_READONLY))
     goto cselim;
+  if ((fins->op2 & IRXLOAD_VOLATILE))
+    goto doemit;
 
   /* Search for conflicting stores. */
   ref = J->chain[IR_XSTORE];
@@ -721,7 +723,8 @@ cselim:
     xr = IR(xref);
     goto retry;  /* Retry with the reassociated reference. */
   }
-  return lj_ir_emit(J);
+doemit:
+  return EMITFOLD;
 }
 
 /* XSTORE elimination. */
