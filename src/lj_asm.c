@@ -2945,8 +2945,28 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	if (!asm_isk32(as, irl->op2, &imm)) {
 	  left = ra_alloc1(as, irl->op2, allow);
 	  rset_clear(allow, left);
+	} else {  /* Try to Fuse IRT_I8/IRT_U8 loads, too. See below. */
+	  IRIns *irll = IR(irl->op1);
+	  if (opisfusableload((IROp)irll->o) &&
+	      (irt_isi8(irll->t) || irt_isu8(irll->t))) {
+	    IRType1 origt = irll->t;  /* Temporarily flip types. */
+	    irll->t.irt = (irll->t.irt & ~IRT_TYPE) | IRT_INT;
+	    as->curins--;  /* Skip to BAND to avoid failing in noconflict(). */
+	    right = asm_fuseload(as, irl->op1, RSET_GPR);
+	    as->curins++;
+	    irll->t = origt;
+	    if (right != RID_MRM) goto test_nofuse;
+	    /* Fusion succeeded, emit test byte mrm, imm8. */
+	    asm_guardcc(as, cc);
+	    emit_i8(as, (imm & 0xff));
+	    emit_mrm(as, XO_GROUP3b, XOg_TEST, RID_MRM);
+	    return;
+	  }
 	}
+	as->curins--;  /* Skip to BAND to avoid failing in noconflict(). */
 	right = asm_fuseload(as, irl->op1, allow);
+	as->curins++;  /* Undo the above. */
+      test_nofuse:
 	asm_guardcc(as, cc);
 	if (ra_noreg(left)) {
 	  emit_i32(as, imm);
