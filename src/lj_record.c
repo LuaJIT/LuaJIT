@@ -2033,6 +2033,27 @@ void lj_record_setup(jit_State *J)
     if (1 + J->pt->framesize >= LJ_MAX_JSLOTS)
       lj_trace_err(J, LJ_TRERR_STACKOV);
   }
+#ifdef LUAJIT_ENABLE_CHECKHOOK
+  /* Regularly check for instruction/line hooks from compiled code and
+  ** exit to the interpreter if the hooks are set.
+  **
+  ** This is a compile-time option and disabled by default, since the
+  ** hook checks may be quite expensive in tight loops.
+  **
+  ** Note this is only useful if hooks are *not* set most of the time.
+  ** Use this only if you want to *asynchronously* interrupt the execution.
+  **
+  ** You can set the instruction hook via lua_sethook() with a count of 1
+  ** from a signal handler or another native thread. Please have a look
+  ** at the first few functions in luajit.c for an example (Ctrl-C handler).
+  */
+  {
+    TRef tr = emitir(IRT(IR_XLOAD, IRT_U8),
+		     lj_ir_kptr(J, &J2G(J)->hookmask), IRXLOAD_VOLATILE);
+    tr = emitir(IRTI(IR_BAND), tr, lj_ir_kint(J, (LUA_MASKLINE|LUA_MASKCOUNT)));
+    emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, 0));
+  }
+#endif
 }
 
 #undef IR
