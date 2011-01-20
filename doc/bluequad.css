@@ -271,7 +271,10 @@ img.right {
   color: #2142bf;
 }
 #nav ul ul a {
-  padding: 0 1em 0 2em;
+  padding: 0 1em 0 1.7em;
+}
+#nav ul ul ul a {
+  padding: 0 0.5em 0 2.4em;
 }
 #main {
   line-height: 1.5;

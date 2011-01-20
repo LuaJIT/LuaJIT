@@ -44,6 +44,17 @@ td.excinterop {
 </li><li>
 <a class="current" href="extensions.html">Extensions</a>
 <ul><li>
+<a href="ext_ffi.html">FFI Library</a>
+<ul><li>
+<a href="ext_ffi_tutorial.html">FFI Tutorial</a>
+</li><li>
+<a href="ext_ffi_api.html">ffi.* API</a>
+</li><li>
+<a href="ext_ffi_int64.html">64 bit Integers</a>
+</li><li>
+<a href="ext_ffi_semantics.html">FFI Semantics</a>
+</li></ul>
+</li><li>
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
@@ -112,6 +123,13 @@ local bit = require("bit")
 An already installed Lua BitOp module is ignored by LuaJIT.
 This way you can use bit operations from both Lua and LuaJIT on a
 shared installation.
+</p>
+
+<h3 id="ffi"><tt>ffi.*</tt> &mdash; FFI library</h3>
+<p>
+The <a href="ext_ffi.html">FFI library</a> allows calling external
+C&nbsp;functions and the use of C&nbsp;data structures from pure Lua
+code.
 </p>
 
 <h3 id="jit"><tt>jit.*</tt> &mdash; JIT compiler control</h3>

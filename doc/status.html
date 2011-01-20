@@ -30,6 +30,17 @@ ul li { padding-bottom: 0.3em; }
 </li><li>
 <a href="extensions.html">Extensions</a>
 <ul><li>
+<a href="ext_ffi.html">FFI Library</a>
+<ul><li>
+<a href="ext_ffi_tutorial.html">FFI Tutorial</a>
+</li><li>
+<a href="ext_ffi_api.html">ffi.* API</a>
+</li><li>
+<a href="ext_ffi_int64.html">64 bit Integers</a>
+</li><li>
+<a href="ext_ffi_semantics.html">FFI Semantics</a>
+</li></ul>
+</li><li>
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
@@ -84,7 +95,7 @@ especially when they contain lengthy debug output or if you require
 confidentiality.
 </li>
 <li>
-The JIT compiler only generates code for CPUs with support for
+The x86 JIT compiler only generates code for CPUs with support for
 <b>SSE2</b> instructions. I.e. you need at least a P4, Core 2/i3/i5/i7,
 Atom or K8/K10 to get the full benefit.<br>
 If you run LuaJIT on older CPUs without SSE2 support, the JIT compiler
@@ -129,7 +140,7 @@ demonstrable need is shown.
 </ul>
 </li>
 <li>
-The <b>JIT compiler</b> is not complete (yet) and falls back to the
+The <b>JIT compiler</b> falls back to the
 interpreter in some cases. All of this works transparently, so unless
 you use <tt>-jv</tt>, you'll probably never notice (the interpreter is
 <a href="http://luajit.org/performance.html"><span class="ext">&raquo;</span>&nbsp;quite fast</a>, too). Here are the known issues:
@@ -221,7 +232,7 @@ commented, many basic design decisions are in need of an explanation.
 The rather un-traditional compiler architecture and the many highly
 optimized data structures are a barrier for outside participation in
 the development. Alas, as I've repeatedly stated, I'm better at
-writing code than papers and I'm not in need of any academical merits.
+writing code than papers and I'm not in need of any academic merits.
 Someday I will find the time for it. :-)
 </li>
 <li>
@@ -231,15 +242,6 @@ compilers. This is the main cause for "trace explosion".
 price of a major redesign of the compiler. This would also pave the
 way for emitting predicated instructions, which is a prerequisite
 for efficient <b>vectorization</b>.
-</li>
-<li>
-Currently Lua is missing a standard library for access to <b>structured
-binary data</b> and <b>arrays/buffers</b> holding low-level data types.
-Allowing calls to arbitrary C functions (<b>FFI</b>) would obviate the
-need to write manual bindings. A variety of Lua extension modules are
-available, with different scope and capabilities. Alas, none of them has been
-designed with a JIT compiler in mind. An FFI for LuaJIT is currently
-in the design phase, but there's no ETA, yet.
 </li>
 </ul>
 <br class="flush">

@@ -1,0 +1,155 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>FFI Semantics</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2011, Mike Pall">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+</head>
+<body>
+<div id="site">
+<a href="http://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1>FFI Semantics</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li></ul>
+</li><li>
+<a href="extensions.html">Extensions</a>
+<ul><li>
+<a href="ext_ffi.html">FFI Library</a>
+<ul><li>
+<a href="ext_ffi_tutorial.html">FFI Tutorial</a>
+</li><li>
+<a href="ext_ffi_api.html">ffi.* API</a>
+</li><li>
+<a href="ext_ffi_int64.html">64 bit Integers</a>
+</li><li>
+<a class="current" href="ext_ffi_semantics.html">FFI Semantics</a>
+</li></ul>
+</li><li>
+<a href="ext_jit.html">jit.* Library</a>
+</li><li>
+<a href="ext_c_api.html">Lua/C API</a>
+</li></ul>
+</li><li>
+<a href="status.html">Status</a>
+<ul><li>
+<a href="changes.html">Changes</a>
+</li></ul>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://luajit.org/performance.html">Performance <span class="ext">&raquo;</span></a>
+</li><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+TODO
+</p>
+
+<h2 id="clang">C Language Support</h2>
+<p>
+TODO
+</p>
+
+<h2 id="convert">C Type Conversion Rules</h2>
+<p>
+TODO
+</p>
+
+<h2 id="clib">C Library Namespaces</h2>
+<p>
+A C&nbsp;library namespace is a special kind of object which allows
+access to the symbols contained in libraries. Indexing it with a
+symbol name (a Lua string) automatically binds it to the library.
+</p>
+<p>
+TODO
+</p>
+
+<h2 id="ops">Operations on cdata Objects</h2>
+<p>
+TODO
+</p>
+
+<h2 id="gc">Garbage Collection of cdata Objects</h2>
+<p>
+All explicitly (<tt>ffi.new()</tt> etc.) or implicitly (accessors)
+created cdata objects are garbage collected. You need to ensure to
+retain valid references to cdata objects somewhere on a Lua stack, an
+upvalue or in a Lua table while they are still in use. Once the last
+reference to a cdata object is gone, the garbage collector will
+automatically free the memory used by it (at the end of the next GC
+cycle).
+</p>
+<p>
+Please note that pointers themselves are cdata objects, however they
+are <b>not</b> followed by the garbage collector. So e.g. if you
+assign a cdata array to a pointer, you must keep the cdata object
+holding the array alive as long as the pointer is still in use:
+</p>
+<pre class="code">
+ffi.cdef[[
+typedef struct { int *a; } foo_t;
+]]
+
+local s = ffi.new("foo_t", ffi.new("int[10]")) -- <span style="color:#c00000;">WRONG!</span>
+
+local a = ffi.new("int[10]") -- <span style="color:#00a000;">OK</span>
+local s = ffi.new("foo_t", a)
+-- Now do something with 's', but keep 'a' alive until you're done.
+</pre>
+<p>
+Similar rules apply for Lua strings which are implicitly converted to
+<tt>"const&nbsp;char&nbsp;*"</tt>: the string object itself must be
+referenced somewhere or it'll be garbage collected eventually. The
+pointer will then point to stale data, which may have already beeen
+overwritten. Note that string literals are automatically kept alive as
+long as the function containing it (actually its prototype) is not
+garbage collected.
+</p>
+<p>
+Objects which are passed as an argument to an external C&nbsp;function
+are kept alive until the call returns. So it's generally safe to
+create temporary cdata objects in argument lists. This is a common
+idiom for passing specific C&nbsp;types to vararg functions:
+</p>
+<pre class="code">
+ffi.cdef[[
+int printf(const char *fmt, ...);
+]]
+ffi.C.printf("integer value: %d\n", ffi.new("int", x)) -- <span style="color:#00a000;">OK</span>
+</pre>
+<p>
+Memory areas returned by C functions (e.g. from <tt>malloc()</tt>)
+must be manually managed of course. Pointers to cdata objects are
+indistinguishable from pointers returned by C functions (which is one
+of the reasons why the GC cannot follow them).
+</p>
+
+<h2>TODO</h2>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2011 Mike Pall
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>

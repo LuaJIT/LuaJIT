@@ -1,0 +1,410 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<title>ffi.* API Functions</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta name="Author" content="Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2011, Mike Pall">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+<style type="text/css">
+table.abitable { width: 30em; line-height: 1.2; }
+tr.abihead td { font-weight: bold; }
+td.abiparam { font-weight: bold; width: 6em; }
+</style>
+</head>
+<body>
+<div id="site">
+<a href="http://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1><tt>ffi.*</tt> API Functions</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li></ul>
+</li><li>
+<a href="extensions.html">Extensions</a>
+<ul><li>
+<a href="ext_ffi.html">FFI Library</a>
+<ul><li>
+<a href="ext_ffi_tutorial.html">FFI Tutorial</a>
+</li><li>
+<a class="current" href="ext_ffi_api.html">ffi.* API</a>
+</li><li>
+<a href="ext_ffi_int64.html">64 bit Integers</a>
+</li><li>
+<a href="ext_ffi_semantics.html">FFI Semantics</a>
+</li></ul>
+</li><li>
+<a href="ext_jit.html">jit.* Library</a>
+</li><li>
+<a href="ext_c_api.html">Lua/C API</a>
+</li></ul>
+</li><li>
+<a href="status.html">Status</a>
+<ul><li>
+<a href="changes.html">Changes</a>
+</li></ul>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://luajit.org/performance.html">Performance <span class="ext">&raquo;</span></a>
+</li><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+This page describes the API functions provided by the FFI library in
+detail. It's recommended to read through the
+<a href="ext_ffi.html">introduction</a> and the
+<a href="ext_ffi_tutorial.html">FFI tutorial</a> first.
+</p>
+
+<h2 id="glossary">Glossary</h2>
+<ul>
+<li><b>cdecl</b> &mdash; An abstract C&nbsp;type declaration (a Lua
+string).</li>
+<li><b>ctype</b> &mdash; A C&nbsp;type object. This is a special kind of
+<b>cdata</b> returned by <tt>ffi.typeof()</tt>. It serves as a
+<b>cdata</b> <a href="#ffi_new">constructor</a> when called.</li>
+<li><b>cdata</b> &mdash; A C&nbsp;data object. It holds a value of the
+corresponding <b>ctype</b>.</li>
+<li><b>ct</b> &mdash; A C&nbsp;type specification which can be used for
+most of the API functions. Either a <b>cdecl</b>, a <b>ctype</b> or a
+<b>cdata</b> serving as a template type.</li>
+<li><b>VLA</b> &mdash; A variable-length array is declared with a
+<tt>?</tt> instead of the number of elements, e.g. <tt>"int[?]"</tt>.
+The number of elements (<tt>nelem</tt>) must be given when it's
+<a href="#ffi_new">created</a>.</li>
+<li><b>VLS</b> &mdash; A variable-length struct is a <tt>struct</tt> C
+type where the last element is a <b>VLA</b>. The same rules for
+declaration and creation apply.</li>
+</ul>
+
+<h2 id="decl">Declaring and Accessing External Symbols</h2>
+<p>
+External symbols must be declared first and can then be accessed by
+indexing a <a href="ext_ffi_semantics.html#clib">C&nbsp;library
+namespace</a>, which automatically binds the symbol to a specific
+library.
+</p>
+
+<h3 id="ffi_cdef"><tt>ffi.cdef(def)</tt></h3>
+<p>
+Adds multiple C&nbsp;declarations for types or external symbols (named
+variables or functions). <tt>def</tt> must be a Lua string. It's
+recommended to use the syntactic sugar for string arguments as
+follows:
+</p>
+<pre class="code">
+ffi.cdef[[
+<span style="color:#00a000;font-weight:bold;">typedef struct foo { int a, b; } foo_t;  // Declare a struct and typedef.
+int dofoo(foo_t *f, int n);  /* Declare an external C function. */</span>
+]]
+</pre>
+<p>
+The contents of the string (the part in green above) must be a
+sequence of
+<a href="ext_ffi_semantics.html#clang">C&nbsp;declarations</a>,
+separated by semicolons. The trailing semicolon for a single
+declaration may be omitted.
+</p>
+<p>
+Please note that external symbols are only <em>declared</em>, but they
+are <em>not bound</em> to any specific address, yet. Binding is
+achieved with C&nbsp;library namespaces (see below).
+</p>
+<p style="color: #c00000;">
+C&nbsp;declarations are not passed through a C&nbsp;pre-processor,
+yet. No pre-processor tokens are allowed, except for
+<tt>#pragma&nbsp;pack</tt>. Replace <tt>#define</tt> in existing
+C&nbsp;header files with <tt>enum</tt>, <tt>static&nbsp;const</tt>
+or <tt>typedef</tt> and/or pass the files through an external
+C&nbsp;pre-processor (once). Be careful not to include unneeded or
+redundant declarations from unrelated header files.
+</p>
+
+<h3 id="ffi_C"><tt>ffi.C</tt></h3>
+<p>
+This is the default C&nbsp;library namespace &mdash; note the
+uppercase <tt>'C'</tt>. It binds to the default set of symbols or
+libraries on the target system. These are more or less the same as a
+C&nbsp;compiler would offer by default, without specifying extra link
+libraries.
+</p>
+<p>
+On POSIX systems, this binds to symbols in the default or global
+namespace. This includes all exported symbols from the executable and
+any libraries loaded into the global namespace. This includes at least
+<tt>libc</tt>, <tt>libm</tt>, <tt>libdl</tt> (on Linux),
+<tt>libgcc</tt> (if compiled with GCC), as well as any exported
+symbols from the Lua/C&nbsp;API provided by LuaJIT itself.
+</p>
+<p>
+On Windows systems, this binds to symbols exported from the
+<tt>*.exe</tt>, the <tt>lua51.dll</tt> (i.e. the Lua/C&nbsp;API
+provided by LuaJIT itself), the C&nbsp;runtime library LuaJIT was linked
+with (<tt>msvcrt*.dll</tt>), <tt>kernel32.dll</tt>,
+<tt>user32.dll</tt> and <tt>gdi32.dll</tt>.
+</p>
+
+<h3 id="ffi_load"><tt>clib = ffi.load(name [,global])</tt></h3>
+<p>
+This loads the dynamic library given by <tt>name</tt> and returns
+a new C&nbsp;library namespace which binds to its symbols. On POSIX
+systems, if <tt>global</tt> is <tt>true</tt>, the library symbols are
+loaded into the global namespace, too.
+</p>
+<p>
+If <tt>name</tt> is a path, the library is loaded from this path.
+Otherwise <tt>name</tt> is canonicalized in a system-dependent way and
+searched in the default search path for dynamic libraries:
+</p>
+<p>
+On POSIX systems, if the name contains no dot, the extension
+<tt>.so</tt> is appended. Also, the <tt>lib</tt> prefix is prepended
+if necessary. So <tt>ffi.load("z")</tt> looks for <tt>"libz.so"</tt>
+in the default shared library search path.
+</p>
+<p>
+On Windows systems, if the name contains no dot, the extension
+<tt>.dll</tt> is appended. So <tt>ffi.load("ws2_32")</tt> looks for
+<tt>"ws2_32.dll"</tt> in the default DLL search path.
+</p>
+
+<h2 id="create">Creating cdata Objects</h2>
+<p>
+The following API functions create cdata objects (<tt>type()</tt>
+returns <tt>"cdata"</tt>). All created cdata objects are
+<a href="ext_ffi_semantics.html#gc">garbage collected</a>.
+</p>
+
+<h3 id="ffi_new"><tt>cdata = ffi.new(ct [,nelem] [,init...])<br>
+cdata = <em>ctype</em>([nelem,] [init...])</tt></h3>
+<p>
+Creates a cdata object for the given <tt>ct</tt>. VLA/VLS types
+require the <tt>nelem</tt> argument. The second syntax uses a ctype as
+a constructor and is otherwise fully equivalent.
+</p>
+<p>
+The <tt>init</tt> arguments provide optional initializers. The created
+cdata object is filled with zero bytes if no initializers are given.
+Scalar types accept a single initializer. Aggregates can either be
+initialized with a flat list of initializers or a single aggregate
+initializer (see the <a href="ext_ffi_semantics.html#convert">C&nbsp;type
+conversion rules</a>). Excess initializers cause an error.
+</p>
+<p>
+If a single initializer is given for an array, it's repeated for all
+remaining elements. This doesn't happen if two or more initializers
+are given &mdash; all uninitialized elements are filled with zero
+bytes. The fields of a <tt>struct</tt> are initialized in the order of
+their declaration. Uninitialized fields are filled with zero bytes.
+Only the first field of <tt>union</tt> can be initialized with a flat
+initializer. Elements or fields which are aggregates themselves are
+initialized with a <em>single</em> <tt>init</tt> argument, but this
+may be an aggregate initializer of course.
+</p>
+<p>
+Performance notice: if you want to create many objects of one kind,
+parse the cdecl only once and get its ctype with
+<tt>ffi.typeof()</tt>. Then use the ctype as a constructor repeatedly.
+</p>
+<p style="font-size: 8pt;">
+Please note that an anonymous <tt>struct</tt> declaration implicitly
+creates a new and distinguished ctype every time you use it for
+<tt>ffi.new()</tt>. This is probably <b>not</b> what you want,
+especially if you create more than one cdata object. Different anonymous
+<tt>structs</tt> are not considered assignment-compatible by the
+C&nbsp;standard, even though they may have the same fields! Also, they
+are considered different types by the JIT-compiler, which may cause an
+excessive number of traces. It's strongly suggested to either declare
+a named <tt>struct</tt> or <tt>typedef</tt> with <tt>ffi.cdef()</tt>
+or to create a single ctype object for an anonymous <tt>struct</tt>
+with <tt>ffi.typeof()</tt>.
+</p>
+
+<h3 id="ffi_typeof"><tt>ctype = ffi.typeof(ct)</tt></h3>
+<p>
+Creates a ctype object for the given <tt>ct</tt>.
+</p>
+<p>
+This function is especially useful to parse a cdecl only once and then
+use the resulting ctype object as a <a href="#ffi_new">constructor</a>.
+</p>
+
+<h3 id="ffi_cast"><tt>cdata = ffi.cast(ct, init)</tt></h3>
+<p>
+Creates a scalar cdata object for the given <tt>ct</tt>. The cdata
+object is initialized with <tt>init</tt> using the "cast" variant of
+the <a href="ext_ffi_semantics.html#convert">C&nbsp;type conversion
+rules</a>.
+</p>
+<p>
+This functions is mainly useful to override the pointer compatibility
+rules or to convert pointers to addresses or vice versa. For maximum
+portability you should convert a pointer to its address as follows:
+</p>
+<pre class="code">
+local addr = tonumber(ffi.cast("intptr_t", ptr))
+</pre>
+
+<h2 id="info">C&nbsp;Type Information</h2>
+<p>
+The following API functions return information about C&nbsp;types.
+They are most useful for inspecting cdata objects.
+</p>
+
+<h3 id="ffi_sizeof"><tt>size = ffi.sizeof(ct [,nelem])</tt></h3>
+<p>
+Returns the size of <tt>ct</tt> in bytes. Returns <tt>nil</tt> if
+the size is not known (e.g. for <tt>"void"</tt> or function types).
+Requires <tt>nelem</tt> for VLA/VLS types, except for cdata objects.
+</p>
+
+<h3 id="ffi_alignof"><tt>align = ffi.alignof(ct)</tt></h3>
+<p>
+Returns the minimum required alignment for <tt>ct</tt> in bytes.
+</p>
+
+<h3 id="ffi_offsetof"><tt>ofs [,bpos,bsize] = ffi.offsetof(ct, field)</tt></h3>
+<p>
+Returns the offset (in bytes) of <tt>field</tt> relative to the start
+of <tt>ct</tt>, which must be a <tt>struct</tt>. Additionally returns
+the position and the field size (in bits) for bit fields.
+</p>
+
+<h2 id="util">Utility Functions</h2>
+
+<h3 id="ffi_string"><tt>str = ffi.string(ptr [,len])</tt></h3>
+<p>
+Creates an interned Lua string from the data pointed to by
+<tt>ptr</tt>.
+</p>
+<p>
+If the optional argument <tt>len</tt> is missing, <tt>ptr</tt> is
+converted to a <tt>"char&nbsp;*"</tt> and the data is assumed to be
+zero-terminated. The length of the string is computed with
+<tt>strlen()</tt>.
+</p>
+<p>
+Otherwise <tt>ptr</tt> is converted to a <tt>"void&nbsp;*"</tt> and
+<tt>len</tt> gives the length of the data. The data may contain
+embedded zeros and need not be byte-oriented (though this may cause
+endianess issues).
+</p>
+<p>
+This function is mainly useful to convert (temporary)
+<tt>"const&nbsp;char&nbsp;*"</tt> pointers returned by
+C&nbsp;functions to Lua strings and store them or pass them to other
+functions expecting a Lua string. The Lua string is an (interned) copy
+of the data and bears no relation to the original data area anymore.
+Lua strings are 8&nbsp;bit clean and may be used to hold arbitrary,
+non-character data.
+</p>
+<p>
+Performance notice: it's faster to pass the length of the string, if
+it's known. E.g. when the length is returned by a C&nbsp;call like
+<tt>sprintf()</tt>.
+</p>
+
+<h3 id="ffi_copy"><tt>ffi.copy(dst, src, len)<br>
+ffi.copy(dst, str)</tt></h3>
+<p>
+Copies the data pointed to by <tt>src</tt> to <tt>dst</tt>.
+<tt>dst</tt> is converted to a <tt>"void&nbsp;*"</tt> and <tt>src</tt>
+is converted to a <tt>"const void&nbsp;*"</tt>.
+</p>
+<p>
+In the first syntax, <tt>len</tt> gives the number of bytes to copy.
+In case <tt>src</tt> is a Lua string, the maximum copy length is the
+number of bytes of the string plus a zero-terminator. Caveat: the
+copied data may not be zero-terminated if <tt>len&nbsp;&le;&nbsp;#src</tt>.
+</p>
+<p>
+In the second syntax, the source of the copy must be a Lua string. All
+bytes of the string plus a zero-terminator are copied to <tt>dst</tt>.
+</p>
+<p>
+Performance notice: <tt>ffi.copy()</tt> may be used as a faster
+(inlineable) replacement for the C&nbsp;library functions
+<tt>memcpy()</tt>, <tt>strcpy()</tt> and <tt>strncpy()</tt>.
+</p>
+
+<h3 id="ffi_fill"><tt>ffi.fill(dst, len [,c])</tt></h3>
+<p>
+Fills the data pointed to by <tt>dst</tt> with <tt>len</tt> constant
+bytes, given by <tt>c</tt>. If <tt>c</tt> is omitted, the data is
+zero-filled.
+</p>
+<p>
+Performance notice: <tt>ffi.fill()</tt> may be used as a faster
+(inlineable) replacement for the C&nbsp;library function
+<tt>memset(dst,&nbsp;c,&nbsp;len)</tt>. Please note the different
+order of arguments!
+</p>
+
+<h2 id="target">Target-specific Information</h2>
+
+<h3 id="ffi_abi"><tt>status = ffi.abi(param)</tt></h3>
+<p>
+Returns <tt>true</tt> if <tt>param</tt> (a Lua string) applies for the
+target ABI (Application Binary Interface). Otherwise returns
+<tt>false</tt>. The following parameters are currently defined:
+</p>
+<table class="abitable">
+<tr class="abihead">
+<td class="abiparam">Parameter</td>
+<td class="abidesc">Description</td>
+</tr>
+<tr class="odd separate">
+<td class="abiparam">32bit</td><td class="abidesc">32 bit architecture</td></tr>
+<tr class="even">
+<td class="abiparam">64bit</td><td class="abidesc">64 bit architecture</td></tr>
+<tr class="odd separate">
+<td class="abiparam">le</td><td class="abidesc">Little-endian architecture</td></tr>
+<tr class="even">
+<td class="abiparam">be</td><td class="abidesc">Big-endian architecture</td></tr>
+<tr class="odd separate">
+<td class="abiparam">fpu</td><td class="abidesc">Target has a hardware FPU</td></tr>
+<tr class="even">
+<td class="abiparam">softfp</td><td class="abidesc">softfp calling conventions</td></tr>
+<tr class="odd">
+<td class="abiparam">hardfp</td><td class="abidesc">hardfp calling conventions</td></tr>
+<tr class="even separate">
+<td class="abiparam">eabi</td><td class="abidesc">EABI variant of the standard ABI</td></tr>
+<tr class="odd">
+<td class="abiparam">win</td><td class="abidesc">Windows variant of the standard ABI</td></tr>
+</table>
+
+<h3 id="ffi_os"><tt>ffi.os</tt></h3>
+<p>
+Contains the target OS name. Same contents as
+<a href="ext_jit.html#jit_os"><tt>jit.os</tt></a>.
+</p>
+
+<h3 id="ffi_arch"><tt>ffi.arch</tt></h3>
+<p>
+Contains the target architecture name. Same contents as
+<a href="ext_jit.html#jit_arch"><tt>jit.arch</tt></a>.
+</p>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2011 Mike Pall
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>
