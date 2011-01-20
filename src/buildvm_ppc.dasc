@@ -1130,13 +1130,13 @@ static void build_subroutines(BuildCtx *ctx)
   |   la RA, -8(BASE)
   |  cmplw TMP0, TMP2
   |   slwi TMP3, TMP2, 3
+  |  evstdd CARG2, 0(RA)
   |  ble >2				// Not in array part?
   |  evlddx TMP1, TMP1, TMP3
   |1:
   |  checknil TMP1
   |   li RD, (0+1)*8
   |  checkok ->fff_res			// End of iteration, return 0 results.
-  |  evstdd CARG2, 0(RA)
   |   li RD, (2+1)*8
   |  evstdd TMP1, 8(RA)
   |  b ->fff_res
