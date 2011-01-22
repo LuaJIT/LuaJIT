@@ -194,8 +194,9 @@ static void trace_unpatch(jit_State *J, GCtrace *T)
     lua_assert(bc_op(*pc) == BC_JFORI);
     setbc_op(pc, BC_FORI);
     break;
+  case BC_JITERL:
   case BC_JLOOP:
-    lua_assert(op == BC_LOOP || bc_isret(op));
+    lua_assert(op == BC_ITERL || op == BC_LOOP || bc_isret(op));
     *pc = T->startins;
     break;
   case BC_JMP:
@@ -227,11 +228,13 @@ static void trace_flushroot(jit_State *J, GCtrace *T)
     pt->trace = T->nextroot;
   } else {  /* Otherwise search in chain of root traces. */
     GCtrace *T2 = traceref(J, pt->trace);
-    for (; T2->nextroot; T2 = traceref(J, T2->nextroot))
-      if (T2->nextroot == T->traceno) {
-	T2->nextroot = T->nextroot;  /* Unlink from chain. */
-	break;
-      }
+    if (T2) {
+      for (; T2->nextroot; T2 = traceref(J, T2->nextroot))
+	if (T2->nextroot == T->traceno) {
+	  T2->nextroot = T->nextroot;  /* Unlink from chain. */
+	  break;
+	}
+    }
   }
 }
 
