@@ -195,23 +195,10 @@ require the <tt>nelem</tt> argument. The second syntax uses a ctype as
 a constructor and is otherwise fully equivalent.
 </p>
 <p>
-The <tt>init</tt> arguments provide optional initializers. The created
-cdata object is filled with zero bytes if no initializers are given.
-Scalar types accept a single initializer. Aggregates can either be
-initialized with a flat list of initializers or a single aggregate
-initializer (see the <a href="ext_ffi_semantics.html#convert">C&nbsp;type
-conversion rules</a>). Excess initializers cause an error.
-</p>
-<p>
-If a single initializer is given for an array, it's repeated for all
-remaining elements. This doesn't happen if two or more initializers
-are given &mdash; all uninitialized elements are filled with zero
-bytes. The fields of a <tt>struct</tt> are initialized in the order of
-their declaration. Uninitialized fields are filled with zero bytes.
-Only the first field of <tt>union</tt> can be initialized with a flat
-initializer. Elements or fields which are aggregates themselves are
-initialized with a <em>single</em> <tt>init</tt> argument, but this
-may be an aggregate initializer of course.
+The cdata object is initialized according to the
+<a href="ext_ffi_semantics.html#init">rules for initializers</a>,
+using the optional <tt>init</tt> arguments. Excess initializers cause
+an error.
 </p>
 <p>
 Performance notice: if you want to create many objects of one kind,
@@ -357,8 +344,8 @@ order of arguments!
 <h3 id="ffi_abi"><tt>status = ffi.abi(param)</tt></h3>
 <p>
 Returns <tt>true</tt> if <tt>param</tt> (a Lua string) applies for the
-target ABI (Application Binary Interface). Otherwise returns
-<tt>false</tt>. The following parameters are currently defined:
+target ABI (Application Binary Interface). Returns <tt>false</tt>
+otherwise. The following parameters are currently defined:
 </p>
 <table class="abitable">
 <tr class="abihead">
