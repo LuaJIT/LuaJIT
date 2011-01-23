@@ -139,7 +139,7 @@ static const char *clib_extname(lua_State *L, const char *name)
 static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   void *h = (void *)LoadLibraryA(clib_extname(L, name));
-  if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", strdata(name));
+  if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", name);
   UNUSED(global);
   return h;
 }
