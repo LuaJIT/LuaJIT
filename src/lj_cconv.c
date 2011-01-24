@@ -545,10 +545,8 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
       CTSize sz = str->len+1;
       if (!ctype_isinteger(dc->info) || dc->size != 1)
 	goto err_conv;
-      if (d->size != 0 && d->size < sz) {
-	sz = d->size-1;
-	dp[sz] = '\0';
-      }
+      if (d->size != 0 && d->size < sz)
+	sz = d->size;
       memcpy(dp, strdata(str), sz);
       return;
     } else {  /* Otherwise pass it as a const char[]. */
