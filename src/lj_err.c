@@ -526,7 +526,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !LJ_TARGET_ARM
 
 #include <unwind.h>
 

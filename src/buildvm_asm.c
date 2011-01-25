@@ -95,7 +95,9 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
   uint32_t ins;
   emit_asm_words(ctx, p, n-4);
   ins = *(uint32_t *)(p+n-4);
-#if LJ_TARGET_PPC
+#if LJ_TARGET_ARM
+  UNUSED(sym);  /* NYI */
+#elif LJ_TARGET_PPC
   if ((ins >> 26) == 16) {
     fprintf(ctx->fp, "\t%s %d, %d, %s\n",
 	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
@@ -113,6 +115,12 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 }
 #endif
 
+#if LJ_TARGET_ARM
+#define ELFASM_PX	"%%"
+#else
+#define ELFASM_PX	"@"
+#endif
+
 /* Emit an assembler label. */
 static void emit_asm_label(BuildCtx *ctx, const char *name, int size, int isfunc)
 {
@@ -121,7 +129,7 @@ static void emit_asm_label(BuildCtx *ctx, const char *name, int size, int isfunc
     fprintf(ctx->fp,
       "\n\t.globl %s\n"
       "\t.hidden %s\n"
-      "\t.type %s, @%s\n"
+      "\t.type %s, " ELFASM_PX "%s\n"
       "\t.size %s, %d\n"
       "%s:\n",
       name, name, name, isfunc ? "function" : "object", name, size, name);
@@ -204,7 +212,7 @@ void emit_asm(BuildCtx *ctx)
   fprintf(ctx->fp, "\n");
   switch (ctx->mode) {
   case BUILD_elfasm:
-    fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\",@progbits\n");
+    fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\"," ELFASM_PX "progbits\n");
 #if LJ_TARGET_PPCSPE
     /* Soft-float ABI + SPE. */
     fprintf(ctx->fp, "\t.gnu_attribute 4, 2\n\t.gnu_attribute 8, 3\n");

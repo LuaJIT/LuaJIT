@@ -51,6 +51,7 @@ CCOPT= -O2 -fomit-frame-pointer
 #
 CCOPT_X86= -march=i686
 CCOPT_X64=
+CCOPT_ARM=
 CCOPT_PPCSPE=
 #
 CCDEBUG=
@@ -223,11 +224,16 @@ ifneq (,$(findstring LJ_TARGET_X86 ,$(TARGET_TESTARCH)))
   TARGET_CCARCH= x86
   TARGET_XCFLAGS+= $(CCOPT_X86)
 else
+ifneq (,$(findstring LJ_TARGET_ARM ,$(TARGET_TESTARCH)))
+  TARGET_CCARCH= arm
+  TARGET_XCFLAGS+= $(CCOPT_ARM)
+else
 ifneq (,$(findstring LJ_TARGET_PPCSPE ,$(TARGET_TESTARCH)))
   TARGET_CCARCH= ppcspe
   TARGET_XCFLAGS+= $(CCOPT_PPCSPE)
 else
   $(error Unsupported target architecture)
+endif
 endif
 endif
 endif

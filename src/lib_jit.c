@@ -556,6 +556,8 @@ static uint32_t jit_cpudetect(lua_State *L)
     luaL_error(L, "CPU does not support SSE2 (recompile without -DLUAJIT_CPU_SSE2)");
 #endif
 #endif
+#elif LJ_TARGET_ARM
+  /* NYI */
 #elif LJ_TARGET_PPC
   /* Nothing to do. */
 #else
