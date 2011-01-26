@@ -342,6 +342,7 @@ typedef struct CPDecl {
   uint32_t mode;	/* Declarator mode. */
   CPState *cp;		/* C parser state. */
   GCstr *name;		/* Name of declared identifier (if direct). */
+  GCstr *redir;		/* Redirected symbol name. */
   CTypeID nameid;	/* Existing typedef for declared identifier. */
   CTInfo attr;		/* Attributes. */
   CTInfo fattr;		/* Function attributes. */
@@ -923,6 +924,7 @@ static void cp_decl_reset(CPDecl *decl)
   decl->attr = decl->specattr;
   decl->fattr = decl->specfattr;
   decl->name = NULL;
+  decl->redir = NULL;
 }
 
 /* Parse constant initializer. */
@@ -982,7 +984,15 @@ static void cp_decl_asm(CPState *cp, CPDecl *decl)
   UNUSED(decl);
   cp_next(cp);
   cp_check(cp, '(');
-  while (cp->tok == CTOK_STRING) cp_next(cp);  /* NYI: currently ignored. */
+  if (cp->tok == CTOK_STRING) {
+    GCstr *str = cp->str;
+    while (cp_next(cp) == CTOK_STRING) {
+      lj_str_pushf(cp->L, "%s%s", strdata(str), strdata(cp->str));
+      cp->L->top--;
+      str = strV(cp->L->top);
+    }
+    decl->redir = str;
+  }
   cp_check(cp, ')');
 }
 
@@ -1428,6 +1438,7 @@ static CPscl cp_decl_spec(CPState *cp, CPDecl *decl, CPscl scl)
   decl->cp = cp;
   decl->mode = cp->mode;
   decl->name = NULL;
+  decl->redir = NULL;
   decl->attr = 0;
   decl->fattr = 0;
   decl->pos = decl->top = 0;
@@ -1729,31 +1740,36 @@ static void cp_decl_multi(CPState *cp)
       cp_declarator(cp, &decl);
       typeid = cp_decl_intern(cp, &decl);
       if (decl.name && !decl.nameid) {  /* NYI: redeclarations are ignored. */
+	CType *ct;
+	CTypeID id;
 	if ((scl & CDF_TYPEDEF)) {  /* Create new typedef. */
-	  CType *ct;
-	  CTypeID tdefid = lj_ctype_new(cp->cts, &ct);
+	  id = lj_ctype_new(cp->cts, &ct);
 	  ct->info = CTINFO(CT_TYPEDEF, typeid);
-	  ctype_setname(ct, decl.name);
-	  lj_ctype_addname(cp->cts, ct, tdefid);
+	  goto noredir;
 	} else if (ctype_isfunc(ctype_get(cp->cts, typeid)->info)) {
 	  /* Treat both static and extern function declarations as extern. */
-	  CType *ct = ctype_get(cp->cts, typeid);
+	  ct = ctype_get(cp->cts, typeid);
 	  /* We always get new anonymous functions (typedefs are copied). */
 	  lua_assert(gcref(ct->name) == NULL);
-	  ctype_setname(ct, decl.name);  /* Just name it. */
-	  lj_ctype_addname(cp->cts, ct, typeid);
+	  id = typeid;  /* Just name it. */
 	} else if ((scl & CDF_STATIC)) {  /* Accept static constants. */
-	  CType *ct;
-	  CTypeID constid = cp_decl_constinit(cp, &ct, typeid);
-	  ctype_setname(ct, decl.name);
-	  lj_ctype_addname(cp->cts, ct, constid);
+	  id = cp_decl_constinit(cp, &ct, typeid);
+	  goto noredir;
 	} else {  /* External references have extern or no storage class. */
-	  CType *ct;
-	  CTypeID extid = lj_ctype_new(cp->cts, &ct);
+	  id = lj_ctype_new(cp->cts, &ct);
 	  ct->info = CTINFO(CT_EXTERN, typeid);
-	  ctype_setname(ct, decl.name);
-	  lj_ctype_addname(cp->cts, ct, extid);
 	}
+	if (decl.redir) {  /* Add attribute for redirected symbol name. */
+	  CType *cta;
+	  CTypeID aid = lj_ctype_new(cp->cts, &cta);
+	  cta->info = CTINFO(CT_ATTRIB, CTATTRIB(CTA_REDIR));
+	  cta->sib = ct->sib;
+	  ct->sib = aid;
+	  ctype_setname(cta, decl.redir);
+	}
+      noredir:
+	ctype_setname(ct, decl.name);
+	lj_ctype_addname(cp->cts, ct, id);
       }
       if (!cp_opt(cp, ',')) break;
       cp_decl_reset(&decl);

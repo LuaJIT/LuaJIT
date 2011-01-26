@@ -275,8 +275,16 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 #endif
   }
 
+  /* Skip initial attributes. */
+  fid = ct->sib;
+  while (fid) {
+    CType *ctf = ctype_get(cts, fid);
+    if (!ctype_isattrib(ctf->info)) break;
+    fid = ctf->sib;
+  }
+
   /* Walk through all passed arguments. */
-  for (fid = ct->sib, o = L->base+1; o < top; o++) {
+  for (o = L->base+1; o < top; o++) {
     CTypeID did;
     CType *d;
     CTSize sz;

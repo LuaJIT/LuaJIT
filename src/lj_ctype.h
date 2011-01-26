@@ -54,7 +54,7 @@ LJ_STATIC_ASSERT(((int)CT_STRUCT & (int)CT_ARRAY) == CT_STRUCT);
 ** |FIELD                   cid | offset | field |       | name? |
 ** |BITFIELD  B.vcU csz bsz pos | offset | field |       | name? |
 ** |CONSTVAL     c          cid | value  | const | name  | name  |
-** |EXTERN                  cid |        |       | name  | name  |
+** |EXTERN                  cid |        | sib?  | name  | name  |
 ** |KW                      tok | size   |       | name  | name  |
 ** +----------------------------+--------+-------+-------+-------+--
 **        ^^  ^^--- bits used for C type conversion dispatch
@@ -126,6 +126,7 @@ enum {
   CTA_QUAL,		/* Unmerged qualifiers. */
   CTA_ALIGN,		/* Alignment override. */
   CTA_SUBTYPE,		/* Transparent sub-type. */
+  CTA_REDIR,		/* Redirected symbol name. */
   CTA_BAD,		/* To catch bad IDs. */
   CTA__MAX
 };

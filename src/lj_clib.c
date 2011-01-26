@@ -242,6 +242,17 @@ static CTSize clib_func_argsize(CTState *cts, CType *ct)
 }
 #endif
 
+/* Get redirected or mangled external symbol. */
+static const char *clib_extsym(CTState *cts, CType *ct, GCstr *name)
+{
+  if (ct->sib) {
+    CType *ctf = ctype_get(cts, ct->sib);
+    if (ctype_isxattrib(ctf->info, CTA_REDIR))
+      return strdata(gco2str(gcref(ctf->name)));
+  }
+  return strdata(name);
+}
+
 /* Index a C library by name. */
 TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 {
@@ -260,7 +271,8 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
       else
 	setnumV(tv, (lua_Number)(int32_t)ct->size);
     } else {
-      void *p = clib_getsym(cl, strdata(name));
+      const char *sym = clib_extsym(cts, ct, name);
+      void *p = clib_getsym(cl, sym);
       GCcdata *cd;
       lua_assert(ctype_isfunc(ct->info) || ctype_isextern(ct->info));
 #if LJ_TARGET_X86 && LJ_ABI_WIN
@@ -269,8 +281,8 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 	CTInfo cconv = ctype_cconv(ct->info);
 	if (cconv == CTCC_FASTCALL || cconv == CTCC_STDCALL) {
 	  CTSize sz = clib_func_argsize(cts, ct);
-	  const char *sym = lj_str_pushf(L,
-	    cconv == CTCC_FASTCALL ? "@%s@%d" : "_%s@%d", strdata(name), sz);
+	  sym = lj_str_pushf(L, cconv == CTCC_FASTCALL ? "@%s@%d" : "_%s@%d",
+			     sym, sz);
 	  L->top--;
 	  p = clib_getsym(cl, sym);
 	}
