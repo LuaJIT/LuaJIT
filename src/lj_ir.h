@@ -255,7 +255,7 @@ typedef struct CCallInfo {
 /* Function definitions for CALL* instructions. */
 #if LJ_HASFFI
 #define IRCALLDEF_FFI(_) \
-  _(lj_cdata_powi64,	3,   N, U64, CCI_NOFPRCLOBBER)
+  _(lj_carith_powi64,	3,   N, U64, CCI_NOFPRCLOBBER)
 #else
 #define IRCALLDEF_FFI(_)
 #endif

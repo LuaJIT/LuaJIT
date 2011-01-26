@@ -689,7 +689,7 @@ static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
       J->postproc = LJ_POST_FIXGUARD;
       return TREF_TRUE;
     } else if (mm == MM_pow) {
-      tr = lj_ir_call(J, IRCALL_lj_cdata_powi64, sp[0], sp[1],
+      tr = lj_ir_call(J, IRCALL_lj_carith_powi64, sp[0], sp[1],
 		      lj_ir_kint(J, (int)dt-(int)IRT_I64));
     } else {
       if (mm == MM_div || mm == MM_mod)

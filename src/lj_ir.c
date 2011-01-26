@@ -24,6 +24,7 @@
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_cdata.h"
+#include "lj_carith.h"
 #endif
 #include "lj_lib.h"
 
