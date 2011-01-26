@@ -226,7 +226,7 @@ static void trace_flushroot(jit_State *J, GCtrace *T)
   /* Unlink root trace from chain anchored in prototype. */
   if (pt->trace == T->traceno) {  /* Trace is first in chain. Easy. */
     pt->trace = T->nextroot;
-  } else {  /* Otherwise search in chain of root traces. */
+  } else if (pt->trace) {  /* Otherwise search in chain of root traces. */
     GCtrace *T2 = traceref(J, pt->trace);
     if (T2) {
       for (; T2->nextroot; T2 = traceref(J, T2->nextroot))
