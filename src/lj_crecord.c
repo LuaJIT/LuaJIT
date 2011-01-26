@@ -481,11 +481,24 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     if (tref_isnum(idx))
       idx = emitconv(idx, IRT_INT, IRT_NUM, IRCONV_TRUNC|IRCONV_ANY);
 #endif
+  integer_key:
     if (ctype_ispointer(ct->info)) {
       CTSize sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
       idx = crec_reassoc_ofs(J, idx, &ofs, sz);
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
+    }
+  } else if (tref_iscdata(idx)) {
+    GCcdata *cdk = cdataV(&rd->argv[1]);
+    CType *ctk = ctype_raw(cts, cdk->typeid);
+    IRType t;
+    if (ctype_isenum(ctk->info)) ctk = ctype_child(cts, ctk);
+    if (ctype_isinteger(ctk->info) && (t = crec_ct2irt(ctk)) != IRT_CDATA) {
+      idx = emitir(IRT(IR_ADD, IRT_PTR), idx, lj_ir_kintp(J, sizeof(GCcdata)));
+      idx = emitir(IRT(IR_XLOAD, t), idx, 0);
+      if (!LJ_64 && (t == IRT_I64 || t == IRT_U64))
+	idx = emitconv(idx, IRT_INT, t, 0);
+      goto integer_key;
     }
   } else if (tref_isstr(idx)) {
     GCstr *name = strV(&rd->argv[1]);
