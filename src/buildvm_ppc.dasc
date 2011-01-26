@@ -3091,7 +3091,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  // RA = base*8, (RB = (nresults+1)*8 (2+1)*8, RC = (nargs+1)*8 (2+1)*8)
+    |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
 #if LJ_HASJIT
     |  // NYI: add hotloop, record BC_ITERN.
 #endif
