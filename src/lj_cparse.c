@@ -1762,6 +1762,7 @@ static void cp_decl_multi(CPState *cp)
 	if (decl.redir) {  /* Add attribute for redirected symbol name. */
 	  CType *cta;
 	  CTypeID aid = lj_ctype_new(cp->cts, &cta);
+	  ct = ctype_get(cp->cts, id);  /* Table may have been reallocated. */
 	  cta->info = CTINFO(CT_ATTRIB, CTATTRIB(CTA_REDIR));
 	  cta->sib = ct->sib;
 	  ct->sib = aid;
