@@ -821,6 +821,7 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
     } else if (ctype_isfunc(info)) {  /* Intern function. */
       CType *fct;
       CTypeID fid;
+      CTypeID sib;
       if (id) {
 	CType *refct = ctype_raw(cp->cts, id);
 	/* Reject function or refarray return types. */
@@ -833,11 +834,12 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
 	if (!ctype_isattrib(ctn->info)) break;
 	idx = ctn->next;  /* Skip attribute. */
       }
+      sib = ct->sib;  /* Next line may reallocate the C type table. */
       fid = lj_ctype_new(cp->cts, &fct);
       csize = CTSIZE_INVALID;
       fct->info = cinfo = info + id;
-      fct->size = ct->size;
-      fct->sib = ct->sib;
+      fct->size = size;
+      fct->sib = sib;
       id = fid;
     } else if (ctype_isattrib(info)) {
       if (ctype_isxattrib(info, CTA_QUAL))
@@ -932,23 +934,27 @@ static void cp_decl_reset(CPDecl *decl)
 static CTypeID cp_decl_constinit(CPState *cp, CType **ctp, CTypeID typeid)
 {
   CType *ctt = ctype_get(cp->cts, typeid);
+  CTInfo info;
+  CTSize size;
   CPValue k;
   CTypeID constid;
   while (ctype_isattrib(ctt->info)) {  /* Skip attributes. */
     typeid = ctype_cid(ctt->info);  /* Update ID, too. */
     ctt = ctype_get(cp->cts, typeid);
   }
-  if (!ctype_isinteger(ctt->info) || !(ctt->info & CTF_CONST) || ctt->size > 4)
+  info = ctt->info;
+  size = ctt->size;
+  if (!ctype_isinteger(info) || !(info & CTF_CONST) || size > 4)
     cp_err(cp, LJ_ERR_FFI_INVTYPE);
   cp_check(cp, '=');
   cp_expr_sub(cp, &k, 0);
   constid = lj_ctype_new(cp->cts, ctp);
   (*ctp)->info = CTINFO(CT_CONSTVAL, CTF_CONST|typeid);
-  k.u32 <<= 8*(4-ctt->size);
-  if ((ctt->info & CTF_UNSIGNED))
-    k.u32 >>= 8*(4-ctt->size);
+  k.u32 <<= 8*(4-size);
+  if ((info & CTF_UNSIGNED))
+    k.u32 >>= 8*(4-size);
   else
-    k.u32 = (uint32_t)((int32_t)k.u32 >> 8*(4-ctt->size));
+    k.u32 = (uint32_t)((int32_t)k.u32 >> 8*(4-size));
   (*ctp)->size = k.u32;
   return constid;
 }
@@ -1307,7 +1313,6 @@ static CTypeID cp_decl_struct(CPState *cp, CPDecl *sdecl, CTInfo sinfo)
 	CPARSE_MODE_DIRECT|CPARSE_MODE_ABSTRACT|CPARSE_MODE_FIELD;
 
       for (;;) {
-	CType *fct;
 	CTypeID typeid;
 
 	if (lastdecl) cp_err_token(cp, '}');
@@ -1316,7 +1321,6 @@ static CTypeID cp_decl_struct(CPState *cp, CPDecl *sdecl, CTInfo sinfo)
 	decl.bits = CTSIZE_INVALID;
 	cp_declarator(cp, &decl);
 	typeid = cp_decl_intern(cp, &decl);
-	fct = ctype_raw(cp->cts, typeid);
 
 	if ((scl & CDF_STATIC)) {  /* Static constant in struct namespace. */
 	  CType *ct;
