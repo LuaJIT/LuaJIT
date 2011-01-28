@@ -12,7 +12,8 @@
 
 LJ_FUNC int lj_carith_op(lua_State *L, MMS mm);
 
-LJ_FUNC uint64_t lj_carith_powi64(uint64_t x, uint64_t k, int isunsigned);
+LJ_FUNC uint64_t lj_carith_powu64(uint64_t x, uint64_t k);
+LJ_FUNC int64_t lj_carith_powi64(int64_t x, int64_t k);
 
 #endif
 

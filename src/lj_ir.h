@@ -251,11 +251,13 @@ typedef struct CCallInfo {
 #define CCI_CASTU64		0x0200	/* Cast u64 result to number. */
 #define CCI_NOFPRCLOBBER	0x0400	/* Does not clobber any FPRs. */
 #define CCI_FASTCALL		0x0800	/* Fastcall convention. */
+#define CCI_STACK64		0x1000	/* Needs 64 bits per argument. */
 
 /* Function definitions for CALL* instructions. */
 #if LJ_HASFFI
 #define IRCALLDEF_FFI(_) \
-  _(lj_carith_powi64,	3,   N, U64, CCI_NOFPRCLOBBER)
+  _(lj_carith_powi64,	2,   N, I64, CCI_STACK64|CCI_NOFPRCLOBBER) \
+  _(lj_carith_powu64,	2,   N, U64, CCI_STACK64|CCI_NOFPRCLOBBER)
 #else
 #define IRCALLDEF_FFI(_)
 #endif

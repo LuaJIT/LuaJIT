@@ -184,7 +184,12 @@ static int carith_int64(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
       else
 	*up = u0 % u1;
       break;
-    case MM_pow: *up = lj_carith_powi64(u0, u1, (id == CTID_UINT64)); break;
+    case MM_pow:
+      if (id == CTID_INT64)
+	*up = (uint64_t)lj_carith_powi64((int64_t)u0, (int64_t)u1);
+      else
+	*up = lj_carith_powu64(u0, u1);
+      break;
     case MM_unm: *up = (uint64_t)-(int64_t)u0; break;
     default: lua_assert(0); break;
     }
@@ -225,24 +230,12 @@ int lj_carith_op(lua_State *L, MMS mm)
 
 /* -- 64 bit integer arithmetic helpers ----------------------------------- */
 
-/* 64 bit integer x^k. */
-uint64_t lj_carith_powi64(uint64_t x, uint64_t k, int isunsigned)
+/* Unsigned 64 bit x^k. */
+uint64_t lj_carith_powu64(uint64_t x, uint64_t k)
 {
-  uint64_t y = 0;
+  uint64_t y;
   if (k == 0)
     return 1;
-  if (!isunsigned) {
-    if ((int64_t)k < 0) {
-      if (x == 0)
-	return U64x(7fffffff,ffffffff);
-      else if (x == 1)
-	return 1;
-      else if ((int64_t)x == -1)
-	return (k & 1) ? -1 : 1;
-      else
-	return 0;
-    }
-  }
   for (; (k & 1) == 0; k >>= 1) x *= x;
   y = x;
   if ((k >>= 1) != 0) {
@@ -255,6 +248,24 @@ uint64_t lj_carith_powi64(uint64_t x, uint64_t k, int isunsigned)
     y *= x;
   }
   return y;
+}
+
+/* Signed 64 bit x^k. */
+int64_t lj_carith_powi64(int64_t x, int64_t k)
+{
+  if (k == 0)
+    return 1;
+  if (k < 0) {
+    if (x == 0)
+      return U64x(7fffffff,ffffffff);
+    else if (x == 1)
+      return 1;
+    else if (x == -1)
+      return (k & 1) ? -1 : 1;
+    else
+      return 0;
+  }
+  return (int64_t)lj_carith_powu64((uint64_t)x, (uint64_t)k);
 }
 
 #endif
