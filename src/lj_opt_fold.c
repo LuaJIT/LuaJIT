@@ -1019,7 +1019,7 @@ LJFOLD(SUBOV any any)
 LJFOLDF(simplify_intsub)
 {
   if (fins->op1 == fins->op2 && !irt_isnum(fins->t))  /* i - i ==> 0 */
-    return INTFOLD(0);
+    return irt_is64(fins->t) ? INT64FOLD(0) : INTFOLD(0);
   return NEXTFOLD;
 }
 
@@ -1492,7 +1492,7 @@ LJFOLD(BXOR any any)
 LJFOLDF(comm_bxor)
 {
   if (fins->op1 == fins->op2)  /* i xor i ==> 0 */
-    return INTFOLD(0);
+    return irt_is64(fins->t) ? INT64FOLD(0) : INTFOLD(0);
   return fold_comm_swap(J);
 }
 
