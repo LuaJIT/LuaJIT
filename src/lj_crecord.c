@@ -483,7 +483,10 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
 #endif
   integer_key:
     if (ctype_ispointer(ct->info)) {
-      CTSize sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
+      CTSize sz;
+      if ((ct->info & CTF_COMPLEX))
+	idx = emitir(IRT(IR_BAND, IRT_INTP), idx, lj_ir_kintp(J, 1));
+      sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
       idx = crec_reassoc_ofs(J, idx, &ofs, sz);
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);

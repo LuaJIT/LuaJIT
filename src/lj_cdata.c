@@ -94,10 +94,12 @@ collect_attrib:
     if (ctype_ispointer(ct->info)) {
       CTSize sz = lj_ctype_size(cts, ctype_cid(ct->info));  /* Element size. */
       if (sz != CTSIZE_INVALID) {
-	if (ctype_isptr(ct->info))
+	if (ctype_isptr(ct->info)) {
 	  p = (uint8_t *)cdata_getptr(p, ct->size);
-	else if ((ct->info & (CTF_VECTOR|CTF_COMPLEX)))
+	} else if ((ct->info & (CTF_VECTOR|CTF_COMPLEX))) {
+	  if ((ct->info & CTF_COMPLEX)) idx &= 1;
 	  *qual |= CTF_CONST;  /* Valarray elements are constant. */
+	}
 	*pp = p + idx*(int32_t)sz;
 	return ct;
       }
