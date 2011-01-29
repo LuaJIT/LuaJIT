@@ -86,6 +86,7 @@ typedef struct CCallState {
   uint8_t nsp;			/* Number of stack slots. */
   uint8_t retref;		/* Return value by reference. */
 #if LJ_TARGET_X64
+  uint8_t ngpr;			/* Number of arguments in GPRs. */
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #elif LJ_TARGET_X86
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */

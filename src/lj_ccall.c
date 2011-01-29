@@ -111,13 +111,18 @@
 /* -- POSIX/x64 calling conventions --------------------------------------- */
 
 #define CCALL_HANDLE_STRUCTRET \
-  if (sz <= 16) { \
-    cc->retref = 0; \
-    goto err_nyi;  /* NYI: crazy x64 rules for small structs. */ \
-  } else { \
-    cc->retref = 1;  /* Return all bigger structs by reference. */ \
+  int rcl[2]; rcl[0] = rcl[1] = 0; \
+  if (ccall_classify_struct(cts, ctr, rcl, 0)) { \
+    cc->retref = 1;  /* Return struct by reference. */ \
     cc->gpr[ngpr++] = (GPRArg)dp; \
+  } else { \
+    cc->retref = 0;  /* Return small structs in registers. */ \
   }
+
+#define CCALL_HANDLE_STRUCTRET2 \
+  int rcl[2]; rcl[0] = rcl[1] = 0; \
+  ccall_classify_struct(cts, ctr, rcl, 0); \
+  ccall_struct_ret(cc, rcl, dp, ctr->size);
 
 #define CCALL_HANDLE_COMPLEXRET \
   /* Complex values are returned in one or two FPRs. */ \
@@ -132,8 +137,12 @@
   }
 
 #define CCALL_HANDLE_STRUCTARG \
-  if (sz <= 16) { \
-    goto err_nyi;  /* NYI: crazy x64 rules for small structs. */ \
+  int rcl[2]; rcl[0] = rcl[1] = 0; \
+  if (!ccall_classify_struct(cts, d, rcl, 0)) { \
+    cc->nsp = nsp; cc->ngpr = ngpr; cc->nfpr = nfpr; \
+    if (ccall_struct_arg(cc, cts, d, rcl, o)) goto err_nyi; \
+    nsp = cc->nsp; ngpr = cc->ngpr; nfpr = cc->nfpr; \
+    continue; \
   }  /* Pass all other structs by value on stack. */
 
 #define CCALL_HANDLE_COMPLEXARG \
@@ -195,6 +204,113 @@
 #error "missing calling convention definitions for this architecture"
 #endif
 
+#ifndef CCALL_HANDLE_STRUCTRET2
+#define CCALL_HANDLE_STRUCTRET2 \
+  memcpy(dp, sp, ctr->size);  /* Copy struct return value from GPRs. */
+#endif
+
+/* -- x64 struct classification ------------------------------------------- */
+
+#if LJ_TARGET_X64 && !LJ_ABI_WIN
+
+/* Register classes for x64 struct classification. */
+#define CCALL_RCL_INT	1
+#define CCALL_RCL_SSE	2
+#define CCALL_RCL_MEM	4
+/* NYI: classify vectors. */
+
+static int ccall_classify_struct(CTState *cts, CType *ct, int *rcl, CTSize ofs);
+
+/* Classify a C type. */
+static void ccall_classify_ct(CTState *cts, CType *ct, int *rcl, CTSize ofs)
+{
+  if (ctype_isarray(ct->info)) {
+    CType *cct = ctype_rawchild(cts, ct);
+    CTSize eofs, esz = cct->size, asz = ct->size;
+    for (eofs = 0; eofs < asz; eofs += esz)
+      ccall_classify_ct(cts, cct, rcl, ofs+eofs);
+  } else if (ctype_isstruct(ct->info)) {
+    ccall_classify_struct(cts, ct, rcl, ofs);
+  } else {
+    int cl = ctype_isfp(ct->info) ? CCALL_RCL_SSE : CCALL_RCL_INT;
+    lua_assert(ctype_hassize(ct->info));
+    if ((ofs & (ct->size-1))) cl = CCALL_RCL_MEM;  /* Unaligned. */
+    rcl[(ofs >= 8)] |= cl;
+  }
+}
+
+/* Recursively classify a struct based on its fields. */
+static int ccall_classify_struct(CTState *cts, CType *ct, int *rcl, CTSize ofs)
+{
+  if (ct->size > 16) return CCALL_RCL_MEM;  /* Too big, gets memory class. */
+  while (ct->sib) {
+    CTSize fofs;
+    ct = ctype_get(cts, ct->sib);
+    fofs = ofs+ct->size;
+    if (ctype_isfield(ct->info))
+      ccall_classify_ct(cts, ctype_rawchild(cts, ct), rcl, fofs);
+    else if (ctype_isbitfield(ct->info))
+      rcl[(fofs >= 8)] |= CCALL_RCL_INT;  /* NYI: unaligned bitfields? */
+    else if (ctype_isxattrib(ct->info, CTA_SUBTYPE))
+      ccall_classify_struct(cts, ctype_child(cts, ct), rcl, fofs);
+  }
+  return ((rcl[0]|rcl[1]) & CCALL_RCL_MEM);  /* Memory class? */
+}
+
+/* Try to split up a small struct into registers. */
+static int ccall_struct_reg(CCallState *cc, GPRArg *dp, int *rcl)
+{
+  MSize ngpr = cc->ngpr, nfpr = cc->nfpr;
+  uint32_t i;
+  for (i = 0; i < 2; i++) {
+    lua_assert(!(rcl[i] & CCALL_RCL_MEM));
+    if ((rcl[i] & CCALL_RCL_INT)) {  /* Integer class takes precedence. */
+      if (ngpr >= CCALL_NARG_GPR) return 1;  /* Register overflow. */
+      cc->gpr[ngpr++] = dp[i];
+    } else if ((rcl[i] & CCALL_RCL_SSE)) {
+      if (nfpr >= CCALL_NARG_FPR) return 1;  /* Register overflow. */
+      cc->fpr[nfpr++].l[0] = dp[i];
+    }
+  }
+  cc->ngpr = ngpr; cc->nfpr = nfpr;
+  return 0;  /* Ok. */
+}
+
+/* Pass a small struct argument. */
+static int ccall_struct_arg(CCallState *cc, CTState *cts, CType *d, int *rcl,
+			    TValue *o)
+{
+  GPRArg dp[2];
+  dp[0] = dp[1] = 0;
+  lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, 0);  /* Convert to temp. struct. */
+  if (!ccall_struct_reg(cc, dp, rcl)) {  /* Register overflow? Pass on stack. */
+    MSize nsp = cc->nsp, n = rcl[1] ? 2 : 1;
+    if (nsp + n > CCALL_MAXSTACK) return 1;  /* Too many arguments. */
+    cc->nsp = nsp + n;
+    memcpy(&cc->stack[nsp], dp, n*CTSIZE_PTR);
+  }
+  return 0;  /* Ok. */
+}
+
+/* Combine returned small struct. */
+static void ccall_struct_ret(CCallState *cc, int *rcl, uint8_t *dp, CTSize sz)
+{
+  GPRArg sp[2];
+  MSize ngpr = 0, nfpr = 0;
+  uint32_t i;
+  for (i = 0; i < 2; i++) {
+    if ((rcl[i] & CCALL_RCL_INT)) {  /* Integer class takes precedence. */
+      sp[i] = cc->gpr[ngpr++];
+    } else if ((rcl[i] & CCALL_RCL_SSE)) {
+      sp[i] = cc->fpr[nfpr++].l[0];
+    }
+  }
+  memcpy(dp, sp, sz);
+}
+#endif
+
+/* -- Common C call handling ---------------------------------------------- */
+
 /* Infer the destination CTypeID for a vararg argument. */
 static CTypeID ccall_ctid_vararg(CTState *cts, cTValue *o)
 {
@@ -207,6 +323,7 @@ static CTypeID ccall_ctid_vararg(CTState *cts, cTValue *o)
       return lj_ctype_intern(cts,
 	       CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(s->info)), CTSIZE_PTR);
     } else if (ctype_isstruct(s->info) || ctype_isfunc(s->info)) {
+      /* NYI: how to pass a struct by value in a vararg argument? */
       return lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR);
     } if (ctype_isfp(s->info) && s->size == sizeof(float)) {
       return CTID_DOUBLE;
@@ -335,7 +452,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       MSize align = (1u << ctype_align(d->info-CTALIGN_PTR)) -1;
       nsp = (nsp + align) & ~align;  /* Align argument on stack. */
     }
-    if (nsp + n >= CCALL_MAXSTACK) {  /* Too many arguments. */
+    if (nsp + n > CCALL_MAXSTACK) {  /* Too many arguments. */
     err_nyi:
       lj_err_caller(L, LJ_ERR_FFI_NYICALL);
     }
@@ -392,7 +509,7 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
     /* Return cdata object which is already on top of stack. */
     if (!cc->retref) {
       void *dp = cdataptr(cdataV(L->top-1));  /* Use preallocated object. */
-      memcpy(dp, sp, ctr->size);  /* Copy struct return value from GPRs. */
+      CCALL_HANDLE_STRUCTRET2
     }
     return 1;  /* One GC step. */
   }
