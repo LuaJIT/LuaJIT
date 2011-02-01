@@ -14,17 +14,18 @@
 
 /* CPU-specific JIT engine flags. */
 #if LJ_TARGET_X86ORX64
-#define JIT_F_CMOV		0x00000100
-#define JIT_F_SSE2		0x00000200
-#define JIT_F_SSE4_1		0x00000400
-#define JIT_F_P4		0x00000800
-#define JIT_F_PREFER_IMUL	0x00001000
-#define JIT_F_SPLIT_XMM		0x00002000
-#define JIT_F_LEA_AGU		0x00004000
+#define JIT_F_CMOV		0x00000010
+#define JIT_F_SSE2		0x00000020
+#define JIT_F_SSE3		0x00000040
+#define JIT_F_SSE4_1		0x00000080
+#define JIT_F_P4		0x00000100
+#define JIT_F_PREFER_IMUL	0x00000200
+#define JIT_F_SPLIT_XMM		0x00000400
+#define JIT_F_LEA_AGU		0x00000800
 
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_CMOV
-#define JIT_F_CPUSTRING		"\4CMOV\4SSE2\6SSE4.1\2P4\3AMD\2K8\4ATOM"
+#define JIT_F_CPUSTRING		"\4CMOV\4SSE2\4SSE3\6SSE4.1\2P4\3AMD\2K8\4ATOM"
 #else
 #error "Missing CPU-specific JIT engine flags"
 #endif

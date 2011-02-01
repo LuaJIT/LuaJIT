@@ -530,6 +530,7 @@ static uint32_t jit_cpudetect(lua_State *L)
     flags |= ((features[3] >> 15)&1) * JIT_F_CMOV;
     flags |= ((features[3] >> 26)&1) * JIT_F_SSE2;
 #if LJ_HASJIT
+    flags |= ((features[2] >> 0)&1) * JIT_F_SSE3;
     flags |= ((features[2] >> 19)&1) * JIT_F_SSE4_1;
     if (vendor[2] == 0x6c65746e) {  /* Intel. */
       if ((features[0] & 0x0ff00f00) == 0x00000f00)  /* P4. */
