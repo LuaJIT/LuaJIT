@@ -2505,6 +2505,7 @@ static void emit_asm_debug(BuildCtx *ctx)
     for (i = 0; i < ctx->nsym; i++) {
       const char *name = ctx->sym[i].name;
       int32_t size = ctx->sym[i+1].ofs - ctx->sym[i].ofs;
+      if (size == 0) continue;
       fprintf(ctx->fp,
 	  "%s.eh:\n"
 	  "LSFDE%d:\n"
