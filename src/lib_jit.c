@@ -592,11 +592,11 @@ LUALIB_API int luaopen_jit(lua_State *L)
   lua_pushliteral(L, LJ_ARCH_NAME);
   lua_pushinteger(L, LUAJIT_VERSION_NUM);
   lua_pushliteral(L, LUAJIT_VERSION);
-  LJ_LIB_REG(L, jit);
+  LJ_LIB_REG(L, LUA_JITLIBNAME, jit);
 #ifndef LUAJIT_DISABLE_JITUTIL
-  LJ_LIB_REG_(L, "jit.util", jit_util);
+  LJ_LIB_REG(L, "jit.util", jit_util);
 #endif
-  LJ_LIB_REG_(L, "jit.opt", jit_opt);
+  LJ_LIB_REG(L, "jit.opt", jit_opt);
   L->top -= 2;
   jit_init(L);
   return 1;

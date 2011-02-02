@@ -614,8 +614,8 @@ LUALIB_API int luaopen_base(lua_State *L)
   settabV(L, lj_tab_setstr(L, env, lj_str_newlit(L, "_G")), env);
   lua_pushliteral(L, LUA_VERSION);  /* top-3. */
   newproxy_weaktable(L);  /* top-2. */
-  LJ_LIB_REG_(L, "_G", base);
-  LJ_LIB_REG(L, coroutine);
+  LJ_LIB_REG(L, "_G", base);
+  LJ_LIB_REG(L, LUA_COLIBNAME, coroutine);
   return 2;
 }
 

@@ -81,9 +81,7 @@ static LJ_AINLINE void lj_lib_pushcc(lua_State *L, lua_CFunction f,
 #define LJLIB_NOREGUV
 #define LJLIB_NOREG
 
-#define LJ_LIB_REG(L, name) \
-  lj_lib_register(L, #name, lj_lib_init_##name, lj_lib_cf_##name)
-#define LJ_LIB_REG_(L, regname, name) \
+#define LJ_LIB_REG(L, regname, name) \
   lj_lib_register(L, regname, lj_lib_init_##name, lj_lib_cf_##name)
 
 LJ_FUNC void lj_lib_register(lua_State *L, const char *libname,

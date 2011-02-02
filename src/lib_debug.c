@@ -360,7 +360,7 @@ LJLIB_CF(debug_traceback)
 
 LUALIB_API int luaopen_debug(lua_State *L)
 {
-  LJ_LIB_REG(L, debug);
+  LJ_LIB_REG(L, LUA_DBLIBNAME, debug);
   return 1;
 }
 

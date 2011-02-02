@@ -250,7 +250,7 @@ LJLIB_CF(os_setlocale)
 
 LUALIB_API int luaopen_os(lua_State *L)
 {
-  LJ_LIB_REG(L, os);
+  LJ_LIB_REG(L, LUA_OSLIBNAME, os);
   return 1;
 }
 

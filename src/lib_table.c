@@ -270,7 +270,7 @@ LJLIB_CF(table_sort)
 
 LUALIB_API int luaopen_table(lua_State *L)
 {
-  LJ_LIB_REG(L, table);
+  LJ_LIB_REG(L, LUA_TABLIBNAME, table);
   return 1;
 }
 

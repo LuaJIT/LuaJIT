@@ -791,7 +791,7 @@ LUALIB_API int luaopen_string(lua_State *L)
 {
   GCtab *mt;
   global_State *g;
-  LJ_LIB_REG(L, string);
+  LJ_LIB_REG(L, LUA_STRLIBNAME, string);
 #if defined(LUA_COMPAT_GFIND)
   lua_getfield(L, -1, "gmatch");
   lua_setfield(L, -2, "gfind");
