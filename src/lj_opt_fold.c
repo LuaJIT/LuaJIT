@@ -184,12 +184,12 @@ LJFOLDF(kfold_fpmath)
   return lj_ir_knum(J, y);
 }
 
-LJFOLD(POWI KNUM KINT)
-LJFOLDF(kfold_powi)
+LJFOLD(POW KNUM KINT)
+LJFOLDF(kfold_numpow)
 {
   lua_Number a = knumleft;
   lua_Number b = cast_num(fright->i);
-  lua_Number y = lj_vm_foldarith(a, b, IR_POWI - IR_ADD);
+  lua_Number y = lj_vm_foldarith(a, b, IR_POW - IR_ADD);
   return lj_ir_knum(J, y);
 }
 
@@ -326,7 +326,7 @@ LJFOLDF(kfold_int64arith)
 
 LJFOLD(DIV KINT64 KINT64)
 LJFOLD(MOD KINT64 KINT64)
-LJFOLD(POWI KINT64 KINT64)
+LJFOLD(POW KINT64 KINT64)
 LJFOLDF(kfold_int64arith2)
 {
 #if LJ_HASFFI
@@ -784,8 +784,8 @@ LJFOLDF(simplify_nummuldiv_negneg)
   return RETRYFOLD;
 }
 
-LJFOLD(POWI any KINT)
-LJFOLDF(simplify_powi_xk)
+LJFOLD(POW any KINT)
+LJFOLDF(simplify_numpow_xk)
 {
   int32_t k = fright->i;
   TRef ref = fins->op1;
@@ -814,8 +814,8 @@ LJFOLDF(simplify_powi_xk)
   return ref;
 }
 
-LJFOLD(POWI KNUM any)
-LJFOLDF(simplify_powi_kx)
+LJFOLD(POW KNUM any)
+LJFOLDF(simplify_numpow_kx)
 {
   lua_Number n = knumleft;
   if (n == 2.0) {  /* 2.0 ^ i ==> ldexp(1.0, tonum(i)) */

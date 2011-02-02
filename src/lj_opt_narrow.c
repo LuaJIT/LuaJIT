@@ -428,7 +428,7 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
       tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536-2147483647-1));
       emitir(IRTGI(IR_LE), tmp, lj_ir_kint(J, 2*65536-2147483647-1));
     }
-    return emitir(IRTN(IR_POWI), rb, rc);
+    return emitir(IRTN(IR_POW), rb, rc);
   }
   /* FOLD covers most cases, but some are easier to do here. */
   if (tref_isk(rb) && tvispone(ir_knum(IR(tref_ref(rb)))))

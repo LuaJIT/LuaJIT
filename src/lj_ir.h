@@ -67,7 +67,7 @@
   _(MUL,	C , ref, ref) \
   _(DIV,	N , ref, ref) \
   _(MOD,	N , ref, ref) \
-  _(POWI,	N , ref, ref) \
+  _(POW,	N , ref, ref) \
   _(NEG,	N , ref, ref) \
   \
   _(ABS,	N , ref, ref) \

@@ -2749,7 +2749,7 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
   }
 }
 
-static void asm_powi(ASMState *as, IRIns *ir)
+static void asm_fppowi(ASMState *as, IRIns *ir)
 {
   /* The modified regs must match with the *.dasc implementation. */
   RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
@@ -4020,14 +4020,14 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
     asm_fpmath(as, ir);
     break;
-  case IR_POWI:
+  case IR_POW:
 #if LJ_64 && LJ_HASFFI
     if (!irt_isnum(ir->t))
       asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
 					     IRCALL_lj_carith_powu64);
     else
 #endif
-      asm_powi(as, ir);
+      asm_fppowi(as, ir);
     break;
 
   /* Overflow-checking arithmetic ops. Note: don't use LEA here! */
@@ -4183,7 +4183,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       if (inloop)
 	as->modset = RSET_SCRATCH;
       break;
-    case IR_POWI:
+    case IR_POW:
       if (irt_isnum(ir->t)) {
 	ir->prev = REGSP_HINT(RID_XMM0);
 	if (inloop)
