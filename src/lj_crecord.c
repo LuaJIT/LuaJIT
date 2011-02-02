@@ -700,8 +700,6 @@ static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
       J->postproc = LJ_POST_FIXGUARD;
       return TREF_TRUE;
     } else {
-      if (mm == MM_div || mm == MM_mod)
-	return 0;  /* NYI: integer div, mod. */
       tr = emitir(IRT(mm+(int)IR_ADD-(int)MM_add, dt), sp[0], sp[1]);
     }
     dp = emitir(IRTG(IR_CNEW, IRT_CDATA), lj_ir_kint(J, id), TREF_NIL);

@@ -3988,7 +3988,23 @@ static void asm_ir(ASMState *as, IRIns *ir)
     else
       asm_intarith(as, ir, XOg_X_IMUL);
     break;
-  case IR_DIV: asm_fparith(as, ir, XO_DIVSD); break;
+  case IR_DIV:
+#if LJ_64 && LJ_HASFFI
+    if (!irt_isnum(ir->t))
+      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
+					     IRCALL_lj_carith_divu64);
+    else
+#endif
+      asm_fparith(as, ir, XO_DIVSD);
+    break;
+  case IR_MOD:
+#if LJ_64 && LJ_HASFFI
+    asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
+					   IRCALL_lj_carith_modu64);
+#else
+    lua_assert(0);
+#endif
+    break;
 
   case IR_NEG:
     if (irt_isnum(ir->t))
@@ -4168,6 +4184,14 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	as->modset = RSET_SCRATCH;
       break;
     case IR_POWI:
+      if (irt_isnum(ir->t)) {
+	ir->prev = REGSP_HINT(RID_XMM0);
+	if (inloop)
+	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
+	continue;
+      }
+      /* fallthrough */
+    case IR_DIV: case IR_MOD:
 #if LJ_64 && LJ_HASFFI
       if (!irt_isnum(ir->t)) {
 	ir->prev = REGSP_HINT(RID_RET);
@@ -4176,10 +4200,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	continue;
       }
 #endif
-      ir->prev = REGSP_HINT(RID_XMM0);
-      if (inloop)
-	as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
-      continue;
+      break;
     case IR_FPMATH:
       if (ir->op2 == IRFPM_EXP2) {  /* May be joined to lj_vm_pow_sse. */
 	ir->prev = REGSP_HINT(RID_XMM0);

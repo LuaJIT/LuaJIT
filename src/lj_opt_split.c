@@ -197,6 +197,16 @@ static void split_ir(jit_State *J)
       case IR_MUL:
 	hi = split_call64(J, hisubst, oir, ir, IRCALL_lj_carith_mul64);
 	break;
+      case IR_DIV:
+	hi = split_call64(J, hisubst, oir, ir,
+			  irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
+					     IRCALL_lj_carith_divu64);
+	break;
+      case IR_MOD:
+	hi = split_call64(J, hisubst, oir, ir,
+			  irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
+					     IRCALL_lj_carith_modu64);
+	break;
       case IR_POWI:
 	hi = split_call64(J, hisubst, oir, ir,
 			  irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :

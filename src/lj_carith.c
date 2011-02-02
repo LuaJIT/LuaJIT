@@ -148,21 +148,6 @@ static int carith_int64(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
       setboolV(L->top-1,
 	       id == CTID_INT64 ? ((int64_t)u0 <= (int64_t)u1) : (u0 <= u1));
       return 1;
-    case MM_div: case MM_mod:
-      if (u1 == 0) {  /* Division by zero. */
-	if (u0 == 0)
-	  setnanV(L->top-1);
-	else if (id == CTID_INT64 && (int64_t)u0 < 0)
-	  setminfV(L->top-1);
-	else
-	  setpinfV(L->top-1);
-	return 1;
-      } else if (id == CTID_INT64 && (int64_t)u1 == -1 &&
-		 u0 == U64x(80000000,00000000)) {  /* MIN64 / -1. */
-	if (mm == MM_div) id = CTID_UINT64; else u0 = 0;
-	mm = MM_unm;  /* Result is 0x8000000000000000ULL or 0LL. */
-      }
-      break;
     default: break;
     }
     cd = lj_cdata_new(cts, id, 8);
@@ -174,15 +159,15 @@ static int carith_int64(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
     case MM_mul: *up = u0 * u1; break;
     case MM_div:
       if (id == CTID_INT64)
-	*up = (uint64_t)((int64_t)u0 / (int64_t)u1);
+	*up = (uint64_t)lj_carith_divi64((int64_t)u0, (int64_t)u1);
       else
-	*up = u0 / u1;
+	*up = lj_carith_divu64(u0, u1);
       break;
     case MM_mod:
       if (id == CTID_INT64)
-	*up = (uint64_t)((int64_t)u0 % (int64_t)u1);
+	*up = (uint64_t)lj_carith_modi64((int64_t)u0, (int64_t)u1);
       else
-	*up = u0 % u1;
+	*up = lj_carith_modu64(u0, u1);
       break;
     case MM_pow:
       if (id == CTID_INT64)
@@ -231,12 +216,42 @@ int lj_carith_op(lua_State *L, MMS mm)
 /* -- 64 bit integer arithmetic helpers ----------------------------------- */
 
 #if LJ_32
-/* Signed/unsigned 64 bit multiply. */
+/* Signed/unsigned 64 bit multiplication. */
 int64_t lj_carith_mul64(int64_t a, int64_t b)
 {
   return a * b;
 }
 #endif
+
+/* Unsigned 64 bit division. */
+uint64_t lj_carith_divu64(uint64_t a, uint64_t b)
+{
+  if (b == 0) return U64x(80000000,00000000);
+  return a / b;
+}
+
+/* Signed 64 bit division. */
+int64_t lj_carith_divi64(int64_t a, int64_t b)
+{
+  if (b == 0 || (a == (int64_t)U64x(80000000,00000000) && b == -1))
+    return U64x(80000000,00000000);
+  return a / b;
+}
+
+/* Unsigned 64 bit modulo. */
+uint64_t lj_carith_modu64(uint64_t a, uint64_t b)
+{
+  if (b == 0) return U64x(80000000,00000000);
+  return a % b;
+}
+
+/* Signed 64 bit modulo. */
+int64_t lj_carith_modi64(int64_t a, int64_t b)
+{
+  if (b == 0) return U64x(80000000,00000000);
+  if (a == (int64_t)U64x(80000000,00000000) && b == -1) return 0;
+  return a % b;
+}
 
 /* Unsigned 64 bit x^k. */
 uint64_t lj_carith_powu64(uint64_t x, uint64_t k)

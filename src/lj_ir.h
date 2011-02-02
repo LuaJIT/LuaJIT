@@ -10,7 +10,7 @@
 
 /* -- IR instructions ----------------------------------------------------- */
 
-/* IR instruction definition. Order matters, see below. */
+/* IR instruction definition. Order matters, see below. ORDER IR */
 #define IRDEF(_) \
   /* Guarded assertions. */ \
   /* Must be properly aligned to flip opposites (^1) and (un)ordered (^4). */ \
@@ -61,21 +61,21 @@
   _(BROL,	N , ref, ref) \
   _(BROR,	N , ref, ref) \
   \
-  /* Arithmetic ops. ORDER ARITH (FPMATH/POWI take the space for MOD/POW). */ \
+  /* Arithmetic ops. ORDER ARITH */ \
   _(ADD,	C , ref, ref) \
   _(SUB,	N , ref, ref) \
   _(MUL,	C , ref, ref) \
   _(DIV,	N , ref, ref) \
-  \
-  _(FPMATH,	N , ref, lit) \
+  _(MOD,	N , ref, ref) \
   _(POWI,	N , ref, ref) \
-  \
   _(NEG,	N , ref, ref) \
+  \
   _(ABS,	N , ref, ref) \
   _(ATAN2,	N , ref, ref) \
   _(LDEXP,	N , ref, ref) \
   _(MIN,	C , ref, ref) \
   _(MAX,	C , ref, ref) \
+  _(FPMATH,	N , ref, lit) \
   \
   /* Overflow-checking arithmetic ops. */ \
   _(ADDOV,	C , ref, ref) \
@@ -266,6 +266,10 @@ typedef struct CCallInfo {
 #endif
 #define IRCALLDEF_FFI(_) \
   IRCALLDEF_FFI32(_) \
+  _(lj_carith_divi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(lj_carith_divu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(lj_carith_modi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(lj_carith_modu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
   _(lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
   _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER)
 #else
@@ -584,12 +588,12 @@ typedef union IRIns {
 #define ir_kptr(ir) \
   check_exp((ir)->o == IR_KPTR || (ir)->o == IR_KKPTR, mref((ir)->ptr, void))
 
-LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
-
 /* A store or any other op with a non-weak guard has a side-effect. */
 static LJ_AINLINE int ir_sideeff(IRIns *ir)
 {
   return (((ir->t.irt | ~IRT_GUARD) & lj_ir_mode[ir->o]) >= IRM_S);
 }
+
+LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 
 #endif
