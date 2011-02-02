@@ -33,6 +33,7 @@
   /* Miscellaneous ops. */ \
   _(NOP,	N , ___, ___) \
   _(BASE,	N , lit, lit) \
+  _(HIOP,	S , ref, ref) \
   _(LOOP,	S , ___, ___) \
   _(PHI,	S , ref, ref) \
   _(RENAME,	S , ref, lit) \
@@ -212,8 +213,9 @@ IRFLDEF(FLENUM)
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */
 #define IRCONV_DSTMASK		0x03e0	/* Dest. IRType (also in ir->t). */
-#define IRCONV_NUM_INT		((IRT_NUM<<5)|IRT_INT)
-#define IRCONV_INT_NUM		((IRT_INT<<5)|IRT_NUM)
+#define IRCONV_DSH		5
+#define IRCONV_NUM_INT		((IRT_NUM<<IRCONV_DSH)|IRT_INT)
+#define IRCONV_INT_NUM		((IRT_INT<<IRCONV_DSH)|IRT_NUM)
 #define IRCONV_TRUNC		0x0400	/* Truncate number to integer. */
 #define IRCONV_SEXT		0x0800	/* Sign-extend integer to integer. */
 #define IRCONV_MODEMASK		0x0fff
@@ -251,13 +253,21 @@ typedef struct CCallInfo {
 #define CCI_CASTU64		0x0200	/* Cast u64 result to number. */
 #define CCI_NOFPRCLOBBER	0x0400	/* Does not clobber any FPRs. */
 #define CCI_FASTCALL		0x0800	/* Fastcall convention. */
-#define CCI_STACK64		0x1000	/* Needs 64 bits per argument. */
 
 /* Function definitions for CALL* instructions. */
 #if LJ_HASFFI
+#if LJ_32
+#define ARG2_64		4	/* Treat as 4 32 bit arguments. */
+#define IRCALLDEF_FFI32(_) \
+  _(lj_carith_mul64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER)
+#else
+#define ARG2_64		2
+#define IRCALLDEF_FFI32(_)
+#endif
 #define IRCALLDEF_FFI(_) \
-  _(lj_carith_powi64,	2,   N, I64, CCI_STACK64|CCI_NOFPRCLOBBER) \
-  _(lj_carith_powu64,	2,   N, U64, CCI_STACK64|CCI_NOFPRCLOBBER)
+  IRCALLDEF_FFI32(_) \
+  _(lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER)
 #else
 #define IRCALLDEF_FFI(_)
 #endif
@@ -402,6 +412,7 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isinteger(t)	(irt_typerange((t), IRT_I8, IRT_INT))
 #define irt_isgcv(t)		(irt_typerange((t), IRT_STR, IRT_UDATA))
 #define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD, IRT_UDATA))
+#define irt_isint64(t)		(irt_typerange((t), IRT_I64, IRT_U64))
 
 #if LJ_64
 #define IRT_IS64 \

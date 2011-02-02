@@ -347,6 +347,20 @@ static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
   }
 }
 
+/* op rm/mrm, i */
+static void emit_gmrmi(ASMState *as, x86Group xg, Reg rb, int32_t i)
+{
+  x86Op xo;
+  if (checki8(i)) {
+    emit_i8(as, i);
+    xo = XG_TOXOi8(xg);
+  } else {
+    emit_i32(as, i);
+    xo = XG_TOXOi(xg);
+  }
+  emit_mrm(as, xo, (Reg)(xg & 7) | (rb & REX_64), (rb & ~REX_64));
+}
+
 /* -- Emit moves ---------------------------------------------------------- */
 
 /* mov [base+ofs], i */
@@ -371,7 +385,10 @@ static void emit_movmroi(ASMState *as, Reg base, int32_t ofs, int32_t i)
 /* mov r, i / xor r, r */
 static void emit_loadi(ASMState *as, Reg r, int32_t i)
 {
-  if (i == 0) {
+  /* XOR r,r is shorter, but modifies the flags. This is bad for HIOP. */
+  if (i == 0 && !(LJ_32 && (IR(as->curins)->o == IR_HIOP ||
+			    (as->curins+1 < as->T->nins &&
+			     IR(as->curins+1)->o == IR_HIOP)))) {
     emit_rr(as, XO_ARITH(XOg_XOR), r, r);
   } else {
     MCode *p = as->mcp;
@@ -421,6 +438,19 @@ static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
 
 /* Label for short jumps. */
 typedef MCode *MCLabel;
+
+#if LJ_32 && LJ_HASFFI
+/* jmp short target */
+static void emit_sjmp(ASMState *as, MCLabel target)
+{
+  MCode *p = as->mcp;
+  ptrdiff_t delta = target - p;
+  lua_assert(delta == (int8_t)delta);
+  p[-1] = (MCode)(int8_t)delta;
+  p[-2] = XI_JMPs;
+  as->mcp = p - 2;
+}
+#endif
 
 /* jcc short target */
 static void emit_sjcc(ASMState *as, int cc, MCLabel target)
@@ -630,7 +660,7 @@ static Reg ra_rematk(ASMState *as, IRIns *ir)
   } else if (ir->o == IR_KPRI) {  /* REF_NIL stores ASMREF_L register. */
     lua_assert(irt_isnil(ir->t));
     emit_getgl(as, r, jit_L);
-#if LJ_64  /* NYI: 32 bit register pairs. */
+#if LJ_64
   } else if (ir->o == IR_KINT64) {
     emit_loadu64(as, r, ir_kint64(ir)->u64);
 #endif
@@ -681,8 +711,7 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
 #if LJ_64
 #define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
 #else
-/* NYI: 32 bit register pairs. */
-#define REX_64IR(ir, r)		check_exp(!irt_is64((ir)->t), (r))
+#define REX_64IR(ir, r)		(r)
 #endif
 
 /* Generic move between two regs. */
@@ -939,7 +968,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
 	  emit_loadn(as, dest, tv);
 	  return;
 	}
-#if LJ_64  /* NYI: 32 bit register pairs. */
+#if LJ_64
       } else if (ir->o == IR_KINT64) {
 	emit_loadu64(as, dest, ir_kint64(ir)->u64);
 	return;
@@ -1463,7 +1492,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 #endif
     if (r) {  /* Argument is in a register. */
       if (r < RID_MAX_GPR && ref < ASMREF_TMP1) {
-#if LJ_64  /* NYI: 32 bit register pairs. */
+#if LJ_64
 	if (ir->o == IR_KINT64)
 	  emit_loadu64(as, r, ir_kint64(ir)->u64);
 	else
@@ -1519,7 +1548,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
   ra_evictset(as, drop);  /* Evictions must be performed first. */
   if (ra_used(ir)) {
     if (irt_isfp(ir->t)) {
-      int32_t ofs = sps_scale(ir->s); /* Use spill slot or temp slots. */
+      int32_t ofs = sps_scale(ir->s);  /* Use spill slot or temp slots. */
 #if LJ_64
       if ((ci->flags & CCI_CASTU64)) {
 	Reg dest = ir->r;
@@ -1632,19 +1661,24 @@ static void asm_conv(ASMState *as, IRIns *ir)
   int stfp = (st == IRT_NUM || st == IRT_FLOAT);
   IRRef lref = ir->op1;
   lua_assert(irt_type(ir->t) != st);
+  lua_assert(!(LJ_32 && (irt_isint64(ir->t) || st64)));  /* Handled by SPLIT. */
   if (irt_isfp(ir->t)) {
     Reg dest = ra_dest(as, ir, RSET_FPR);
     if (stfp) {  /* FP to FP conversion. */
       Reg left = asm_fuseload(as, lref, RSET_FPR);
       emit_mrm(as, st == IRT_NUM ? XO_CVTSD2SS : XO_CVTSS2SD, dest, left);
       if (left == dest) return;  /* Avoid the XO_XORPS. */
-#if LJ_32
-    } else if (st >= IRT_U32) {
-      /* NYI: 64 bit integer or uint32_t to number conversion. */
-      setintV(&as->J->errinfo, ir->o);
-      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+    } else if (LJ_32 && st == IRT_U32) {  /* U32 to FP conversion on x86. */
+      /* number = (2^52+2^51 .. u32) - (2^52+2^51) */
+      cTValue *k = lj_ir_k64_find(as->J, U64x(43380000,00000000));
+      Reg bias = ra_scratch(as, rset_exclude(RSET_FPR, dest));
+      if (irt_isfloat(ir->t))
+	emit_rr(as, XO_CVTSD2SS, dest, dest);
+      emit_rr(as, XO_SUBSD, dest, bias);  /* Subtract 2^52+2^51 bias. */
+      emit_rr(as, XO_XORPS, dest, bias);  /* Merge bias and integer. */
+      emit_loadn(as, bias, k);
+      emit_mrm(as, XO_MOVD, dest, asm_fuseload(as, lref, RSET_GPR));
       return;
-#endif
     } else {  /* Integer to FP conversion. */
       Reg left = (LJ_64 && (st == IRT_U32 || st == IRT_U64)) ?
 		 ra_alloc1(as, lref, RSET_GPR) :
@@ -1663,41 +1697,47 @@ static void asm_conv(ASMState *as, IRIns *ir)
       emit_rr(as, XO_XORPS, dest, dest);  /* Avoid partial register stall. */
   } else if (stfp) {  /* FP to integer conversion. */
     if (irt_isguard(ir->t)) {
-      lua_assert(!irt_is64(ir->t));  /* No support for checked 64 bit conv. */
+      /* Checked conversions are only supported from number to int. */
+      lua_assert(irt_isint(ir->t) && st == IRT_NUM);
       asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
-#if LJ_32
-    } else if (irt_isi64(ir->t) || irt_isu64(ir->t) || irt_isu32(ir->t)) {
-      /* NYI: number to 64 bit integer or uint32_t conversion. */
-      setintV(&as->J->errinfo, ir->o);
-      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-#endif
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
       x86Op op = st == IRT_NUM ?
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
-      if (LJ_64 && irt_isu64(ir->t)) {
-	const void *k = lj_ir_k64_find(as->J, U64x(c3f00000,00000000));
-	MCLabel l_end = emit_label(as);
-	Reg left = IR(lref)->r;
+      if (LJ_32 && irt_isu32(ir->t)) {  /* FP to U32 conversion on x86. */
+	/* u32 = (int32_t)(number - 2^31) + 2^31 */
+	Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
+					  ra_scratch(as, RSET_FPR);
+	emit_gri(as, XG_ARITHi(XOg_ADD), dest, (int32_t)0x80000000);
+	emit_rr(as, op, dest, tmp);
+	if (st == IRT_NUM)
+	  emit_rma(as, XO_ADDSD, tmp,
+		   lj_ir_k64_find(as->J, U64x(c1e00000,00000000)));
+	else
+	  emit_rma(as, XO_ADDSS, tmp,
+		   lj_ir_k64_find(as->J, U64x(00000000,cf000000)));
+	ra_left(as, tmp, lref);
+      } else if (LJ_64 && irt_isu64(ir->t)) {
 	/* For inputs in [2^63,2^64-1] add -2^64 and convert again. */
-	if (ra_hasreg(left)) {
-	  Reg tmpn = ra_scratch(as, rset_exclude(RSET_FPR, left));
-	  emit_rr(as, op, dest|REX_64, tmpn);
-	  emit_rr(as, st == IRT_NUM ? XO_ADDSD : XO_ADDSS, tmpn, left);
-	  emit_rma(as, st == IRT_NUM ? XMM_MOVRM(as) : XO_MOVSS, tmpn, k);
-	} else {
-	  left = ra_allocref(as, lref, RSET_FPR);
-	  emit_rr(as, op, dest|REX_64, left);
-	  emit_rma(as, st == IRT_NUM ? XO_ADDSD : XO_ADDSS, left, k);
-	}
+	Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
+					  ra_scratch(as, RSET_FPR);
+	MCLabel l_end = emit_label(as);
+	emit_rr(as, op, dest|REX_64, tmp);
+	if (st == IRT_NUM)
+	  emit_rma(as, XO_ADDSD, tmp,
+		   lj_ir_k64_find(as->J, U64x(c3f00000,00000000)));
+	else
+	  emit_rma(as, XO_ADDSS, tmp,
+		   lj_ir_k64_find(as->J, U64x(00000000,df800000)));
 	emit_sjcc(as, CC_NS, l_end);
 	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest < 2^63. */
-	emit_rr(as, op, dest|REX_64, left);
+	emit_rr(as, op, dest|REX_64, tmp);
+	ra_left(as, tmp, lref);
       } else {
 	Reg left = asm_fuseload(as, lref, RSET_FPR);
 	if (LJ_64 && irt_isu32(ir->t))
-	  emit_rr(as, XO_MOV, dest, dest);  /* Zero upper 32 bits. */
+	  emit_rr(as, XO_MOV, dest, dest);  /* Zero hiword. */
 	emit_mrm(as, op,
 		 dest|((LJ_64 &&
 			(irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
@@ -1728,12 +1768,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
       emit_mrm(as, op, dest, left);
     }
   } else {  /* 32/64 bit integer conversions. */
-    if (irt_is64(ir->t)) {
-#if LJ_32
-      /* NYI: conversion to 64 bit integers. */
-      setintV(&as->J->errinfo, ir->o);
-      lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-#else
+    if (LJ_32) {  /* Only need to handle 32/32 bit no-op (cast) on x86. */
+      Reg dest = ra_dest(as, ir, RSET_GPR);
+      ra_left(as, dest, lref);  /* Do nothing, but may need to move regs. */
+    } else if (irt_is64(ir->t)) {
       Reg dest = ra_dest(as, ir, RSET_GPR);
       if (st64 || !(ir->op2 & IRCONV_SEXT)) {
 	/* 64/64 bit no-op (cast) or 32 to 64 bit zero extension. */
@@ -1742,27 +1780,107 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	Reg left = asm_fuseload(as, lref, RSET_GPR);
 	emit_mrm(as, XO_MOVSXd, dest|REX_64, left);
       }
-#endif
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
       if (st64) {
-#if LJ_32
-	/* NYI: conversion from 64 bit integers. */
-	setintV(&as->J->errinfo, ir->o);
-	lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-#else
 	Reg left = asm_fuseload(as, lref, RSET_GPR);
-	/* This is either a 32 bit reg/reg mov which zeroes the hi-32 bits
-	** or a load of the lower 32 bits from a 64 bit address.
+	/* This is either a 32 bit reg/reg mov which zeroes the hiword
+	** or a load of the loword from a 64 bit address.
 	*/
 	emit_mrm(as, XO_MOV, dest, left);
-#endif
       } else {  /* 32/32 bit no-op (cast). */
 	ra_left(as, dest, lref);  /* Do nothing, but may need to move regs. */
       }
     }
   }
 }
+
+#if LJ_32 && LJ_HASFFI
+/* No SSE conversions to/from 64 bit on x86, so resort to ugly x87 code. */
+
+/* 64 bit integer to FP conversion in 32 bit mode. */
+static void asm_conv_fp_int64(ASMState *as, IRIns *ir)
+{
+  Reg hi = ra_alloc1(as, ir->op1, RSET_GPR);
+  Reg lo = ra_alloc1(as, (ir-1)->op1, rset_exclude(RSET_GPR, hi));
+  int32_t ofs = sps_scale(ir->s);  /* Use spill slot or temp slots. */
+  Reg dest = ir->r;
+  if (ra_hasreg(dest)) {
+    ra_free(as, dest);
+    ra_modified(as, dest);
+    emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
+	      dest, RID_ESP, ofs);
+  }
+  emit_rmro(as, irt_isnum(ir->t) ? XO_FSTPq : XO_FSTPd,
+	    irt_isnum(ir->t) ? XOg_FSTPq : XOg_FSTPd, RID_ESP, ofs);
+  if (((ir-1)->op2 & IRCONV_SRCMASK) == IRT_U64) {
+    /* For inputs in [2^63,2^64-1] add 2^64 to compensate. */
+    MCLabel l_end = emit_label(as);
+    emit_rma(as, XO_FADDq, XOg_FADDq,
+	     lj_ir_k64_find(as->J, U64x(43f00000,00000000)));
+    emit_sjcc(as, CC_NS, l_end);
+    emit_rr(as, XO_TEST, hi, hi);  /* Check if u64 >= 2^63. */
+  } else {
+    lua_assert(((ir-1)->op2 & IRCONV_SRCMASK) == IRT_I64);
+  }
+  emit_rmro(as, XO_FILDq, XOg_FILDq, RID_ESP, 0);
+  /* NYI: Avoid narrow-to-wide store-to-load forwarding stall. */
+  emit_rmro(as, XO_MOVto, hi, RID_ESP, 4);
+  emit_rmro(as, XO_MOVto, lo, RID_ESP, 0);
+}
+
+/* FP to 64 bit integer conversion in 32 bit mode. */
+static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
+{
+  IRType st = (IRType)((ir-1)->op2 & IRCONV_SRCMASK);
+  IRType dt = (((ir-1)->op2 & IRCONV_DSTMASK) >> IRCONV_DSH);
+  Reg lo, hi;
+  lua_assert(st == IRT_NUM || st == IRT_FLOAT);
+  lua_assert(dt == IRT_I64 || dt == IRT_U64);
+  lua_assert(((ir-1)->op2 & IRCONV_TRUNC));
+  hi = ra_dest(as, ir, RSET_GPR);
+  lo = ra_dest(as, ir-1, rset_exclude(RSET_GPR, hi));
+  if (ra_used(ir-1)) emit_rmro(as, XO_MOV, lo, RID_ESP, 0);
+  /* NYI: Avoid wide-to-narrow store-to-load forwarding stall. */
+  if (!(as->flags & JIT_F_SSE3)) {  /* Set FPU rounding mode to default. */
+    emit_rmro(as, XO_FLDCW, XOg_FLDCW, RID_ESP, 4);
+    emit_rmro(as, XO_MOVto, lo, RID_ESP, 4);
+    emit_gri(as, XG_ARITHi(XOg_AND), lo, 0xf3ff);
+  }
+  if (dt == IRT_U64) {
+    /* For inputs in [2^63,2^64-1] add -2^64 and convert again. */
+    MCLabel l_pop, l_end = emit_label(as);
+    emit_x87op(as, XI_FPOP);
+    l_pop = emit_label(as);
+    emit_sjmp(as, l_end);
+    emit_rmro(as, XO_MOV, hi, RID_ESP, 4);
+    if ((as->flags & JIT_F_SSE3))
+      emit_rmro(as, XO_FISTTPq, XOg_FISTTPq, RID_ESP, 0);
+    else
+      emit_rmro(as, XO_FISTPq, XOg_FISTPq, RID_ESP, 0);
+    emit_rma(as, XO_FADDq, XOg_FADDq,
+	     lj_ir_k64_find(as->J, U64x(c3f00000,00000000)));
+    emit_sjcc(as, CC_NS, l_pop);
+    emit_rr(as, XO_TEST, hi, hi);  /* Check if out-of-range (2^63). */
+  }
+  emit_rmro(as, XO_MOV, hi, RID_ESP, 4);
+  if ((as->flags & JIT_F_SSE3)) {  /* Truncation is easy with SSE3. */
+    emit_rmro(as, XO_FISTTPq, XOg_FISTTPq, RID_ESP, 0);
+  } else {  /* Otherwise set FPU rounding mode to truncate before the store. */
+    emit_rmro(as, XO_FISTPq, XOg_FISTPq, RID_ESP, 0);
+    emit_rmro(as, XO_FLDCW, XOg_FLDCW, RID_ESP, 0);
+    emit_rmro(as, XO_MOVtow, lo, RID_ESP, 0);
+    emit_rmro(as, XO_ARITHw(XOg_OR), lo, RID_ESP, 0);
+    emit_loadi(as, lo, 0xc00);
+    emit_rmro(as, XO_FNSTCW, XOg_FNSTCW, RID_ESP, 0);
+  }
+  if (dt == IRT_U64)
+    emit_x87op(as, XI_FDUP);
+  emit_mrm(as, st == IRT_NUM ? XO_FLDq : XO_FLDd,
+	   st == IRT_NUM ? XOg_FLDq: XOg_FLDd,
+	   asm_fuseload(as, ir->op1, RSET_EMPTY));
+}
+#endif
 
 static void asm_strto(ASMState *as, IRIns *ir)
 {
@@ -2644,6 +2762,18 @@ static void asm_powi(ASMState *as, IRIns *ir)
   ra_left(as, RID_EAX, ir->op2);
 }
 
+#if LJ_64 && LJ_HASFFI
+static void asm_arith64(ASMState *as, IRIns *ir, IRCallID id)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[id];
+  IRRef args[2];
+  args[0] = ir->op1;
+  args[1] = ir->op2;
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+#endif
+
 /* Find out whether swapping operands might be beneficial. */
 static int swapops(ASMState *as, IRIns *ir)
 {
@@ -2877,12 +3007,30 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
 /* -- Comparisons --------------------------------------------------------- */
 
 /* Virtual flags for unordered FP comparisons. */
-#define VCC_U	0x100		/* Unordered. */
-#define VCC_P	0x200		/* Needs extra CC_P branch. */
-#define VCC_S	0x400		/* Swap avoids CC_P branch. */
+#define VCC_U	0x1000		/* Unordered. */
+#define VCC_P	0x2000		/* Needs extra CC_P branch. */
+#define VCC_S	0x4000		/* Swap avoids CC_P branch. */
 #define VCC_PS	(VCC_P|VCC_S)
 
-static void asm_comp_(ASMState *as, IRIns *ir, int cc)
+/* Map of comparisons to flags. ORDER IR. */
+#define COMPFLAGS(ci, cin, cu, cf)	((ci)+((cu)<<4)+((cin)<<8)+(cf))
+static const uint16_t asm_compmap[IR_ABC+1] = {
+  /*                 signed non-eq unsigned flags */
+  /* LT  */ COMPFLAGS(CC_GE, CC_G,  CC_AE, VCC_PS),
+  /* GE  */ COMPFLAGS(CC_L,  CC_L,  CC_B,  0),
+  /* LE  */ COMPFLAGS(CC_G,  CC_G,  CC_A,  VCC_PS),
+  /* GT  */ COMPFLAGS(CC_LE, CC_L,  CC_BE, 0),
+  /* ULT */ COMPFLAGS(CC_AE, CC_A,  CC_AE, VCC_U),
+  /* UGE */ COMPFLAGS(CC_B,  CC_B,  CC_B,  VCC_U|VCC_PS),
+  /* ULE */ COMPFLAGS(CC_A,  CC_A,  CC_A,  VCC_U),
+  /* UGT */ COMPFLAGS(CC_BE, CC_B,  CC_BE, VCC_U|VCC_PS),
+  /* EQ  */ COMPFLAGS(CC_NE, CC_NE, CC_NE, VCC_P),
+  /* NE  */ COMPFLAGS(CC_E,  CC_E,  CC_E,  VCC_U|VCC_P),
+  /* ABC */ COMPFLAGS(CC_BE, CC_B,  CC_BE, VCC_U|VCC_PS)  /* Same as UGT. */
+};
+
+/* FP and integer comparisons. */
+static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
 {
   if (irt_isnum(ir->t)) {
     IRRef lref = ir->op1;
@@ -3008,15 +3156,7 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
-	  x86Op xo;
-	  if (checki8(imm)) {
-	    emit_i8(as, imm);
-	    xo = XO_ARITHi8;
-	  } else {
-	    emit_i32(as, imm);
-	    xo = XO_ARITHi;
-	  }
-	  emit_mrm(as, xo, r64 + XOg_CMP, left);
+	  emit_gmrmi(as, XG_ARITHi(XOg_CMP), r64 + left, imm);
 	}
       }
     } else {
@@ -3028,8 +3168,133 @@ static void asm_comp_(ASMState *as, IRIns *ir, int cc)
   }
 }
 
-#define asm_comp(as, ir, ci, cf, cu) \
-  asm_comp_(as, ir, (ci)+((cf)<<4)+(cu))
+#if LJ_32 && LJ_HASFFI
+/* 64 bit integer comparisons in 32 bit mode. */
+static void asm_comp_int64(ASMState *as, IRIns *ir)
+{
+  uint32_t cc = asm_compmap[(ir-1)->o];
+  RegSet allow = RSET_GPR;
+  Reg lefthi = RID_NONE, leftlo = RID_NONE;
+  Reg righthi = RID_NONE, rightlo = RID_NONE;
+  MCLabel l_around;
+  x86ModRM mrm;
+
+  as->curins--;  /* Skip loword ins. Avoids failing in noconflict(), too. */
+
+  /* Allocate/fuse hiword operands. */
+  if (irref_isk(ir->op2)) {
+    lefthi = asm_fuseload(as, ir->op1, allow);
+  } else {
+    lefthi = ra_alloc1(as, ir->op1, allow);
+    righthi = asm_fuseload(as, ir->op2, allow);
+    if (righthi == RID_MRM) {
+      if (as->mrm.base != RID_NONE) rset_clear(allow, as->mrm.base);
+      if (as->mrm.idx != RID_NONE) rset_clear(allow, as->mrm.idx);
+    } else {
+      rset_clear(allow, righthi);
+    }
+  }
+  mrm = as->mrm;  /* Save state for hiword instruction. */
+
+  /* Allocate/fuse loword operands. */
+  if (irref_isk((ir-1)->op2)) {
+    leftlo = asm_fuseload(as, (ir-1)->op1, allow);
+  } else {
+    leftlo = ra_alloc1(as, (ir-1)->op1, allow);
+    rightlo = asm_fuseload(as, (ir-1)->op2, allow);
+    if (rightlo == RID_MRM) {
+      if (as->mrm.base != RID_NONE) rset_clear(allow, as->mrm.base);
+      if (as->mrm.idx != RID_NONE) rset_clear(allow, as->mrm.idx);
+    } else {
+      rset_clear(allow, rightlo);
+    }
+  }
+
+  /* All register allocations must be performed _before_ this point. */
+  l_around = emit_label(as);
+  as->invmcp = as->testmcp = NULL;  /* Cannot use these optimizations. */
+
+  /* Loword comparison and branch. */
+  asm_guardcc(as, cc >> 4);  /* Always use unsigned compare for loword. */
+  if (ra_noreg(rightlo)) {
+    int32_t imm = IR((ir-1)->op2)->i;
+    if (imm == 0 && ((cc >> 4) & 0xa) != 0x2 && leftlo != RID_MRM)
+      emit_rr(as, XO_TEST, leftlo, leftlo);
+    else
+      emit_gmrmi(as, XG_ARITHi(XOg_CMP), leftlo, imm);
+  } else {
+    emit_mrm(as, XO_CMP, leftlo, rightlo);
+  }
+
+  /* Hiword comparison and branches. */
+  if ((cc & 15) != CC_NE)
+    emit_sjcc(as, CC_NE, l_around);  /* Hiword unequal: skip loword compare. */
+  if ((cc & 15) != CC_E)
+    asm_guardcc(as, cc >> 8);  /* Hiword compare without equality check. */
+  as->mrm = mrm;  /* Restore state. */
+  if (ra_noreg(righthi)) {
+    int32_t imm = IR(ir->op2)->i;
+    if (imm == 0 && (cc & 0xa) != 0x2 && lefthi != RID_MRM)
+      emit_rr(as, XO_TEST, lefthi, lefthi);
+    else
+      emit_gmrmi(as, XG_ARITHi(XOg_CMP), lefthi, imm);
+  } else {
+    emit_mrm(as, XO_CMP, lefthi, righthi);
+  }
+}
+#endif
+
+/* -- Support for 64 bit ops in 32 bit mode ------------------------------- */
+
+/* Hiword op of a split 64 bit op. Previous op must be the loword op. */
+static void asm_hiop(ASMState *as, IRIns *ir)
+{
+#if LJ_32 && LJ_HASFFI
+  /* HIOP is marked as a store because it needs its own DCE logic. */
+  int uselo = ra_used(ir-1), usehi = ra_used(ir);  /* Loword/hiword used? */
+  if (LJ_UNLIKELY(!(as->flags & JIT_F_OPT_DCE))) uselo = usehi = 1;
+  if ((ir-1)->o == IR_CONV) {  /* Conversions to/from 64 bit. */
+    if (usehi || uselo) {
+      if (irt_isfp(ir->t))
+	asm_conv_fp_int64(as, ir);
+      else
+	asm_conv_int64_fp(as, ir);
+    }
+    as->curins--;  /* Always skip the CONV. */
+    return;
+  } else if ((ir-1)->o <= IR_NE) {  /* 64 bit integer comparisons. ORDER IR. */
+    asm_comp_int64(as, ir);
+    return;
+  }
+  if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
+  switch ((ir-1)->o) {
+  case IR_ADD:
+    asm_intarith(as, ir, uselo ? XOg_ADC : XOg_ADD);
+    break;
+  case IR_SUB:
+    asm_intarith(as, ir, uselo ? XOg_SBB : XOg_SUB);
+    break;
+  case IR_NEG: {
+    Reg dest = ra_dest(as, ir, RSET_GPR);
+    emit_rr(as, XO_GROUP3, XOg_NEG, dest);
+    if (uselo) {
+      emit_i8(as, 0);
+      emit_rr(as, XO_ARITHi8, XOg_ADC, dest);
+    }
+    ra_left(as, dest, ir->op1);
+    break;
+    }
+  case IR_CALLN:
+    ra_destreg(as, ir, RID_RETHI);
+    if (!uselo)
+      ra_allocref(as, ir->op1, RID2RSET(RID_RET));  /* Mark call as used. */
+    break;
+  default: lua_assert(0); break;
+  }
+#else
+  UNUSED(as); UNUSED(ir); lua_assert(0);  /* Unused on x64 or without FFI. */
+#endif
+}
 
 /* -- Stack handling ------------------------------------------------------ */
 
@@ -3682,21 +3947,16 @@ static void asm_ir(ASMState *as, IRIns *ir)
   switch ((IROp)ir->o) {
   /* Miscellaneous ops. */
   case IR_LOOP: asm_loop(as); break;
-  case IR_NOP: break;
+  case IR_NOP: lua_assert(!ra_used(ir)); break;
   case IR_PHI: asm_phi(as, ir); break;
+  case IR_HIOP: asm_hiop(as, ir); break;
 
   /* Guarded assertions. */
-  case IR_LT:  asm_comp(as, ir, CC_GE, CC_AE, VCC_PS); break;
-  case IR_GE:  asm_comp(as, ir, CC_L,  CC_B,  0); break;
-  case IR_LE:  asm_comp(as, ir, CC_G,  CC_A,  VCC_PS); break;
-  case IR_GT:  asm_comp(as, ir, CC_LE, CC_BE, 0); break;
-  case IR_ULT: asm_comp(as, ir, CC_AE, CC_AE, VCC_U); break;
-  case IR_UGE: asm_comp(as, ir, CC_B,  CC_B,  VCC_U|VCC_PS); break;
-  case IR_ULE: asm_comp(as, ir, CC_A,  CC_A,  VCC_U); break;
-  case IR_ABC:
-  case IR_UGT: asm_comp(as, ir, CC_BE, CC_BE, VCC_U|VCC_PS); break;
-  case IR_EQ:  asm_comp(as, ir, CC_NE, CC_NE, VCC_P); break;
-  case IR_NE:  asm_comp(as, ir, CC_E,  CC_E,  VCC_U|VCC_P); break;
+  case IR_LT: case IR_GE: case IR_LE: case IR_GT:
+  case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
+  case IR_EQ: case IR_NE: case IR_ABC:
+    asm_comp(as, ir, asm_compmap[ir->o]);
+    break;
 
   case IR_RETF: asm_retf(as, ir); break;
 
@@ -3744,7 +4004,15 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
     asm_fpmath(as, ir);
     break;
-  case IR_POWI: asm_powi(as, ir); break;
+  case IR_POWI:
+#if LJ_64 && LJ_HASFFI
+    if (!irt_isnum(ir->t))
+      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
+					     IRCALL_lj_carith_powu64);
+    else
+#endif
+      asm_powi(as, ir);
+    break;
 
   /* Overflow-checking arithmetic ops. Note: don't use LEA here! */
   case IR_ADDOV: asm_intarith(as, ir, XOg_ADD); break;
@@ -3801,6 +4069,7 @@ static void asm_trace(ASMState *as)
 {
   for (as->curins--; as->curins > as->stopins; as->curins--) {
     IRIns *ir = IR(as->curins);
+    lua_assert(!(LJ_32 && irt_isint64(ir->t)));  /* Handled by SPLIT. */
     if (!ra_used(ir) && !ir_sideeff(ir) && (as->flags & JIT_F_OPT_DCE))
       continue;  /* Dead-code elimination can be soooo easy. */
     if (irt_isguard(ir->t))
@@ -3864,11 +4133,10 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
     case IR_CALLN: case IR_CALLL: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
 #if LJ_64
-      /* NYI: add stack slots for x64 calls with many args. */
       lua_assert(CCI_NARGS(ci) <= (LJ_ABI_WIN ? 4 : 6));
       ir->prev = REGSP_HINT(irt_isnum(ir->t) ? RID_FPRET : RID_RET);
 #else
-      /* NYI: not fastcall-aware, but doesn't matter (yet). */
+      lua_assert(!(ci->flags & CCI_FASTCALL) || CCI_NARGS(ci) <= 2);
       if (CCI_NARGS(ci) > (uint32_t)as->evenspill)  /* Leave room for args. */
 	as->evenspill = (int32_t)CCI_NARGS(ci);
       ir->prev = REGSP_HINT(RID_RET);
@@ -3878,6 +4146,12 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 		      (RSET_SCRATCH & ~RSET_FPR) : RSET_SCRATCH;
       continue;
       }
+#if LJ_32 && LJ_HASFFI
+    case IR_HIOP:
+      if ((ir-1)->o == IR_CALLN)
+	ir->prev = REGSP_HINT(RID_RETHI);
+      break;
+#endif
     /* C calls evict all scratch regs and return results in RID_RET. */
     case IR_SNEW: case IR_NEWREF:
 #if !LJ_64
@@ -3894,6 +4168,14 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	as->modset = RSET_SCRATCH;
       break;
     case IR_POWI:
+#if LJ_64 && LJ_HASFFI
+      if (!irt_isnum(ir->t)) {
+	ir->prev = REGSP_HINT(RID_RET);
+	if (inloop)
+	  as->modset |= (RSET_SCRATCH & RSET_GPR);
+	continue;
+      }
+#endif
       ir->prev = REGSP_HINT(RID_XMM0);
       if (inloop)
 	as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);

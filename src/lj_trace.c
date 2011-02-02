@@ -394,6 +394,7 @@ static void trace_start(jit_State *J)
   J->bcskip = 0;
   J->guardemit.irt = 0;
   J->postproc = LJ_POST_NONE;
+  lj_resetsplit(J);
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
   L = J->L;
@@ -592,6 +593,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 	}
 	J->loopref = J->chain[IR_LOOP];  /* Needed by assembler. */
       }
+      lj_opt_split(J);
       J->state = LJ_TRACE_ASM;
       break;
 

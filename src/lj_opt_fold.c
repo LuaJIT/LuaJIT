@@ -538,6 +538,13 @@ LJFOLDF(kfold_conv_knum_int_num)
   }
 }
 
+LJFOLD(CONV KNUM IRCONV_U32_NUM)
+LJFOLDF(kfold_conv_knum_u32_num)
+{
+  lua_assert((fins->op2 & IRCONV_TRUNC));
+  return INTFOLD((int32_t)(uint32_t)knumleft);
+}
+
 LJFOLD(CONV KNUM IRCONV_I64_NUM)
 LJFOLDF(kfold_conv_knum_i64_num)
 {
@@ -805,6 +812,7 @@ LJFOLDF(simplify_conv_u32_num)
 }
 
 LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32*/
+LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32*/
 LJFOLDF(simplify_conv_i64_num)
 {
   PHIBARRIER(fleft);
@@ -820,23 +828,6 @@ LJFOLDF(simplify_conv_i64_num)
     /* Reduce to a zero-extension. */
     fins->op1 = fleft->op1;
     fins->op2 = (IRT_I64<<5)|IRT_U32;
-    return RETRYFOLD;
-#endif
-  }
-  return NEXTFOLD;
-}
-
-LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _U32*/
-LJFOLDF(simplify_conv_u64_num)
-{
-  PHIBARRIER(fleft);
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
-#if LJ_TARGET_X64
-    return fleft->op1;
-#else
-    /* Reduce to a zero-extension. */
-    fins->op1 = fleft->op1;
-    fins->op2 = (IRT_U64<<5)|IRT_U32;
     return RETRYFOLD;
 #endif
   }

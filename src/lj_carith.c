@@ -230,6 +230,14 @@ int lj_carith_op(lua_State *L, MMS mm)
 
 /* -- 64 bit integer arithmetic helpers ----------------------------------- */
 
+#if LJ_32
+/* Signed/unsigned 64 bit multiply. */
+int64_t lj_carith_mul64(int64_t a, int64_t b)
+{
+  return a * b;
+}
+#endif
+
 /* Unsigned 64 bit x^k. */
 uint64_t lj_carith_powu64(uint64_t x, uint64_t k)
 {

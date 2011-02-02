@@ -58,6 +58,7 @@
 #include "lj_opt_narrow.c"
 #include "lj_opt_dce.c"
 #include "lj_opt_loop.c"
+#include "lj_opt_split.c"
 #include "lj_mcode.c"
 #include "lj_snap.c"
 #include "lj_record.c"

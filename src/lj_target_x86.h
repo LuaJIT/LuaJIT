@@ -193,6 +193,7 @@ typedef enum {
   XI_FLD1 =	0xe8d9,
   XI_FLDLG2 =	0xecd9,
   XI_FLDLN2 =	0xedd9,
+  XI_FDUP =	0xc0d9,  /* Really fld st0. */
   XI_FPOP =	0xd8dd,  /* Really fstp st0. */
   XI_FPOP1 =	0xd9dd,  /* Really fstp st1. */
   XI_FRNDINT =	0xfcd9,
@@ -263,10 +264,17 @@ typedef enum {
   XO_MOVD =	XO_660f(6e),
   XO_MOVDto =	XO_660f(7e),
 
+  XO_FLDd =	XO_(d9), XOg_FLDd = 0,
   XO_FLDq =	XO_(dd), XOg_FLDq = 0,
   XO_FILDd =	XO_(db), XOg_FILDd = 0,
+  XO_FILDq =	XO_(df), XOg_FILDq = 5,
+  XO_FSTPd =	XO_(d9), XOg_FSTPd = 3,
   XO_FSTPq =	XO_(dd), XOg_FSTPq = 3,
   XO_FISTPq =	XO_(df), XOg_FISTPq = 7,
+  XO_FISTTPq =	XO_(dd), XOg_FISTTPq = 1,
+  XO_FADDq =	XO_(dc), XOg_FADDq = 0,
+  XO_FLDCW =	XO_(d9), XOg_FLDCW = 5,
+  XO_FNSTCW =	XO_(d9), XOg_FNSTCW = 7
 } x86Op;
 
 /* x86 opcode groups. */
@@ -278,6 +286,7 @@ typedef uint32_t x86Group;
 #define XG_TOXOi8(xg)	((x86Op)(0x000000fe + (((xg)<<8) & 0xff000000)))
 
 #define XO_ARITH(a)	((x86Op)(0x030000fe + ((a)<<27)))
+#define XO_ARITHw(a)	((x86Op)(0x036600fd + ((a)<<27)))
 
 typedef enum {
   XOg_ADD, XOg_OR, XOg_ADC, XOg_SBB, XOg_AND, XOg_SUB, XOg_XOR, XOg_CMP,

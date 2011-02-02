@@ -141,6 +141,12 @@ LJ_FUNC IRType lj_opt_narrow_forl(cTValue *forbase);
 /* Optimization passes. */
 LJ_FUNC void lj_opt_dce(jit_State *J);
 LJ_FUNC int lj_opt_loop(jit_State *J);
+#if LJ_HASFFI && LJ_32
+LJ_FUNC void lj_opt_split(jit_State *J);
+#else
+#define lj_opt_split(J)		UNUSED(J)
+#endif
+
 #endif
 
 #endif
