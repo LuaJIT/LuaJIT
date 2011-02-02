@@ -18,6 +18,7 @@
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
+#include "lj_carith.h"
 #include "lj_vm.h"
 
 /* Here's a short description how the FOLD engine processes instructions:
@@ -296,12 +297,16 @@ LJFOLDF(kfold_intcomp0)
 static uint64_t kfold_int64arith(uint64_t k1, uint64_t k2, IROp op)
 {
   switch (op) {
+#if LJ_64 || LJ_HASFFI
   case IR_ADD: k1 += k2; break;
   case IR_SUB: k1 -= k2; break;
+#endif
+#if LJ_HASFFI
   case IR_MUL: k1 *= k2; break;
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
+#endif
   default: lua_assert(0); break;
   }
   return k1;
@@ -319,6 +324,28 @@ LJFOLDF(kfold_int64arith)
 				    ir_k64(fright)->u64, (IROp)fins->o));
 }
 
+LJFOLD(DIV KINT64 KINT64)
+LJFOLD(MOD KINT64 KINT64)
+LJFOLD(POWI KINT64 KINT64)
+LJFOLDF(kfold_int64arith2)
+{
+#if LJ_HASFFI
+  uint64_t k1 = ir_k64(fleft)->u64, k2 = ir_k64(fright)->u64;
+  if (irt_isi64(fins->t)) {
+    k1 = fins->o == IR_DIV ? lj_carith_divi64((int64_t)k1, (int64_t)k2) :
+	 fins->o == IR_MOD ? lj_carith_modi64((int64_t)k1, (int64_t)k2) :
+			     lj_carith_powi64((int64_t)k1, (int64_t)k2);
+  } else {
+    k1 = fins->o == IR_DIV ? lj_carith_divu64(k1, k2) :
+	 fins->o == IR_MOD ? lj_carith_modu64(k1, k2) :
+			     lj_carith_powu64(k1, k2);
+  }
+  return INT64FOLD(k1);
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
+}
+
 LJFOLD(BSHL KINT64 KINT)
 LJFOLD(BSHR KINT64 KINT)
 LJFOLD(BSAR KINT64 KINT)
@@ -326,29 +353,43 @@ LJFOLD(BROL KINT64 KINT)
 LJFOLD(BROR KINT64 KINT)
 LJFOLDF(kfold_int64shift)
 {
+#if LJ_HASFFI || LJ_64
   uint64_t k = ir_k64(fleft)->u64;
   int32_t sh = (fright->i & 63);
   switch ((IROp)fins->o) {
   case IR_BSHL: k <<= sh; break;
+#if LJ_HASFFI
   case IR_BSHR: k >>= sh; break;
   case IR_BSAR: k = (uint64_t)((int64_t)k >> sh); break;
   case IR_BROL: k = lj_rol(k, sh); break;
   case IR_BROR: k = lj_ror(k, sh); break;
+#endif
   default: lua_assert(0); break;
   }
   return INT64FOLD(k);
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(BNOT KINT64)
 LJFOLDF(kfold_bnot64)
 {
+#if LJ_HASFFI
   return INT64FOLD(~ir_k64(fleft)->u64);
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(BSWAP KINT64)
 LJFOLDF(kfold_bswap64)
 {
+#if LJ_HASFFI
   return INT64FOLD(lj_bswap64(ir_k64(fleft)->u64));
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(LT KINT64 KINT)
@@ -361,6 +402,7 @@ LJFOLD(ULE KINT64 KINT)
 LJFOLD(UGT KINT64 KINT)
 LJFOLDF(kfold_int64comp)
 {
+#if LJ_HASFFI
   uint64_t a = ir_k64(fleft)->u64, b = ir_k64(fright)->u64;
   switch ((IROp)fins->o) {
   case IR_LT: return CONDFOLD(a < b);
@@ -373,14 +415,21 @@ LJFOLDF(kfold_int64comp)
   case IR_UGT: return CONDFOLD((uint64_t)a > (uint64_t)b);
   default: lua_assert(0); return FAILFOLD;
   }
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(UGE any KINT64)
 LJFOLDF(kfold_int64comp0)
 {
+#if LJ_HASFFI
   if (ir_k64(fright)->u64 == 0)
     return DROPFOLD;
   return NEXTFOLD;
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 /* -- Constant folding for strings ---------------------------------------- */
@@ -1249,6 +1298,7 @@ LJFOLD(BOR BOR KINT64)
 LJFOLD(BXOR BXOR KINT64)
 LJFOLDF(reassoc_intarith_k64)
 {
+#if LJ_HASFFI || LJ_64
   IRIns *irk = IR(fleft->op2);
   if (irk->o == IR_KINT64) {
     uint64_t k = kfold_int64arith(ir_k64(irk)->u64,
@@ -1259,6 +1309,9 @@ LJFOLDF(reassoc_intarith_k64)
     return RETRYFOLD;  /* (i o k1) o k2 ==> i o (k1 o k2) */
   }
   return NEXTFOLD;
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(MIN MIN any)
