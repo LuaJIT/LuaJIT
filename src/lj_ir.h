@@ -113,7 +113,7 @@
   _(TNEW,	AW, lit, lit) \
   _(TDUP,	AW, ref, ___) \
   _(CNEW,	AW, ref, ref) \
-  _(CNEWP,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
+  _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
   /* Write barriers. */ \
   _(TBAR,	S , ref, ___) \
@@ -188,7 +188,9 @@ IRFPMDEF(FPMENUM)
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
   _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
-  _(CDATA_PTR, sizeof(GCcdata))
+  _(CDATA_PTR,	sizeof(GCcdata)) \
+  _(CDATA_INT64, sizeof(GCcdata)) \
+  _(CDATA_INT64HI, sizeof(GCcdata) + 4)
 
 typedef enum {
 #define FLENUM(name, ofs)	IRFL_##name,
@@ -588,12 +590,12 @@ typedef union IRIns {
 #define ir_kptr(ir) \
   check_exp((ir)->o == IR_KPTR || (ir)->o == IR_KKPTR, mref((ir)->ptr, void))
 
+LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
+
 /* A store or any other op with a non-weak guard has a side-effect. */
 static LJ_AINLINE int ir_sideeff(IRIns *ir)
 {
   return (((ir->t.irt | ~IRT_GUARD) & lj_ir_mode[ir->o]) >= IRM_S);
 }
-
-LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 
 #endif

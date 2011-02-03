@@ -154,7 +154,7 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
 #define gcstep_barrier(J, ref) \
   ((ref) < J->chain[IR_LOOP] && \
    (J->chain[IR_SNEW] || J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
-    J->chain[IR_CNEW] || J->chain[IR_CNEWP] || J->chain[IR_TOSTR]))
+    J->chain[IR_CNEW] || J->chain[IR_CNEWI] || J->chain[IR_TOSTR]))
 
 /* -- Constant folding for FP numbers ------------------------------------- */
 
@@ -307,7 +307,7 @@ static uint64_t kfold_int64arith(uint64_t k1, uint64_t k2, IROp op)
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
 #endif
-  default: lua_assert(0); break;
+  default: UNUSED(k2); lua_assert(0); break;
   }
   return k1;
 }
@@ -1765,18 +1765,28 @@ LJFOLDF(fload_cdata_typeid_kgc)
   return NEXTFOLD;
 }
 
-LJFOLD(FLOAD CNEW IRFL_CDATA_TYPEID)
-LJFOLD(FLOAD CNEWP IRFL_CDATA_TYPEID)
-LJFOLDF(fload_cdata_typeid_cnew)
+/* The content of int64 cdata objects is immutable. */
+LJFOLD(FLOAD KGC IRFL_CDATA_INT64)
+LJFOLDF(fload_cdata_int64_kgc)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
-    return fleft->op1;  /* No PHI barrier needed. CNEW/CNEWP op1 is const. */
+    return INT64FOLD(*(uint64_t *)cdataptr(ir_kcdata(fleft)));
   return NEXTFOLD;
 }
 
-/* Pointer cdata objects are immutable. */
-LJFOLD(FLOAD CNEWP IRFL_CDATA_PTR)
-LJFOLDF(fload_cdata_ptr_cnew)
+LJFOLD(FLOAD CNEW IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_TYPEID)
+LJFOLDF(fload_cdata_typeid_cnew)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
+    return fleft->op1;  /* No PHI barrier needed. CNEW/CNEWI op1 is const. */
+  return NEXTFOLD;
+}
+
+/* Pointer and int64 cdata objects are immutable. */
+LJFOLD(FLOAD CNEWI IRFL_CDATA_PTR)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_INT64)
+LJFOLDF(fload_cdata_ptr_int64_cnew)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
     return fleft->op2;  /* Fold even across PHI to avoid allocations. */
@@ -1786,6 +1796,7 @@ LJFOLDF(fload_cdata_ptr_cnew)
 LJFOLD(FLOAD any IRFL_STR_LEN)
 LJFOLD(FLOAD any IRFL_CDATA_TYPEID)
 LJFOLD(FLOAD any IRFL_CDATA_PTR)
+LJFOLD(FLOAD any IRFL_CDATA_INT64)
 LJFOLD(VLOAD any any)  /* Vararg loads have no corresponding stores. */
 LJFOLDX(lj_opt_cse)
 

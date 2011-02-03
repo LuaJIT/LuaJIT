@@ -2518,7 +2518,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
 {
   CTState *cts = ctype_ctsG(J2G(as->J));
   CTypeID typeid = (CTypeID)IR(ir->op1)->i;
-  CTSize sz = (ir->o == IR_CNEWP || ir->op2 == REF_NIL) ?
+  CTSize sz = (ir->o == IR_CNEWI || ir->op2 == REF_NIL) ?
 	      lj_ctype_size(cts, typeid) : (CTSize)IR(ir->op2)->i;
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[2];
@@ -2529,33 +2529,45 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   as->gcsteps++;
   asm_setupresult(as, ir, ci);  /* GCcdata * */
 
-  /* Initialize pointer cdata object. */
-  if (ir->o == IR_CNEWP) {
+  /* Initialize immutable cdata object. */
+  if (ir->o == IR_CNEWI) {
+    RegSet allow = (RSET_GPR & ~RSET_SCRATCH);
+#if LJ_64
+    Reg r64 = sz == 8 ? REX_64 : 0;
     if (irref_isk(ir->op2)) {
       IRIns *irk = IR(ir->op2);
-#if LJ_64
-      if (irk->o == IR_KINT64) {
-	uint64_t k = ir_k64(irk)->u64;
-	lua_assert(sz == 8);
-	if (checki32((int64_t)k)) {
-	  emit_i32(as, (int32_t)k);
-	  emit_rmro(as, XO_MOVmi, REX_64, RID_RET, sizeof(GCcdata));
-	} else {
-	  emit_movtomro(as, RID_ECX|REX_64, RID_RET, sizeof(GCcdata));
-	  emit_loadu64(as, RID_ECX, k);
-	}
+      uint64_t k = irk->o == IR_KINT64 ? ir_k64(irk)->u64 :
+					 (uint64_t)(uint32_t)irk->i;
+      if (sz == 4 || checki32((int64_t)k)) {
+	emit_i32(as, (int32_t)k);
+	emit_rmro(as, XO_MOVmi, r64, RID_RET, sizeof(GCcdata));
       } else {
-#endif
-	lua_assert(sz == 4);
-	emit_movmroi(as, RID_RET, sizeof(GCcdata), irk->i);
-#if LJ_64
+	emit_movtomro(as, RID_ECX + r64, RID_RET, sizeof(GCcdata));
+	emit_loadu64(as, RID_ECX, k);
       }
-#endif
     } else {
-      Reg r = ra_alloc1(as, ir->op2, (RSET_GPR & ~RSET_SCRATCH));
-      emit_movtomro(as, r + ((LJ_64 && sz == 8) ? REX_64 : 0),
-		    RID_RET, sizeof(GCcdata));
+      Reg r = ra_alloc1(as, ir->op2, allow);
+      emit_movtomro(as, r + r64, RID_RET, sizeof(GCcdata));
     }
+#else
+    int32_t ofs = sizeof(GCcdata);
+    if (LJ_HASFFI && sz == 8) {
+      ofs += 4; ir++;
+      lua_assert(ir->o == IR_HIOP);
+    }
+    do {
+      if (irref_isk(ir->op2)) {
+	emit_movmroi(as, RID_RET, ofs, IR(ir->op2)->i);
+      } else {
+	Reg r = ra_alloc1(as, ir->op2, allow);
+	emit_movtomro(as, r, RID_RET, ofs);
+	rset_clear(allow, r);
+      }
+      if (!LJ_HASFFI || ofs == sizeof(GCcdata)) break;
+      ofs -= 4; ir--;
+    } while (1);
+#endif
+    lua_assert(sz == 4 || (sz == 8 && (LJ_64 || LJ_HASFFI)));
   }
 
   /* Combine initialization of marked, gct and typeid. */
@@ -3288,6 +3300,9 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     ra_destreg(as, ir, RID_RETHI);
     if (!uselo)
       ra_allocref(as, ir->op1, RID2RSET(RID_RET));  /* Mark call as used. */
+    break;
+  case IR_CNEWI:
+    /* Nothing to do here. Handled by CNEWI itself. */
     break;
   default: lua_assert(0); break;
   }
@@ -4057,7 +4072,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_SNEW: asm_snew(as, ir); break;
   case IR_TNEW: asm_tnew(as, ir); break;
   case IR_TDUP: asm_tdup(as, ir); break;
-  case IR_CNEW: case IR_CNEWP: asm_cnew(as, ir); break;
+  case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
 
   /* Write barriers. */
   case IR_TBAR: asm_tbar(as, ir); break;
@@ -4164,8 +4179,10 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       }
 #if LJ_32 && LJ_HASFFI
     case IR_HIOP:
-      if ((ir-1)->o == IR_CALLN)
+      if ((ir-1)->o == IR_CALLN) {
 	ir->prev = REGSP_HINT(RID_RETHI);
+	continue;
+      }
       break;
 #endif
     /* C calls evict all scratch regs and return results in RID_RET. */
@@ -4174,7 +4191,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       if (as->evenspill < 3)  /* lj_str_new and lj_tab_newkey need 3 args. */
 	as->evenspill = 3;
 #endif
-    case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWP: case IR_TOSTR:
+    case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)
 	as->modset = RSET_SCRATCH;

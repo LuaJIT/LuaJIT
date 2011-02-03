@@ -159,7 +159,8 @@ static void split_ir(jit_State *J)
       ir->prev = lj_ir_kint(J, (int32_t)tv.u32.lo);
       hisubst[ref] = lj_ir_kint(J, (int32_t)tv.u32.hi);
     } else {
-      ir->prev = (IRRef1)ref;  /* Identity substitution for loword. */
+      ir->prev = ref;  /* Identity substitution for loword. */
+      hisubst[ref] = 0;
     }
   }
 
@@ -168,6 +169,7 @@ static void split_ir(jit_State *J)
     IRIns *ir = &oir[ref];
     IRRef nref = lj_ir_nextins(J);
     IRIns *nir = IR(nref);
+    IRRef hi = 0;
 
     /* Copy-substitute old instruction to new instruction. */
     nir->op1 = ir->op1 < nk ? ir->op1 : oir[ir->op1].prev;
@@ -175,10 +177,11 @@ static void split_ir(jit_State *J)
     ir->prev = nref;  /* Loword substitution. */
     nir->o = ir->o;
     nir->t.irt = ir->t.irt & ~(IRT_MARK|IRT_ISPHI);
+    hisubst[ref] = 0;
 
     /* Split 64 bit instructions. */
     if (irt_isint64(ir->t)) {
-      IRRef hi = hisubst[ir->op1];
+      IRRef hiref = hisubst[ir->op1];
       nir->t.irt = IRT_INT | (nir->t.irt & IRT_GUARD);  /* Turn into INT op. */
       switch (ir->o) {
       case IR_ADD:
@@ -186,13 +189,13 @@ static void split_ir(jit_State *J)
 	/* Use plain op for hiword if loword cannot produce a carry/borrow. */
 	if (irref_isk(nir->op2) && IR(nir->op2)->i == 0) {
 	  ir->prev = nir->op1;  /* Pass through loword. */
-	  nir->op1 = hi; nir->op2 = hisubst[ir->op2];
+	  nir->op1 = hiref; nir->op2 = hisubst[ir->op2];
 	  hi = nref;
 	  break;
 	}
 	/* fallthrough */
       case IR_NEG:
-	hi = split_emit(J, IRTI(IR_HIOP), hi, hisubst[ir->op2]);
+	hi = split_emit(J, IRTI(IR_HIOP), hiref, hisubst[ir->op2]);
 	break;
       case IR_MUL:
 	hi = split_call64(J, hisubst, oir, ir, IRCALL_lj_carith_mul64);
@@ -212,6 +215,13 @@ static void split_ir(jit_State *J)
 			  irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
 					     IRCALL_lj_carith_powu64);
 	break;
+      case IR_FLOAD:
+	lua_assert(ir->op2 == IRFL_CDATA_INT64);
+	hi = split_emit(J, IRTI(IR_FLOAD), nir->op1, IRFL_CDATA_INT64HI);
+#if LJ_BE
+	ir->prev = hi; hi = nref;
+#endif
+	break;
       case IR_XLOAD:
 	hi = split_emit(J, IRTI(IR_XLOAD), split_ptr(J, nir->op1), ir->op2);
 #if LJ_BE
@@ -220,19 +230,18 @@ static void split_ir(jit_State *J)
 	break;
       case IR_XSTORE:
 #if LJ_LE
-	hi = hisubst[ir->op2];
+	hiref = hisubst[ir->op2];
 #else
-	hi = nir->op2; nir->op2 = hisubst[ir->op2];
+	hiref = nir->op2; nir->op2 = hisubst[ir->op2];
 #endif
-	split_emit(J, IRTI(IR_XSTORE), split_ptr(J, nir->op1), hi);
-	continue;
+	split_emit(J, IRTI(IR_XSTORE), split_ptr(J, nir->op1), hiref);
+	break;
       case IR_CONV: {  /* Conversion to 64 bit integer. Others handled below. */
 	IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
 	if (st == IRT_NUM || st == IRT_FLOAT) {  /* FP to 64 bit int conv. */
 	  hi = split_emit(J, IRTI(IR_HIOP), nir->op1, nref);
 	} else if (st == IRT_I64 || st == IRT_U64) {  /* 64/64 bit cast. */
 	  /* Drop cast, since assembler doesn't care. */
-	  hisubst[ref] = hi;
 	  goto fwdlo;
 	} else if ((ir->op2 & IRCONV_SEXT)) {  /* Sign-extend to 64 bit. */
 	  IRRef k31 = lj_ir_kint(J, 31);
@@ -242,27 +251,26 @@ static void split_ir(jit_State *J)
 	  nir->op2 = k31;
 	  hi = nref;
 	} else {  /* Zero-extend to 64 bit. */
-	  hisubst[ref] = lj_ir_kint(J, 0);
+	  hi = lj_ir_kint(J, 0);
 	  goto fwdlo;
 	}
 	break;
 	}
       case IR_PHI: {
-	IRRef hi2;
+	IRRef hiref2;
 	if ((irref_isk(nir->op1) && irref_isk(nir->op2)) ||
 	    nir->op1 == nir->op2)
 	  J->cur.nins--;  /* Drop useless PHIs. */
-	hi2 = hisubst[ir->op2];
-	if (!((irref_isk(hi) && irref_isk(hi2)) || hi == hi2))
-	  split_emit(J, IRTI(IR_PHI), hi, hi2);
-	continue;
+	hiref2 = hisubst[ir->op2];
+	if (!((irref_isk(hiref) && irref_isk(hiref2)) || hiref == hiref2))
+	  split_emit(J, IRTI(IR_PHI), hiref, hiref2);
+	break;
 	}
       default:
-	lua_assert(ir->o <= IR_NE);
-	split_emit(J, IRTGI(IR_HIOP), hi, hisubst[ir->op2]);  /* Comparisons. */
-	continue;
+	lua_assert(ir->o <= IR_NE);  /* Comparisons. */
+	split_emit(J, IRTGI(IR_HIOP), hiref, hisubst[ir->op2]);
+	break;
       }
-      hisubst[ref] = hi;  /* Store hiword substitution. */
     } else if (ir->o == IR_CONV) {  /* See above, too. */
       IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
       if (st == IRT_I64 || st == IRT_U64) {  /* Conversion from 64 bit int. */
@@ -277,9 +285,13 @@ static void split_ir(jit_State *J)
 	  nir->op1 = nir->op2 = 0;
 	}
       }
+    } else if (ir->o == IR_CNEWI) {
+      if (hisubst[ir->op2])
+	split_emit(J, IRT(IR_HIOP, IRT_NIL), nref, hisubst[ir->op2]);
     } else if (ir->o == IR_LOOP) {
       J->loopref = nref;  /* Needed by assembler. */
     }
+    hisubst[ref] = hi;  /* Store hiword substitution. */
   }
 
   /* Add PHI marks. */
