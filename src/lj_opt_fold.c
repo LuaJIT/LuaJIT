@@ -1049,8 +1049,11 @@ LJFOLDF(simplify_intmul_k64)
 {
   if (ir_kint64(fright)->u64 == 0)  /* i * 0 ==> 0 */
     return INT64FOLD(0);
+#if LJ_64
+  /* NYI: SPLIT for BSHL and 32 bit backend support. */
   else if (ir_kint64(fright)->u64 < 0x80000000u)
     return simplify_intmul_k(J, (int32_t)ir_kint64(fright)->u64);
+#endif
   return NEXTFOLD;
 }
 
