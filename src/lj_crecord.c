@@ -681,7 +681,7 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
   for (n = 0; J->base[n+1]; n++) {
     CType *d;
     do {
-      if (!ct->sib)
+      if (!ct->sib || n >= CCI_NARGS_MAX)
 	lj_trace_err(J, LJ_TRERR_NYICALL);
       ct = ctype_get(cts, ct->sib);
     } while (ctype_isattrib(ct->info));
