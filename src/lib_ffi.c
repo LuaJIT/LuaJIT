@@ -425,17 +425,21 @@ LJLIB_CF(ffi_cast)
   return 1;
 }
 
-LJLIB_CF(ffi_string)
+LJLIB_CF(ffi_string)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);
   TValue *o = lj_lib_checkany(L, 1);
-  size_t sz = (size_t)(CTSize)lj_lib_optint(L, 2, (int32_t)CTSIZE_INVALID);
-  CType *ct = ctype_get(cts, sz==CTSIZE_INVALID ? CTID_P_CVOID : CTID_P_CCHAR);
   const char *p;
+  size_t len;
+  if (o+1 < L->top) {
+    len = (size_t)lj_lib_checkint(L, 2);
+    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&p, o, 0);
+  } else {
+    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CCHAR), (uint8_t *)&p, o, 0);
+    len = strlen(p);
+  }
   L->top = o+1;  /* Make sure this is the last item on the stack. */
-  lj_cconv_ct_tv(cts, ct, (uint8_t *)&p, o, 0);
-  if (sz == CTSIZE_INVALID) sz = strlen(p);
-  setstrV(L, o, lj_str_new(L, p, sz));
+  setstrV(L, o, lj_str_new(L, p, len));
   lj_gc_check(L);
   return 1;
 }

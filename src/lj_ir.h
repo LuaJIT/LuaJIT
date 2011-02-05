@@ -273,7 +273,8 @@ typedef struct CCallInfo {
   _(lj_carith_modi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
   _(lj_carith_modu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
   _(lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER)
+  _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(strlen,		1,         N, INT, 0)
 #else
 #define IRCALLDEF_FFI(_)
 #endif

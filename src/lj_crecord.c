@@ -844,6 +844,23 @@ void LJ_FASTCALL recff_ffi_new(jit_State *J, RecordFFData *rd)
   crec_alloc(J, rd, argv2ctype(J, J->base[0], &rd->argv[0]));
 }
 
+void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  TRef tr = J->base[0];
+  if (tr) {
+    TRef trlen = J->base[1];
+    if (trlen) {
+      trlen = lj_ir_toint(J, trlen);
+      tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CVOID), 0, tr, &rd->argv[0]);
+    } else {
+      tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CCHAR), 0, tr, &rd->argv[0]);
+      trlen = lj_ir_call(J, IRCALL_strlen, tr);
+    }
+    J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), tr, trlen);
+  }  /* else: interpreter will throw. */
+}
+
 /* -- Miscellaneous library functions ------------------------------------- */
 
 void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
