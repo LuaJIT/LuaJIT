@@ -1459,7 +1459,6 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 /* Generate a call to a C function. */
 static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
-  RegSet allow = RSET_ALL;
   uint32_t n, nargs = CCI_NARGS(ci);
   int32_t ofs = STACKARG_OFS;
   uint32_t gprs = REGARG_GPRS;
@@ -1467,24 +1466,25 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   Reg fpr = REGARG_FIRSTFPR;
 #endif
   lua_assert(!(nargs > 2 && (ci->flags&CCI_FASTCALL)));  /* Avoid stack adj. */
-  emit_call(as, ci->func);
+  if ((void *)ci->func)
+    emit_call(as, ci->func);
   for (n = 0; n < nargs; n++) {  /* Setup args. */
     IRRef ref = args[n];
     IRIns *ir = IR(ref);
     Reg r;
 #if LJ_64 && LJ_ABI_WIN
     /* Windows/x64 argument registers are strictly positional. */
-    r = irt_isnum(ir->t) ? (fpr <= REGARG_LASTFPR ? fpr : 0) : (gprs & 31);
+    r = irt_isfp(ir->t) ? (fpr <= REGARG_LASTFPR ? fpr : 0) : (gprs & 31);
     fpr++; gprs >>= 5;
 #elif LJ_64
     /* POSIX/x64 argument registers are used in order of appearance. */
-    if (irt_isnum(ir->t)) {
+    if (irt_isfp(ir->t)) {
       r = fpr <= REGARG_LASTFPR ? fpr : 0; fpr++;
     } else {
       r = gprs & 31; gprs >>= 5;
     }
 #else
-    if (irt_isnum(ir->t) || !(ci->flags & CCI_FASTCALL)) {
+    if (irt_isfp(ir->t) || !(ci->flags & CCI_FASTCALL)) {
       r = 0;
     } else {
       r = gprs & 31; gprs >>= 5;
@@ -1514,22 +1514,16 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	emit_movmroi(as, RID_ESP, ofs, (int32_t)ir_knum(ir)->u32.lo);
 	emit_movmroi(as, RID_ESP, ofs+4, (int32_t)ir_knum(ir)->u32.hi);
       } else {
-	if ((allow & RSET_FPR) == RSET_EMPTY)
-	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
-	r = ra_alloc1(as, ref, allow & RSET_FPR);
-	allow &= ~RID2RSET(r);
+	r = ra_alloc1(as, ref, RSET_FPR);
 	emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto,
 		  r, RID_ESP, ofs);
       }
-      ofs += 8;
+      ofs += (LJ_32 && irt_isfloat(ir->t)) ? 4 : 8;
     } else {  /* Non-FP argument is on stack. */
       if (LJ_32 && ref < ASMREF_TMP1) {
 	emit_movmroi(as, RID_ESP, ofs, ir->i);
       } else {
-	if ((allow & RSET_GPR) == RSET_EMPTY)
-	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
-	r = ra_alloc1(as, ref, allow & RSET_GPR);
-	allow &= ~RID2RSET(r);
+	r = ra_alloc1(as, ref, RSET_GPR);
 	emit_movtomro(as, REX_64IR(ir, r), RID_ESP, ofs);
       }
       ofs += sizeof(intptr_t);
@@ -1575,7 +1569,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 	emit_movtomro(as, RID_RET, RID_ESP, ofs);
 	emit_movtomro(as, RID_RETHI, RID_ESP, ofs+4);
       } else {
-	emit_rmro(as, XO_FSTPq, XOg_FSTPq, RID_ESP, ofs);
+	emit_rmro(as, irt_isnum(ir->t) ? XO_FSTPq : XO_FSTPd,
+		  irt_isnum(ir->t) ? XOg_FSTPq : XOg_FSTPd, RID_ESP, ofs);
       }
 #endif
     } else {
@@ -1585,7 +1580,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
   }
 }
 
-/* Collect arguments from CALL* and ARG instructions. */
+/* Collect arguments from CALL* and CARG instructions. */
 static void asm_collectargs(ASMState *as, IRIns *ir,
 			    const CCallInfo *ci, IRRef *args)
 {
@@ -1608,6 +1603,40 @@ static void asm_call(ASMState *as, IRIns *ir)
   asm_collectargs(as, ir, ci, args);
   asm_setupresult(as, ir, ci);
   asm_gencall(as, ci, args);
+}
+
+/* Reconstruct CCallInfo flags for CALLX*. */
+static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
+{
+  uint32_t nargs = 0;
+  if (ir->op1 != REF_NIL) {  /* Count number of arguments first. */
+    IRIns *ira = IR(ir->op1);
+    nargs++;
+    while (ira->o == IR_CARG) { nargs++; ira = IR(ira->op1); }
+  }
+  /* NYI: fastcall etc. */
+  return (nargs | (ir->t.irt << CCI_OTSHIFT));
+}
+
+static void asm_callx(ASMState *as, IRIns *ir)
+{
+  IRRef args[CCI_NARGS_MAX];
+  CCallInfo ci;
+  IRIns *irf;
+  ci.flags = asm_callx_flags(as, ir);
+  asm_collectargs(as, ir, &ci, args);
+  asm_setupresult(as, ir, &ci);
+  irf = IR(ir->op2);
+  if (LJ_32 && irref_isk(ir->op2)) {  /* Call to constant address on x86. */
+    ci.func = (ASMFunction)(void *)(uintptr_t)(uint32_t)irf->i;
+  } else {
+    /* Prefer a non-argument register or RID_RET for indirect calls. */
+    RegSet allow = (RSET_GPR & ~RSET_SCRATCH)|RID2RSET(RID_RET);
+    Reg r = ra_alloc1(as, ir->op2, allow);
+    emit_rr(as, XO_GROUP5, XOg_CALL, r);
+    ci.func = (ASMFunction)(void *)0;
+  }
+  asm_gencall(as, &ci, args);
 }
 
 /* -- Returns ------------------------------------------------------------- */
@@ -4086,6 +4115,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 
   /* Calls. */
   case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
+  case IR_CALLXS: asm_callx(as, ir); break;
   case IR_CARG: break;
 
   default:
@@ -4112,6 +4142,43 @@ static void asm_trace(ASMState *as)
 }
 
 /* -- Trace setup --------------------------------------------------------- */
+
+/* Ensure there are enough stack slots for call arguments. */
+static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
+{
+  IRRef args[CCI_NARGS_MAX];
+  uint32_t nargs = (int)CCI_NARGS(ci);
+  int nslots = 0;
+  asm_collectargs(as, ir, ci, args);
+#if LJ_64
+  if (LJ_ABI_WIN) {
+    nslots = (int)(nargs*2);  /* Only matters for more than four args. */
+  } else {
+    uint32_t i;
+    int ngpr = 6, nfpr = 8;
+    for (i = 0; i < nargs; i++)
+      if (irt_isfp(IR(args[i])->t)) {
+	if (nfpr > 0) nfpr--; else nslots += 2;
+      } else {
+	if (ngpr > 0) ngpr--; else nslots += 2;
+      }
+  }
+  if (nslots > as->evenspill)  /* Leave room for args in stack slots. */
+    as->evenspill = nslots;
+  return irt_isfp(ir->t) ? REGSP_HINT(RID_FPRET) : REGSP_HINT(RID_RET);
+#else
+  if ((ci->flags & CCI_FASTCALL)) {
+    lua_assert(nargs <= 2);
+  } else {
+    uint32_t i;
+    for (i = 0; i < nargs; i++)
+      nslots += irt_isnum(IR(args[i])->t) ? 2 : 1;
+    if (nslots > as->evenspill)  /* Leave room for args. */
+      as->evenspill = nslots;
+  }
+  return irt_isfp(ir->t) ? REGSP_INIT : REGSP_HINT(RID_RET);
+#endif
+}
 
 /* Clear reg/sp for all instructions and add register hints. */
 static void asm_setup_regsp(ASMState *as, GCtrace *T)
@@ -4161,17 +4228,17 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	}
       }
       break;
+    case IR_CALLXS: {
+      CCallInfo ci;
+      ci.flags = asm_callx_flags(as, ir);
+      ir->prev = asm_setup_call_slots(as, ir, &ci);
+      if (inloop)
+	as->modset |= RSET_SCRATCH;
+      continue;
+      }
     case IR_CALLN: case IR_CALLL: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
-#if LJ_64
-      lua_assert(CCI_NARGS(ci) <= (LJ_ABI_WIN ? 4 : 6));
-      ir->prev = REGSP_HINT(irt_isnum(ir->t) ? RID_FPRET : RID_RET);
-#else
-      lua_assert(!(ci->flags & CCI_FASTCALL) || CCI_NARGS(ci) <= 2);
-      if (CCI_NARGS(ci) > (uint32_t)as->evenspill)  /* Leave room for args. */
-	as->evenspill = (int32_t)CCI_NARGS(ci);
-      ir->prev = REGSP_HINT(RID_RET);
-#endif
+      ir->prev = asm_setup_call_slots(as, ir, ci);
       if (inloop)
 	as->modset |= (ci->flags & CCI_NOFPRCLOBBER) ?
 		      (RSET_SCRATCH & ~RSET_FPR) : RSET_SCRATCH;

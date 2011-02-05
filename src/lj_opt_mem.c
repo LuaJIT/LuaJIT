@@ -675,7 +675,8 @@ TRef LJ_FASTCALL lj_opt_fwd_xload(jit_State *J)
   /* Search for conflicting stores. */
   ref = J->chain[IR_XSTORE];
 retry:
-  while (ref > xref) {
+  if (J->chain[IR_CALLXS] > lim) lim = J->chain[IR_CALLXS];
+  while (ref > lim) {
     IRIns *store = IR(ref);
     switch (aa_xref(J, xr, fins, store)) {
     case ALIAS_NO:   break;  /* Continue searching. */
@@ -732,10 +733,12 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
 {
   IRRef xref = fins->op1;
   IRIns *xr = IR(xref);
+  IRRef lim = xref;  /* Search limit. */
   IRRef val = fins->op2;  /* Stored value reference. */
   IRRef1 *refp = &J->chain[IR_XSTORE];
   IRRef ref = *refp;
-  while (ref > xref) {  /* Search for redundant or conflicting stores. */
+  if (J->chain[IR_CALLXS] > lim) lim = J->chain[IR_CALLXS];
+  while (ref > lim) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
     switch (aa_xref(J, xr, fins, store)) {
     case ALIAS_NO:

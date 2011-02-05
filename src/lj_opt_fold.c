@@ -1891,6 +1891,7 @@ LJFOLDX(lj_opt_dse_xstore)
 LJFOLD(NEWREF any any)  /* Treated like a store. */
 LJFOLD(CALLS any any)
 LJFOLD(CALLL any any)  /* Safeguard fallback. */
+LJFOLD(CALLXS any any)
 LJFOLD(RETF any any)  /* Modifies BASE. */
 LJFOLD(TNEW any any)
 LJFOLD(TDUP any)

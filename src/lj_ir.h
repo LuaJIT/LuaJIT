@@ -129,6 +129,7 @@
   _(CALLN,	N , ref, lit) \
   _(CALLL,	L , ref, lit) \
   _(CALLS,	S , ref, lit) \
+  _(CALLXS,	S , ref, ref) \
   _(CARG,	N , ref, ref) \
   \
   /* End of list. */
@@ -236,7 +237,7 @@ typedef struct CCallInfo {
 } CCallInfo;
 
 #define CCI_NARGS(ci)		((ci)->flags & 0xff)	/* Extract # of args. */
-#define CCI_NARGS_MAX		16		/* Max. # of args. */
+#define CCI_NARGS_MAX		32			/* Max. # of args. */
 
 #define CCI_OTSHIFT		16
 #define CCI_OPTYPE(ci)		((ci)->flags >> CCI_OTSHIFT)  /* Get op/type. */
@@ -590,7 +591,6 @@ typedef union IRIns {
   check_exp((ir)->o == IR_KNUM || (ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
 #define ir_kptr(ir) \
   check_exp((ir)->o == IR_KPTR || (ir)->o == IR_KKPTR, mref((ir)->ptr, void))
-
 LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 
 /* A store or any other op with a non-weak guard has a side-effect. */

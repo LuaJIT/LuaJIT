@@ -429,9 +429,15 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 		       band(ot, 128) == 0 and " " or ">",
 		       band(ot, 64) == 0 and " " or "+",
 		       irtype[t], op))
-      local m1 = band(m, 3)
+      local m1, m2 = band(m, 3), band(m, 3*4)
       if sub(op, 1, 4) == "CALL" then
-	out:write(format("%-10s  (", vmdef.ircall[op2]))
+	if m2 == 1*4 then -- op2 == IRMlit
+	  out:write(format("%-10s  (", vmdef.ircall[op2]))
+	elseif op2 < 0 then
+	  out:write(format("[0x%x](", tonumber((tracek(tr, op2)))))
+	else
+	  out:write(format("%04d (", op2))
+	end
 	if op1 ~= -1 then dumpcallargs(tr, op1) end
 	out:write(")")
       elseif op == "CNEW  " and op2 == -1 then
@@ -442,7 +448,6 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 	else
 	  out:write(format(m1 == 0 and "%04d" or "#%-3d", op1))
 	end
-	local m2 = band(m, 3*4)
 	if m2 ~= 3*4 then -- op2 != IRMnone
 	  if m2 == 1*4 then -- op2 == IRMlit
 	    local litn = litname[op]
