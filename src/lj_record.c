@@ -661,7 +661,32 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     mt = tabref(tabV(&ix->tabv)->metatable);
     mix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), ix->tab, IRFL_TAB_META);
   } else if (tref_isudata(ix->tab)) {
+    int udtype = udataV(&ix->tabv)->udtype;
     mt = tabref(udataV(&ix->tabv)->metatable);
+    /* The metatables of special userdata objects are treated as immutable. */
+    if (udtype != UDTYPE_USERDATA) {
+      cTValue *mo;
+      if (LJ_HASFFI && udtype == UDTYPE_FFI_CLIB) {
+	/* Specialize to the C library namespace object. */
+	emitir(IRTG(IR_EQ, IRT_P32), ix->tab, lj_ir_kptr(J, udataV(&ix->tabv)));
+      } else {
+	/* Specialize to the type of userdata. */
+	TRef tr = emitir(IRT(IR_FLOAD, IRT_U8), ix->tab, IRFL_UDATA_UDTYPE);
+	emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, udtype));
+      }
+  immutable_mt:
+      mo = lj_tab_getstr(mt, mmname_str(J2G(J), mm));
+      if (!mo || tvisnil(mo))
+	return 0;  /* No metamethod. */
+      /* Treat metamethod or index table as immutable, too. */
+      if (!(tvisfunc(mo) || tvistab(mo)))
+	lj_trace_err(J, LJ_TRERR_BADTYPE);
+      copyTV(J->L, &ix->mobjv, mo);
+      ix->mobj = lj_ir_kgc(J, gcV(mo), tvisfunc(mo) ? IRT_FUNC : IRT_TAB);
+      ix->mtv = mt;
+      ix->mt = TREF_NIL;  /* Dummy value for comparison semantics. */
+      return 1;  /* Got metamethod or index table. */
+    }
     mix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), ix->tab, IRFL_UDATA_META);
   } else {
     /* Specialize to base metatable. Must flush mcode in lua_setmetatable(). */
@@ -670,19 +695,8 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
       ix->mt = TREF_NIL;
       return 0;  /* No metamethod. */
     }
-#if LJ_HASFFI
     /* The cdata metatable is treated as immutable. */
-    if (tref_iscdata(ix->tab)) {
-      cTValue *mo = lj_tab_getstr(mt, mmname_str(J2G(J), mm));
-      if (!mo || tvisnil(mo))
-	return 0;  /* No metamethod. */
-      setfuncV(J->L, &ix->mobjv, funcV(mo));
-      ix->mobj = lj_ir_kfunc(J, funcV(mo));  /* Immutable metamethod. */
-      ix->mtv = mt;
-      ix->mt = TREF_NIL;  /* Dummy value for comparison semantics. */
-      return 1;  /* Got cdata metamethod. */
-    }
-#endif
+    if (LJ_HASFFI && tref_iscdata(ix->tab)) goto immutable_mt;
     ix->mt = mix.tab = lj_ir_ktab(J, mt);
     goto nocheck;
   }
