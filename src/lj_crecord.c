@@ -855,6 +855,12 @@ void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
   if (ctype_isref(s->info)) {
     sp = emitir(IRT(IR_FLOAD, IRT_PTR), sp, IRFL_CDATA_PTR);
     s = ctype_rawchild(cts, s);
+  } else if (ctype_isnum(s->info) && s->size == 8) {
+    IRType t = (s->info & CTF_UNSIGNED) ? IRT_U64 : IRT_I64;
+    TRef tr = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_INT64);
+    J->base[0] = emitconv(tr, IRT_NUM, t, 0);
+    lj_needsplit(J);
+    return;
   } else {
     sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCcdata)));
   }
