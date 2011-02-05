@@ -917,6 +917,8 @@ LJFOLDF(simplify_conv_sext)
   if (!(fins->op2 & IRCONV_SEXT))
     return NEXTFOLD;
   PHIBARRIER(fleft);
+  if (fleft->o == IR_XLOAD && (irt_isu8(fleft->t) || irt_isu16(fleft->t)))
+    goto ok_reduce;
   if (fleft->o == IR_ADD && irref_isk(fleft->op2)) {
     ofs = (int64_t)IR(fleft->op2)->i;
     ref = fleft->op1;
@@ -926,6 +928,7 @@ LJFOLDF(simplify_conv_sext)
     IRRef lo = J->scev.dir ? J->scev.start : J->scev.stop;
     lua_assert(irt_isint(J->scev.t));
     if (lo && IR(lo)->i + ofs >= 0) {
+    ok_reduce:
 #if LJ_TARGET_X64
       /* Eliminate widening. All 32 bit ops do an implicit zero-extension. */
       return LEFTFOLD;
