@@ -13,6 +13,7 @@
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_tab.h"
+#include "lj_frame.h"
 #include "lj_ctype.h"
 #include "lj_cparse.h"
 #include "lj_cconv.h"
@@ -834,6 +835,15 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
 	!(tr = crec_arith_ptr(J, sp, s, (MMS)rd->data))) {
     err_type:
       lj_trace_err(J, LJ_TRERR_BADTYPE);
+    }
+    /* Fixup cdata comparisons, too. Avoids some cdata escapes. */
+    if (J->postproc == LJ_POST_FIXGUARD && frame_iscont(J->L->base-1)) {
+      const BCIns *pc = frame_contpc(J->L->base-1) - 1;
+      if (bc_op(*pc) <= BC_ISNEP) {
+	setframe_pc(&J2G(J)->tmptv, pc);
+	J2G(J)->tmptv.u32.lo = ((tref_istrue(tr) ^ bc_op(*pc)) & 1);
+	J->postproc = LJ_POST_FIXCOMP;
+      }
     }
     J->base[0] = tr;
   }

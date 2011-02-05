@@ -1355,10 +1355,10 @@ static void rec_comp_prep(jit_State *J)
 }
 
 /* Fixup comparison. */
-static void rec_comp_fixup(jit_State *J, int cond)
+static void rec_comp_fixup(jit_State *J, const BCIns *pc, int cond)
 {
-  BCIns jmpins = J->pc[1];
-  const BCIns *npc = J->pc + 2 + (cond ? bc_j(jmpins) : 0);
+  BCIns jmpins = pc[1];
+  const BCIns *npc = pc + 2 + (cond ? bc_j(jmpins) : 0);
   SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
   /* Set PC to opposite target to avoid re-recording the comp. in side trace. */
   J->cur.snapmap[snap->mapofs + snap->nent] = SNAP_MKPC(npc);
@@ -1383,6 +1383,10 @@ void lj_record_ins(jit_State *J)
   /* Perform post-processing action before recording the next instruction. */
   if (LJ_UNLIKELY(J->postproc != LJ_POST_NONE)) {
     switch (J->postproc) {
+    case LJ_POST_FIXCOMP:  /* Fixup comparison. */
+      pc = frame_pc(&J2G(J)->tmptv);
+      rec_comp_fixup(J, pc, (!tvistruecond(&J2G(J)->tmptv2) ^ (bc_op(*pc)&1)));
+      /* fallthrough */
     case LJ_POST_FIXGUARD:  /* Fixup and emit pending guard. */
       if (!tvistruecond(&J2G(J)->tmptv2)) {
 	BCReg s;
@@ -1505,7 +1509,7 @@ void lj_record_ins(jit_State *J)
 	break;
       }
       emitir(IRTG(irop, ta), ra, rc);
-      rec_comp_fixup(J, ((int)op ^ irop) & 1);
+      rec_comp_fixup(J, J->pc, ((int)op ^ irop) & 1);
     }
     break;
 
@@ -1529,7 +1533,7 @@ void lj_record_ins(jit_State *J)
 	rec_mm_equal(J, &ix, (int)op);
 	break;
       }
-      rec_comp_fixup(J, ((int)op & 1) == !diff);
+      rec_comp_fixup(J, J->pc, ((int)op & 1) == !diff);
     }
     break;
 
