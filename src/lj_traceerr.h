@@ -35,6 +35,7 @@ TREDEF(IDXLOOP,	"looping index lookup")
 TREDEF(NYITMIX,	"NYI: mixed sparse/dense table")
 
 /* Recording C data operations. */
+TREDEF(NOCACHE,	"symbol not in cache")
 TREDEF(NYICONV,	"NYI: unsupported C type conversion")
 
 /* Optimizations. */

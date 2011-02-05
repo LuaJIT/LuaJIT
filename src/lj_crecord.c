@@ -12,9 +12,11 @@
 
 #include "lj_err.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ctype.h"
 #include "lj_cparse.h"
 #include "lj_cconv.h"
+#include "lj_clib.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
@@ -835,6 +837,38 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
     }
     J->base[0] = tr;
   }
+}
+
+/* -- C library namespace metamethods ------------------------------------- */
+
+void LJ_FASTCALL recff_clib_index(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  if (tref_isudata(J->base[0]) && tref_isstr(J->base[1]) &&
+      udataV(&rd->argv[0])->udtype == UDTYPE_FFI_CLIB) {
+    CLibrary *cl = (CLibrary *)uddata(udataV(&rd->argv[0]));
+    GCstr *name = strV(&rd->argv[1]);
+    CType *ct;
+    CTypeID id = lj_ctype_getname(cts, &ct, name, CLNS_INDEX);
+    cTValue *tv = lj_tab_getstr(cl->cache, name);
+    if (id && tv && tviscdata(tv)) {
+      /* Specialize to the symbol name and make the result a constant. */
+      emitir(IRTG(IR_EQ, IRT_STR), J->base[1], lj_ir_kstr(J, name));
+      if (ctype_isconstval(ct->info)) {
+	if (ct->size >= 0x80000000u &&
+	    (ctype_child(cts, ct)->info & CTF_UNSIGNED))
+	  J->base[0] = lj_ir_knum(J, (lua_Number)(uint32_t)ct->size);
+	else
+	  J->base[0] = lj_ir_kint(J, (int32_t)ct->size);
+      } else if (ctype_isextern(ct->info)) {
+	lj_trace_err(J, LJ_TRERR_BADTYPE);  /* NYI: access extern variables. */
+      } else {
+	J->base[0] = lj_ir_kgc(J, obj2gco(cdataV(tv)), IRT_CDATA);
+      }
+    } else {
+      lj_trace_err(J, LJ_TRERR_NOCACHE);
+    }
+  }  /* else: interpreter will throw. */
 }
 
 /* -- FFI library functions ----------------------------------------------- */

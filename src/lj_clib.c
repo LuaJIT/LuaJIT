@@ -222,10 +222,6 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 
 /* -- C library indexing -------------------------------------------------- */
 
-/* Namespace for C library indexing. */
-#define CLNS_INDEX \
-  ((1u<<CT_FUNC)|(1u<<CT_EXTERN)|(1u<<CT_CONSTVAL))
-
 #if LJ_TARGET_X86 && LJ_ABI_WIN
 /* Compute argument size for fastcall/stdcall functions. */
 static CTSize clib_func_argsize(CTState *cts, CType *ct)

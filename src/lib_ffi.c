@@ -239,7 +239,7 @@ static TValue *ffi_clib_index(lua_State *L)
   return lj_clib_index(L, cl, strV(o+1));
 }
 
-LJLIB_CF(ffi_clib___index)
+LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index)
 {
   TValue *tv = ffi_clib_index(L);
   if (tviscdata(tv)) {

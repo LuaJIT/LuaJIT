@@ -1768,12 +1768,18 @@ LJFOLDF(fload_cdata_typeid_kgc)
   return NEXTFOLD;
 }
 
-/* The content of int64 cdata objects is immutable. */
+/* Get the contents of immutable cdata objects. */
+LJFOLD(FLOAD KGC IRFL_CDATA_PTR)
 LJFOLD(FLOAD KGC IRFL_CDATA_INT64)
 LJFOLDF(fload_cdata_int64_kgc)
 {
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
-    return INT64FOLD(*(uint64_t *)cdataptr(ir_kcdata(fleft)));
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
+    void *p = cdataptr(ir_kcdata(fleft));
+    if (irt_is64(fins->t))
+      return INT64FOLD(*(uint64_t *)p);
+    else
+      return INTFOLD(*(int32_t *)p);
+  }
   return NEXTFOLD;
 }
 

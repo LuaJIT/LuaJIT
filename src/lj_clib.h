@@ -10,6 +10,9 @@
 
 #if LJ_HASFFI
 
+/* Namespace for C library indexing. */
+#define CLNS_INDEX	((1u<<CT_FUNC)|(1u<<CT_EXTERN)|(1u<<CT_CONSTVAL))
+
 /* C library namespace. */
 typedef struct CLibrary {
   void *handle;		/* Opaque handle for dynamic library loader. */
