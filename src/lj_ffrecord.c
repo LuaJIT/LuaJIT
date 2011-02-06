@@ -253,13 +253,13 @@ static void LJ_FASTCALL recff_select(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];
+  TRef base = J->base[1];
+  if (tr && base) {
+    base = lj_ir_toint(J, base);
+    if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
+      recff_nyiu(J);
+  }
   if (tref_isnumber_str(tr)) {
-    TRef base = J->base[1];
-    if (base) {
-      base = lj_ir_toint(J, base);
-      if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
-	recff_nyiu(J);
-    }
     if (tref_isstr(tr)) {
       TValue tmp;
       if (!lj_str_tonum(strV(&rd->argv[0]), &tmp))
