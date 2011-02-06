@@ -406,19 +406,18 @@ LJLIB_CF(ffi_offsetof)
   return 0;
 }
 
-LJLIB_CF(ffi_cast)
+LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
 {
   CTState *cts = ctype_cts(L);
   CTypeID id = ffi_checkctype(L, cts);
+  CType *d = ctype_raw(cts, id);
   TValue *o = lj_lib_checkany(L, 2);
   L->top = o+1;  /* Make sure this is the last item on the stack. */
+  if (!(ctype_isnum(d->info) || ctype_isptr(d->info) || ctype_isenum(d->info)))
+    lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
   if (!(tviscdata(o) && cdataV(o)->typeid == id)) {
-    CTSize sz = lj_ctype_size(cts, id);
-    GCcdata *cd;
-    if (sz == CTSIZE_INVALID)
-      lj_err_caller(L, LJ_ERR_FFI_INVSIZE);
-    cd = lj_cdata_new(cts, id, sz);  /* Create destination cdata. */
-    lj_cconv_ct_tv(cts, ctype_raw(cts, id), cdataptr(cd), o, CCF_CAST);
+    GCcdata *cd = lj_cdata_new(cts, id, d->size);
+    lj_cconv_ct_tv(cts, d, cdataptr(cd), o, CCF_CAST);
     setcdataV(L, o, cd);
     lj_gc_check(L);
   }
