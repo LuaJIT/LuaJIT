@@ -591,12 +591,13 @@ typedef union IRIns {
   check_exp((ir)->o == IR_KNUM || (ir)->o == IR_KINT64, mref((ir)->ptr,cTValue))
 #define ir_kptr(ir) \
   check_exp((ir)->o == IR_KPTR || (ir)->o == IR_KKPTR, mref((ir)->ptr, void))
-LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 
 /* A store or any other op with a non-weak guard has a side-effect. */
 static LJ_AINLINE int ir_sideeff(IRIns *ir)
 {
   return (((ir->t.irt | ~IRT_GUARD) & lj_ir_mode[ir->o]) >= IRM_S);
 }
+
+LJ_STATIC_ASSERT((int)IRT_GUARD == (int)IRM_W);
 
 #endif
