@@ -687,8 +687,8 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
     if (!ctype_isfield(ct->info))
       lj_trace_err(J, LJ_TRERR_NYICALL);
     d = ctype_rawchild(cts, ct);
-    if (ctype_isenum(d->info)) d = ctype_child(cts, d);
-    if (!(ctype_isnum(d->info) || ctype_isptr(d->info)))
+    if (!(ctype_isnum(d->info) || ctype_isptr(d->info) ||
+	  ctype_isenum(d->info)))
       lj_trace_err(J, LJ_TRERR_NYICALL);
     args[n] = crec_ct_tv(J, d, 0, J->base[n+1], &rd->argv[n+1]);
   }
