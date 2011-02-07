@@ -3991,7 +3991,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   switch ((IROp)ir->o) {
   /* Miscellaneous ops. */
   case IR_LOOP: asm_loop(as); break;
-  case IR_NOP: lua_assert(!ra_used(ir)); break;
+  case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
   case IR_PHI: asm_phi(as, ir); break;
   case IR_HIOP: asm_hiop(as, ir); break;
 

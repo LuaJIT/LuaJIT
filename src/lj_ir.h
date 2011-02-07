@@ -115,9 +115,10 @@
   _(CNEW,	AW, ref, ref) \
   _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
-  /* Write barriers. */ \
+  /* Barriers. */ \
   _(TBAR,	S , ref, ___) \
   _(OBAR,	S , ref, ref) \
+  _(XBAR,	S , ___, ___) \
   \
   /* Type conversions. */ \
   _(CONV,	N , ref, lit) \
