@@ -78,6 +78,18 @@ static void *ffi_checkptr(lua_State *L, int narg, CTypeID id)
   return p;
 }
 
+/* Convert argument to int32_t. */
+static int32_t ffi_checkint(lua_State *L, int narg)
+{
+  CTState *cts = ctype_cts(L);
+  TValue *o = L->base + narg-1;
+  int32_t i;
+  if (o >= L->top)
+    lj_err_arg(L, narg, LJ_ERR_NOVAL);
+  lj_cconv_ct_tv(cts, ctype_get(cts, CTID_INT32), (uint8_t *)&i, o, 0);
+  return i;
+}
+
 /* -- C type metamethods -------------------------------------------------- */
 
 #define LJLIB_MODULE_ffi_meta
@@ -324,7 +336,7 @@ LJLIB_CF(ffi_new)	LJLIB_REC(.)
   if ((info & CTF_VLA)) {
     o++;
     sz = lj_ctype_vlsize(cts, ctype_raw(cts, id),
-			 (CTSize)lj_lib_checkint(L, 2));
+			 (CTSize)ffi_checkint(L, 2));
   }
   if (sz == CTSIZE_INVALID)
     lj_err_arg(L, 1, LJ_ERR_FFI_INVSIZE);
@@ -361,7 +373,7 @@ LJLIB_CF(ffi_sizeof)
   } else {
     CType *ct = lj_ctype_rawref(cts, id);
     if (ctype_isvltype(ct->info))
-      sz = lj_ctype_vlsize(cts, ct, (CTSize)lj_lib_checkint(L, 2));
+      sz = lj_ctype_vlsize(cts, ct, (CTSize)ffi_checkint(L, 2));
     else
       sz = ctype_hassize(ct->info) ? ct->size : CTSIZE_INVALID;
     if (LJ_UNLIKELY(sz == CTSIZE_INVALID)) {
@@ -431,7 +443,7 @@ LJLIB_CF(ffi_string)	LJLIB_REC(.)
   const char *p;
   size_t len;
   if (o+1 < L->top) {
-    len = (size_t)lj_lib_checkint(L, 2);
+    len = (size_t)ffi_checkint(L, 2);
     lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&p, o, 0);
   } else {
     lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CCHAR), (uint8_t *)&p, o, 0);
@@ -452,7 +464,7 @@ LJLIB_CF(ffi_copy)
   if (tvisstr(o) && o+1 >= L->top) {
     sz = strV(o)->len+1;  /* Copy Lua string including trailing '\0'. */
   } else {
-    sz = (CTSize)lj_lib_checkint(L, 3);
+    sz = (CTSize)ffi_checkint(L, 3);
     if (tvisstr(o) && sz > strV(o)->len+1)
       sz = strV(o)->len+1;  /* Max. copy length is string length. */
   }
@@ -463,7 +475,7 @@ LJLIB_CF(ffi_copy)
 LJLIB_CF(ffi_fill)
 {
   void *dp = ffi_checkptr(L, 1, CTID_P_VOID);
-  CTSize sz = (CTSize)lj_lib_checkint(L, 2);
+  CTSize sz = (CTSize)ffi_checkint(L, 2);
   int32_t fill = lj_lib_optint(L, 3, 0);
   memset(dp, fill, sz);
   return 0;

@@ -947,6 +947,11 @@ void LJ_FASTCALL recff_clib_index(jit_State *J, RecordFFData *rd)
 
 /* -- FFI library functions ----------------------------------------------- */
 
+static TRef crec_toint(jit_State *J, CTState *cts, TRef sp, TValue *sval)
+{
+  return crec_ct_tv(J, ctype_get(cts, CTID_INT32), 0, sp, sval);
+}
+
 void LJ_FASTCALL recff_ffi_new(jit_State *J, RecordFFData *rd)
 {
   crec_alloc(J, rd, argv2ctype(J, J->base[0], &rd->argv[0]));
@@ -959,7 +964,7 @@ void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
   if (tr) {
     TRef trlen = J->base[1];
     if (trlen) {
-      trlen = lj_ir_toint(J, trlen);
+      trlen = crec_toint(J, cts, trlen, &rd->argv[1]);
       tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CVOID), 0, tr, &rd->argv[0]);
     } else {
       tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CCHAR), 0, tr, &rd->argv[0]);
