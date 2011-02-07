@@ -974,6 +974,40 @@ void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
   }  /* else: interpreter will throw. */
 }
 
+void LJ_FASTCALL recff_ffi_copy(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  TRef trdst = J->base[0], trsrc = J->base[1], trlen = J->base[2];
+  if (trdst && trsrc && (trlen || tref_isstr(trsrc))) {
+    trdst = crec_ct_tv(J, ctype_get(cts, CTID_P_VOID), 0, trdst, &rd->argv[0]);
+    trsrc = crec_ct_tv(J, ctype_get(cts, CTID_P_CVOID), 0, trsrc, &rd->argv[1]);
+    if (trlen) {
+      trlen = crec_toint(J, cts, trlen, &rd->argv[2]);
+    } else {
+      trlen = emitir(IRTI(IR_FLOAD), trsrc, IRFL_STR_LEN);
+      trlen = emitir(IRTI(IR_ADD), trlen, lj_ir_kint(J, 1));
+    }
+    lj_ir_call(J, IRCALL_memcpy, trdst, trsrc, trlen);
+    emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
+  }  /* else: interpreter will throw. */
+}
+
+void LJ_FASTCALL recff_ffi_fill(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  TRef tr = J->base[0], trlen = J->base[1], trfill = J->base[2];
+  if (tr && trlen) {
+    tr = crec_ct_tv(J, ctype_get(cts, CTID_P_VOID), 0, tr, &rd->argv[0]);
+    trlen = crec_toint(J, cts, trlen, &rd->argv[1]);
+    if (trfill)
+      trfill = crec_toint(J, cts, trfill, &rd->argv[2]);
+    else
+      trfill = lj_ir_kint(J, 0);
+    lj_ir_call(J, IRCALL_memset, tr, trfill, trlen);
+    emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
+  }  /* else: interpreter will throw. */
+}
+
 /* -- Miscellaneous library functions ------------------------------------- */
 
 void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)

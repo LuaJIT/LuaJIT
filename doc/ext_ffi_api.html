@@ -312,13 +312,13 @@ is converted to a <tt>"const void&nbsp;*"</tt>.
 </p>
 <p>
 In the first syntax, <tt>len</tt> gives the number of bytes to copy.
-In case <tt>src</tt> is a Lua string, the maximum copy length is the
-number of bytes of the string plus a zero-terminator. Caveat: the
-copied data may not be zero-terminated if <tt>len&nbsp;&le;&nbsp;#src</tt>.
+Caveat: if <tt>src</tt> is a Lua string, then <tt>len</tt> must not
+exceed <tt>#src+1</tt>.
 </p>
 <p>
 In the second syntax, the source of the copy must be a Lua string. All
-bytes of the string plus a zero-terminator are copied to <tt>dst</tt>.
+bytes of the string <em>plus a zero-terminator</em> are copied to
+<tt>dst</tt> (i.e. <tt>#src+1</tt> bytes).
 </p>
 <p>
 Performance notice: <tt>ffi.copy()</tt> may be used as a faster

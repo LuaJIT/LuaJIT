@@ -455,29 +455,27 @@ LJLIB_CF(ffi_string)	LJLIB_REC(.)
   return 1;
 }
 
-LJLIB_CF(ffi_copy)
+LJLIB_CF(ffi_copy)	LJLIB_REC(.)
 {
   void *dp = ffi_checkptr(L, 1, CTID_P_VOID);
   void *sp = ffi_checkptr(L, 2, CTID_P_CVOID);
   TValue *o = L->base+1;
-  CTSize sz;
-  if (tvisstr(o) && o+1 >= L->top) {
-    sz = strV(o)->len+1;  /* Copy Lua string including trailing '\0'. */
-  } else {
-    sz = (CTSize)ffi_checkint(L, 3);
-    if (tvisstr(o) && sz > strV(o)->len+1)
-      sz = strV(o)->len+1;  /* Max. copy length is string length. */
-  }
-  memcpy(dp, sp, sz);
+  CTSize len;
+  if (tvisstr(o) && o+1 >= L->top)
+    len = strV(o)->len+1;  /* Copy Lua string including trailing '\0'. */
+  else
+    len = (CTSize)ffi_checkint(L, 3);
+  memcpy(dp, sp, len);
   return 0;
 }
 
-LJLIB_CF(ffi_fill)
+LJLIB_CF(ffi_fill)	LJLIB_REC(.)
 {
   void *dp = ffi_checkptr(L, 1, CTID_P_VOID);
-  CTSize sz = (CTSize)ffi_checkint(L, 2);
-  int32_t fill = lj_lib_optint(L, 3, 0);
-  memset(dp, fill, sz);
+  CTSize len = (CTSize)ffi_checkint(L, 2);
+  int32_t fill = 0;
+  if (L->base+2 < L->top && !tvisnil(L->base+2)) fill = ffi_checkint(L, 3);
+  memset(dp, fill, len);
   return 0;
 }
 
