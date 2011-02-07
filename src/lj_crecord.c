@@ -1008,6 +1008,16 @@ void LJ_FASTCALL recff_ffi_fill(jit_State *J, RecordFFData *rd)
   }  /* else: interpreter will throw. */
 }
 
+void LJ_FASTCALL recff_ffi_abi(jit_State *J, RecordFFData *rd)
+{
+  if (tref_isstr(J->base[0])) {
+    /* Specialize to the ABI string to make the boolean result a constant. */
+    emitir(IRTG(IR_EQ, IRT_STR), J->base[0], lj_ir_kstr(J, strV(&rd->argv[0])));
+    J->postproc = LJ_POST_FIXBOOL;
+    J->base[0] = TREF_TRUE;
+  }  /* else: interpreter will throw. */
+}
+
 /* -- Miscellaneous library functions ------------------------------------- */
 
 void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)

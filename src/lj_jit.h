@@ -112,7 +112,8 @@ typedef enum {
 typedef enum {
   LJ_POST_NONE,		/* No action. */
   LJ_POST_FIXCOMP,	/* Fixup comparison and emit pending guard. */
-  LJ_POST_FIXGUARD	/* Fixup and emit pending guard. */
+  LJ_POST_FIXGUARD,	/* Fixup and emit pending guard. */
+  LJ_POST_FIXBOOL	/* Fixup boolean result. */
 } PostProc;
 
 /* Machine code type. */

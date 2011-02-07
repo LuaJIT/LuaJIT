@@ -482,7 +482,7 @@ LJLIB_CF(ffi_fill)	LJLIB_REC(.)
 #define H_(le, be)	LJ_ENDIAN_SELECT(0x##le, 0x##be)
 
 /* Test ABI string. */
-LJLIB_CF(ffi_abi)
+LJLIB_CF(ffi_abi)	LJLIB_REC(.)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
   int b = 0;
@@ -511,6 +511,7 @@ LJLIB_CF(ffi_abi)
     break;
   }
   setboolV(L->top-1, b);
+  setboolV(&G(L)->tmptv2, b);  /* Remember for trace recorder. */
   return 1;
 }
 
