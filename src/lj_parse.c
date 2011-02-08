@@ -691,8 +691,6 @@ static void bcemit_branch_t(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     invertcond(fs, e), pc = e->u.s.info;
-  else if (e->k == VKFALSE && !expr_hasjump(e))
-    pc = bcemit_jmp(fs);  /* Always jump. */
   else
     pc = bcemit_branch(fs, e, 0);
   jmp_append(fs, &e->f, pc);
@@ -709,8 +707,6 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     pc = e->u.s.info;
-  else if (e->k == VKTRUE && !expr_hasjump(e))
-    pc = bcemit_jmp(fs);  /* Always jump. */
   else
     pc = bcemit_branch(fs, e, 1);
   jmp_append(fs, &e->t, pc);
