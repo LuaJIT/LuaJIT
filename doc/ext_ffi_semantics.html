@@ -57,18 +57,159 @@
 </div>
 <div id="main">
 <p>
-TODO
+This page describes the detailed semantics underlying the FFI library
+and its interaction with both Lua and C&nbsp;code.
+</p>
+<p>
+Given that the FFI library is designed to interface with C&nbsp;code
+and that declarations can be written in plain C&nbsp;syntax, it
+closely follows the C&nbsp;language semantics wherever possible. Some
+concessions are needed for smoother interoperation with Lua language
+semantics. But it should be straightforward to write applications
+using the LuaJIT FFI for developers with a C or C++ background.
 </p>
 
 <h2 id="clang">C Language Support</h2>
 <p>
-TODO
+The FFI library has a built-in C&nbsp;parser with a minimal memory
+footprint. It's used by the <a href="ext_ffi_api.html">ffi.* library
+functions</a> to declare C&nbsp;types or external symbols.
 </p>
+<p>
+It's only purpose is to parse C&nbsp;declarations, as found e.g. in
+C&nbsp;header files. Although it does evaluate constant expressions,
+it's <em>not</em> a C&nbsp;compiler. The body of <tt>inline</tt>
+C&nbsp;function definitions is simply ignored.
+</p>
+<p>
+Also, this is <em>not</em> a validating C&nbsp;parser. It expects and
+accepts correctly formed C&nbsp;declarations, but it may choose to
+ignore bad declarations or show rather generic error messages. If in
+doubt, please check the input against your favorite C&nbsp;compiler.
+</p>
+<p>
+The C&nbsp;parser complies to the <b>C99 language standard</b> plus
+the following extensions:
+</p>
+<ul>
+
+<li>C++-style comments (<tt>//</tt>).</li>
+
+<li>The <tt>'\e'</tt> escape in character and string literals.</li>
+
+<li>The <tt>long long</tt> 64&nbsp;bit integer type.</tt>
+
+<li>The C99/C++ boolean type, declared with the keywords <tt>bool</tt>
+or <tt>_Bool</tt>.</li>
+
+<li>Complex numbers, declared with the keywords <tt>complex</tt> or
+<tt>_Complex</tt>.</li>
+
+<li>Two complex number types: <tt>complex</tt> (aka
+<tt>complex&nbsp;double</tt>) and <tt>complex&nbsp;float</tt>.</li>
+
+<li>Vector types, declared with the GCC <tt>mode</tt> or
+<tt>vector_size</tt> attribute.</li>
+
+<li>Unnamed ('transparent') <tt>struct</tt>/<tt>union</tt> fields
+inside a <tt>struct</tt>/<tt>union</tt>.</li>
+
+<li>Incomplete <tt>enum</tt> declarations, handled like incomplete
+<tt>struct</tt> declarations.</li>
+
+<li>Unnamed <tt>enum</tt> fields inside a
+<tt>struct</tt>/<tt>union</tt>. This is similar to a scoped C++
+<tt>enum</tt>, except that declared constants are visible in the
+global namespace, too.</li>
+
+<li>C++-style scoped <tt>static&nbsp;const</tt> declarations inside a
+<tt>struct</tt>/<tt>union</tt>.</li>
+
+<li>Zero-length arrays (<tt>[0]</tt>), empty
+<tt>struct</tt>/<tt>union</tt>, variable-length arrays (VLA,
+<tt>[?]</tt>) and variable-length structs (VLS, with a trailing
+VLA).</li>
+
+<li>Alternate GCC keywords with '<tt>__</tt>', e.g.
+<tt>__const__</tt>.</li>
+
+<li>GCC <tt>__attribute__</tt> with the following attributes:
+<tt>aligned</tt>, <tt>packed</tt>, <tt>mode</tt>,
+<tt>vector_size</tt>, <tt>cdecl</tt>, <tt>fastcall</tt>,
+<tt>stdcall</tt>.</li>
+
+<li>The GCC <tt>__extension__</tt> keyword and the GCC
+<tt>__alignof__</tt> operator.</li>
+
+<li>GCC <tt>__asm__("symname")</tt> symbol name redirection for
+function declarations.</tt>
+
+<li>MSVC keywords for fixed-length types: <tt>__int8</tt>,
+<tt>__int16</tt>, <tt>__int32</tt> and <tt>__int64</tt>.</li>
+
+<li>MSVC <tt>__cdecl</tt>, <tt>__fastcall</tt>, <tt>__stdcall</tt>,
+<tt>__ptr32</tt>, <tt>__ptr64</tt>, <tt>__declspec(align(n))</tt>
+and <tt>#pragma&nbsp;pack</tt>.</li>
+
+<li>All other GCC/MSVC-specific attributes are ignored.</li>
+
+</ul>
+<p>
+The following C&nbsp;types are pre-defined by the C&nbsp;parser (like
+a <tt>typedef</tt>, except re-declarations will be ignored):
+</p>
+<ul>
+
+<li>Vararg handling: <tt>va_list</tt>, <tt>__builtin_va_list</tt>,
+<tt>__gnuc_va_list</tt>.</li>
+
+<li>From <tt>&lt;stddef.h&gt;</tt>: <tt>ptrdiff_t</tt>,
+<tt>size_t</tt>, <tt>wchar_t</tt>.</li>
+
+<li>From <tt>&lt;stdint.h&gt;</tt>: <tt>int8_t</tt>, <tt>int16_t</tt>,
+<tt>int32_t</tt>, <tt>int64_t</tt>, <tt>uint8_t</tt>,
+<tt>uint16_t</tt>, <tt>uint32_t</tt>, <tt>uint64_t</tt>,
+<tt>intptr_t</tt>, <tt>uintptr_t</tt>.</li>
+
+</ul>
+<p>
+You're encouraged to use these types in preference to the
+compiler-specific extensions or the target-dependent standard types.
+E.g. <tt>char</tt> differs in signedness and <tt>long</tt> differs in
+size, depending on the target architecture and platform ABI.
+</p>
+<p>
+The following C&nbsp;features are <b>not</b> supported:
+</p>
+<ul>
+
+<li>A declaration must always have a type specifier; it doesn't
+default to an <tt>int</tt> type.</li>
+
+<li>Old-style empty function declarations (K&amp;R) are not allowed.
+All C&nbsp;functions must have a proper protype declaration. A
+function declared without parameters (<tt>int&nbsp;foo();</tt>) is
+treated as a function taking zero arguments, like in C++.</li>
+
+<li>The <tt>long double</tt> C&nbsp;type is parsed correctly, but
+there's no support for the related conversions, accesses or arithmetic
+operations.</li>
+
+<li>Wide character strings and character literals are not
+supported.</li>
+
+<li><a href="#status">See below</a> for features that are currently
+not implemented.</li>
+
+</ul>
 
 <h2 id="convert">C Type Conversion Rules</h2>
 <p>
 TODO
 </p>
+<h3 id="convert_tolua">Conversions from C&nbsp;types to Lua objects</h2>
+<h3 id="convert_fromlua">Conversions from Lua objects to C&nbsp;types</h2>
+<h3 id="convert_between">Conversions between C&nbsp;types</h2>
 
 <h2 id="init">Initializers</h2>
 <p>
@@ -81,8 +222,8 @@ initializers and the C&nbsp;types involved:
 <li>If no initializers are given, the object is filled with zero bytes.</li>
 
 <li>Scalar types (numbers and pointers) accept a single initializer.
-The standard <a href="#convert">C&nbsp;type conversion rules</a>
-apply.</li>
+The Lua object is <a href="#convert_fromlua">converted to the scalar
+C&nbsp;type</a>.</li>
 
 <li>Valarrays (complex numbers and vectors) are treated like scalars
 when a single initializer is given. Otherwise they are treated like
@@ -110,16 +251,6 @@ with a <em>single</em> initializer, but this may be a compound
 initializer or a compatible aggregate, of course.</li>
 
 </ul>
-
-<h2 id="clib">C Library Namespaces</h2>
-<p>
-A C&nbsp;library namespace is a special kind of object which allows
-access to the symbols contained in libraries. Indexing it with a
-symbol name (a Lua string) automatically binds it to the library.
-</p>
-<p>
-TODO
-</p>
 
 <h2 id="ops">Operations on cdata Objects</h2>
 <p>
@@ -158,9 +289,9 @@ Similar rules apply for Lua strings which are implicitly converted to
 <tt>"const&nbsp;char&nbsp;*"</tt>: the string object itself must be
 referenced somewhere or it'll be garbage collected eventually. The
 pointer will then point to stale data, which may have already beeen
-overwritten. Note that string literals are automatically kept alive as
-long as the function containing it (actually its prototype) is not
-garbage collected.
+overwritten. Note that <em>string literals</em> are automatically kept
+alive as long as the function containing it (actually its prototype)
+is not garbage collected.
 </p>
 <p>
 Objects which are passed as an argument to an external C&nbsp;function
@@ -179,6 +310,121 @@ Memory areas returned by C functions (e.g. from <tt>malloc()</tt>)
 must be manually managed, of course. Pointers to cdata objects are
 indistinguishable from pointers returned by C functions (which is one
 of the reasons why the GC cannot follow them).
+</p>
+
+<h2 id="clib">C Library Namespaces</h2>
+<p>
+A C&nbsp;library namespace is a special kind of object which allows
+access to the symbols contained in shared libraries or the default
+symbol namespace. The default
+<a href="ext_ffi_api.html#ffi_C"><tt>ffi.C</tt></a> namespace is
+automatically created when the FFI library is loaded. C&nbsp;library
+namespaces for specific shared libraries may be created with the
+<a href="ext_ffi_api.html#ffi_load"><tt>ffi.load()</tt></a> API
+function.
+</p>
+<p>
+Indexing a C&nbsp;library namespace object with a symbol name (a Lua
+string) automatically binds it to the library. First the symbol type
+is resolved &mdash; it must have been declared with
+<a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a>. Then the
+symbol address is resolved by searching for the symbol name in the
+associated shared libraries or the default symbol namespace. Finally,
+the resulting binding between the symbol name, the symbol type and its
+address is cached. Missing symbol declarations or nonexistent symbol
+names cause an error.
+</p>
+<p>
+This is what happens on a <b>read access</b> for the different kinds of
+symbols:
+</p>
+<ul>
+
+<li>External functions: a cdata object with the type of the function
+and its address is returned.</li>
+
+<li>External variables: the symbol address is dereferenced and the
+loaded value is <a href="#convert_tolua">converted to a Lua object</a>
+and returned.</li>
+
+<li>Constant values (<tt>static&nbsp;const</tt> or <tt>enum</tt>
+constants): the constant is <a href="#convert_tolua">converted to a
+Lua object</a> and returned.</li>
+
+</ul>
+<p>
+This is what happens on a <b>write access</b>:
+</p>
+<ul>
+
+<li>External variables: the value to be written is
+<a href="#convert_fromlua">converted to the C&nbsp;type</a> of the
+variable and then stored at the symbol address.</li>
+
+<li>Writing to constant variables or to any other symbol type causes
+an error, like any other attempted write to a constant location.</li>
+
+</ul>
+<p>
+C&nbsp;library namespaces themselves are garbage collected objects. If
+the last reference to the namespace object is gone, the garbage
+collector will eventually release the shared library reference and
+remove all memory associated with the namespace. Since this may
+trigger the removal of the shared library from the memory of the
+running process, it's generally <em>not safe</em> to use function
+cdata objects obtained from a library if the namespace object may be
+unreferenced.
+</p>
+<p>
+Performance notice: the JIT compiler specializes to the identity of
+namespace objects and to the strings used to index it. This
+effectively turns function cdata objects into constants. It's not
+useful and actually counter-productive to explicitly cache these
+function objects, e.g. <tt>local strlen = ffi.C.strlen</tt>. OTOH it
+<em>is</em> useful to cache the namespace itself, e.g. <tt>local C =
+ffi.C</tt>.
+</p>
+
+<h2 id="policy">No Hand-holding!</h2>
+<p>
+The FFI library has been designed as <b>a low-level library</b>. The
+goal is to interface with C&nbsp;code and C&nbsp;data types with a
+minimum of overhead. This means <b>you can do anything you can do
+from&nbsp;C</b>: access all memory, overwrite anything in memory, call
+machine code at any memory address and so on.
+</p>
+<p>
+The FFI library provides <b>no memory safety</b>, unlike regular Lua
+code. It will happily allow you to dereference a <tt>NULL</tt>
+pointer, to access arrays out of bounds or to misdeclare
+C&nbsp;functions. If you make a mistake, your application might crash,
+just like equivalent C&nbsp;code would.
+</p>
+<p>
+This behavior is inevitable, since the goal is to provide full
+interoperability with C&nbsp;code. Adding extra safety measures, like
+bounds checks, would be futile. There's no way to detect
+misdeclarations of C&nbsp;functions, since shared libraries only
+provide symbol names, but no type information. Likewise there's no way
+to infer the valid range of indexes for a returned pointer.
+</p>
+<p>
+Again: the FFI library is a low-level library. This implies it needs
+to be used with care, but it's flexibility and performance often
+outweigh this concern. If you're a C or C++ developer, it'll be easy
+to apply your existing knowledge. OTOH writing code for the FFI
+library is not for the faint of heart and probably shouldn't be the
+first exercise for someone with little experience in Lua, C or C++.
+</p>
+<p>
+As a corollary of the above, the FFI library is <b>not safe for use by
+untrusted Lua code</b>. If you're sandboxing untrusted Lua code, you
+definitely don't want to give this code access to the FFI library or
+to <em>any</em> cdata object (except 64&nbsp;bit integers or complex
+numbers). Any properly engineered Lua sandbox needs to provide safety
+wrappers for many of the standard Lua library functions &mdash;
+similar wrappers need to be written for high-level operations on FFI
+data types, too.
 </p>
 
 <h2 id="status">Current Status</h2>
@@ -200,18 +446,15 @@ obscure constructs.</li>
 <li><tt>static const</tt> declarations only work for integer types
 up to 32&nbsp;bits. Neither declaring string constants nor
 floating-point constants is supported.</li>
-<li>The <tt>long double</tt> C&nbsp;type is parsed correctly, but
-there's no support for the related conversions, accesses or
-arithmetic operations.</li>
 <li>Packed <tt>struct</tt> bitfields that cross container boundaries
 are not implemented.</li>
-<li>Native vector types may be defined with the GCC <tt>mode</tt> and
-<tt>vector_size</tt> attributes. But no operations other than loading,
+<li>Native vector types may be defined with the GCC <tt>mode</tt> or
+<tt>vector_size</tt> attribute. But no operations other than loading,
 storing and initializing them are supported, yet.</li>
 <li>The <tt>volatile</tt> type qualifier is currently ignored by
 compiled code.</li>
-<li><a href="ext_ffi_api.html#ffi_cdef">ffi.cdef</a> silently ignores
-all redeclarations.</li>
+<li><a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a> silently
+ignores all redeclarations.</li>
 </ul>
 <p>
 The JIT compiler already handles a large subset of all FFI operations.
@@ -238,6 +481,7 @@ two.</li>
 value.</li>
 <li>Calls to C&nbsp;functions with 64 bit arguments or return values
 on 32 bit CPUs.</li>
+<li>Accesses to external variables in C&nbsp;library namespaces.</li>
 <li><tt>tostring()</tt> for cdata types.</li>
 <li>The following <a href="ext_ffi_api.html">ffi.* API</a> functions:
 <tt>ffi.sizeof()</tt>, <tt>ffi.alignof()</tt>, <tt>ffi.offsetof()</tt>.
