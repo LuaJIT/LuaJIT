@@ -392,7 +392,7 @@ See: <tt>man rebase</tt>
 for embedding Lua or LuaJIT into your application.</li>
 <li>Make sure you use <tt>luaL_newstate</tt>. Avoid using
 <tt>lua_newstate</tt>, since this uses the (slower) default memory
-allocator from your system (no support for this on x64).</tt></li>
+allocator from your system (no support for this on x64).</li>
 <li>Make sure you use <tt>luaL_openlibs</tt> and not the old Lua 5.0 style
 of calling <tt>luaopen_base</tt> etc. directly.</li>
 <li>To change or extend the list of standard libraries to load, copy
