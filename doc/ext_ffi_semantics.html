@@ -66,9 +66,9 @@ and its interaction with both Lua and C&nbsp;code.
 </p>
 <p>
 Given that the FFI library is designed to interface with C&nbsp;code
-and that declarations can be written in plain C&nbsp;syntax, it
-closely follows the C&nbsp;language semantics, wherever possible. Some
-minor concessions are needed for smoother interoperation with Lua
+and that declarations can be written in plain C&nbsp;syntax, <b>it
+closely follows the C&nbsp;language semantics</b>, wherever possible.
+Some minor concessions are needed for smoother interoperation with Lua
 language semantics.
 </p>
 <p>
@@ -83,9 +83,8 @@ background.
 Please note: this is the first public release of the FFI library. This
 does not comprise the final specification for the FFI semantics, yet.
 Some of the semantics may need to be changed, based on feedback from
-developers. Please <a href="contact.html">report</a> any problems
-you've encountered or any improvements you'd like to see &mdash; thank
-you!
+developers. Please <a href="contact.html">report</a> any problems you
+may encounter or any improvements you'd like to see &mdash; thank you!
 </p>
 
 <h2 id="clang">C Language Support</h2>
@@ -204,7 +203,7 @@ The following C&nbsp;features are <b>not</b> supported:
 default to an <tt>int</tt> type.</li>
 
 <li>Old-style empty function declarations (K&amp;R) are not allowed.
-All C&nbsp;functions must have a proper protype declaration. A
+All C&nbsp;functions must have a proper prototype declaration. A
 function declared without parameters (<tt>int&nbsp;foo();</tt>) is
 treated as a function taking zero arguments, like in C++.</li>
 
@@ -312,7 +311,7 @@ C&nbsp;type of the destination, the
 are applied.
 </p>
 <p>
-Reference types are immutable after initialization ("no reseating of
+Reference types are immutable after initialization ("no re-seating of
 references"). For initialization purposes or when passing values to
 reference parameters, they are treated like pointers. Note that unlike
 in C++, there's no way to implement automatic reference generation of
@@ -652,8 +651,8 @@ variable argument part of vararg C&nbsp;function use
 <a href="#convert_vararg">special conversion rules</a>. This
 C&nbsp;function is called and the return value (if any) is
 <a href="#convert_tolua">converted to a Lua object</a>.<br>
-On Windows/x86 systems, <tt>stdcall</tt> functions are automatically
-detected and a function declared as <tt>cdecl</tt> (the default) is
+On Windows/x86 systems, <tt>__stdcall</tt> functions are automatically
+detected and a function declared as <tt>__cdecl</tt> (the default) is
 silently fixed up after the first call.</li>
 
 </ul>
@@ -790,7 +789,7 @@ local s = ffi.new("foo_t", a)
 Similar rules apply for Lua strings which are implicitly converted to
 <tt>"const&nbsp;char&nbsp;*"</tt>: the string object itself must be
 referenced somewhere or it'll be garbage collected eventually. The
-pointer will then point to stale data, which may have already beeen
+pointer will then point to stale data, which may have already been
 overwritten. Note that <em>string literals</em> are automatically kept
 alive as long as the function containing it (actually its prototype)
 is not garbage collected.
@@ -951,7 +950,7 @@ storing and initializing them are supported, yet.</li>
 <li>The <tt>volatile</tt> type qualifier is currently ignored by
 compiled code.</li>
 <li><a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a> silently
-ignores all redeclarations.</li>
+ignores all re-declarations.</li>
 </ul>
 <p>
 The JIT compiler already handles a large subset of all FFI operations.

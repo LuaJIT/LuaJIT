@@ -9,7 +9,12 @@
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
 <style type="text/css">
+span.codemark { position:absolute; left: 16em; color: #4040c0; }
+span.mark { color: #4040c0; font-family: Courier New, Courier, monospace;
+  line-height: 1.1; }
+pre.mark { padding-left: 2em; }
 table.idiomtable { line-height: 1.2; }
+table.idiomtable tt { font-size: 100%; }
 tr.idiomhead td { font-weight: bold; }
 td.idiomc { width: 12em; }
 td.idiomlua { width: 14em; }
@@ -94,27 +99,46 @@ The following code explains how to access standard system functions.
 We slowly print two lines of dots by sleeping for 10&nbsp;milliseconds
 after each dot:
 </p>
-<pre class="code">
-local ffi = require("ffi")
-ffi.cdef[[ <span style="color:#f0f4ff;">//</span><span style="color:#4040c0;">&#9312;</span>
+<pre class="code mark">
+<span class="codemark">&nbsp;
+&#9312;
+
+
+
+
+
+&#9313;
+&#9314;
+&#9315;
+
+
+
+&#9316;
+
+
+
+
+
+&#9317;</span>local ffi = require("ffi")
+ffi.cdef[[
 <span style="color:#00a000;">void Sleep(int ms);
 int poll(struct pollfd *fds, unsigned long nfds, int timeout);</span>
 ]]
 
 local sleep
-if ffi.os == "Windows" then <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9313;</span>
-  function sleep(s) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9314;</span>
-    ffi.C.Sleep(s*1000) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9315;</span>
+if ffi.os == "Windows" then
+  function sleep(s)
+    ffi.C.Sleep(s*1000)
   end
 else
   function sleep(s)
-    ffi.C.poll(nil, 0, s*1000) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9316;</span>
+    ffi.C.poll(nil, 0, s*1000)
   end
 end
 
 for i=1,160 do
   io.write("."); io.flush()
-  sleep(0.01) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9317;</span>
+  sleep(0.01)
 end
 io.write("\n")
 </pre>
@@ -122,14 +146,14 @@ io.write("\n")
 Here's the step-by-step explanation:
 </p>
 <p>
-<span style="color:#4040c0;">&#9312;</span> This defines the
+<span class="mark">&#9312;</span> This defines the
 C&nbsp;library functions we're going to use. The part inside the
 double-brackets (in green) is just standard C&nbsp;syntax. You can
 usually get this info from the C&nbsp;header files or the
 documentation provided by each C&nbsp;library or C&nbsp;compiler.
 </p>
 <p>
-<span style="color:#4040c0;">&#9313;</span> The difficulty we're
+<span class="mark">&#9313;</span> The difficulty we're
 facing here, is that there are different standards to choose from.
 Windows has a simple <tt>Sleep()</tt> function. On other systems there
 are a variety of functions available to achieve sub-second sleeps, but
@@ -139,14 +163,14 @@ check for <tt>ffi.os</tt> makes sure we use the Windows-specific
 function only on Windows systems.
 </p>
 <p>
-<span style="color:#4040c0;">&#9314;</span> Here we're wrapping the
+<span class="mark">&#9314;</span> Here we're wrapping the
 call to the C&nbsp;function in a Lua function. This isn't strictly
 necessary, but it's helpful to deal with system-specific issues only
 in one part of the code. The way we're wrapping it ensures the check
 for the OS is only done during initialization and not for every call.
 </p>
 <p>
-<span style="color:#4040c0;">&#9315;</span> A more subtle point is
+<span class="mark">&#9315;</span> A more subtle point is
 that we defined our <tt>sleep()</tt> function (for the sake of this
 example) as taking the number of seconds, but accepting fractional
 seconds. Multiplying this by 1000 gets us milliseconds, but that still
@@ -165,7 +189,7 @@ FFI library automatically detects <tt>stdcall</tt> functions, so you
 don't need to declare them as such.
 </p>
 <p>
-<span style="color:#4040c0;">&#9316;</span> The <tt>poll()</tt>
+<span class="mark">&#9316;</span> The <tt>poll()</tt>
 function takes a couple more arguments we're not going to use. You can
 simply use <tt>nil</tt> to pass a <tt>NULL</tt> pointer and <tt>0</tt>
 for the <tt>nfds</tt> parameter. Please note that the
@@ -182,7 +206,7 @@ with this, as it's performed automatically and it's carefully designed
 to bridge the semantic differences between Lua and C.
 </p>
 <p>
-<span style="color:#4040c0;">&#9317;</span> Now that we have defined
+<span class="mark">&#9317;</span> Now that we have defined
 our own <tt>sleep()</tt> function, we can just call it from plain Lua
 code. That wasn't so bad, huh? Turning these boring animated dots into
 a fascinating best-selling game is left as an exercise for the reader.
@@ -196,27 +220,54 @@ href="http://zlib.net/">zlib</a> compression library from Lua code.
 We'll define two convenience wrapper functions that take a string and
 compress or uncompress it to another string:
 </p>
-<pre class="code">
-local ffi = require("ffi")
-ffi.cdef[[ <span style="color:#f0f4ff;">//</span><span style="color:#4040c0;">&#9312;</span>
+<pre class="code mark">
+<span class="codemark">&nbsp;
+&#9312;
+
+
+
+
+
+
+&#9313;
+
+
+&#9314;
+
+&#9315;
+
+
+&#9316;
+
+
+&#9317;
+
+
+
+
+
+
+
+&#9318;</span>local ffi = require("ffi")
+ffi.cdef[[
 <span style="color:#00a000;">unsigned long compressBound(unsigned long sourceLen);
 int compress2(uint8_t *dest, unsigned long *destLen,
 	      const uint8_t *source, unsigned long sourceLen, int level);
 int uncompress(uint8_t *dest, unsigned long *destLen,
 	       const uint8_t *source, unsigned long sourceLen);</span>
 ]]
-local zlib = ffi.load(ffi.os == "Windows" and "zlib1" or "z") <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9313;</span>
+local zlib = ffi.load(ffi.os == "Windows" and "zlib1" or "z")
 
 local function compress(txt)
-  local n = zlib.compressBound(#txt) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9314;</span>
+  local n = zlib.compressBound(#txt)
   local buf = ffi.new("uint8_t[?]", n)
-  local buflen = ffi.new("unsigned long[1]", n) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9315;</span>
+  local buflen = ffi.new("unsigned long[1]", n)
   local res = zlib.compress2(buf, buflen, txt, #txt, 9)
   assert(res == 0)
-  return ffi.string(buf, buflen[0]) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9316;</span>
+  return ffi.string(buf, buflen[0])
 end
 
-local function uncompress(comp, n) <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9317;</span>
+local function uncompress(comp, n)
   local buf = ffi.new("uint8_t[?]", n)
   local buflen = ffi.new("unsigned long[1]", n)
   local res = zlib.uncompress(buf, buflen, comp, #comp)
@@ -224,7 +275,7 @@ local function uncompress(comp, n) <span style="color:#f0f4ff;">--</span><span s
   return ffi.string(buf, buflen[0])
 end
 
--- Simple test code. <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9318;</span>
+-- Simple test code.
 local txt = string.rep("abcd", 1000)
 print("Uncompressed size: ", #txt)
 local c = compress(txt)
@@ -236,13 +287,13 @@ assert(txt2 == txt)
 Here's the step-by-step explanation:
 </p>
 <p>
-<span style="color:#4040c0;">&#9312;</span> This defines some of the
+<span class="mark">&#9312;</span> This defines some of the
 C&nbsp;functions provided by zlib. For the sake of this example, some
 type indirections have been reduced and it uses the pre-defined
 fixed-size integer types, while still adhering to the zlib API/ABI.
 </p>
 <p>
-<span style="color:#4040c0;">&#9313;</span> This loads the zlib shared
+<span class="mark">&#9313;</span> This loads the zlib shared
 library. On POSIX systems it's named <tt>libz.so</tt> and usually
 comes pre-installed. Since <tt>ffi.load()</tt> automatically adds any
 missing standard prefixes/suffixes, we can simply load the
@@ -253,7 +304,7 @@ you'll have to download it first from the
 <tt>ffi.load()</tt>.
 </p>
 <p>
-<span style="color:#4040c0;">&#9314;</span> First, the maximum size of
+<span class="mark">&#9314;</span> First, the maximum size of
 the compression buffer is obtained by calling the
 <tt>zlib.compressBound</tt> function with the length of the
 uncompressed string. The next line allocates a byte buffer of this
@@ -262,7 +313,7 @@ variable-length array (VLA). The actual number of elements of this
 array is given as the 2nd argument to <tt>ffi.new()</tt>.
 </p>
 <p>
-<span style="color:#4040c0;">&#9315;</span> This may look strange at
+<span class="mark">&#9315;</span> This may look strange at
 first, but have a look at the declaration of the <tt>compress2</tt>
 function from zlib: the destination length is defined as a pointer!
 This is because you pass in the maximum buffer size and get back the
@@ -276,7 +327,7 @@ initialized with the maximum buffer size in one step. Calling the
 actual <tt>zlib.compress2</tt> function is then straightforward.
 </p>
 <p>
-<span style="color:#4040c0;">&#9316;</span> We want to return the
+<span class="mark">&#9316;</span> We want to return the
 compressed data as a Lua string, so we'll use <tt>ffi.string()</tt>.
 It needs a pointer to the start of the data and the actual length. The
 length has been returned in the <tt>buflen</tt> array, so we'll just
@@ -292,13 +343,13 @@ results in buffers instead of strings. This will reduce the overhead
 for garbage collection and string interning.
 </p>
 <p>
-<span style="color:#4040c0;">&#9317;</span> The <tt>uncompress</tt>
+<span class="mark">&#9317;</span> The <tt>uncompress</tt>
 functions does the exact opposite of the <tt>compress</tt> function.
 The compressed data doesn't include the size of the original string,
 so this needs to be passed in. Otherwise no surprises here.
 </p>
 <p>
-<span style="color:#4040c0;">&#9318;</span> The code, that makes use
+<span class="mark">&#9318;</span> The code, that makes use
 of the functions we just defined, is just plain Lua code. It doesn't
 need to know anything about the LuaJIT FFI &mdash; the convenience
 wrapper functions completely hide it.

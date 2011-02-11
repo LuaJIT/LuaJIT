@@ -417,7 +417,7 @@ simply use whatever <tt>make install</tt> creates. There's a reason
 for all of the files <em>and</em> directories it creates.
 </p>
 <p>
-The build system uses GNU make and autodetects most settings based on
+The build system uses GNU make and auto-detects most settings based on
 the host you're building it on. This should work fine for native builds,
 even when sandboxed. You may need to pass some of the following flags to
 <em>both</em> the <tt>make</tt> and the <tt>make install</tt> command lines
@@ -431,7 +431,7 @@ the <tt>-rpath</tt> of the shared library.</li>
 to a shadow tree instead of the root tree of the build system.</li>
 <li>Have a look at the top-level <tt>Makefile</tt> and <tt>src/Makefile</tt>
 for additional variables to tweak. The following variables <em>may</em> be
-overriden, but it's <em>not</em> recommended, except for special needs
+overridden, but it's <em>not</em> recommended, except for special needs
 like cross-builds:
 <tt>BUILDMODE, CC, HOST_CC, STATIC_CC, DYNAMIC_CC, CFLAGS, HOST_CFLAGS,
 TARGET_CFLAGS, LDFLAGS, HOST_LDFLAGS, TARGET_LDFLAGS, TARGET_SHLDFLAGS,

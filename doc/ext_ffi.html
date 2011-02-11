@@ -8,6 +8,12 @@
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+<style type="text/css">
+span.codemark { position:absolute; left: 16em; color: #4040c0; }
+span.mark { color: #4040c0; font-family: Courier New, Courier, monospace;
+  line-height: 1.1; }
+pre.mark { padding-left: 2em; }
+</style>
 </head>
 <body>
 <div id="site">
@@ -55,16 +61,20 @@
 </div>
 <div id="main">
 <p>
-The FFI library allows calling external C&nbsp;functions and the use
-of C&nbsp;data structures from pure Lua code.
+
+The FFI library allows <b>calling external C&nbsp;functions</b> and
+<b>using C&nbsp;data structures</b> from pure Lua code.
+
 </p>
 <p>
+
 The FFI library largely obviates the need to write tedious manual
-Lua/C bindings in C. It doesn't require learning a separate binding
-language &mdash; it parses plain C&nbsp;declarations, which can be
+Lua/C bindings in C. No need to learn a separate binding language
+&mdash; <b>it parses plain C&nbsp;declarations!</b> These can be
 cut-n-pasted from C&nbsp;header files or reference manuals. It's up to
 the task of binding large libraries without the need for dealing with
 fragile binding generators.
+
 </p>
 <p>
 The FFI library is tightly integrated into LuaJIT (it's not available
@@ -83,26 +93,30 @@ Please use the FFI sub-topics in the navigation bar to learn more.
 <p>
 It's really easy to call an external C&nbsp;library function:
 </p>
-<pre class="code">
-local ffi = require("ffi") <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9312;</span>
-ffi.cdef[[ <span style="color:#f0f4ff;">//</span><span style="color:#4040c0;">&#9313;</span>
+<pre class="code mark">
+<span class="codemark">&#9312;
+&#9313;
+
+
+&#9314;</span>local ffi = require("ffi")
+ffi.cdef[[
 <span style="color:#00a000;">int printf(const char *fmt, ...);</span>
 ]]
-ffi.C.printf("Hello %s!", "world") <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9314;</span>
+ffi.C.printf("Hello %s!", "world")
 </pre>
 <p>
 So, let's pick that apart:
 </p>
 <p>
-<span style="color:#4040c0;">&#9312;</span> Load the FFI library.
+<span class="mark">&#9312;</span> Load the FFI library.
 </p>
 <p>
-<span style="color:#4040c0;">&#9313;</span> Add a C&nbsp;declaration
+<span class="mark">&#9313;</span> Add a C&nbsp;declaration
 for the function. The part inside the double-brackets (in green) is
 just standard C&nbsp;syntax.
 </p>
 <p>
-<span style="color:#4040c0;">&#9314;</span> Call the named
+<span class="mark">&#9314;</span> Call the named
 C&nbsp;function &mdash; Yes, it's that simple!
 </p>
 <p style="font-size: 8pt;">
@@ -198,25 +212,42 @@ need of a simple example ...
 And here's the FFI version. The modified parts have been marked in
 bold:
 </p>
-<pre class="code">
-<b>local ffi = require("ffi")</b> <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9312;</span>
-<b>ffi.cdef[[
+<pre class="code mark">
+<span class="codemark">&#9312;
+
+
+
+
+
+&#9313;
+
+&#9314;
+&#9315;
+
+
+
+
+
+
+&#9314;
+&#9316;</span><b>local ffi = require("ffi")
+ffi.cdef[[
 </b><span style="color:#00a000;">typedef struct { uint8_t red, green, blue, alpha; } rgba_pixel;</span><b>
 ]]</b>
 
 local function image_ramp_green(n)
-  <b>local img = ffi.new("rgba_pixel[?]", n)</b> <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9313;</span>
+  <b>local img = ffi.new("rgba_pixel[?]", n)</b>
   local f = 255/(n-1)
-  for i=<b>0,n-1</b> do <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9314;</span>
-    <b>img[i].green = i*f</b> <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9315;</span>
+  for i=<b>0,n-1</b> do
+    <b>img[i].green = i*f</b>
     <b>img[i].alpha = 255</b>
   end
   return img
 end
 
 local function image_to_grey(img, n)
-  for i=<b>0,n-1</b> do <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9314;</span>
-    local y = <b>0.3*img[i].red + 0.59*img[i].green + 0.11*img[i].blue</b> <span style="color:#f0f4ff;">--</span><span style="color:#4040c0;">&#9316;</span>
+  for i=<b>0,n-1</b> do
+    local y = <b>0.3*img[i].red + 0.59*img[i].green + 0.11*img[i].blue</b>
     img[i].red = y; img[i].green = y; img[i].blue = y
   end
 end
@@ -231,30 +262,30 @@ end
 Ok, so that wasn't too difficult:
 </p>
 <p>
-<span style="color:#4040c0;">&#9312;</span> First, load the FFI
+<span class="mark">&#9312;</span> First, load the FFI
 library and declare the low-level data type. Here we choose a
 <tt>struct</tt> which holds four byte fields, one for each component
 of a 4x8&nbsp;bit RGBA pixel.
 </p>
 <p>
-<span style="color:#4040c0;">&#9313;</span> Creating the data
+<span class="mark">&#9313;</span> Creating the data
 structure with <tt>ffi.new()</tt> is straightforward &mdash; the
 <tt>'?'</tt> is a placeholder for the number of elements of a
 variable-length array.
 </p>
 <p>
-<span style="color:#4040c0;">&#9314;</span> C&nbsp;arrays are
+<span class="mark">&#9314;</span> C&nbsp;arrays are
 zero-based, so the indexes have to run from <tt>0</tt> to
 <tt>n-1</tt>. One might want to allocate one more element instead to
 simplify converting legacy code.
 </p>
 <p>
-<span style="color:#4040c0;">&#9315;</span> Since <tt>ffi.new()</tt>
+<span class="mark">&#9315;</span> Since <tt>ffi.new()</tt>
 zero-fills the array by default, we only need to set the green and the
 alpha fields.
 </p>
 <p>
-<span style="color:#4040c0;">&#9316;</span> The calls to
+<span class="mark">&#9316;</span> The calls to
 <tt>math.floor()</tt> can be omitted here, because floating-point
 numbers are already truncated towards zero when converting them to an
 integer. This happens implicitly when the number is stored in the
