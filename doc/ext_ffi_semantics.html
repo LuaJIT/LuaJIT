@@ -39,8 +39,6 @@ td.convop { font-style: italic; width: 16em; }
 </li><li>
 <a href="ext_ffi_api.html">ffi.* API</a>
 </li><li>
-<a href="ext_ffi_int64.html">64 bit Integers</a>
-</li><li>
 <a class="current" href="ext_ffi_semantics.html">FFI Semantics</a>
 </li></ul>
 </li><li>
@@ -653,7 +651,10 @@ parameters given by the function declaration. Arguments passed to the
 variable argument part of vararg C&nbsp;function use
 <a href="#convert_vararg">special conversion rules</a>. This
 C&nbsp;function is called and the return value (if any) is
-<a href="#convert_tolua">converted to a Lua object</a>.</li>
+<a href="#convert_tolua">converted to a Lua object</a>.<br>
+On Windows/x86 systems, <tt>stdcall</tt> functions are automatically
+detected and a function declared as <tt>cdecl</tt> (the default) is
+silently fixed up after the first call.</li>
 
 </ul>
 
@@ -672,15 +673,24 @@ can be subtracted. The result is the difference between their
 addresses, divided by the element size in bytes. An error is raised if
 the element size is undefined or zero.</li>
 
-<li><a href="ext_ffi_int64.html">64&nbsp;bit integer arithmetic</a>:
-the standard arithmetic operators
-(<tt>+&nbsp;-&nbsp;*&nbsp;/&nbsp;%&nbsp;^</tt> and unary <tt>-</tt>)
-can be applied to two cdata numbers, or a cdata number and a Lua
-number. If one of them is an <tt>uint64_t</tt>, the other side is
+<li><b>64&nbsp;bit integer arithmetic</b>: the standard arithmetic
+operators (<tt>+&nbsp;-&nbsp;*&nbsp;/&nbsp;%&nbsp;^</tt> and unary
+minus) can be applied to two cdata numbers, or a cdata number and a
+Lua number. If one of them is an <tt>uint64_t</tt>, the other side is
 converted to an <tt>uint64_t</tt> and an unsigned arithmetic operation
 is performed. Otherwise both sides are converted to an
 <tt>int64_t</tt> and a signed arithmetic operation is performed. The
-result is a boxed 64&nbsp;bit cdata object.</li>
+result is a boxed 64&nbsp;bit cdata object.<br>
+
+These rules ensure that 64&nbsp;bit integers are "sticky". Any
+expression involving at least one 64&nbsp;bit integer operand results
+in another one. The undefined cases for the division, modulo and power
+operators return <tt>2LL&nbsp;^&nbsp;63</tt> or
+<tt>2ULL&nbsp;^&nbsp;63</tt>.<br>
+
+You'll have to explicitly convert a 64&nbsp;bit integer to a Lua
+number (e.g. for regular floating-point calculations) with
+<tt>tonumber()</tt>. But note this may incur a precision loss.</li>
 
 </ul>
 
@@ -692,12 +702,12 @@ can be compared. The result is the same as an unsigned comparison of
 their addresses. <tt>nil</tt> is treated like a <tt>NULL</tt> pointer,
 which is compatible with any other pointer type.</li>
 
-<li><a href="ext_ffi_int64.html">64&nbsp;bit integer comparison</a>:
-two cdata numbers, or a cdata number and a Lua number can be compared
-with each other. If one of them is an <tt>uint64_t</tt>, the other
-side is converted to an <tt>uint64_t</tt> and an unsigned comparison
-is performed. Otherwise both sides are converted to an
-<tt>int64_t</tt> and a signed comparison is performed.</li>
+<li><b>64&nbsp;bit integer comparison</b>: two cdata numbers, or a
+cdata number and a Lua number can be compared with each other. If one
+of them is an <tt>uint64_t</tt>, the other side is converted to an
+<tt>uint64_t</tt> and an unsigned comparison is performed. Otherwise
+both sides are converted to an <tt>int64_t</tt> and a signed
+comparison is performed.</li>
 
 </ul>
 
