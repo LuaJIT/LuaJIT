@@ -69,6 +69,51 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta6">LuaJIT 2.0.0-beta6 &mdash; 2011-02-11</h2>
+<ul>
+<li>New features:
+<ul>
+<li>PowerPC/e500v2 port of the LuaJIT interpreter is complete.</li>
+<li>Various minor features from Lua 5.2: Hex escapes in literals,
+<tt>'\*'</tt> escape, reversible <tt>string.format("%q",s)</tt>,
+<tt>"%g"</tt> pattern, <tt>table.sort</tt> checks callbacks,
+<tt>os.exit(status|true|false[,close])</tt>.</li>
+<li>Lua 5.2 <tt>__pairs</tt> and <tt>__ipairs</tt> metamethods
+(disabled by default).</li>
+<li>Initial release of the FFI library.</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>Fix <tt>string.format()</tt> for non-finite numbers.</li>
+<li>Fix memory leak when compiled to use the built-in allocator.</li>
+<li>x86/x64: Fix unnecessary resize in <tt>TSETM</tt> bytecode.</li>
+<li>Fix various GC issues with traces and <tt>jit.flush()</tt>.</li>
+<li>x64: Fix fusion of indexes for array references.</li>
+<li>x86/x64: Fix stack overflow handling for coroutine results.</li>
+<li>Enable low-2GB memory allocation on FreeBSD/x64.</li>
+<li>Fix <tt>collectgarbage("count")</tt> result if more than 2GB is in use.</li>
+<li>Fix parsing of hex floats.</li>
+<li>x86/x64: Fix loop branch inversion with trailing
+<tt>HREF+NE/EQ</tt>.</li>
+<li>Add <tt>jit.os</tt> string.</li>
+<li><tt>coroutine.create()</tt> permits running C functions, too.</li>
+<li>Fix OSX build to work with newer ld64 versions.</li>
+<li>Fix bytecode optimization of <tt>and</tt>/<tt>or</tt> operators.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Emit specialized bytecode for <tt>pairs()</tt>/<tt>next()</tt>.</li>
+<li>Improve bytecode coalescing of <tt>nil</tt> constants.</li>
+<li>Compile calls to vararg functions.</li>
+<li>Compile <tt>select()</tt>.</li>
+<li>Improve alias analysis, esp. for loads from allocations.</li>
+<li>Tuning of various compiler heuristics.</li>
+<li>Refactor and extend IR conversion instructions.</li>
+<li>x86/x64: Various backend enhancements related to the FFI.</li>
+<li>Add SPLIT pass to split 64 bit IR instructions for 32 bit CPUs.</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta5">LuaJIT 2.0.0-beta5 &mdash; 2010-08-24</h2>
 <ul>
 <li>Correctness and completeness:
