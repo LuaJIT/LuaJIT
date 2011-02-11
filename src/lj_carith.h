@@ -12,7 +12,7 @@
 
 LJ_FUNC int lj_carith_op(lua_State *L, MMS mm);
 
-#if LJ_32
+#if LJ_32 && LJ_HASJIT
 LJ_FUNC int64_t lj_carith_mul64(int64_t x, int64_t k);
 #endif
 LJ_FUNC uint64_t lj_carith_divu64(uint64_t a, uint64_t b);

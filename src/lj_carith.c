@@ -215,7 +215,7 @@ int lj_carith_op(lua_State *L, MMS mm)
 
 /* -- 64 bit integer arithmetic helpers ----------------------------------- */
 
-#if LJ_32
+#if LJ_32 && LJ_HASJIT
 /* Signed/unsigned 64 bit multiplication. */
 int64_t lj_carith_mul64(int64_t a, int64_t b)
 {
