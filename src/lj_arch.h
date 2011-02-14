@@ -154,6 +154,7 @@
 #define LJ_TARGET_EHRETREG	3
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
+#define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
 #else
