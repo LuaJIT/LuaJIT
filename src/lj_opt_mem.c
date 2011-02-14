@@ -689,8 +689,8 @@ retry:
 	if (st == IRT_I8 || st == IRT_I16) {  /* Trunc + sign-extend. */
 	  st |= IRCONV_SEXT;
 	} else if (st == IRT_U8 || st == IRT_U16) {  /* Trunc + zero-extend. */
-	} else if (st == IRT_INT && irt_isu32(IR(store->op2)->t)) {
-	  st = IRT_U32;  /* Needs dummy CONV.int.u32. */
+	} else if (st == IRT_INT && !irt_isint(IR(store->op2)->t)) {
+	  st = irt_type(IR(store->op2)->t);  /* Needs dummy CONV.int.*. */
 	} else {  /* I64/U64 are boxed, U32 is hidden behind a CONV.num.u32. */
 	  goto store_fwd;
 	}
