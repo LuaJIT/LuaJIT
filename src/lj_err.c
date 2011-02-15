@@ -17,6 +17,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_ff.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
 
@@ -903,10 +904,19 @@ LJ_NOINLINE void lj_err_callermsg(lua_State *L, const char *msg)
 {
   TValue *frame = L->base-1;
   TValue *pframe = NULL;
-  if (frame_islua(frame))
+  if (frame_islua(frame)) {
     pframe = frame_prevl(frame);
-  else if (frame_iscont(frame))
-    L->base = (pframe = frame_prevd(frame))+1;  /* Remove metamethod frame. */
+  } else if (frame_iscont(frame)) {
+    pframe = frame_prevd(frame);
+#if LJ_HASFFI
+    /* Remove frame for FFI metamethods. */
+    if (frame_func(frame)->c.ffid >= FF_ffi_meta___index &&
+	frame_func(frame)->c.ffid <= FF_ffi_meta___tostring) {
+      L->base = pframe+1;
+      L->top = frame;
+    }
+#endif
+  }
   err_loc(L, msg, pframe, frame);
   lj_err_run(L);
 }
