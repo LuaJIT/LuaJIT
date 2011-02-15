@@ -1021,7 +1021,8 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   xref = rec_idx_key(J, ix);
   xrefop = IR(tref_ref(xref))->o;
   loadop = xrefop == IR_AREF ? IR_ALOAD : IR_HLOAD;
-  oldv = ix->oldv;
+  /* NYI: workaround until lj_meta_tset() inconsistency is solved. */
+  oldv = xrefop == IR_KKPTR ? (cTValue *)ir_kptr(IR(tref_ref(xref))) : ix->oldv;
 
   if (ix->val == 0) {  /* Indexed load */
     IRType t = itype2irt(oldv);
