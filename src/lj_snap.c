@@ -289,7 +289,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	Reg r = regsp_reg(rs);
 	lua_assert(ra_hasreg(r));
 	if (irt_isinteger(t)) {
-	  setintV(o, ex->gpr[r-RID_MIN_GPR]);
+	  setintV(o, (int32_t)ex->gpr[r-RID_MIN_GPR]);
 	} else if (irt_isnum(t)) {
 	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
 #if LJ_64

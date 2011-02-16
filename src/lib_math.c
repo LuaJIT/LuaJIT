@@ -129,7 +129,7 @@ static void random_init(RandomState *rs, double d)
 LJLIB_PUSH(top-2)  /* Upvalue holds userdata with RandomState. */
 LJLIB_CF(math_random)		LJLIB_REC(.)
 {
-  int n = cast_int(L->top - L->base);
+  int n = (int)(L->top - L->base);
   RandomState *rs = (RandomState *)(uddata(udataV(lj_lib_upvalue(L, 1))));
   U64double u;
   double d;

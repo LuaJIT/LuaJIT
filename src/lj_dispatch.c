@@ -320,7 +320,7 @@ static void callhook(lua_State *L, int event, BCLine line)
     ar.event = event;
     ar.currentline = line;
     /* Top frame, nextframe = NULL. */
-    ar.i_ci = cast_int((L->base-1) - tvref(L->stack));
+    ar.i_ci = (int)((L->base-1) - tvref(L->stack));
     lj_state_checkstack(L, 1+LUA_MINSTACK);
     hook_enter(g);
     hookf(L, &ar);

@@ -522,7 +522,7 @@ GCstr *lj_ctype_repr_int64(lua_State *L, uint64_t n, int isunsigned)
 /* Convert complex to string with 'i' or 'I' suffix. */
 GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size)
 {
-  char buf[2*LUAI_MAXNUMBER2STR+2+1];
+  char buf[2*LJ_STR_NUMBUF+2+1];
   TValue re, im;
   size_t len;
   if (size == 2*sizeof(double)) {

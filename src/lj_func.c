@@ -98,7 +98,7 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
   GCfunc *fn = cast(GCfunc *, lj_mem_newgco(L, sizeCfunc(nelems)));
   fn->c.gct = ~LJ_TFUNC;
   fn->c.ffid = FF_C;
-  fn->c.nupvalues = cast_byte(nelems);
+  fn->c.nupvalues = (uint8_t)nelems;
   /* NOBARRIER: The GCfunc is new (marked white). */
   setmref(fn->c.pc, &G(L)->bc_cfunc_ext);
   setgcref(fn->c.env, obj2gco(env));
@@ -110,7 +110,7 @@ GCfunc *lj_func_newL(lua_State *L, GCproto *pt, GCtab *env)
   GCfunc *fn = cast(GCfunc *, lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv)));
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
-  fn->l.nupvalues = cast_byte(pt->sizeuv);
+  fn->l.nupvalues = (uint8_t)pt->sizeuv;
   /* NOBARRIER: Really a setgcref. But the GCfunc is new (marked white). */
   setmref(fn->l.pc, proto_bc(pt));
   setgcref(fn->l.env, obj2gco(env));

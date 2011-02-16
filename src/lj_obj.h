@@ -140,7 +140,10 @@ typedef LJ_ALIGN(8) union TValue {
   lua_Number n;		/* Number object overlaps split tag/value object. */
   struct {
     LJ_ENDIAN_LOHI(
-      GCRef gcr;	/* GCobj reference (if any). */
+      union {
+	GCRef gcr;	/* GCobj reference (if any). */
+	int32_t i;	/* Integer value. */
+      };
     , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
     )
   };
@@ -180,6 +183,7 @@ typedef const TValue cTValue;
 ** lightuserdata   |  itype  |  void * |  (32 bit platforms)
 ** lightuserdata   |ffff|    void *    |  (64 bit platforms, 47 bit pointers)
 ** GC objects      |  itype  |  GCRef  |
+** int (LJ_DUALNUM)|  itype  |   int   |
 ** number           -------double------
 **
 ** ORDER LJ_T
@@ -203,6 +207,7 @@ typedef const TValue cTValue;
 /* This is just the canonical number type used in some places. */
 #define LJ_TNUMX		(~13u)
 
+/* Integers have itype == LJ_TISNUM doubles have itype < LJ_TISNUM */
 #if LJ_64
 #define LJ_TISNUM		0xfffeffffu
 #else
@@ -322,6 +327,8 @@ typedef struct GCproto {
 	    gcref(mref((pt)->k, GCRef)[(idx)]))
 #define proto_knum(pt, idx) \
   check_exp((uintptr_t)(idx) < (pt)->sizekn, mref((pt)->k, lua_Number)[(idx)])
+#define proto_knumtv(pt, idx) \
+  check_exp((uintptr_t)(idx) < (pt)->sizekn, &mref((pt)->k, TValue)[(idx)])
 #define proto_bc(pt)		((BCIns *)((char *)(pt) + sizeof(GCproto)))
 #define proto_bcpos(pt, pc)	((BCPos)((pc) - proto_bc(pt)))
 #define proto_uv(pt)		(mref((pt)->uv, uint16_t))
@@ -650,7 +657,9 @@ typedef union GCobj {
 #define tviscdata(o)	(itype(o) == LJ_TCDATA)
 #define tvistab(o)	(itype(o) == LJ_TTAB)
 #define tvisudata(o)	(itype(o) == LJ_TUDATA)
-#define tvisnum(o)	(itype(o) <= LJ_TISNUM)
+#define tvisnumber(o)	(itype(o) <= LJ_TISNUM)
+#define tvisint(o)	(LJ_DUALNUM && itype(o) == LJ_TISNUM)
+#define tvisnum(o)	(itype(o) < LJ_TISNUM)
 
 #define tvistruecond(o)	(itype(o) < LJ_TISTRUECOND)
 #define tvispri(o)	(itype(o) >= LJ_TISPRI)
@@ -659,6 +668,11 @@ typedef union GCobj {
 
 /* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
 #define tvisnan(o)	((o)->n != (o)->n)
+#if LJ_64
+#define tviszero(o)	(((o)->u64 << 1) == 0)
+#else
+#define tviszero(o)	(((o)->u32.lo | ((o)->u32.hi << 1)) == 0)
+#endif
 #define tvispzero(o)	((o)->u64 == 0)
 #define tvismzero(o)	((o)->u64 == U64x(80000000,00000000))
 #define tvispone(o)	((o)->u64 == U64x(3ff00000,00000000))
@@ -667,9 +681,9 @@ typedef union GCobj {
 /* Macros to convert type ids. */
 #if LJ_64
 #define itypemap(o) \
-  (tvisnum(o) ? ~LJ_TNUMX : tvislightud(o) ? ~LJ_TLIGHTUD : ~itype(o))
+  (tvisnumber(o) ? ~LJ_TNUMX : tvislightud(o) ? ~LJ_TLIGHTUD : ~itype(o))
 #else
-#define itypemap(o)	(tvisnum(o) ? ~LJ_TNUMX : ~itype(o))
+#define itypemap(o)	(tvisnumber(o) ? ~LJ_TNUMX : ~itype(o))
 #endif
 
 /* Macros to get tagged values. */
@@ -690,6 +704,7 @@ typedef union GCobj {
 #define tabV(o)		check_exp(tvistab(o), &gcval(o)->tab)
 #define udataV(o)	check_exp(tvisudata(o), &gcval(o)->ud)
 #define numV(o)		check_exp(tvisnum(o), (o)->n)
+#define intV(o)		check_exp(tvisint(o), (int32_t)(o)->i)
 
 /* Macros to set tagged values. */
 #define setitype(o, i)		((o)->it = (i))
@@ -741,7 +756,29 @@ define_setV(setudataV, GCudata, LJ_TUDATA)
 #define setnanV(o)		((o)->u64 = U64x(fff80000,00000000))
 #define setpinfV(o)		((o)->u64 = U64x(7ff00000,00000000))
 #define setminfV(o)		((o)->u64 = U64x(fff00000,00000000))
-#define setintV(o, i)		((o)->n = cast_num((int32_t)(i)))
+
+static LJ_AINLINE void setintV(TValue *o, int32_t i)
+{
+#if LJ_DUALNUM
+  o->i = (uint32_t)i; setitype(o, LJ_TISNUM);
+#else
+  o->n = (lua_Number)i;
+#endif
+}
+
+static LJ_AINLINE void setint64V(TValue *o, int64_t i)
+{
+  if (LJ_DUALNUM && LJ_LIKELY(i == (int64_t)(int32_t)i))
+    setintV(o, (int32_t)i);
+  else
+    setnumV(o, (lua_Number)i);
+}
+
+#if LJ_64
+#define setintptrV(o, i)	setint64V((o), (i))
+#else
+#define setintptrV(o, i)	setintV((o), (i))
+#endif
 
 /* Copy tagged values. */
 static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
@@ -772,6 +809,22 @@ static LJ_AINLINE uint64_t lj_num2u64(lua_Number n)
   else
 #endif
     return (uint64_t)n;
+}
+
+static LJ_AINLINE int32_t numberVint(cTValue *o)
+{
+  if (LJ_LIKELY(tvisint(o)))
+    return intV(o);
+  else
+    return lj_num2int(numV(o));
+}
+
+static LJ_AINLINE lua_Number numberVnum(cTValue *o)
+{
+  if (LJ_UNLIKELY(tvisint(o)))
+    return (lua_Number)intV(o);
+  else
+    return numV(o);
 }
 
 /* -- Miscellaneous object handling --------------------------------------- */

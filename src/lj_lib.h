@@ -41,10 +41,6 @@ LJ_FUNC GCtab *lj_lib_checktab(lua_State *L, int narg);
 LJ_FUNC GCtab *lj_lib_checktabornil(lua_State *L, int narg);
 LJ_FUNC int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst);
 
-#define lj_lib_opt(L, narg, gotarg, noarg) \
-  { TValue *_o = L->base + (narg)-1; \
-    if (_o < L->top && !tvisnil(_o)) { gotarg } else { noarg } }
-
 /* Avoid including lj_frame.h. */
 #define lj_lib_upvalue(L, n) \
   (&gcref((L->base-1)->fr.func)->fn.c.upvalue[(n)-1])

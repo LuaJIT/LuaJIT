@@ -195,7 +195,7 @@ static int io_file_readchars(lua_State *L, FILE *fp, size_t n)
 
 static int io_file_read(lua_State *L, FILE *fp, int start)
 {
-  int ok, n, nargs = cast_int(L->top - L->base) - start;
+  int ok, n, nargs = (int)(L->top - L->base) - start;
   clearerr(fp);
   if (nargs == 0) {
     ok = io_file_readline(L, fp);
@@ -240,10 +240,15 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
     if (tvisstr(tv)) {
       MSize len = strV(tv)->len;
       status = status && (fwrite(strVdata(tv), 1, len, fp) == len);
+    } else if (tvisint(tv)) {
+      char buf[LJ_STR_INTBUF];
+      char *p = lj_str_bufint(buf, intV(tv));
+      size_t len = (size_t)(buf+LJ_STR_INTBUF-p);
+      status = status && (fwrite(p, 1, len, fp) == len);
     } else if (tvisnum(tv)) {
       status = status && (fprintf(fp, LUA_NUMBER_FMT, numV(tv)) > 0);
     } else {
-      lj_err_argt(L, cast_int(tv - L->base) + 1, LUA_TSTRING);
+      lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
     }
   }
   return io_pushresult(L, status, NULL);
@@ -279,37 +284,42 @@ LJLIB_CF(io_method_seek)
 {
   FILE *fp = io_tofile(L)->fp;
   int opt = lj_lib_checkopt(L, 2, 1, "\3set\3cur\3end");
-  lua_Number ofs;
+  int64_t ofs = 0;
+  cTValue *o;
   int res;
   if (opt == 0) opt = SEEK_SET;
   else if (opt == 1) opt = SEEK_CUR;
   else if (opt == 2) opt = SEEK_END;
-  lj_lib_opt(L, 3,
-    ofs = lj_lib_checknum(L, 3);
-    ,
-    ofs = 0;
-  )
+  o = L->base+2;
+  if (o < L->top) {
+    if (tvisint(o))
+      ofs = (int64_t)intV(o);
+    else if (tvisnum(o))
+      ofs = (int64_t)numV(o);
+    else if (!tvisnil(o))
+      lj_err_argt(L, 3, LUA_TNUMBER);
+  }
 #if LJ_TARGET_POSIX
-  res = fseeko(fp, (int64_t)ofs, opt);
+  res = fseeko(fp, ofs, opt);
 #elif _MSC_VER >= 1400
-  res = _fseeki64(fp, (int64_t)ofs, opt);
+  res = _fseeki64(fp, ofs, opt);
 #elif defined(__MINGW32__)
-  res = fseeko64(fp, (int64_t)ofs, opt);
+  res = fseeko64(fp, ofs, opt);
 #else
   res = fseek(fp, (long)ofs, opt);
 #endif
   if (res)
     return io_pushresult(L, 0, NULL);
 #if LJ_TARGET_POSIX
-  ofs = cast_num(ftello(fp));
+  ofs = ftello(fp);
 #elif _MSC_VER >= 1400
-  ofs = cast_num(_ftelli64(fp));
+  ofs = _ftelli64(fp);
 #elif defined(__MINGW32__)
-  ofs = cast_num(ftello64(fp));
+  ofs = ftello64(fp);
 #else
-  ofs = cast_num(ftell(fp));
+  ofs = (int64_t)ftell(fp);
 #endif
-  setnumV(L->top-1, ofs);
+  setint64V(L->top-1, ofs);
   return 1;
 }
 

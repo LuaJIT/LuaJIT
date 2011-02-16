@@ -61,7 +61,7 @@ LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
 
 LJLIB_ASM(string_char)
 {
-  int i, nargs = cast_int(L->top - L->base);
+  int i, nargs = (int)(L->top - L->base);
   char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, (size_t)nargs);
   for (i = 1; i <= nargs; i++) {
     int32_t k = lj_lib_checkint(L, i);
@@ -737,7 +737,7 @@ LJLIB_CF(string_format)
 	tv.n = lj_lib_checknum(L, arg);
 	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
 	  /* Canonicalize output of non-finite values. */
-	  char *p, nbuf[LUAI_MAXNUMBER2STR];
+	  char *p, nbuf[LJ_STR_NUMBUF];
 	  size_t len = lj_str_bufnum(nbuf, &tv);
 	  if (strfrmt[-1] == 'E' || strfrmt[-1] == 'G') {
 	    nbuf[len-3] = nbuf[len-3] - 0x20;
@@ -801,7 +801,7 @@ LUALIB_API int luaopen_string(lua_State *L)
   g = G(L);
   setgcref(basemt_it(g, LJ_TSTR), obj2gco(mt));
   settabV(L, lj_tab_setstr(L, mt, mmname_str(g, MM_index)), tabV(L->top-1));
-  mt->nomm = cast_byte(~(1u<<MM_index));
+  mt->nomm = (uint8_t)(~(1u<<MM_index));
   return 1;
 }
 

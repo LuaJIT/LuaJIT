@@ -190,8 +190,8 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
   int32_t base = lj_lib_optint(L, 2, 10);
   if (base == 10) {
     TValue *o = lj_lib_checkany(L, 1);
-    if (tvisnum(o) || (tvisstr(o) && lj_str_tonum(strV(o), o))) {
-      setnumV(L->base-1, numV(o));
+    if (tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o))) {
+      copyTV(L, L->base-1, o);
       return FFH_RES(1);
     }
 #if LJ_HASFFI
@@ -212,7 +212,10 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
     if (p != ep) {
       while (lj_char_isspace((unsigned char)(*ep))) ep++;
       if (*ep == '\0') {
-	setnumV(L->base-1, cast_num(ul));
+	if (LJ_DUALNUM && LJ_LIKELY(ul < 0x80000000u))
+	  setintV(L->base-1, (int32_t)ul);
+	else
+	  setnumV(L->base-1, (lua_Number)ul);
 	return FFH_RES(1);
       }
     }
@@ -234,8 +237,8 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
     return FFH_TAILCALL;
   } else {
     GCstr *s;
-    if (tvisnum(o)) {
-      s = lj_str_fromnum(L, &o->n);
+    if (tvisnumber(o)) {
+      s = lj_str_fromnumber(L, o);
     } else if (tvispri(o)) {
       s = strV(lj_lib_upvalue(L, -(int32_t)itype(o)));
     } else {
@@ -359,7 +362,7 @@ static const char *reader_func(lua_State *L, void *ud, size_t *size)
   if (tvisnil(L->top)) {
     *size = 0;
     return NULL;
-  } else if (tvisstr(L->top) || tvisnum(L->top)) {
+  } else if (tvisstr(L->top) || tvisnumber(L->top)) {
     copyTV(L, L->base+2, L->top);  /* Anchor string in reserved stack slot. */
     return lua_tolstring(L, 3, size);
   } else {
@@ -385,7 +388,7 @@ LJLIB_CF(dofile)
   if (luaL_loadfile(L, fname ? strdata(fname) : NULL) != 0)
     lua_error(L);
   lua_call(L, 0, LUA_MULTRET);
-  return cast_int(L->top - L->base) - 1;
+  return (int)(L->top - L->base) - 1;
 }
 
 /* -- Base library: GC control -------------------------------------------- */
@@ -402,7 +405,7 @@ LJLIB_CF(collectgarbage)
     "\4stop\7restart\7collect\5count\1\377\4step\10setpause\12setstepmul");
   int32_t data = lj_lib_optint(L, 2, 0);
   if (opt == LUA_GCCOUNT) {
-    setnumV(L->top, cast_num(G(L)->gc.total)/1024.0);
+    setnumV(L->top, (lua_Number)G(L)->gc.total/1024.0);
   } else {
     int res = lua_gc(L, opt, data);
     if (opt == LUA_GCSTEP)
@@ -464,8 +467,13 @@ LJLIB_CF(print)
     if (shortcut && tvisstr(o)) {
       str = strVdata(o);
       size = strV(o)->len;
+    } else if (shortcut && tvisint(o)) {
+      char buf[LJ_STR_INTBUF];
+      char *p = lj_str_bufint(buf, intV(o));
+      size = (size_t)(buf+LJ_STR_INTBUF-p);
+      str = p;
     } else if (shortcut && tvisnum(o)) {
-      char buf[LUAI_MAXNUMBER2STR];
+      char buf[LJ_STR_NUMBUF];
       size = lj_str_bufnum(buf, o);
       str = buf;
     } else {
@@ -604,7 +612,7 @@ static void newproxy_weaktable(lua_State *L)
   setgcref(t->metatable, obj2gco(t));
   setstrV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "__mode")),
 	    lj_str_newlit(L, "kv"));
-  t->nomm = cast_byte(~(1u<<MM_mode));
+  t->nomm = (uint8_t)(~(1u<<MM_mode));
 }
 
 LUALIB_API int luaopen_base(lua_State *L)

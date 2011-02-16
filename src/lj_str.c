@@ -172,13 +172,25 @@ void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s)
 /* Convert string object to number. */
 int LJ_FASTCALL lj_str_tonum(GCstr *str, TValue *n)
 {
+  int ok = lj_str_numconv(strdata(str), n);
+  if (ok && tvisint(n))
+    setnumV(n, (lua_Number)intV(n));
+  return ok;
+}
+
+int LJ_FASTCALL lj_str_tonumber(GCstr *str, TValue *n)
+{
   return lj_str_numconv(strdata(str), n);
 }
 
 /* Convert string to number. */
 int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
 {
+#if LJ_DUALNUM
+  int sign = 0;
+#else
   lua_Number sign = 1;
+#endif
   const uint8_t *p = (const uint8_t *)s;
   while (lj_char_isspace(*p)) p++;
   if (*p == '-') { p++; sign = -1; } else if (*p == '+') { p++; }
@@ -189,21 +201,34 @@ int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
       if (!lj_char_isxdigit(*p))
 	return 0;  /* Don't accept '0x' without hex digits. */
       do {
-	if (k >= 0x10000000) goto parsedbl;
+	if (k >= 0x10000000u) goto parsedbl;
 	k = (k << 4) + (*p & 15u);
 	if (!lj_char_isdigit(*p)) k += 9;
 	p++;
       } while (lj_char_isxdigit(*p));
     } else {
       while ((uint32_t)(*p - '0') < 10) {
-	if (k >= 0x19999999) goto parsedbl;
+	if (LJ_UNLIKELY(k >= 429496729) && (k != 429496729 || *p > '5'))
+	  goto parsedbl;
 	k = k * 10u + (uint32_t)(*p++ - '0');
       }
     }
     while (LJ_UNLIKELY(lj_char_isspace(*p))) p++;
     if (LJ_LIKELY(*p == '\0')) {
-      setnumV(n, sign * cast_num(k));
+#if LJ_DUALNUM
+      if (!sign) {
+	if (k < 0x80000000u) {
+	  setintV(n, (int32_t)k);
+	  return 1;
+	}
+      } else if (k <= 0x80000000u) {
+	setintV(n, -(int32_t)k);
+	return 1;
+      }
+#else
+      setnumV(n, sign * (lua_Number)k);
       return 1;
+#endif
     }
   }
 parsedbl:
@@ -239,26 +264,36 @@ size_t LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o)
   }
 }
 
+/* Print integer to buffer. Returns pointer to start. */
+char * LJ_FASTCALL lj_str_bufint(char *p, int32_t k)
+{
+  uint32_t u = (uint32_t)(k < 0 ? -k : k);
+  p += 1+10;
+  do { *--p = (char)('0' + u % 10); } while (u /= 10);
+  if (k < 0) *--p = '-';
+  return p;
+}
+
 /* Convert number to string. */
 GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
 {
-  char buf[LUAI_MAXNUMBER2STR];
+  char buf[LJ_STR_NUMBUF];
   size_t len = lj_str_bufnum(buf, (TValue *)np);
   return lj_str_new(L, buf, len);
 }
 
-#if LJ_HASJIT
 /* Convert integer to string. */
 GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k)
 {
   char s[1+10];
-  char *p = s+sizeof(s);
-  uint32_t i = (uint32_t)(k < 0 ? -k : k);
-  do { *--p = (char)('0' + i % 10); } while (i /= 10);
-  if (k < 0) *--p = '-';
+  char *p = lj_str_bufint(s, k);
   return lj_str_new(L, p, (size_t)(s+sizeof(s)-p));
 }
-#endif
+
+GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o)
+{
+  return tvisint(o) ? lj_str_fromint(L, intV(o)) : lj_str_fromnum(L, &o->n);
+}
 
 /* -- String formatting --------------------------------------------------- */
 
@@ -307,38 +342,34 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       addchar(L, sb, va_arg(argp, int));
       break;
     case 'd': {
-      char buff[1+10];
-      char *p = buff+sizeof(buff);
-      int32_t k = va_arg(argp, int32_t);
-      uint32_t i = (uint32_t)(k < 0 ? -k : k);
-      do { *--p = (char)('0' + i % 10); } while (i /= 10);
-      if (k < 0) *--p = '-';
-      addstr(L, sb, p, (MSize)(buff+sizeof(buff)-p));
+      char buf[LJ_STR_INTBUF];
+      char *p = lj_str_bufint(buf, va_arg(argp, int32_t));
+      addstr(L, sb, p, (MSize)(buf+LJ_STR_INTBUF-p));
       break;
       }
     case 'f': {
-      char buf[LUAI_MAXNUMBER2STR];
+      char buf[LJ_STR_NUMBUF];
       TValue tv;
       MSize len;
-      tv.n = cast_num(va_arg(argp, LUAI_UACNUMBER));
+      tv.n = (lua_Number)(va_arg(argp, LUAI_UACNUMBER));
       len = (MSize)lj_str_bufnum(buf, &tv);
       addstr(L, sb, buf, len);
       break;
       }
     case 'p': {
 #define FMTP_CHARS	(2*sizeof(ptrdiff_t))
-      char buff[2+FMTP_CHARS];
+      char buf[2+FMTP_CHARS];
       ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
       ptrdiff_t i, lasti = 2+FMTP_CHARS;
 #if LJ_64
       if ((p >> 32) == 0)  /* Shorten output for true 32 bit pointers. */
 	lasti = 2+2*4;
 #endif
-      buff[0] = '0';
-      buff[1] = 'x';
+      buf[0] = '0';
+      buf[1] = 'x';
       for (i = lasti-1; i >= 2; i--, p >>= 4)
-	buff[i] = "0123456789abcdef"[(p & 15)];
-      addstr(L, sb, buff, (MSize)lasti);
+	buf[i] = "0123456789abcdef"[(p & 15)];
+      addstr(L, sb, buf, (MSize)lasti);
       break;
       }
     case '%':

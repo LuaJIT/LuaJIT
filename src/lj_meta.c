@@ -44,7 +44,7 @@ cTValue *lj_meta_cache(GCtab *mt, MMS mm, GCstr *name)
   cTValue *mo = lj_tab_getstr(mt, name);
   lua_assert(mm <= MM_FAST);
   if (!mo || tvisnil(mo)) {  /* No metamethod? */
-    mt->nomm |= cast_byte(1u<<mm);  /* Set negative cache flag. */
+    mt->nomm |= (uint8_t)(1u<<mm);  /* Set negative cache flag. */
     return NULL;
   }
   return mo;
@@ -156,6 +156,8 @@ static cTValue *str2num(cTValue *o, TValue *n)
 {
   if (tvisnum(o))
     return o;
+  else if (tvisint(o))
+    return (setnumV(n, (lua_Number)intV(o)), n);
   else if (tvisstr(o) && lj_str_tonum(strV(o), n))
     return n;
   else
@@ -192,8 +194,8 @@ static LJ_AINLINE int tostring(lua_State *L, TValue *o)
 {
   if (tvisstr(o)) {
     return 1;
-  } else if (tvisnum(o)) {
-    setstrV(L, o, lj_str_fromnum(L, &o->n));
+  } else if (tvisnumber(o)) {
+    setstrV(L, o, lj_str_fromnumber(L, o));
     return 1;
   } else {
     return 0;
@@ -205,12 +207,12 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 {
   do {
     int n = 1;
-    if (!(tvisstr(top-1) || tvisnum(top-1)) || !tostring(L, top)) {
+    if (!(tvisstr(top-1) || tvisnumber(top-1)) || !tostring(L, top)) {
       cTValue *mo = lj_meta_lookup(L, top-1, MM_concat);
       if (tvisnil(mo)) {
 	mo = lj_meta_lookup(L, top, MM_concat);
 	if (tvisnil(mo)) {
-	  if (tvisstr(top-1) || tvisnum(top-1)) top++;
+	  if (tvisstr(top-1) || tvisnumber(top-1)) top++;
 	  lj_err_optype(L, top-1, LJ_ERR_OPCAT);
 	  return NULL;  /* unreachable */
 	}

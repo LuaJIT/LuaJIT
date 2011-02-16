@@ -115,7 +115,7 @@ LUA_API void lua_xmove(lua_State *from, lua_State *to, int n)
 
 LUA_API int lua_gettop(lua_State *L)
 {
-  return cast_int(L->top - L->base);
+  return (int)(L->top - L->base);
 }
 
 LUA_API void lua_settop(lua_State *L, int idx)
@@ -186,7 +186,7 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
 LUA_API int lua_type(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
-  if (tvisnum(o)) {
+  if (tvisnumber(o)) {
     return LUA_TNUMBER;
 #if LJ_64
   } else if (tvislightud(o)) {
@@ -234,13 +234,13 @@ LUA_API int lua_isnumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  return (tvisnum(o) || (tvisstr(o) && lj_str_tonum(strV(o), &tmp)));
+  return (tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), &tmp)));
 }
 
 LUA_API int lua_isstring(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
-  return (tvisstr(o) || tvisnum(o));
+  return (tvisstr(o) || tvisnumber(o));
 }
 
 LUA_API int lua_isuserdata(lua_State *L, int idx)
@@ -260,8 +260,10 @@ LUA_API int lua_equal(lua_State *L, int idx1, int idx2)
 {
   cTValue *o1 = index2adr(L, idx1);
   cTValue *o2 = index2adr(L, idx2);
-  if (tvisnum(o1) && tvisnum(o2)) {
-    return numV(o1) == numV(o2);
+  if (tvisint(o1) && tvisint(o2)) {
+    return intV(o1) == intV(o2);
+  } else if (tvisnumber(o1) && tvisnumber(o2)) {
+    return numberVnum(o1) == numberVnum(o2);
   } else if (itype(o1) != itype(o2)) {
     return 0;
   } else if (tvispri(o1)) {
@@ -293,8 +295,10 @@ LUA_API int lua_lessthan(lua_State *L, int idx1, int idx2)
   cTValue *o2 = index2adr(L, idx2);
   if (o1 == niltv(L) || o2 == niltv(L)) {
     return 0;
-  } else if (tvisnum(o1) && tvisnum(o2)) {
-    return numV(o1) < numV(o2);
+  } else if (tvisint(o1) && tvisint(o2)) {
+    return intV(o1) < intV(o2);
+  } else if (tvisnumber(o1) && tvisnumber(o2)) {
+    return numberVnum(o1) < numberVnum(o2);
   } else {
     TValue *base = lj_meta_comp(L, o1, o2, 0);
     if ((uintptr_t)base <= 1) {
@@ -312,8 +316,8 @@ LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  if (LJ_LIKELY(tvisnum(o)))
-    return numV(o);
+  if (LJ_LIKELY(tvisnumber(o)))
+    return numberVnum(o);
   else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
     return numV(&tmp);
   else
@@ -324,8 +328,8 @@ LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  if (tvisnum(o))
-    return numV(o);
+  if (LJ_LIKELY(tvisnumber(o)))
+    return numberVnum(o);
   else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
     lj_err_argt(L, idx, LUA_TNUMBER);
   return numV(&tmp);
@@ -335,8 +339,8 @@ LUALIB_API lua_Number luaL_optnumber(lua_State *L, int idx, lua_Number def)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  if (tvisnum(o))
-    return numV(o);
+  if (LJ_LIKELY(tvisnumber(o)))
+    return numberVnum(o);
   else if (tvisnil(o))
     return def;
   else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
@@ -349,12 +353,17 @@ LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
-  if (LJ_LIKELY(tvisnum(o)))
+  if (LJ_LIKELY(tvisint(o))) {
+    return intV(o);
+  } else if (LJ_LIKELY(tvisnum(o))) {
     n = numV(o);
-  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
+  } else {
+    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+      return 0;
+    if (tvisint(&tmp))
+      return (lua_Integer)intV(&tmp);
     n = numV(&tmp);
-  else
-    return 0;
+  }
 #if LJ_64
   return (lua_Integer)n;
 #else
@@ -367,12 +376,17 @@ LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int idx)
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
-  if (LJ_LIKELY(tvisnum(o)))
+  if (LJ_LIKELY(tvisint(o))) {
+    return intV(o);
+  } else if (LJ_LIKELY(tvisnum(o))) {
     n = numV(o);
-  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
+  } else {
+    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+      lj_err_argt(L, idx, LUA_TNUMBER);
+    if (tvisint(&tmp))
+      return (lua_Integer)intV(&tmp);
     n = numV(&tmp);
-  else
-    lj_err_argt(L, idx, LUA_TNUMBER);
+  }
 #if LJ_64
   return (lua_Integer)n;
 #else
@@ -385,14 +399,19 @@ LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
   cTValue *o = index2adr(L, idx);
   TValue tmp;
   lua_Number n;
-  if (LJ_LIKELY(tvisnum(o)))
+  if (LJ_LIKELY(tvisint(o))) {
+    return intV(o);
+  } else if (LJ_LIKELY(tvisnum(o))) {
     n = numV(o);
-  else if (tvisnil(o))
+  } else if (tvisnil(o)) {
     return def;
-  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
+  } else {
+    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+      lj_err_argt(L, idx, LUA_TNUMBER);
+    if (tvisint(&tmp))
+      return (lua_Integer)intV(&tmp);
     n = numV(&tmp);
-  else
-    lj_err_argt(L, idx, LUA_TNUMBER);
+  }
 #if LJ_64
   return (lua_Integer)n;
 #else
@@ -412,10 +431,10 @@ LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
   GCstr *s;
   if (LJ_LIKELY(tvisstr(o))) {
     s = strV(o);
-  } else if (tvisnum(o)) {
+  } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnum(L, &o->n);
+    s = lj_str_fromnumber(L, o);
   } else {
     if (len != NULL) *len = 0;
     return NULL;
@@ -430,10 +449,10 @@ LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
   GCstr *s;
   if (LJ_LIKELY(tvisstr(o))) {
     s = strV(o);
-  } else if (tvisnum(o)) {
+  } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnum(L, &o->n);
+    s = lj_str_fromnumber(L, o);
   } else {
     lj_err_argt(L, idx, LUA_TSTRING);
   }
@@ -451,10 +470,10 @@ LUALIB_API const char *luaL_optlstring(lua_State *L, int idx,
   } else if (tvisnil(o)) {
     if (len != NULL) *len = def ? strlen(def) : 0;
     return def;
-  } else if (tvisnum(o)) {
+  } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnum(L, &o->n);
+    s = lj_str_fromnumber(L, o);
   } else {
     lj_err_argt(L, idx, LUA_TSTRING);
   }
@@ -484,8 +503,8 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
     return cast(size_t, lj_tab_len(tabV(o)));
   else if (tvisudata(o))
     return udataV(o)->len;
-  else if (tvisnum(o))
-    return lj_str_fromnum(L, &o->n)->len;
+  else if (tvisnumber(o))
+    return lj_str_fromnumber(L, o)->len;
   else
     return 0;
 }
@@ -551,7 +570,7 @@ LUA_API void lua_pushnumber(lua_State *L, lua_Number n)
 
 LUA_API void lua_pushinteger(lua_State *L, lua_Integer n)
 {
-  setnumV(L->top, cast_num(n));
+  setintptrV(L->top, n);
   incr_top(L);
 }
 
@@ -687,7 +706,7 @@ LUA_API void lua_concat(lua_State *L, int n)
 	L->top -= n;
 	break;
       }
-      n -= cast_int(L->top - top);
+      n -= (int)(L->top - top);
       L->top = top+2;
       lj_vm_call(L, top, 1+1);
       L->top--;
@@ -1085,7 +1104,7 @@ LUA_API int lua_yield(lua_State *L, int nresults)
       setcont(top+1, lj_cont_hook);
       setframe_pc(top+1, cframe_pc(cf)-1);
       setframe_gc(top+2, obj2gco(L));
-      top[2].fr.tp.ftsz = cast_int((char *)(top+3)-(char *)L->base)+FRAME_CONT;
+      top[2].fr.tp.ftsz = (int)((char *)(top+3)-(char *)L->base)+FRAME_CONT;
       L->top = L->base = top+3;
     }
     L->cframe = NULL;
@@ -1160,10 +1179,10 @@ LUA_API int lua_gc(lua_State *L, int what, int data)
     lj_gc_fullgc(L);
     break;
   case LUA_GCCOUNT:
-    res = cast_int(g->gc.total >> 10);
+    res = (int)(g->gc.total >> 10);
     break;
   case LUA_GCCOUNTB:
-    res = cast_int(g->gc.total & 0x3ff);
+    res = (int)(g->gc.total & 0x3ff);
     break;
   case LUA_GCSTEP: {
     MSize a = (MSize)data << 10;
@@ -1176,11 +1195,11 @@ LUA_API int lua_gc(lua_State *L, int what, int data)
     break;
   }
   case LUA_GCSETPAUSE:
-    res = cast_int(g->gc.pause);
+    res = (int)(g->gc.pause);
     g->gc.pause = (MSize)data;
     break;
   case LUA_GCSETSTEPMUL:
-    res = cast_int(g->gc.stepmul);
+    res = (int)(g->gc.stepmul);
     g->gc.stepmul = (MSize)data;
     break;
   default:
