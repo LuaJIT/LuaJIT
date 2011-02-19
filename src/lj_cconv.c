@@ -22,17 +22,26 @@ LJ_NORET static void cconv_err_conv(CTState *cts, CType *d, CType *s,
   const char *dst = strdata(lj_ctype_repr(cts->L, ctype_typeid(cts, d), NULL));
   const char *src;
   if ((flags & CCF_FROMTV))
-    src = lj_obj_typename[1+(ctype_isnum(s->info) ? LUA_TNUMBER : LUA_TSTRING)];
+    src = lj_obj_typename[1+(ctype_isnum(s->info) ? LUA_TNUMBER :
+			     ctype_isarray(s->info) ? LUA_TSTRING : LUA_TNIL)];
   else
     src = strdata(lj_ctype_repr(cts->L, ctype_typeid(cts, s), NULL));
-  lj_err_callerv(cts->L, LJ_ERR_FFI_BADCONV, src, dst);
+  if (CCF_GETARG(flags))
+    lj_err_argv(cts->L, CCF_GETARG(flags), LJ_ERR_FFI_BADCONV, src, dst);
+  else
+    lj_err_callerv(cts->L, LJ_ERR_FFI_BADCONV, src, dst);
 }
 
 /* Bad conversion from TValue. */
-LJ_NORET static void cconv_err_convtv(CTState *cts, CType *d, TValue *o)
+LJ_NORET static void cconv_err_convtv(CTState *cts, CType *d, TValue *o,
+				      CTInfo flags)
 {
   const char *dst = strdata(lj_ctype_repr(cts->L, ctype_typeid(cts, d), NULL));
-  lj_err_callerv(cts->L, LJ_ERR_FFI_BADCONV, typename(o), dst);
+  const char *src = typename(o);
+  if (CCF_GETARG(flags))
+    lj_err_argv(cts->L, CCF_GETARG(flags), LJ_ERR_FFI_BADCONV, src, dst);
+  else
+    lj_err_callerv(cts->L, LJ_ERR_FFI_BADCONV, src, dst);
 }
 
 /* Initializer overflow. */
@@ -570,13 +579,14 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
     sid = CTID_BOOL;
   } else if (tvisnil(o)) {
     tmpptr = (void *)0;
+    flags |= CCF_FROMTV;
   } else if (tvisudata(o)) {
     tmpptr = uddata(udataV(o));
   } else if (tvislightud(o)) {
     tmpptr = lightudV(o);
   } else {
   err_conv:
-    cconv_err_convtv(cts, d, o);
+    cconv_err_convtv(cts, d, o, flags);
   }
   s = ctype_get(cts, sid);
 doconv:

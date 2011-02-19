@@ -74,7 +74,7 @@ static void *ffi_checkptr(lua_State *L, int narg, CTypeID id)
   void *p;
   if (o >= L->top)
     lj_err_arg(L, narg, LJ_ERR_NOVAL);
-  lj_cconv_ct_tv(cts, ctype_get(cts, id), (uint8_t *)&p, o, 0);
+  lj_cconv_ct_tv(cts, ctype_get(cts, id), (uint8_t *)&p, o, CCF_ARG(narg));
   return p;
 }
 
@@ -86,7 +86,8 @@ static int32_t ffi_checkint(lua_State *L, int narg)
   int32_t i;
   if (o >= L->top)
     lj_err_arg(L, narg, LJ_ERR_NOVAL);
-  lj_cconv_ct_tv(cts, ctype_get(cts, CTID_INT32), (uint8_t *)&i, o, 0);
+  lj_cconv_ct_tv(cts, ctype_get(cts, CTID_INT32), (uint8_t *)&i, o,
+		 CCF_ARG(narg));
   return i;
 }
 
@@ -444,9 +445,11 @@ LJLIB_CF(ffi_string)	LJLIB_REC(.)
   size_t len;
   if (o+1 < L->top) {
     len = (size_t)ffi_checkint(L, 2);
-    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&p, o, 0);
+    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&p, o,
+		   CCF_ARG(1));
   } else {
-    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CCHAR), (uint8_t *)&p, o, 0);
+    lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CCHAR), (uint8_t *)&p, o,
+		   CCF_ARG(1));
     len = strlen(p);
   }
   L->top = o+1;  /* Make sure this is the last item on the stack. */

@@ -48,6 +48,9 @@ static LJ_AINLINE uint32_t cconv_idx(CTInfo info)
 #define CCF_SAME	0x00000004u
 #define CCF_IGNQUAL	0x00000008u
 
+#define CCF_ARG_SHIFT	8
+#define CCF_ARG(n)	((n) << CCF_ARG_SHIFT)
+#define CCF_GETARG(f)	((f) >> CCF_ARG_SHIFT)
 
 LJ_FUNC int lj_cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags);
 LJ_FUNC void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
