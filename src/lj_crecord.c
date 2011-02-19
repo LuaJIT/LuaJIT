@@ -179,18 +179,12 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
   case CCX(I, I):
   conv_I_I:
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-#if LJ_64
-    /* Sign-extend 32 to 64 bit integer. */
-    if (dsize == 8 && ssize < 8 && !(sinfo & CTF_UNSIGNED))
-      sp = emitconv(sp, dt, IRT_INT, IRCONV_SEXT);
-    /* All other conversions are no-ops on x64. */
-#else
-    if (dsize == 8 && ssize < 8)  /* Extend to 64 bit integer. */
+    /* Extend 32 to 64 bit integer. */
+    if (dsize == 8 && ssize < 8 && !(LJ_64 && (sinfo & CTF_UNSIGNED)))
       sp = emitconv(sp, dt, ssize < 4 ? IRT_INT : st,
 		    (sinfo & CTF_UNSIGNED) ? 0 : IRCONV_SEXT);
     else if (dsize < 8 && ssize == 8)  /* Truncate from 64 bit integer. */
       sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, 0);
-#endif
   xstore:
     if (dt == IRT_I64 || dt == IRT_U64) lj_needsplit(J);
     if (dp == 0) return sp;
