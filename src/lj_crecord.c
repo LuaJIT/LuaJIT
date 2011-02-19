@@ -984,11 +984,12 @@ void LJ_FASTCALL recff_ffi_copy(jit_State *J, RecordFFData *rd)
     if (trlen) {
       trlen = crec_toint(J, cts, trlen, &rd->argv[2]);
     } else {
-      trlen = emitir(IRTI(IR_FLOAD), trsrc, IRFL_STR_LEN);
+      trlen = emitir(IRTI(IR_FLOAD), J->base[1], IRFL_STR_LEN);
       trlen = emitir(IRTI(IR_ADD), trlen, lj_ir_kint(J, 1));
     }
     lj_ir_call(J, IRCALL_memcpy, trdst, trsrc, trlen);
     emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
+    rd->nres = 0;
   }  /* else: interpreter will throw. */
 }
 
@@ -1005,6 +1006,7 @@ void LJ_FASTCALL recff_ffi_fill(jit_State *J, RecordFFData *rd)
       trfill = lj_ir_kint(J, 0);
     lj_ir_call(J, IRCALL_memset, tr, trfill, trlen);
     emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
+    rd->nres = 0;
   }  /* else: interpreter will throw. */
 }
 
