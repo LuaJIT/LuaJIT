@@ -2328,6 +2328,11 @@ static int parse_stmt(LexState *ls)
     lj_lex_next(ls);
     parse_break(ls);
     return 1;  /* Must be last. */
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  case ';':
+    lj_lex_next(ls);
+    break;
+#endif
   default:
     parse_call_assign(ls);
     break;
