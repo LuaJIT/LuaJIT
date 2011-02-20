@@ -373,8 +373,11 @@ static const char *reader_func(lua_State *L, void *ud, size_t *size)
 
 LJLIB_CF(load)
 {
-  GCstr *name = lj_lib_optstr(L, 2);
+  GCstr *name;
+  if (L->base < L->top && (tvisstr(L->base) || tvisnumber(L->base)))
+    return lj_cf_loadstring(L);
   lj_lib_checkfunc(L, 1);
+  name = lj_lib_optstr(L, 2);
   lua_settop(L, 3);  /* Reserve a slot for the string from the reader. */
   return load_aux(L,
 	   lua_load(L, reader_func, NULL, name ? strdata(name) : "=(load)"));
