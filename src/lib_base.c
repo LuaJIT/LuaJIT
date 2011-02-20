@@ -3,7 +3,7 @@
 ** Copyright (C) 2005-2011 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
+** Copyright (C) 1994-2011 Lua.org, PUC-Rio. See Copyright Notice in lua.h
 */
 
 #include <stdio.h>
@@ -522,9 +522,15 @@ LJLIB_CF(coroutine_status)
 
 LJLIB_CF(coroutine_running)
 {
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  int ismain = lua_pushthread(L);
+  setboolV(L->top++, ismain);
+  return 2;
+#else
   if (lua_pushthread(L))
     setnilV(L->top++);
   return 1;
+#endif
 }
 
 LJLIB_CF(coroutine_create)
