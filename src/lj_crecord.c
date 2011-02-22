@@ -707,8 +707,14 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     CType *ctr = ctype_rawchild(cts, ct);
     IRType t = crec_ct2irt(ctr);
     TRef tr;
-    if (ctype_isenum(ctr->info)) ctr = ctype_child(cts, ctr);
-    if (!(ctype_isnum(ctr->info) || ctype_isptr(ctr->info)) ||
+    if (ctype_isvoid(ctr->info)) {
+      t = IRT_NIL;
+      rd->nres = 0;
+    } else if (ctype_isenum(ctr->info)) {
+      ctr = ctype_child(cts, ctr);
+    }
+    if (!(ctype_isnum(ctr->info) || ctype_isptr(ctr->info) ||
+	  ctype_isvoid(ctr->info)) ||
 	ctype_isbool(ctr->info) || (ct->info & CTF_VARARG) ||
 #if LJ_TARGET_X86
 	ctype_cconv(ct->info) != CTCC_CDECL ||
