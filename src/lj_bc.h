@@ -156,8 +156,8 @@
   _(CALLT,	base,	___,	lit,	call) \
   _(ITERC,	base,	lit,	lit,	call) \
   _(ITERN,	base,	lit,	lit,	call) \
-  _(ISNEXT,	base,	___,	jump,	___) \
   _(VARG,	base,	lit,	lit,	___) \
+  _(ISNEXT,	base,	___,	jump,	___) \
   \
   /* Returns. */ \
   _(RETM,	base,	___,	lit,	___) \

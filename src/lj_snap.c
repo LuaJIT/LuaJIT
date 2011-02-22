@@ -13,6 +13,7 @@
 #include "lj_gc.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#include "lj_bc.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
@@ -138,27 +139,139 @@ void lj_snap_add(jit_State *J)
   snapshot_stack(J, &J->cur.snap[nsnap], nsnapmap);
 }
 
+/* -- Snapshot modification ----------------------------------------------- */
+
+#define SNAP_USEDEF_SLOTS	(LJ_MAX_JSLOTS+LJ_STACK_EXTRA)
+
+/* Find unused slots with reaching-definitions bytecode data-flow analysis. */
+static BCReg snap_usedef(jit_State *J, uint8_t *udf,
+			 const BCIns *pc, BCReg maxslot)
+{
+  BCReg s;
+  GCobj *o;
+
+  if (maxslot == 0) return 0;
+#ifdef LUAJIT_USE_VALGRIND
+  /* Avoid errors for harmless reads beyond maxslot. */
+  memset(udf, 1, SNAP_USEDEF_SLOTS);
+#else
+  memset(udf, 1, maxslot);
+#endif
+
+  /* Treat open upvalues as used. */
+  o = gcref(J->L->openupval);
+  while (o) {
+    if (uvval(gco2uv(o)) < J->L->base) break;
+    udf[uvval(gco2uv(o)) - J->L->base] = 0;
+    o = gcref(o->gch.nextgc);
+  }
+
+#define USE_SLOT(s)		udf[(s)] &= ~1
+#define DEF_SLOT(s)		udf[(s)] *= 3
+
+  /* Scan through following bytecode and check for uses/defs. */
+  lua_assert(pc >= proto_bc(J->pt) && pc < proto_bc(J->pt) + J->pt->sizebc);
+  for (;;) {
+    BCIns ins = *pc++;
+    BCOp op = bc_op(ins);
+    switch (bcmode_b(op)) {
+    case BCMvar: USE_SLOT(bc_b(ins)); break;
+    default: break;
+    }
+    switch (bcmode_c(op)) {
+    case BCMvar: USE_SLOT(bc_c(ins)); break;
+    case BCMrbase:
+      lua_assert(op == BC_CAT);
+      for (s = bc_b(ins); s <= bc_c(ins); s++) USE_SLOT(s);
+      for (; s < maxslot; s++) DEF_SLOT(s);
+      break;
+    case BCMjump:
+    handle_jump: {
+      BCReg minslot = bc_a(ins);
+      if (op >= BC_FORI && op <= BC_JFORL) minslot += FORL_EXT;
+      else if (op >= BC_ITERL && op <= BC_JITERL) minslot += bc_b(pc[-1])-1;
+      for (s = minslot; s < maxslot; s++) DEF_SLOT(s);
+      return minslot < maxslot ? minslot : maxslot;
+      }
+    case BCMlit:
+      if (op == BC_JFORL || op == BC_JITERL || op == BC_JLOOP) {
+	goto handle_jump;
+      } else if (bc_isret(op)) {
+	BCReg top = op == BC_RETM ? maxslot : (bc_a(ins) + bc_d(ins)-1);
+	for (s = 0; s < bc_a(ins); s++) DEF_SLOT(s);
+	for (; s < top; s++) USE_SLOT(s);
+	for (; s < maxslot; s++) DEF_SLOT(s);
+	return 0;
+      }
+      break;
+    case BCMfunc: return maxslot;  /* NYI: will abort, anyway. */
+    default: break;
+    }
+    switch (bcmode_a(op)) {
+    case BCMvar: USE_SLOT(bc_a(ins)); break;
+    case BCMdst:
+       if (!(op == BC_ISTC || op == BC_ISFC)) DEF_SLOT(bc_a(ins));
+       break;
+    case BCMbase:
+      if (op >= BC_CALLM && op <= BC_VARG) {
+	BCReg top = (op == BC_CALLM || op == BC_CALLMT || bc_c(ins) == 0) ?
+		    maxslot : (bc_a(ins) + bc_c(ins));
+	for (s = bc_a(ins); s < top; s++) USE_SLOT(s);
+	for (; s < maxslot; s++) DEF_SLOT(s);
+	if (op == BC_CALLT || op == BC_CALLMT) {
+	  for (s = 0; s < bc_a(ins); s++) DEF_SLOT(s);
+	  return 0;
+	}
+      } else if (op == BC_KNIL) {
+	for (s = bc_a(ins); s <= bc_d(ins); s++) DEF_SLOT(s);
+      } else if (op == BC_TSETM) {
+	for (s = bc_a(ins)-1; s < maxslot; s++) USE_SLOT(s);
+      }
+      break;
+    default: break;
+    }
+    lua_assert(pc >= proto_bc(J->pt) && pc < proto_bc(J->pt) + J->pt->sizebc);
+  }
+
+#undef USE_SLOT
+#undef DEF_SLOT
+
+  return 0;  /* unreachable */
+}
+
+/* Purge dead slots before the next snapshot. */
+void lj_snap_purge(jit_State *J)
+{
+  uint8_t udf[SNAP_USEDEF_SLOTS];
+  BCReg maxslot = J->maxslot;
+  BCReg s = snap_usedef(J, udf, J->pc, maxslot);
+  for (; s < maxslot; s++)
+    if (udf[s] != 0)
+      J->base[s] = 0;  /* Purge dead slots. */
+}
+
 /* Shrink last snapshot. */
 void lj_snap_shrink(jit_State *J)
 {
-  BCReg nslots = J->baseslot + J->maxslot;
   SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
   SnapEntry *map = &J->cur.snapmap[snap->mapofs];
-  MSize nent = snap->nent;
-  lua_assert(nslots < snap->nslots);
-  snap->nslots = (uint8_t)nslots;
-  if (nent > 0 && snap_slot(map[nent-1]) >= nslots) {
-    MSize s, delta, depth = snap->depth;
-    lua_assert(depth == (MSize)J->framedepth);
-    for (nent--; nent > 0 && snap_slot(map[nent-1]) >= nslots; nent--)
-      ;
-    delta = snap->nent - nent;
-    snap->nent = (uint8_t)nent;
-    J->cur.nsnapmap = (uint16_t)(snap->mapofs + nent + 1 + depth);
-    map += nent;
-    for (s = 0; s <= depth; s++)  /* Move PC + frame links down. */
-      map[s] = map[s+delta];
+  MSize n, m, nlim, nent = snap->nent;
+  uint8_t udf[SNAP_USEDEF_SLOTS];
+  BCReg maxslot = J->maxslot;
+  BCReg minslot = snap_usedef(J, udf, snap_pc(map[nent]), maxslot);
+  BCReg baseslot = J->baseslot;
+  maxslot += baseslot;
+  minslot += baseslot;
+  snap->nslots = (uint8_t)maxslot;
+  for (n = m = 0; n < nent; n++) {  /* Remove unused slots from snapshot. */
+    BCReg s = snap_slot(map[n]);
+    if (s < minslot || (s < maxslot && udf[s-baseslot] == 0))
+      map[m++] = map[n];  /* Only copy used slots. */
   }
+  snap->nent = (uint8_t)m;
+  nlim = nent + snap->depth;
+  while (n <= nlim) map[m++] = map[n++];  /* Move PC + frame links down. */
+  J->cur.nsnapmap = (uint16_t)(snap->mapofs + m);  /* Free up space in map. */
 }
 
 /* -- Snapshot access ----------------------------------------------------- */

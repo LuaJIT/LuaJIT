@@ -1364,11 +1364,8 @@ static void rec_comp_fixup(jit_State *J, const BCIns *pc, int cond)
   /* Set PC to opposite target to avoid re-recording the comp. in side trace. */
   J->cur.snapmap[snap->mapofs + snap->nent] = SNAP_MKPC(npc);
   J->needsnap = 1;
-  /* Shrink last snapshot if possible. */
-  if (bc_a(jmpins) < J->maxslot) {
-    J->maxslot = bc_a(jmpins);
-    lj_snap_shrink(J);
-  }
+  if (bc_a(jmpins) < J->maxslot) J->maxslot = bc_a(jmpins);
+  lj_snap_shrink(J);  /* Shrink last snapshot if possible. */
 }
 
 /* Record the next bytecode instruction (_before_ it's executed). */
@@ -1411,6 +1408,7 @@ void lj_record_ins(jit_State *J)
   /* Need snapshot before recording next bytecode (e.g. after a store). */
   if (J->needsnap) {
     J->needsnap = 0;
+    lj_snap_purge(J);
     lj_snap_add(J);
     J->mergesnap = 1;
   }
