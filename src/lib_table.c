@@ -82,7 +82,7 @@ LJLIB_CF(table_maxn)
     }
   node = noderef(t->node);
   for (i = (ptrdiff_t)t->hmask; i >= 0; i--)
-    if (tvisnumber(&node[i].key)) {
+    if (!tvisnil(&node[i].val) && tvisnumber(&node[i].key)) {
       lua_Number n = numberVnum(&node[i].key);
       if (n > m) m = n;
     }
