@@ -315,7 +315,7 @@ static void ccall_struct_ret(CCallState *cc, int *rcl, uint8_t *dp, CTSize sz)
 /* Infer the destination CTypeID for a vararg argument. */
 static CTypeID ccall_ctid_vararg(CTState *cts, cTValue *o)
 {
-  if (tvisnum(o)) {
+  if (tvisnumber(o)) {
     return CTID_DOUBLE;
   } else if (tviscdata(o)) {
     CTypeID id = cdataV(o)->typeid;

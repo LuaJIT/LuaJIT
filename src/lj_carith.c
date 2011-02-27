@@ -41,6 +41,9 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
       }
       ca->ct[i] = ct;
       ca->p[i] = p;
+    } else if (tvisint(o)) {
+      ca->ct[i] = ctype_get(cts, CTID_INT32);
+      ca->p[i] = (uint8_t *)&o->i;
     } else if (tvisnum(o)) {
       ca->ct[i] = ctype_get(cts, CTID_DOUBLE);
       ca->p[i] = (uint8_t *)&o->n;
@@ -84,7 +87,7 @@ static int carith_ptr(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
 	/* All valid pointer differences on x64 are in (-2^47, +2^47),
 	** which fits into a double without loss of precision.
 	*/
-	setnumV(L->top-1, (lua_Number)diff);
+	setintptrV(L->top-1, (int32_t)diff);
 	return 1;
       } else if (mm == MM_lt) {  /* Pointer comparison (unsigned). */
 	setboolV(L->top-1, ((uintptr_t)pp < (uintptr_t)pp2));

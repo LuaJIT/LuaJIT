@@ -266,10 +266,10 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
     if (ctype_isconstval(ct->info)) {
       CType *ctt = ctype_child(cts, ct);
       lua_assert(ctype_isinteger(ctt->info) && ctt->size <= 4);
-      if ((ctt->info & CTF_UNSIGNED) && ctt->size == 4)
+      if ((ctt->info & CTF_UNSIGNED) && (int32_t)ct->size < 0)
 	setnumV(tv, (lua_Number)(uint32_t)ct->size);
       else
-	setnumV(tv, (lua_Number)(int32_t)ct->size);
+	setintV(tv, (int32_t)ct->size);
     } else {
       const char *sym = clib_extsym(cts, ct, name);
       void *p = clib_getsym(cl, sym);

@@ -375,10 +375,20 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
   if (ctype_isnum(sinfo)) {
     if (!ctype_isbool(sinfo)) {
       if (ctype_isinteger(sinfo) && s->size > 4) goto copyval;
-      lj_cconv_ct_ct(cts, ctype_get(cts, CTID_DOUBLE), s,
-		     (uint8_t *)&o->n, sp, 0);
-      /* Numbers are NOT canonicalized here! Beware of uninitialized data. */
-      lua_assert(tvisnum(o));
+      if (LJ_DUALNUM && ctype_isinteger(sinfo)) {
+	int32_t i;
+	lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT32), s,
+		       (uint8_t *)&i, sp, 0);
+	if ((sinfo & CTF_UNSIGNED) && i < 0)
+	  setnumV(o, (lua_Number)(uint32_t)i);
+	else
+	  setintV(o, i);
+      } else {
+	lj_cconv_ct_ct(cts, ctype_get(cts, CTID_DOUBLE), s,
+		       (uint8_t *)&o->n, sp, 0);
+	/* Numbers are NOT canonicalized here! Beware of uninitialized data. */
+	lua_assert(tvisnum(o));
+      }
     } else {
       uint32_t b = ((*sp) & 1);
       setboolV(o, b);
@@ -426,10 +436,15 @@ int lj_cconv_tv_bf(CTState *cts, CType *s, TValue *o, uint8_t *sp)
     lj_err_caller(cts->L, LJ_ERR_FFI_NYIPACKBIT);
   if (!(info & CTF_BOOL)) {
     CTSize shift = 32 - bsz;
-    if (!(info & CTF_UNSIGNED))
-      setnumV(o, (lua_Number)((int32_t)(val << (shift-pos)) >> shift));
-    else
-      setnumV(o, (lua_Number)((val << (shift-pos)) >> shift));
+    if (!(info & CTF_UNSIGNED)) {
+      setintV(o, (int32_t)(val << (shift-pos)) >> shift);
+    } else {
+      val = (val << (shift-pos)) >> shift;
+      if (!LJ_DUALNUM || (int32_t)val < 0)
+	setnumV(o, (lua_Number)(uint32_t)val);
+      else
+	setintV(o, (int32_t)val);
+    }
   } else {
     lua_assert(bsz == 1);
     setboolV(o, (val >> pos) & 1);
@@ -519,7 +534,11 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
   CType *s;
   void *tmpptr;
   uint8_t tmpbool, *sp = (uint8_t *)&tmpptr;
-  if (LJ_LIKELY(tvisnum(o))) {
+  if (LJ_LIKELY(tvisint(o))) {
+    sp = (uint8_t *)&o->i;
+    sid = CTID_INT32;
+    flags |= CCF_FROMTV;
+  } else if (LJ_LIKELY(tvisnum(o))) {
     sp = (uint8_t *)&o->n;
     sid = CTID_DOUBLE;
     flags |= CCF_FROMTV;

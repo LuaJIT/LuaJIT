@@ -88,7 +88,10 @@ collect_attrib:
   }
   lua_assert(!ctype_isref(ct->info));  /* Interning rejects refs to refs. */
 
-  if (tvisnum(key)) {  /* Numeric key. */
+  if (tvisint(key)) {
+    idx = (ptrdiff_t)intV(key);
+    goto integer_key;
+  } else if (tvisnum(key)) {  /* Numeric key. */
     idx = LJ_64 ? (ptrdiff_t)numV(key) : (ptrdiff_t)lj_num2int(numV(key));
   integer_key:
     if (ctype_ispointer(ct->info)) {
@@ -171,10 +174,10 @@ static void cdata_getconst(CTState *cts, TValue *o, CType *ct)
   CType *ctt = ctype_child(cts, ct);
   lua_assert(ctype_isinteger(ctt->info) && ctt->size <= 4);
   /* Constants are already zero-extended/sign-extended to 32 bits. */
-  if (!(ctt->info & CTF_UNSIGNED))
-    setintV(o, (int32_t)ct->size);
-  else
+  if ((ctt->info & CTF_UNSIGNED) && (int32_t)ct->size < 0)
     setnumV(o, (lua_Number)(uint32_t)ct->size);
+  else
+    setintV(o, (int32_t)ct->size);
 }
 
 /* Get C data value and convert to TValue. */
