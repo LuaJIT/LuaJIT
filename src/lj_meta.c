@@ -385,10 +385,21 @@ void lj_meta_call(lua_State *L, TValue *func, TValue *top)
 }
 
 /* Helper for FORI. Coercion. */
-void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *base)
+void LJ_FASTCALL lj_meta_for(lua_State *L, TValue *o)
 {
-  if (!str2num(base, base)) lj_err_msg(L, LJ_ERR_FORINIT);
-  if (!str2num(base+1, base+1)) lj_err_msg(L, LJ_ERR_FORLIM);
-  if (!str2num(base+2, base+2)) lj_err_msg(L, LJ_ERR_FORSTEP);
+  if (!(tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o))))
+    lj_err_msg(L, LJ_ERR_FORINIT);
+  if (!(tvisnumber(o+1) || (tvisstr(o+1) && lj_str_tonumber(strV(o+1), o+1))))
+    lj_err_msg(L, LJ_ERR_FORLIM);
+  if (!(tvisnumber(o+2) || (tvisstr(o+2) && lj_str_tonumber(strV(o+2), o+2))))
+    lj_err_msg(L, LJ_ERR_FORSTEP);
+#if LJ_DUALNUM
+  /* Ensure all slots are integers or all slots are numbers. */
+  if (!(tvisint(o) && tvisint(o+1) && tvisint(o+2))) {
+    if (tvisint(o)) setnumV(o, (lua_Number)intV(o));
+    if (tvisint(o+1)) setnumV(o+1, (lua_Number)intV(o+1));
+    if (tvisint(o+2)) setnumV(o+2, (lua_Number)intV(o+2));
+  }
+#endif
 }
 

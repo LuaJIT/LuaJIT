@@ -21,12 +21,17 @@
 
 LJLIB_ASM(math_abs)		LJLIB_REC(.)
 {
-  lj_lib_checknum(L, 1);
+  lj_lib_checknumber(L, 1);
   return FFH_RETRY;
 }
 LJLIB_ASM_(math_floor)		LJLIB_REC(math_round IRFPM_FLOOR)
 LJLIB_ASM_(math_ceil)		LJLIB_REC(math_round IRFPM_CEIL)
-LJLIB_ASM_(math_sqrt)		LJLIB_REC(math_unary IRFPM_SQRT)
+
+LJLIB_ASM(math_sqrt)		LJLIB_REC(math_unary IRFPM_SQRT)
+{
+  lj_lib_checknum(L, 1);
+  return FFH_RETRY;
+}
 LJLIB_ASM_(math_log)		LJLIB_REC(math_unary IRFPM_LOG)
 LJLIB_ASM_(math_log10)		LJLIB_REC(math_unary IRFPM_LOG10)
 LJLIB_ASM_(math_exp)		LJLIB_REC(math_unary IRFPM_EXP)
@@ -61,7 +66,7 @@ LJLIB_ASM_(math_fmod)
 LJLIB_ASM(math_min)		LJLIB_REC(math_minmax IR_MIN)
 {
   int i = 0;
-  do { lj_lib_checknum(L, ++i); } while (L->base+i < L->top);
+  do { lj_lib_checknumber(L, ++i); } while (L->base+i < L->top);
   return FFH_RETRY;
 }
 LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
@@ -137,13 +142,42 @@ LJLIB_CF(math_random)		LJLIB_REC(.)
   u.u64 = lj_math_random_step(rs);
   d = u.d - 1.0;
   if (n > 0) {
+#if LJ_DUALNUM
+    int isint = 1;
+    double r1;
+    lj_lib_checknumber(L, 1);
+    if (tvisint(L->base)) {
+      r1 = (lua_Number)intV(L->base);
+    } else {
+      isint = 0;
+      r1 = numV(L->base);
+    }
+#else
     double r1 = lj_lib_checknum(L, 1);
+#endif
     if (n == 1) {
       d = floor(d*r1) + 1.0;  /* d is an int in range [1, r1] */
     } else {
+#if LJ_DUALNUM
+      double r2;
+      lj_lib_checknumber(L, 2);
+      if (tvisint(L->base+1)) {
+	r2 = (lua_Number)intV(L->base+1);
+      } else {
+	isint = 0;
+	r2 = numV(L->base+1);
+      }
+#else
       double r2 = lj_lib_checknum(L, 2);
+#endif
       d = floor(d*(r2-r1+1.0)) + r1;  /* d is an int in range [r1, r2] */
     }
+#if LJ_DUALNUM
+    if (isint) {
+      setintV(L->top-1, lj_num2int(d));
+      return 1;
+    }
+#endif
   }  /* else: d is a double in range [0, 1] */
   setnumV(L->top++, d);
   return 1;

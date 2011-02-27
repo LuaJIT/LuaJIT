@@ -137,6 +137,13 @@ static int io_file_readnum(lua_State *L, FILE *fp)
 {
   lua_Number d;
   if (fscanf(fp, LUA_NUMBER_SCAN, &d) == 1) {
+    if (LJ_DUALNUM) {
+      int32_t i = lj_num2int(d);
+      if (d == (lua_Number)i && !tvismzero((cTValue *)&d)) {
+	setintV(L->top++, i);
+	return 1;
+      }
+    }
     setnumV(L->top++, d);
     return 1;
   } else {
@@ -217,7 +224,7 @@ static int io_file_read(lua_State *L, FILE *fp, int start)
 	  io_file_readchars(L, fp, ~((size_t)0));
 	else
 	  lj_err_arg(L, n+1, LJ_ERR_INVFMT);
-      } else if (tvisnum(L->base+n)) {
+      } else if (tvisnumber(L->base+n)) {
 	size_t len = (size_t)lj_lib_checkint(L, n+1);
 	ok = len ? io_file_readchars(L, fp, len) : io_file_testeof(L, fp);
       } else {

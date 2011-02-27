@@ -187,7 +187,7 @@ int LJ_FASTCALL lj_str_tonumber(GCstr *str, TValue *n)
 int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
 {
 #if LJ_DUALNUM
-  int sign = 0;
+  int sign = 1;
 #else
   lua_Number sign = 1;
 #endif
@@ -216,7 +216,7 @@ int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
     while (LJ_UNLIKELY(lj_char_isspace(*p))) p++;
     if (LJ_LIKELY(*p == '\0')) {
 #if LJ_DUALNUM
-      if (!sign) {
+      if (sign == 1) {
 	if (k < 0x80000000u) {
 	  setintV(n, (int32_t)k);
 	  return 1;
@@ -225,10 +225,9 @@ int LJ_FASTCALL lj_str_numconv(const char *s, TValue *n)
 	setintV(n, -(int32_t)k);
 	return 1;
       }
-#else
+#endif
       setnumV(n, sign * (lua_Number)k);
       return 1;
-#endif
     }
   }
 parsedbl:

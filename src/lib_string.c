@@ -702,6 +702,38 @@ static void addintlen(char *form)
   form[l + sizeof(LUA_INTFRMLEN) - 1] = '\0';
 }
 
+static unsigned LUA_INTFRM_T num2intfrm(lua_State *L, int arg)
+{
+  if (sizeof(LUA_INTFRM_T) == 4) {
+    return (LUA_INTFRM_T)lj_lib_checkbit(L, arg);
+  } else {
+    cTValue *o;
+    lj_lib_checknumber(L, arg);
+    o = L->base+arg-1;
+    if (tvisint(o))
+      return (LUA_INTFRM_T)intV(o);
+    else
+      return (LUA_INTFRM_T)numV(o);
+  }
+}
+
+static unsigned LUA_INTFRM_T num2uintfrm(lua_State *L, int arg)
+{
+  if (sizeof(LUA_INTFRM_T) == 4) {
+    return (unsigned LUA_INTFRM_T)lj_lib_checkbit(L, arg);
+  } else {
+    cTValue *o;
+    lj_lib_checknumber(L, arg);
+    o = L->base+arg-1;
+    if (tvisint(o))
+      return (unsigned LUA_INTFRM_T)intV(o);
+    else if ((int32_t)o->u32.hi < 0)
+      return (unsigned LUA_INTFRM_T)(LUA_INTFRM_T)numV(o);
+    else
+      return (unsigned LUA_INTFRM_T)numV(o);
+  }
+}
+
 LJLIB_CF(string_format)
 {
   int arg = 1;
@@ -726,11 +758,11 @@ LJLIB_CF(string_format)
 	break;
       case 'd':  case 'i':
 	addintlen(form);
-	sprintf(buff, form, (LUA_INTFRM_T)lj_lib_checknum(L, arg));
+	sprintf(buff, form, num2intfrm(L, arg));
 	break;
       case 'o':  case 'u':  case 'x':  case 'X':
 	addintlen(form);
-	sprintf(buff, form, (unsigned LUA_INTFRM_T)lj_lib_checknum(L, arg));
+	sprintf(buff, form, num2uintfrm(L, arg));
 	break;
       case 'e':  case 'E': case 'f': case 'g': case 'G': {
 	TValue tv;

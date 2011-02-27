@@ -197,6 +197,18 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
 #if LJ_HASFFI
     if (tviscdata(o)) {
       CTState *cts = ctype_cts(L);
+      if (LJ_DUALNUM) {
+	CType *ct = ctype_raw(cts, cdataV(o)->typeid);
+	if (ctype_isinteger_or_bool(ct->info)) {
+	  int64_t i;
+	  lj_cconv_ct_tv(cts, ctype_get(cts, CTID_INT64), (uint8_t *)&i, o, 0);
+	  if ((ct->size == 8 && (ct->info & CTF_UNSIGNED)) ?
+	      (uint64_t)i <= 0x7fffffffu : checki32(i)) {
+	    setintV(L->base-1, (int32_t)i);
+	    return FFH_RES(1);
+	  }  /* else: retry and convert to double. */
+	}
+      }
       lj_cconv_ct_tv(cts, ctype_get(cts, CTID_DOUBLE),
 		     (uint8_t *)&(L->base-1)->n, o, 0);
       return FFH_RES(1);
@@ -294,7 +306,7 @@ LJLIB_ASM(pairs)
 LJLIB_NOREGUV LJLIB_ASM(ipairs_aux)	LJLIB_REC(.)
 {
   lj_lib_checktab(L, 1);
-  lj_lib_checknum(L, 2);
+  lj_lib_checkint(L, 2);
   return FFH_UNREACHABLE;
 }
 

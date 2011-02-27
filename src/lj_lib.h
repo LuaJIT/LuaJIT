@@ -33,9 +33,15 @@
 LJ_FUNC TValue *lj_lib_checkany(lua_State *L, int narg);
 LJ_FUNC GCstr *lj_lib_checkstr(lua_State *L, int narg);
 LJ_FUNC GCstr *lj_lib_optstr(lua_State *L, int narg);
+#if LJ_DUALNUM
+LJ_FUNC void lj_lib_checknumber(lua_State *L, int narg);
+#else
+#define lj_lib_checknumber(L, narg)	lj_lib_checknum((L), (narg))
+#endif
 LJ_FUNC lua_Number lj_lib_checknum(lua_State *L, int narg);
 LJ_FUNC int32_t lj_lib_checkint(lua_State *L, int narg);
 LJ_FUNC int32_t lj_lib_optint(lua_State *L, int narg, int32_t def);
+LJ_FUNC int32_t lj_lib_checkbit(lua_State *L, int narg);
 LJ_FUNC GCfunc *lj_lib_checkfunc(lua_State *L, int narg);
 LJ_FUNC GCtab *lj_lib_checktab(lua_State *L, int narg);
 LJ_FUNC GCtab *lj_lib_checktabornil(lua_State *L, int narg);

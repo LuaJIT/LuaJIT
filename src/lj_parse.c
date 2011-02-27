@@ -935,6 +935,7 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
 	    setnumV(o, -(lua_Number)k);
 	  else
 	    setintV(o, -k);
+	  return;
 	} else {
 	  o->u64 ^= U64x(80000000,00000000);
 	  return;

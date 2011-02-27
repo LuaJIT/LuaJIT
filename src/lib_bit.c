@@ -21,7 +21,7 @@
 
 LJLIB_ASM(bit_tobit)		LJLIB_REC(bit_unary IR_TOBIT)
 {
-  lj_lib_checknum(L, 1);
+  lj_lib_checknumber(L, 1);
   return FFH_RETRY;
 }
 LJLIB_ASM_(bit_bnot)		LJLIB_REC(bit_unary IR_BNOT)
@@ -29,8 +29,8 @@ LJLIB_ASM_(bit_bswap)		LJLIB_REC(bit_unary IR_BSWAP)
 
 LJLIB_ASM(bit_lshift)		LJLIB_REC(bit_shift IR_BSHL)
 {
-  lj_lib_checknum(L, 1);
-  lj_lib_checknum(L, 2);
+  lj_lib_checknumber(L, 1);
+  lj_lib_checkbit(L, 2);
   return FFH_RETRY;
 }
 LJLIB_ASM_(bit_rshift)		LJLIB_REC(bit_shift IR_BSHR)
@@ -41,7 +41,7 @@ LJLIB_ASM_(bit_ror)		LJLIB_REC(bit_shift IR_BROR)
 LJLIB_ASM(bit_band)		LJLIB_REC(bit_nary IR_BAND)
 {
   int i = 0;
-  do { lj_lib_checknum(L, ++i); } while (L->base+i < L->top);
+  do { lj_lib_checknumber(L, ++i); } while (L->base+i < L->top);
   return FFH_RETRY;
 }
 LJLIB_ASM_(bit_bor)		LJLIB_REC(bit_nary IR_BOR)
@@ -51,8 +51,8 @@ LJLIB_ASM_(bit_bxor)		LJLIB_REC(bit_nary IR_BXOR)
 
 LJLIB_CF(bit_tohex)
 {
-  uint32_t b = (uint32_t)lj_num2bit(lj_lib_checknum(L, 1));
-  int32_t i, n = L->base+1 >= L->top ? 8 : lj_num2bit(lj_lib_checknum(L, 2));
+  uint32_t b = (uint32_t)lj_lib_checkbit(L, 1);
+  int32_t i, n = L->base+1 >= L->top ? 8 : lj_lib_checkbit(L, 2);
   const char *hexdigits = "0123456789abcdef";
   char buf[8];
   if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
