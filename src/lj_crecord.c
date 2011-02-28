@@ -970,7 +970,7 @@ void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
       tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CCHAR), 0, tr, &rd->argv[0]);
       trlen = lj_ir_call(J, IRCALL_strlen, tr);
     }
-    J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), tr, trlen);
+    J->base[0] = emitir(IRT(IR_XSNEW, IRT_STR), tr, trlen);
   }  /* else: interpreter will throw. */
 }
 

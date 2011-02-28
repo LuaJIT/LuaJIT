@@ -4098,7 +4098,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_FSTORE: case IR_XSTORE: asm_fxstore(as, ir); break;
 
   /* Allocations. */
-  case IR_SNEW: asm_snew(as, ir); break;
+  case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;
   case IR_TNEW: asm_tnew(as, ir); break;
   case IR_TDUP: asm_tdup(as, ir); break;
   case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;

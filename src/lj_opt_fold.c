@@ -153,7 +153,8 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
 */
 #define gcstep_barrier(J, ref) \
   ((ref) < J->chain[IR_LOOP] && \
-   (J->chain[IR_SNEW] || J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
+   (J->chain[IR_SNEW] || J->chain[IR_XSNEW] || \
+    J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
     J->chain[IR_CNEW] || J->chain[IR_CNEWI] || J->chain[IR_TOSTR]))
 
 /* -- Constant folding for FP numbers ------------------------------------- */
@@ -445,7 +446,7 @@ LJFOLD(SNEW any KINT)
 LJFOLDF(kfold_snew_empty)
 {
   if (fright->i == 0)
-    return lj_ir_kstr(J, lj_str_new(J->L, "", 0));
+    return lj_ir_kstr(J, &J2G(J)->strempty);
   return NEXTFOLD;
 }
 
@@ -1900,6 +1901,7 @@ LJFOLD(RETF any any)  /* Modifies BASE. */
 LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
 LJFOLD(CNEW any any)
+LJFOLD(XSNEW any any)
 LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */

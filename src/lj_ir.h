@@ -110,6 +110,7 @@
   \
   /* Allocations. */ \
   _(SNEW,	N , ref, ref)  /* CSE is ok, not marked as A. */ \
+  _(XSNEW,	A , ref, ref) \
   _(TNEW,	AW, lit, lit) \
   _(TDUP,	AW, ref, ___) \
   _(CNEW,	AW, ref, ref) \
