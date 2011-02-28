@@ -20,6 +20,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #if LJ_HASFFI
+#include "lj_ctype.h"
 #include "lj_cdata.h"
 #endif
 #include "lj_trace.h"
@@ -170,8 +171,9 @@ static int gc_traverse_tab(global_State *g, GCtab *t)
     while ((c = *modestr++)) {
       if (c == 'k') weak |= LJ_GC_WEAKKEY;
       else if (c == 'v') weak |= LJ_GC_WEAKVAL;
+      else if (c == 'K') weak = (int)(~0u & ~LJ_GC_WEAKVAL);
     }
-    if (weak) {  /* Weak tables are cleared in the atomic phase. */
+    if (weak > 0) {  /* Weak tables are cleared in the atomic phase. */
       t->marked = cast_byte((t->marked & ~LJ_GC_WEAK) | weak);
       setgcrefr(t->gclist, g->gc.weak);
       setgcref(g->gc.weak, obj2gco(t));
@@ -458,52 +460,97 @@ static void gc_clearweak(GCobj *o)
   }
 }
 
-/* Finalize one userdata object from mmudata list. */
+/* Call a userdata or cdata finalizer. */
+static void gc_call_finalizer(global_State *g, lua_State *L,
+			      cTValue *mo, GCobj *o)
+{
+  /* Save and restore lots of state around the __gc callback. */
+  uint8_t oldh = hook_save(g);
+  MSize oldt = g->gc.threshold;
+  int errcode;
+  TValue *top;
+  lj_trace_abort(g);
+  top = L->top;
+  L->top = top+2;
+  hook_entergc(g);  /* Disable hooks and new traces during __gc. */
+  g->gc.threshold = LJ_MAX_MEM;  /* Prevent GC steps. */
+  copyTV(L, top, mo);
+  setgcV(L, top+1, o, ~o->gch.gct);
+  errcode = lj_vm_pcall(L, top+1, 1+0, -1);  /* Stack: |mo|o| -> | */
+  hook_restore(g, oldh);
+  g->gc.threshold = oldt;  /* Restore GC threshold. */
+  if (errcode)
+    lj_err_throw(L, errcode);  /* Propagate errors. */
+}
+
+/* Finalize one userdata or cdata object from the mmudata list. */
 static void gc_finalize(lua_State *L)
 {
   global_State *g = G(L);
   GCobj *o = gcnext(gcref(g->gc.mmudata));
-  GCudata *ud = gco2ud(o);
   cTValue *mo;
   lua_assert(gcref(g->jit_L) == NULL);  /* Must not be called on trace. */
   /* Unchain from list of userdata to be finalized. */
   if (o == gcref(g->gc.mmudata))
     setgcrefnull(g->gc.mmudata);
   else
-    setgcrefr(gcref(g->gc.mmudata)->gch.nextgc, ud->nextgc);
-  /* Add it back to the main userdata list and make it white. */
-  setgcrefr(ud->nextgc, mainthread(g)->nextgc);
-  setgcref(mainthread(g)->nextgc, o);
+    setgcrefr(gcref(g->gc.mmudata)->gch.nextgc, o->gch.nextgc);
   makewhite(g, o);
-  /* Resolve the __gc metamethod. */
-  mo = lj_meta_fastg(g, tabref(ud->metatable), MM_gc);
-  if (mo) {
-    /* Save and restore lots of state around the __gc callback. */
-    uint8_t oldh = hook_save(g);
-    MSize oldt = g->gc.threshold;
-    int errcode;
-    TValue *top;
-    lj_trace_abort(g);
-    top = L->top;
-    L->top = top+2;
-    hook_entergc(g);  /* Disable hooks and new traces during __gc. */
-    g->gc.threshold = LJ_MAX_MEM;  /* Prevent GC steps. */
-    copyTV(L, top, mo);
-    setudataV(L, top+1, ud);
-    errcode = lj_vm_pcall(L, top+1, 1+0, -1);  /* Stack: |mo|ud| -> | */
-    hook_restore(g, oldh);
-    g->gc.threshold = oldt;  /* Restore GC threshold. */
-    if (errcode)
-      lj_err_throw(L, errcode);  /* Propagate errors. */
+#if LJ_HASFFI
+  if (o->gch.gct == ~LJ_TCDATA) {
+    TValue tmp, *tv;
+    setgcrefr(o->gch.nextgc, g->gc.root);  /* Add cdata back to the gc list. */
+    setgcref(g->gc.root, o);
+    /* Resolve finalizer. */
+    setcdataV(L, &tmp, gco2cd(o));
+    tv = lj_tab_set(L, ctype_ctsG(g)->finalizer, &tmp);
+    if (!tvisnil(tv)) {
+      copyTV(L, &tmp, tv);
+      setnilV(tv);  /* Clear entry in finalizer table. */
+      gc_call_finalizer(g, L, &tmp, o);
+    }
+    return;
   }
+#endif
+  /* Add userdata back to the main userdata list. */
+  setgcrefr(o->gch.nextgc, mainthread(g)->nextgc);
+  setgcref(mainthread(g)->nextgc, o);
+  /* Resolve the __gc metamethod. */
+  mo = lj_meta_fastg(g, tabref(gco2ud(o)->metatable), MM_gc);
+  if (mo)
+    gc_call_finalizer(g, L, mo, o);
 }
 
 /* Finalize all userdata objects from mmudata list. */
-void lj_gc_finalizeudata(lua_State *L)
+void lj_gc_finalize_udata(lua_State *L)
 {
   while (gcref(G(L)->gc.mmudata) != NULL)
     gc_finalize(L);
 }
+
+#if LJ_HASFFI
+/* Finalize all cdata objects from finalizer table. */
+void lj_gc_finalize_cdata(lua_State *L)
+{
+  global_State *g = G(L);
+  CTState *cts = ctype_ctsG(g);
+  if (cts) {
+    GCtab *t = cts->finalizer;
+    Node *node = noderef(t->node);
+    ptrdiff_t i;
+    setgcrefnull(t->metatable);  /* Mark finalizer table as disabled. */
+    for (i = (ptrdiff_t)t->hmask; i >= 0; i--)
+      if (!tvisnil(&node[i].val) && tviscdata(&node[i].key)) {
+	GCobj *o = gcV(&node[i].key);
+	TValue tmp;
+	o->gch.marked &= ~LJ_GC_CDATA_FIN;
+	copyTV(L, &tmp, &node[i].val);
+	setnilV(&node[i].val);
+	gc_call_finalizer(g, L, &tmp, o);
+      }
+  }
+}
+#endif
 
 /* Free all remaining GC objects. */
 void lj_gc_freeall(global_State *g)

@@ -52,7 +52,18 @@ GCcdata *lj_cdata_newv(CTState *cts, CTypeID id, CTSize sz, CTSize align)
 /* Free a C data object. */
 void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
 {
-  if (LJ_LIKELY(!cdataisv(cd))) {
+  if (LJ_UNLIKELY(cd->marked & LJ_GC_CDATA_FIN)) {
+    GCobj *root;
+    cd->marked = curwhite(g) | LJ_GC_FINALIZED;
+    if ((root = gcref(g->gc.mmudata)) != NULL) {
+      setgcrefr(cd->nextgc, root->gch.nextgc);
+      setgcref(root->gch.nextgc, obj2gco(cd));
+      setgcref(g->gc.mmudata, obj2gco(cd));
+    } else {
+      setgcref(cd->nextgc, obj2gco(cd));
+      setgcref(g->gc.mmudata, obj2gco(cd));
+    }
+  } else if (LJ_LIKELY(!cdataisv(cd))) {
     CType *ct = ctype_raw(ctype_ctsG(g), cd->typeid);
     CTSize sz = ctype_hassize(ct->info) ? ct->size : CTSIZE_PTR;
     lua_assert(ctype_hassize(ct->info) || ctype_isfunc(ct->info) ||

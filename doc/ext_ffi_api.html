@@ -238,6 +238,34 @@ This functions is mainly useful to override the pointer compatibility
 checks or to convert pointers to addresses or vice versa.
 </p>
 
+<h3 id="ffi_gc"><tt>cdata = ffi.gc(cdata, finalizer)</tt></h3>
+<p>
+Associates a finalizer with a pointer or aggregate cdata object. The
+cdata object is returned unchanged.
+</p>
+<p>
+This function allows safe integration of unmanaged resources into the
+automatic memory management of the LuaJIT garbage collector. Typical
+usage:
+</p>
+<pre class="code">
+local p = ffi.gc(ffi.C.malloc(n), ffi.C.free)
+...
+p = nil -- Last reference to p is gone.
+-- GC will eventually run finalizer: ffi.C.free(p)
+</pre>
+<p>
+A cdata finalizer works like the <tt>__gc</tt> metamethod for userdata
+objects: when the last reference to a cdata object is gone, the
+associated finalizer is called with the cdata object as an argument. The
+finalizer can be a Lua function or a cdata function or cdata function
+pointer. An existing finalizer can be removed by setting a <tt>nil</tt>
+finalizer, e.g. right before explicitly deleting a resource:
+</p>
+<pre class="code">
+ffi.C.free(ffi.gc(p, nil)) -- Manually free the memory.
+</pre>
+
 <h2 id="info">C&nbsp;Type Information</h2>
 <p>
 The following API functions return information about C&nbsp;types.

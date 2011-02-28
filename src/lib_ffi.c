@@ -17,6 +17,7 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ctype.h"
 #include "lj_cparse.h"
 #include "lj_cdata.h"
@@ -353,6 +354,24 @@ LJLIB_CF(ffi_new)	LJLIB_REC(.)
   return 1;
 }
 
+LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
+{
+  CTState *cts = ctype_cts(L);
+  CTypeID id = ffi_checkctype(L, cts);
+  CType *d = ctype_raw(cts, id);
+  TValue *o = lj_lib_checkany(L, 2);
+  L->top = o+1;  /* Make sure this is the last item on the stack. */
+  if (!(ctype_isnum(d->info) || ctype_isptr(d->info) || ctype_isenum(d->info)))
+    lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
+  if (!(tviscdata(o) && cdataV(o)->typeid == id)) {
+    GCcdata *cd = lj_cdata_new(cts, id, d->size);
+    lj_cconv_ct_tv(cts, d, cdataptr(cd), o, CCF_CAST);
+    setcdataV(L, o, cd);
+    lj_gc_check(L);
+  }
+  return 1;
+}
+
 LJLIB_CF(ffi_typeof)
 {
   CTState *cts = ctype_cts(L);
@@ -417,24 +436,6 @@ LJLIB_CF(ffi_offsetof)
     }
   }
   return 0;
-}
-
-LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
-{
-  CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
-  CType *d = ctype_raw(cts, id);
-  TValue *o = lj_lib_checkany(L, 2);
-  L->top = o+1;  /* Make sure this is the last item on the stack. */
-  if (!(ctype_isnum(d->info) || ctype_isptr(d->info) || ctype_isenum(d->info)))
-    lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
-  if (!(tviscdata(o) && cdataV(o)->typeid == id)) {
-    GCcdata *cd = lj_cdata_new(cts, id, d->size);
-    lj_cconv_ct_tv(cts, d, cdataptr(cd), o, CCF_CAST);
-    setcdataV(L, o, cd);
-    lj_gc_check(L);
-  }
-  return 1;
 }
 
 LJLIB_CF(ffi_string)	LJLIB_REC(.)
@@ -520,6 +521,30 @@ LJLIB_CF(ffi_abi)	LJLIB_REC(.)
 
 #undef H_
 
+LJLIB_PUSH(top-7) LJLIB_SET(!)  /* Store reference to weak table. */
+
+LJLIB_CF(ffi_gc)
+{
+  GCcdata *cd = ffi_checkcdata(L, 1);
+  TValue *fin = lj_lib_checkany(L, 2);
+  CTState *cts = ctype_cts(L);
+  GCtab *t = cts->finalizer;
+  CType *ct = ctype_raw(cts, cd->typeid);
+  if (!(ctype_isptr(ct->info) || ctype_isstruct(ct->info) ||
+	ctype_isrefarray(ct->info)))
+    lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
+  if (gcref(t->metatable)) {  /* Update finalizer table, if still enabled. */
+    copyTV(L, lj_tab_set(L, t, L->base), fin);
+    lj_gc_anybarriert(L, t);
+    if (!tvisnil(fin))
+      cd->marked |= LJ_GC_CDATA_FIN;
+    else
+      cd->marked &= ~LJ_GC_CDATA_FIN;
+  }
+  L->top = L->base+1;  /* Pass through the cdata object. */
+  return 1;
+}
+
 LJLIB_PUSH(top-5) LJLIB_SET(!)  /* Store clib metatable in func environment. */
 
 LJLIB_CF(ffi_load)
@@ -538,9 +563,23 @@ LJLIB_PUSH(top-2) LJLIB_SET(arch)
 
 /* ------------------------------------------------------------------------ */
 
+/* Create special weak-keyed finalizer table. */
+static GCtab *ffi_finalizer(lua_State *L)
+{
+  /* NOBARRIER: The table is new (marked white). */
+  GCtab *t = lj_tab_new(L, 0, 1);
+  settabV(L, L->top++, t);
+  setgcref(t->metatable, obj2gco(t));
+  setstrV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "__mode")),
+	  lj_str_newlit(L, "K"));
+  t->nomm = (uint8_t)(~(1u<<MM_mode));
+  return t;
+}
+
 LUALIB_API int luaopen_ffi(lua_State *L)
 {
-  lj_ctype_init(L);
+  CTState *cts = lj_ctype_init(L);
+  cts->finalizer = ffi_finalizer(L);
   LJ_LIB_REG(L, NULL, ffi_meta);
   /* NOBARRIER: basemt is a GC root. */
   setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top-1)));

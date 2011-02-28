@@ -20,6 +20,7 @@ enum {
 #define LJ_GC_FINALIZED	0x08
 #define LJ_GC_WEAKKEY	0x08
 #define LJ_GC_WEAKVAL	0x10
+#define LJ_GC_CDATA_FIN	0x10
 #define LJ_GC_FIXED	0x20
 #define LJ_GC_SFIXED	0x40
 
@@ -42,7 +43,12 @@ enum {
 
 /* Collector. */
 LJ_FUNC size_t lj_gc_separateudata(global_State *g, int all);
-LJ_FUNC void lj_gc_finalizeudata(lua_State *L);
+LJ_FUNC void lj_gc_finalize_udata(lua_State *L);
+#if LJ_HASFFI
+LJ_FUNC void lj_gc_finalize_cdata(lua_State *L);
+#else
+#define lj_gc_finalize_cdata(L)		UNUSED(L)
+#endif
 LJ_FUNC void lj_gc_freeall(global_State *g);
 LJ_FUNCA int LJ_FASTCALL lj_gc_step(lua_State *L);
 LJ_FUNCA void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L);
