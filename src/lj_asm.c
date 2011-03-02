@@ -4394,7 +4394,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 
     if (!as->loopref) {
       /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
-      as->mcp -= (as->flags & JIT_F_LEA_AGU) ? 7 : 6  + (LJ_64 ? 1 : 0);
+      as->mcp -= ((as->flags & JIT_F_LEA_AGU) ? 7 : 6)  + (LJ_64 ? 1 : 0);
       as->invmcp = NULL;
       asm_tail_link(as);
     }
