@@ -413,23 +413,27 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
   if (tvisstr(vc) && !lj_str_tonum(strV(vc), vc))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   n = numV(vc);
-  /* Limit narrowing for pow to small exponents (or for two constants). */
-  if ((tref_isk(rc) && tref_isint(rc) && tref_isk(rb)) ||
-      ((J->flags & JIT_F_OPT_NARROW) &&
-       (numisint(n) && n >= -65536.0 && n <= 65536.0))) {
-    TRef tmp;
+  /* Narrowing must be unconditional to preserve (-x)^i semantics. */
+  if (numisint(n)) {
+    int checkrange = 0;
+    /* Split pow is faster for bigger exponents. But do this only for (+k)^i. */
+    if (tref_isk(rb) && (int32_t)ir_knum(IR(tref_ref(rb)))->u32.hi >= 0) {
+      if (!(n >= -65536.0 && n <= 65536.0)) goto split_pow;
+      checkrange = 1;
+    }
     if (!tref_isinteger(rc)) {
       if (tref_isstr(rc))
 	rc = emitir(IRTG(IR_STRTO, IRT_NUM), rc, 0);
       /* Guarded conversion to integer! */
       rc = emitir(IRTGI(IR_CONV), rc, IRCONV_INT_NUM|IRCONV_CHECK);
     }
-    if (!tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
-      tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536-2147483647-1));
-      emitir(IRTGI(IR_LE), tmp, lj_ir_kint(J, 2*65536-2147483647-1));
+    if (checkrange && !tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
+      TRef tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536));
+      emitir(IRTGI(IR_ULE), tmp, lj_ir_kint(J, 2*65536));
     }
     return emitir(IRTN(IR_POW), rb, rc);
   }
+split_pow:
   /* FOLD covers most cases, but some are easier to do here. */
   if (tref_isk(rb) && tvispone(ir_knum(IR(tref_ref(rb)))))
     return rb;  /* 1 ^ x ==> 1 */
