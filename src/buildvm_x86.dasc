@@ -4055,10 +4055,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 	|  ucomisd xmm0, qword [KBASE+RD*8]
       } else {
 	|  fild dword [BASE+RA*8]
-	|  fld qword [BASE+RD*8]
+	|  fld qword [KBASE+RD*8]
       }
       |  jmp >4
-      |
     } else {
       |  cmp RB, LJ_TISNUM; jae >3
     }
@@ -4073,8 +4072,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  fld qword [KBASE+RD*8]
       |2:
       |  fld qword [BASE+RA*8]
-      |  fcomparepp			// eax (RD) modified!
       |4:
+      |  fcomparepp			// eax (RD) modified!
     }
     goto iseqne_fp;
   case BC_ISEQP: case BC_ISNEP:
