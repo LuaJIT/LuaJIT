@@ -3992,6 +3992,8 @@ static void asm_ir(ASMState *as, IRIns *ir)
   /* Miscellaneous ops. */
   case IR_LOOP: asm_loop(as); break;
   case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
+  case IR_USE:
+    ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
   case IR_PHI: asm_phi(as, ir); break;
   case IR_HIOP: asm_hiop(as, ir); break;
 
@@ -4077,6 +4079,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   /* Overflow-checking arithmetic ops. Note: don't use LEA here! */
   case IR_ADDOV: asm_intarith(as, ir, XOg_ADD); break;
   case IR_SUBOV: asm_intarith(as, ir, XOg_SUB); break;
+  case IR_MULOV: asm_intarith(as, ir, XOg_X_IMUL); break;
 
   /* Memory references. */
   case IR_AREF: asm_aref(as, ir); break;

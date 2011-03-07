@@ -35,6 +35,7 @@
   _(BASE,	N , lit, lit) \
   _(HIOP,	S , ref, ref) \
   _(LOOP,	S , ___, ___) \
+  _(USE,	S , ref, ___) \
   _(PHI,	S , ref, ref) \
   _(RENAME,	S , ref, lit) \
   \
@@ -78,8 +79,9 @@
   _(FPMATH,	N , ref, lit) \
   \
   /* Overflow-checking arithmetic ops. */ \
-  _(ADDOV,	C , ref, ref) \
-  _(SUBOV,	N , ref, ref) \
+  _(ADDOV,	CW, ref, ref) \
+  _(SUBOV,	NW, ref, ref) \
+  _(MULOV,	CW, ref, ref) \
   \
   /* Memory ops. A = array, H = hash, U = upvalue, F = field, S = stack. */ \
   \
@@ -339,6 +341,7 @@ typedef enum {
 #define IRM_W			0x80
 
 #define IRM_NW			(IRM_N|IRM_W)
+#define IRM_CW			(IRM_C|IRM_W)
 #define IRM_AW			(IRM_A|IRM_W)
 #define IRM_LW			(IRM_L|IRM_W)
 

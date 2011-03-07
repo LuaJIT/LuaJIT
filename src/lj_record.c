@@ -1860,8 +1860,9 @@ static void rec_setup_forl(jit_State *J, const BCIns *fori)
 	    emitir(IRTGI(IR_GE), step, lj_ir_kint(J, (int32_t)0x80000000-k));
 	}
       } else {
-	/* Stop+step variable: need full overflow check (with dead result). */
-	emitir(IRTGI(IR_ADDOV), step, stop);
+	/* Stop+step variable: need full overflow check. */
+	TRef tr = emitir(IRTGI(IR_ADDOV), step, stop);
+	emitir(IRTI(IR_USE), tr, 0);  /* ADDOV is weak. Avoid dead result. */
       }
     }
   } else if (t == IRT_INT && !tref_isk(stop)) {

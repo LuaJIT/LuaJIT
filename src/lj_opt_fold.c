@@ -247,6 +247,19 @@ LJFOLDF(kfold_intarith)
   return INTFOLD(kfold_intop(fleft->i, fright->i, (IROp)fins->o));
 }
 
+LJFOLD(ADDOV KINT KINT)
+LJFOLD(SUBOV KINT KINT)
+LJFOLD(MULOV KINT KINT)
+LJFOLDF(kfold_intovarith)
+{
+  lua_Number n = lj_vm_foldarith((lua_Number)fleft->i, (lua_Number)fright->i,
+				 fins->o - IR_ADDOV);
+  int32_t k = lj_num2int(n);
+  if (n != (lua_Number)k)
+    return FAILFOLD;
+  return INTFOLD(k);
+}
+
 LJFOLD(BNOT KINT)
 LJFOLDF(kfold_bnot)
 {
@@ -992,6 +1005,21 @@ LJFOLDF(simplify_intadd_k)
   return NEXTFOLD;
 }
 
+LJFOLD(MULOV any KINT)
+LJFOLDF(simplify_intmul_k)
+{
+  if (fright->i == 0)  /* i * 0 ==> 0 */
+    return RIGHTFOLD;
+  if (fright->i == 1)  /* i * 1 ==> i */
+    return LEFTFOLD;
+  if (fright->i == 2) {  /* i * 2 ==> i + i */
+    fins->o = IR_ADDOV;
+    fins->op2 = fins->op1;
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
+
 LJFOLD(SUB any KINT)
 LJFOLDF(simplify_intsub_k)
 {
@@ -1484,6 +1512,7 @@ LJFOLDF(abc_invar)
 LJFOLD(ADD any any)
 LJFOLD(MUL any any)
 LJFOLD(ADDOV any any)
+LJFOLD(MULOV any any)
 LJFOLDF(comm_swap)
 {
   if (fins->op1 < fins->op2) {  /* Move lower ref to the right. */
