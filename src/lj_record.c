@@ -1400,6 +1400,10 @@ void lj_record_ins(jit_State *J)
 	  }
       }
       break;
+    case LJ_POST_FFRETRY:  /* Suppress recording of retried fast function. */
+      if (bc_op(*J->pc) >= BC__MAX)
+	return;
+      break;
     default: lua_assert(0); break;
     }
     J->postproc = LJ_POST_NONE;

@@ -799,8 +799,10 @@ void lj_ffrecord_func(jit_State *J)
   rd.argv = J->L->base;
   J->base[J->maxslot] = 0;  /* Mark end of arguments. */
   (recff_func[m >> 8])(J, &rd);  /* Call recff_* handler. */
-  if (rd.nres >= 0)
+  if (rd.nres >= 0) {
+    if (J->postproc == LJ_POST_NONE) J->postproc = LJ_POST_FFRETRY;
     lj_record_ret(J, 0, rd.nres);
+  }
 }
 
 #undef IR
