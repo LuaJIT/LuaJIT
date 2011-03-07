@@ -4007,7 +4007,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_RETF: asm_retf(as, ir); break;
 
   /* Bit ops. */
-  case IR_BNOT: asm_neg_not(as, ir, XOg_NOT);
+  case IR_BNOT: asm_neg_not(as, ir, XOg_NOT); break;
   case IR_BSWAP: asm_bitswap(as, ir); break;
 
   case IR_BAND: asm_intarith(as, ir, XOg_AND); break;
