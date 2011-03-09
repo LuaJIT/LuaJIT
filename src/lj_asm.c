@@ -4256,7 +4256,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       break;
 #endif
     /* C calls evict all scratch regs and return results in RID_RET. */
-    case IR_SNEW: case IR_NEWREF:
+    case IR_SNEW: case IR_XSNEW: case IR_NEWREF:
 #if !LJ_64
       if (as->evenspill < 3)  /* lj_str_new and lj_tab_newkey need 3 args. */
 	as->evenspill = 3;
