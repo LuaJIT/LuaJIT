@@ -3753,6 +3753,16 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
 #endif
   |
   |//-----------------------------------------------------------------------
+  |//-- Assertions ---------------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->assert_bad_for_arg_type:
+#ifdef LUA_USE_ASSERT
+  |  int3
+#endif
+  |  int3
+  |
+  |//-----------------------------------------------------------------------
 }
 
 /* Generate the code for a single instruction. */
@@ -5534,6 +5544,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
 	|  mov RB, dword FOR_IDX
 	|  cmp dword FOR_STEP, 0; jl >5
       } else {
+#ifdef LUA_USE_ASSERT
+	|  cmp FOR_TSTOP, LJ_TISNUM; jne ->assert_bad_for_arg_type
+	|  cmp FOR_TSTEP, LJ_TISNUM; jne ->assert_bad_for_arg_type
+#endif
 	|  mov RB, dword FOR_STEP
 	|  test RB, RB; js >5
 	|  add RB, dword FOR_IDX; jo >1
@@ -5593,6 +5607,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     if (!vk) {
       |  jae ->vmeta_for
       |  cmp FOR_TSTOP, LJ_TISNUM; jae ->vmeta_for
+    } else {
+#ifdef LUA_USE_ASSERT
+      |  cmp FOR_TSTOP, LJ_TISNUM; jae ->assert_bad_for_arg_type
+      |  cmp FOR_TSTEP, LJ_TISNUM; jae ->assert_bad_for_arg_type
+#endif
     }
     |  mov RB, FOR_TSTEP		// Load type/hiword of for step.
     if (!vk) {
