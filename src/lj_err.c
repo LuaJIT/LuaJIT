@@ -87,9 +87,10 @@ static BCPos currentpc(lua_State *L, GCfunc *fn, cTValue *nextframe)
   if (!isluafunc(fn)) {  /* Cannot derive a PC for non-Lua functions. */
     return ~(BCPos)0;
   } else if (nextframe == NULL) {  /* Lua function on top. */
-    if (L->cframe == NULL)
+    void *cf = cframe_raw(L->cframe);
+    if (cf == NULL || (char *)cframe_pc(cf) == (char *)cframe_L(cf))
       return ~(BCPos)0;
-    ins = cframe_Lpc(L);  /* Only happens during error/hook handling. */
+    ins = cframe_pc(cf);  /* Only happens during error/hook handling. */
   } else {
     if (frame_islua(nextframe)) {
       ins = frame_pc(nextframe);
@@ -815,9 +816,11 @@ LJ_NOINLINE static void err_loc(lua_State *L, const char *msg,
     if (isluafunc(fn)) {
       char buff[LUA_IDSIZE];
       BCLine line = currentline(L, fn, nextframe);
-      err_chunkid(buff, strdata(proto_chunkname(funcproto(fn))));
-      lj_str_pushf(L, "%s:%d: %s", buff, line, msg);
-      return;
+      if (line >= 0) {
+	err_chunkid(buff, strdata(proto_chunkname(funcproto(fn))));
+	lj_str_pushf(L, "%s:%d: %s", buff, line, msg);
+	return;
+      }
     }
   }
   lj_str_pushf(L, "%s", msg);
