@@ -2904,7 +2904,7 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
     x86Op xo;
     if (checki8(k)) { emit_i8(as, k); xo = XO_IMULi8;
     } else { emit_i32(as, k); xo = XO_IMULi; }
-    emit_rr(as, xo, REX_64IR(ir, dest), left);
+    emit_mrm(as, xo, REX_64IR(ir, dest), left);
     return;
   }
   ra_left(as, dest, lref);
