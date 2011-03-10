@@ -1803,7 +1803,7 @@ static void cp_decl_single(CPState *cp)
 /* Protected callback for C parser. */
 static TValue *cpcparser(lua_State *L, lua_CFunction dummy, void *ud)
 {
-  CPState *cp = cast(CPState *, ud);
+  CPState *cp = (CPState *)ud;
   UNUSED(dummy);
   cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */
   cp_init(cp);

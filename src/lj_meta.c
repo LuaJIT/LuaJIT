@@ -291,7 +291,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     if (tabref(o1->gch.metatable) != tabref(o2->gch.metatable)) {
       cTValue *mo2 = lj_meta_fast(L, tabref(o2->gch.metatable), MM_eq);
       if (mo2 == NULL || !lj_obj_equal(mo, mo2))
-	return cast(TValue *, (intptr_t)ne);
+	return (TValue *)(intptr_t)ne;
     }
     top = curr_top(L);
     setcont(top, ne ? lj_cont_condf : lj_cont_condt);
@@ -301,7 +301,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     setgcV(L, top+3, o2, it);
     return top+2;  /* Trigger metamethod call. */
   }
-  return cast(TValue *, (intptr_t)ne);
+  return (TValue *)(intptr_t)ne;
 }
 
 #if LJ_HASFFI
@@ -329,7 +329,7 @@ TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
   if (LJ_LIKELY(!tvisnil(mo)))
     return mmcall(L, cont, mo, o1, o2);
   else
-    return cast(TValue *, (intptr_t)(bc_op(ins) & 1));
+    return (TValue *)(intptr_t)(bc_op(ins) & 1);
 }
 #endif
 
@@ -345,7 +345,7 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
   } else if (itype(o1) == itype(o2)) {  /* Never called with two numbers. */
     if (tvisstr(o1) && tvisstr(o2)) {
       int32_t res = lj_str_cmp(strV(o1), strV(o2));
-      return cast(TValue *, (intptr_t)(((op&2) ? res <= 0 : res < 0) ^ (op&1)));
+      return (TValue *)(intptr_t)(((op&2) ? res <= 0 : res < 0) ^ (op&1));
     } else {
     trymt:
       while (1) {

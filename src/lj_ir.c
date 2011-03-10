@@ -267,7 +267,7 @@ TRef lj_ir_kint64(jit_State *J, uint64_t u64)
 static int numistrueint(lua_Number n, int32_t *kp)
 {
   int32_t k = lj_num2int(n);
-  if (n == cast_num(k)) {
+  if (n == (lua_Number)k) {
     if (kp) *kp = k;
     if (k == 0) {  /* Special check for -0. */
       TValue tv;

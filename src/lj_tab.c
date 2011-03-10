@@ -580,20 +580,20 @@ static MSize unbound_search(GCtab *t, MSize j)
   MSize i = j;  /* i is zero or a present index */
   j++;
   /* find `i' and `j' such that i is present and j is not */
-  while ((tv = lj_tab_getint(t, cast(int32_t, j))) && !tvisnil(tv)) {
+  while ((tv = lj_tab_getint(t, (int32_t)j)) && !tvisnil(tv)) {
     i = j;
     j *= 2;
     if (j > (MSize)(INT_MAX-2)) {  /* overflow? */
       /* table was built with bad purposes: resort to linear search */
       i = 1;
-      while ((tv = lj_tab_getint(t, cast(int32_t, i))) && !tvisnil(tv)) i++;
+      while ((tv = lj_tab_getint(t, (int32_t)i)) && !tvisnil(tv)) i++;
       return i - 1;
     }
   }
   /* now do a binary search between them */
   while (j - i > 1) {
     MSize m = (i+j)/2;
-    cTValue *tvb = lj_tab_getint(t, cast(int32_t, m));
+    cTValue *tvb = lj_tab_getint(t, (int32_t)m);
     if (tvb && !tvisnil(tvb)) i = m; else j = m;
   }
   return i;

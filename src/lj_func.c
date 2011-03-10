@@ -95,7 +95,7 @@ void LJ_FASTCALL lj_func_freeuv(global_State *g, GCupval *uv)
 
 GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 {
-  GCfunc *fn = cast(GCfunc *, lj_mem_newgco(L, sizeCfunc(nelems)));
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems));
   fn->c.gct = ~LJ_TFUNC;
   fn->c.ffid = FF_C;
   fn->c.nupvalues = (uint8_t)nelems;
@@ -107,7 +107,7 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 
 GCfunc *lj_func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
-  GCfunc *fn = cast(GCfunc *, lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv)));
+  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv));
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
   fn->l.nupvalues = (uint8_t)pt->sizeuv;

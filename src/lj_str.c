@@ -316,7 +316,7 @@ static void addchar(lua_State *L, SBuf *sb, int c)
     MSize sz = sb->sz * 2;
     lj_str_resizebuf(L, sb, sz);
   }
-  sb->buf[sb->n++] = cast(char, c);
+  sb->buf[sb->n++] = (char)c;
 }
 
 /* Push formatted message as a string object to Lua stack. va_list variant. */

@@ -181,7 +181,7 @@ lua_State *lj_state_newstate(lua_Alloc f, void *ud)
 LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
 #endif
 {
-  GG_State *GG = cast(GG_State *, f(ud, NULL, 0, sizeof(GG_State)));
+  GG_State *GG = (GG_State *)f(ud, NULL, 0, sizeof(GG_State));
   lua_State *L = &GG->L;
   global_State *g = &GG->g;
   if (GG == NULL || !checkptr32(GG)) return NULL;

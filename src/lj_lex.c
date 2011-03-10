@@ -36,7 +36,7 @@ TKDEF(TKSTR1, TKSTR2)
 
 /* -- Buffer handling ----------------------------------------------------- */
 
-#define char2int(c)		cast(int, cast(uint8_t, (c)))
+#define char2int(c)		((int)(uint8_t)(c))
 #define next(ls) \
   (ls->current = (ls->n--) > 0 ? char2int(*ls->p++) : fillbuf(ls))
 #define save_and_next(ls)	(save(ls, ls->current), next(ls))

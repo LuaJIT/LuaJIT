@@ -1264,7 +1264,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   dasm_put(Dst, 1837, ((char *)(&((GCfuncC *)0)->upvalue)), LJ_TSTR, 1+1, LJ_TTAB, Dt6(->metatable), LJ_TNIL, DISPATCH_GL(gcroot)+4*(GCROOT_MMNAME+MM_metatable), LJ_TTAB);
   dasm_put(Dst, 1920, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), DtB(->next), LJ_TNIL);
   dasm_put(Dst, 1978, LJ_TUDATA, LJ_TISNUM, LJ_TNUMX, DISPATCH_GL(gcroot[GCROOT_BASEMT]), 2+1);
-  dasm_put(Dst, 2041, LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->marked), LJ_GC_BLACK, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+  dasm_put(Dst, 2041, LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->metatable), LJ_TTAB, Dt6(->marked), LJ_GC_BLACK, Dt6(->marked), (uint8_t)~LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
   dasm_put(Dst, 2113, 2+1, LJ_TTAB, 1+1, LJ_TISNUM);
   if (LJ_DUALNUM) {
     dasm_put(Dst, 2202);
@@ -2791,21 +2791,21 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       dasm_put(Dst, 14358);
     }
     dasm_put(Dst, 14363, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex);
-    dasm_put(Dst, 14447, LJ_TSTR, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 14447, LJ_TSTR, Dt6(->marked), (uint8_t)~LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
   case BC_TSETS:
     dasm_put(Dst, 14504, LJ_TTAB, Dt6(->hmask), Dt5(->hash), sizeof(Node), Dt6(->nomm), Dt6(->node), DtB(->key.it), LJ_TSTR, DtB(->key.gcr), LJ_TNIL);
     dasm_put(Dst, 14579, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, DtB(->next));
-    dasm_put(Dst, 14671, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt1(->base), Dt1(->base), Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 14671, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, LJ_TSTR, Dt1(->base), Dt1(->base), Dt6(->marked), (uint8_t)~LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
   case BC_TSETB:
     dasm_put(Dst, 14767, LJ_TTAB, Dt6(->asize), Dt6(->array), LJ_TNIL, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable));
-    dasm_put(Dst, 14865, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 14865, Dt6(->metatable), Dt6(->nomm), 1<<MM_newindex, Dt6(->marked), (uint8_t)~LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
 
   case BC_TSETM:
     dasm_put(Dst, 14911, Dt6(->marked), LJ_GC_BLACK, Dt6(->asize), Dt6(->array), Dt1(->base), Dt1(->base));
-    dasm_put(Dst, 15060, Dt6(->marked), cast_byte(~LJ_GC_BLACK), DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
+    dasm_put(Dst, 15060, Dt6(->marked), (uint8_t)~LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), DISPATCH_GL(gc.grayagain), Dt6(->gclist));
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */

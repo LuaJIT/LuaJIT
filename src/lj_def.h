@@ -74,13 +74,7 @@ typedef unsigned __int32 uintptr_t;
 #define UNUSED(x)	((void)(x))	/* to avoid warnings */
 #endif
 
-#ifndef cast
-#define cast(t, exp)	((t)(exp))
-#endif
-
 #define U64x(hi, lo)	(((uint64_t)0x##hi << 32) + (uint64_t)0x##lo)
-#define cast_byte(i)	cast(uint8_t, (i))
-#define cast_num(i)	cast(lua_Number, (i))
 #define i32ptr(p)	((int32_t)(intptr_t)(void *)(p))
 #define u32ptr(p)	((uint32_t)(intptr_t)(void *)(p))
 

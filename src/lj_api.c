@@ -500,7 +500,7 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
   if (tvisstr(o))
     return strV(o)->len;
   else if (tvistab(o))
-    return cast(size_t, lj_tab_len(tabV(o)));
+    return (size_t)lj_tab_len(tabV(o));
   else if (tvisudata(o))
     return udataV(o)->len;
   else if (tvisnumber(o))
@@ -1129,7 +1129,7 @@ LUA_API int lua_resume(lua_State *L, int nargs)
 
 static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
 {
-  LexState *ls = cast(LexState *, ud);
+  LexState *ls = (LexState *)ud;
   GCfunc *fn;
   UNUSED(dummy);
   cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */

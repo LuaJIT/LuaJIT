@@ -189,7 +189,7 @@ LJFOLD(POW KNUM KINT)
 LJFOLDF(kfold_numpow)
 {
   lua_Number a = knumleft;
-  lua_Number b = cast_num(fright->i);
+  lua_Number b = (lua_Number)fright->i;
   lua_Number y = lj_vm_foldarith(a, b, IR_POW - IR_ADD);
   return lj_ir_knum(J, y);
 }
@@ -545,13 +545,13 @@ LJFOLDF(kfold_tobit)
 LJFOLD(CONV KINT IRCONV_NUM_INT)
 LJFOLDF(kfold_conv_kint_num)
 {
-  return lj_ir_knum(J, cast_num(fleft->i));
+  return lj_ir_knum(J, (lua_Number)fleft->i);
 }
 
 LJFOLD(CONV KINT IRCONV_NUM_U32)
 LJFOLDF(kfold_conv_kintu32_num)
 {
-  return lj_ir_knum(J, cast_num((uint32_t)fleft->i));
+  return lj_ir_knum(J, (lua_Number)(uint32_t)fleft->i);
 }
 
 LJFOLD(CONV KINT IRCONV_I64_INT)
@@ -567,13 +567,13 @@ LJFOLDF(kfold_conv_kint_i64)
 LJFOLD(CONV KINT64 IRCONV_NUM_I64)
 LJFOLDF(kfold_conv_kint64_num_i64)
 {
-  return lj_ir_knum(J, cast_num((int64_t)ir_kint64(fleft)->u64));
+  return lj_ir_knum(J, (lua_Number)(int64_t)ir_kint64(fleft)->u64);
 }
 
 LJFOLD(CONV KINT64 IRCONV_NUM_U64)
 LJFOLDF(kfold_conv_kint64_num_u64)
 {
-  return lj_ir_knum(J, cast_num(ir_kint64(fleft)->u64));
+  return lj_ir_knum(J, (lua_Number)ir_kint64(fleft)->u64);
 }
 
 LJFOLD(CONV KINT64 IRCONV_INT_I64)
@@ -589,7 +589,7 @@ LJFOLDF(kfold_conv_knum_int_num)
   lua_Number n = knumleft;
   if (!(fins->op2 & IRCONV_TRUNC)) {
     int32_t k = lj_num2int(n);
-    if (irt_isguard(fins->t) && n != cast_num(k)) {
+    if (irt_isguard(fins->t) && n != (lua_Number)k) {
       /* We're about to create a guard which always fails, like CONV +1.5.
       ** Some pathological loops cause this during LICM, e.g.:
       **   local x,k,t = 0,1.5,{1,[1.5]=2}
