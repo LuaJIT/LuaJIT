@@ -495,8 +495,8 @@ static int trace_abort(jit_State *J)
 
   J->postproc = LJ_POST_NONE;
   lj_mcode_abort(J);
-  if (tvisnum(L->top-1))
-    e = (TraceError)lj_num2int(numV(L->top-1));
+  if (tvisnumber(L->top-1))
+    e = (TraceError)numberVint(L->top-1);
   if (e == LJ_TRERR_MCODELM) {
     J->state = LJ_TRACE_ASM;
     return 1;  /* Retry ASM with new MCode area. */
@@ -703,8 +703,12 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     setintV(L->top++, J->exitno);
     setintV(L->top++, RID_NUM_GPR);
     setintV(L->top++, RID_NUM_FPR);
-    for (i = 0; i < RID_NUM_GPR; i++)
-      setnumV(L->top++, cast_num(ex->gpr[i]));
+    for (i = 0; i < RID_NUM_GPR; i++) {
+      if (sizeof(ex->gpr[i]) == sizeof(int32_t))
+	setintV(L->top++, (int32_t)ex->gpr[i]);
+      else
+	setnumV(L->top++, (lua_Number)ex->gpr[i]);
+    }
     for (i = 0; i < RID_NUM_FPR; i++) {
       setnumV(L->top, ex->fpr[i]);
       if (LJ_UNLIKELY(tvisnan(L->top)))

@@ -426,32 +426,6 @@ TRef LJ_FASTCALL lj_ir_tostr(jit_State *J, TRef tr)
   return tr;
 }
 
-/* Convert from number or string to bitop operand (overflow wrapped). */
-TRef LJ_FASTCALL lj_ir_tobit(jit_State *J, TRef tr)
-{
-  if (!tref_isinteger(tr)) {
-    if (tref_isstr(tr))
-      tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
-    else if (!tref_isnum(tr))
-      lj_trace_err(J, LJ_TRERR_BADTYPE);
-    tr = emitir(IRTI(IR_TOBIT), tr, lj_ir_knum_tobit(J));
-  }
-  return tr;
-}
-
-/* Convert from number or string to integer (overflow undefined). */
-TRef LJ_FASTCALL lj_ir_toint(jit_State *J, TRef tr)
-{
-  if (!tref_isinteger(tr)) {
-    if (tref_isstr(tr))
-      tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
-    else if (!tref_isnum(tr))
-      lj_trace_err(J, LJ_TRERR_BADTYPE);
-    tr = emitir(IRTI(IR_CONV), tr, IRCONV_INT_NUM|IRCONV_ANY);
-  }
-  return tr;
-}
-
 /* -- Miscellaneous IR ops ------------------------------------------------ */
 
 /* Evaluate numeric comparison. */

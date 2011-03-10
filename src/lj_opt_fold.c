@@ -558,7 +558,10 @@ LJFOLD(CONV KINT IRCONV_I64_INT)
 LJFOLD(CONV KINT IRCONV_U64_INT)
 LJFOLDF(kfold_conv_kint_i64)
 {
-  return INT64FOLD((uint64_t)(int64_t)fleft->i);
+  if ((fins->op2 & IRCONV_SEXT))
+    return INT64FOLD((uint64_t)(int64_t)fleft->i);
+  else
+    return INT64FOLD((uint64_t)(int64_t)(uint32_t)fleft->i);
 }
 
 LJFOLD(CONV KINT64 IRCONV_NUM_I64)

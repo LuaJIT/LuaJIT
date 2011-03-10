@@ -300,8 +300,11 @@ static void loop_unroll(jit_State *J)
 	}
 	/* Check all loop-carried dependencies for type instability. */
 	if (!irt_sametype(t, irr->t)) {
-	  if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num case. */
+	  if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num. */
 	    subst[ins] = tref_ref(emitir(IRTN(IR_CONV), ref, IRCONV_NUM_INT));
+	  else if (irt_isnum(irr->t) && irt_isinteger(t))  /* Fix num->int. */
+	    subst[ins] = tref_ref(emitir(IRTGI(IR_CONV), ref,
+					 IRCONV_INT_NUM|IRCONV_CHECK));
 	  else if (!(irt_isinteger(t) && irt_isinteger(irr->t)))
 	    lj_trace_err(J, LJ_TRERR_TYPEINS);
 	}
@@ -355,8 +358,8 @@ int lj_opt_loop(jit_State *J)
   int errcode = lj_vm_cpcall(J->L, NULL, J, cploop_opt);
   if (LJ_UNLIKELY(errcode)) {
     lua_State *L = J->L;
-    if (errcode == LUA_ERRRUN && tvisnum(L->top-1)) {  /* Trace error? */
-      int32_t e = lj_num2int(numV(L->top-1));
+    if (errcode == LUA_ERRRUN && tvisnumber(L->top-1)) {  /* Trace error? */
+      int32_t e = numberVint(L->top-1);
       switch ((TraceError)e) {
       case LJ_TRERR_TYPEINS:  /* Type instability. */
       case LJ_TRERR_GFAIL:  /* Guard would always fail. */

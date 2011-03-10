@@ -68,7 +68,8 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 	if (!(ir->op2 & IRSLOAD_INHERIT))
 	  continue;
 	/* No need to restore readonly slots and unmodified non-parent slots. */
-	if ((ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
+	if (!(LJ_DUALNUM && (ir->op2 & IRSLOAD_CONVERT)) &&
+	    (ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
 	  sn |= SNAP_NORESTORE;
       }
       map[n++] = sn;

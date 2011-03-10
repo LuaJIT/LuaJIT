@@ -325,8 +325,6 @@ typedef struct GCproto {
 #define proto_kgc(pt, idx) \
   check_exp((uintptr_t)(intptr_t)(idx) >= (uintptr_t)-(intptr_t)(pt)->sizekgc, \
 	    gcref(mref((pt)->k, GCRef)[(idx)]))
-#define proto_knum(pt, idx) \
-  check_exp((uintptr_t)(idx) < (pt)->sizekn, mref((pt)->k, lua_Number)[(idx)])
 #define proto_knumtv(pt, idx) \
   check_exp((uintptr_t)(idx) < (pt)->sizekn, &mref((pt)->k, TValue)[(idx)])
 #define proto_bc(pt)		((BCIns *)((char *)(pt) + sizeof(GCproto)))

@@ -2059,7 +2059,7 @@ static void asm_href(ASMState *as, IRIns *ir)
     } else {
       emit_sjcc(as, CC_P, l_next);
       emit_rmro(as, XO_UCOMISD, key, dest, offsetof(Node, key.n));
-      emit_sjcc(as, CC_A, l_next);
+      emit_sjcc(as, CC_AE, l_next);
       /* The type check avoids NaN penalties and complaints from Valgrind. */
 #if LJ_64
       emit_u32(as, LJ_TISNUM);
@@ -2388,7 +2388,8 @@ static Reg asm_load_lightud64(ASMState *as, IRIns *ir, int typecheck)
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
 {
-  lua_assert(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t));
+  lua_assert(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t) ||
+	     (LJ_DUALNUM && irt_isint(ir->t)));
 #if LJ_64
   if (irt_islightud(ir->t)) {
     Reg dest = asm_load_lightud64(as, ir, 1);
@@ -2409,8 +2410,9 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   }
   /* Always do the type check, even if the load result is unused. */
   as->mrm.ofs += 4;
-  asm_guardcc(as, irt_isnum(ir->t) ? CC_A : CC_NE);
-  if (LJ_64 && irt_isnum(ir->t)) {
+  asm_guardcc(as, irt_isnum(ir->t) ? CC_AE : CC_NE);
+  if (LJ_64 && irt_type(ir->t) >= IRT_NUM) {
+    lua_assert(irt_isinteger(ir->t) || irt_isnum(ir->t));
     emit_u32(as, LJ_TISNUM);
     emit_mrm(as, XO_ARITHi, XOg_CMP, RID_MRM);
   } else {
@@ -2443,7 +2445,7 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
     if (ra_hasreg(src)) {
       emit_mrm(as, XO_MOVto, src, RID_MRM);
     } else if (!irt_ispri(irr->t)) {
-      lua_assert(irt_isaddr(ir->t));
+      lua_assert(irt_isaddr(ir->t) || (LJ_DUALNUM && irt_isinteger(ir->t)));
       emit_i32(as, irr->i);
       emit_mrm(as, XO_MOVmi, 0, RID_MRM);
     }
@@ -2460,8 +2462,9 @@ static void asm_sload(ASMState *as, IRIns *ir)
   Reg base;
   lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
   lua_assert(irt_isguard(t) || !(ir->op2 & IRSLOAD_TYPECHECK));
-  lua_assert(!irt_isint(t) || (ir->op2 & (IRSLOAD_CONVERT|IRSLOAD_FRAME)));
-  if ((ir->op2 & IRSLOAD_CONVERT) && irt_isguard(t)) {
+  lua_assert(LJ_DUALNUM ||
+	     !irt_isint(t) || (ir->op2 & (IRSLOAD_CONVERT|IRSLOAD_FRAME)));
+  if ((ir->op2 & IRSLOAD_CONVERT) && irt_isguard(t) && irt_isint(t)) {
     Reg left = ra_scratch(as, RSET_FPR);
     asm_tointg(as, ir, left);  /* Frees dest reg. Do this before base alloc. */
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
@@ -2481,12 +2484,14 @@ static void asm_sload(ASMState *as, IRIns *ir)
     Reg dest = ra_dest(as, ir, allow);
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
     lua_assert(irt_isnum(t) || irt_isint(t) || irt_isaddr(t));
-    if ((ir->op2 & IRSLOAD_CONVERT))
-      emit_rmro(as, XO_CVTSD2SI, dest, base, ofs);
-    else if (irt_isnum(t))
+    if ((ir->op2 & IRSLOAD_CONVERT)) {
+      t.irt = irt_isint(t) ? IRT_NUM : IRT_INT;  /* Check for original type. */
+      emit_rmro(as, irt_isint(t) ? XO_CVTSI2SD : XO_CVTSD2SI, dest, base, ofs);
+    } else if (irt_isnum(t)) {
       emit_rmro(as, XMM_MOVRM(as), dest, base, ofs);
-    else
+    } else {
       emit_rmro(as, XO_MOV, dest, base, ofs);
+    }
   } else {
     if (!(ir->op2 & IRSLOAD_TYPECHECK))
       return;  /* No type check: avoid base alloc. */
@@ -2494,8 +2499,9 @@ static void asm_sload(ASMState *as, IRIns *ir)
   }
   if ((ir->op2 & IRSLOAD_TYPECHECK)) {
     /* Need type check, even if the load result is unused. */
-    asm_guardcc(as, irt_isnum(t) ? CC_A : CC_NE);
-    if (LJ_64 && irt_isnum(t)) {
+    asm_guardcc(as, irt_isnum(t) ? CC_AE : CC_NE);
+    if (LJ_64 && irt_type(t) >= IRT_NUM) {
+      lua_assert(irt_isinteger(t) || irt_isnum(t));
       emit_u32(as, LJ_TISNUM);
       emit_rmro(as, XO_ARITHi, XOg_CMP, base, ofs+4);
     } else {
@@ -3408,7 +3414,8 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
       Reg src = ra_alloc1(as, ref, RSET_FPR);
       emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
     } else {
-      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t));
+      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t) ||
+		 (LJ_DUALNUM && irt_isinteger(ir->t)));
       if (!irref_isk(ref)) {
 	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
 	emit_movtomro(as, REX_64IR(ir, src), RID_BASE, ofs);
