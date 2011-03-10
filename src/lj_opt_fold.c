@@ -897,6 +897,16 @@ LJFOLDF(simplify_conv_i64_num)
   return NEXTFOLD;
 }
 
+LJFOLD(CONV CONV IRCONV_INT_I64)  /* _INT */
+LJFOLD(CONV CONV IRCONV_INT_U64)  /* _INT */
+LJFOLDF(simplify_conv_int_i64)
+{
+  PHIBARRIER(fleft);
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT)
+    return fleft->op1;
+  return NEXTFOLD;
+}
+
 /* Shortcut TOBIT + IRT_NUM <- IRT_INT/IRT_U32 conversion. */
 LJFOLD(TOBIT CONV KNUM)
 LJFOLDF(simplify_tobit_conv)
@@ -954,6 +964,26 @@ LJFOLDF(simplify_conv_sext)
     }
   }
   return NEXTFOLD;
+}
+
+/* Strength reduction of narrowing. */
+LJFOLD(CONV ADD IRCONV_INT_I64)
+LJFOLD(CONV SUB IRCONV_INT_I64)
+LJFOLD(CONV MUL IRCONV_INT_I64)
+LJFOLD(CONV ADD IRCONV_INT_U64)
+LJFOLD(CONV SUB IRCONV_INT_U64)
+LJFOLD(CONV MUL IRCONV_INT_U64)
+LJFOLDF(simplify_conv_narrow)
+{
+  IROp op = (IROp)fleft->o;
+  IRRef op1 = fleft->op1, op2 = fleft->op2, mode = fins->op2;
+  PHIBARRIER(fleft);
+  op1 = emitir(IRTI(IR_CONV), op1, mode);
+  op2 = emitir(IRTI(IR_CONV), op2, mode);
+  fins->ot = IRTI(op);
+  fins->op1 = op1;
+  fins->op2 = op2;
+  return RETRYFOLD;
 }
 
 /* Special CSE rule for CONV. */

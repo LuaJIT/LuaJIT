@@ -503,10 +503,17 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     IRType t;
     if (ctype_isenum(ctk->info)) ctk = ctype_child(cts, ctk);
     if (ctype_isinteger(ctk->info) && (t = crec_ct2irt(ctk)) != IRT_CDATA) {
-      idx = emitir(IRT(IR_ADD, IRT_PTR), idx, lj_ir_kintp(J, sizeof(GCcdata)));
-      idx = emitir(IRT(IR_XLOAD, t), idx, 0);
-      if (!LJ_64 && (t == IRT_I64 || t == IRT_U64)) {
-	idx = emitconv(idx, IRT_INT, t, 0);
+      if (ctk->size == 8) {
+	idx = emitir(IRT(IR_FLOAD, t), idx, IRFL_CDATA_INT64);
+      } else {
+	idx = emitir(IRT(IR_ADD, IRT_PTR), idx,
+		     lj_ir_kintp(J, sizeof(GCcdata)));
+	idx = emitir(IRT(IR_XLOAD, t), idx, 0);
+      }
+      if (LJ_64 && ctk->size < sizeof(intptr_t) && !(ctk->info & CTF_UNSIGNED))
+	idx = emitconv(idx, IRT_INTP, IRT_INT, IRCONV_SEXT);
+      if (!LJ_64 && ctk->size > sizeof(intptr_t)) {
+	idx = emitconv(idx, IRT_INTP, t, 0);
 	lj_needsplit(J);
       }
       goto integer_key;
