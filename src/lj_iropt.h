@@ -82,6 +82,7 @@ static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 LJ_FUNC void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir);
 
 /* Convert IR operand types. */
+LJ_FUNC TRef LJ_FASTCALL lj_ir_tonumber(jit_State *J, TRef tr);
 LJ_FUNC TRef LJ_FASTCALL lj_ir_tonum(jit_State *J, TRef tr);
 LJ_FUNC TRef LJ_FASTCALL lj_ir_tostr(jit_State *J, TRef tr);
 

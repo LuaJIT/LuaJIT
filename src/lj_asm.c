@@ -3005,6 +3005,17 @@ static void asm_neg_not(ASMState *as, IRIns *ir, x86Group3 xg)
   ra_left(as, dest, ir->op1);
 }
 
+static void asm_min_max(ASMState *as, IRIns *ir, int cc)
+{
+  Reg right, dest = ra_dest(as, ir, RSET_GPR);
+  IRRef lref = ir->op1, rref = ir->op2;
+  if (irref_isk(rref)) { lref = rref; rref = ir->op1; }
+  right = ra_alloc1(as, rref, rset_exclude(RSET_GPR, dest));
+  emit_rr(as, XO_CMOV + (cc<<24), REX_64IR(ir, dest), right);
+  emit_rr(as, XO_CMP, REX_64IR(ir, dest), right);
+  ra_left(as, dest, lref);
+}
+
 static void asm_bitswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
@@ -4067,8 +4078,18 @@ static void asm_ir(ASMState *as, IRIns *ir)
     break;
   case IR_ABS: asm_fparith(as, ir, XO_ANDPS); break;
 
-  case IR_MIN: asm_fparith(as, ir, XO_MINSD); break;
-  case IR_MAX: asm_fparith(as, ir, XO_MAXSD); break;
+  case IR_MIN:
+    if (irt_isnum(ir->t))
+      asm_fparith(as, ir, XO_MINSD);
+    else
+      asm_min_max(as, ir, CC_G);
+    break;
+  case IR_MAX:
+    if (irt_isnum(ir->t))
+      asm_fparith(as, ir, XO_MAXSD);
+    else
+      asm_min_max(as, ir, CC_L);
+    break;
 
   case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
     asm_fpmath(as, ir);

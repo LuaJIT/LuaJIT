@@ -401,6 +401,18 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
 
 /* -- Convert IR operand types -------------------------------------------- */
 
+/* Convert from string to number. */
+TRef LJ_FASTCALL lj_ir_tonumber(jit_State *J, TRef tr)
+{
+  if (!tref_isnumber(tr)) {
+    if (tref_isstr(tr))
+      tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
+    else
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+  return tr;
+}
+
 /* Convert from integer or string to number. */
 TRef LJ_FASTCALL lj_ir_tonum(jit_State *J, TRef tr)
 {
