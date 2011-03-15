@@ -535,6 +535,21 @@ TRef lj_opt_narrow_arith(jit_State *J, TRef rb, TRef rc,
   return emitir(IRTN(op), rb, rc);
 }
 
+/* Narrowing of unary minus operator. */
+TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
+{
+  if (tref_isstr(rc)) {
+    rc = emitir(IRTG(IR_STRTO, IRT_NUM), rc, 0);
+    lj_str_tonum(strV(vc), vc);
+  }
+  if (tref_isinteger(rc)) {
+    if ((uint32_t)numberVint(vc) != 0x80000000u)
+      return emitir(IRTGI(IR_SUBOV), lj_ir_kint(J, 0), rc);
+    rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
+  }
+  return emitir(IRTN(IR_NEG), rc, lj_ir_knum_neg(J));
+}
+
 /* Narrowing of modulo operator. */
 TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc)
 {

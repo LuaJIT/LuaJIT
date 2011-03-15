@@ -1666,8 +1666,7 @@ void lj_record_ins(jit_State *J)
 
   case BC_UNM:
     if (tref_isnumber_str(rc)) {
-      rc = lj_ir_tonum(J, rc);
-      rc = emitir(IRTN(IR_NEG), rc, lj_ir_knum_neg(J));
+      rc = lj_opt_narrow_unm(J, rc, &ix.tabv);
     } else {
       ix.tab = rc;
       copyTV(J->L, &ix.tabv, &ix.keyv);

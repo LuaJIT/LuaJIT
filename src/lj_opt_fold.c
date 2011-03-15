@@ -701,7 +701,7 @@ LJFOLDF(shortcut_dropleft)
 }
 
 /* Note: no safe shortcuts with STRTO and TOSTR ("1e2" ==> +100 ==> "100"). */
-LJFOLD(NEG NEG KNUM)
+LJFOLD(NEG NEG any)
 LJFOLD(BNOT BNOT)
 LJFOLD(BSWAP BSWAP)
 LJFOLDF(shortcut_leftleft)
@@ -1065,6 +1065,18 @@ LJFOLDF(simplify_intsub_k)
   fins->o = IR_ADD;  /* i - k ==> i + (-k) */
   fins->op2 = (IRRef1)lj_ir_kint(J, -fright->i);  /* Overflow for -2^31 ok. */
   return RETRYFOLD;
+}
+
+LJFOLD(SUB KINT any)
+LJFOLD(SUB KINT64 any)
+LJFOLDF(simplify_intsub_kleft)
+{
+  if (fleft->o == IR_KINT ? (fleft->i == 0) : (ir_kint64(fleft)->u64 == 0)) {
+    fins->o = IR_NEG;  /* 0 - i ==> -i */
+    fins->op1 = fins->op2;
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
 }
 
 LJFOLD(ADD any KINT64)
