@@ -414,9 +414,17 @@ static void LJ_FASTCALL recff_math_abs(jit_State *J, RecordFFData *rd)
 /* Record rounding functions math.floor and math.ceil. */
 static void LJ_FASTCALL recff_math_round(jit_State *J, RecordFFData *rd)
 {
-  if (!tref_isinteger(J->base[0]))  /* Pass through integers unmodified. */
-    J->base[0] = emitir(IRTN(IR_FPMATH), lj_ir_tonum(J, J->base[0]), rd->data);
-  /* Note: result is integral (or NaN/Inf), but may not fit into an integer. */
+  TRef tr = J->base[0];
+  if (!tref_isinteger(tr)) {  /* Pass through integers unmodified. */
+    tr = emitir(IRTN(IR_FPMATH), lj_ir_tonum(J, tr), rd->data);
+    /* Result is integral (or NaN/Inf), but may not fit an int32_t. */
+    if (LJ_DUALNUM) {  /* Try to narrow using a guarded conversion to int. */
+      lua_Number n = lj_vm_foldfpm(numberVnum(&rd->argv[0]), rd->data);
+      if (n == (lua_Number)lj_num2int(n))
+	tr = emitir(IRTGI(IR_CONV), tr, IRCONV_INT_NUM|IRCONV_CHECK);
+    }
+    J->base[0] = tr;
+  }
 }
 
 /* Record unary math.* functions, mapped to IR_FPMATH opcode. */
