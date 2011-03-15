@@ -730,6 +730,7 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
       tr = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, tr);
     }
     J->base[0] = tr;
+    J->needsnap = 1;
     return 1;
   }
   return 0;
