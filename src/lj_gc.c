@@ -310,7 +310,7 @@ static size_t propagatemark(global_State *g)
   setgcrefr(g->gc.gray, o->gch.gclist);  /* Remove from gray list. */
   if (LJ_LIKELY(o->gch.gct == ~LJ_TTAB)) {
     GCtab *t = gco2tab(o);
-    if (gc_traverse_tab(g, t))
+    if (gc_traverse_tab(g, t) > 0)
       black2gray(o);  /* Keep weak tables gray. */
     return sizeof(GCtab) + sizeof(TValue) * t->asize +
 			   sizeof(Node) * (t->hmask + 1);
