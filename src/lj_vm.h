@@ -19,6 +19,9 @@ LJ_ASMF_NORET void LJ_FASTCALL lj_vm_unwind_c(void *cframe, int errcode);
 LJ_ASMF_NORET void LJ_FASTCALL lj_vm_unwind_ff(void *cframe);
 LJ_ASMF void lj_vm_unwind_c_eh(void);
 LJ_ASMF void lj_vm_unwind_ff_eh(void);
+#if LJ_TARGET_X86ORX64
+LJ_ASMF void lj_vm_unwind_rethrow(void);
+#endif
 
 /* Miscellaneous functions. */
 #if LJ_TARGET_X86ORX64

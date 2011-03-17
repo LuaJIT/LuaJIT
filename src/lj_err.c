@@ -577,6 +577,16 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
 				       lj_vm_unwind_c_eh));
       return _URC_INSTALL_CONTEXT;
     }
+#if LJ_TARGET_X86ORX64
+    else if ((actions & _UA_HANDLER_FRAME)) {
+      /* Workaround for ancient libgcc bug. Still present in RHEL 5.5. :-/
+      ** Real fix: http://gcc.gnu.org/viewcvs/trunk/gcc/unwind-dw2.c?r1=121165&r2=124837&pathrev=153877&diff_format=h
+      */
+      _Unwind_SetGR(ctx, LJ_TARGET_EHRETREG, errcode);
+      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_rethrow);
+      return _URC_INSTALL_CONTEXT;
+    }
+#endif
 #else
     /* This is not the proper way to escape from the unwinder. We get away with
     ** it on x86/PPC because the interpreter restores all callee-saved regs.

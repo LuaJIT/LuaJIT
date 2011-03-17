@@ -530,6 +530,14 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov dword GL:RB->vmstate, ~LJ_VMST_C
   |  jmp ->vm_leave_unw
   |
+  |->vm_unwind_rethrow:
+  |.if X64 and not X64WIN
+  |  mov FCARG1, SAVE_L
+  |  mov FCARG2, eax
+  |  restoreregs
+  |  jmp extern lj_err_throw@8		// (lua_State *L, int errcode)
+  |.endif
+  |
   |->vm_unwind_ff@4:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
   |.if X64
