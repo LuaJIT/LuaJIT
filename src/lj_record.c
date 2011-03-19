@@ -1655,7 +1655,7 @@ void lj_record_ins(jit_State *J)
       rc = lj_ir_call(J, IRCALL_lj_tab_len, rc);
     } else {
       ix.tab = rc;
-      copyTV(J->L, &ix.tabv, &ix.keyv);
+      copyTV(J->L, &ix.tabv, rcv);
       ix.key = TREF_NIL;
       setnilV(&ix.keyv);
       rc = rec_mm_arith(J, &ix, MM_len);
@@ -1666,19 +1666,20 @@ void lj_record_ins(jit_State *J)
 
   case BC_UNM:
     if (tref_isnumber_str(rc)) {
-      rc = lj_opt_narrow_unm(J, rc, &ix.tabv);
+      rc = lj_opt_narrow_unm(J, rc, rcv);
     } else {
       ix.tab = rc;
-      copyTV(J->L, &ix.tabv, &ix.keyv);
+      copyTV(J->L, &ix.tabv, rcv);
       rc = rec_mm_arith(J, &ix, MM_unm);
     }
     break;
 
   case BC_ADDNV: case BC_SUBNV: case BC_MULNV: case BC_DIVNV: case BC_MODNV:
+    /* Swap rb/rc and rbv/rcv. rav is temp. */
     ix.tab = rc; ix.key = rc = rb; rb = ix.tab;
-    copyTV(J->L, &ix.valv, &ix.tabv);
-    copyTV(J->L, &ix.tabv, &ix.keyv);
-    copyTV(J->L, &ix.keyv, &ix.valv);
+    copyTV(J->L, rav, rbv);
+    copyTV(J->L, rbv, rcv);
+    copyTV(J->L, rcv, rav);
     if (op == BC_MODNV)
       goto recmod;
     /* fallthrough */
@@ -1686,7 +1687,7 @@ void lj_record_ins(jit_State *J)
   case BC_ADDVV: case BC_SUBVV: case BC_MULVV: case BC_DIVVV: {
     MMS mm = bcmode_mm(op);
     if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
-      rc = lj_opt_narrow_arith(J, rb, rc, &ix.tabv, &ix.keyv,
+      rc = lj_opt_narrow_arith(J, rb, rc, rbv, rcv,
 			       (int)mm - (int)MM_add + (int)IR_ADD);
     else
       rc = rec_mm_arith(J, &ix, mm);
