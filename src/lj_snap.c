@@ -217,7 +217,8 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
       if (op >= BC_CALLM && op <= BC_VARG) {
 	BCReg top = (op == BC_CALLM || op == BC_CALLMT || bc_c(ins) == 0) ?
 		    maxslot : (bc_a(ins) + bc_c(ins));
-	for (s = bc_a(ins); s < top; s++) USE_SLOT(s);
+	s = bc_a(ins) - ((op == BC_ITERC || op == BC_ITERN) ? 3 : 0);
+	for (; s < top; s++) USE_SLOT(s);
 	for (; s < maxslot; s++) DEF_SLOT(s);
 	if (op == BC_CALLT || op == BC_CALLMT) {
 	  for (s = 0; s < bc_a(ins); s++) DEF_SLOT(s);
