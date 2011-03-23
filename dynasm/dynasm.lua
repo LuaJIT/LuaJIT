@@ -723,8 +723,10 @@ local function splitstmt_one(c)
     splitlvl = ")"..splitlvl
   elseif c == "[" then
     splitlvl = "]"..splitlvl
-  elseif c == ")" or c == "]" then
-    if sub(splitlvl, 1, 1) ~= c then werror("unbalanced () or []") end
+  elseif c == "{" then
+    splitlvl = "}"..splitlvl
+  elseif c == ")" or c == "]" or c == "}" then
+    if sub(splitlvl, 1, 1) ~= c then werror("unbalanced (), [] or {}") end
     splitlvl = sub(splitlvl, 2)
   elseif splitlvl == "" then
     return " \0 "
@@ -740,7 +742,7 @@ local function splitstmt(stmt)
 
   -- Split at commas and equal signs, but obey parentheses and brackets.
   splitlvl = ""
-  stmt = gsub(stmt, "[,%(%)%[%]]", splitstmt_one)
+  stmt = gsub(stmt, "[,%(%)%[%]{}]", splitstmt_one)
   if splitlvl ~= "" then werror("unbalanced () or []") end
 
   -- Split off opcode.
@@ -783,7 +785,7 @@ dostmt = function(stmt)
   if not f then
     if not g_arch then wfatal("first statement must be .arch") end
     -- Improve error report.
-    for i=0,16 do
+    for i=0,9 do
       if map_op[op.."_"..i] then
 	werror("wrong number of parameters for `"..op.."'")
       end
