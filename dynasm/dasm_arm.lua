@@ -723,7 +723,7 @@ map_op[".template__"] = function(params, template, nparams)
 	op = op + parse_gpr(p)
       else
 	if op < 0xe0000000 then werror("unconditional instruction") end
-	local mode, n, s = parse_label(params[n], false)
+	local mode, n, s = parse_label(p, false)
 	waction("REL_"..mode, n, s, 1)
 	op = 0xfa000000
       end

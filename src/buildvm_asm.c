@@ -96,7 +96,17 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
   emit_asm_words(ctx, p, n-4);
   ins = *(uint32_t *)(p+n-4);
 #if LJ_TARGET_ARM
-  UNUSED(sym);  /* NYI */
+  if ((ins & 0xff000000u) == 0xfa000000u) {
+    fprintf(ctx->fp, "\tblx %s\n", sym);
+  } else if ((ins & 0x0e000000u) == 0x0a000000u) {
+    fprintf(ctx->fp, "\t%s%.2s %s\n", (ins & 0x01000000u) ? "bl" : "b",
+	    "eqnecsccmiplvsvchilsgeltgtle" + 2*(ins >> 28), sym);
+  } else {
+    fprintf(stderr,
+	    "Error: unsupported opcode %08x for %s symbol relocation.\n",
+	    ins, sym);
+    exit(1);
+  }
 #elif LJ_TARGET_PPC
   if ((ins >> 26) == 16) {
     fprintf(ctx->fp, "\t%s %d, %d, %s\n",
@@ -185,7 +195,7 @@ void emit_asm(BuildCtx *ctx)
     int32_t ofs = ctx->sym[i].ofs;
     int32_t next = ctx->sym[i+1].ofs;
     emit_asm_label(ctx, ctx->sym[i].name, next - ofs, 1);
-    while (rel < ctx->nreloc && ctx->reloc[rel].ofs < next) {
+    while (rel < ctx->nreloc && ctx->reloc[rel].ofs <= next) {
       BuildReloc *r = &ctx->reloc[rel];
       int n = r->ofs - ofs;
 #if LJ_TARGET_X86ORX64
