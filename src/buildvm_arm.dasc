@@ -1,0 +1,866 @@
+|// Low-level VM code for ARM CPUs.
+|// Bytecode interpreter, fast functions and helper functions.
+|// Copyright (C) 2005-2011 Mike Pall. See Copyright Notice in luajit.h
+|
+|.arch arm
+|.section code_op, code_sub
+|
+|.actionlist build_actionlist
+|.globals GLOB_
+|.globalnames globnames
+|.externnames extnames
+|
+|// Note: The ragged indentation of the instructions is intentional.
+|//       The starting columns indicate data dependencies.
+|
+|//-----------------------------------------------------------------------
+|
+|// Trap for not-yet-implemented parts.
+|.macro NYI; ud; .endmacro
+|
+|//-----------------------------------------------------------------------
+|
+|// Assumes DISPATCH is relative to GL.
+#define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
+#define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
+|
+#define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
+|
+|.macro hotloop
+|  NYI
+|.endmacro
+|
+|.macro hotcall
+|  NYI
+|.endmacro
+|
+|//-----------------------------------------------------------------------
+
+/* Generate subroutines used by opcodes and other parts of the VM. */
+/* The .code_sub section should be last to help static branch prediction. */
+static void build_subroutines(BuildCtx *ctx)
+{
+  |.code_sub
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Return handling ----------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_returnp:
+  |  NYI
+  |
+  |->vm_returnc:
+  |  NYI
+  |
+  |->vm_return:
+  |  NYI
+  |
+  |->vm_leave_cp:
+  |  NYI
+  |
+  |->vm_leave_unw:
+  |  NYI
+  |
+  |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
+  |  NYI
+  |->vm_unwind_c_eh:			// Landing pad for external unwinder.
+  |  NYI
+  |
+  |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
+  |  NYI
+  |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Grow stack for calls -----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_growstack_c:			// Grow stack for C function.
+  |  NYI
+  |
+  |->vm_growstack_l:			// Grow stack for Lua function.
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Entry points into the assembler VM ---------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_resume:				// Setup C frame and resume thread.
+  |  NYI
+  |
+  |->vm_pcall:				// Setup protected C frame and enter VM.
+  |  NYI
+  |
+  |->vm_call:				// Setup C frame and enter VM.
+  |  NYI
+  |
+  |->vm_call_dispatch:
+  |  NYI
+  |
+  |->vm_call_dispatch_f:
+  |  NYI
+  |
+  |->vm_cpcall:				// Setup protected C frame, call C.
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Metamethod handling ------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |//-- Continuation dispatch ----------------------------------------------
+  |
+  |->cont_dispatch:
+  |  NYI
+  |
+  |->cont_cat:
+  |  NYI
+  |
+  |//-- Table indexing metamethods -----------------------------------------
+  |
+  |->vmeta_tgets:
+  |  NYI
+  |
+  |->vmeta_tgetb:
+  |  NYI
+  |
+  |->vmeta_tgetv:
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |
+  |->vmeta_tsets:
+  |  NYI
+  |
+  |->vmeta_tsetb:
+  |  NYI
+  |
+  |->vmeta_tsetv:
+  |  NYI
+  |
+  |//-- Comparison metamethods ---------------------------------------------
+  |
+  |->vmeta_comp:
+  |  NYI
+  |
+  |->cont_nop:
+  |  NYI
+  |
+  |->cont_ra:				// RA = resultptr
+  |  NYI
+  |
+  |->cont_condt:			// RA = resultptr
+  |  NYI
+  |
+  |->cont_condf:			// RA = resultptr
+  |  NYI
+  |
+  |->vmeta_equal:
+  |  NYI
+  |
+  |//-- Arithmetic metamethods ---------------------------------------------
+  |
+  |->vmeta_arith_vn:
+  |  NYI
+  |
+  |->vmeta_arith_nv:
+  |  NYI
+  |
+  |->vmeta_unm:
+  |  NYI
+  |
+  |->vmeta_arith_vv:
+  |  NYI
+  |
+  |->vmeta_binop:
+  |  NYI
+  |
+  |->vmeta_len:
+  |  NYI
+  |
+  |//-- Call metamethod ----------------------------------------------------
+  |
+  |->vmeta_call:			// Resolve and call __call metamethod.
+  |  NYI
+  |
+  |->vmeta_callt:			// Resolve __call for BC_CALLT.
+  |  NYI
+  |
+  |//-- Argument coercion for 'for' statement ------------------------------
+  |
+  |->vmeta_for:
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Fast functions -----------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |.macro .ffunc, name
+  |->ff_ .. name:
+  |.endmacro
+  |
+  |.macro .ffunc_1, name
+  |->ff_ .. name:
+  |  NYI
+  |.endmacro
+  |
+  |.macro .ffunc_2, name
+  |->ff_ .. name:
+  |  NYI
+  |.endmacro
+  |
+  |.macro .ffunc_n, name
+  |  .ffunc_1 name
+  |  NYI
+  |.endmacro
+  |
+  |.macro .ffunc_nn, name
+  |  .ffunc_2 name
+  |  NYI
+  |.endmacro
+  |
+  |.macro ffgccheck
+  |  NYI
+  |.endmacro
+  |
+  |//-- Base library: checks -----------------------------------------------
+  |
+  |.ffunc assert
+  |  NYI
+  |
+  |.ffunc type
+  |  NYI
+  |
+  |//-- Base library: getters and setters ---------------------------------
+  |
+  |.ffunc_1 getmetatable
+  |  NYI
+  |
+  |.ffunc_2 setmetatable
+  |  NYI
+  |
+  |.ffunc rawget
+  |  NYI
+  |
+  |//-- Base library: conversions ------------------------------------------
+  |
+  |.ffunc tonumber
+  |  NYI
+  |
+  |.ffunc_1 tostring
+  |  NYI
+  |
+  |//-- Base library: iterators -------------------------------------------
+  |
+  |.ffunc next
+  |  NYI
+  |
+  |.ffunc_1 pairs
+  |  NYI
+  |
+  |.ffunc_2 ipairs_aux
+  |  NYI
+  |
+  |.ffunc_1 ipairs
+  |  NYI
+  |
+  |//-- Base library: catch errors ----------------------------------------
+  |
+  |.ffunc pcall
+  |  NYI
+  |
+  |.ffunc_2 xpcall
+  |  NYI
+  |
+  |//-- Coroutine library --------------------------------------------------
+  |
+  |.macro coroutine_resume_wrap, resume
+  |.if resume
+  |.ffunc_1 coroutine_resume
+  |.else
+  |.ffunc coroutine_wrap_aux
+  |.endif
+  |  NYI
+  |.endmacro
+  |
+  |  coroutine_resume_wrap 1		// coroutine.resume
+  |  coroutine_resume_wrap 0		// coroutine.wrap
+  |
+  |.ffunc coroutine_yield
+  |  NYI
+  |
+  |//-- Math library -------------------------------------------------------
+  |
+  |.ffunc_n math_abs
+  |  NYI
+  |
+  |->fff_restv:
+  |  NYI
+  |
+  |->fff_res1:
+  |  NYI
+  |
+  |->fff_res:
+  |  NYI
+  |
+  |.macro math_extern, func
+  |  .ffunc math_ .. func
+  |  NYI
+  |.endmacro
+  |
+  |.macro math_extern2, func
+  |  .ffunc math_ .. func
+  |  NYI
+  |.endmacro
+  |
+  |.macro math_round, func
+  |  .ffunc math_ .. func
+  |  NYI
+  |.endmacro
+  |
+  |  math_round floor
+  |  math_round ceil
+  |
+  |  math_extern sqrt
+  |  math_extern log
+  |  math_extern log10
+  |  math_extern exp
+  |  math_extern sin
+  |  math_extern cos
+  |  math_extern tan
+  |  math_extern asin
+  |  math_extern acos
+  |  math_extern atan
+  |  math_extern sinh
+  |  math_extern cosh
+  |  math_extern tanh
+  |  math_extern2 pow
+  |  math_extern2 atan2
+  |  math_extern2 fmod
+  |
+  |->ff_math_deg:
+  |.ffunc_n math_rad
+  |  NYI
+  |
+  |.ffunc math_ldexp
+  |  NYI
+  |
+  |.ffunc math_frexp
+  |  NYI
+  |
+  |.ffunc math_modf
+  |  NYI
+  |
+  |.macro math_minmax, name, cmpop
+  |  .ffunc_1 name
+  |  NYI
+  |.endmacro
+  |
+  |  math_minmax math_min, NYI
+  |  math_minmax math_max, NYI
+  |
+  |//-- String library -----------------------------------------------------
+  |
+  |.ffunc_1 string_len
+  |  NYI
+  |
+  |.ffunc string_byte			// Only handle the 1-arg case here.
+  |  NYI
+  |
+  |.ffunc string_char			// Only handle the 1-arg case here.
+  |  NYI
+  |
+  |.ffunc string_sub
+  |  NYI
+  |
+  |.ffunc string_rep			// Only handle the 1-char case inline.
+  |  NYI
+  |
+  |.ffunc string_reverse
+  |  NYI
+  |
+  |.macro ffstring_case, name, lo
+  |  .ffunc name
+  |  NYI
+  |.endmacro
+  |
+  |ffstring_case string_lower, 65
+  |ffstring_case string_upper, 97
+  |
+  |//-- Table library ------------------------------------------------------
+  |
+  |.ffunc_1 table_getn
+  |  NYI
+  |
+  |//-- Bit library --------------------------------------------------------
+  |
+  |.macro .ffunc_bit, name
+  |  .ffunc_n bit_..name
+  |  NYI
+  |.endmacro
+  |
+  |.ffunc_bit tobit
+  |  NYI
+  |->fff_resbit:
+  |  NYI
+  |
+  |.macro .ffunc_bit_op, name, ins
+  |  .ffunc_bit name
+  |  NYI
+  |.endmacro
+  |
+  |.ffunc_bit_op band, and
+  |.ffunc_bit_op bor, or
+  |.ffunc_bit_op bxor, xor
+  |
+  |.ffunc_bit bswap
+  |  NYI
+  |
+  |.ffunc_bit bnot
+  |  NYI
+  |
+  |.macro .ffunc_bit_sh, name, ins, shmod
+  |  .ffunc_nn bit_..name
+  |  NYI
+  |.endmacro
+  |
+  |.ffunc_bit_sh lshift, NYI, 1
+  |.ffunc_bit_sh rshift, NYI, 1
+  |.ffunc_bit_sh arshift, NYI, 1
+  |.ffunc_bit_sh rol, NYI, 2
+  |.ffunc_bit_sh ror, NYI, 0
+  |
+  |//-----------------------------------------------------------------------
+  |
+  |->fff_fallback:			// Call fast function fallback handler.
+  |  NYI
+  |
+  |->fff_gcstep:			// Call GC step function.
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Special dispatch targets -------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_record:				// Dispatch target for recording phase.
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |
+  |->vm_rethook:			// Dispatch target for return hooks.
+  |  NYI
+  |
+  |->vm_inshook:			// Dispatch target for instr/line hooks.
+  |  NYI
+  |
+  |->cont_hook:				// Continue from hook yield.
+  |  NYI
+  |
+  |->vm_hotloop:			// Hot loop counter underflow.
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |
+  |->vm_callhook:			// Dispatch target for call hooks.
+  |  NYI
+  |
+  |->vm_hotcall:			// Hot call counter underflow.
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Trace exit handler -------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_exit_handler:
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |->vm_exit_interp:
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Math helper functions ----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |// FP value rounding. Called by math.floor/math.ceil fast functions
+  |// and from JIT code.
+  |//
+  |.macro vm_round, name, mode
+  |->name:
+  |  NYI
+  |.endmacro
+  |
+  |  vm_round vm_floor, 0
+  |  vm_round vm_ceil,  1
+#if LJ_HASJIT
+  |  vm_round vm_trunc, 2
+#else
+  |->vm_trunc:
+#endif
+  |
+  |->vm_powi:
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |
+  |->vm_foldfpm:
+#if LJ_HASJIT
+  |  NYI
+#endif
+  |
+  |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
+  |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
+  |// and basic math functions. ORDER ARITH
+  |->vm_foldarith:
+  |  NYI
+  |
+  |//-----------------------------------------------------------------------
+  |//-- Miscellaneous functions --------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |//-----------------------------------------------------------------------
+  |//-- FFI helper functions -----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_ffi_call:
+#if LJ_HASFFI
+  |  NYI
+#endif
+  |
+  |//-----------------------------------------------------------------------
+}
+
+/* Generate the code for a single instruction. */
+static void build_ins(BuildCtx *ctx, BCOp op, int defop)
+{
+  int vk = 0;
+  |=>defop:
+
+  switch (op) {
+
+  /* -- Comparison ops ---------------------------------------------------- */
+
+  /* Remember: all ops branch for a true comparison, fall through otherwise. */
+
+  case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
+    |  NYI
+    break;
+
+  case BC_ISEQV: case BC_ISNEV:
+    vk = op == BC_ISEQV;
+    |  NYI
+    break;
+
+  case BC_ISEQS: case BC_ISNES:
+    vk = op == BC_ISEQS;
+    |  NYI
+    break;
+
+  case BC_ISEQN: case BC_ISNEN:
+    vk = op == BC_ISEQN;
+    |  NYI
+    break;
+
+  case BC_ISEQP: case BC_ISNEP:
+    vk = op == BC_ISEQP;
+    |  NYI
+    break;
+
+  /* -- Unary test and copy ops ------------------------------------------- */
+
+  case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
+    |  NYI
+    break;
+
+  /* -- Unary ops --------------------------------------------------------- */
+
+  case BC_MOV:
+    |  NYI
+    break;
+  case BC_NOT:
+    |  NYI
+    break;
+  case BC_UNM:
+    |  NYI
+    break;
+  case BC_LEN:
+    |  NYI
+    break;
+
+  /* -- Binary ops -------------------------------------------------------- */
+
+  case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
+    |  NYI
+    break;
+  case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
+    |  NYI
+    break;
+  case BC_MULVN: case BC_MULNV: case BC_MULVV:
+    |  NYI
+    break;
+  case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
+    |  NYI
+    break;
+  case BC_MODVN:
+    |  NYI
+    break;
+  case BC_MODNV: case BC_MODVV:
+    |  NYI
+    break;
+  case BC_POW:
+    |  NYI
+    break;
+
+  case BC_CAT:
+    |  NYI
+    break;
+
+  /* -- Constant ops ------------------------------------------------------ */
+
+  case BC_KSTR:
+    |  NYI
+    break;
+  case BC_KCDATA:
+#if LJ_HASFFI
+    |  NYI
+#endif
+    break;
+  case BC_KSHORT:
+    |  NYI
+    break;
+  case BC_KNUM:
+    |  NYI
+    break;
+  case BC_KPRI:
+    |  NYI
+    break;
+  case BC_KNIL:
+    |  NYI
+    break;
+
+  /* -- Upvalue and function ops ------------------------------------------ */
+
+  case BC_UGET:
+    |  NYI
+    break;
+  case BC_USETV:
+    |  NYI
+    break;
+  case BC_USETS:
+    |  NYI
+    break;
+  case BC_USETN:
+    |  NYI
+    break;
+  case BC_USETP:
+    |  NYI
+    break;
+
+  case BC_UCLO:
+    |  NYI
+    break;
+
+  case BC_FNEW:
+    |  NYI
+    break;
+
+  /* -- Table ops --------------------------------------------------------- */
+
+  case BC_TNEW:
+  case BC_TDUP:
+    |  NYI
+    break;
+
+  case BC_GGET:
+  case BC_GSET:
+    |  NYI
+    break;
+
+  case BC_TGETV:
+    |  NYI
+    break;
+  case BC_TGETS:
+    |  NYI
+    break;
+  case BC_TGETB:
+    |  NYI
+    break;
+
+  case BC_TSETV:
+    |  NYI
+    break;
+  case BC_TSETS:
+    |  NYI
+    break;
+  case BC_TSETB:
+    |  NYI
+    break;
+
+  case BC_TSETM:
+    |  NYI
+    break;
+
+  /* -- Calls and vararg handling ----------------------------------------- */
+
+  case BC_CALLM:
+    |  NYI
+    break;
+  case BC_CALL:
+    |  NYI
+    break;
+
+  case BC_CALLMT:
+    |  NYI
+    break;
+  case BC_CALLT:
+    |  NYI
+    break;
+
+  case BC_ITERC:
+    |  NYI
+    break;
+
+  case BC_ITERN:
+    |  NYI
+    break;
+
+  case BC_ISNEXT:
+    |  NYI
+    break;
+
+  case BC_VARG:
+    |  NYI
+    break;
+
+  /* -- Returns ----------------------------------------------------------- */
+
+  case BC_RETM:
+    |  NYI
+    break;
+
+  case BC_RET:
+    |  NYI
+    break;
+
+  case BC_RET0: case BC_RET1:
+    |  NYI
+    break;
+
+  /* -- Loops and branches ------------------------------------------------ */
+
+  case BC_FORL:
+#if LJ_HASJIT
+    |  hotloop
+#endif
+    |  // Fall through. Assumes BC_IFORL follows.
+    break;
+
+  case BC_JFORI:
+  case BC_JFORL:
+#if !LJ_HASJIT
+    break;
+#endif
+  case BC_FORI:
+  case BC_IFORL:
+    vk = (op == BC_IFORL || op == BC_JFORL);
+    |  NYI
+    break;
+
+  case BC_ITERL:
+#if LJ_HASJIT
+    |  hotloop
+#endif
+    |  // Fall through. Assumes BC_IITERL follows.
+    break;
+
+  case BC_JITERL:
+#if !LJ_HASJIT
+    break;
+#endif
+  case BC_IITERL:
+    |  NYI
+    break;
+
+  case BC_LOOP:
+    |  NYI
+    break;
+
+  case BC_ILOOP:
+    |  NYI
+    break;
+
+  case BC_JLOOP:
+#if LJ_HASJIT
+    |  NYI
+#endif
+    break;
+
+  case BC_JMP:
+    |  NYI
+    break;
+
+  /* -- Function headers -------------------------------------------------- */
+
+  case BC_FUNCF:
+#if LJ_HASJIT
+    |  hotcall
+#endif
+  case BC_FUNCV:  /* NYI: compiled vararg functions. */
+    |  // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow.
+    break;
+
+  case BC_JFUNCF:
+#if !LJ_HASJIT
+    break;
+#endif
+  case BC_IFUNCF:
+    |  NYI
+    break;
+
+  case BC_JFUNCV:
+#if !LJ_HASJIT
+    break;
+#endif
+    |  NYI  // NYI: compiled vararg functions
+    break;  /* NYI: compiled vararg functions. */
+
+  case BC_IFUNCV:
+    |  NYI
+    break;
+
+  case BC_FUNCC:
+  case BC_FUNCCW:
+    |  NYI
+    break;
+
+  /* ---------------------------------------------------------------------- */
+
+  default:
+    fprintf(stderr, "Error: undefined opcode BC_%s\n", bc_names[op]);
+    exit(2);
+    break;
+  }
+}
+
+static int build_backend(BuildCtx *ctx)
+{
+  int op;
+
+  dasm_growpc(Dst, BC__MAX);
+
+  build_subroutines(ctx);
+
+  |.code_op
+  for (op = 0; op < BC__MAX; op++)
+    build_ins(ctx, (BCOp)op, op);
+
+  return BC__MAX;
+}
+
+/* Emit pseudo frame-info for all assembler functions. */
+static void emit_asm_debug(BuildCtx *ctx)
+{
+  UNUSED(ctx);  /* NYI */
+}
+
