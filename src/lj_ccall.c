@@ -475,6 +475,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       else
 	cc->fpr[ngpr-1].l[0] = cc->gpr[ngpr-1];
     }
+#else
+    UNUSED(isva);
 #endif
 #if LJ_TARGET_X64 && !LJ_ABI_WIN
     if (isfp == 2 && n == 2 && (uint8_t *)dp == (uint8_t *)&cc->fpr[nfpr-2]) {
