@@ -42,20 +42,6 @@
 #include "../dynasm/dasm_proto.h"
 
 /* Glue macros for DynASM. */
-#define DASM_M_GROW(ctx, t, p, sz, need) \
-  do { \
-    size_t _sz = (sz), _need = (need); \
-    if (_sz < _need) { \
-      if (_sz < 16) _sz = 16; \
-      while (_sz < _need) _sz += _sz; \
-      (p) = (t *)realloc((p), _sz); \
-      if ((p) == NULL) exit(1); \
-      (sz) = _sz; \
-    } \
-  } while(0)
-
-#define DASM_M_FREE(ctx, p, sz)	free(p)
-
 static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 
 #define DASM_EXTERN(ctx, addr, idx, type) \

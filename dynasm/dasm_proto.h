@@ -14,17 +14,34 @@
 #define DASM_VERSION	10202	/* 1.2.2 */
 
 #ifndef Dst_DECL
-#define Dst_DECL	dasm_State *Dst
+#define Dst_DECL	dasm_State **Dst
 #endif
 
-#ifndef Dst_GET
-#define Dst_GET		(Dst)
+#ifndef Dst_REF
+#define Dst_REF		(*Dst)
 #endif
 
 #ifndef DASM_FDEF
 #define DASM_FDEF	extern
 #endif
 
+#ifndef DASM_M_GROW
+#define DASM_M_GROW(ctx, t, p, sz, need) \
+  do { \
+    size_t _sz = (sz), _need = (need); \
+    if (_sz < _need) { \
+      if (_sz < 16) _sz = 16; \
+      while (_sz < _need) _sz += _sz; \
+      (p) = (t *)realloc((p), _sz); \
+      if ((p) == NULL) exit(1); \
+      (sz) = _sz; \
+    } \
+  } while(0)
+#endif
+
+#ifndef DASM_M_FREE
+#define DASM_M_FREE(ctx, p, sz)	free(p)
+#endif
 
 /* Internal DynASM encoder state. */
 typedef struct dasm_State dasm_State;
