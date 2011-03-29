@@ -163,6 +163,12 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// Macros to test operand types.
+|.macro checktp, reg, tp; cmn reg, #-tp; .endmacro
+|.macro checkstr, reg, target; checktp reg, LJ_TSTR; bne target; .endmacro
+|.macro checktab, reg, target; checktp reg, LJ_TTAB; bne target; .endmacro
+|.macro checkfunc, reg, target; checktp reg, LJ_TFUNC; bne target; .endmacro
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
@@ -177,6 +183,10 @@
 |  NYI
 |.endmacro
 |
+|// Set current VM state.
+|.macro mv_vmstate, reg, st; mvn reg, #LJ_VMST_..st; .endmacro
+|.macro st_vmstate, reg; str reg, [DISPATCH, #DISPATCH_GL(vmstate)]; .endmacro
+|
 |//-----------------------------------------------------------------------
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
@@ -190,19 +200,88 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_returnp:
-  |  NYI
+  |  // See vm_return. Also: RB = previous base.
+  |  tst PC, #FRAME_P
+  |  beq ->cont_dispatch
+  |
+  |  // Return from pcall or xpcall fast func.
+  |  ldr PC, [RB, FRAME_PC]		// Fetch PC of previous frame.
+  |   mvn CARG2, #~LJ_TTRUE
+  |  mov BASE, RB
+  |  // Prepending may overwrite the pcall frame, so do it at the end.
+  |   str CARG2, [RA, FRAME_PC]		// Prepend true to results.
+  |  sub RA, RA, #8
   |
   |->vm_returnc:
-  |  NYI
+  |  add RC, RC, #8			// RC = (nresults+1)*8.
+  |   ands CARG1, PC, #FRAME_TYPE
+  |  str RC, SAVE_MULTRES
+  |   beq ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
-  |  NYI
+  |  // BASE = base, RA = resultptr, RC/MULTRES = (nresults+1)*8, PC = return
+  |  // CARG1 = PC & FRAME_TYPE
+  |  bic RB, PC, #FRAME_TYPEP
+  |   cmp CARG1, #FRAME_C
+  |  sub RB, BASE, RB			// RB = previous base.
+  |   bne ->vm_returnp
+  |
+  |  str RB, L->base
+  |   ldr KBASE, SAVE_NRES
+  |    mv_vmstate CARG4, C
+  |   sub BASE, BASE, #8
+  |  subs CARG3, RC, #8
+  |   lsl KBASE, KBASE, #3		// KBASE = (nresults_wanted+1)*8
+  |    st_vmstate CARG4
+  |  beq >2
+  |1:
+  |  subs CARG3, CARG3, #8
+  |   ldrd CARG12, [RA], #8
+  |   strd CARG12, [BASE], #8
+  |  bne <1
+  |2:
+  |  cmp KBASE, RC			// More/less results wanted?
+  |  bne >6
+  |3:
+  |  str BASE, L->top			// Store new top.
   |
   |->vm_leave_cp:
-  |  NYI
+  |  ldr RC, SAVE_CFRAME		// Restore previous C frame.
+  |   mov CRET1, #0			// Ok return status for vm_pcall.
+  |  str RC, L->cframe
   |
   |->vm_leave_unw:
-  |  NYI
+  |  restoreregs_ret
+  |
+  |6:
+  |  blt >7				// Less results wanted?
+  |  // More results wanted. Check stack size and fill up results with nil.
+  |  ldr CARG3, L->maxstack
+  |   mvn CARG2, #~LJ_TNIL
+  |  cmp BASE, CARG3
+  |  bhs >8
+  |   str CARG2, [BASE, #4]
+  |  add RC, RC, #8
+  |  add BASE, BASE, #8
+  |  b <2
+  |
+  |7:  // Less results wanted.
+  |  sub CARG1, RC, KBASE
+  |  cmp KBASE, #0			// LUA_MULTRET+1 case?
+  |  subne BASE, BASE, CARG1		// Either keep top or shrink it.
+  |  b <3
+  |
+  |8:  // Corner case: need to grow stack for filling up results.
+  |  // This can happen if:
+  |  // - A C function grows the stack (a lot).
+  |  // - The GC shrinks the stack in between.
+  |  // - A return back from a lua_call() with (high) nresults adjustment.
+  |  str BASE, L->top			// Save current top held in BASE (yes).
+  |  mov CARG2, KBASE
+  |  mov CARG1, L
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  ldr BASE, L->top			// Need the (realloced) L->top in BASE.
+  |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  NYI
@@ -232,19 +311,71 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
+  |  saveregs
+  |  mov PC, #FRAME_CP
+  |  str CARG4, SAVE_ERRF
+  |  b >1
   |
   |->vm_call:				// Setup C frame and enter VM.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1)
+  |  saveregs
+  |  mov PC, #FRAME_C
+  |
+  |1:  // Entry point for vm_pcall above (PC = ftype).
+  |  ldr RC, L:CARG1->cframe
+  |   str CARG3, SAVE_NRES
+  |    mov L, CARG1
+  |   str CARG1, SAVE_L
+  |    mov BASE, CARG2
+  |  str sp, L->cframe			// Add our C frame to cframe chain.
+  |    ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |   str CARG1, SAVE_PC		// Any value outside of bytecode is ok.
+  |  str RC, SAVE_CFRAME
+  |    add DISPATCH, DISPATCH, #GG_G2DISP
+  |
+  |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
+  |  ldr RB, L->base			// RB = old base (for vmeta_call).
+  |   ldr CARG1, L->top
+  |    mov MASKR8, #255
+  |  add PC, PC, BASE
+  |    lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
+  |  sub PC, PC, RB			// PC = frame delta + frame type
+  |    mv_vmstate CARG2, INTERP
+  |   sub NARGS8:RC, CARG1, BASE
+  |    st_vmstate CARG2
   |
   |->vm_call_dispatch:
-  |  NYI
+  |  // RB = old base, BASE = new base, RC = nargs*8, PC = caller PC
+  |  ldrd CARG34, [BASE, FRAME_FUNC]
+  |  checkfunc CARG4, ->vmeta_call
   |
   |->vm_call_dispatch_f:
-  |  NYI
+  |  ins_call
+  |  // BASE = new base, RC = nargs*8
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
-  |  NYI
+  |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
+  |  saveregs
+  |  mov L, CARG1
+  |   ldr RA, L:CARG1->stack
+  |  str CARG1, SAVE_L
+  |   ldr RB, L->top
+  |  str CARG1, SAVE_PC			// Any value outside of bytecode is ok.
+  |  ldr RC, L->cframe
+  |   sub RA, RA, RB			// Compute -savestack(L, L->top).
+  |  str sp, L->cframe			// Add our C frame to cframe chain.
+  |  mov RB, #0
+  |   str RA, SAVE_NRES			// Neg. delta means cframe w/o frame.
+  |  str RB, SAVE_ERRF			// No error function.
+  |  str RC, SAVE_CFRAME
+  |  blx CARG4			// (lua_State *L, lua_CFunction func, void *ud)
+  |   ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |  movs BASE, CRET1
+  |    mov PC, #FRAME_CP
+  |   add DISPATCH, DISPATCH, #GG_G2DISP
+  |  bne <3				// Else continue with the call.
+  |  b ->vm_leave_cp			// No base? Just remove C frame.
   |
   |//-----------------------------------------------------------------------
   |//-- Metamethod handling ------------------------------------------------
