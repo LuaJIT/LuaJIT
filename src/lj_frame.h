@@ -91,13 +91,12 @@ enum {
 #define CFRAME_SHIFT_MULTRES	0
 #endif
 #elif LJ_TARGET_ARM
-/* NYI: Dummy definitions for now. */
-#define CFRAME_OFS_ERRF		28
-#define CFRAME_OFS_NRES		24
-#define CFRAME_OFS_PREV		20
-#define CFRAME_OFS_L		16
-#define CFRAME_OFS_PC		12
-#define CFRAME_OFS_MULTRES	8
+#define CFRAME_OFS_ERRF		24
+#define CFRAME_OFS_NRES		20
+#define CFRAME_OFS_PREV		16
+#define CFRAME_OFS_L		12
+#define CFRAME_OFS_PC		8
+#define CFRAME_OFS_MULTRES	4
 #define CFRAME_SIZE		64
 #define CFRAME_SIZE_JIT		CFRAME_SIZE
 #define CFRAME_SHIFT_MULTRES	3
