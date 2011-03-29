@@ -684,7 +684,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc_bit_op band, and
   |.ffunc_bit_op bor, or
-  |.ffunc_bit_op bxor, xor
+  |.ffunc_bit_op bxor, eor
   |
   |.ffunc_bit bswap
   |  NYI
@@ -850,16 +850,67 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
-    |  NYI
+    |  // RA = dst*8, RC = src
+    |  lsl RC, RC, #3
+    |   ins_next1
+    |  ldrd CARG12, [BASE, RC]
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
     break;
   case BC_NOT:
-    |  NYI
+    |  // RA = dst*8, RC = src
+    |  add RC, BASE, RC, lsl #3
+    |   ins_next1
+    |  ldr CARG1, [RC, #4]
+    |   add RA, BASE, RA
+    |   ins_next2
+    |  cmn CARG1, #-LJ_TTRUE
+    |  mvnls CARG2, #~LJ_TFALSE
+    |  mvnhi CARG2, #~LJ_TTRUE
+    |  str CARG2, [RA, #4]
+    |   ins_next3
     break;
   case BC_UNM:
-    |  NYI
+    |  // RA = dst*8, RC = src
+    |  lsl RC, RC, #3
+    |  ldrd CARG12, [BASE, RC]
+    |   ins_next1
+    |   ins_next2
+    |  cmn CARG2, #-LJ_TISNUM
+    |  bne >5
+    |  rsbs CARG1, CARG1, #0
+    |  bvs >4
+    |9:
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    |4:
+    |  mov CARG2, #0x01e00000  // 2^31.
+    |  mov CARG1, #0
+    |  orr CARG2, CARG2, #0x40000000
+    |  b <9
+    |5:
+    |  bhi ->vmeta_unm
+    |  add CARG2, CARG2, #0x80000000
+    |  b <9
     break;
   case BC_LEN:
-    |  NYI
+    |  // RA = dst*8, RC = src
+    |  lsl RC, RC, #3
+    |  ldrd CARG12, [BASE, RC]
+    |  checkstr CARG2, >2
+    |  ldr CARG1, STR:CARG1->len
+    |1:
+    |  mvn CARG2, #~LJ_TISNUM
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    |2:
+    |  checktab CARG2, ->vmeta_len
+    |  blx extern lj_tab_len		// (GCtab *t)
+    |  // Returns uint32_t (but less than 2^31).
+    |  b <1
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
@@ -893,7 +944,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Constant ops ------------------------------------------------------ */
 
   case BC_KSTR:
-    |  NYI
+    |  // RA = dst*8, RC = str_const (~)
+    |  mvn RC, RC
+    |   ins_next1
+    |  ldr CARG1, [KBASE, RC, lsl #2]
+    |   ins_next2
+    |  mvn CARG2, #~LJ_TSTR
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
     break;
   case BC_KCDATA:
 #if LJ_HASFFI
@@ -901,16 +959,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #endif
     break;
   case BC_KSHORT:
-    |  NYI
+    |  // RA = dst*8, (RC = int16_literal)
+    |  mov CARG1, INS, asr #16			// Refetch sign-extended reg.
+    |  mvn CARG2, #~LJ_TISNUM
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
     break;
   case BC_KNUM:
-    |  NYI
+    |  // RA = dst*8, RC = num_const
+    |  lsl RC, RC, #3
+    |   ins_next1
+    |  ldrd CARG12, [KBASE, RC]
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
     break;
   case BC_KPRI:
-    |  NYI
+    |  // RA = dst*8, RC = primitive_type (~)
+    |  add RA, BASE, RA
+    |  mvn RC, RC
+    |   ins_next1
+    |   ins_next2
+    |  str RC, [RA, #4]
+    |   ins_next3
     break;
   case BC_KNIL:
-    |  NYI
+    |  // RA = base*8, RC = end
+    |  add RA, BASE, RA
+    |   add RC, BASE, RC, lsl #3
+    |  mvn CARG1, #~LJ_TNIL
+    |  str CARG1, [RA, #4]
+    |   add RA, RA, #8
+    |1:
+    |  str CARG1, [RA, #4]
+    |  cmp RA, RC
+    |   add RA, RA, #8
+    |  blt <1
+    |  ins_next_
     break;
 
   /* -- Upvalue and function ops ------------------------------------------ */
