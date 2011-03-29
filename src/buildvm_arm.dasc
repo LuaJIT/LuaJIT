@@ -1014,11 +1014,67 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_RET:
+    |  // RA = results*8, RC = nresults+1
+    |  ldr PC, [BASE, FRAME_PC]
+    |   lsl RC, RC, #3
+    |    add RA, BASE, RA
+    |   str RC, SAVE_MULTRES
+    |1:
+    |  ands CARG1, PC, #FRAME_TYPE
+    |   eor CARG2, PC, #FRAME_VARG
+    |   ldreq INS, [PC, #-4]
+    |  bne ->BC_RETV2_Z
+    |
+    |->BC_RET_Z:
+    |  // BASE = base, RA = resultptr, RC = (nresults+1)*8, PC = return
     |  NYI
+    |
+    |->BC_RETV1_Z:  // Non-standard return case.
+    |  add RA, BASE, RA
+    |->BC_RETV2_Z:
+    |  tst CARG2, #FRAME_TYPEP
+    |  bne ->vm_return
+    |  // Return from vararg function: relocate BASE down.
+    |  sub BASE, BASE, CARG2
+    |  ldr PC, [BASE, FRAME_PC]
+    |  b <1
     break;
 
   case BC_RET0: case BC_RET1:
-    |  NYI
+    |  // RA = results*8, RC = nresults+1
+    |  ldr PC, [BASE, FRAME_PC]
+    |   lsl RC, RC, #3
+    |   str RC, SAVE_MULTRES
+    |  ands CARG1, PC, #FRAME_TYPE
+    |   eor CARG2, PC, #FRAME_VARG
+    |   ldreq INS, [PC, #-4]
+    |  bne ->BC_RETV1_Z
+    if (op == BC_RET1) {
+      |  ldrd CARG12, [BASE, RA]
+    }
+    |  sub CARG4, BASE, #8
+    |   decode_RA8 RA, INS
+    if (op == BC_RET1) {
+      |  strd CARG12, [CARG4]
+    }
+    |  sub BASE, CARG4, RA
+    |   decode_RB8 RB, INS
+    |  ldr LFUNC:CARG1, [BASE, FRAME_FUNC]
+    |5:
+    |  cmp RB, RC
+    |  bhi >6
+    |  ldr CARG2, LFUNC:CARG1->field_pc
+    |   ins_next1
+    |   ins_next2
+    |  ldr KBASE, [CARG2, #PC2PROTO(k)]
+    |   ins_next3
+    |
+    |6:  // Fill up results with nil.
+    |  sub CARG2, CARG4, #4
+    |  mvn CARG3, #~LJ_TNIL
+    |  str CARG3, [CARG2, RC]
+    |  add RC, RC, #8
+    |  b <5
     break;
 
   /* -- Loops and branches ------------------------------------------------ */
@@ -1089,7 +1145,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IFUNCF:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, CARG3 = LFUNC, RC = nargs*8
+    |  ldr CARG1, L->maxstack
+    |   ldrb CARG2, [PC, #-4+PC2PROTO(numparams)]
+    |    ldr KBASE, [PC, #-4+PC2PROTO(k)]
+    |  cmp RA, CARG1
+    |  bhi ->vm_growstack_l
+    |  ins_next1
+    |  ins_next2
+    |2:
+    |  cmp NARGS8:RC, CARG2, lsl #3	// Check for missing parameters.
+    |  ble >3
+    if (op == BC_JFUNCF) {
+      |  NYI
+    } else {
+      |  ins_next3
+    }
+    |
+    |3:  // Clear missing parameters.
+    |  mvn CARG1, #~LJ_TNIL
+    |  str CARG1, [BASE, NARGS8:RC]
+    |  add NARGS8:RC, NARGS8:RC, #8
+    |  b <2
     break;
 
   case BC_JFUNCV:
@@ -1100,7 +1177,34 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, CARG3 = LFUNC, RC = nargs*8
+    |  ldr CARG1, L->maxstack
+    |   add CARG4, BASE, RC
+    |  add RA, RA, RC
+    |   str LFUNC:CARG3, [CARG4]	// Store copy of LFUNC.
+    |   add CARG2, RC, #8+FRAME_VARG
+    |    ldr KBASE, [PC, #-4+PC2PROTO(k)]
+    |  cmp RA, CARG1
+    |   str CARG2, [CARG4, #4]		// Store delta + FRAME_VARG.
+    |  bhs ->vm_growstack_l
+    |  ldrb RB, [PC, #-4+PC2PROTO(numparams)]
+    |   mov RA, BASE
+    |   mov RC, CARG4
+    |  cmp RB, #0
+    |   add BASE, CARG4, #8
+    |  beq >3
+    |  mvn CARG3, #~LJ_TNIL
+    |1:
+    |  cmp RA, RC			// Less args than parameters?
+    |   ldrdlo CARG12, [RA], #8
+    |   mvnhs CARG2, CARG3
+    |    strlo CARG3, [RA, #-4]		// Clear old fixarg slot (help the GC).
+    |2:
+    |  subs RB, RB, #1
+    |   strd CARG12, [CARG4, #8]!
+    |  bne <1
+    |3:
+    |  ins_next
     break;
 
   case BC_FUNCC:
