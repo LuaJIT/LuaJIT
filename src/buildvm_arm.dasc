@@ -84,6 +84,85 @@
 |
 |//-----------------------------------------------------------------------
 |
+|// Access to frame relative to BASE.
+|.define FRAME_FUNC,	#-8
+|.define FRAME_PC,	#-4
+|
+|.macro decode_RA8, dst, ins; and dst, MASKR8, ins, lsr #5; .endmacro
+|.macro decode_RB8, dst, ins; and dst, MASKR8, ins, lsr #21; .endmacro
+|.macro decode_RC8, dst, ins; and dst, MASKR8, ins, lsr #13; .endmacro
+|.macro decode_RD, dst, ins; lsr dst, ins, #16; .endmacro
+|
+|// Instruction fetch.
+|.macro ins_NEXT1
+|  ldrb OP, [PC]
+|.endmacro
+|.macro ins_NEXT2
+|   ldr INS, [PC], #4
+|.endmacro
+|// Instruction decode+dispatch.
+|.macro ins_NEXT3
+|  ldr OP, [DISPATCH, OP, lsl #2]
+|   decode_RA8 RA, INS
+|   decode_RD RC, INS
+|  bx OP
+|.endmacro
+|.macro ins_NEXT
+|  ins_NEXT1
+|  ins_NEXT2
+|  ins_NEXT3
+|.endmacro
+|
+|// Instruction footer.
+|.if 1
+|  // Replicated dispatch. Less unpredictable branches, but higher I-Cache use.
+|  .define ins_next, ins_NEXT
+|  .define ins_next_, ins_NEXT
+|  .define ins_next1, ins_NEXT1
+|  .define ins_next2, ins_NEXT2
+|  .define ins_next3, ins_NEXT3
+|.else
+|  // Common dispatch. Lower I-Cache use, only one (very) unpredictable branch.
+|  // Affects only certain kinds of benchmarks (and only with -j off).
+|  .macro ins_next
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next1
+|  .endmacro
+|  .macro ins_next2
+|  .endmacro
+|  .macro ins_next3
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next_
+|  ->ins_next:
+|    ins_NEXT
+|  .endmacro
+|.endif
+|
+|// Avoid register name substitution for field name.
+#define field_pc	pc
+|
+|// Call decode and dispatch.
+|.macro ins_callt
+|  // BASE = new base, CARG3 = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
+|  ldr PC, LFUNC:CARG3->field_pc
+|  ldrb OP, [PC]
+|   ldr INS, [PC], #4
+|  ldr OP, [DISPATCH, OP, lsl #2]
+|   decode_RA8 RA, INS
+|   add RA, RA, BASE
+|  bx OP
+|.endmacro
+|
+|.macro ins_call
+|  // BASE = new base, CARG3 = LFUNC/CFUNC, RC = nargs*8, PC = caller PC
+|  str PC, [BASE, FRAME_PC]
+|  ins_callt
+|.endmacro
+|
+|//-----------------------------------------------------------------------
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
