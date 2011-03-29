@@ -1105,7 +1105,35 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCC:
   case BC_FUNCCW:
-    |  NYI
+    |  // BASE = new base, RA = BASE+framesize*8, CARG3 = CFUNC, RC = nargs*8
+    if (op == BC_FUNCC) {
+      |  ldr CARG4, CFUNC:CARG3->f
+    } else {
+      |  ldr CARG4, [DISPATCH, #DISPATCH_GL(wrapf)]
+    }
+    |   add CARG2, RA, NARGS8:RC
+    |   ldr CARG1, L->maxstack
+    |  add RC, BASE, NARGS8:RC
+    |    str BASE, L->base
+    |   cmp CARG2, CARG1
+    |  str RC, L->top
+    if (op == BC_FUNCCW) {
+      |  ldr CARG2, CFUNC:CARG3->f
+    }
+    |    mv_vmstate CARG3, C
+    |  mov CARG1, L
+    |   bhi ->vm_growstack_c		// Need to grow stack.
+    |    st_vmstate CARG3
+    |  blx CARG4			// (lua_State *L [, lua_CFunction f])
+    |  // Returns nresults.
+    |  ldr BASE, L->base
+    |    mv_vmstate CARG3, INTERP
+    |   ldr CRET2, L->top
+    |   lsl RC, CRET1, #3
+    |    st_vmstate CARG3
+    |  ldr PC, [BASE, FRAME_PC]
+    |   sub RA, CRET2, RC		// RA = L->top - nresults*8
+    |  b ->vm_returnc
     break;
 
   /* ---------------------------------------------------------------------- */
