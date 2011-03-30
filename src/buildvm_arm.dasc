@@ -92,6 +92,7 @@
 |.macro decode_RB8, dst, ins; and dst, MASKR8, ins, lsr #21; .endmacro
 |.macro decode_RC8, dst, ins; and dst, MASKR8, ins, lsr #13; .endmacro
 |.macro decode_RD, dst, ins; lsr dst, ins, #16; .endmacro
+|.macro decode_OP, dst, ins; and dst, ins, #255; .endmacro
 |
 |// Instruction fetch.
 |.macro ins_NEXT1
@@ -188,6 +189,10 @@
 |.macro st_vmstate, reg; str reg, [DISPATCH, #DISPATCH_GL(vmstate)]; .endmacro
 |
 |//-----------------------------------------------------------------------
+
+#if !LJ_DUALNUM
+#error "Only dual-number mode supported for ARM target"
+#endif
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
 /* The .code_sub section should be last to help static branch prediction. */
@@ -417,7 +422,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |->cont_nop:
-  |  NYI
+  |  ins_next
   |
   |->cont_ra:				// RA = resultptr
   |  NYI
@@ -434,18 +439,44 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_arith_vn:
-  |  NYI
+  |  decode_RB8 RB, INS
+  |   decode_RC8 RC, INS
+  |  add CARG3, BASE, RB
+  |   add CARG4, KBASE, RC
+  |  b >1
   |
   |->vmeta_arith_nv:
-  |  NYI
+  |  decode_RB8 RB, INS
+  |   decode_RC8 RC, INS
+  |  add CARG4, BASE, RB
+  |   add CARG3, KBASE, RC
+  |  b >1
   |
   |->vmeta_unm:
-  |  NYI
+  |  add CARG3, BASE, RC
+  |  add CARG4, BASE, RC
+  |  b >1
   |
   |->vmeta_arith_vv:
-  |  NYI
+  |  decode_RB8 RB, INS
+  |   decode_RC8 RC, INS
+  |  add CARG3, BASE, RB
+  |   add CARG4, BASE, RC
+  |1:
+  |  decode_OP OP, INS
+  |   add CARG2, BASE, RA
+  |    str BASE, L->base
+  |   mov CARG1, L
+  |    str PC, SAVE_PC
+  |  str OP, ARG5
+  |  bl extern lj_meta_arith  // (lua_State *L, TValue *ra,*rb,*rc, BCReg op)
+  |  // Returns NULL (finished) or TValue * (metamethod).
+  |  cmp CRET1, #0
+  |  beq ->cont_nop
   |
+  |  // Call metamethod for binary op.
   |->vmeta_binop:
+  |  // BASE = old base, CRET1 = new base, stack = cont/func/o1/o2
   |  NYI
   |
   |->vmeta_len:
@@ -790,6 +821,9 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_trunc:
 #endif
   |
+  |->vm_mod:
+  |  NYI
+  |
   |->vm_powi:
 #if LJ_HASJIT
   |  NYI
@@ -804,7 +838,21 @@ static void build_subroutines(BuildCtx *ctx)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
   |// and basic math functions. ORDER ARITH
   |->vm_foldarith:
-  |  NYI
+  |  ldr OP, [sp]
+  |  cmp OP, #1
+  |  blo extern __aeabi_dadd
+  |  beq extern __aeabi_dsub
+  |  cmp OP, #3
+  |  blo extern __aeabi_dmul
+  |  beq extern __aeabi_ddiv
+  |  cmp OP, #5
+  |  blo ->vm_mod
+  |  beq extern pow
+  |  cmp OP, #7
+  |  eorlo CARG2, CARG2, #0x80000000
+  |  biceq CARG2, CARG2, #0x80000000
+  |  bxls lr
+  |  NYI  // Other operations only needed by JIT compiler.
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -925,33 +973,125 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next3
     |2:
     |  checktab CARG2, ->vmeta_len
-    |  blx extern lj_tab_len		// (GCtab *t)
+    |  bl extern lj_tab_len		// (GCtab *t)
     |  // Returns uint32_t (but less than 2^31).
     |  b <1
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
 
+    |.macro ins_arithcheck, cond, ncond, target
+    ||if (vk == 1) {
+    |   cmn CARG4, #-LJ_TISNUM
+    |    cmn..cond CARG2, #-LJ_TISNUM
+    ||} else {
+    |   cmn CARG2, #-LJ_TISNUM
+    |    cmn..cond CARG4, #-LJ_TISNUM
+    ||}
+    |  b..ncond target
+    |.endmacro
+    |.macro ins_arithcheck_int, target
+    |  ins_arithcheck eq, ne, target
+    |.endmacro
+    |.macro ins_arithcheck_num, target
+    |  ins_arithcheck lo, hs, target
+    |.endmacro
+    |
+    |.macro ins_arithpre
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = dst*8, RB = src1*8, RC = src2*8 | num_const*8
+    ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
+    ||switch (vk) {
+    ||case 0:
+    |   ldrd CARG12, [BASE, RB]
+    |    ldrd CARG34, [KBASE, RC]
+    ||  break;
+    ||case 1:
+    |   ldrd CARG34, [BASE, RB]
+    |    ldrd CARG12, [KBASE, RC]
+    ||  break;
+    ||default:
+    |   ldrd CARG12, [BASE, RB]
+    |    ldrd CARG34, [BASE, RC]
+    ||  break;
+    ||}
+    |.endmacro
+    |
+    |.macro ins_arithfallback, ins
+    ||switch (vk) {
+    ||case 0:
+    |   ins ->vmeta_arith_vn
+    ||  break;
+    ||case 1:
+    |   ins ->vmeta_arith_nv
+    ||  break;
+    ||default:
+    |   ins ->vmeta_arith_vv
+    ||  break;
+    ||}
+    |.endmacro
+    |
+    |.macro ins_arithdn, intins, fpcall
+    |  ins_arithpre
+    |   ins_next1
+    |  ins_arithcheck_int >5
+    |.if "intins" == "smull"
+    |  smull CARG1, RC, CARG3, CARG1
+    |  cmp RC, CARG1, asr #31
+    |  ins_arithfallback bne
+    |.else
+    |  intins CARG1, CARG1, CARG3
+    |  ins_arithfallback bvs
+    |.endif
+    |4:
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    |5:  // FP variant.
+    |  ins_arithfallback ins_arithcheck_num
+    |  bl fpcall
+    |   ins_next1
+    |  b <4
+    |.endmacro
+    |
+    |.macro ins_arithfp, fpcall
+    |  ins_arithpre
+    ||if (op == BC_MODVN) {
+    |  ->BC_MODVN_Z:
+    ||}
+    |  ins_arithfallback ins_arithcheck_num
+    |  bl fpcall
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    |.endmacro
+
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
-    |  NYI
+    |  ins_arithdn adds, extern __aeabi_dadd
     break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
-    |  NYI
+    |  ins_arithdn subs, extern __aeabi_dsub
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
-    |  NYI
+    |  ins_arithdn smull, extern __aeabi_dmul
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
-    |  NYI
+    |  ins_arithfp extern __aeabi_ddiv
     break;
   case BC_MODVN:
-    |  NYI
+    |  // NYI: integer arithmetic.
+    |  // Note: __aeabi_idivmod is unsuitable. It uses trunc, not floor.
+    |  ins_arithfp ->vm_mod
     break;
   case BC_MODNV: case BC_MODVV:
-    |  NYI
+    |  ins_arithpre
+    |  b ->BC_MODVN_Z
     break;
   case BC_POW:
-    |  NYI
+    |  // NYI: (partial) integer arithmetic.
+    |  ins_arithfp extern pow
     break;
 
   case BC_CAT:
