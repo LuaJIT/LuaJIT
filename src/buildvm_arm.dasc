@@ -462,7 +462,24 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Argument coercion for 'for' statement ------------------------------
   |
   |->vmeta_for:
-  |  NYI
+  |  mov CARG1, L
+  |   str BASE, L->base
+  |  mov CARG2, RA
+  |   str PC, SAVE_PC
+  |  bl extern lj_meta_for	// (lua_State *L, TValue *base)
+#if LJ_HASJIT
+  |   ldrb OP, [PC, #-4]
+#endif
+  |  ldr INS, [PC, #-4]
+#if LJ_HASJIT
+  |   cmp OP, #BC_JFORI
+#endif
+  |  decode_RA8 RA, INS
+  |  decode_RD RC, INS
+#if LJ_HASJIT
+  |   beq =>BC_JFORI
+#endif
+  |  b =>BC_FORI
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
@@ -1166,6 +1183,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   /* -- Loops and branches ------------------------------------------------ */
 
+  |.define FOR_IDX,  [RA];      .define FOR_TIDX,  [RA, #4]
+  |.define FOR_STOP, [RA, #8];  .define FOR_TSTOP, [RA, #12]
+  |.define FOR_STEP, [RA, #16]; .define FOR_TSTEP, [RA, #20]
+  |.define FOR_EXT,  [RA, #24]; .define FOR_TEXT,  [RA, #28]
+
   case BC_FORL:
 #if LJ_HASJIT
     |  hotloop
@@ -1180,8 +1202,105 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #endif
   case BC_FORI:
   case BC_IFORL:
+    |  // RA = base*8, RC = target (after end of loop or start of loop)
     vk = (op == BC_IFORL || op == BC_JFORL);
-    |  NYI
+    |  ldrd CARG12, [RA, BASE]!
+    |   add RC, PC, RC, lsl #2
+    if (!vk) {
+      |  ldrd CARG34, FOR_STOP
+      |   cmn CARG2, #-LJ_TISNUM
+      |  ldr RB, FOR_TSTEP
+      |   bne >5
+      |  cmn CARG4, #-LJ_TISNUM
+      |   ldr CARG4, FOR_STEP
+      |  cmneq RB, #-LJ_TISNUM
+      |  bne ->vmeta_for
+      |  cmp CARG4, #0
+      |  blt >4
+      |  cmp CARG1, CARG3
+    } else {
+      |  ldrd CARG34, FOR_STEP
+      |   cmn CARG2, #-LJ_TISNUM
+      |   bne >5
+      |  adds CARG1, CARG1, CARG3
+      |   ldr CARG4, FOR_STOP
+      if (op == BC_IFORL) {
+	|  addvs RC, PC, #0x20000		// Overflow: prevent branch.
+      } else {
+	|  NYI
+      }
+      |  cmp CARG3, #0
+      |  blt >4
+      |  cmp CARG1, CARG4
+    }
+    |1:
+    if (op == BC_FORI) {
+      |  subgt PC, RC, #0x20000
+    } else if (op == BC_JFORI) {
+      |  NYI
+    } else if (op == BC_IFORL) {
+      |  suble PC, RC, #0x20000
+    } else {
+      |  NYI
+    }
+    if (vk) {
+      |  strd CARG12, FOR_IDX
+    }
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, FOR_EXT
+    |3:
+    |   ins_next3
+    |
+    |4:  // Invert check for negative step.
+    if (!vk) {
+      |  cmp CARG3, CARG1
+    } else {
+      |  cmp CARG4, CARG1
+    }
+    |  b <1
+    |
+    |5:  // FP loop.
+    if (!vk) {
+      |  cmnlo CARG4, #-LJ_TISNUM
+      |  cmnlo RB, #-LJ_TISNUM
+      |  bhs ->vmeta_for
+      |  cmp RB, #0
+      |   strd CARG12, FOR_IDX
+      |  blt >8
+    } else {
+      |  cmp CARG4, #0
+      |  blt >8
+      |  bl extern __aeabi_dadd
+      |   strd CARG12, FOR_IDX
+      |  ldrd CARG34, FOR_STOP
+      |   strd CARG12, FOR_EXT
+    }
+    |6:
+    |  bl extern __aeabi_cdcmple
+    if (op == BC_FORI) {
+      |  subhi PC, RC, #0x20000
+    } else if (op == BC_JFORI) {
+      |  NYI
+    } else if (op == BC_IFORL) {
+      |  subls PC, RC, #0x20000
+    } else {
+      |  NYI
+    }
+    |  ins_next1
+    |  ins_next2
+    |  b <3
+    |
+    |8:  // Invert check for negative step.
+    if (vk) {
+      |  bl extern __aeabi_dadd
+      |  strd CARG12, FOR_IDX
+      |  strd CARG12, FOR_EXT
+    }
+    |  mov CARG3, CARG1
+    |  mov CARG4, CARG2
+    |  ldrd CARG12, FOR_STOP
+    |  b <6
     break;
 
   case BC_ITERL:
@@ -1200,11 +1319,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_LOOP:
-    |  NYI
+    |  // RA = base*8, RC = target (loop extent)
+    |  // Note: RA/RC is only used by trace recorder to determine scope/extent
+    |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
+#if LJ_HASJIT
+    |  hotloop
+#endif
+    |  // Fall through. Assumes BC_ILOOP follows.
     break;
 
   case BC_ILOOP:
-    |  NYI
+    |  // RA = base*8, RC = target (loop extent)
+    |  ins_next
     break;
 
   case BC_JLOOP:
@@ -1214,7 +1340,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JMP:
-    |  NYI
+    |  // RA = base*8 (only used by trace recorder), RC = target
+    |  add RC, PC, RC, lsl #2
+    |  sub PC, RC, #0x20000
+    |  ins_next
     break;
 
   /* -- Function headers -------------------------------------------------- */
