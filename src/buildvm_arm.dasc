@@ -575,7 +575,24 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |.ffunc_1 tostring
-  |  NYI
+  |  // Only handles the string or number case inline.
+  |  checktp CARG2, LJ_TSTR
+  |  // A __tostring method in the string base metatable is ignored.
+  |  beq ->fff_restv
+  |  // Handle numbers inline, unless a number base metatable is present.
+  |  ldr CARG4, [DISPATCH, #DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM])]
+  |   mov CARG1, L
+  |  checktp CARG2, LJ_TISNUM
+  |  cmpls CARG4, #0
+  |  bhi ->fff_fallback
+  |  str BASE, L->base
+  |   mov CARG2, BASE
+  |  str PC, SAVE_PC
+  |  bl extern lj_str_fromnumber	// (lua_State *L, cTValue *o)
+  |  // Returns GCstr *.
+  |  ldr BASE, L->base
+  |  mvn CARG2, #~LJ_TSTR
+  |  b ->fff_restv
   |
   |//-- Base library: iterators -------------------------------------------
   |
