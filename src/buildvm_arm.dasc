@@ -523,12 +523,17 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_1, name
   |->ff_ .. name:
-  |  NYI
+  |  ldrd CARG12, [BASE]
+  |   cmp NARGS8:RC, #8
+  |   blo ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_2, name
   |->ff_ .. name:
-  |  NYI
+  |  ldrd CARG12, [BASE]
+  |   ldrd CARG34, [BASE, #8]
+  |    cmp NARGS8:RC, #16
+  |    blo ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_n, name
@@ -617,13 +622,36 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |->fff_restv:
-  |  NYI
-  |
+  |  // CARG12 = TValue result.
+  |  ldr PC, [BASE, FRAME_PC]
+  |  strd CARG12, [BASE, #-8]
   |->fff_res1:
-  |  NYI
-  |
+  |  // PC = return.
+  |  mov RC, #(1+1)*8
   |->fff_res:
-  |  NYI
+  |  // RC = (nresults+1)*8, PC = return.
+  |  ands CARG1, PC, #FRAME_TYPE
+  |  ldreq INS, [PC, #-4]
+  |   str RC, SAVE_MULTRES
+  |  sub RA, BASE, #8
+  |  bne ->vm_return
+  |  decode_RB8 RB, INS
+  |5:
+  |  cmp RB, RC				// More results expected?
+  |  bhi >6
+  |  decode_RA8 CARG1, INS
+  |   ins_next1
+  |   ins_next2
+  |  // Adjust BASE. KBASE is assumed to be set for the calling frame.
+  |  sub BASE, RA, CARG1
+  |   ins_next3
+  |
+  |6:  // Fill up results with nil.
+  |  add CARG2, RA, RC
+  |  mvn CARG1, #~LJ_TNIL
+  |   add RC, RC, #8
+  |  str CARG1, [CARG2, #-4]
+  |  b <5
   |
   |.macro math_extern, func
   |  .ffunc math_ .. func
@@ -755,7 +783,46 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->fff_fallback:			// Call fast function fallback handler.
-  |  NYI
+  |  // BASE = new base, RC = nargs*8
+  |   ldr CARG3, [BASE, FRAME_FUNC]
+  |  ldr CARG2, L->maxstack
+  |  add CARG1, BASE, NARGS8:RC
+  |    ldr PC, [BASE, FRAME_PC]		// Fallback may overwrite PC.
+  |  str CARG1, L->top
+  |   ldr CARG3, CFUNC:CARG3->f
+  |    str BASE, L->base
+  |  add CARG1, CARG1, #8*LUA_MINSTACK
+  |    str PC, SAVE_PC			// Redundant (but a defined value).
+  |  cmp CARG1, CARG2
+  |   mov CARG1, L
+  |  bhi >5				// Need to grow stack.
+  |   blx CARG3				// (lua_State *L)
+  |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
+  |  cmp CRET1, #0
+  |   lsl RC, CRET1, #3
+  |   sub RA, BASE, #8
+  |  bgt ->fff_res			// Returned nresults+1?
+  |1:  // Returned 0 or -1: retry fast path.
+  |   ldr CARG1, L->top
+  |    ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |   sub NARGS8:RC, CARG1, BASE
+  |  bne >2				// Returned -1?
+  |  ins_callt				// Returned 0: retry fast path.
+  |
+  |2:  // Reconstruct previous base for vmeta_call during tailcall.
+  |  ands CARG1, PC, #FRAME_TYPE
+  |   bic CARG2, PC, #FRAME_TYPEP
+  |  ldreq INS, [PC, #-4]
+  |  andeq CARG2, MASKR8, INS, lsr #5	// Conditional decode_RA8.
+  |  sub RB, BASE, CARG2
+  |  b ->vm_call_dispatch		// Resolve again for tailcall.
+  |
+  |5:  // Grow stack for fallback handler.
+  |  mov CARG2, #LUA_MINSTACK
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  ldr BASE, L->base
+  |  cmp CARG1, CARG1			// Set zero-flag to force retry.
+  |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
   |  NYI
