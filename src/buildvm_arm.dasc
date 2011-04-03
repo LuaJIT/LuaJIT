@@ -1188,7 +1188,41 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TNEW:
   case BC_TDUP:
-    |  NYI
+    |  // RA = dst*8, RC = (hbits|asize) | tab_const (~)
+    if (op == BC_TDUP) {
+      |  mvn RC, RC
+    }
+    |  ldr CARG3, [DISPATCH, #DISPATCH_GL(gc.total)]
+    |   ldr CARG4, [DISPATCH, #DISPATCH_GL(gc.threshold)]
+    |    str BASE, L->base
+    |    str PC, SAVE_PC
+    |  cmp CARG3, CARG4
+    |  bhs >5
+    |1:
+    |  mov CARG1, L
+    if (op == BC_TNEW) {
+      |  lsl CARG2, RC, #21
+      |   lsr CARG3, RC, #11
+      |  asr RC, CARG2, #21
+      |  lsr CARG2, CARG2, #21
+      |  cmn RC, #1
+      |  addeq CARG2, CARG2, #2
+      |  bl extern lj_tab_new  // (lua_State *L, int32_t asize, uint32_t hbits)
+      |  // Returns GCtab *.
+    } else {
+      |  ldr CARG2, [KBASE, RC, lsl #2]
+      |  bl extern lj_tab_dup  // (lua_State *L, Table *kt)
+      |  // Returns GCtab *.
+    }
+    |  ldr BASE, L->base
+    |  mvn CARG2, #~LJ_TTAB
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    |5:
+    |  bl extern lj_gc_step_fixtop  // (lua_State *L)
+    |  b <1
     break;
 
   case BC_GGET:
