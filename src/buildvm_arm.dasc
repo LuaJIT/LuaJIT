@@ -1255,7 +1255,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
-    |  NYI
+    |  // RA = results*8, RC = extra results
+    |  ldr CARG1, SAVE_MULTRES
+    |   ldr PC, [BASE, FRAME_PC]
+    |    add RA, BASE, RA
+    |  add RC, CARG1, RC, lsl #3
+    |  b ->BC_RETM_Z
     break;
 
   case BC_RET:
@@ -1263,16 +1268,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldr PC, [BASE, FRAME_PC]
     |   lsl RC, RC, #3
     |    add RA, BASE, RA
+    |->BC_RETM_Z:
     |   str RC, SAVE_MULTRES
     |1:
     |  ands CARG1, PC, #FRAME_TYPE
     |   eor CARG2, PC, #FRAME_VARG
-    |   ldreq INS, [PC, #-4]
     |  bne ->BC_RETV2_Z
     |
     |->BC_RET_Z:
     |  // BASE = base, RA = resultptr, RC = (nresults+1)*8, PC = return
-    |  NYI
+    |  ldr INS, [PC, #-4]
+    |  subs CARG4, RC, #8
+    |   sub CARG3, BASE, #8
+    |  beq >3
+    |2:
+    |  ldrd CARG12, [RA], #8
+    |   add BASE, BASE, #8
+    |   subs CARG4, CARG4, #8
+    |  strd CARG12, [BASE, #-16]
+    |   bne <2
+    |3:
+    |  decode_RA8 RA, INS
+    |  sub BASE, CARG3, RA
+    |   decode_RB8 RB, INS
+    |  ldr LFUNC:CARG1, [BASE, FRAME_FUNC]
+    |5:
+    |  cmp RB, RC			// More results expected?
+    |  bhi >6
+    |  ldr CARG2, LFUNC:CARG1->field_pc
+    |   ins_next1
+    |   ins_next2
+    |  ldr KBASE, [CARG2, #PC2PROTO(k)]
+    |   ins_next3
+    |
+    |6:  // Fill up results with nil.
+    |  mvn CARG2, #~LJ_TNIL
+    |  sub BASE, BASE, #8
+    |   add RC, RC, #8
+    |  str CARG2, [BASE, #-12]
+    |  b <5
     |
     |->BC_RETV1_Z:  // Non-standard return case.
     |  add RA, BASE, RA
