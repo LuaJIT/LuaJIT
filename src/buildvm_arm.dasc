@@ -148,9 +148,9 @@
 |.macro ins_callt
 |  // BASE = new base, CARG3 = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
 |  ldr PC, LFUNC:CARG3->field_pc
-|  ldrb OP, [PC]
+|  ldrb OP, [PC]  // STALL: load PC. early PC.
 |   ldr INS, [PC], #4
-|  ldr OP, [DISPATCH, OP, lsl #2]
+|  ldr OP, [DISPATCH, OP, lsl #2]  // STALL: load OP. early OP.
 |   decode_RA8 RA, INS
 |   add RA, RA, BASE
 |  bx OP
@@ -159,13 +159,14 @@
 |.macro ins_call
 |  // BASE = new base, CARG3 = LFUNC/CFUNC, RC = nargs*8, PC = caller PC
 |  str PC, [BASE, FRAME_PC]
-|  ins_callt
+|  ins_callt  // STALL: locked PC.
 |.endmacro
 |
 |//-----------------------------------------------------------------------
 |
 |// Macros to test operand types.
 |.macro checktp, reg, tp; cmn reg, #-tp; .endmacro
+|.macro checktpeq, reg, tp; cmneq reg, #-tp; .endmacro
 |.macro checkstr, reg, target; checktp reg, LJ_TSTR; bne target; .endmacro
 |.macro checktab, reg, target; checktp reg, LJ_TTAB; bne target; .endmacro
 |.macro checkfunc, reg, target; checktp reg, LJ_TFUNC; bne target; .endmacro
@@ -930,7 +931,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldr CARG1, [RC, #4]
     |   add RA, BASE, RA
     |   ins_next2
-    |  cmn CARG1, #-LJ_TTRUE
+    |  checktp CARG1, LJ_TTRUE
     |  mvnls CARG2, #~LJ_TFALSE
     |  mvnhi CARG2, #~LJ_TTRUE
     |  str CARG2, [RA, #4]
@@ -942,7 +943,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrd CARG12, [BASE, RC]
     |   ins_next1
     |   ins_next2
-    |  cmn CARG2, #-LJ_TISNUM
+    |  checktp CARG2, LJ_TISNUM
     |  bne >5
     |  rsbs CARG1, CARG1, #0
     |  bvs >4
@@ -1348,19 +1349,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add RC, PC, RC, lsl #2
     if (!vk) {
       |  ldrd CARG34, FOR_STOP
-      |   cmn CARG2, #-LJ_TISNUM
+      |   checktp CARG2, LJ_TISNUM
       |  ldr RB, FOR_TSTEP
       |   bne >5
-      |  cmn CARG4, #-LJ_TISNUM
+      |  checktp CARG4, LJ_TISNUM
       |   ldr CARG4, FOR_STEP
-      |  cmneq RB, #-LJ_TISNUM
+      |  checktpeq RB, LJ_TISNUM
       |  bne ->vmeta_for
       |  cmp CARG4, #0
       |  blt >4
       |  cmp CARG1, CARG3
     } else {
       |  ldrd CARG34, FOR_STEP
-      |   cmn CARG2, #-LJ_TISNUM
+      |   checktp CARG2, LJ_TISNUM
       |   bne >5
       |  adds CARG1, CARG1, CARG3
       |   ldr CARG4, FOR_STOP
@@ -1553,7 +1554,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |1:
     |  cmp RA, RC			// Less args than parameters?
     |   ldrdlo CARG12, [RA], #8
-    |   mvnhs CARG2, CARG3
+    |   movhs CARG2, CARG3
     |    strlo CARG3, [RA, #-4]		// Clear old fixarg slot (help the GC).
     |2:
     |  subs RB, RB, #1
