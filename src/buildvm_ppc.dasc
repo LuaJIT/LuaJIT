@@ -1108,7 +1108,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  evldd CFUNC:TMP0, CFUNC:RB->upvalue[0]
   |  la RA, -8(BASE)
 #endif
-  |   evstdd TAB:CARG1, 0(BASE)
   |   evstdd TISNIL, 8(BASE)
   |  li RD, (3+1)*8
   |  evstdd CFUNC:TMP0, 0(RA)
@@ -1169,9 +1168,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RA, -8(BASE)
 #endif
   |    evsplati TMP1, 0
-  |   evstdd TAB:CARG1, 0(BASE)
-  |    evstdd TMP1, 8(BASE)
   |  li RD, (3+1)*8
+  |    evstdd TMP1, 8(BASE)
   |  evstdd CFUNC:TMP0, 0(RA)
   |  b ->fff_res
   |
@@ -1780,7 +1778,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lwz TMP3, CFUNC:RB->f
   |    add TMP1, BASE, NARGS8:RC
   |   lwz PC, FRAME_PC(BASE)		// Fallback may overwrite PC.
-  |    addi TMP0, TMP1, 8*LUA_MINSTACK-8
+  |    addi TMP0, TMP1, 8*LUA_MINSTACK
   |     lwz TMP2, L->maxstack
   |   stw PC, SAVE_PC			// Redundant (but a defined value).
   |  cmplw TMP0, TMP2
@@ -1796,7 +1794,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   slwi RD, CRET1, 3
   |   la RA, -8(BASE)
   |  bgt ->fff_res			// Returned nresults+1?
-  |1:  // Returned 0: retry fast path.
+  |1:  // Returned 0 or -1: retry fast path.
   |  lwz TMP0, L->top
   |   lwz LFUNC:RB, FRAME_FUNC(BASE)
   |  sub NARGS8:RC, TMP0, BASE
@@ -1814,11 +1812,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_call_dispatch		// Resolve again for tailcall.
   |
   |5:  // Grow stack for fallback handler.
-  |  mr CARG1, L
   |  li CARG2, LUA_MINSTACK
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |  lwz BASE, L->base
-  |  cmpw TMP0, TMP0			// Set 4*cr0+eq.
+  |  cmpw TMP0, TMP0			// Set 4*cr0+eq to force retry.
   |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
@@ -3073,7 +3070,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERC:
-    |  // RA = base*8, (RB = (nresults+1)*8,) RC = (nargs+1)*8 ((2+1)*8)
+    |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 ((2+1)*8))
     |  subi RA, RA, 24			// evldd doesn't support neg. offsets.
     |   mr TMP2, BASE
     |  evlddx LFUNC:RB, BASE, RA
