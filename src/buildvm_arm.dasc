@@ -1226,15 +1226,70 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_GGET:
+    |  // RA = dst*8, RC = str_const (~)
   case BC_GSET:
-    |  NYI
+    |  // RA = dst*8, RC = str_const (~)
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   mvn RC, RC
+    |  ldr TAB:CARG1, LFUNC:CARG2->env
+    |   ldr STR:RC, [KBASE, RC, lsl #2]
+    if (op == BC_GGET) {
+      |  b ->BC_TGETS_Z
+    } else {
+      |  b ->BC_TSETS_Z
+    }
     break;
 
   case BC_TGETV:
     |  NYI
     break;
   case BC_TGETS:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   and RC, RC, #255
+    |  // RA = dst*8, RB = table*8, RC = str_const (~)
+    |  ldrd CARG12, [BASE, RB]
+    |   mvn RC, RC
+    |   ldr STR:RC, [KBASE, RC, lsl #2]  // STALL: early RC.
+    |  checktab CARG2, ->vmeta_tgets
+    |->BC_TGETS_Z:
+    |  // (TAB:RB =) TAB:CARG1 = GCtab *, STR:RC = GCstr *, RA = dst*8
+    |  ldr CARG3, TAB:CARG1->hmask
+    |   ldr CARG4, STR:RC->hash
+    |    ldr NODE:INS, TAB:CARG1->node
+    |     mov TAB:RB, TAB:CARG1
+    |  and CARG3, CARG3, CARG4			// idx = str->hash & tab->hmask
+    |  add CARG3, CARG3, CARG3, lsl #1
+    |    add NODE:INS, NODE:INS, CARG3, lsl #3	// node = tab->node + idx*3*8
+    |1:
+    |  ldrd CARG12, NODE:INS->key  // STALL: early NODE:INS.
+    |   ldrd CARG34, NODE:INS->val
+    |    ldr NODE:INS, NODE:INS->next
+    |  cmp CARG1, STR:RC
+    |  checktpeq CARG2, LJ_TSTR
+    |  bne >4
+    |   checktp CARG4, LJ_TNIL
+    |   beq >5
+    |3:
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG34, [BASE, RA]
+    |   ins_next3
+    |
+    |4:  // Follow hash chain.
+    |  cmp NODE:INS, #0
+    |  bne <1
+    |  // End of hash chain: key not found, nil result.
+    |
+    |5:  // Check for __index if table value is nil.
+    |  ldr TAB:CARG1, TAB:RB->metatable
+    |   mov CARG3, #0  // Optional clear of undef. value (during load stall).
+    |   mvn CARG4, #~LJ_TNIL
+    |  cmp TAB:CARG1, #0
+    |  beq <3					// No metatable: done.
+    |  ldrb CARG2, TAB:CARG1->nomm
+    |  tst CARG2, #1<<MM_index
+    |  bne <3					// 'no __index' flag set: done.
+    |  b ->vmeta_tgets
     break;
   case BC_TGETB:
     |  NYI
@@ -1244,6 +1299,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  NYI
     break;
   case BC_TSETS:
+    |->BC_TSETS_Z:
     |  NYI
     break;
   case BC_TSETB:
