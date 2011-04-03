@@ -25,7 +25,7 @@ local assert, setmetatable, rawget = assert, setmetatable, rawget
 local _s = string
 local sub, format, byte, char = _s.sub, _s.format, _s.byte, _s.char
 local match, gmatch, gsub = _s.match, _s.gmatch, _s.gsub
-local concat, sort = table.concat, table.sort
+local concat, sort, insert = table.concat, table.sort, table.insert
 
 -- Inherited tables and callbacks.
 local g_opt, g_arch
@@ -127,6 +127,10 @@ end
 -- Store word to reserved position.
 local function wputpos(pos, n)
   assert(n >= 0 and n <= 0xffffffff and n % 1 == 0, "word out of range")
+  if n <= 0x000fffff then
+    insert(actlist, pos+1, n)
+    n = map_action.ESC * 0x10000
+  end
   actlist[pos] = n
 end
 
@@ -688,7 +692,7 @@ map_op[".template__"] = function(params, template, nparams)
   local n = 1
 
   -- Limit number of section buffer positions used by a single dasm_put().
-  -- A single opcode needs a maximum of 3 positions (rlwinm).
+  -- A single opcode needs a maximum of 3 positions.
   if secpos+3 > maxsecpos then wflush() end
   local pos = wpos()
 
