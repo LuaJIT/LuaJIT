@@ -596,17 +596,94 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Base library: iterators -------------------------------------------
   |
-  |.ffunc next
-  |  NYI
+  |.ffunc_1 next
+  |   mvn CARG4, #~LJ_TNIL
+  |  checktab CARG2, ->fff_fallback
+  |   strd CARG34, [BASE, NARGS8:RC]	// Set missing 2nd arg to nil.
+  |   ldr PC, [BASE, FRAME_PC]
+  |  mov CARG2, CARG1
+  |    str BASE, L->base		// Add frame since C call can throw.
+  |  mov CARG1, L
+  |    str BASE, L->top			// Dummy frame length is ok.
+  |  add CARG3, BASE, #8
+  |   str PC, SAVE_PC
+  |  bl extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
+  |  // Returns 0 at end of traversal.
+  |  cmp CRET1, #0
+  |  mvneq CRET2, #~LJ_TNIL
+  |  beq ->fff_restv			// End of traversal: return nil.
+  |  ldrd CARG12, [BASE, #8]		// Copy key and value to results.
+  |   ldrd CARG34, [BASE, #16]
+  |    mov RC, #(2+1)*8
+  |  strd CARG12, [BASE, #-8]
+  |   strd CARG34, [BASE]
+  |  b ->fff_res
   |
   |.ffunc_1 pairs
-  |  NYI
+  |  checktab CARG2, ->fff_fallback
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  ldr TAB:RB, TAB:CARG1->metatable
+#endif
+  |   ldrd CFUNC:CARG34, CFUNC:CARG3->upvalue[0]
+  |    ldr PC, [BASE, FRAME_PC]
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  cmp TAB:RB, #0
+  |  bne ->fff_fallback
+#endif
+  |  mvn CARG2, #~LJ_TNIL
+  |    mov RC, #(3+1)*8
+  |   strd CFUNC:CARG34, [BASE, #-8]
+  |  str CARG2, [BASE, #12]
+  |  b ->fff_res
   |
   |.ffunc_2 ipairs_aux
-  |  NYI
+  |  checktp CARG2, LJ_TTAB
+  |  checktpeq CARG4, LJ_TISNUM
+  |  bne ->fff_fallback
+  |  ldr RB, TAB:CARG1->asize
+  |   ldr RC, TAB:CARG1->array
+  |  add CARG3, CARG3, #1
+  |    ldr PC, [BASE, FRAME_PC]
+  |  cmp CARG3, RB
+  |   add RC, RC, CARG3, lsl #3
+  |  strd CARG34, [BASE, #-8]
+  |   ldrdlo CARG12, [RC]
+  |   mov RC, #(0+1)*8
+  |  bhs >2				// Not in array part?
+  |1:
+  |   checktp CARG2, LJ_TNIL
+  |   movne RC, #(2+1)*8
+  |   strdne CARG12, [BASE]
+  |  b ->fff_res
+  |2:  // Check for empty hash part first. Otherwise call C function.
+  |  ldr RB, TAB:CARG1->hmask
+  |   mov CARG2, CARG3
+  |  cmp RB, #0
+  |  beq ->fff_res
+  |  bl extern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |  // Returns cTValue * or NULL.
+  |  cmp CRET1, #0
+  |  beq ->fff_res
+  |  ldrd CARG12, [CRET1]
+  |  b <1
   |
   |.ffunc_1 ipairs
-  |  NYI
+  |  checktab CARG2, ->fff_fallback
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  ldr TAB:RB, TAB:CARG1->metatable
+#endif
+  |   ldrd CFUNC:CARG34, CFUNC:CARG3->upvalue[0]
+  |    ldr PC, [BASE, FRAME_PC]
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  cmp TAB:RB, #0
+  |  bne ->fff_fallback
+#endif
+  |  mov CARG1, #0
+  |  mvn CARG2, #~LJ_TISNUM
+  |    mov RC, #(3+1)*8
+  |   strd CFUNC:CARG34, [BASE, #-8]
+  |  strd CARG12, [BASE, #8]
+  |  b ->fff_res
   |
   |//-- Base library: catch errors ----------------------------------------
   |
