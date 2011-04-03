@@ -1223,10 +1223,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Calls and vararg handling ----------------------------------------- */
 
   case BC_CALLM:
-    |  NYI
+    |  // RA = base*8, (RB = nresults+1,) RC = extra_nargs
+    |  ldr CARG1, SAVE_MULTRES
+    |  decode_RC8 NARGS8:RC, INS
+    |  add NARGS8:RC, NARGS8:RC, CARG1
+    |  b ->BC_CALL_Z
     break;
   case BC_CALL:
-    |  NYI
+    |  // RA = base*8, (RB = nresults+1,) RC = nargs+1
+    |  decode_RC8 NARGS8:RC, INS
+    |->BC_CALL_Z:
+    |  mov RB, BASE			// Save old BASE for vmeta_call.
+    |  ldrd CARG34, [BASE, RA]!
+    |   sub NARGS8:RC, NARGS8:RC, #8
+    |   add BASE, BASE, #8
+    |  checkfunc CARG4, ->vmeta_call
+    |  ins_call
     break;
 
   case BC_CALLMT:
@@ -1237,15 +1249,104 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERC:
-    |  NYI
+    |  // RA = base*8, (RB = nresults+1, RC = nargs+1 (2+1))
+    |  add RA, BASE, RA
+    |   mov RB, BASE			// Save old BASE for vmeta_call.
+    |  ldrd CARG34, [RA, #-16]
+    |   ldrd CARG12, [RA, #-8]
+    |    add BASE, RA, #8
+    |  strd CARG34, [RA, #8]		// Copy state.
+    |   strd CARG12, [RA, #16]		// Copy control var.
+    |  // STALL: locked CARG34.
+    |  ldrd LFUNC:CARG34, [RA, #-24]
+    |    mov NARGS8:RC, #16		// Iterators get 2 arguments.
+    |  // STALL: load CARG34.
+    |  strd LFUNC:CARG34, [RA]		// Copy callable.
+    |  checkfunc CARG4, ->vmeta_call
+    |  ins_call
     break;
 
   case BC_ITERN:
-    |  NYI
+    |  // RA = base*8, (RB = nresults+1, RC = nargs+1 (2+1))
+#if LJ_HASJIT
+    |  // NYI: add hotloop, record BC_ITERN.
+#endif
+    |  add RA, BASE, RA
+    |  ldr TAB:RB, [RA, #-16]
+    |  ldr CARG1, [RA, #-8]		// Get index from control var.
+    |  ldr INS, TAB:RB->asize
+    |   ldr CARG2, TAB:RB->array
+    |    add PC, PC, #4
+    |1:  // Traverse array part.
+    |  subs RC, CARG1, INS
+    |   add CARG3, CARG2, CARG1, lsl #3
+    |  bhs >5				// Index points after array part?
+    |   ldrd CARG34, [CARG3]
+    |   checktp CARG4, LJ_TNIL
+    |   addeq CARG1, CARG1, #1		// Skip holes in array part.
+    |   beq <1
+    |  ldrh RC, [PC, #-2]
+    |   mvn CARG2, #~LJ_TISNUM
+    |    strd CARG34, [RA, #8]
+    |  add RC, PC, RC, lsl #2
+    |    add RB, CARG1, #1
+    |   strd CARG12, [RA]
+    |  sub PC, RC, #0x20000
+    |    str RB, [RA, #-8]		// Update control var.
+    |3:
+    |  ins_next
+    |
+    |5:  // Traverse hash part.
+    |  ldr CARG4, TAB:RB->hmask
+    |   ldr NODE:RB, TAB:RB->node
+    |6:
+    |   add CARG1, RC, RC, lsl #1
+    |  cmp RC, CARG4			// End of iteration? Branch to ITERL+1.
+    |   add NODE:CARG3, NODE:RB, CARG1, lsl #3  // node = tab->node + idx*3*8
+    |  bhi <3
+    |   ldrd CARG12, NODE:CARG3->val
+    |   checktp CARG2, LJ_TNIL
+    |   add RC, RC, #1
+    |   beq <6				// Skip holes in hash part.
+    |  ldrh RB, [PC, #-2]
+    |   add RC, RC, INS
+    |    ldrd CARG34, NODE:CARG3->key
+    |   str RC, [RA, #-8]		// Update control var.
+    |   strd CARG12, [RA, #8]
+    |  add RC, PC, RB, lsl #2
+    |  sub PC, RC, #0x20000
+    |    strd CARG34, [RA]
+    |  b <3
     break;
 
   case BC_ISNEXT:
-    |  NYI
+    |  // RA = base*8, RD = target (points to ITERN)
+    |  add RA, BASE, RA
+    |     add RC, PC, RC, lsl #2
+    |  ldrd CFUNC:CARG12, [RA, #-24]
+    |   ldr CARG3, [RA, #-12]
+    |    ldr CARG4, [RA, #-4]
+    |  checktp CARG2, LJ_TFUNC
+    |  ldrbeq CARG1, CFUNC:CARG1->ffid
+    |   checktpeq CARG3, LJ_TTAB
+    |    checktpeq CARG4, LJ_TNIL
+    |  cmpeq CARG1, #FF_next_N
+    |     subeq PC, RC, #0x20000
+    |  bne >5
+    |   ins_next1
+    |   ins_next2
+    |  mov CARG1, #0
+    |  str CARG1, [RA, #-8]		// Initialize control var.
+    |1:
+    |   ins_next3
+    |5:  // Despecialize bytecode if any of the checks fail.
+    |  mov CARG1, #BC_JMP
+    |   mov OP, #BC_ITERC
+    |  strb CARG1, [PC, #-4]
+    |   sub PC, RC, #0x20000
+    |   strb OP, [PC]			// Subsumes ins_next1.
+    |   ins_next2
+    |  b <1
     break;
 
   case BC_VARG:
@@ -1490,7 +1591,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IITERL:
-    |  NYI
+    |  // RA = base*8, RC = target
+    |  ldrd CARG12, [RA, BASE]!
+    if (op == BC_JITERL) {
+      |  NYI
+    } else {
+      |   add RC, PC, RC, lsl #2
+      |  // STALL: load CARG12.
+      |  cmn CARG2, #-LJ_TNIL		// Stop if iterator returned nil.
+      |  subne PC, RC, #0x20000		// Otherwise save control var + branch.
+      |  strdne CARG12, [RA, #-8]
+    }
+    |  ins_next
     break;
 
   case BC_LOOP:
