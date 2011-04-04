@@ -290,14 +290,34 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
-  |  NYI
+  |  // (void *cframe, int errcode)
+  |  mov sp, CARG1
+  |  mov CRET1, CARG2
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
-  |  NYI
+  |  ldr L, SAVE_L
+  |   mv_vmstate CARG4, C
+  |  ldr GL:CARG3, L->glref
+  |   str CARG4, GL:CARG3->vmstate
+  |  b ->vm_leave_unw
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
-  |  NYI
+  |  // (void *cframe)
+  |  bic sp, CARG1, #~CFRAME_RAWMASK
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
-  |  NYI
+  |  ldr L, SAVE_L
+  |   mov MASKR8, #255
+  |    mov RC, #16			// 2 results: false + error message.
+  |   lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
+  |  ldr BASE, L->base
+  |   ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |    mvn CARG1, #~LJ_TFALSE
+  |  sub RA, BASE, #8			// Results start at BASE-8.
+  |  ldr PC, [BASE, FRAME_PC]		// Fetch PC of previous frame.
+  |   add DISPATCH, DISPATCH, #GG_G2DISP
+  |   mv_vmstate CARG2, INTERP
+  |    str CARG1, [BASE, #-4]		// Prepend false to error message.
+  |   st_vmstate CARG2
+  |  b ->vm_returnc
   |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------
@@ -688,10 +708,29 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: catch errors ----------------------------------------
   |
   |.ffunc pcall
-  |  NYI
+  |  ldrb RA, [DISPATCH, #DISPATCH_GL(hookmask)]
+  |   cmp NARGS8:RC, #8
+  |   blo ->fff_fallback
+  |  tst RA, #HOOK_ACTIVE		// Remember active hook before pcall.
+  |   mov RB, BASE
+  |   add BASE, BASE, #8
+  |  moveq PC, #8+FRAME_PCALL
+  |  movne PC, #8+FRAME_PCALLH
+  |   sub NARGS8:RC, NARGS8:RC, #8
+  |  b ->vm_call_dispatch
   |
   |.ffunc_2 xpcall
-  |  NYI
+  |  ldrb RA, [DISPATCH, #DISPATCH_GL(hookmask)]
+  |  checkfunc CARG4, ->fff_fallback	// Traceback must be a function.
+  |   mov RB, BASE
+  |  strd CARG12, [BASE, #8]		// Swap function and traceback.
+  |   strd CARG34, [BASE]
+  |  tst RA, #HOOK_ACTIVE		// Remember active hook before pcall.
+  |   add BASE, BASE, #16
+  |  moveq PC, #16+FRAME_PCALL
+  |  movne PC, #16+FRAME_PCALLH
+  |   sub NARGS8:RC, NARGS8:RC, #16
+  |  b ->vm_call_dispatch
   |
   |//-- Coroutine library --------------------------------------------------
   |
