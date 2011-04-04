@@ -53,6 +53,11 @@
 |.define SAVE_MULTRES,	[sp, #4]
 |.define ARG5,		[sp]
 |
+|.define TMPDhi,	[sp, #4]
+|.define TMPDlo,	[sp]
+|.define TMPD,		[sp]
+|.define TMPDp,		sp
+|
 |.macro saveregs
 |  push {r4, r5, r6, r7, r8, r9, r10, r11, lr}
 |  sub sp, sp, CFRAME_SPACE
@@ -188,6 +193,15 @@
 |// Set current VM state.
 |.macro mv_vmstate, reg, st; mvn reg, #LJ_VMST_..st; .endmacro
 |.macro st_vmstate, reg; str reg, [DISPATCH, #DISPATCH_GL(vmstate)]; .endmacro
+|
+|// Move table write barrier back. Overwrites mark and tmp.
+|.macro barrierback, tab, mark, tmp
+|  ldr tmp, [DISPATCH, #DISPATCH_GL(gc.grayagain)]
+|   bic mark, mark, #LJ_GC_BLACK		// black2gray(tab)
+|  str tab, [DISPATCH, #DISPATCH_GL(gc.grayagain)]
+|   strb mark, tab->marked
+|  str tmp, tab->gclist
+|.endmacro
 |
 |//-----------------------------------------------------------------------
 
@@ -417,25 +431,113 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
-  |->vmeta_tgets:
-  |  NYI
+  |->vmeta_tgets1:
+  |  add CARG2, BASE, RB
+  |  b >2
   |
-  |->vmeta_tgetb:
-  |  NYI
+  |->vmeta_tgets:
+  |  sub CARG2, DISPATCH, #-DISPATCH_GL(tmptv)
+  |   mvn CARG4, #~LJ_TTAB
+  |  str TAB:RB, [CARG2]
+  |   str CARG4, [CARG2, #4]
+  |2:
+  |   mvn CARG4, #~LJ_TISNUM
+  |  str STR:RC, TMPDlo
+  |   str CARG4, TMPDhi
+  |  mov CARG3, TMPDp
+  |  b >1
+  |
+  |->vmeta_tgetb:			// RC = index
+  |  decode_RB8 RB, INS
+  |   str RC, TMPDlo
+  |   mvn CARG4, #~LJ_TISNUM
+  |  add CARG2, BASE, RB
+  |   str CARG4, TMPDhi
+  |  mov CARG3, TMPDp
+  |  b >1
   |
   |->vmeta_tgetv:
-  |  NYI
+  |  add CARG2, BASE, RB
+  |   add CARG3, BASE, RC
+  |1:
+  |   str BASE, L->base
+  |  mov CARG1, L
+  |   str PC, SAVE_PC
+  |  bl extern lj_meta_tget		// (lua_State *L, TValue *o, TValue *k)
+  |  // Returns TValue * (finished) or NULL (metamethod).
+  |  cmp CRET1, #0
+  |  beq >3
+  |  ldrd CARG34, [CRET1]
+  |   ins_next1
+  |   ins_next2
+  |  strd CARG34, [BASE, RA]
+  |   ins_next3
+  |
+  |3:  // Call __index metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k
+  |   rsb CARG1, BASE, #FRAME_CONT
+  |  ldr BASE, L->top
+  |    mov NARGS8:RC, #16		// 2 args for func(t, k).
+  |    str PC, [BASE, #-12]		// [cont|PC]
+  |   add PC, CARG1, BASE
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
+  |  b ->vm_call_dispatch_f
   |
   |//-----------------------------------------------------------------------
   |
-  |->vmeta_tsets:
-  |  NYI
+  |->vmeta_tsets1:
+  |  add CARG2, BASE, RB
+  |  b >2
   |
-  |->vmeta_tsetb:
-  |  NYI
+  |->vmeta_tsets:
+  |  sub CARG2, DISPATCH, #-DISPATCH_GL(tmptv)
+  |   mvn CARG4, #~LJ_TTAB
+  |  str TAB:RB, [CARG2]
+  |   str CARG4, [CARG2, #4]
+  |2:
+  |   mvn CARG4, #~LJ_TISNUM
+  |  str STR:RC, TMPDlo
+  |   str CARG4, TMPDhi
+  |  mov CARG3, TMPDp
+  |  b >1
+  |
+  |->vmeta_tsetb:			// RC = index
+  |  decode_RB8 RB, INS
+  |   str RC, TMPDlo
+  |   mvn CARG4, #~LJ_TISNUM
+  |  add CARG2, BASE, RB
+  |   str CARG4, TMPDhi
+  |  mov CARG3, TMPDp
+  |  b >1
   |
   |->vmeta_tsetv:
-  |  NYI
+  |  add CARG2, BASE, RB
+  |   add CARG3, BASE, RC
+  |1:
+  |   str BASE, L->base
+  |  mov CARG1, L
+  |   str PC, SAVE_PC
+  |  bl extern lj_meta_tset		// (lua_State *L, TValue *o, TValue *k)
+  |  // Returns TValue * (finished) or NULL (metamethod).
+  |  cmp CRET1, #0
+  |   ldrd CARG34, [BASE, RA]
+  |  beq >3
+  |   ins_next1
+  |  // NOBARRIER: lj_meta_tset ensures the table is not black.
+  |  strd CARG34, [CRET1]
+  |   ins_next2
+  |   ins_next3
+  |
+  |3:  // Call __newindex metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
+  |   rsb CARG1, BASE, #FRAME_CONT
+  |  ldr BASE, L->top
+  |    mov NARGS8:RC, #24		// 3 args for func(t, k, v).
+  |   strd CARG34, [BASE, #16]		// Copy value to third argument.
+  |    str PC, [BASE, #-12]		// [cont|PC]
+  |   add PC, CARG1, BASE
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
+  |  b ->vm_call_dispatch_f
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -1462,7 +1564,43 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TGETV:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  ldrd TAB:CARG12, [BASE, RB]
+    |   ldrd CARG34, [BASE, RC]
+    |  checktab CARG2, ->vmeta_tgetv  // STALL: load CARG12.
+    |   checktp CARG4, LJ_TISNUM	// Integer key?
+    |  ldreq CARG4, TAB:CARG1->array
+    |    ldreq CARG2, TAB:CARG1->asize
+    |   bne >9
+    |
+    |  add CARG4, CARG4, CARG3, lsl #3
+    |    cmp CARG3, CARG2		// In array part?
+    |  ldrdlo CARG34, [CARG4]
+    |    bhs ->vmeta_tgetv
+    |   ins_next1
+    |  checktp CARG4, LJ_TNIL
+    |  beq >5
+    |1:
+    |   ins_next2
+    |  strd CARG34, [BASE, RA]
+    |   ins_next3
+    |
+    |5:  // Check for __index if table value is nil.
+    |  ldr TAB:CARG2, TAB:CARG1->metatable
+    |  cmp TAB:CARG2, #0
+    |  beq <1				// No metatable: done.
+    |  ldrb CARG2, TAB:CARG2->nomm
+    |  tst CARG2, #1<<MM_index
+    |  bne <1				// 'no __index' flag set: done.
+    |  b ->vmeta_tgetv
+    |
+    |9:
+    |  checktp CARG4, LJ_TSTR		// String key?
+    |   moveq STR:RC, CARG3
+    |  beq ->BC_TGETS_Z
+    |  b ->vmeta_tgetv
     break;
   case BC_TGETS:
     |  decode_RB8 RB, INS
@@ -1471,7 +1609,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrd CARG12, [BASE, RB]
     |   mvn RC, RC
     |   ldr STR:RC, [KBASE, RC, lsl #2]  // STALL: early RC.
-    |  checktab CARG2, ->vmeta_tgets
+    |  checktab CARG2, ->vmeta_tgets1
     |->BC_TGETS_Z:
     |  // (TAB:RB =) TAB:CARG1 = GCtab *, STR:RC = GCstr *, RA = dst*8
     |  ldr CARG3, TAB:CARG1->hmask
@@ -1506,25 +1644,206 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   mov CARG3, #0  // Optional clear of undef. value (during load stall).
     |   mvn CARG4, #~LJ_TNIL
     |  cmp TAB:CARG1, #0
-    |  beq <3					// No metatable: done.
+    |  beq <3				// No metatable: done.
     |  ldrb CARG2, TAB:CARG1->nomm
     |  tst CARG2, #1<<MM_index
-    |  bne <3					// 'no __index' flag set: done.
+    |  bne <3				// 'no __index' flag set: done.
     |  b ->vmeta_tgets
     break;
   case BC_TGETB:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   and RC, RC, #255
+    |  // RA = dst*8, RB = table*8, RC = index
+    |  ldrd CARG12, [BASE, RB]
+    |  checktab CARG2, ->vmeta_tgetb  // STALL: load CARG12.
+    |   ldr CARG3, TAB:CARG1->asize
+    |  ldr CARG4, TAB:CARG1->array
+    |  lsl CARG2, RC, #3
+    |   cmp RC, CARG3
+    |  ldrdlo CARG34, [CARG4, CARG2]
+    |   bhs ->vmeta_tgetb
+    |   ins_next1  // Overwrites RB!
+    |  checktp CARG4, LJ_TNIL
+    |  beq >5
+    |1:
+    |   ins_next2
+    |  strd CARG34, [BASE, RA]
+    |   ins_next3
+    |
+    |5:  // Check for __index if table value is nil.
+    |  ldr TAB:CARG2, TAB:CARG1->metatable
+    |  cmp TAB:CARG2, #0
+    |  beq <1				// No metatable: done.
+    |  ldrb CARG2, TAB:CARG2->nomm
+    |  tst CARG2, #1<<MM_index
+    |  bne <1				// 'no __index' flag set: done.
+    |  b ->vmeta_tgetb
     break;
 
   case BC_TSETV:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = src*8, RB = table*8, RC = key*8
+    |  ldrd TAB:CARG12, [BASE, RB]
+    |   ldrd CARG34, [BASE, RC]
+    |  checktab CARG2, ->vmeta_tsetv  // STALL: load CARG12.
+    |   checktp CARG4, LJ_TISNUM	// Integer key?
+    |  ldreq CARG2, TAB:CARG1->array
+    |    ldreq CARG4, TAB:CARG1->asize
+    |   bne >9
+    |
+    |  add CARG2, CARG2, CARG3, lsl #3
+    |    cmp CARG3, CARG4		// In array part?
+    |  ldrlo INS, [CARG2, #4]
+    |    bhs ->vmeta_tsetv
+    |   ins_next1  // Overwrites RB!
+    |  checktp INS, LJ_TNIL
+    |  ldrb INS, TAB:CARG1->marked
+    |   ldrd CARG34, [BASE, RA]
+    |  beq >5
+    |1:
+    |  tst INS, #LJ_GC_BLACK		// isblack(table)
+    |   strd CARG34, [CARG2]
+    |  bne >7
+    |2:
+    |   ins_next2
+    |   ins_next3
+    |
+    |5:  // Check for __newindex if previous value is nil.
+    |  ldr TAB:RA, TAB:CARG1->metatable
+    |  cmp TAB:RA, #0
+    |  beq <1				// No metatable: done.
+    |  ldrb RA, TAB:RA->nomm
+    |  tst RA, #1<<MM_newindex
+    |  bne <1				// 'no __newindex' flag set: done.
+    |  ldr INS, [PC, #-4]		// Restore RA.
+    |  decode_RA8 RA, INS
+    |  b ->vmeta_tsetv
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:CARG1, INS, CARG3
+    |  b <2
+    |
+    |9:
+    |  checktp CARG4, LJ_TSTR		// String key?
+    |   moveq STR:RC, CARG3
+    |  beq ->BC_TSETS_Z
+    |  b ->vmeta_tsetv
     break;
   case BC_TSETS:
+    |  decode_RB8 RB, INS
+    |   and RC, RC, #255
+    |  // RA = src*8, RB = table*8, RC = str_const (~)
+    |  ldrd CARG12, [BASE, RB]
+    |   mvn RC, RC
+    |   ldr STR:RC, [KBASE, RC, lsl #2]  // STALL: early RC.
+    |  checktab CARG2, ->vmeta_tsets1
     |->BC_TSETS_Z:
-    |  NYI
+    |  // (TAB:RB =) TAB:CARG1 = GCtab *, STR:RC = GCstr *, RA = dst*8
+    |  ldr CARG3, TAB:CARG1->hmask
+    |   ldr CARG4, STR:RC->hash
+    |    ldr NODE:INS, TAB:CARG1->node
+    |     mov TAB:RB, TAB:CARG1
+    |  and CARG3, CARG3, CARG4			// idx = str->hash & tab->hmask
+    |  add CARG3, CARG3, CARG3, lsl #1
+    |    add NODE:INS, NODE:INS, CARG3, lsl #3	// node = tab->node + idx*3*8
+    |1:
+    |  ldrd CARG12, NODE:INS->key  // STALL: early NODE:INS.
+    |   ldr CARG4, NODE:INS->val.it
+    |    ldr NODE:CARG3, NODE:INS->next
+    |  cmp CARG1, STR:RC
+    |  checktpeq CARG2, LJ_TSTR
+    |  bne >5
+    |  ldrb CARG2, TAB:RB->marked
+    |   checktp CARG4, LJ_TNIL		// Key found, but nil value?
+    |    ldrd CARG34, [BASE, RA]
+    |   beq >4
+    |2:
+    |  tst CARG2, #LJ_GC_BLACK		// isblack(table)
+    |    strd CARG34, NODE:INS->val
+    |  bne >7
+    |3:
+    |   ins_next
+    |
+    |4:  // Check for __newindex if previous value is nil.
+    |  ldr TAB:CARG1, TAB:RB->metatable
+    |  cmp TAB:CARG1, #0
+    |  beq <2				// No metatable: done.
+    |  ldrb CARG1, TAB:CARG1->nomm
+    |  tst CARG1, #1<<MM_newindex
+    |  bne <2				// 'no __newindex' flag set: done.
+    |  b ->vmeta_tsets
+    |
+    |5:  // Follow hash chain.
+    |  movs NODE:INS, NODE:CARG3
+    |  bne <1
+    |  // End of hash chain: key not found, add a new one.
+    |
+    |  // But check for __newindex first.
+    |  ldr TAB:CARG1, TAB:RB->metatable
+    |   mov CARG3, TMPDp
+    |   str PC, SAVE_PC
+    |  cmp TAB:CARG1, #0		// No metatable: continue.
+    |   str BASE, L->base
+    |  ldrbne CARG2, TAB:CARG1->nomm
+    |   mov CARG1, L
+    |  beq >6
+    |  tst CARG2, #1<<MM_newindex
+    |  beq ->vmeta_tsets		// 'no __newindex' flag NOT set: check.
+    |6:
+    |  mvn CARG4, #~LJ_TSTR
+    |   str STR:RC, TMPDlo
+    |   mov CARG2, TAB:RB
+    |  str CARG4, TMPDhi
+    |  bl extern lj_tab_newkey		// (lua_State *L, GCtab *t, TValue *k)
+    |  // Returns TValue *.
+    |  ldr BASE, L->base
+    |  ldrd CARG34, [BASE, RA]
+    |  strd CARG34, [CRET1]
+    |  b <3				// No 2nd write barrier needed.
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:CARG1, CARG2, CARG3
+    |  b <3
     break;
   case BC_TSETB:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   and RC, RC, #255
+    |  // RA = src*8, RB = table*8, RC = index
+    |  ldrd CARG12, [BASE, RB]
+    |  checktab CARG2, ->vmeta_tsetb  // STALL: load CARG12.
+    |   ldr CARG3, TAB:CARG1->asize
+    |  ldr RB, TAB:CARG1->array
+    |  lsl CARG2, RC, #3
+    |   cmp RC, CARG3
+    |  ldrdlo CARG34, [CARG2, RB]!
+    |   bhs ->vmeta_tsetb
+    |   ins_next1  // Overwrites RB!
+    |  checktp CARG4, LJ_TNIL
+    |  ldrb INS, TAB:CARG1->marked
+    |   ldrd CARG34, [BASE, RA]
+    |  beq >5
+    |1:
+    |  tst INS, #LJ_GC_BLACK		// isblack(table)
+    |    strd CARG34, [CARG2]
+    |  bne >7
+    |2:
+    |   ins_next2
+    |   ins_next3
+    |
+    |5:  // Check for __newindex if previous value is nil.
+    |  ldr TAB:RA, TAB:CARG1->metatable
+    |  cmp TAB:RA, #0
+    |  beq <1				// No metatable: done.
+    |  ldrb RA, TAB:RA->nomm
+    |  tst RA, #1<<MM_newindex
+    |  bne <1				// 'no __newindex' flag set: done.
+    |  ldr INS, [PC, #-4]		// Restore INS.
+    |  b ->vmeta_tsetb
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:CARG1, INS, CARG3
+    |  b <2
     break;
 
   case BC_TSETM:
