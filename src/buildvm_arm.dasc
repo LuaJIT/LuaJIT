@@ -572,11 +572,32 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Base library: checks -----------------------------------------------
   |
-  |.ffunc assert
-  |  NYI
+  |.ffunc_1 assert
+  |  checktp CARG2, LJ_TTRUE
+  |  bhi ->fff_fallback
+  |   ldr PC, [BASE, FRAME_PC]
+  |  strd CARG12, [BASE, #-8]
+  |  mov RB, BASE
+  |  subs RA, NARGS8:RC, #8
+  |   add RC, NARGS8:RC, #8		// Compute (nresults+1)*8.
+  |  beq ->fff_res			// Done if exactly 1 argument.
+  |1:
+  |   ldrd CARG12, [RB, #8]
+  |  subs RA, RA, #8
+  |   strd CARG12, [RB], #8
+  |  bne <1
+  |  b ->fff_res
   |
   |.ffunc type
-  |  NYI
+  |  ldr CARG2, [BASE, #4]
+  |   cmp NARGS8:RC, #8
+  |   blo ->fff_fallback
+  |  checktp CARG2, LJ_TISNUM
+  |  mvnlo CARG2, #~LJ_TISNUM
+  |  rsb CARG4, CARG2, #(int)(offsetof(GCfuncC, upvalue)>>3)-1
+  |  lsl CARG4, CARG4, #3
+  |  ldrd CARG12, [CFUNC:CARG3, CARG4]
+  |  b ->fff_restv
   |
   |//-- Base library: getters and setters ---------------------------------
   |
