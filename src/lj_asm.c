@@ -97,6 +97,7 @@ typedef struct ASMState {
 #define FUSE_DISABLED		(~(IRRef)0)
 #define mayfuse(as, ref)	((ref) > as->fuseref)
 #define neverfuse(as)		(as->fuseref == FUSE_DISABLED)
+#define canfuse(as, ir)		(!neverfuse(as) && !irt_isphi((ir)->t))
 #define opisfusableload(o) \
   ((o) == IR_ALOAD || (o) == IR_HLOAD || (o) == IR_ULOAD || \
    (o) == IR_FLOAD || (o) == IR_XLOAD || (o) == IR_SLOAD || (o) == IR_VLOAD)
@@ -1348,7 +1349,7 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
     asm_fusestrref(as, ir, allow);
   } else {
     as->mrm.ofs = 0;
-    if (mayfuse(as, ref) && ir->o == IR_ADD && ra_noreg(ir->r)) {
+    if (canfuse(as, ir) && ir->o == IR_ADD && ra_noreg(ir->r)) {
       /* Gather (base+idx*sz)+ofs as emitted by cdata ptr/array indexing. */
       IRIns *irx;
       IRRef idx;
@@ -1356,7 +1357,7 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
       if (asm_isk32(as, ir->op2, &as->mrm.ofs)) {  /* Recognize x+ofs. */
 	ref = ir->op1;
 	ir = IR(ref);
-	if (!(ir->o == IR_ADD && mayfuse(as, ref) && ra_noreg(ir->r)))
+	if (!(ir->o == IR_ADD && canfuse(as, ir) && ra_noreg(ir->r)))
 	  goto noadd;
       }
       as->mrm.scale = XM_SCALE1;
@@ -1368,7 +1369,7 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
 	ref = ir->op1;
 	irx = IR(idx);
       }
-      if (mayfuse(as, idx) && ra_noreg(irx->r)) {
+      if (canfuse(as, irx) && ra_noreg(irx->r)) {
 	if (irx->o == IR_BSHL && irref_isk(irx->op2) && IR(irx->op2)->i <= 3) {
 	  /* Recognize idx<<b with b = 0-3, corresponding to sz = (1),2,4,8. */
 	  idx = irx->op1;
