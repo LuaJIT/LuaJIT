@@ -914,6 +914,15 @@ LJFOLDF(simplify_conv_int_i64)
   return NEXTFOLD;
 }
 
+LJFOLD(CONV CONV IRCONV_NUM_FLOAT)  /* _NUM */
+LJFOLDF(simplify_conv_flt_num)
+{
+  PHIBARRIER(fleft);
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_NUM)
+    return fleft->op1;
+  return NEXTFOLD;
+}
+
 /* Shortcut TOBIT + IRT_NUM <- IRT_INT/IRT_U32 conversion. */
 LJFOLD(TOBIT CONV KNUM)
 LJFOLDF(simplify_tobit_conv)

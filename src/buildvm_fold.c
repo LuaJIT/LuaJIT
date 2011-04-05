@@ -111,13 +111,15 @@ static uint32_t nexttoken(char **pp, int allowlit, int allowany)
 	if (!strcmp(ircall_names[i], p+7))
 	  return i;
     } else if (allowlit && !strncmp(p, "IRCONV_", 7)) {
-      for (i = 0; irt_names[i]; i++)
-	if (!strncmp(irt_names[i], p+7, 3) && p[10] == '_') {
+      for (i = 0; irt_names[i]; i++) {
+	const char *r = strchr(p+7, '_');
+	if (r && !strncmp(irt_names[i], p+7, r-(p+7))) {
 	  uint32_t j;
 	  for (j = 0; irt_names[j]; j++)
-	    if (!strncmp(irt_names[j], p+11, 3))
+	    if (!strcmp(irt_names[j], r+1))
 	      return (i << 5) + j;
 	}
+      }
     } else if (allowlit && *p >= '0' && *p <= '9') {
       for (i = 0; *p >= '0' && *p <= '9'; p++)
 	i = i*10 + (*p - '0');
