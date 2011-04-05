@@ -1390,9 +1390,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |
   |6:
   |  cmp RB, LJ_TUDATA;  je <1
-  |  cmp RB, LJ_TISNUM;  ja >7
-  |  mov RB, LJ_TNUMX
+  |.if X64
+  |  cmp RB, LJ_TNUMX;  ja >8
+  |  cmp RB, LJ_TISNUM;  jbe >7
+  |  mov RB, LJ_TLIGHTUD
+  |  jmp >8
   |7:
+  |.else
+  |  cmp RB, LJ_TISNUM;  ja >8
+  |.endif
+  |  mov RB, LJ_TNUMX
+  |8:
   |  not RB
   |  mov TAB:RB, [DISPATCH+RB*4+DISPATCH_GL(gcroot[GCROOT_BASEMT])]
   |  jmp <2
