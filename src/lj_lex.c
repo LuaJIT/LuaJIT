@@ -89,14 +89,7 @@ static void inclinenumber(LexState *ls)
 static void lex_loadffi(lua_State *L)
 {
   ptrdiff_t oldtop = savestack(L, L->top);
-  cTValue *tmp;
   luaopen_ffi(L);
-  tmp = lj_tab_getstr(tabV(registry(L)), lj_str_newlit(L, "_LOADED"));
-  if (tmp && tvistab(tmp)) {
-    GCtab *t = tabV(tmp);
-    copyTV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "ffi")), L->top-1);
-    lj_gc_anybarriert(L, t);
-  }
   L->top = restorestack(L, oldtop);
 }
 
