@@ -1356,33 +1356,234 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* Remember: all ops branch for a true comparison, fall through otherwise. */
 
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
-    |  NYI
+    |  // RA = src1*8, RC = src2, JMP with RC = target
+    |   lsl RC, RC, #3
+    |  ldrd CARG12, [RA, BASE]!
+    |    ldrh RB, [PC, #2]
+    |   ldrd CARG34, [RC, BASE]!
+    |    add PC, PC, #4
+    |    add RB, PC, RB, lsl #2
+    |  checktp CARG2, LJ_TISNUM
+    |  bne >3
+    |  checktp CARG4, LJ_TISNUM
+    |  bne >4
+    |  cmp CARG1, CARG3
+    if (op == BC_ISLT) {
+      |  sublt PC, RB, #0x20000
+    } else if (op == BC_ISGE) {
+      |  subge PC, RB, #0x20000
+    } else if (op == BC_ISLE) {
+      |  suble PC, RB, #0x20000
+    } else {
+      |  subgt PC, RB, #0x20000
+    }
+    |1:
+    |  ins_next
+    |
+    |3: // CARG12 is not an integer.
+    |  bhi ->vmeta_comp
+    |  // CARG12 is a number.
+    |  checktp CARG4, LJ_TISNUM
+    |  movlo RA, RB			// Save RB.
+    |  blo >5
+    |  // CARG12 is a number, CARG3 is an integer.
+    |  mov CARG1, CARG3
+    |  mov RC, RA
+    |  mov RA, RB			// Save RB.
+    |  bl extern __aeabi_i2d
+    |  mov CARG3, CARG1
+    |  mov CARG4, CARG2
+    |  ldrd CARG12, [RC]		// Restore first operand.
+    |  b >5
+    |4:  // CARG1 is an integer, CARG34 is not an integer.
+    |  bhi ->vmeta_comp
+    |  // CARG1 is an integer, CARG34 is a number
+    |  mov RA, RB			// Save RB.
+    |  bl extern __aeabi_i2d
+    |  ldrd CARG34, [RC]		// Restore second operand.
+    |5:  // CARG12 and CARG34 are numbers.
+    |  bl extern __aeabi_cdcmple
+    |  // To preserve NaN semantics GE/GT branch on unordered, but LT/LE don't.
+    if (op == BC_ISLT) {
+      |  sublo PC, RA, #0x20000
+    } else if (op == BC_ISGE) {
+      |  subhs PC, RA, #0x20000
+    } else if (op == BC_ISLE) {
+      |  subls PC, RA, #0x20000
+    } else {
+      |  subhi PC, RA, #0x20000
+    }
+    |  b <1
     break;
 
   case BC_ISEQV: case BC_ISNEV:
     vk = op == BC_ISEQV;
-    |  NYI
+    |  // RA = src1*8, RC = src2, JMP with RC = target
+    |   lsl RC, RC, #3
+    |  ldrd CARG12, [RA, BASE]!
+    |    ldrh RB, [PC, #2]
+    |   ldrd CARG34, [RC, BASE]!
+    |    add PC, PC, #4
+    |    add RB, PC, RB, lsl #2
+    |  checktp CARG2, LJ_TISNUM
+    |  cmnls CARG4, #-LJ_TISNUM
+    if (vk) {
+      |  bls ->BC_ISEQN_Z
+    } else {
+      |  bls ->BC_ISNEN_Z
+    }
+    |  // Either or both types are not numbers.
+    |  cmp CARG2, CARG4			// Compare types.
+    |  bne >2				// Not the same type?
+    |  checktp CARG2, LJ_TISPRI
+    |  bhs >1				// Same type and primitive type?
+    |
+    |  // Same types and not a primitive type. Compare GCobj or pvalue.
+    |  cmp CARG1, CARG3
+    if (vk) {
+      |  bne >3				// Different GCobjs or pvalues?
+      |1:  // Branch if same.
+      |  sub PC, RB, #0x20000
+      |2:  // Different.
+      |  ins_next
+      |3:
+      |  checktp CARG2, LJ_TISTABUD
+      |  bhi <2				// Different objects and not table/ud?
+    } else {
+      |  beq >1				// Same GCobjs or pvalues?
+      |  checktp CARG2, LJ_TISTABUD
+      |  bhi >2				// Different objects and not table/ud?
+    }
+    |  // Different tables or userdatas. Need to check __eq metamethod.
+    |  // Field metatable must be at same offset for GCtab and GCudata!
+    |  ldr TAB:RA, TAB:CARG1->metatable
+    |  cmp TAB:RA, #0
+    if (vk) {
+      |  beq <2			// No metatable?
+    } else {
+      |  beq >2			// No metatable?
+    }
+    |  ldrb RA, TAB:RA->nomm
+    |   mov CARG4, #1-vk		// ne = 0 or 1.
+    |   mov CARG2, CARG1
+    |  tst RA, #1<<MM_eq
+    |  beq ->vmeta_equal		// 'no __eq' flag not set?
+    if (!vk) {
+      |2:  // Branch if different.
+      |  sub PC, RB, #0x20000
+      |1:  // Same.
+      |  ins_next
+    }
     break;
 
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
-    |  NYI
+    |  // RA = src*8, RC = str_const (~), JMP with RC = target
+    |   mvn RC, RC
+    |  ldrd CARG12, [BASE, RA]
+    |    ldrh RB, [PC, #2]
+    |   ldr STR:CARG3, [KBASE, RC, lsl #2]
+    |    add PC, PC, #4
+    |    add RB, PC, RB, lsl #2
+    |  checktp CARG2, LJ_TSTR
+    |  cmpeq CARG1, CARG3
+    if (vk) {
+      |  subeq PC, RB, #0x20000
+    } else {
+      |  subne PC, RB, #0x20000
+    }
+    |  ins_next
     break;
 
   case BC_ISEQN: case BC_ISNEN:
     vk = op == BC_ISEQN;
-    |  NYI
+    |  // RA = src*8, RC = num_const (~), JMP with RC = target
+    |   lsl RC, RC, #3
+    |  ldrd CARG12, [RA, BASE]!
+    |    ldrh RB, [PC, #2]
+    |   ldrd CARG34, [RC, KBASE]!
+    |    add PC, PC, #4
+    |    add RB, PC, RB, lsl #2
+    if (vk) {
+      |->BC_ISEQN_Z:
+    } else {
+      |->BC_ISNEN_Z:
+    }
+    |  checktp CARG2, LJ_TISNUM
+    |  bne >3
+    |  checktp CARG4, LJ_TISNUM
+    |  bne >4
+    |  cmp CARG1, CARG3
+    if (vk) {
+      |  subeq PC, RB, #0x20000
+    } else {
+      |  subne PC, RB, #0x20000
+    }
+    |1:
+    |  ins_next
+    |
+    |3:  // CARG12 is not an integer.
+    |  bhi <1
+    |  // CARG12 is a number.
+    |  checktp CARG4, LJ_TISNUM
+    |  movlo RA, RB			// Save RB.
+    |  blo >5
+    |  // CARG12 is a number, CARG3 is an integer.
+    |  mov CARG1, CARG3
+    |  mov RC, RA
+    |4:  // CARG1 is an integer, CARG34 is a number.
+    |  mov RA, RB			// Save RB.
+    |  bl extern __aeabi_i2d
+    |  ldrd CARG34, [RC]		// Restore other operand.
+    |5:  // CARG12 and CARG34 are numbers.
+    |  bl extern __aeabi_cdcmpeq
+    if (vk) {
+      |  subeq PC, RA, #0x20000
+    } else {
+      |  subne PC, RA, #0x20000
+    }
+    |  b <1
     break;
 
   case BC_ISEQP: case BC_ISNEP:
     vk = op == BC_ISEQP;
-    |  NYI
+    |  // RA = src*8, RC = primitive_type (~), JMP with RC = target
+    |  ldrd CARG12, [BASE, RA]
+    |   ldrh RB, [PC, #2]
+    |   add PC, PC, #4
+    |  mvn RC, RC
+    |   add RB, PC, RB, lsl #2
+    |  cmp CARG2, RC
+    if (vk) {
+      |  subeq PC, RB, #0x20000
+    } else {
+      |  subne PC, RB, #0x20000
+    }
+    |  ins_next
     break;
 
   /* -- Unary test and copy ops ------------------------------------------- */
 
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
-    |  NYI
+    |  // RA = dst*8 or unused, RC = src, JMP with RC = target
+    |  add RC, BASE, RC, lsl #3
+    |   ldrh RB, [PC, #2]
+    |  ldrd CARG12, [RC]
+    |   add PC, PC, #4
+    |   add RB, PC, RB, lsl #2
+    |  checktp CARG2, LJ_TTRUE
+    if (op == BC_ISTC || op == BC_IST) {
+      |  subls PC, RB, #0x20000
+      if (op == BC_ISTC) {
+	|  strdls CARG12, [BASE, RA]
+      }
+    } else {
+      |  subhi PC, RB, #0x20000
+      if (op == BC_ISFC) {
+	|  strdhi CARG12, [BASE, RA]
+      }
+    }
+    |  ins_next
     break;
 
   /* -- Unary ops --------------------------------------------------------- */
