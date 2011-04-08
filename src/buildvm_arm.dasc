@@ -338,10 +338,29 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_growstack_c:			// Grow stack for C function.
-  |  NYI
+  |  // CARG1 = L
+  |  mov CARG2, #LUA_MINSTACK
+  |  b >2
   |
   |->vm_growstack_l:			// Grow stack for Lua function.
-  |  NYI
+  |  // BASE = new base, RA = BASE+framesize*8, RC = nargs*8, PC = first PC
+  |  add RC, BASE, RC
+  |   sub RA, RA, BASE
+  |    mov CARG1, L
+  |  str BASE, L->base
+  |   add PC, PC, #4			// Must point after first instruction.
+  |  str RC, L->top
+  |   lsr CARG3, RA, #3
+  |2:
+  |  // L->base = new base, L->top = top
+  |  str PC, SAVE_PC
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  ldr BASE, L->base
+  |   ldr RC, L->top
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |   sub NARGS8:RC, RC, BASE
+  |  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
+  |  ins_callt				// Just retry the call.
   |
   |//-----------------------------------------------------------------------
   |//-- Entry points into the assembler VM ---------------------------------
