@@ -679,12 +679,15 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_n, name
   |  .ffunc_1 name
-  |  NYI
+  |  checktp CARG2, LJ_TISNUM
+  |  bhs ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_nn, name
   |  .ffunc_2 name
-  |  NYI
+  |  checktp CARG2, LJ_TISNUM
+  |  cmnlo CARG4, #-LJ_TISNUM
+  |  bhs ->fff_fallback
   |.endmacro
   |
   |.macro ffgccheck
@@ -947,8 +950,19 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Math library -------------------------------------------------------
   |
-  |.ffunc_n math_abs
-  |  NYI
+  |.align 8
+  |1:
+  |  .long 0x00000000, 0x41e00000	// 2^31.
+  |
+  |.ffunc_1 math_abs
+  |  checktp CARG2, LJ_TISNUM
+  |  bhi ->fff_fallback
+  |  bicne CARG2, CARG2, #0x80000000
+  |  bne ->fff_restv
+  |  cmp CARG1, #0
+  |  rsbslt CARG1, CARG1, #0
+  |  ldrdvs CARG12, <1
+  |  // Fallthrough.
   |
   |->fff_restv:
   |  // CARG12 = TValue result.
@@ -983,13 +997,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <5
   |
   |.macro math_extern, func
-  |  .ffunc math_ .. func
-  |  NYI
+  |  .ffunc_n math_ .. func
+  |  bl extern func
+  |  b ->fff_restv
   |.endmacro
   |
   |.macro math_extern2, func
-  |  .ffunc math_ .. func
-  |  NYI
+  |  .ffunc_nn math_ .. func
+  |  bl extern func
+  |  b ->fff_restv
   |.endmacro
   |
   |.macro math_round, func
@@ -1019,24 +1035,84 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->ff_math_deg:
   |.ffunc_n math_rad
-  |  NYI
+  |  ldrd CARG34, CFUNC:CARG3->upvalue[0]
+  |  bl extern __aeabi_dmul
+  |  b ->fff_restv
   |
-  |.ffunc math_ldexp
-  |  NYI
+  |.ffunc_2 math_ldexp
+  |  checktp CARG2, LJ_TISNUM
+  |  bhs ->fff_fallback
+  |  checktp CARG4, LJ_TISNUM
+  |  bne ->fff_fallback
+  |  bl extern ldexp			// (double x, int exp)
+  |  b ->fff_restv
   |
-  |.ffunc math_frexp
-  |  NYI
+  |.ffunc_n math_frexp
+  |  mov CARG3, sp
+  |  bl extern frexp
+  |   ldr CARG3, [sp]
+  |   mvn CARG4, #~LJ_TISNUM
+  |    ldr PC, [BASE, FRAME_PC]
+  |  strd CARG12, [BASE, #-8]
+  |    mov RC, #(2+1)*8
+  |   strd CARG34, [BASE]
+  |  b ->fff_res
   |
-  |.ffunc math_modf
-  |  NYI
+  |.ffunc_n math_modf
+  |  sub CARG3, BASE, #8
+  |   ldr PC, [BASE, FRAME_PC]
+  |  bl extern modf
+  |   mov RC, #(2+1)*8
+  |  strd CARG12, [BASE]
+  |  b ->fff_res
   |
-  |.macro math_minmax, name, cmpop
+  |.macro math_minmax, name, cond, fcond
   |  .ffunc_1 name
-  |  NYI
+  |  checktp CARG2, LJ_TISNUM
+  |   mov RA, #8
+  |  bne >4
+  |1:  // Handle integers.
+  |  ldrd CARG34, [BASE, RA]
+  |   cmp RA, RC
+  |   bhs ->fff_restv
+  |  checktp CARG4, LJ_TISNUM
+  |  bne >3
+  |  cmp CARG1, CARG3
+  |   add RA, RA, #8
+  |  mov..cond CARG1, CARG3
+  |  b <1
+  |3:
+  |  bhi ->fff_fallback
+  |  // Convert intermediate result to number and continue below.
+  |  bl extern __aeabi_i2d
+  |  ldrd CARG34, [BASE, RA]
+  |  b >6
+  |
+  |4:
+  |  bhi ->fff_fallback
+  |5:  // Handle numbers.
+  |  ldrd CARG34, [BASE, RA]
+  |   cmp RA, RC
+  |   bhs ->fff_restv
+  |  checktp CARG4, LJ_TISNUM
+  |  bhs >7
+  |6:
+  |  bl extern __aeabi_cdcmple
+  |   add RA, RA, #8
+  |  mov..fcond CARG1, CARG3
+  |  mov..fcond CARG2, CARG4
+  |  b <5
+  |7:  // Convert integer to number and continue above.
+  |  bhi ->fff_fallback
+  |  strd CARG12, TMPD
+  |  mov CARG1, CARG3
+  |  bl extern __aeabi_i2d
+  |  ldrd CARG34, TMPD
+  |  b <6
   |.endmacro
   |
-  |  math_minmax math_min, NYI
-  |  math_minmax math_max, NYI
+  |  math_minmax math_min, gt, hi
+  |  math_minmax math_max, lt, lo
   |
   |//-- String library -----------------------------------------------------
   |
