@@ -723,18 +723,72 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: getters and setters ---------------------------------
   |
   |.ffunc_1 getmetatable
-  |  NYI
+  |  checktp CARG2, LJ_TTAB
+  |  cmnne CARG2, #-LJ_TUDATA
+  |  bne >6
+  |1:  // Field metatable must be at same offset for GCtab and GCudata!
+  |  ldr TAB:RB, TAB:CARG1->metatable
+  |2:
+  |   mvn CARG2, #~LJ_TNIL
+  |   ldr STR:RC, [DISPATCH, #DISPATCH_GL(gcroot[GCROOT_MMNAME+MM_metatable])]
+  |  cmp TAB:RB, #0
+  |  beq ->fff_restv
+  |  ldr CARG3, TAB:RB->hmask
+  |   ldr CARG4, STR:RC->hash
+  |    ldr NODE:INS, TAB:RB->node
+  |  and CARG3, CARG3, CARG4		// idx = str->hash & tab->hmask
+  |  add CARG3, CARG3, CARG3, lsl #1
+  |    add NODE:INS, NODE:INS, CARG3, lsl #3	// node = tab->node + idx*3*8
+  |3:  // Rearranged logic, because we expect _not_ to find the key.
+  |  ldrd CARG34, NODE:INS->key  // STALL: early NODE:INS.
+  |   ldrd CARG12, NODE:INS->val
+  |    ldr NODE:INS, NODE:INS->next
+  |  cmp CARG3, STR:RC
+  |  checktpeq CARG4, LJ_TSTR
+  |  beq >5
+  |  cmp NODE:INS, #0
+  |  bne <3
+  |4:
+  |  mov CARG1, RB			// Use metatable as default result.
+  |  mvn CARG2, #~LJ_TTAB
+  |  b ->fff_restv
+  |5:
+  |  checktp CARG2, LJ_TNIL
+  |  bne ->fff_restv
+  |  b <4
+  |
+  |6:
+  |  checktp CARG2, LJ_TISNUM
+  |  mvnhs CARG2, CARG2
+  |  movlo CARG2, #~LJ_TISNUM
+  |  add CARG4, DISPATCH, CARG2, lsl #2
+  |  ldr TAB:RB, [CARG4, #DISPATCH_GL(gcroot[GCROOT_BASEMT])]
+  |  b <2
   |
   |.ffunc_2 setmetatable
-  |  NYI
+  |  // Fast path: no mt for table yet and not clearing the mt.
+  |  checktp CARG2, LJ_TTAB
+  |   ldreq TAB:RB, TAB:CARG1->metatable
+  |  checktpeq CARG4, LJ_TTAB
+  |    ldrbeq CARG4, TAB:CARG1->marked
+  |   cmpeq TAB:RB, #0
+  |  bne ->fff_fallback
+  |    tst CARG4, #LJ_GC_BLACK		// isblack(table)
+  |     str TAB:CARG3, TAB:CARG1->metatable
+  |    beq ->fff_restv
+  |  barrierback TAB:CARG1, CARG4, CARG3
+  |  b ->fff_restv
   |
   |.ffunc rawget
   |  NYI
   |
   |//-- Base library: conversions ------------------------------------------
   |
-  |.ffunc tonumber
-  |  NYI
+  |.ffunc_1 tonumber
+  |  // Only handles the number case inline (without a base argument).
+  |  checktp CARG2, LJ_TISNUM
+  |  bls ->fff_restv
+  |  b ->fff_fallback
   |
   |.ffunc_1 tostring
   |  // Only handles the string or number case inline.
