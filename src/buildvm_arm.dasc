@@ -484,7 +484,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  str TAB:RB, [CARG2]
   |   str CARG4, [CARG2, #4]
   |2:
-  |   mvn CARG4, #~LJ_TISNUM
+  |   mvn CARG4, #~LJ_TSTR
   |  str STR:RC, TMPDlo
   |   str CARG4, TMPDhi
   |  mov CARG3, TMPDp
@@ -650,6 +650,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  b >1
   |
   |->vmeta_unm:
+  |  ldr INS, [PC, #-8]
+  |   sub PC, PC, #4
   |  add CARG3, BASE, RC
   |  add CARG4, BASE, RC
   |  b >1
@@ -1239,7 +1241,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Bit library --------------------------------------------------------
   |
   |.macro .ffunc_bit, name
-  |  .ffunc_n bit_..name
+  |  .ffunc_1 bit_..name
   |  NYI
   |.endmacro
   |
@@ -1264,7 +1266,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  NYI
   |
   |.macro .ffunc_bit_sh, name, ins, shmod
-  |  .ffunc_nn bit_..name
+  |  .ffunc_2 bit_..name
   |  NYI
   |.endmacro
   |
@@ -1706,21 +1708,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next1
     |   ins_next2
     |  checktp CARG2, LJ_TISNUM
+    |  bhi ->vmeta_unm
+    |  eorne CARG2, CARG2, #0x80000000
     |  bne >5
-    |  rsbs CARG1, CARG1, #0
-    |  bvs >4
-    |9:
+    |  rsbseq CARG1, CARG1, #0
+    |  ldrdvs CARG12, >9
+    |5:
     |  strd CARG12, [BASE, RA]
     |   ins_next3
-    |4:
-    |  mov CARG2, #0x01e00000  // 2^31.
-    |  mov CARG1, #0
-    |  orr CARG2, CARG2, #0x40000000
-    |  b <9
-    |5:
-    |  bhi ->vmeta_unm
-    |  add CARG2, CARG2, #0x80000000
-    |  b <9
+    |
+    |.align 8
+    |9:
+    |  .long 0x00000000, 0x41e00000	// 2^31.
     break;
   case BC_LEN:
     |  // RA = dst*8, RC = src
@@ -1820,10 +1819,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |.macro ins_arithfp, fpcall
     |  ins_arithpre
+    |  ins_arithfallback ins_arithcheck_num
     ||if (op == BC_MODVN) {
     |  ->BC_MODVN_Z:
     ||}
-    |  ins_arithfallback ins_arithcheck_num
     |  bl fpcall
     |   ins_next1
     |   ins_next2
@@ -1850,6 +1849,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_MODNV: case BC_MODVV:
     |  ins_arithpre
+    |  ins_arithfallback ins_arithcheck_num
     |  b ->BC_MODVN_Z
     break;
   case BC_POW:
@@ -2087,9 +2087,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    str BASE, L->base
     |    str PC, SAVE_PC
     |  cmp CARG3, CARG4
+    |   mov CARG1, L
     |  bhs >5
     |1:
-    |  mov CARG1, L
     if (op == BC_TNEW) {
       |  lsl CARG2, RC, #21
       |   lsr CARG3, RC, #11
@@ -2112,6 +2112,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next3
     |5:
     |  bl extern lj_gc_step_fixtop  // (lua_State *L)
+    |  mov CARG1, L
     |  b <1
     break;
 
@@ -2146,7 +2147,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    cmp CARG3, CARG2		// In array part?
     |  ldrdlo CARG34, [CARG4]
     |    bhs ->vmeta_tgetv
-    |   ins_next1
+    |   ins_next1  // Overwrites RB!
     |  checktp CARG4, LJ_TNIL
     |  beq >5
     |1:
@@ -2161,6 +2162,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrb CARG2, TAB:CARG2->nomm
     |  tst CARG2, #1<<MM_index
     |  bne <1				// 'no __index' flag set: done.
+    |  decode_RB8 RB, INS		// Restore RB.
     |  b ->vmeta_tgetv
     |
     |9:
@@ -2283,7 +2285,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrb RA, TAB:RA->nomm
     |  tst RA, #1<<MM_newindex
     |  bne <1				// 'no __newindex' flag set: done.
-    |  ldr INS, [PC, #-4]		// Restore RA.
+    |  ldr INS, [PC, #-4]		// Restore RA and RB.
+    |  decode_RB8 RB, INS
     |  decode_RA8 RA, INS
     |  b ->vmeta_tsetv
     |
@@ -2313,9 +2316,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |     mov TAB:RB, TAB:CARG1
     |  and CARG3, CARG3, CARG4			// idx = str->hash & tab->hmask
     |  add CARG3, CARG3, CARG3, lsl #1
+    |   mov CARG4, #0
     |    add NODE:INS, NODE:INS, CARG3, lsl #3	// node = tab->node + idx*3*8
+    |   strb CARG4, TAB:RB->nomm		// Clear metamethod cache.
     |1:
-    |  ldrd CARG12, NODE:INS->key  // STALL: early NODE:INS.
+    |  ldrd CARG12, NODE:INS->key
     |   ldr CARG4, NODE:INS->val.it
     |    ldr NODE:CARG3, NODE:INS->next
     |  cmp CARG1, STR:RC
@@ -2427,8 +2432,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->BC_CALL_Z
     break;
   case BC_CALL:
-    |  // RA = base*8, (RB = nresults+1,) RC = nargs+1
     |  decode_RC8 NARGS8:RC, INS
+    |  // RA = base*8, (RB = nresults+1,) RC = (nargs+1)*8
     |->BC_CALL_Z:
     |  mov RB, BASE			// Save old BASE for vmeta_call.
     |  ldrd CARG34, [BASE, RA]!
@@ -2568,7 +2573,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ISNEXT:
-    |  // RA = base*8, RD = target (points to ITERN)
+    |  // RA = base*8, RC = target (points to ITERN)
     |  add RA, BASE, RA
     |     add RC, PC, RC, lsl #2
     |  ldrd CFUNC:CARG12, [RA, #-24]
@@ -2638,12 +2643,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   bne <2
     |3:
     |  decode_RA8 RA, INS
-    |  sub BASE, CARG3, RA
+    |  sub CARG4, CARG3, RA
     |   decode_RB8 RB, INS
-    |  ldr LFUNC:CARG1, [BASE, FRAME_FUNC]
+    |  ldr LFUNC:CARG1, [CARG4, FRAME_FUNC]
     |5:
     |  cmp RB, RC			// More results expected?
     |  bhi >6
+    |  mov BASE, CARG4
     |  ldr CARG2, LFUNC:CARG1->field_pc
     |   ins_next1
     |   ins_next2
@@ -2652,7 +2658,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |6:  // Fill up results with nil.
     |  mvn CARG2, #~LJ_TNIL
-    |  sub BASE, BASE, #8
+    |  add BASE, BASE, #8
     |   add RC, RC, #8
     |  str CARG2, [BASE, #-12]
     |  b <5
@@ -2791,6 +2797,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  bhs ->vmeta_for
       |  cmp RB, #0
       |   strd CARG12, FOR_IDX
+      |   strd CARG12, FOR_EXT
       |  blt >8
     } else {
       |  cmp CARG4, #0
@@ -2906,6 +2913,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next2
     |2:
     |  cmp NARGS8:RC, CARG2, lsl #3	// Check for missing parameters.
+    |   mvn CARG4, #~LJ_TNIL
     |  ble >3
     if (op == BC_JFUNCF) {
       |  NYI
@@ -2914,8 +2922,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |
     |3:  // Clear missing parameters.
-    |  mvn CARG1, #~LJ_TNIL
-    |  str CARG1, [BASE, NARGS8:RC]
+    |  strd CARG34, [BASE, NARGS8:RC]
     |  add NARGS8:RC, NARGS8:RC, #8
     |  b <2
     break;

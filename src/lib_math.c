@@ -59,9 +59,19 @@ LJLIB_ASM(math_atan2)		LJLIB_REC(math_binary IR_ATAN2)
   lj_lib_checknum(L, 2);
   return FFH_RETRY;
 }
-LJLIB_ASM_(math_ldexp)		LJLIB_REC(math_binary IR_LDEXP)
 LJLIB_ASM_(math_pow)		LJLIB_REC(.)
 LJLIB_ASM_(math_fmod)
+
+LJLIB_ASM(math_ldexp)		LJLIB_REC(math_binary IR_LDEXP)
+{
+  lj_lib_checknum(L, 1);
+#if LJ_DUALNUM && !LJ_TARGET_X86ORX64
+  lj_lib_checkint(L, 2);
+#else
+  lj_lib_checknum(L, 2);
+#endif
+  return FFH_RETRY;
+}
 
 LJLIB_ASM(math_min)		LJLIB_REC(math_minmax IR_MIN)
 {
