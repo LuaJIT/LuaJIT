@@ -443,7 +443,19 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
-  |  NYI
+  |  // BASE = meta base, RA = resultptr, RC = (nresults+1)*8
+  |  ldr LFUNC:CARG3, [RB, FRAME_FUNC]
+  |   mov CARG4, BASE
+  |   mov BASE, RB			// Restore caller BASE.
+  |   ldr PC, [CARG4, #-12]		// Restore PC from [cont|PC].
+  |  ldr CARG3, LFUNC:CARG3->field_pc
+  |    mvn INS, #~LJ_TNIL
+  |    add CARG2, RA, RC
+  |   ldr CARG1, [CARG4, #-16]		// Get continuation.
+  |    str INS, [CARG2, #-4]		// Ensure one valid arg.
+  |  ldr KBASE, [CARG3, #PC2PROTO(k)]
+  |  // BASE = base, RA = resultptr, CARG4 = meta base
+  |   bx CARG1
   |
   |->cont_cat:
   |  NYI
@@ -561,22 +573,53 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Comparison metamethods ---------------------------------------------
   |
   |->vmeta_comp:
-  |  NYI
-  |
+  |  mov CARG1, L
+  |   sub PC, PC, #4
+  |  mov CARG2, RA
+  |   str BASE, L->base
+  |  mov CARG3, RC
+  |   str PC, SAVE_PC
+  |  decode_OP CARG4, INS
+  |  bl extern lj_meta_comp  // (lua_State *L, TValue *o1, *o2, int op)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |3:
+  |  cmp CRET1, #1
+  |  bhi ->vmeta_binop
+  |4:
+  |  ldrh RB, [PC, #2]
+  |   add PC, PC, #4
+  |  add RB, PC, RB, lsl #2
+  |  subhs PC, RB, #0x20000
   |->cont_nop:
   |  ins_next
   |
   |->cont_ra:				// RA = resultptr
-  |  NYI
+  |  ldr INS, [PC, #-4]
+  |   ldrd CARG12, [RA]
+  |  decode_RA8 CARG3, INS
+  |   strd CARG12, [BASE, CARG3]
+  |  b ->cont_nop
   |
   |->cont_condt:			// RA = resultptr
-  |  NYI
+  |  ldr CARG2, [RA, #4]
+  |   mvn CARG1, #~LJ_TTRUE
+  |  cmp CARG1, CARG2			// Branch if result is true.
+  |  b <4
   |
   |->cont_condf:			// RA = resultptr
-  |  NYI
+  |  ldr CARG2, [RA, #4]
+  |  checktp CARG2, LJ_TFALSE		// Branch if result is false.
+  |  b <4
   |
   |->vmeta_equal:
-  |  NYI
+  |  // CARG2, CARG3, CARG4 are already set by BC_ISEQV/BC_ISNEV.
+  |  sub PC, PC, #4
+  |   str BASE, L->base
+  |   mov CARG1, L
+  |  str PC, SAVE_PC
+  |  bl extern lj_meta_equal  // (lua_State *L, GCobj *o1, *o2, int ne)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |  b <3
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -619,18 +662,48 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Call metamethod for binary op.
   |->vmeta_binop:
   |  // BASE = old base, CRET1 = new base, stack = cont/func/o1/o2
-  |  NYI
+  |  sub CARG2, CRET1, BASE
+  |   str PC, [CRET1, #-12]		// [cont|PC]
+  |  add PC, CARG2, #FRAME_CONT
+  |   mov BASE, CRET1
+  |    mov NARGS8:RC, #16		// 2 args for func(o1, o2).
+  |  b ->vm_call_dispatch
   |
   |->vmeta_len:
-  |  NYI
+  |  add CARG2, BASE, RC
+  |   str BASE, L->base
+  |  mov CARG1, L
+  |   str PC, SAVE_PC
+  |  bl extern lj_meta_len		// (lua_State *L, TValue *o)
+  |  // Returns TValue * (metamethod base).
+  |  b ->vmeta_binop			// Binop call for compatibility.
   |
   |//-- Call metamethod ----------------------------------------------------
   |
   |->vmeta_call:			// Resolve and call __call metamethod.
-  |  NYI
+  |  // RB = old base, BASE = new base, RC = nargs*8
+  |  mov CARG1, L
+  |   str RB, L->base			// This is the callers base!
+  |  sub CARG2, BASE, #8
+  |   str PC, SAVE_PC
+  |  add CARG3, BASE, NARGS8:RC
+  |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
+  |   add NARGS8:RC, NARGS8:RC, #8	// Got one more argument now.
+  |  ins_call
   |
   |->vmeta_callt:			// Resolve __call for BC_CALLT.
-  |  NYI
+  |  // BASE = old base, RA = new base, RC = nargs*8
+  |  mov CARG1, L
+  |   str BASE, L->base
+  |  sub CARG2, RA, #8
+  |   str PC, SAVE_PC
+  |  add CARG3, RA, NARGS8:RC
+  |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
+  |   ldr PC, [BASE, FRAME_PC]
+  |    add NARGS8:RC, NARGS8:RC, #8	// Got one more argument now.
+  |  b ->BC_CALLT2_Z
   |
   |//-- Argument coercion for 'for' statement ------------------------------
   |
