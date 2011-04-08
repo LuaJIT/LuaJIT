@@ -586,6 +586,36 @@ local function parse_shift(shift, gprok)
   end
 end
 
+local function parse_label(label, def)
+  local prefix = sub(label, 1, 2)
+  -- =>label (pc label reference)
+  if prefix == "=>" then
+    return "PC", 0, sub(label, 3)
+  end
+  -- ->name (global label reference)
+  if prefix == "->" then
+    return "LG", map_global[sub(label, 3)]
+  end
+  if def then
+    -- [1-9] (local label definition)
+    if match(label, "^[1-9]$") then
+      return "LG", 10+tonumber(label)
+    end
+  else
+    -- [<>][1-9] (local label reference)
+    local dir, lnum = match(label, "^([<>])([1-9])$")
+    if dir then -- Fwd: 1-9, Bkwd: 11-19.
+      return "LG", lnum + (dir == ">" and 0 or 10)
+    end
+    -- extern label (extern label reference)
+    local extname = match(label, "^extern%s+(%S+)$")
+    if extname then
+      return "EXT", map_extern[extname]
+    end
+  end
+  werror("bad label `"..label.."'")
+end
+
 local function parse_load(params, nparams, n, op)
   local oplo = op % 256
   local ext, ldrd = (oplo ~= 0), (oplo == 208)
@@ -594,11 +624,17 @@ local function parse_load(params, nparams, n, op)
     d = ((op - (op % 4096)) / 4096) % 16
     if d % 2 ~= 0 then werror("odd destination register") end
   end
-  local p1, wb = match(params[n], "^%[%s*(.-)%s*%](!?)$")
+  local pn = params[n]
+  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
   local p2 = params[n+1]
   if not p1 then
     if not p2 then
-      local reg, tailr = match(params[n], "^([%w_:]+)%s*(.*)$")
+      if match(pn, "^[<>=%-]") or match(pn, "^extern%s+") then
+	local mode, n, s = parse_label(pn, false)
+	waction("REL_"..mode, n + (ext and 0x1800 or 0x0800), s, 1)
+	return op + 15 * 65536 + 0x01000000 + (ext and 0x00400000 or 0)
+      end
+      local reg, tailr = match(pn, "^([%w_:]+)%s*(.*)$")
       if reg and tailr ~= "" then
 	local d, tp = parse_gpr(reg)
 	if tp then
@@ -651,36 +687,6 @@ local function parse_load(params, nparams, n, op)
     end
   end
   return op
-end
-
-local function parse_label(label, def)
-  local prefix = sub(label, 1, 2)
-  -- =>label (pc label reference)
-  if prefix == "=>" then
-    return "PC", 0, sub(label, 3)
-  end
-  -- ->name (global label reference)
-  if prefix == "->" then
-    return "LG", map_global[sub(label, 3)]
-  end
-  if def then
-    -- [1-9] (local label definition)
-    if match(label, "^[1-9]$") then
-      return "LG", 10+tonumber(label)
-    end
-  else
-    -- [<>][1-9] (local label reference)
-    local dir, lnum = match(label, "^([<>])([1-9])$")
-    if dir then -- Fwd: 1-9, Bkwd: 11-19.
-      return "LG", lnum + (dir == ">" and 0 or 10)
-    end
-    -- extern label (extern label reference)
-    local extname = match(label, "^extern%s+(%S+)$")
-    if extname then
-      return "EXT", map_extern[extname]
-    end
-  end
-  werror("bad label `"..label.."'")
 end
 
 ------------------------------------------------------------------------------
