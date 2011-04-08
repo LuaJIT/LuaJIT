@@ -1834,27 +1834,135 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Upvalue and function ops ------------------------------------------ */
 
   case BC_UGET:
-    |  NYI
+    |  // RA = dst*8, RC = uvnum
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   lsl RC, RC, #2
+    |   add RC, RC, #offsetof(GCfuncL, uvptr)
+    |  ldr UPVAL:CARG2, [LFUNC:CARG2, RC]
+    |  ldr CARG2, UPVAL:CARG2->v
+    |  ldrd CARG34, [CARG2]
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG34, [BASE, RA]
+    |   ins_next3
     break;
   case BC_USETV:
-    |  NYI
+    |  // RA = uvnum*8, RC = src
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   lsr RA, RA, #1
+    |   add RA, RA, #offsetof(GCfuncL, uvptr)
+    |    lsl RC, RC, #3
+    |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
+    |    ldrd CARG34, [BASE, RC]
+    |  ldrb RB, UPVAL:CARG2->marked
+    |  ldrb RC, UPVAL:CARG2->closed
+    |    ldr CARG2, UPVAL:CARG2->v
+    |  tst RB, #LJ_GC_BLACK		// isblack(uv)
+    |   add RB, CARG4, #-LJ_TISGCV
+    |  cmpne RC, #0
+    |   strd CARG34, [CARG2]
+    |  bne >2				// Upvalue is closed and black?
+    |1:
+    |   ins_next
+    |
+    |2:  // Check if new value is collectable.
+    |  cmn RB, #-(LJ_TISNUM - LJ_TISGCV)
+    |   ldrbhi RC, GCOBJ:CARG3->gch.marked
+    |  bls <1				// tvisgcv(v)
+    |    sub CARG1, DISPATCH, #-GG_DISP2G
+    |   tst RC, #LJ_GC_WHITES
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  blne extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  b <1
     break;
   case BC_USETS:
-    |  NYI
+    |  // RA = uvnum*8, RC = str_const (~)
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   lsr RA, RA, #1
+    |   add RA, RA, #offsetof(GCfuncL, uvptr)
+    |    mvn RC, RC
+    |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
+    |    ldr STR:CARG3, [KBASE, RC, lsl #2]
+    |    mvn CARG4, #~LJ_TSTR
+    |  ldrb RB, UPVAL:CARG2->marked
+    |   ldr CARG2, UPVAL:CARG2->v
+    |     ldrb RC, UPVAL:CARG2->closed
+    |  tst RB, #LJ_GC_BLACK		// isblack(uv)
+    |    ldrb RB, STR:CARG3->marked
+    |   strd CARG34, [CARG2]
+    |  bne >2
+    |1:
+    |   ins_next
+    |
+    |2:  // Check if string is white and ensure upvalue is closed.
+    |  tst RB, #LJ_GC_WHITES		// iswhite(str)
+    |  cmpne RC, #0
+    |   sub CARG1, DISPATCH, #-GG_DISP2G
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  blne extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  b <1
     break;
   case BC_USETN:
-    |  NYI
+    |  // RA = uvnum*8, RC = num_const
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   lsr RA, RA, #1
+    |   add RA, RA, #offsetof(GCfuncL, uvptr)
+    |    lsl RC, RC, #3
+    |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
+    |    ldrd CARG34, [KBASE, RC]
+    |  ldr CARG2, UPVAL:CARG2->v
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG34, [CARG2]
+    |   ins_next3
     break;
   case BC_USETP:
-    |  NYI
+    |  // RA = uvnum*8, RC = primitive_type (~)
+    |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+    |   lsr RA, RA, #1
+    |   add RA, RA, #offsetof(GCfuncL, uvptr)
+    |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
+    |   mvn RC, RC
+    |  ldr CARG2, UPVAL:CARG2->v
+    |   ins_next1
+    |   ins_next2
+    |  str RC, [CARG2, #4]
+    |   ins_next3
     break;
 
   case BC_UCLO:
-    |  NYI
+    |  // RA = level*8, RC = target
+    |  ldr CARG3, L->openupval
+    |   add RC, PC, RC, lsl #2
+    |   str BASE, L->base
+    |  cmp CARG3, #0
+    |   sub PC, RC, #0x20000
+    |  beq >1
+    |   mov CARG1, L
+    |   add CARG2, BASE, RA
+    |  bl extern lj_func_closeuv	// (lua_State *L, TValue *level)
+    |  ldr BASE, L->base
+    |1:
+    |  ins_next
     break;
 
   case BC_FNEW:
-    |  NYI
+    |  // RA = dst*8, RC = proto_const (~) (holding function prototype)
+    |  mvn RC, RC
+    |   str BASE, L->base
+    |  ldr CARG2, [KBASE, RC, lsl #2]
+    |   str PC, SAVE_PC
+    |  ldr CARG3, [BASE, FRAME_FUNC]
+    |   mov CARG1, L
+    |  // (lua_State *L, GCproto *pt, GCfuncL *parent)
+    |  bl extern lj_func_newL_gc
+    |  // Returns GCfuncL *.
+    |  ldr BASE, L->base
+    |  mvn CARG2, #~LJ_TFUNC
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
     break;
 
   /* -- Table ops --------------------------------------------------------- */
