@@ -1145,7 +1145,11 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Table library ------------------------------------------------------
   |
   |.ffunc_1 table_getn
-  |  NYI
+  |  checktab CARG2, ->fff_fallback
+  |  bl extern lj_tab_len		// (GCtab *t)
+  |  // Returns uint32_t (but less than 2^31).
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
   |
   |//-- Bit library --------------------------------------------------------
   |
