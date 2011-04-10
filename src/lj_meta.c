@@ -101,7 +101,7 @@ cTValue *lj_meta_tget(lua_State *L, cTValue *o, cTValue *k)
   int loop;
   for (loop = 0; loop < LJ_MAX_IDXCHAIN; loop++) {
     cTValue *mo;
-    if (tvistab(o)) {
+    if (LJ_LIKELY(tvistab(o))) {
       GCtab *t = tabV(o);
       cTValue *tv = lj_tab_get(L, t, k);
       if (!tvisnil(tv) ||
@@ -128,13 +128,22 @@ TValue *lj_meta_tset(lua_State *L, cTValue *o, cTValue *k)
   int loop;
   for (loop = 0; loop < LJ_MAX_IDXCHAIN; loop++) {
     cTValue *mo;
-    if (tvistab(o)) {
+    if (LJ_LIKELY(tvistab(o))) {
       GCtab *t = tabV(o);
-      TValue *tv = lj_tab_set(L, t, k);
-      if (!tvisnil(tv) ||
-	  !(mo = lj_meta_fast(L, tabref(t->metatable), MM_newindex))) {
+      cTValue *tv = lj_tab_get(L, t, k);
+      if (LJ_LIKELY(!tvisnil(tv))) {
+	t->nomm = 0;  /* Invalidate negative metamethod cache. */
 	lj_gc_anybarriert(L, t);
-	return tv;
+	return (TValue *)tv;
+      } else if (!(mo = lj_meta_fast(L, tabref(t->metatable), MM_newindex))) {
+	t->nomm = 0;  /* Invalidate negative metamethod cache. */
+	lj_gc_anybarriert(L, t);
+	if (tv != niltv(L))
+	  return (TValue *)tv;
+	if (tvisnil(k)) lj_err_msg(L, LJ_ERR_NILIDX);
+	else if (tvisint(k)) { setnumV(&tmp, (lua_Number)intV(k)); k = &tmp; }
+	else if (tvisnum(k) && tvisnan(k)) lj_err_msg(L, LJ_ERR_NANIDX);
+	return lj_tab_newkey(L, t, k);
       }
     } else if (tvisnil(mo = lj_meta_lookup(L, o, MM_newindex))) {
       lj_err_optype(L, o, LJ_ERR_OPINDEX);
