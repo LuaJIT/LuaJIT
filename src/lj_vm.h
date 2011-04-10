@@ -31,6 +31,9 @@ LJ_ASMF double lj_vm_foldarith(double x, double y, int op);
 #if LJ_HASJIT
 LJ_ASMF double lj_vm_foldfpm(double x, int op);
 #endif
+#if !LJ_ARCH_HASFPU
+/* Declared in lj_obj.h: LJ_ASMF int32_t lj_vm_tobit(double x); */
+#endif
 
 /* Dispatch targets for recording and hooks. */
 LJ_ASMF void lj_vm_record(void);
