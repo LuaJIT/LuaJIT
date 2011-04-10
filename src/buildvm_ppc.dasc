@@ -578,10 +578,9 @@ static void build_subroutines(BuildCtx *ctx)
   |->cont_dispatch:
   |  // BASE = meta base, RA = resultptr, RD = (nresults+1)*8
   |  lwz TMP0, -12(BASE)		// Continuation.
-  |   rlwinm TMP1, PC, 0, 0, 28
   |   mr RB, BASE
-  |   sub BASE, BASE, TMP1		// Restore caller BASE.
-  |    lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+  |   mr BASE, TMP2			// Restore caller BASE.
+  |    lwz LFUNC:TMP1, FRAME_FUNC(TMP2)
   |   subi TMP2, RD, 8
   |    lwz PC, -16(RB)			// Restore PC from [cont|PC].
   |    lwz TMP1, LFUNC:TMP1->pc
@@ -2514,13 +2513,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   evstdd TMP1, 0(CARG2)
     |    cmplwi cr1, TMP0, 0
     |  cror 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
-    |   subi TMP2, TMP2, LJ_TISNUM
+    |   subi TMP2, TMP2, (LJ_TISNUM+1)
     |  bne >2				// Upvalue is closed and black?
     |1:
     |  ins_next
     |
     |2:  // Check if new value is collectable.
-    |  cmplwi TMP2, LJ_TISGCV - LJ_TISNUM
+    |  cmplwi TMP2, LJ_TISGCV - (LJ_TISNUM+1)
     |  bge <1				// tvisgcv(v)
     |  lbz TMP3, GCOBJ:TMP1->gch.marked
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(v)
@@ -2554,7 +2553,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:  // Check if string is white and ensure upvalue is closed.
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(str)
     |   cmplwi cr1, TMP2, 0
-    |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
+    |  cror 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
     |   la CARG1, GG_DISP2G(DISPATCH)
     |  // Crossed a write barrier. Move the barrier forward.
     |  beq <1
