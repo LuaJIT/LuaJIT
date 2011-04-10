@@ -39,6 +39,7 @@ enum {
 #define curwhite(g)	((g)->gc.currentwhite & LJ_GC_WHITES)
 #define newwhite(g, x)	(obj2gco(x)->gch.marked = (uint8_t)curwhite(g))
 #define flipwhite(x)	((x)->gch.marked ^= LJ_GC_WHITES)
+#define black2gray(x)	((x)->gch.marked &= (uint8_t)~LJ_GC_BLACK)
 #define fixstring(s)	((s)->marked |= LJ_GC_FIXED)
 
 /* Collector. */
@@ -66,7 +67,6 @@ LJ_FUNC void lj_gc_fullgc(lua_State *L);
       lj_gc_step_fixtop(L); }
 
 /* Write barriers. */
-LJ_FUNC void lj_gc_barrierback(global_State *g, GCtab *t);
 LJ_FUNC void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v);
 LJ_FUNCA void LJ_FASTCALL lj_gc_barrieruv(global_State *g, TValue *tv);
 LJ_FUNC void lj_gc_closeuv(global_State *g, GCupval *uv);
@@ -74,9 +74,20 @@ LJ_FUNC void lj_gc_closeuv(global_State *g, GCupval *uv);
 LJ_FUNC void lj_gc_barriertrace(global_State *g, uint32_t traceno);
 #endif
 
+/* Move the GC propagation frontier back for tables (make it gray again). */
+static LJ_AINLINE void lj_gc_barrierback(global_State *g, GCtab *t)
+{
+  GCobj *o = obj2gco(t);
+  lua_assert(isblack(o) && !isdead(g, o));
+  lua_assert(g->gc.state != GCSfinalize && g->gc.state != GCSpause);
+  black2gray(o);
+  setgcrefr(t->gclist, g->gc.grayagain);
+  setgcref(g->gc.grayagain, o);
+}
+
 /* Barrier for stores to table objects. TValue and GCobj variant. */
 #define lj_gc_anybarriert(L, t)  \
-  { if (isblack(obj2gco(t))) lj_gc_barrierback(G(L), (t)); }
+  { if (LJ_UNLIKELY(isblack(obj2gco(t)))) lj_gc_barrierback(G(L), (t)); }
 #define lj_gc_barriert(L, t, tv) \
   { if (tviswhite(tv) && isblack(obj2gco(t))) \
       lj_gc_barrierback(G(L), (t)); }

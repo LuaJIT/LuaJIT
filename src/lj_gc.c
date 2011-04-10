@@ -33,7 +33,6 @@
 
 /* Macros to set GCobj colors and flags. */
 #define white2gray(x)		((x)->gch.marked &= (uint8_t)~LJ_GC_WHITES)
-#define black2gray(x)		((x)->gch.marked &= (uint8_t)~LJ_GC_BLACK)
 #define gray2black(x)		((x)->gch.marked |= LJ_GC_BLACK)
 #define makewhite(g, x) \
   ((x)->gch.marked = ((x)->gch.marked & (uint8_t)~LJ_GC_COLORS) | curwhite(g))
@@ -739,17 +738,6 @@ void lj_gc_fullgc(lua_State *L)
 }
 
 /* -- Write barriers ------------------------------------------------------ */
-
-/* Move the GC propagation frontier back for tables (make it gray again). */
-void lj_gc_barrierback(global_State *g, GCtab *t)
-{
-  GCobj *o = obj2gco(t);
-  lua_assert(isblack(o) && !isdead(g, o));
-  lua_assert(g->gc.state != GCSfinalize && g->gc.state != GCSpause);
-  black2gray(o);
-  setgcrefr(t->gclist, g->gc.grayagain);
-  setgcref(g->gc.grayagain, o);
-}
 
 /* Move the GC propagation frontier forward. */
 void lj_gc_barrierf(global_State *g, GCobj *o, GCobj *v)
