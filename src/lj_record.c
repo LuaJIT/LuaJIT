@@ -1016,6 +1016,12 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
   }
 
   /* Otherwise the key is located in the hash part. */
+  if (t->hmask == 0) {  /* Shortcut for empty hash part. */
+    /* Guard that the hash part stays empty. */
+    TRef tmp = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_HMASK);
+    emitir(IRTGI(IR_EQ), tmp, lj_ir_kint(J, 0));
+    return lj_ir_kkptr(J, niltvg(J2G(J)));
+  }
   if (tref_isinteger(key))  /* Hash keys are based on numbers, not ints. */
     ix->key = key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
   if (tref_isk(key)) {
@@ -1105,7 +1111,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   xref = rec_idx_key(J, ix);
   xrefop = IR(tref_ref(xref))->o;
   loadop = xrefop == IR_AREF ? IR_ALOAD : IR_HLOAD;
-  /* NYI: workaround until lj_meta_tset() inconsistency is solved. */
+  /* The lj_meta_tset() inconsistency is gone, but better play safe. */
   oldv = xrefop == IR_KKPTR ? (cTValue *)ir_kptr(IR(tref_ref(xref))) : ix->oldv;
 
   if (ix->val == 0) {  /* Indexed load */
