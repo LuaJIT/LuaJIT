@@ -538,7 +538,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  str TAB:RB, [CARG2]
   |   str CARG4, [CARG2, #4]
   |2:
-  |   mvn CARG4, #~LJ_TISNUM
+  |   mvn CARG4, #~LJ_TSTR
   |  str STR:RC, TMPDlo
   |   str CARG4, TMPDhi
   |  mov CARG3, TMPDp
@@ -1505,6 +1505,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bhi >5				// Need to grow stack.
   |   blx CARG3				// (lua_State *L)
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
+  |   ldr BASE, L->base
   |  cmp CRET1, #0
   |   lsl RC, CRET1, #3
   |   sub RA, BASE, #8
