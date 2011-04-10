@@ -278,10 +278,10 @@ local map_op = {
   bic_4 = "e1c00000DNMps",
   mvn_3 = "e1e00000DMps",
 
-  lsl_3 = "e1a00000DMvs",
-  lsr_3 = "e1a00020DMvs",
-  asr_3 = "e1a00040DMvs",
-  ror_3 = "e1a00060DMvs",
+  lsl_3 = "e1a00000DMws",
+  lsr_3 = "e1a00020DMws",
+  asr_3 = "e1a00040DMws",
+  ror_3 = "e1a00060DMws",
   rrx_2 = "e1a00060DMs",
 
   -- Multiply and multiply-accumulate.
@@ -747,6 +747,13 @@ map_op[".template__"] = function(params, template, nparams)
       op = op + parse_imm16(params[n]); n = n + 1
     elseif p == "v" then
       op = op + parse_imm(params[n], 5, 7, 0, false); n = n + 1
+    elseif p == "w" then
+      local imm = match(params[n], "^#(.*)$")
+      if imm then
+	op = op + parse_imm(params[n], 5, 7, 0, false); n = n + 1
+      else
+	op = op + parse_gpr(params[n]) * 256 + 16
+      end
     elseif p == "X" then
       op = op + parse_imm(params[n], 5, 16, 0, false); n = n + 1
     elseif p == "K" then
