@@ -870,7 +870,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_restv
   |
   |.ffunc rawget
-  |  NYI
+  |  ldrd CARG34, [BASE]
+  |   cmp NARGS8:RC, #16
+  |   blo ->fff_fallback
+  |   mov CARG2, CARG3
+  |  checktab CARG4, ->fff_fallback
+  |   mov CARG1, L
+  |   add CARG3, BASE, #8
+  |  bl extern lj_tab_get  // (lua_State *L, GCtab *t, cTValue *key)
+  |  // Returns cTValue *.
+  |  ldrd CARG12, [CRET1]
+  |  b ->fff_restv
   |
   |//-- Base library: conversions ------------------------------------------
   |
