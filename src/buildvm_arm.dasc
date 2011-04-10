@@ -777,8 +777,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  bhs ->fff_fallback
   |.endmacro
   |
+  |// Inlined GC threshold check. Caveat: uses CARG1 and CARG2.
   |.macro ffgccheck
-  |  NYI
+  |  ldr CARG1, [DISPATCH, #DISPATCH_GL(gc.total)]
+  |  ldr CARG2, [DISPATCH, #DISPATCH_GL(gc.threshold)]
+  |  cmp CARG1, CARG2
+  |  blge ->fff_gcstep
   |.endmacro
   |
   |//-- Base library: checks -----------------------------------------------
@@ -897,13 +901,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  beq ->fff_restv
   |  // Handle numbers inline, unless a number base metatable is present.
   |  ldr CARG4, [DISPATCH, #DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM])]
-  |   mov CARG1, L
+  |   str BASE, L->base
   |  checktp CARG2, LJ_TISNUM
   |  cmpls CARG4, #0
+  |   str PC, SAVE_PC			// Redundant (but a defined value).
   |  bhi ->fff_fallback
-  |  str BASE, L->base
-  |   mov CARG2, BASE
-  |  str PC, SAVE_PC
+  |  ffgccheck
+  |  mov CARG1, L
+  |  mov CARG2, BASE
   |  bl extern lj_str_fromnumber	// (lua_State *L, cTValue *o)
   |  // Returns GCstr *.
   |  ldr BASE, L->base
@@ -1214,26 +1219,156 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- String library -----------------------------------------------------
   |
   |.ffunc_1 string_len
-  |  NYI
+  |  checkstr CARG2, ->fff_fallback
+  |  ldr CARG1, STR:CARG1->len
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
   |
   |.ffunc string_byte			// Only handle the 1-arg case here.
-  |  NYI
+  |  ldrd CARG12, [BASE]
+  |    ldr PC, [BASE, FRAME_PC]
+  |   cmp NARGS8:RC, #8
+  |   checktpeq CARG2, LJ_TSTR		// Need exactly 1 argument.
+  |   bne ->fff_fallback
+  |  ldr CARG3, STR:CARG1->len
+  |   ldrb CARG1, STR:CARG1[1]		// Access is always ok (NUL at end).
+  |   mvn CARG2, #~LJ_TISNUM
+  |  cmp CARG3, #0
+  |  moveq RC, #(0+1)*8
+  |  movne RC, #(1+1)*8
+  |   strd CARG12, [BASE, #-8]
+  |  b ->fff_res
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
-  |  NYI
+  |  ffgccheck
+  |  ldrd CARG12, [BASE]
+  |    ldr PC, [BASE, FRAME_PC]
+  |   cmp NARGS8:RC, #8			// Need exactly 1 argument.
+  |   checktpeq CARG2, LJ_TISNUM
+  |   bicseq CARG4, CARG1, #255
+  |  mov CARG3, #1
+  |   bne ->fff_fallback
+  |  str CARG1, TMPD
+  |  mov CARG2, TMPDp			// Points to stack. Little-endian.
+  |->fff_newstr:
+  |  // CARG2 = str, CARG3 = len.
+  |   str BASE, L->base
+  |  mov CARG1, L
+  |   str PC, SAVE_PC
+  |  bl extern lj_str_new		// (lua_State *L, char *str, size_t l)
+  |  // Returns GCstr *.
+  |  ldr BASE, L->base
+  |   mvn CARG2, #~LJ_TSTR
+  |  b ->fff_restv
   |
   |.ffunc string_sub
-  |  NYI
+  |  ffgccheck
+  |  ldrd CARG12, [BASE]
+  |   ldrd CARG34, [BASE, #16]
+  |    cmp NARGS8:RC, #16
+  |     mvn RB, #0
+  |    beq >1
+  |    blo ->fff_fallback
+  |   checktp CARG4, LJ_TISNUM
+  |    mov RB, CARG3
+  |   bne ->fff_fallback
+  |1:
+  |  ldr CARG34, [BASE, #8]
+  |  checktp CARG2, LJ_TSTR
+  |   ldreq CARG2, STR:CARG1->len
+  |  checktpeq CARG4, LJ_TISNUM
+  |  bne ->fff_fallback
+  |  // CARG1 = str, CARG2 = str->len, CARG3 = start, RB = end
+  |  add CARG4, CARG2, #1
+  |  cmp CARG3, #0			// if (start < 0) start += len+1
+  |  addlt CARG3, CARG3, CARG4
+  |  cmp CARG3, #1			// if (start < 1) start = 1
+  |  movlt CARG3, #1
+  |  cmp RB, #0				// if (end < 0) end += len+1
+  |  addlt RB, RB, CARG4
+  |  bic RB, RB, RB, asr #31		// if (end < 0) end = 0
+  |  cmp RB, CARG2			// if (end > len) end = len
+  |   add CARG1, STR:CARG1, #sizeof(GCstr)-1
+  |  movgt RB, CARG2
+  |   add CARG2, CARG1, CARG3
+  |  subs CARG3, RB, CARG3		// len = start - end
+  |   add CARG3, CARG3, #1		// len += 1
+  |  bge ->fff_newstr
+  |->fff_emptystr:
+  |  sub STR:CARG1, DISPATCH, #-DISPATCH_GL(strempty)
+  |  mvn CARG2, #~LJ_TSTR
+  |  b ->fff_restv
   |
   |.ffunc string_rep			// Only handle the 1-char case inline.
-  |  NYI
+  |  ffgccheck
+  |  ldrd CARG12, [BASE]
+  |   ldrd CARG34, [BASE, #8]
+  |    cmp NARGS8:RC, #16
+  |    blo ->fff_fallback
+  |  checktp CARG2, LJ_TSTR
+  |   checktpeq CARG4, LJ_TISNUM
+  |   bne ->fff_fallback
+  |  subs CARG4, CARG3, #1
+  |   ldr CARG2, STR:CARG1->len
+  |  blt ->fff_emptystr			// Count <= 0?
+  |   cmp CARG2, #1
+  |   blo ->fff_emptystr		// Zero-length string?
+  |   bne ->fff_fallback		// Fallback for > 1-char strings.
+  |  ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
+  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |   ldr CARG1, STR:CARG1[1]
+  |  cmp RB, CARG3
+  |  blo ->fff_fallback
+  |1:  // Fill buffer with char.
+  |   strb CARG1, [CARG2, CARG4]
+  |  subs CARG4, CARG4, #1
+  |  bge <1
+  |  b ->fff_newstr
   |
   |.ffunc string_reverse
-  |  NYI
+  |  ffgccheck
+  |  ldrd CARG12, [BASE]
+  |   cmp NARGS8:RC, #8
+  |   blo ->fff_fallback
+  |  checkstr CARG2, ->fff_fallback
+  |  ldr CARG3, STR:CARG1->len
+  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
+  |    ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |  mov CARG4, CARG3
+  |  add CARG1, STR:CARG1, #sizeof(GCstr)
+  |   cmp RB, CARG3
+  |   blo ->fff_fallback
+  |1:  // Reverse string copy.
+  |  ldrb RB, [CARG1], #1
+  |   subs CARG4, CARG4, #1
+  |   blt ->fff_newstr
+  |  strb RB, [CARG2, CARG4]
+  |  b <1
   |
   |.macro ffstring_case, name, lo
   |  .ffunc name
-  |  NYI
+  |  ffgccheck
+  |  ldrd CARG12, [BASE]
+  |   cmp NARGS8:RC, #8
+  |   blo ->fff_fallback
+  |  checkstr CARG2, ->fff_fallback
+  |  ldr CARG3, STR:CARG1->len
+  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
+  |    ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |  mov CARG4, #0
+  |  add CARG1, STR:CARG1, #sizeof(GCstr)
+  |   cmp RB, CARG3
+  |   blo ->fff_fallback
+  |1:  // ASCII case conversion.
+  |  ldrb RB, [CARG1, CARG4]
+  |   cmp CARG4, CARG3
+  |   bhs ->fff_newstr
+  |  sub RC, RB, #lo
+  |  cmp RC, #26
+  |  eorlo RB, RB, #0x20
+  |  strb RB, [CARG2, CARG4]
+  |   add CARG4, CARG4, #1
+  |  b <1
   |.endmacro
   |
   |ffstring_case string_lower, 65
@@ -1397,7 +1532,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
-  |  NYI
+  |  // BASE = new base, RC = nargs*8
+  |  mov RA, lr
+  |   str BASE, L->base
+  |  add CARG2, BASE, NARGS8:RC
+  |   str PC, SAVE_PC			// Redundant (but a defined value).
+  |  str CARG2, L->top
+  |  mov CARG1, L
+  |  bl extern lj_gc_step		// (lua_State *L)
+  |   ldr BASE, L->base
+  |  mov lr, RA				// Help return address predictor.
+  |   ldr CFUNC:CARG3, [BASE, FRAME_FUNC]
+  |  bx lr
   |
   |//-----------------------------------------------------------------------
   |//-- Special dispatch targets -------------------------------------------
