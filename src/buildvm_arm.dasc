@@ -1240,41 +1240,107 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Bit library --------------------------------------------------------
   |
+  |// FP number to bit conversion for soft-float. Clobbers r0-r3.
+  |->vm_tobit_fb:
+  |  bhi ->fff_fallback
+  |->vm_tobit:
+  |  lsl CARG3, CARG2, #1
+  |  adds CARG3, CARG3, #0x00200000
+  |  movpl CARG1, #0			// |x| < 1?
+  |  bxpl lr
+  |  mvn CARG4, #0x3e0
+  |  subs CARG3, CARG4, CARG3, asr #21
+  |  bmi >1				// |x| >= 2^32?
+  |  lsl CARG4, CARG2, #11
+  |  orr CARG4, CARG4, #0x80000000
+  |  orr CARG4, CARG4, CARG1, lsr #21
+  |   cmp CARG2, #0
+  |  lsr CARG1, CARG4, CARG3
+  |   rsblt CARG1, CARG1, #0
+  |  bx lr
+  |1:
+  |  add CARG3, CARG3, #21
+  |  lsr CARG4, CARG1, CARG3
+  |  rsb CARG3, CARG3, #20
+  |  lsl CARG1, CARG2, #12
+  |   cmp CARG2, #0
+  |  orr CARG1, CARG4, CARG1, lsl CARG3
+  |   rsblt CARG1, CARG1, #0
+  |  bx lr
+  |
   |.macro .ffunc_bit, name
   |  .ffunc_1 bit_..name
-  |  NYI
+  |  checktp CARG2, LJ_TISNUM
+  |  blne ->vm_tobit_fb
   |.endmacro
   |
   |.ffunc_bit tobit
-  |  NYI
-  |->fff_resbit:
-  |  NYI
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
   |
   |.macro .ffunc_bit_op, name, ins
   |  .ffunc_bit name
-  |  NYI
+  |  mov CARG3, CARG1
+  |  mov RA, #8
+  |1:
+  |  ldrd CARG12, [BASE, RA]
+  |   cmp RA, NARGS8:RC
+  |    add RA, RA, #8
+  |   bge >2
+  |  checktp CARG2, LJ_TISNUM
+  |  blne ->vm_tobit_fb
+  |  ins CARG3, CARG3, CARG1
+  |  b <1
   |.endmacro
   |
   |.ffunc_bit_op band, and
-  |.ffunc_bit_op bor, or
+  |.ffunc_bit_op bor, orr
   |.ffunc_bit_op bxor, eor
   |
+  |2:
+  |  mvn CARG4, #~LJ_TISNUM
+  |   ldr PC, [BASE, FRAME_PC]
+  |  strd CARG34, [BASE, #-8]
+  |  b ->fff_res1
+  |
   |.ffunc_bit bswap
-  |  NYI
+  |  eor CARG3, CARG1, CARG1, ror #16
+  |  bic CARG3, CARG3, #0x00ff0000
+  |  ror CARG1, CARG1, #8
+  |   mvn CARG2, #~LJ_TISNUM
+  |  eor CARG1, CARG1, CARG3, lsr #8
+  |  b ->fff_restv
   |
   |.ffunc_bit bnot
-  |  NYI
+  |  mvn CARG1, CARG1
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
   |
   |.macro .ffunc_bit_sh, name, ins, shmod
-  |  .ffunc_2 bit_..name
-  |  NYI
+  |  .ffunc bit_..name
+  |  ldrd CARG12, [BASE, #8]
+  |   cmp NARGS8:RC, #16
+  |   blo ->fff_fallback
+  |  checktp CARG2, LJ_TISNUM
+  |  blne ->vm_tobit_fb
+  |.if shmod == 0
+  |  and RA, CARG1, #31
+  |.else
+  |  rsb RA, CARG1, #0
+  |.endif
+  |  ldrd CARG12, [BASE]
+  |  checktp CARG2, LJ_TISNUM
+  |  blne ->vm_tobit_fb
+  |  ins CARG1, CARG1, RA
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
   |.endmacro
   |
-  |.ffunc_bit_sh lshift, NYI, 1
-  |.ffunc_bit_sh rshift, NYI, 1
-  |.ffunc_bit_sh arshift, NYI, 1
-  |.ffunc_bit_sh rol, NYI, 2
-  |.ffunc_bit_sh ror, NYI, 0
+  |.ffunc_bit_sh lshift, lsl, 0
+  |.ffunc_bit_sh rshift, lsr, 0
+  |.ffunc_bit_sh arshift, asr, 0
+  |.ffunc_bit_sh rol, ror, 1
+  |.ffunc_bit_sh ror, ror, 0
   |
   |//-----------------------------------------------------------------------
   |
