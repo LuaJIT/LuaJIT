@@ -483,7 +483,7 @@ static LoopEvent rec_iterl(jit_State *J, const BCIns iterins)
 /* Record LOOP/JLOOP. Now, that was easy. */
 static LoopEvent rec_loop(jit_State *J, BCReg ra)
 {
-  J->maxslot = ra;
+  if (ra < J->maxslot) J->maxslot = ra;
   J->pc++;
   return LOOPEV_ENTER;
 }
