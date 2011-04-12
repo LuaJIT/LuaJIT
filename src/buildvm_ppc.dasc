@@ -540,7 +540,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_call_dispatch_f:
   |  ins_call
-  |  // BASE = new base, RC = nargs*8
+  |  // BASE = new base, RB = func, RC = nargs*8, PC = caller PC
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
@@ -581,14 +581,21 @@ static void build_subroutines(BuildCtx *ctx)
   |   mr RB, BASE
   |   mr BASE, TMP2			// Restore caller BASE.
   |    lwz LFUNC:TMP1, FRAME_FUNC(TMP2)
+  |  cmplwi TMP0, 0
+  |     lwz PC, -16(RB)			// Restore PC from [cont|PC].
+  |  beq >1
   |   subi TMP2, RD, 8
-  |    lwz PC, -16(RB)			// Restore PC from [cont|PC].
   |    lwz TMP1, LFUNC:TMP1->pc
   |   evstddx TISNIL, RA, TMP2		// Ensure one valid arg.
   |    lwz KBASE, PC2PROTO(k)(TMP1)
   |  // BASE = base, RA = resultptr, RB = meta base
   |  mtctr TMP0
   |  bctr				// Jump to continuation.
+  |
+  |1:  // Tail call from C function.
+  |  subi TMP1, RB, 16
+  |  sub RC, TMP1, BASE
+  |  b ->vm_call_tail
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  lwz INS, -4(PC)
@@ -845,7 +852,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
   |  lwz TMP1, FRAME_PC(BASE)
   |   addi NARGS8:RC, SAVE0, 8		// Got one more argument now.
-  |   lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
+  |   lwz LFUNC:RB, FRAME_FUNC(RA)	// Guaranteed to be a function here.
   |  b ->BC_CALLT_Z
   |
   |//-- Argument coercion for 'for' statement ------------------------------
@@ -1797,10 +1804,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  lwz TMP0, L->top
   |   lwz LFUNC:RB, FRAME_FUNC(BASE)
   |  sub NARGS8:RC, TMP0, BASE
-  |  bne >2				// Returned -1?
+  |  bne ->vm_call_tail			// Returned -1?
   |  ins_callt				// Returned 0: retry fast path.
   |
-  |2:  // Reconstruct previous base for vmeta_call during tailcall.
+  |// Reconstruct previous base for vmeta_call during tailcall.
+  |->vm_call_tail:
   |  andi. TMP0, PC, FRAME_TYPE
   |   rlwinm TMP1, PC, 0, 0, 28
   |  bne >3

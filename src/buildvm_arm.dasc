@@ -411,7 +411,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_call_dispatch_f:
   |  ins_call
-  |  // BASE = new base, RC = nargs*8
+  |  // BASE = new base, CARG3 = func, RC = nargs*8, PC = caller PC
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
@@ -445,17 +445,25 @@ static void build_subroutines(BuildCtx *ctx)
   |->cont_dispatch:
   |  // BASE = meta base, RA = resultptr, RC = (nresults+1)*8
   |  ldr LFUNC:CARG3, [RB, FRAME_FUNC]
+  |    ldr CARG1, [BASE, #-16]		// Get continuation.
   |   mov CARG4, BASE
   |   mov BASE, RB			// Restore caller BASE.
+  |    cmp CARG1, #0
   |   ldr PC, [CARG4, #-12]		// Restore PC from [cont|PC].
+  |    beq >1
   |  ldr CARG3, LFUNC:CARG3->field_pc
   |    mvn INS, #~LJ_TNIL
   |    add CARG2, RA, RC
-  |   ldr CARG1, [CARG4, #-16]		// Get continuation.
   |    str INS, [CARG2, #-4]		// Ensure one valid arg.
   |  ldr KBASE, [CARG3, #PC2PROTO(k)]
   |  // BASE = base, RA = resultptr, CARG4 = meta base
   |   bx CARG1
+  |
+  |1:  // Tail call from C function.
+  |  ldr CARG3, [BASE, FRAME_FUNC]
+  |   sub CARG4, CARG4, #16
+  |   sub RC, CARG4, BASE
+  |  b ->vm_call_tail
   |
   |->cont_cat:				// RA = resultptr, CARG4 = meta base
   |  ldr INS, [PC, #-4]
@@ -714,7 +722,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   str PC, SAVE_PC
   |  add CARG3, RA, NARGS8:RC
   |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
-  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
+  |  ldr LFUNC:CARG3, [RA, FRAME_FUNC]  // Guaranteed to be a function here.
   |   ldr PC, [BASE, FRAME_PC]
   |    add NARGS8:RC, NARGS8:RC, #8	// Got one more argument now.
   |  b ->BC_CALLT2_Z
@@ -1514,10 +1522,11 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldr CARG1, L->top
   |    ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
   |   sub NARGS8:RC, CARG1, BASE
-  |  bne >2				// Returned -1?
+  |  bne ->vm_call_tail			// Returned -1?
   |  ins_callt				// Returned 0: retry fast path.
   |
-  |2:  // Reconstruct previous base for vmeta_call during tailcall.
+  |// Reconstruct previous base for vmeta_call during tailcall.
+  |->vm_call_tail:
   |  ands CARG1, PC, #FRAME_TYPE
   |   bic CARG2, PC, #FRAME_TYPEP
   |  ldreq INS, [PC, #-4]

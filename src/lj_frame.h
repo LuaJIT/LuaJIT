@@ -51,6 +51,7 @@ enum {
 /* Note: this macro does not skip over FRAME_VARG. */
 
 #define setframe_pc(f, pc)	(setmref((f)->fr.tp.pcr, (pc)))
+#define setframe_ftsz(f, sz)	((f)->fr.tp.ftsz = (sz))
 #define setframe_gc(f, p)	(setgcref((f)->fr.func, (p)))
 
 /* -- C stack frame ------------------------------------------------------- */

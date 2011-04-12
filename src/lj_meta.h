@@ -12,6 +12,7 @@
 LJ_FUNC void lj_meta_init(lua_State *L);
 LJ_FUNC cTValue *lj_meta_cache(GCtab *mt, MMS mm, GCstr *name);
 LJ_FUNC cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm);
+LJ_FUNC int lj_meta_tailcall(lua_State *L, cTValue *tv);
 
 #define lj_meta_fastg(g, mt, mm) \
   ((mt) == NULL ? NULL : ((mt)->nomm & (1u<<(mm))) ? NULL : \

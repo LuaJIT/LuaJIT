@@ -691,12 +691,12 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |->vm_call_dispatch:
   |  mov LFUNC:RB, [RA-8]
   |  cmp dword [RA-4], LJ_TFUNC
-  |  jne ->vmeta_call		// Ensure KBASE defined and != BASE.
+  |  jne ->vmeta_call			// Ensure KBASE defined and != BASE.
   |
   |->vm_call_dispatch_f:
   |  mov BASE, RA
   |  ins_call
-  |  // BASE = new base, RD = nargs+1
+  |  // BASE = new base, RB = func, RD = nargs+1, PC = caller PC
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
@@ -760,16 +760,26 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, [RB-12]			// Restore PC from [cont|PC].
   |.if X64
   |  movsxd RAa, dword [RB-16]		// May be negative on WIN64 with debug.
+  |  test RA, RA
+  |  jz >1
   |  lea KBASEa, qword [=>0]
   |  add RAa, KBASEa
   |.else
   |  mov RA, dword [RB-16]
+  |  test RA, RA
+  |  jz >1
   |.endif
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
   |  // BASE = base, RC = result, RB = meta base
   |  jmp RAa				// Jump to continuation.
+  |
+  |1:  // Tail call from C function.
+  |  sub RB, BASE
+  |  shr RB, 3
+  |  lea RD, [RB-1]
+  |  jmp ->vm_call_tail
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
   |  movzx RA, PC_RB
@@ -2735,10 +2745,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  test RD, RD
   |  lea NARGS:RD, [RA+1]
   |  mov LFUNC:RB, [BASE-8]
-  |  jne >2				// Returned -1?
+  |  jne ->vm_call_tail			// Returned -1?
   |  ins_callt				// Returned 0: retry fast path.
   |
-  |2:  // Reconstruct previous base for vmeta_call during tailcall.
+  |// Reconstruct previous base for vmeta_call during tailcall.
+  |->vm_call_tail:
   |  mov RA, BASE
   |  test PC, FRAME_TYPE
   |  jnz >3

@@ -15,6 +15,7 @@
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_meta.h"
+#include "lj_frame.h"
 #include "lj_bc.h"
 #include "lj_vm.h"
 
@@ -66,6 +67,29 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
       return mo;
   }
   return niltv(L);
+}
+
+/* Tailcall from C function. */
+int lj_meta_tailcall(lua_State *L, cTValue *tv)
+{
+  TValue *base = L->base;
+  TValue *top = L->top;
+  const BCIns *pc = frame_pc(base-1);  /* Preserve old PC from frame. */
+  copyTV(L, base-1, tv);  /* Replace frame with new object. */
+  top->u64 = 0;
+  setframe_pc(top, pc);
+  setframe_gc(top+1, obj2gco(L));  /* Dummy frame object. */
+  setframe_ftsz(top+1, (int)((char *)(top+2) - (char *)base) + FRAME_CONT);
+  L->base = L->top = top+2;
+  /*
+  ** before:   [old_mo|PC]    [... ...]
+  **                         ^base     ^top
+  ** after:    [new_mo|itype] [... ...] [NULL|PC] [dummy|delta]
+  **                                                           ^base/top
+  ** tailcall: [new_mo|PC]    [... ...]
+  **                         ^base     ^top
+  */
+  return 0;
 }
 
 /* Setup call to metamethod to be run by Assembler VM. */
