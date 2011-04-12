@@ -159,6 +159,7 @@ typedef struct CTState {
   lua_State *L;		/* Lua state (needed for errors and allocations). */
   global_State *g;	/* Global state. */
   GCtab *finalizer;	/* Map of cdata to finalizer. */
+  GCtab *metatype;	/* Map of CTypeID to metatable. */
   CTypeID1 hash[CTHASH_SIZE];  /* Hash anchors for C type table. */
 } CTState;
 
@@ -426,6 +427,7 @@ LJ_FUNC CType *lj_ctype_rawref(CTState *cts, CTypeID id);
 LJ_FUNC CTSize lj_ctype_size(CTState *cts, CTypeID id);
 LJ_FUNC CTSize lj_ctype_vlsize(CTState *cts, CType *ct, CTSize nelem);
 LJ_FUNC CTInfo lj_ctype_info(CTState *cts, CTypeID id, CTSize *szp);
+LJ_FUNC cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm);
 LJ_FUNC GCstr *lj_ctype_repr(lua_State *L, CTypeID id, GCstr *name);
 LJ_FUNC GCstr *lj_ctype_repr_int64(lua_State *L, uint64_t n, int isunsigned);
 LJ_FUNC GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size);

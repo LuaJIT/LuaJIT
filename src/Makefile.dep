@@ -21,9 +21,9 @@ lib_bit.o: lib_bit.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
 lib_debug.o: lib_debug.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h \
  lj_def.h lj_arch.h lj_err.h lj_errmsg.h lj_lib.h lj_libdef.h
 lib_ffi.o: lib_ffi.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
- lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_ctype.h \
- lj_cparse.h lj_cdata.h lj_cconv.h lj_carith.h lj_ccall.h lj_clib.h \
- lj_ff.h lj_ffdef.h lj_lib.h lj_libdef.h
+ lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_meta.h \
+ lj_ctype.h lj_cparse.h lj_cdata.h lj_cconv.h lj_carith.h lj_ccall.h \
+ lj_clib.h lj_ff.h lj_ffdef.h lj_lib.h lj_libdef.h
 lib_init.o: lib_init.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h
 lib_io.o: lib_io.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
  lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_ff.h lj_ffdef.h \
@@ -57,8 +57,8 @@ lj_asm.o: lj_asm.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
 lj_bc.o: lj_bc.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_bc.h \
  lj_bcdef.h
 lj_carith.o: lj_carith.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_gc.h lj_err.h lj_errmsg.h lj_ctype.h lj_cconv.h lj_cdata.h \
- lj_carith.h
+ lj_gc.h lj_err.h lj_errmsg.h lj_tab.h lj_meta.h lj_ctype.h lj_cconv.h \
+ lj_cdata.h lj_carith.h
 lj_ccall.o: lj_ccall.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_ctype.h lj_cconv.h lj_cdata.h \
  lj_ccall.h lj_trace.h lj_jit.h lj_ir.h lj_dispatch.h lj_bc.h \
@@ -77,7 +77,8 @@ lj_cparse.o: lj_cparse.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
 lj_crecord.o: lj_crecord.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_frame.h lj_bc.h lj_ctype.h \
  lj_gc.h lj_cparse.h lj_cconv.h lj_clib.h lj_ir.h lj_jit.h lj_iropt.h \
- lj_trace.h lj_dispatch.h lj_traceerr.h lj_ffrecord.h lj_crecord.h
+ lj_trace.h lj_dispatch.h lj_traceerr.h lj_record.h lj_ffrecord.h \
+ lj_crecord.h
 lj_ctype.o: lj_ctype.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_ctype.h
 lj_dispatch.o: lj_dispatch.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \

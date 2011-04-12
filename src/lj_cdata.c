@@ -129,13 +129,7 @@ collect_attrib:
     }
   } else if (tvisstr(key)) {  /* String key. */
     GCstr *name = strV(key);
-    if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
-      if (ctype_isstruct(ctype_rawchild(cts, ct)->info)) {
-	p = (uint8_t *)cdata_getptr(p, ct->size);
-	ct = ctype_child(cts, ct);
-	goto collect_attrib;
-      }
-    } if (ctype_isstruct(ct->info)) {
+    if (ctype_isstruct(ct->info)) {
       CTSize ofs;
       CType *fct = lj_ctype_getfield(cts, ct, name, &ofs);
       if (fct) {
@@ -155,7 +149,7 @@ collect_attrib:
       }
     } else if (cd->typeid == CTID_CTYPEID) {
       /* Allow indexing a (pointer to) struct constructor to get constants. */
-      CType *sct = ct = ctype_raw(cts, *(CTypeID *)p);
+      CType *sct = ctype_raw(cts, *(CTypeID *)p);
       if (ctype_isptr(sct->info))
 	sct = ctype_rawchild(cts, sct);
       if (ctype_isstruct(sct->info)) {
@@ -165,16 +159,16 @@ collect_attrib:
 	  return fct;
       }
     }
-    {
-      GCstr *s = lj_ctype_repr(cts->L, ctype_typeid(cts, ct), NULL);
-      lj_err_callerv(cts->L, LJ_ERR_FFI_BADMEMBER, strdata(s), strdata(name));
+  }
+  if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
+    if (ctype_isstruct(ctype_rawchild(cts, ct)->info)) {
+      p = (uint8_t *)cdata_getptr(p, ct->size);
+      ct = ctype_child(cts, ct);
+      goto collect_attrib;
     }
   }
-  {
-    GCstr *s = lj_ctype_repr(cts->L, ctype_typeid(cts, ct), NULL);
-    lj_err_callerv(cts->L, LJ_ERR_FFI_BADIDX, strdata(s));
-  }
-  return NULL;  /* unreachable */
+  *qual |= 1;  /* Lookup failed. */
+  return ct;  /* But return the resolved raw type. */
 }
 
 /* -- C data getters ------------------------------------------------------ */

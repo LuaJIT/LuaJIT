@@ -2558,6 +2558,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
 	      lj_ctype_size(cts, typeid) : (CTSize)IR(ir->op2)->i;
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[2];
+  int gcfin = 0;
   lua_assert(sz != CTSIZE_INVALID);
 
   args[0] = ASMREF_L;     /* lua_State *L */
@@ -2604,12 +2605,15 @@ static void asm_cnew(ASMState *as, IRIns *ir)
     } while (1);
 #endif
     lua_assert(sz == 4 || (sz == 8 && (LJ_64 || LJ_HASFFI)));
+  } else {
+    if (lj_ctype_meta(cts, typeid, MM_gc) != NULL)
+      gcfin = LJ_GC_CDATA_FIN;
   }
 
   /* Combine initialization of marked, gct and typeid. */
   emit_movtomro(as, RID_ECX, RID_RET, offsetof(GCcdata, marked));
   emit_gri(as, XG_ARITHi(XOg_OR), RID_ECX,
-	   (int32_t)((~LJ_TCDATA<<8)+(typeid<<16)));
+	   (int32_t)((~LJ_TCDATA<<8)+(typeid<<16)+gcfin));
   emit_gri(as, XG_ARITHi(XOg_AND), RID_ECX, LJ_GC_WHITES);
   emit_opgl(as, XO_MOVZXb, RID_ECX, gc.currentwhite);
 

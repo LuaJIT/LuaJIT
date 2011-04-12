@@ -22,6 +22,7 @@
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
+#include "lj_record.h"
 #include "lj_ffrecord.h"
 #include "lj_crecord.h"
 #include "lj_dispatch.h"
@@ -459,6 +460,41 @@ static TRef crec_reassoc_ofs(jit_State *J, TRef tr, ptrdiff_t *ofsp, MSize sz)
   return tr;
 }
 
+/* Record ctype __index/__newindex metamethods. */
+static void crec_index_meta(jit_State *J, CTState *cts, CType *ct,
+			    RecordFFData *rd)
+{
+  CTypeID id = ctype_typeid(cts, ct);
+  cTValue *tv = lj_ctype_meta(cts, id, rd->data ? MM_newindex : MM_index);
+  if (!tv)
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  if (tvisfunc(tv)) {
+    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+    rd->nres = -1;  /* Pending tailcall. */
+  } else if (rd->data == 0 && tvistab(tv) && tref_isstr(J->base[1])) {
+    /* Specialize to result of __index lookup. */
+    cTValue *o = lj_tab_get(J->L, tabV(tv), &rd->argv[1]);
+    IRType t = itype2irt(o);
+    if (tvisgcv(o))
+      J->base[0] = lj_ir_kgc(J, gcV(o), t);
+    else if (tvisint(o))
+      J->base[0] = lj_ir_kint(J, intV(o));
+    else if (tvisnum(o))
+      J->base[0] = lj_ir_knumint(J, numV(o));
+    else if (tvisbool(o))
+      J->base[0] = TREF_PRI(t);
+    else
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+    /* Always specialize to the key. */
+    emitir(IRTG(IR_EQ, IRT_STR), J->base[1], lj_ir_kstr(J, strV(&rd->argv[1])));
+  } else {
+    /* NYI: resolving of non-function metamethods. */
+    /* NYI: non-string keys for __index table. */
+    /* NYI: stores to __newindex table. */
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+}
+
 void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
 {
   TRef idx, ptr = J->base[0];
@@ -477,12 +513,13 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     ptr = crec_reassoc_ofs(J, ptr, &ofs, 1);
   }
 
+again:
   idx = J->base[1];
   if (tref_isnumber(idx)) {
     idx = lj_opt_narrow_cindex(J, idx);
-  integer_key:
     if (ctype_ispointer(ct->info)) {
       CTSize sz;
+  integer_key:
       if ((ct->info & CTF_COMPLEX))
 	idx = emitir(IRT(IR_BAND, IRT_INTP), idx, lj_ir_kintp(J, 1));
       sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
@@ -495,7 +532,8 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     CType *ctk = ctype_raw(cts, cdk->typeid);
     IRType t;
     if (ctype_isenum(ctk->info)) ctk = ctype_child(cts, ctk);
-    if (ctype_isinteger(ctk->info) && (t = crec_ct2irt(ctk)) != IRT_CDATA) {
+    if (ctype_ispointer(ct->info) &&
+	ctype_isinteger(ctk->info) && (t = crec_ct2irt(ctk)) != IRT_CDATA) {
       if (ctk->size == 8) {
 	idx = emitir(IRT(IR_FLOAD, t), idx, IRFL_CDATA_INT64);
       } else {
@@ -513,22 +551,15 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
     }
   } else if (tref_isstr(idx)) {
     GCstr *name = strV(&rd->argv[1]);
-    /* Always specialize to the field name. */
-    emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
     if (cd->typeid == CTID_CTYPEID)
       ct = ctype_raw(cts, crec_constructor(J, cd, ptr));
-    if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
-      CType *cct = ctype_rawchild(cts, ct);
-      if (ctype_isstruct(cct->info)) {
-	ct = cct;
-	goto index_struct;
-      }
-    } else if (ctype_isstruct(ct->info)) {
+    if (ctype_isstruct(ct->info)) {
       CTSize fofs;
       CType *fct;
-index_struct:
       fct = lj_ctype_getfield(cts, ct, name, &fofs);
       if (fct) {
+	/* Always specialize to the field name. */
+	emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
 	if (ctype_isconstval(fct->info)) {
 	  if (fct->size >= 0x80000000u &&
 	      (ctype_child(cts, fct)->info & CTF_UNSIGNED)) {
@@ -546,11 +577,26 @@ index_struct:
 	ofs += (ptrdiff_t)fofs;
       }
     } else if (ctype_iscomplex(ct->info)) {
-      if (strdata(name)[0] == 'i') ofs += (ct->size >> 1);
-      sid = ctype_cid(ct->info);
+      if (name->len == 2 &&
+	  ((strdata(name)[0] == 'r' && strdata(name)[1] == 'e') ||
+	   (strdata(name)[0] == 'i' && strdata(name)[1] == 'm'))) {
+	/* Always specialize to the field name. */
+	emitir(IRTG(IR_EQ, IRT_STR), idx, lj_ir_kstr(J, name));
+	if (strdata(name)[0] == 'i') ofs += (ct->size >> 1);
+	sid = ctype_cid(ct->info);
+      }
     }
   }
-  if (!sid) lj_trace_err(J, LJ_TRERR_BADTYPE);
+  if (!sid) {
+    if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
+      CType *cct = ctype_rawchild(cts, ct);
+      if (ctype_isstruct(cct->info)) {
+	ct = cct;
+	if (tref_isstr(idx)) goto again;
+      }
+    }
+    return crec_index_meta(J, cts, ct, rd);
+  }
 
   if (ofs)
     ptr = emitir(IRT(IR_ADD, IRT_PTR), ptr, lj_ir_kintp(J, ofs));
@@ -592,6 +638,7 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
     J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, sp);
   } else {
     TRef trcd = emitir(IRTG(IR_CNEW, IRT_CDATA), trid, TREF_NIL);
+    cTValue *fin;
     J->base[0] = trcd;
     if (J->base[1] && !J->base[2] && !lj_cconv_multi_init(d, &rd->argv[1])) {
       goto single_init;
@@ -659,6 +706,24 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	tv.u64 = 0;
 	crec_ct_tv(J, d, dp, lj_ir_kint(J, 0), &tv);
       }
+    }
+    /* Handle __gc metamethod. */
+    fin = lj_ctype_meta(cts, id, MM_gc);
+    if (fin) {
+      RecordIndex ix;
+      ix.idxchain = 0;
+      settabV(J->L, &ix.tabv, cts->finalizer);
+      ix.tab = lj_ir_ktab(J, cts->finalizer);
+      setboolV(&ix.keyv, 0);  /* The key is new. Dummy value is ok here. */
+      ix.key = trcd;
+      copyTV(J->L, &ix.valv, fin);
+      if (tvisfunc(fin))
+	ix.val = lj_ir_kfunc(J, funcV(fin));
+      else if (tviscdata(fin))
+	ix.val = lj_ir_kgc(J, obj2gco(cdataV(fin)), IRT_CDATA);
+      else
+	lj_trace_err(J, LJ_TRERR_BADTYPE);
+      lj_record_idx(J, &ix);
     }
   }
 }
@@ -849,6 +914,27 @@ static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)
   }
 }
 
+/* Record ctype arithmetic metamethods. */
+static void crec_arith_meta(jit_State *J, CTState *cts, RecordFFData *rd)
+{
+  cTValue *tv = NULL;
+  if (J->base[0]) {
+    if (tviscdata(&rd->argv[0]))
+      tv = lj_ctype_meta(cts, argv2cdata(J, J->base[0], &rd->argv[0])->typeid,
+			 (MMS)rd->data);
+    if (!tv && J->base[1] && tviscdata(&rd->argv[1]))
+      tv = lj_ctype_meta(cts, argv2cdata(J, J->base[1], &rd->argv[1])->typeid,
+			 (MMS)rd->data);
+  }
+  if (tv && tvisfunc(tv)) {
+    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+    rd->nres = -1;  /* Pending tailcall. */
+  } else {
+    /* NYI: non-function metamethods. */
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+}
+
 void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
 {
   CTState *cts = ctype_ctsG(J2G(J));
@@ -858,7 +944,9 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
   for (i = 0; i < 2; i++) {
     TRef tr = J->base[i];
     CType *ct = ctype_get(cts, CTID_DOUBLE);
-    if (tref_iscdata(tr)) {
+    if (!tr) {
+      goto trymeta;
+    } else if (tref_iscdata(tr)) {
       CTypeID id = argv2cdata(J, tr, &rd->argv[i])->typeid;
       ct = ctype_raw(cts, id);
       if (ctype_isptr(ct->info)) {  /* Resolve pointer or reference. */
@@ -876,11 +964,11 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
       if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
       if (ctype_isnum(ct->info)) {
 	IRType t = crec_ct2irt(ct);
-	if (t == IRT_CDATA) goto err_type;
+	if (t == IRT_CDATA) goto trymeta;
 	if (t == IRT_I64 || t == IRT_U64) lj_needsplit(J);
 	tr = emitir(IRT(IR_XLOAD, t), tr, 0);
       } else if (!(ctype_isptr(ct->info) || ctype_isrefarray(ct->info))) {
-	goto err_type;
+	goto trymeta;
       }
     } else if (tref_isnil(tr)) {
       tr = lj_ir_kptr(J, NULL);
@@ -888,7 +976,7 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
     } else if (tref_isinteger(tr)) {
       ct = ctype_get(cts, CTID_INT32);
     } else if (!tref_isnum(tr)) {
-      goto err_type;
+      goto trymeta;
     }
   ok:
     s[i] = ct;
@@ -896,21 +984,22 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
   }
   {
     TRef tr;
-    if (!(tr = crec_arith_int64(J, sp, s, (MMS)rd->data)) &&
-	!(tr = crec_arith_ptr(J, sp, s, (MMS)rd->data))) {
-    err_type:
-      lj_trace_err(J, LJ_TRERR_BADTYPE);
-    }
-    /* Fixup cdata comparisons, too. Avoids some cdata escapes. */
-    if (J->postproc == LJ_POST_FIXGUARD && frame_iscont(J->L->base-1)) {
-      const BCIns *pc = frame_contpc(J->L->base-1) - 1;
-      if (bc_op(*pc) <= BC_ISNEP) {
-	setframe_pc(&J2G(J)->tmptv, pc);
-	J2G(J)->tmptv.u32.lo = ((tref_istrue(tr) ^ bc_op(*pc)) & 1);
-	J->postproc = LJ_POST_FIXCOMP;
+    if ((tr = crec_arith_int64(J, sp, s, (MMS)rd->data)) ||
+	(tr = crec_arith_ptr(J, sp, s, (MMS)rd->data))) {
+      J->base[0] = tr;
+      /* Fixup cdata comparisons, too. Avoids some cdata escapes. */
+      if (J->postproc == LJ_POST_FIXGUARD && frame_iscont(J->L->base-1)) {
+	const BCIns *pc = frame_contpc(J->L->base-1) - 1;
+	if (bc_op(*pc) <= BC_ISNEP) {
+	  setframe_pc(&J2G(J)->tmptv, pc);
+	  J2G(J)->tmptv.u32.lo = ((tref_istrue(tr) ^ bc_op(*pc)) & 1);
+	  J->postproc = LJ_POST_FIXCOMP;
+	}
       }
+    } else {
+    trymeta:
+      crec_arith_meta(J, cts, rd);
     }
-    J->base[0] = tr;
   }
 }
 

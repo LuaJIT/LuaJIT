@@ -238,6 +238,31 @@ This functions is mainly useful to override the pointer compatibility
 checks or to convert pointers to addresses or vice versa.
 </p>
 
+<h3 id="ffi_metatype"><tt>ctype = ffi.metatype(ct, metatable)</tt></h3>
+<p>
+Creates a ctype object for the given <tt>ct</tt> and associates it with
+a metatable. Only <tt>struct</tt>/<tt>union</tt> types, complex numbers
+and vectors are allowed. Other types may be wrapped in a
+<tt>struct</tt>, if needed.
+</p>
+<p>
+The association with a metatable is permanent and cannot be changed
+afterwards. Neither the contents of the <tt>metatable</tt> nor the
+contents of an <tt>__index</tt> table (if any) may be modified
+afterwards. The associated metatable automatically applies to all uses
+of this type, no matter how the objects are created or where they
+originate from. Note that pre-defined operations on types have
+precedence (e.g. declared field names cannot be overriden).
+</p>
+<p>
+All standard Lua metamethods are implemented. These are called directly,
+without shortcuts and on any mix of types. For binary operations, the
+left operand is checked first for a valid ctype metamethod. The
+<tt>__gc</tt> metamethod only applies to <tt>struct</tt>/<tt>union</tt>
+types and performs an implicit <a href="#ffi_gc"><tt>ffi.gc()</tt></a>
+call during creation of an instance.
+</p>
+
 <h3 id="ffi_gc"><tt>cdata = ffi.gc(cdata, finalizer)</tt></h3>
 <p>
 Associates a finalizer with a pointer or aggregate cdata object. The

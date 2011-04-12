@@ -306,6 +306,22 @@ CTInfo lj_ctype_info(CTState *cts, CTypeID id, CTSize *szp)
   return qual;
 }
 
+/* Get ctype metamethod. */
+cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
+{
+  CType *ct = ctype_get(cts, id);
+  cTValue *tv;
+  while (ctype_isattrib(ct->info)) {
+    id = ctype_cid(ct->info);
+    ct = ctype_get(cts, id);
+  }
+  tv = lj_tab_getint(cts->metatype, (int32_t)id);
+  if (tv && tvistab(tv) &&
+      (tv = lj_tab_getstr(tabV(tv), mmname_str(cts->g, mm))) && !tvisnil(tv))
+    return tv;
+  return NULL;
+}
+
 /* -- C type representation ----------------------------------------------- */
 
 /* Fixed max. length of a C type representation. */

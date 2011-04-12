@@ -582,6 +582,10 @@ Reference types are dereferenced <em>before</em> performing each of
 the operations below &mdash; the operation is applied to the
 C&nbsp;type pointed to by the reference.
 </p>
+<p>
+The pre-defined operations are always tried first before deferring to a
+metamethod for a ctype (if defined).
+</p>
 
 <h3 id="cdata_array">Indexing a cdata object</h3>
 <ul>
@@ -803,9 +807,10 @@ vararg functions</a>.
 </p>
 <p>
 Memory areas returned by C functions (e.g. from <tt>malloc()</tt>)
-must be manually managed, of course. Pointers to cdata objects are
-indistinguishable from pointers returned by C functions (which is one
-of the reasons why the GC cannot follow them).
+must be manually managed, of course (or use
+<a href="ext_ffi_api.html#ffi_gc"><tt>ffi.gc()</tt></a>)). Pointers to
+cdata objects are indistinguishable from pointers returned by C
+functions (which is one of the reasons why the GC cannot follow them).
 </p>
 
 <h2 id="clib">C Library Namespaces</h2>
@@ -977,6 +982,9 @@ two.</li>
 value.</li>
 <li>Calls to C&nbsp;functions with 64 bit arguments or return values
 on 32 bit CPUs.</li>
+<li>Calls to ctype metamethods which are not plain functions.</li>
+<li>ctype <tt>__newindex</tt> tables and non-string lookups in ctype
+<tt>__index</tt> tables.</li>
 <li>Accesses to external variables in C&nbsp;library namespaces.</li>
 <li><tt>tostring()</tt> for cdata types.</li>
 <li>The following <a href="ext_ffi_api.html">ffi.* API</a> functions:
@@ -988,7 +996,6 @@ Other missing features:
 <ul>
 <li>Bit operations for 64&nbsp;bit types.</li>
 <li>Arithmetic for <tt>complex</tt> numbers.</li>
-<li>User-defined metamethods for C&nbsp;types.</li>
 <li>Callbacks from C&nbsp;code to Lua functions.</li>
 <li>Atomic handling of <tt>errno</tt>.</li>
 <li>Passing structs by value to vararg C&nbsp;functions.</li>

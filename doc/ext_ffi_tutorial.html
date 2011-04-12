@@ -386,6 +386,99 @@ application might work on some systems, but would fail in a POSIX/x64
 environment.
 </p>
 
+<h2 id="metatype">Defining Metamethods for a C&nbsp;Type</h2>
+<p>
+The following code explains how to define metamethods for a C type.
+We define a simple point type and add some operations to it:
+</p>
+<pre class="code mark">
+<span class="codemark">&nbsp;
+&#9312;
+
+
+
+&#9313;
+
+&#9314;
+
+&#9315;
+
+
+
+&#9316;
+
+&#9317;</span>local ffi = require("ffi")
+ffi.cdef[[
+<span style="color:#00a000;">typedef struct { double x, y; } point_t;</span>
+]]
+
+local point
+local mt = {
+  __add = function(a, b) return point(a.x+b.x, a.y+b.y) end,
+  __len = function(a) return math.sqrt(a.x*a.x + a.y*a.y) end,
+  __index = {
+    area = function(a) return a.x*a.x + a.y*a.y end,
+  },
+}
+point = ffi.metatype("point_t", mt)
+
+local a = point(3, 4)
+print(a.x, a.y)  --> 3  4
+print(#a)        --> 5
+print(a:area())  --> 25
+local b = a + point(0.5, 8)
+print(#b)        --> 12.5
+</pre>
+<p>
+Here's the step-by-step explanation:
+</p>
+<p>
+<span class="mark">&#9312;</span> This defines the C&nbsp;type for a
+two-dimensional point object.
+</p>
+<p>
+<span class="mark">&#9313;</span> We have to declare the variable
+holding the point constructor first, because it's used inside of a
+metamethod.
+</p>
+<p>
+<span class="mark">&#9314;</span> Let's define an <tt>__add</tt>
+metamethod which adds the coordinates of two points and creates a new
+point object. For simplicity, this function assumes that both arguments
+are points. But it could be any mix of objects, if at least one operand
+is of the required type (e.g. adding a point plus a number or vice
+versa). Our <tt>__len</tt> metamethod returns the distance of a point to
+the origin.
+</p>
+<p>
+<span class="mark">&#9315;</span> If we run out of operators, we can
+define named methods, too. Here the <tt>__index</tt> table defines an
+<tt>area</tt> function. For custom indexing needs, one might want to
+define <tt>__index</tt> and <tt>__newindex</tt> functions instead.
+</p>
+<p>
+<span class="mark">&#9316;</span> This associates the metamethods with
+our C&nbsp;type. This only needs to be done once. For convenience, a
+constructor is returned by
+<a href="ffi_ext_api.html#ffi_metatype"><tt>ffi.metatype()</tt></a>.
+We're not required to use it, though. The original C&nbsp;type can still
+be used e.g. to create an array of points. The metamethods automatically
+apply to any and all uses of this type.
+</p>
+<p>
+Please note that the association with a metatable is permanent and
+<b>the metatable must not be modified afterwards!</b> Ditto for the
+<tt>__index</tt> table.
+</p>
+<p>
+<span class="mark">&#9317;</span> Here are some simple usage examples
+for the point type and their expected results. The pre-defined
+operations (such as <tt>a.x</tt>) can be freely mixed with the newly
+defined metamethods. Note that <tt>area</tt> is a method and must be
+called with the Lua syntax for methods: <tt>a:area()</tt>, not
+<tt>a.area()</tt>.
+</p>
+
 <h2 id="idioms">Translating C&nbsp;Idioms</h2>
 <p>
 Here's a list of common C&nbsp;idioms and their translation to the
