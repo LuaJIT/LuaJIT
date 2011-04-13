@@ -1119,8 +1119,12 @@ static void build_subroutines(BuildCtx *ctx)
   |.endmacro
   |
   |.macro math_round, func
-  |  .ffunc math_ .. func
-  |  NYI
+  |  .ffunc_1 math_ .. func
+  |  checktp CARG2, LJ_TISNUM
+  |  bhi ->fff_fallback
+  |  bllo extern func  // NYI: use internal implementation of floor/ceil.
+  |  // NYI: normalize result.
+  |  b ->fff_restv
   |.endmacro
   |
   |  math_round floor
@@ -1618,7 +1622,16 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |
   |->vm_mod:
-  |  NYI
+  |  push {r0, r1, r2, r3, r4, lr}
+  |  bl extern __aeabi_ddiv
+  |  bl extern floor  // NYI: Use internal implementation of floor.
+  |  ldrd CARG34, [sp, #8]
+  |  bl extern __aeabi_dmul
+  |  ldrd CARG34, [sp]
+  |  eor CARG2, CARG2, #0x80000000
+  |  bl extern __aeabi_dadd
+  |  add sp, sp, #20
+  |  pop {pc}
   |
   |->vm_powi:
 #if LJ_HASJIT
