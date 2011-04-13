@@ -494,12 +494,13 @@ static void gc_finalize(lua_State *L)
     setgcrefnull(g->gc.mmudata);
   else
     setgcrefr(gcref(g->gc.mmudata)->gch.nextgc, o->gch.nextgc);
-  makewhite(g, o);
 #if LJ_HASFFI
   if (o->gch.gct == ~LJ_TCDATA) {
     TValue tmp, *tv;
-    setgcrefr(o->gch.nextgc, g->gc.root);  /* Add cdata back to the gc list. */
+    /* Add cdata back to the GC list and make it white. */
+    setgcrefr(o->gch.nextgc, g->gc.root);
     setgcref(g->gc.root, o);
+    o->gch.marked = curwhite(g);
     /* Resolve finalizer. */
     setcdataV(L, &tmp, gco2cd(o));
     tv = lj_tab_set(L, ctype_ctsG(g)->finalizer, &tmp);
@@ -511,9 +512,10 @@ static void gc_finalize(lua_State *L)
     return;
   }
 #endif
-  /* Add userdata back to the main userdata list. */
+  /* Add userdata back to the main userdata list and make it white. */
   setgcrefr(o->gch.nextgc, mainthread(g)->nextgc);
   setgcref(mainthread(g)->nextgc, o);
+  makewhite(g, o);
   /* Resolve the __gc metamethod. */
   mo = lj_meta_fastg(g, tabref(gco2ud(o)->metatable), MM_gc);
   if (mo)
@@ -542,7 +544,7 @@ void lj_gc_finalize_cdata(lua_State *L)
       if (!tvisnil(&node[i].val) && tviscdata(&node[i].key)) {
 	GCobj *o = gcV(&node[i].key);
 	TValue tmp;
-	o->gch.marked &= ~LJ_GC_CDATA_FIN;
+	o->gch.marked = curwhite(g);
 	copyTV(L, &tmp, &node[i].val);
 	setnilV(&node[i].val);
 	gc_call_finalizer(g, L, &tmp, o);

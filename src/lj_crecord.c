@@ -710,20 +710,20 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
     /* Handle __gc metamethod. */
     fin = lj_ctype_meta(cts, id, MM_gc);
     if (fin) {
-      RecordIndex ix;
-      ix.idxchain = 0;
-      settabV(J->L, &ix.tabv, cts->finalizer);
-      ix.tab = lj_ir_ktab(J, cts->finalizer);
-      setboolV(&ix.keyv, 0);  /* The key is new. Dummy value is ok here. */
-      ix.key = trcd;
-      copyTV(J->L, &ix.valv, fin);
-      if (tvisfunc(fin))
-	ix.val = lj_ir_kfunc(J, funcV(fin));
-      else if (tviscdata(fin))
-	ix.val = lj_ir_kgc(J, obj2gco(cdataV(fin)), IRT_CDATA);
-      else
+      TRef trlo = lj_ir_call(J, IRCALL_lj_cdata_setfin, trcd);
+      TRef trhi = emitir(IRT(IR_ADD, IRT_P32), trlo, lj_ir_kint(J, 4));
+      if (LJ_BE) { TRef tmp = trlo; trlo = trhi; trhi = tmp; }
+      if (tvisfunc(fin)) {
+	emitir(IRT(IR_XSTORE, IRT_P32), trlo, lj_ir_kfunc(J, funcV(fin)));
+	emitir(IRTI(IR_XSTORE), trhi, lj_ir_kint(J, LJ_TFUNC));
+      } else if (tviscdata(fin)) {
+	emitir(IRT(IR_XSTORE, IRT_P32), trlo,
+	       lj_ir_kgc(J, obj2gco(cdataV(fin)), IRT_CDATA));
+	emitir(IRTI(IR_XSTORE), trhi, lj_ir_kint(J, LJ_TCDATA));
+      } else {
 	lj_trace_err(J, LJ_TRERR_BADTYPE);
-      lj_record_idx(J, &ix);
+      }
+      J->needsnap = 1;
     }
   }
 }

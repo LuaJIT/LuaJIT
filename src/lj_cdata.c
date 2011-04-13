@@ -10,6 +10,7 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ctype.h"
 #include "lj_cconv.h"
 #include "lj_cdata.h"
@@ -71,6 +72,24 @@ void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
     lj_mem_free(g, cd, sizeof(GCcdata) + sz);
   } else {
     lj_mem_free(g, memcdatav(cd), sizecdatav(cd));
+  }
+}
+
+TValue * LJ_FASTCALL lj_cdata_setfin(lua_State *L, GCcdata *cd)
+{
+  global_State *g = G(L);
+  GCtab *t = ctype_ctsG(g)->finalizer;
+  if (gcref(t->metatable)) {
+    /* Add cdata to finalizer table, if still enabled. */
+    TValue *tv, tmp;
+    setcdataV(L, &tmp, cd);
+    lj_gc_anybarriert(L, t);
+    tv = lj_tab_set(L, t, &tmp);
+    cd->marked |= LJ_GC_CDATA_FIN;
+    return tv;
+  } else {
+    /* Otherwise return dummy TValue. */
+    return &g->tmptv;
   }
 }
 

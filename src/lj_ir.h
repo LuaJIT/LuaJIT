@@ -279,6 +279,7 @@ typedef struct CCallInfo {
   _(lj_carith_modu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
   _(lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
   _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(lj_cdata_setfin,	2,        FN, P32, CCI_L) \
   _(strlen,		1,         N, INTP, 0) \
   _(memcpy,		3,         S, PTR, 0) \
   _(memset,		3,         S, PTR, 0)
