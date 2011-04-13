@@ -480,7 +480,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    evsplati TISSTR, LJ_TSTR
   |   sub RD, TMP1, BASE
   |    evmergelo TOBIT, TOBIT, TMP2
-  |    stb TMP3, L->status
+  |    stb CARG3, L->status
   |  andi. TMP0, PC, FRAME_TYPE
   |    li_vmstate INTERP
   |   addi RD, RD, 8
