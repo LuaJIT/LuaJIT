@@ -1569,13 +1569,48 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
-  |  NYI
+  |  ldrb CARG1, [DISPATCH, #DISPATCH_GL(hookmask)]
+  |  tst CARG1, #HOOK_ACTIVE		// Hook already active?
+  |  beq >1
+  |5:  // Re-dispatch to static ins.
+  |  decode_OP OP, INS
+  |  add OP, DISPATCH, OP, lsl #2
+  |  ldr pc, [OP, #GG_DISP2STATIC]
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
-  |  NYI
+  |  ldrb CARG1, [DISPATCH, #DISPATCH_GL(hookmask)]
+  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(hookcount)]
+  |  tst CARG1, #HOOK_ACTIVE		// Hook already active?
+  |  bne <5
+  |  tst CARG1, #LUA_MASKLINE|LUA_MASKCOUNT
+  |  beq <5
+  |   subs CARG2, CARG2, #1
+  |   str CARG2, [DISPATCH, #DISPATCH_GL(hookcount)]
+  |   beq >1
+  |  tst CARG1, #LUA_MASKLINE
+  |  beq <5
+  |1:
+  |  mov CARG1, L
+  |   str BASE, L->base
+  |  mov CARG2, PC
+  |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
+  |  bl extern lj_dispatch_ins		// (lua_State *L, const BCIns *pc)
+  |3:
+  |  ldr BASE, L->base
+  |4:  // Re-dispatch to static ins.
+  |  ldrb OP, [PC, #-4]
+  |   ldr INS, [PC, #-4]
+  |  add OP, DISPATCH, OP, lsl #2
+  |  ldr OP, [OP, #GG_DISP2STATIC]
+  |   decode_RA8 RA, INS
+  |   decode_RD RC, INS
+  |  bx OP
   |
   |->cont_hook:				// Continue from hook yield.
-  |  NYI
+  |  ldr CARG1, [CARG4, #-24]
+  |   add PC, PC, #4
+  |  str CARG1, SAVE_MULTRES		// Restore MULTRES for *M ins.
+  |  b <4
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
@@ -1583,10 +1618,32 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-  |  NYI
+  |  mov CARG2, PC
+#if LJ_HASJIT
+  |  b >1
+#endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
-  |  NYI
+#if LJ_HASJIT
+  |  orr CARG2, PC, #1
+  |1:
+#endif
+  |  add CARG4, BASE, RC
+  |   str PC, SAVE_PC
+  |    mov CARG1, L
+  |   str BASE, L->base
+  |    sub RA, RA, BASE
+  |  str CARG4, L->top
+  |  bl extern lj_dispatch_call		// (lua_State *L, const BCIns *pc)
+  |  // Returns ASMFunction.
+  |  ldr BASE, L->base
+  |   ldr CARG4, L->top
+  |    mov CARG2, #0
+  |  add RA, BASE, RA
+  |   sub NARGS8:RC, CARG4, BASE
+  |    str CARG2, SAVE_PC		// Invalidate for subsequent line hook.
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |  bx CRET1
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
