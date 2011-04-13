@@ -2721,7 +2721,43 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TSETM:
-    |  NYI
+    |  // RA = base*8 (table at base-1), RC = num_const (start index)
+    |  add RA, BASE, RA
+    |1:
+    |   ldr RB, SAVE_MULTRES
+    |  ldr TAB:CARG2, [RA, #-8]		// Guaranteed to be a table.
+    |  ldr CARG4, [KBASE, RC, lsl #3]	// Integer constant is in lo-word.
+    |   subs RB, RB, #8
+    |  ldr CARG1, TAB:CARG2->asize
+    |   beq >4				// Nothing to copy?
+    |  add CARG3, CARG4, RB, lsr #3
+    |  cmp CARG3, CARG1
+    |   ldr CARG1, TAB:CARG2->array
+    |    add RB, RA, RB
+    |  bhi >5
+    |   add INS, CARG1, CARG4, lsl #3
+    |    ldrb CARG4, TAB:CARG2->marked
+    |3:  // Copy result slots to table.
+    |   ldrd CARG12, [RA], #8
+    |   strd CARG12, [INS], #8
+    |  cmp RA, RB
+    |  blo <3
+    |    tst CARG4, #LJ_GC_BLACK	// isblack(table)
+    |    bne >7
+    |4:
+    |  ins_next
+    |
+    |5:  // Need to resize array part.
+    |   str BASE, L->base
+    |  mov CARG1, L
+    |   str PC, SAVE_PC
+    |  bl extern lj_tab_reasize         // (lua_State *L, GCtab *t, int nasize)
+    |  // Must not reallocate the stack.
+    |  b <1
+    |
+    |7:  // Possible table write barrier for any value. Skip valiswhite check.
+    |  barrierback TAB:RB, CARG4, CARG1
+    |  b <4
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
@@ -2905,7 +2941,62 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_VARG:
-    |  NYI
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = base*8, RB = (nresults+1)*8, RC = numparams*8
+    |  ldr CARG1, [BASE, FRAME_PC]
+    |  add RC, BASE, RC
+    |   add RA, BASE, RA
+    |  add RC, RC, #FRAME_VARG
+    |   add CARG4, RA, RB
+    |  sub CARG3, BASE, #8		// CARG3 = vtop
+    |  sub RC, RC, CARG1		// RC = vbase
+    |  // Note: RC may now be even _above_ BASE if nargs was < numparams.
+    |  cmp RB, #0
+    |   sub CARG1, CARG3, RC
+    |  beq >5				// Copy all varargs?
+    |   sub CARG4, CARG4, #16
+    |1:  // Copy vararg slots to destination slots.
+    |  cmp RC, CARG3
+    |  ldrdlo CARG12, [RC], #8
+    |  mvnhs CARG2, #~LJ_TNIL
+    |   cmp RA, CARG4
+    |  strd CARG12, [RA], #8
+    |   blo <1
+    |2:
+    |  ins_next
+    |
+    |5:  // Copy all varargs.
+    |  ldr CARG4, L->maxstack
+    |   cmp CARG1, #0
+    |   movle RB, #8			// MULTRES = (0+1)*8
+    |   addgt RB, CARG1, #8
+    |  add CARG2, RA, CARG1
+    |   str RB, SAVE_MULTRES
+    |   ble <2
+    |  cmp CARG2, CARG4
+    |  bhi >7
+    |6:
+    |   ldrd CARG12, [RC], #8
+    |   strd CARG12, [RA], #8
+    |  cmp RC, CARG3
+    |  blo <6
+    |  b <2
+    |
+    |7:  // Grow stack for varargs.
+    |  lsr CARG2, CARG1, #3
+    |   str RA, L->top
+    |  mov CARG1, L
+    |   str BASE, L->base
+    |  sub RC, RC, BASE			// Need delta, because BASE may change.
+    |   str PC, SAVE_PC
+    |  sub RA, RA, BASE
+    |  bl extern lj_state_growstack	// (lua_State *L, int n)
+    |  ldr BASE, L->base
+    |  add RA, BASE, RA
+    |  add RC, BASE, RC
+    |  sub CARG3, BASE, #8
+    |  b <6
     break;
 
   /* -- Returns ----------------------------------------------------------- */
