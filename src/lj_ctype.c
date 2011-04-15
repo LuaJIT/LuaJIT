@@ -311,7 +311,7 @@ cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
 {
   CType *ct = ctype_get(cts, id);
   cTValue *tv;
-  while (ctype_isattrib(ct->info)) {
+  while (ctype_isattrib(ct->info) || ctype_isref(ct->info)) {
     id = ctype_cid(ct->info);
     ct = ctype_get(cts, id);
   }
