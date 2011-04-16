@@ -164,6 +164,47 @@
     } \
   }
 
+#elif LJ_TARGET_ARM
+/* -- ARM calling conventions --------------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return structs of size <= 4 in a GPR. */ \
+  cc->retref = !(sz <= 4); \
+  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET \
+  cc->retref = 1;  /* Return all complex values by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  UNUSED(dp); /* Nothing to do. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass all structs by value in registers and/or on the stack. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex by value in 2 or 4 GPRs. */
+
+/* ARM has a softfp ABI. */
+#define CCALL_HANDLE_REGARG \
+  if ((d->info & CTF_ALIGN) > CTALIGN_PTR) { \
+    if (ngpr < maxgpr) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+    else \
+      nsp = (nsp + 1u) & ~1u;  /* Align argument on stack. */ \
+  } \
+  if (ngpr < maxgpr) { \
+    dp = &cc->gpr[ngpr]; \
+    if (ngpr + n > maxgpr) { \
+      nsp += ngpr + n - maxgpr;  /* Assumes contiguous gpr/stack fields. */ \
+      if (nsp > CCALL_MAXSTACK) goto err_nyi;  /* Too many arguments. */ \
+      ngpr = maxgpr; \
+    } else { \
+      ngpr += n; \
+    } \
+    goto done; \
+  }
+
 #elif LJ_TARGET_PPCSPE
 /* -- PPC/SPE calling conventions ----------------------------------------- */
 

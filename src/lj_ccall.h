@@ -47,6 +47,16 @@ typedef LJ_ALIGN(16) union FPRArg {
 
 typedef intptr_t GPRArg;
 
+#elif LJ_TARGET_ARM
+
+#define CCALL_NARG_GPR		4
+#define CCALL_NARG_FPR		0
+#define CCALL_NRET_GPR		2	/* For softfp double. */
+#define CCALL_NRET_FPR		0
+#define CCALL_SPS_FREE		0	/* NYI */
+
+typedef intptr_t GPRArg;
+
 #elif LJ_TARGET_PPCSPE
 
 #define CCALL_NARG_GPR		8
@@ -91,10 +101,10 @@ typedef struct CCallState {
 #elif LJ_TARGET_X86
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
 #endif
-  GPRArg gpr[CCALL_NUM_GPR];	/* Arguments/results in GPRs. */
 #if CCALL_NUM_FPR
   FPRArg fpr[CCALL_NUM_FPR];	/* Arguments/results in FPRs. */
 #endif
+  GPRArg gpr[CCALL_NUM_GPR];	/* Arguments/results in GPRs. */
   GPRArg stack[CCALL_MAXSTACK];	/* Stack slots. */
 } CCallState;
 

@@ -1873,7 +1873,32 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_ffi_call:
 #if LJ_HASFFI
-  |  NYI
+  |  .type CCSTATE, CCallState, r4
+  |  push {CCSTATE, r5, r11, lr}
+  |  mov CCSTATE, CARG1
+  |  ldr CARG1, CCSTATE:CARG1->spadj
+  |   ldrb CARG2, CCSTATE->nsp
+  |    add CARG3, CCSTATE, #offsetof(CCallState, stack)
+  |  mov r11, sp
+  |  sub sp, sp, CARG1			// Readjust stack.
+  |   subs CARG2, CARG2, #1
+  |    ldr RB, CCSTATE->func
+  |   bmi >2
+  |1:  // Copy stack slots.
+  |  ldr CARG4, [CARG3, CARG2, lsl #2]
+  |  str CARG4, [sp, CARG2, lsl #2]
+  |  subs CARG2, CARG2, #1
+  |  bpl <1
+  |2:
+  |  ldr CARG1, CCSTATE->gpr[0]
+  |  ldr CARG2, CCSTATE->gpr[1]
+  |  ldr CARG3, CCSTATE->gpr[2]
+  |  ldr CARG4, CCSTATE->gpr[3]
+  |  blx RB
+  |  mov sp, r11
+  |  str CRET1, CCSTATE->gpr[0]
+  |  str CRET2, CCSTATE->gpr[1]
+  |  pop {CCSTATE, r5, r11, pc}
 #endif
   |
   |//-----------------------------------------------------------------------
@@ -2340,7 +2365,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_KCDATA:
 #if LJ_HASFFI
-    |  NYI
+    |  // RA = dst*8, RC = cdata_const (~)
+    |  mvn RC, RC
+    |   ins_next1
+    |  ldr CARG1, [KBASE, RC, lsl #2]
+    |  mvn CARG2, #~LJ_TCDATA
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
 #endif
     break;
   case BC_KSHORT:
