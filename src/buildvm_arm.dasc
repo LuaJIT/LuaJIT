@@ -1821,6 +1821,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_trunc:
 #endif
   |
+  |  // double lj_vm_mod(double dividend, double divisor);
   |->vm_mod:
   |  push {r0, r1, r2, r3, r4, lr}
   |  bl extern __aeabi_ddiv
@@ -1832,6 +1833,41 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern __aeabi_dadd
   |  add sp, sp, #20
   |  pop {pc}
+  |
+  |  // int lj_vm_modi(int dividend, int divisor);
+  |->vm_modi:
+  |  ands RB, CARG1, #0x80000000
+  |  rsbmi CARG1, CARG1, #0		// a = |dividend|
+  |  eor RB, RB, CARG2, asr #1		// Keep signdiff and sign(divisor).
+  |  cmp CARG2, #0
+  |  rsbmi CARG2, CARG2, #0		// b = |divisor|
+  |  subs CARG4, CARG2, #1
+  |  cmpne CARG1, CARG2
+  |  moveq CARG1, #0			// if (b == 1 || a == b) a = 0
+  |  tsthi CARG2, CARG4
+  |  andeq CARG1, CARG1, CARG4		// else if ((b & (b-1)) == 0) a &= b-1
+  |  bls >1
+  |  // Use repeated subtraction to get the remainder.
+  |  clz CARG3, CARG1
+  |  clz CARG4, CARG2
+  |  sub CARG4, CARG4, CARG3
+  |  rsbs CARG3, CARG4, #31		// entry = (31-(clz(b)-clz(a)))*8
+  |  addne pc, pc, CARG3, lsl #3	// Duff's device.
+  |  nop
+  {
+    int i;
+    for (i = 31; i >= 0; i--) {
+      |  cmp CARG1, CARG2, lsl #i
+      |  subhs CARG1, CARG1, CARG2, lsl #i
+    }
+  }
+  |1:
+  |  cmp CARG1, #0
+  |  cmpne RB, #0
+  |  submi CARG1, CARG1, CARG2		// if (y != 0 && signdiff) y = y - b
+  |  eors CARG2, CARG1, RB, lsl #1
+  |  rsbmi CARG1, CARG1, #0		// if (sign(divisor) != sign(y)) y = -y
+  |  bx lr
   |
   |->vm_powi:
 #if LJ_HASJIT
@@ -2266,33 +2302,42 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |.macro ins_arithdn, intins, fpcall
     |  ins_arithpre
+    |.if "intins" ~= "vm_modi"
     |   ins_next1
+    |.endif
     |  ins_arithcheck_int >5
     |.if "intins" == "smull"
     |  smull CARG1, RC, CARG3, CARG1
     |  cmp RC, CARG1, asr #31
     |  ins_arithfallback bne
+    |.elif "intins" == "vm_modi"
+    |  movs CARG2, CARG3
+    |  ins_arithfallback beq
+    |  bl ->vm_modi
+    |  mvn CARG2, #~LJ_TISNUM
     |.else
     |  intins CARG1, CARG1, CARG3
     |  ins_arithfallback bvs
     |.endif
     |4:
+    |.if "intins" == "vm_modi"
+    |   ins_next1
+    |.endif
     |   ins_next2
     |  strd CARG12, [BASE, RA]
     |   ins_next3
     |5:  // FP variant.
     |  ins_arithfallback ins_arithcheck_num
     |  bl fpcall
+    |.if "intins" ~= "vm_modi"
     |   ins_next1
+    |.endif
     |  b <4
     |.endmacro
     |
     |.macro ins_arithfp, fpcall
     |  ins_arithpre
     |  ins_arithfallback ins_arithcheck_num
-    ||if (op == BC_MODVN) {
-    |  ->BC_MODVN_Z:
-    ||}
     |  bl fpcall
     |   ins_next1
     |   ins_next2
@@ -2312,15 +2357,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
     |  ins_arithfp extern __aeabi_ddiv
     break;
-  case BC_MODVN:
-    |  // NYI: integer arithmetic.
-    |  // Note: __aeabi_idivmod is unsuitable. It uses trunc, not floor.
-    |  ins_arithfp ->vm_mod
-    break;
-  case BC_MODNV: case BC_MODVV:
-    |  ins_arithpre
-    |  ins_arithfallback ins_arithcheck_num
-    |  b ->BC_MODVN_Z
+  case BC_MODVN: case BC_MODNV: case BC_MODVV:
+    |  ins_arithdn vm_modi, ->vm_mod
     break;
   case BC_POW:
     |  // NYI: (partial) integer arithmetic.
