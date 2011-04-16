@@ -1544,27 +1544,27 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_tobit_fb:
   |  bhi ->fff_fallback
   |->vm_tobit:
-  |  lsl CARG3, CARG2, #1
-  |  adds CARG3, CARG3, #0x00200000
+  |  lsl RB, CARG2, #1
+  |  adds RB, RB, #0x00200000
   |  movpl CARG1, #0			// |x| < 1?
   |  bxpl lr
   |  mvn CARG4, #0x3e0
-  |  subs CARG3, CARG4, CARG3, asr #21
+  |  subs RB, CARG4, RB, asr #21
   |  bmi >1				// |x| >= 2^32?
   |  lsl CARG4, CARG2, #11
   |  orr CARG4, CARG4, #0x80000000
   |  orr CARG4, CARG4, CARG1, lsr #21
   |   cmp CARG2, #0
-  |  lsr CARG1, CARG4, CARG3
+  |  lsr CARG1, CARG4, RB
   |   rsblt CARG1, CARG1, #0
   |  bx lr
   |1:
-  |  add CARG3, CARG3, #21
-  |  lsr CARG4, CARG1, CARG3
-  |  rsb CARG3, CARG3, #20
+  |  add RB, RB, #21
+  |  lsr CARG4, CARG1, RB
+  |  rsb RB, RB, #20
   |  lsl CARG1, CARG2, #12
   |   cmp CARG2, #0
-  |  orr CARG1, CARG4, CARG1, lsl CARG3
+  |  orr CARG1, CARG4, CARG1, lsl RB
   |   rsblt CARG1, CARG1, #0
   |  bx lr
   |
@@ -2120,6 +2120,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     |
     |3:  // CARG12 is not an integer.
+    if (!vk) {
+      |  subhi PC, RB, #0x20000
+    }
     |  bhi <1
     |  // CARG12 is a number.
     |  checktp CARG4, LJ_TISNUM
@@ -2396,8 +2399,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mvn RC, RC
     |   ins_next1
     |  ldr CARG1, [KBASE, RC, lsl #2]
-    |   ins_next2
     |  mvn CARG2, #~LJ_TSTR
+    |   ins_next2
     |  strd CARG12, [BASE, RA]
     |   ins_next3
     break;
@@ -2890,7 +2893,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <3				// No 2nd write barrier needed.
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
-    |  barrierback TAB:CARG1, CARG2, CARG3
+    |  barrierback TAB:RB, CARG2, CARG3
     |  b <3
     break;
   case BC_TSETB:
@@ -2939,23 +2942,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |1:
     |   ldr RB, SAVE_MULTRES
     |  ldr TAB:CARG2, [RA, #-8]		// Guaranteed to be a table.
-    |  ldr CARG4, [KBASE, RC, lsl #3]	// Integer constant is in lo-word.
+    |  ldr CARG1, [KBASE, RC, lsl #3]	// Integer constant is in lo-word.
     |   subs RB, RB, #8
-    |  ldr CARG1, TAB:CARG2->asize
+    |  ldr CARG4, TAB:CARG2->asize
     |   beq >4				// Nothing to copy?
-    |  add CARG3, CARG4, RB, lsr #3
-    |  cmp CARG3, CARG1
-    |   ldr CARG1, TAB:CARG2->array
+    |  add CARG3, CARG1, RB, lsr #3
+    |  cmp CARG3, CARG4
+    |   ldr CARG4, TAB:CARG2->array
     |    add RB, RA, RB
     |  bhi >5
-    |   add INS, CARG1, CARG4, lsl #3
-    |    ldrb CARG4, TAB:CARG2->marked
+    |   add INS, CARG4, CARG1, lsl #3
+    |    ldrb CARG1, TAB:CARG2->marked
     |3:  // Copy result slots to table.
-    |   ldrd CARG12, [RA], #8
-    |   strd CARG12, [INS], #8
+    |   ldrd CARG34, [RA], #8
+    |   strd CARG34, [INS], #8
     |  cmp RA, RB
     |  blo <3
-    |    tst CARG4, #LJ_GC_BLACK	// isblack(table)
+    |    tst CARG1, #LJ_GC_BLACK	// isblack(table)
     |    bne >7
     |4:
     |  ins_next
@@ -2969,7 +2972,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <1
     |
     |7:  // Possible table write barrier for any value. Skip valiswhite check.
-    |  barrierback TAB:RB, CARG4, CARG1
+    |  barrierback TAB:RB, CARG1, CARG2
     |  b <4
     break;
 
@@ -3010,13 +3013,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checkfunc CARG4, ->vmeta_callt
     |  ldr PC, [BASE, FRAME_PC]
     |->BC_CALLT2_Z:
-    |   str LFUNC:CARG3, [BASE, FRAME_FUNC]  // Copy function down, but keep PC.
+    |   mov RB, #0
     |   ldrb CARG4, LFUNC:CARG3->ffid
     |  tst PC, #FRAME_TYPE
     |  bne >7
     |1:
+    |  str LFUNC:CARG3, [BASE, FRAME_FUNC]  // Copy function down, but keep PC.
     |  cmp NARGS8:RC, #0
-    |   mov RB, #0
     |  beq >3
     |2:
     |  ldrd CARG12, [RA, RB]

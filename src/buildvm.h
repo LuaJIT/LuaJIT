@@ -16,7 +16,7 @@
 #include "lj_arch.h"
 
 /* Hardcoded limits. Increase as needed. */
-#define BUILD_MAX_RELOC		100	/* Max. number of relocations. */
+#define BUILD_MAX_RELOC		200	/* Max. number of relocations. */
 #define BUILD_MAX_FOLD		4096	/* Max. number of fold rules. */
 
 /* Prefix for scanned library definitions. */
