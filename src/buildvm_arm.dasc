@@ -367,7 +367,40 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_resume:				// Setup C frame and resume thread.
-  |  NYI
+  |  // (lua_State *L, TValue *base, int nres1 = 0, ptrdiff_t ef = 0)
+  |  saveregs
+  |  mov L, CARG1
+  |    ldr DISPATCH, L:CARG1->glref	// Setup pointer to dispatch table.
+  |  mov BASE, CARG2
+  |    add DISPATCH, DISPATCH, #GG_G2DISP
+  |   str L, SAVE_L
+  |  mov PC, #FRAME_CP
+  |   str CARG3, SAVE_NRES
+  |    add CARG2, sp, #CFRAME_RESUME
+  |  ldrb CARG1, L->status
+  |   str CARG3, SAVE_ERRF
+  |    str CARG2, L->cframe
+  |   str CARG3, SAVE_CFRAME
+  |  cmp CARG1, #0
+  |   str L, SAVE_PC			// Any value outside of bytecode is ok.
+  |  beq >3
+  |
+  |  // Resume after yield (like a return).
+  |  mov RA, BASE
+  |   ldr BASE, L->base
+  |   ldr CARG1, L->top
+  |    mov MASKR8, #255
+  |     strb CARG3, L->status
+  |   sub RC, CARG1, BASE
+  |  ldr PC, [BASE, FRAME_PC]
+  |    lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
+  |     mv_vmstate CARG2, INTERP
+  |   add RC, RC, #8
+  |  ands CARG1, PC, #FRAME_TYPE
+  |     st_vmstate CARG2
+  |   str RC, SAVE_MULTRES
+  |  beq ->BC_RET_Z
+  |  b ->vm_return
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
   |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
@@ -1046,17 +1079,127 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro coroutine_resume_wrap, resume
   |.if resume
   |.ffunc_1 coroutine_resume
+  |  checktp CARG2, LJ_TTHREAD
+  |  bne ->fff_fallback
   |.else
   |.ffunc coroutine_wrap_aux
+  |  ldr L:CARG1, CFUNC:CARG3->upvalue[0].gcr
   |.endif
-  |  NYI
+  |   ldr PC, [BASE, FRAME_PC]
+  |     str BASE, L->base
+  |  ldr CARG2, L:CARG1->top
+  |   ldrb RA, L:CARG1->status
+  |    ldr RB, L:CARG1->base
+  |  add CARG3, CARG2, NARGS8:RC
+  |  add CARG4, CARG2, RA
+  |   str PC, SAVE_PC
+  |  cmp CARG4, RB
+  |  beq ->fff_fallback
+  |   ldr CARG4, L:CARG1->maxstack
+  |    ldr RB, L:CARG1->cframe
+  |   cmp RA, #LUA_YIELD
+  |   cmpls CARG3, CARG4
+  |    cmpls RB, #0
+  |    bhi ->fff_fallback
+  |1:
+  |.if resume
+  |  sub CARG3, CARG3, #8		// Keep resumed thread in stack for GC.
+  |  add BASE, BASE, #8
+  |  sub NARGS8:RC, NARGS8:RC, #8
+  |.endif
+  |  str CARG3, L:CARG1->top
+  |  str BASE, L->top
+  |2:  // Move args to coroutine.
+  |   ldrd CARG34, [BASE, RB]
+  |  cmp RB, NARGS8:RC
+  |   strdne CARG34, [CARG2, RB]
+  |  add RB, RB, #8
+  |  bne <2
+  |
+  |  mov CARG3, #0
+  |   mov L:RA, L:CARG1
+  |  mov CARG4, #0
+  |  bl ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
+  |  // Returns thread status.
+  |4:
+  |  ldr CARG3, L:RA->base
+  |    mv_vmstate CARG2, INTERP
+  |  ldr CARG4, L:RA->top
+  |    st_vmstate CARG2
+  |   cmp CRET1, #LUA_YIELD
+  |  ldr BASE, L->base
+  |   bhi >8
+  |  subs RC, CARG4, CARG3
+  |   ldr CARG1, L->maxstack
+  |   add CARG2, BASE, RC
+  |  beq >6				// No results?
+  |  cmp CARG2, CARG1
+  |   mov RB, #0
+  |  bhi >9				// Need to grow stack?
+  |
+  |  sub CARG4, RC, #8
+  |   str CARG3, L:RA->top		// Clear coroutine stack.
+  |5:  // Move results from coroutine.
+  |   ldrd CARG12, [CARG3, RB]
+  |  cmp RB, CARG4
+  |   strd CARG12, [BASE, RB]
+  |  add RB, RB, #8
+  |  bne <5
+  |6:
+  |.if resume
+  |  mvn CARG3, #~LJ_TTRUE
+  |   add RC, RC, #16
+  |7:
+  |  str CARG3, [BASE, #-4]		// Prepend true/false to results.
+  |   sub RA, BASE, #8
+  |.else
+  |   mov RA, BASE
+  |   add RC, RC, #8
+  |.endif
+  |  ands CARG1, PC, #FRAME_TYPE
+  |   str PC, SAVE_PC
+  |   str RC, SAVE_MULTRES
+  |  beq ->BC_RET_Z
+  |  b ->vm_return
+  |
+  |8:  // Coroutine returned with error (at co->top-1).
+  |.if resume
+  |  ldrd CARG12, [CARG4, #-8]!
+  |   mvn CARG3, #~LJ_TFALSE
+  |    mov RC, #(2+1)*8
+  |  str CARG4, L:RA->top		// Remove error from coroutine stack.
+  |  strd CARG12, [BASE]		// Copy error message.
+  |  b <7
+  |.else
+  |  mov CARG1, L
+  |  mov CARG2, L:RA
+  |  bl extern lj_ffh_coroutine_wrap_err  // (lua_State *L, lua_State *co)
+  |  // Never returns.
+  |.endif
+  |
+  |9:  // Handle stack expansion on return from yield.
+  |  mov CARG1, L
+  |  lsr CARG2, RC, #3
+  |  bl extern lj_state_growstack	// (lua_State *L, int n)
+  |  mov CRET1, #0
+  |  b <4
   |.endmacro
   |
   |  coroutine_resume_wrap 1		// coroutine.resume
   |  coroutine_resume_wrap 0		// coroutine.wrap
   |
   |.ffunc coroutine_yield
-  |  NYI
+  |  ldr CARG1, L->cframe
+  |   add CARG2, BASE, NARGS8:RC
+  |   str BASE, L->base
+  |  tst CARG1, #CFRAME_RESUME
+  |   str CARG2, L->top
+  |    mov CRET1, #LUA_YIELD
+  |   mov CARG3, #0
+  |  beq ->fff_fallback
+  |   str CARG3, L->cframe
+  |    strb CRET1, L->status
+  |  b ->vm_leave_unw
   |
   |//-- Math library -------------------------------------------------------
   |
