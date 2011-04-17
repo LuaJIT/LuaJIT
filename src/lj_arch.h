@@ -125,7 +125,6 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
 
-#error "No support for ARM CPUs (yet)"
 #define LJ_ARCH_NAME		"arm"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
