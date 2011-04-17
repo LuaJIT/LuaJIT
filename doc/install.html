@@ -102,7 +102,7 @@ operating system, CPU and compilers:
 <table class="compat">
 <tr class="compathead">
 <td class="compatcpu">CPU / OS</td>
-<td class="compatos"><a href="#posix">Linux</a></td>
+<td class="compatos"><a href="#posix">Linux</a><br><a href="#cross">or Android</a></td>
 <td class="compatos"><a href="#posix">OSX<br>10.3-10.6</a></td>
 <td class="compatos"><a href="#posix">*BSD, other</a></td>
 <td class="compatos"><a href="#windows">Windows<br>98/XP/Vista/7</a></td>
@@ -122,6 +122,13 @@ operating system, CPU and compilers:
 <td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
 </tr>
 <tr class="odd">
+<td class="compatcpu">ARM</td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
+</tr>
+<tr class="even">
 <td class="compatcpu">PPC/e500v2</td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos compatno">&nbsp;</td>
@@ -320,7 +327,7 @@ The build system has limited support for cross-compilation. For details
 check the comments in <tt>src/Makefile</tt>. Here are some popular examples:
 </p>
 <p>
-You can cross-compile to a 32 bit binary on a multilib x64 OS by
+You can cross-compile to a <b>32 bit binary on a multilib x64 OS</b> by
 installing the multilib development packages (e.g. <tt>libc6-dev-i386</tt>
 on Debian/Ubuntu) and running:
 </p>
@@ -328,14 +335,36 @@ on Debian/Ubuntu) and running:
 make CC="gcc -m32"
 </pre>
 <p>
-You can cross-compile for a Windows target on Debian/Ubuntu by
+You can cross-compile for a <b>Windows target on Debian/Ubuntu</b> by
 installing the <tt>mingw32</tt> package and running:
 </p>
 <pre class="code">
 make HOST_CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
 </pre>
 <p>
-You can cross-compile for a PPC/e500v2 target on an x86 or x64 host system
+You can cross-compile for an <b>ARM target</b> on an x86 or x64 host
+system using a standard GNU cross-compile toolchain (Binutils, GCC,
+EGLIBC). The <tt>CROSS</tt> prefix may vary depending on the
+<tt>--target</tt> of the toolchain:
+</p>
+<pre class="code">
+make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- TARGET=arm
+</pre>
+<p>
+You can cross-compile for <b>Android (ARM)</b> using the <a href="http://developer.android.com/sdk/ndk/index.html"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
+The environment variables need to match the install locations and the
+desired target platform. E.g. Android&nbsp;2.2 corresponds to ABI level&nbsp;8:
+</p>
+<pre class="code">
+NDK=/opt/android/ndk
+NDKABI=8
+NDKVER=$NDK/toolchains/arm-linux-androideabi-4.4.3
+NDKP=$NDKVER/prebuilt/linux-x86/bin/arm-linux-androideabi-
+NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-arm"
+make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF" TARGET=arm
+</pre>
+<p>
+You can cross-compile for a <b>PPC/e500v2 target</b> on an x86 or x64 host system
 using a standard GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
 The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
 of the toolchain:
