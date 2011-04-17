@@ -1203,8 +1203,74 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Math library -------------------------------------------------------
   |
-  |.align 8
+  |.macro math_round, func
+  |  .ffunc_1 math_ .. func
+  |  checktp CARG2, LJ_TISNUM
+  |  beq ->fff_restv
+  |  bhi ->fff_fallback
+  |  // Round FP value and normalize result.
+  |  lsl CARG3, CARG2, #1
+  |  adds RB, CARG3, #0x00200000
+  |  bpl >2				// |x| < 1?
+  |  mvn CARG4, #0x3e0
+  |    subs RB, CARG4, RB, asr #21
+  |  lsl CARG4, CARG2, #11
+  |   lsl CARG3, CARG1, #11
+  |  orr CARG4, CARG4, #0x80000000
+  |   rsb INS, RB, #32
+  |  orr CARG4, CARG4, CARG1, lsr #21
+  |    bls >3				// |x| >= 2^31?
+  |   orr CARG3, CARG3, CARG4, lsl INS
+  |  lsr CARG1, CARG4, RB
+  |.if "func" == "floor"
+  |   tst CARG3, CARG2, asr #31
+  |   addne CARG1, CARG1, #1
+  |.else
+  |   bics CARG3, CARG3, CARG2, asr #31
+  |   addsne CARG1, CARG1, #1
+  |   ldrdvs CARG12, >9
+  |   bvs ->fff_restv
+  |.endif
+  |    cmp CARG2, #0
+  |    rsblt CARG1, CARG1, #0
   |1:
+  |   mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
+  |
+  |2:  // |x| < 1
+  |  orr CARG3, CARG3, CARG1		// ztest = abs(hi) | lo
+  |.if "func" == "floor"
+  |  tst CARG3, CARG2, asr #31		// return (ztest & sign) == 0 ? 0 : -1
+  |  moveq CARG1, #0
+  |  mvnne CARG1, #0
+  |.else
+  |  bics CARG3, CARG3, CARG2, asr #31	// return (ztest & ~sign) == 0 ? 0 : 1
+  |  moveq CARG1, #0
+  |  movne CARG1, #1
+  |.endif
+  |  mvn CARG2, #~LJ_TISNUM
+  |  b ->fff_restv
+  |
+  |3:  // |x| >= 2^31. Check for x == -(2^31).
+  |  cmpeq CARG4, #0x80000000
+  |.if "func" == "floor"
+  |  cmpeq CARG3, #0
+  |.endif
+  |  bne >4
+  |  cmp CARG2, #0
+  |  movmi CARG1, #0x80000000
+  |  bmi <1
+  |4:
+  |  // NYI: Use internal implementation.
+  |  bl extern func
+  |  b ->fff_restv
+  |.endmacro
+  |
+  |  math_round floor
+  |  math_round ceil
+  |
+  |.align 8
+  |9:
   |  .long 0x00000000, 0x41e00000	// 2^31.
   |
   |.ffunc_1 math_abs
@@ -1214,7 +1280,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bne ->fff_restv
   |  cmp CARG1, #0
   |  rsbslt CARG1, CARG1, #0
-  |  ldrdvs CARG12, <1
+  |  ldrdvs CARG12, <9
   |  // Fallthrough.
   |
   |->fff_restv:
@@ -1260,18 +1326,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern func
   |  b ->fff_restv
   |.endmacro
-  |
-  |.macro math_round, func
-  |  .ffunc_1 math_ .. func
-  |  checktp CARG2, LJ_TISNUM
-  |  bhi ->fff_fallback
-  |  bllo extern func  // NYI: use internal implementation of floor/ceil.
-  |  // NYI: normalize result.
-  |  b ->fff_restv
-  |.endmacro
-  |
-  |  math_round floor
-  |  math_round ceil
   |
   |  math_extern sqrt
   |  math_extern log
@@ -1805,18 +1859,18 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Math helper functions ----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |// FP value rounding. Called by math.floor/math.ceil fast functions
-  |// and from JIT code.
+  |// FP value rounding. Called from JIT code.
   |//
-  |.macro vm_round, name, mode
-  |->name:
+  |// double lj_vm_floor/ceil/trunc(double x);
+  |.macro vm_round, func
+  |->vm_ .. func:
   |  NYI
   |.endmacro
   |
-  |  vm_round vm_floor, 0
-  |  vm_round vm_ceil,  1
+  |  vm_round floor
+  |  vm_round ceil
 #if LJ_HASJIT
-  |  vm_round vm_trunc, 2
+  |  vm_round trunc
 #else
   |->vm_trunc:
 #endif
