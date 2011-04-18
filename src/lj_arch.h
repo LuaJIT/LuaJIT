@@ -190,9 +190,6 @@
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
 #endif
-#if defined(__thumb__) || defined(__thumb2__)
-#error "No support for Thumb instruction set (yet)"
-#endif
 #if !__ARM_EABI__
 #error "Only ARM EABI is supported"
 #endif
