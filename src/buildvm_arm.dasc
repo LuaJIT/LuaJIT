@@ -172,6 +172,7 @@
 |// Macros to test operand types.
 |.macro checktp, reg, tp; cmn reg, #-tp; .endmacro
 |.macro checktpeq, reg, tp; cmneq reg, #-tp; .endmacro
+|.macro checktpne, reg, tp; cmnne reg, #-tp; .endmacro
 |.macro checkstr, reg, target; checktp reg, LJ_TSTR; bne target; .endmacro
 |.macro checktab, reg, target; checktp reg, LJ_TTAB; bne target; .endmacro
 |.macro checkfunc, reg, target; checktp reg, LJ_TFUNC; bne target; .endmacro
@@ -673,6 +674,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_meta_equal  // (lua_State *L, GCobj *o1, *o2, int ne)
   |  // Returns 0/1 or TValue * (metamethod).
   |  b <3
+  |
+  |->vmeta_equal_cd:
+#if LJ_HASFFI
+  |  sub PC, PC, #4
+  |   str BASE, L->base
+  |   mov CARG1, L
+  |   mov CARG2, INS
+  |  str PC, SAVE_PC
+  |  bl extern lj_meta_equal_cd		// (lua_State *L, BCIns op)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |  b <3
+#endif
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -2084,6 +2097,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  bls ->BC_ISNEN_Z
     }
     |  // Either or both types are not numbers.
+    if (LJ_HASFFI) {
+      |  checktp CARG2, LJ_TCDATA
+      |  checktpne CARG4, LJ_TCDATA
+      |  beq ->vmeta_equal_cd
+    }
     |  cmp CARG2, CARG4			// Compare types.
     |  bne >2				// Not the same type?
     |  checktp CARG2, LJ_TISPRI
@@ -2137,13 +2155,27 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    add PC, PC, #4
     |    add RB, PC, RB, lsl #2
     |  checktp CARG2, LJ_TSTR
-    |  cmpeq CARG1, CARG3
+    if (LJ_HASFFI) {
+      |  bne >7
+      |  cmp CARG1, CARG3
+    } else {
+      |  cmpeq CARG1, CARG3
+    }
     if (vk) {
       |  subeq PC, RB, #0x20000
+      |1:
     } else {
+      |1:
       |  subne PC, RB, #0x20000
     }
     |  ins_next
+    |
+    if (LJ_HASFFI) {
+      |7:
+      |  checktp CARG2, LJ_TCDATA
+      |  bne <1
+      |  b ->vmeta_equal_cd
+    }
     break;
 
   case BC_ISEQN: case BC_ISNEN:
@@ -2167,17 +2199,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp CARG1, CARG3
     if (vk) {
       |  subeq PC, RB, #0x20000
+      |1:
     } else {
+      |1:
       |  subne PC, RB, #0x20000
     }
-    |1:
+    |2:
     |  ins_next
     |
     |3:  // CARG12 is not an integer.
-    if (!vk) {
-      |  subhi PC, RB, #0x20000
+    if (LJ_HASFFI) {
+      |  bhi >7
+    } else {
+      if (!vk) {
+	|  subhi PC, RB, #0x20000
+      }
+      |  bhi <2
     }
-    |  bhi <1
     |  // CARG12 is a number.
     |  checktp CARG4, LJ_TISNUM
     |  movlo RA, RB			// Save RB.
@@ -2196,7 +2234,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     } else {
       |  subne PC, RA, #0x20000
     }
-    |  b <1
+    |  b <2
+    |
+    if (LJ_HASFFI) {
+      |7:
+      |  checktp CARG2, LJ_TCDATA
+      |  bne <1
+      |  b ->vmeta_equal_cd
+    }
     break;
 
   case BC_ISEQP: case BC_ISNEP:
@@ -2207,6 +2252,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add PC, PC, #4
     |  mvn RC, RC
     |   add RB, PC, RB, lsl #2
+    if (LJ_HASFFI) {
+      |  checktp CARG2, LJ_TCDATA
+      |  beq ->vmeta_equal_cd
+    }
     |  cmp CARG2, RC
     if (vk) {
       |  subeq PC, RB, #0x20000

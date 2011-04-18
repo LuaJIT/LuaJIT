@@ -136,7 +136,6 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_ARCH_DUALNUM		2
-#define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
