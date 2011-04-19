@@ -50,7 +50,7 @@ __attribute__((packed))
 Unaligned32 { uint32_t u; uint8_t b[4]; } Unaligned32;
 
 /* Unaligned read of uint32_t. */
-static uint32_t LJ_AINLINE str_getu32(const void *p)
+static LJ_AINLINE uint32_t str_getu32(const void *p)
 {
   return ((const Unaligned32 *)p)->u;
 }
