@@ -316,6 +316,24 @@ of <tt>ct</tt>, which must be a <tt>struct</tt>. Additionally returns
 the position and the field size (in bits) for bit fields.
 </p>
 
+<h3 id="ffi_istype"><tt>status = ffi.istype(ct, obj)</tt></h3>
+<p>
+Returns <tt>true</tt> if <tt>obj</tt> has the C&nbsp;type given by
+<tt>ct</tt>. Returns <tt>false</tt> otherwise.
+</p>
+<p>
+C&nbsp;type qualifiers (<tt>const</tt> etc.) are ignored. Pointers are
+checked with the standard pointer compatibility rules, but without any
+special treatment for <tt>void&nbsp;*</tt>. If <tt>ct</tt> specifies a
+<tt>struct</tt>/<tt>union</tt>, then a pointer to this type is accepted,
+too. Otherwise the types must match exactly.
+</p>
+<p>
+Note: this function accepts all kinds of Lua objects for the
+<tt>obj</tt> argument, but always returns <tt>false</tt> for non-cdata
+objects.
+</p>
+
 <h2 id="util">Utility Functions</h2>
 
 <h3 id="ffi_string"><tt>str = ffi.string(ptr [,len])</tt></h3>

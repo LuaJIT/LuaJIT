@@ -456,6 +456,36 @@ LJLIB_CF(ffi_typeof)
   return 1;
 }
 
+LJLIB_CF(ffi_istype)	LJLIB_REC(ffi_istype)
+{
+  CTState *cts = ctype_cts(L);
+  CTypeID id1 = ffi_checkctype(L, cts);
+  TValue *o = lj_lib_checkany(L, 2);
+  int b = 0;
+  if (tviscdata(o)) {
+    GCcdata *cd = cdataV(o);
+    CTypeID id2 = cd->typeid == CTID_CTYPEID ? *(CTypeID *)cdataptr(cd) :
+					       cd->typeid;
+    CType *ct1 = lj_ctype_rawref(cts, id1);
+    CType *ct2 = lj_ctype_rawref(cts, id2);
+    if (ct1 == ct2) {
+      b = 1;
+    } else if (ctype_type(ct1->info) == ctype_type(ct2->info) &&
+	       ct1->size == ct2->size) {
+      if (ctype_ispointer(ct1->info))
+	b = lj_cconv_compatptr(cts, ct1, ct2, CCF_IGNQUAL);
+      else if (ctype_isnum(ct1->info) || ctype_isvoid(ct1->info))
+	b = (((ct1->info ^ ct2->info) & ~CTF_QUAL) == 0);
+    } else if (ctype_isstruct(ct1->info) && ctype_isptr(ct2->info) &&
+	       ct1 == ctype_rawchild(cts, ct2)) {
+      b = 1;
+    }
+  }
+  setboolV(L->top-1, b);
+  setboolV(&G(L)->tmptv2, b);  /* Remember for trace recorder. */
+  return 1;
+}
+
 LJLIB_CF(ffi_sizeof)
 {
   CTState *cts = ctype_cts(L);
