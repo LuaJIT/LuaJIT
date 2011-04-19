@@ -97,7 +97,7 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
 {
   GCtab *t;
   /* First try to colocate the array part. */
-  if (LJ_MAX_COLOSIZE && asize > 0 && asize <= LJ_MAX_COLOSIZE) {
+  if (LJ_MAX_COLOSIZE != 0 && asize > 0 && asize <= LJ_MAX_COLOSIZE) {
     lua_assert((sizeof(GCtab) & 7) == 0);
     t = (GCtab *)lj_mem_newgco(L, sizetabcolo(asize));
     t->gct = ~LJ_TTAB;
@@ -203,9 +203,9 @@ void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t)
 {
   if (t->hmask > 0)
     lj_mem_freevec(g, noderef(t->node), t->hmask+1, Node);
-  if (t->asize > 0 && LJ_MAX_COLOSIZE && t->colo <= 0)
+  if (t->asize > 0 && LJ_MAX_COLOSIZE != 0 && t->colo <= 0)
     lj_mem_freevec(g, tvref(t->array), t->asize, TValue);
-  if (LJ_MAX_COLOSIZE && t->colo)
+  if (LJ_MAX_COLOSIZE != 0 && t->colo)
     lj_mem_free(g, t, sizetabcolo((uint32_t)t->colo & 0x7f));
   else
     lj_mem_freet(g, t);
@@ -224,7 +224,7 @@ static void resizetab(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
     uint32_t i;
     if (asize > LJ_MAX_ASIZE)
       lj_err_msg(L, LJ_ERR_TABOV);
-    if (LJ_MAX_COLOSIZE && t->colo > 0) {
+    if (LJ_MAX_COLOSIZE != 0 && t->colo > 0) {
       /* A colocated array must be separated and copied. */
       TValue *oarray = tvref(t->array);
       array = lj_mem_newvec(L, asize, TValue);
@@ -257,7 +257,7 @@ static void resizetab(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
       if (!tvisnil(&array[i]))
 	copyTV(L, lj_tab_setinth(L, t, (int32_t)i), &array[i]);
     /* Physically shrink only separated arrays. */
-    if (LJ_MAX_COLOSIZE && t->colo <= 0)
+    if (LJ_MAX_COLOSIZE != 0 && t->colo <= 0)
       setmref(t->array, lj_mem_realloc(L, array,
 	      oldasize*sizeof(TValue), asize*sizeof(TValue)));
   }

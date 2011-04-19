@@ -556,7 +556,7 @@ static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
   TRef trfunc, *fbase = &J->base[func];
   ptrdiff_t i;
   for (i = 0; i <= nargs; i++)
-    getslot(J, func+i);  /* Ensure func and all args have a reference. */
+    (void)getslot(J, func+i);  /* Ensure func and all args have a reference. */
   if (!tref_isfunc(fbase[0])) {  /* Resolve __call metamethod. */
     ix.tab = fbase[0];
     copyTV(J->L, &ix.tabv, functv);
@@ -634,7 +634,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   TValue *frame = J->L->base - 1;
   ptrdiff_t i;
   for (i = 0; i < gotresults; i++)
-    getslot(J, rbase+i);  /* Ensure all results have a reference. */
+    (void)getslot(J, rbase+i);  /* Ensure all results have a reference. */
   while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
     BCReg cbase = (BCReg)frame_delta(frame);
     if (--J->framedepth < 0)

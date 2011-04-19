@@ -533,6 +533,11 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 #if defined(__GNUC__) && !LJ_TARGET_ARM
 
+#ifdef __clang__
+/* http://llvm.org/bugs/show_bug.cgi?id=8703 */
+#define __unwind_word__ word
+#endif
+
 #include <unwind.h>
 
 #define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
