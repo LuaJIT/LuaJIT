@@ -173,7 +173,11 @@
 #if __GNUC__ < 4
 #error "Need at least GCC 4.0 or newer"
 #endif
-#elif LJ_TARGET_ARM || LJ_TARGET_PPC
+#elif LJ_TARGET_ARM
+#if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
+#error "Need at least GCC 4.2 or newer"
+#endif
+#elif LJ_TARGET_PPC
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
 #endif
