@@ -525,12 +525,13 @@ local function wputmrmsib(t, imark, s, vsreg)
       -- Pure 32 bit displacement.
       if x64 and tdisp ~= "table" then
 	wputmodrm(0, s, 4) -- [disp] -> (0, s, esp) (0, esp, ebp)
+	if imark == "I" then waction("MARK") end
 	wputmodrm(0, 4, 5)
       else
 	riprel = x64
 	wputmodrm(0, s, 5) -- [disp|rip-label] -> (0, s, ebp)
+	if imark == "I" then waction("MARK") end
       end
-      if imark == "I" then waction("MARK") end
       if vsreg then waction("VREG", vsreg); wputxb(2) end
     end
     if riprel then -- Emit rip-relative displacement.
@@ -1521,7 +1522,7 @@ local function dopattern(pat, args, sz, op, needrex)
 	if szov == "q" and rex == 0 then rex = rex + 8 end
 	if needrex then rex = rex + 16 end
 	if addin and addin.reg == -1 then
-	  wputop(szov, opcode + 1, rex)
+	  wputop(szov, opcode - 7, rex)
 	  waction("VREG", addin.vreg); wputxb(0)
 	else
 	  if addin and addin.reg > 7 then rex = rex + 1 end
