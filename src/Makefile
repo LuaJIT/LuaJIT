@@ -283,6 +283,16 @@ ifeq (Darwin,$(TARGET_SYS))
     TARGET_XSHLDFLAGS+= -image_base 7fff04c4a000
   endif
 else
+ifeq (iOS,$(TARGET_SYS))
+  TARGET_STRIP+= -x
+  TARGET_AR+= 2>/dev/null
+  TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
+  HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_OSX
+  ifneq (,$(TARGET_DYNXLDOPTS))
+    TARGET_DYNXLDOPTS=
+    TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
+  endif
+else
   TARGET_XLDFLAGS+= -Wl,-E
   ifeq (Linux,$(TARGET_SYS))
     TARGET_XLIBS+= -ldl
@@ -290,6 +300,7 @@ else
   ifeq (GNU/kFreeBSD,$(TARGET_SYS))
     TARGET_XLIBS+= -ldl
   endif
+endif
 endif
 endif
 
@@ -390,6 +401,9 @@ endif
 ifeq (Darwin,$(TARGET_SYS))
   LJVM_MODE= machasm
 endif
+ifeq (iOS,$(TARGET_SYS))
+  LJVM_MODE= machasm
+endif
 
 ifeq (static,$(BUILDMODE))
   TARGET_DYNCC= @:
@@ -406,6 +420,10 @@ ifeq (dynamic,$(BUILDMODE))
   TARGET_XLDFLAGS+= $(TARGET_DYNXLDOPTS)
 else
 ifeq (Darwin,$(TARGET_SYS))
+  TARGET_DYNCC= @:
+  LJVMCORE_DYNO= $(LJVMCORE_O)
+endif
+ifeq (iOS,$(TARGET_SYS))
   TARGET_DYNCC= @:
   LJVMCORE_DYNO= $(LJVMCORE_O)
 endif

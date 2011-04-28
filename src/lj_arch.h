@@ -194,8 +194,8 @@
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
 #endif
-#if !__ARM_EABI__
-#error "Only ARM EABI is supported"
+#if !(__ARM_EABI__ || LJ_TARGET_OSX)
+#error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
 #elif LJ_TARGET_PPC
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
