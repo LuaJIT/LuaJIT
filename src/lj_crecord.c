@@ -785,15 +785,16 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
 #if LJ_TARGET_X86
 	ctype_cconv(ct->info) != CTCC_CDECL ||
 #endif
-	t == IRT_CDATA || (LJ_32 && (t == IRT_I64 || t == IRT_U64)))
+	t == IRT_CDATA)
       lj_trace_err(J, LJ_TRERR_NYICALL);
     tr = emitir(IRT(IR_CALLXS, t), crec_call_args(J, rd, cts, ct), func);
     if (t == IRT_FLOAT || t == IRT_U32) {
       tr = emitconv(tr, IRT_NUM, t, 0);
     } else if (t == IRT_PTR || (LJ_64 && t == IRT_P32) ||
-	       (LJ_64 && (t == IRT_I64 || t == IRT_U64))) {
+	       (t == IRT_I64 || t == IRT_U64)) {
       TRef trid = lj_ir_kint(J, ctype_cid(ct->info));
       tr = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, tr);
+      if (t == IRT_I64 || t == IRT_U64) lj_needsplit(J);
     }
     J->base[0] = tr;
     J->needsnap = 1;

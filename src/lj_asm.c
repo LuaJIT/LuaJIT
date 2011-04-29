@@ -3346,6 +3346,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     break;
     }
   case IR_CALLN:
+  case IR_CALLXS:
     ra_destreg(as, ir, RID_RETHI);
     if (!uselo)
       ra_allocref(as, ir->op1, RID2RSET(RID_RET));  /* Mark call as used. */

@@ -256,6 +256,8 @@ static void split_ir(jit_State *J)
 	}
 	break;
 	}
+      case IR_CALLXS:
+	goto split_call;
       case IR_PHI: {
 	IRRef hiref2;
 	if ((irref_isk(nir->op1) && irref_isk(nir->op2)) ||
@@ -284,6 +286,42 @@ static void split_ir(jit_State *J)
 	  nir->ot = IRT(IR_NOP, IRT_NIL);
 	  nir->op1 = nir->op2 = 0;
 	}
+      }
+    } else if (ir->o == IR_CALLXS) {
+      IRRef hiref;
+    split_call:
+      hiref = hisubst[ir->op1];
+      if (hiref) {
+	IROpT ot = nir->ot;
+	IRRef op2 = nir->op2;
+	nir->ot = IRT(IR_CARG, IRT_NIL);
+#if LJ_LE
+	nir->op2 = hiref;
+#else
+	nir->op2 = nir->op1; nir->op1 = hiref;
+#endif
+	ir->prev = nref = split_emit(J, ot, nref, op2);
+      }
+      if (irt_isint64(ir->t))
+	hi = split_emit(J, IRTI(IR_HIOP), nref, nref);
+    } else if (ir->o == IR_CARG) {
+      IRRef hiref = hisubst[ir->op1];
+      if (hiref) {
+	IRRef op2 = nir->op2;
+#if LJ_LE
+	nir->op2 = hiref;
+#else
+	nir->op2 = nir->op1; nir->op1 = hiref;
+#endif
+	ir->prev = nref = split_emit(J, IRT(IR_CARG, IRT_NIL), nref, op2);
+	nir = IR(nref);
+      }
+      hiref = hisubst[ir->op2];
+      if (hiref) {
+#if LJ_BE
+	IRRef tmp = nir->op2; nir->op2 = hiref; hiref = tmp;
+#endif
+	ir->prev = split_emit(J, IRT(IR_CARG, IRT_NIL), nref, hiref);
       }
     } else if (ir->o == IR_CNEWI) {
       if (hisubst[ir->op2])
