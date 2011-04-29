@@ -287,7 +287,6 @@ ifeq (iOS,$(TARGET_SYS))
   TARGET_STRIP+= -x
   TARGET_AR+= 2>/dev/null
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
-  HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_OSX
   ifneq (,$(TARGET_DYNXLDOPTS))
     TARGET_DYNXLDOPTS=
     TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
@@ -302,6 +301,26 @@ else
   endif
 endif
 endif
+endif
+
+ifneq ($(HOST_SYS),$(TARGET_SYS))
+  ifeq (Windows,$(TARGET_SYS))
+    HOST_XCFLAGS+= -malign-double -DLUAJIT_OS=LUAJIT_OS_WINDOWS
+  else
+  ifeq (Linux,$(TARGET_SYS))
+    HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_LINUX
+  else
+  ifeq (Darwin,$(TARGET_SYS))
+    HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_OSX
+  else
+  ifeq (iOS,$(TARGET_SYS))
+    HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_OSX
+  else
+    HOST_XCFLAGS+= -DLUAJIT_OS=LUAJIT_OS_OTHER
+  endif
+  endif
+  endif
+  endif
 endif
 
 ifneq (,$(CCDEBUG))
@@ -388,9 +407,6 @@ ifeq (Windows,$(TARGET_SYS))
   LJVM_MODE= coffasm
   LUAJIT_SO= $(TARGET_DLLNAME)
   LUAJIT_T= luajit.exe
-  ifneq ($(HOST_SYS),$(TARGET_SYS))
-    HOST_XCFLAGS+= -malign-double -DLUAJIT_OS=LUAJIT_OS_WINDOWS
-  endif
   # Mixed mode is not supported on Windows. And static mode doesn't work well.
   # C modules cannot be loaded, because they bind to lua51.dll.
   ifneq (static,$(BUILDMODE))
