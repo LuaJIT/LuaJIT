@@ -1578,6 +1578,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       lua_assert(!irt_ispri(ir->t));
       ra_destreg(as, ir, RID_RET);
     }
+  } else if (LJ_32 && irt_isfp(ir->t)) {
+    emit_x87op(as, XI_FPOP);  /* Pop unused result from x87 st0. */
   }
 }
 
