@@ -521,7 +521,9 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
       */
       if (!innerloopleft(J, pc))
 	lj_trace_err(J, LJ_TRERR_LINNER);  /* Root trace hit an inner loop. */
-      if ((J->loopref && J->cur.nins - J->loopref > 8) || --J->loopunroll < 0)
+      if ((J->loopref && J->cur.nins - J->loopref >
+			 ((IRRef)J->param[JIT_P_maxrecord] >> 5)) ||
+	  --J->loopunroll < 0)
 	lj_trace_err(J, LJ_TRERR_LUNROLL);  /* Limit loop unrolling. */
       J->loopref = J->cur.nins;
     }
