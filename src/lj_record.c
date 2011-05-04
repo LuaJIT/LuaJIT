@@ -422,7 +422,8 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
   } else {  /* Handle FORI/JFORI opcodes. */
     BCReg i;
     lj_meta_for(J->L, tv);
-    t = lj_opt_narrow_forl(J, tv);
+    t = (LJ_DUALNUM || tref_isint(tr[FORL_IDX])) ? lj_opt_narrow_forl(J, tv) :
+						   IRT_NUM;
     for (i = FORL_IDX; i <= FORL_STEP; i++) {
       lua_assert(tref_isnumber_str(tr[i]));
       if (tref_isstr(tr[i]))
@@ -521,9 +522,7 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
       */
       if (!innerloopleft(J, pc))
 	lj_trace_err(J, LJ_TRERR_LINNER);  /* Root trace hit an inner loop. */
-      if ((J->loopref && J->cur.nins - J->loopref >
-			 ((IRRef)J->param[JIT_P_maxrecord] >> 5)) ||
-	  --J->loopunroll < 0)
+      if ((J->loopref && J->cur.nins - J->loopref > 24) || --J->loopunroll < 0)
 	lj_trace_err(J, LJ_TRERR_LUNROLL);  /* Limit loop unrolling. */
       J->loopref = J->cur.nins;
     }
