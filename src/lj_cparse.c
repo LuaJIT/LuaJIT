@@ -1202,8 +1202,8 @@ static CTSize cp_field_align(CPState *cp, CType *ct, CTInfo info)
 {
   CTSize align = ctype_align(info);
   UNUSED(cp); UNUSED(ct);
-#if LJ_TARGET_X86 && !LJ_ABI_WIN
-  /* The SYSV i386 ABI limits alignment of non-vector fields to 4 bytes. */
+#if (LJ_TARGET_X86 && !LJ_ABI_WIN) || (LJ_TARGET_ARM && __APPLE__)
+  /* The SYSV i386 and iOS ABIs limit alignment of non-vector fields to 2^2. */
   if (align > 2 && !(info & CTFP_ALIGNED)) {
     if (ctype_isarray(info) && !(info & CTF_VECTOR)) {
       do {
