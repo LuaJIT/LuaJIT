@@ -596,7 +596,8 @@ again:
 	if (tref_isstr(idx)) goto again;
       }
     }
-    return crec_index_meta(J, cts, ct, rd);
+    crec_index_meta(J, cts, ct, rd);
+    return;
   }
 
   if (ofs)
