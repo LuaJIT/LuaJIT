@@ -666,7 +666,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
     if (J->framedepth == 0 && J->pt && frame == J->L->base - 1) {
       if (check_downrec_unroll(J, pt)) {
-	J->maxslot = (BCReg)(rbase + nresults);
+	J->maxslot = (BCReg)(rbase + gotresults);
+	lj_snap_purge(J);
 	rec_stop(J, J->cur.traceno);  /* Down-recursion. */
 	return;
       }
