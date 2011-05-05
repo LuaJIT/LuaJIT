@@ -60,7 +60,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
 The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta6</strong>.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.6</strong>.
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.7</strong>.
 </p>
 <p>
 Please check the
@@ -69,6 +69,48 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta7">LuaJIT 2.0.0-beta7 &mdash; 2011-05-05</h2>
+<ul>
+<li>New features:
+<ul>
+<li>ARM port of the LuaJIT interpreter is complete.</li>
+<li>FFI library: Add <tt>ffi.gc()</tt>, <tt>ffi.metatype()</tt>,
+<tt>ffi.istype()</tt>.</li>
+<li>FFI library: Resolve ld script redirection in <tt>ffi.load()</tt>.</li>
+<li>From Lua 5.2: <tt>package.searchpath()</tt>, <tt>fp:read("*L")</tt>,
+<tt>load(string)</tt>.</li>
+<li>From Lua 5.2, disabled by default: empty statement,
+<tt>table.unpack()</tt>, modified <tt>coroutine.running()</tt>.</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>FFI library: numerous fixes.</li>
+<li>Fix type mismatches in store-to-load forwarding.</li>
+<li>Fix error handling within metamethods.</li>
+<li>Fix <tt>table.maxn()</tt>.</li>
+<li>Improve accuracy of <tt>x^-k</tt> on x64.</li>
+<li>Fix code generation for Intel Atom in x64 mode.</li>
+<li>Fix narrowing of POW.</li>
+<li>Fix recording of retried fast functions.</li>
+<li>Fix code generation for <tt>bit.bnot()</tt> and multiplies.</li>
+<li>Fix error location within cpcall frames.</li>
+<li>Add workaround for old libgcc unwind bug.</li>
+<li>Fix <tt>lua_yield()</tt> and <tt>getmetatable(lightuserdata)</tt> on x64.</li>
+<li>Misc. fixes for PPC/e500 interpreter.</li>
+<li>Fix stack slot updates for down-recursion.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Add dual-number mode (int/double) for the VM. Enabled for ARM.</li>
+<li>Improve narrowing of arithmetic operators and <tt>for</tt> loops.</li>
+<li>Tune loop unrolling heuristics and increase trace recorder limits.</li>
+<li>Eliminate dead slots in snapshots using bytecode data-flow analysis.</li>
+<li>Avoid phantom stores to proxy tables.</li>
+<li>Optimize lookups in empty proxy tables.</li>
+<li>Improve bytecode optimization of <tt>and</tt>/<tt>or</tt> operators.</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta6">LuaJIT 2.0.0-beta6 &mdash; 2011-02-11</h2>
 <ul>
 <li>New features:
@@ -249,6 +291,12 @@ no point in listing differences over earlier versions.</li>
 </div>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-1.1.7">LuaJIT 1.1.7 &mdash; 2011-05-05</h2>
+<ul>
+<li>Added fixes for the
+<a href="http://www.lua.org/bugs.html#5.1.4"><span class="ext">&raquo;</span>&nbsp;currently known bugs in Lua 5.1.4</a>.</li>
+</ul>
+
 <h2 id="LuaJIT-1.1.6">LuaJIT 1.1.6 &mdash; 2010-03-28</h2>
 <ul>
 <li>Added fixes for the
