@@ -11,9 +11,9 @@ local x64 = x64
 local _info = {
   arch =	x64 and "x64" or "x86",
   description =	"DynASM x86/x64 module",
-  version =	"1.2.2",
-  vernum =	 10202,
-  release =	"2011-01-09",
+  version =	"1.3.0",
+  vernum =	 10300,
+  release =	"2011-05-05",
   author =	"Mike Pall",
   license =	"MIT",
 }

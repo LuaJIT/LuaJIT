@@ -9,9 +9,9 @@
 local _info = {
   arch =	"ppc",
   description =	"DynASM PPC module",
-  version =	"1.2.2",
-  vernum =	 10202,
-  release =	"2011-01-09",
+  version =	"1.3.0",
+  vernum =	 10300,
+  release =	"2011-05-05",
   author =	"Mike Pall",
   license =	"MIT",
 }

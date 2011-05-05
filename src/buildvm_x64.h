@@ -1,11 +1,11 @@
 /*
 ** This file has been pre-processed with DynASM.
 ** http://luajit.org/dynasm.html
-** DynASM version 1.2.2, DynASM x64 version 1.2.2
+** DynASM version 1.3.0, DynASM x64 version 1.3.0
 ** DO NOT EDIT! The original file is in "buildvm_x86.dasc".
 */
 
-#if DASM_VERSION != 10202
+#if DASM_VERSION != 10300
 #error "Version mismatch between DynASM and included encoding engine"
 #endif
 
