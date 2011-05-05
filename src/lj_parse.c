@@ -258,8 +258,9 @@ static BCPos jmp_next(FuncState *fs, BCPos pc)
 static int jmp_novalue(FuncState *fs, BCPos list)
 {
   for (; list != NO_JMP; list = jmp_next(fs, list)) {
-    BCOp op = bc_op(fs->bcbase[list >= 1 ? list-1 : list].ins);
-    if (!(op == BC_ISTC || op == BC_ISFC)) return 1;
+    BCIns p = fs->bcbase[list >= 1 ? list-1 : list].ins;
+    if (!(bc_op(p) == BC_ISTC || bc_op(p) == BC_ISFC || bc_a(p) == NO_REG))
+      return 1;
   }
   return 0;
 }
@@ -269,13 +270,20 @@ static int jmp_patchtestreg(FuncState *fs, BCPos pc, BCReg reg)
 {
   BCIns *ip = &fs->bcbase[pc >= 1 ? pc-1 : pc].ins;
   BCOp op = bc_op(*ip);
-  if (!(op == BC_ISTC || op == BC_ISFC))
+  if (op == BC_ISTC || op == BC_ISFC) {
+    if (reg != NO_REG && reg != bc_d(*ip)) {
+      setbc_a(ip, reg);
+    } else {  /* Nothing to store or already in the right register. */
+      setbc_op(ip, op+(BC_IST-BC_ISTC));
+      setbc_a(ip, 0);
+    }
+  } else if (bc_a(*ip) == NO_REG) {
+    if (reg == NO_REG)
+      *ip = BCINS_AJ(BC_JMP, bc_a(fs->bcbase[pc].ins), 0);
+    else
+      setbc_a(ip, reg);
+  } else {
     return 0;  /* Cannot patch other instructions. */
-  if (reg != NO_REG && reg != bc_d(*ip)) {
-    setbc_a(ip, reg);
-  } else {  /* Nothing to store or already in the right register. */
-    setbc_op(ip, op+(BC_IST-BC_ISTC));
-    setbc_a(ip, 0);
   }
   return 1;
 }
@@ -709,6 +717,8 @@ static void bcemit_branch_t(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     invertcond(fs, e), pc = e->u.s.info;
+  else if (e->k == VKFALSE || e->k == VKNIL)
+    expr_toreg_nobranch(fs, e, NO_REG), pc = bcemit_jmp(fs);
   else
     pc = bcemit_branch(fs, e, 0);
   jmp_append(fs, &e->f, pc);
@@ -725,6 +735,8 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
     pc = NO_JMP;  /* Never jump. */
   else if (e->k == VJMP)
     pc = e->u.s.info;
+  else if (e->k == VKSTR || e->k == VKNUM || e->k == VKTRUE)
+    expr_toreg_nobranch(fs, e, NO_REG), pc = bcemit_jmp(fs);
   else
     pc = bcemit_branch(fs, e, 1);
   jmp_append(fs, &e->t, pc);
