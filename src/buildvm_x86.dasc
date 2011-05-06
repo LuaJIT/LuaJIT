@@ -2551,7 +2551,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).
   |
   |.macro .ffunc_bit, name, kind
-  |  .ffunc name
+  |  .ffunc_1 name
   |.if kind == 2
   ||if (sse) {
   |  sseconst_tobit xmm1, RBa
