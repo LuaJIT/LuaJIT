@@ -23,7 +23,7 @@
 #define lj_alloc_c
 #define LUA_CORE
 
-/* To get the mremap prototype. Must be defind before any system includes. */
+/* To get the mremap prototype. Must be defined before any system includes. */
 #if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
 #endif
@@ -98,18 +98,22 @@ static void INIT_MMAP(void)
 /* Win64 32 bit MMAP via NtAllocateVirtualMemory. */
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
+  DWORD olderr = GetLastError();
   void *ptr = NULL;
   long st = ntavm(INVALID_HANDLE_VALUE, &ptr, NTAVM_ZEROBITS, &size,
 		  MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  SetLastError(olderr);
   return st == 0 ? ptr : MFAIL;
 }
 
 /* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
 static LJ_AINLINE void *DIRECT_MMAP(size_t size)
 {
+  DWORD olderr = GetLastError();
   void *ptr = NULL;
   long st = ntavm(INVALID_HANDLE_VALUE, &ptr, NTAVM_ZEROBITS, &size,
 		  MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, PAGE_READWRITE);
+  SetLastError(olderr);
   return st == 0 ? ptr : MFAIL;
 }
 
@@ -120,15 +124,19 @@ static LJ_AINLINE void *DIRECT_MMAP(size_t size)
 /* Win32 MMAP via VirtualAlloc */
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
+  DWORD olderr = GetLastError();
   void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  SetLastError(olderr);
   return ptr ? ptr : MFAIL;
 }
 
 /* For direct MMAP, use MEM_TOP_DOWN to minimize interference */
 static LJ_AINLINE void *DIRECT_MMAP(size_t size)
 {
+  DWORD olderr = GetLastError();
   void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN,
 			   PAGE_READWRITE);
+  SetLastError(olderr);
   return ptr ? ptr : MFAIL;
 }
 
@@ -137,6 +145,7 @@ static LJ_AINLINE void *DIRECT_MMAP(size_t size)
 /* This function supports releasing coalesed segments */
 static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 {
+  DWORD olderr = GetLastError();
   MEMORY_BASIC_INFORMATION minfo;
   char *cptr = (char *)ptr;
   while (size) {
@@ -150,11 +159,13 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
     cptr += minfo.RegionSize;
     size -= minfo.RegionSize;
   }
+  SetLastError(olderr);
   return 0;
 }
 
 #else
 
+#include <errno.h>
 #include <sys/mman.h>
 
 #define MMAP_PROT		(PROT_READ|PROT_WRITE)
@@ -169,7 +180,13 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #if LJ_TARGET_LINUX
 
 /* Actually this only gives us max. 1GB in current Linux kernels. */
-#define CALL_MMAP(s)	mmap(NULL, (s), MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0)
+static LJ_AINLINE void *CALL_MMAP(size_t size)
+{
+  int olderr = errno;
+  void *ptr = mmap(NULL, size, MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0);
+  errno = olderr;
+  return ptr;
+}
 
 #elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 
@@ -188,6 +205,7 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
+  int olderr = errno;
   /* Hint for next allocation. Doesn't need to be thread-safe. */
   static uintptr_t alloc_hint = MMAP_REGION_START;
   int retry = 0;
@@ -205,6 +223,7 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
     if ((uintptr_t)p >= MMAP_REGION_START &&
 	(uintptr_t)p + size < MMAP_REGION_END) {
       alloc_hint = (uintptr_t)p + size;
+      errno = olderr;
       return p;
     }
     if (p != CMFAIL) munmap(p, size);
@@ -212,6 +231,7 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
     retry = 1;
     alloc_hint = MMAP_REGION_START;
   }
+  errno = olderr;
   return CMFAIL;
 }
 
@@ -224,17 +244,39 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
 #else
 
 /* 32 bit mode is easy. */
-#define CALL_MMAP(s)		mmap(NULL, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
+static LJ_AINLINE void *CALL_MMAP(size_t size)
+{
+  int olderr = errno;
+  void *ptr = mmap(NULL, size, MMAP_PROT, MMAP_FLAGS, -1, 0);
+  errno = olderr;
+  return ptr;
+}
 
 #endif
 
 #define INIT_MMAP()		((void)0)
 #define DIRECT_MMAP(s)		CALL_MMAP(s)
-#define CALL_MUNMAP(a, s)	munmap((a), (s))
+
+static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
+{
+  int olderr = errno;
+  int ret = munmap(ptr, size);
+  errno = olderr;
+  return ret;
+}
 
 #if LJ_TARGET_LINUX
 /* Need to define _GNU_SOURCE to get the mremap prototype. */
-#define CALL_MREMAP(addr, osz, nsz, mv) mremap((addr), (osz), (nsz), (mv))
+static LJ_AINLINE void *CALL_MREMAP_(void *ptr, size_t osz, size_t nsz,
+				     int flags)
+{
+  int olderr = errno;
+  ptr = mremap(ptr, osz, nsz, flags);
+  errno = olderr;
+  return ptr;
+}
+
+#define CALL_MREMAP(addr, osz, nsz, mv) CALL_MREMAP_((addr), (osz), (nsz), (mv))
 #define CALL_MREMAP_NOMOVE	0
 #define CALL_MREMAP_MAYMOVE	1
 #if LJ_64

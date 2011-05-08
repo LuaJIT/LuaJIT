@@ -69,4 +69,21 @@ LJ_FUNCA void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc);
 LJ_FUNCA ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns*pc);
 LJ_FUNCA void LJ_FASTCALL lj_dispatch_return(lua_State *L, const BCIns *pc);
 
+#if LJ_HASFFI && !defined(_BUILDVM_H)
+/* Save/restore errno and GetLastError() around hooks, exits and recording. */
+#include <errno.h>
+#if LJ_TARGET_WINDOWS
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#define ERRNO_SAVE	int olderr = errno; DWORD oldwerr = GetLastError();
+#define ERRNO_RESTORE	errno = olderr; SetLastError(oldwerr);
+#else
+#define ERRNO_SAVE	int olderr = errno;
+#define ERRNO_RESTORE	errno = olderr;
+#endif
+#else
+#define ERRNO_SAVE
+#define ERRNO_RESTORE
+#endif
+
 #endif

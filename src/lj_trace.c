@@ -638,6 +638,7 @@ void lj_trace_ins(jit_State *J, const BCIns *pc)
 /* A hotcount triggered. Start recording a root trace. */
 void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
+  ERRNO_SAVE
   /* Note: pc is the interpreter bytecode PC here. It's offset by 1. */
   hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]+1);  /* Reset hotcount. */
   /* Only start a new trace if not recording or inside __gc call or vmevent. */
@@ -648,6 +649,7 @@ void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
     J->state = LJ_TRACE_START;
     lj_trace_ins(J, pc-1);
   }
+  ERRNO_RESTORE
 }
 
 /* Check for a hot side exit. If yes, start recording a side trace. */
@@ -684,6 +686,7 @@ static TValue *trace_exit_cp(lua_State *L, lua_CFunction dummy, void *ud)
 /* A trace exited. Restore interpreter state. */
 int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 {
+  ERRNO_SAVE
   lua_State *L = J->L;
   ExitDataCP exd;
   int errcode;
@@ -738,6 +741,7 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     }
   }
   /* Return MULTRES or 0. */
+  ERRNO_RESTORE
   switch (bc_op(*pc)) {
   case BC_CALLM: case BC_CALLMT:
     return (int)((BCReg)(L->top - L->base) - bc_a(*pc) - bc_c(*pc));

@@ -348,6 +348,7 @@ static BCReg cur_topslot(GCproto *pt, const BCIns *pc, uint32_t nres)
 /* Instruction dispatch. Used by instr/line/return hooks or when recording. */
 void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 {
+  ERRNO_SAVE
   GCfunc *fn = curr_func(L);
   GCproto *pt = funcproto(fn);
   void *cf = cframe_raw(L->cframe);
@@ -382,6 +383,7 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
   }
   if ((g->hookmask & LUA_MASKRET) && bc_isret(bc_op(pc[-1])))
     callhook(L, LUA_HOOKRET, -1);
+  ERRNO_RESTORE
 }
 
 /* Initialize call. Ensure stack space and return # of missing parameters. */
@@ -405,6 +407,7 @@ static int call_init(lua_State *L, GCfunc *fn)
 /* Call dispatch. Used by call hooks, hot calls or when recording. */
 ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 {
+  ERRNO_SAVE
   GCfunc *fn = curr_func(L);
   BCOp op;
   global_State *g = G(L);
@@ -443,6 +446,7 @@ out:
       (op == BC_FUNCF || op == BC_FUNCV))
     op = (BCOp)((int)op+(int)BC_IFUNCF-(int)BC_FUNCF);
 #endif
+  ERRNO_RESTORE
   return makeasmfunc(lj_bc_ofs[op]);  /* Return static dispatch target. */
 }
 
