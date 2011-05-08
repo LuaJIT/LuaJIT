@@ -6,6 +6,8 @@
 #define lib_ffi_c
 #define LUA_LIB
 
+#include <errno.h>
+
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
@@ -539,6 +541,12 @@ LJLIB_CF(ffi_offsetof)
     }
   }
   return 0;
+}
+
+LJLIB_CF(ffi_errno)
+{
+  setintV(L->top++, errno);
+  return 1;
 }
 
 LJLIB_CF(ffi_string)	LJLIB_REC(.)

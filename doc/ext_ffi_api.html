@@ -336,6 +336,28 @@ objects.
 
 <h2 id="util">Utility Functions</h2>
 
+<h3 id="ffi_errno"><tt>err = ffi.errno()</tt></h3>
+<p>
+Returns the error number set by the last C&nbsp;function call which
+indicated an error condition.
+</p>
+<p>
+This function offers a portable and OS-independent way to get the error
+number. Note that only <em>some</em> C&nbsp;functions set the error
+number. And it's only significant if the function actually indicated an
+error condition (e.g. with a return value of <tt>-1</tt> or
+<tt>NULL</tt>). Otherwise, it may or may not contain any previously set
+value.
+</p>
+<p>
+You're advised to call this function only when needed and as close as
+possible after the return of the related C&nbsp;function. The
+<tt>errno</tt> value is preserved across hooks, memory allocations,
+invocations of the JIT compiler and other internal VM activity. The same
+applies to the value returned by <tt>GetLastError()</tt> on Windows, but
+you need to declare and call it yourself.
+</p>
+
 <h3 id="ffi_string"><tt>str = ffi.string(ptr [,len])</tt></h3>
 <p>
 Creates an interned Lua string from the data pointed to by
