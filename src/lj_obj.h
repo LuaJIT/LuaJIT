@@ -459,15 +459,15 @@ typedef enum {
 #define MMENUM(name)	MM_##name,
 MMDEF(MMENUM)
 #undef MMENUM
-  MM_MAX,
-  MM____ = MM_MAX,
+  MM__MAX,
+  MM____ = MM__MAX,
   MM_FAST = MM_eq
 } MMS;
 
 /* GC root IDs. */
 typedef enum {
   GCROOT_MMNAME,	/* Metamethod names. */
-  GCROOT_MMNAME_LAST = GCROOT_MMNAME + MM_MAX-1,
+  GCROOT_MMNAME_LAST = GCROOT_MMNAME + MM__MAX-1,
   GCROOT_BASEMT,	/* Metatables for base types. */
   GCROOT_BASEMT_NUM = GCROOT_BASEMT + ~LJ_TNUMX,
   GCROOT_IO_INPUT,	/* Userdata for default I/O input file. */
