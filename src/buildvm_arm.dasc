@@ -185,12 +185,23 @@
 |
 #define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
 |
+|.macro hotcheck
+|  lsr CARG1, PC, #1
+|  and CARG1, CARG1, #126
+|  sub CARG1, CARG1, #-GG_DISP2HOT
+|  ldrh CARG2, [DISPATCH, CARG1]
+|  subs CARG2, CARG2, #1
+|  strh CARG2, [DISPATCH, CARG1]
+|.endmacro
+|
 |.macro hotloop
-|  NYI
+|  hotcheck
+|  beq ->vm_hotloop
 |.endmacro
 |
 |.macro hotcall
-|  NYI
+|  hotcheck
+|  beq ->vm_hotcall
 |.endmacro
 |
 |// Set current VM state.
@@ -1811,7 +1822,17 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_record:				// Dispatch target for recording phase.
 #if LJ_HASJIT
-  |  NYI
+  |  ldrb CARG1, [DISPATCH, #DISPATCH_GL(hookmask)]
+  |  tst CARG1, #HOOK_VMEVENT		// No recording while in vmevent.
+  |  bne >5
+  |  // Decrement the hookcount for consistency, but always do the call.
+  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(hookcount)]
+  |  tst CARG1, #HOOK_ACTIVE
+  |  bne >1
+  |   sub CARG2, CARG2, #1
+  |  tst CARG1, #LUA_MASKLINE|LUA_MASKCOUNT
+  |   strne CARG2, [DISPATCH, #DISPATCH_GL(hookcount)]
+  |  b >1
 #endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
@@ -1860,7 +1881,18 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
-  |  NYI
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Same as curr_topL(L).
+  |   sub CARG1, DISPATCH, #-GG_DISP2J
+  |   str PC, SAVE_PC
+  |  ldr CARG3, LFUNC:CARG3->field_pc
+  |   mov CARG2, PC
+  |   str L, [DISPATCH, #DISPATCH_J(L)]
+  |  ldrb CARG3, [CARG3, #PC2PROTO(framesize)]
+  |   str BASE, L->base
+  |  add CARG3, BASE, CARG3, lsl #3
+  |  str CARG3, L->top
+  |  bl extern lj_trace_hot		// (jit_State *J, const BCIns *pc)
+  |  b <3
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
@@ -3510,7 +3542,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8, RC = target (after end of loop or start of loop)
     vk = (op == BC_IFORL || op == BC_JFORL);
     |  ldrd CARG12, [RA, BASE]!
-    |   add RC, PC, RC, lsl #2
+    if (op != BC_JFORL) {
+      |   add RC, PC, RC, lsl #2
+    }
     if (!vk) {
       |  ldrd CARG34, FOR_STOP
       |   checktp CARG2, LJ_TISNUM
@@ -3532,7 +3566,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       if (op == BC_IFORL) {
 	|  addvs RC, PC, #0x20000		// Overflow: prevent branch.
       } else {
-	|  NYI
+	|  bvs >2				// Overflow: do not enter mcode.
       }
       |  cmp CARG3, #0
       |  blt >4
@@ -3542,15 +3576,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_FORI) {
       |  subgt PC, RC, #0x20000
     } else if (op == BC_JFORI) {
-      |  NYI
+      |  subgt PC, RC, #0x20000
+      |  decode_RD RC, INS
+      |  ble =>BC_JLOOP
     } else if (op == BC_IFORL) {
       |  suble PC, RC, #0x20000
     } else {
-      |  NYI
+      |  ble =>BC_JLOOP
     }
     if (vk) {
       |  strd CARG12, FOR_IDX
     }
+    |2:
     |   ins_next1
     |   ins_next2
     |  strd CARG12, FOR_EXT
@@ -3587,11 +3624,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_FORI) {
       |  subhi PC, RC, #0x20000
     } else if (op == BC_JFORI) {
-      |  NYI
+      |  subhi PC, RC, #0x20000
+      |  decode_RD RC, INS
+      |  bls =>BC_JLOOP
     } else if (op == BC_IFORL) {
       |  subls PC, RC, #0x20000
     } else {
-      |  NYI
+      |  bls =>BC_JLOOP
     }
     |  ins_next1
     |  ins_next2
@@ -3624,7 +3663,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8, RC = target
     |  ldrd CARG12, [RA, BASE]!
     if (op == BC_JITERL) {
-      |  NYI
+      |  cmn CARG2, #-LJ_TNIL		// Stop if iterator returned nil.
+      |  strdne CARG12, [RA, #-8]
+      |  bne =>BC_JLOOP
     } else {
       |   add RC, PC, RC, lsl #2
       |  // STALL: load CARG12.
@@ -3652,7 +3693,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_JLOOP:
 #if LJ_HASJIT
-    |  NYI
+    |  // RA = base (ignored), RC = traceno
+    |  ldr CARG1, [DISPATCH, #DISPATCH_J(trace)]
+    |  ldr TRACE:RC, [CARG1, RC, lsl #2]
+    |  ldr RA, TRACE:RC->mcode
+    |   str BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
+    |   str L, [DISPATCH, #DISPATCH_GL(jit_L)]
+    |  bx RA
 #endif
     break;
 
@@ -3691,7 +3738,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   mvn CARG4, #~LJ_TNIL
     |  ble >3
     if (op == BC_JFUNCF) {
-      |  NYI
+      |  decode_RD RC, INS
+      |  b =>BC_JLOOP
     } else {
       |  ins_next3
     }
