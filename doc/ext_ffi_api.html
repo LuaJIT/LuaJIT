@@ -336,14 +336,16 @@ objects.
 
 <h2 id="util">Utility Functions</h2>
 
-<h3 id="ffi_errno"><tt>err = ffi.errno()</tt></h3>
+<h3 id="ffi_errno"><tt>err = ffi.errno([newerr])</tt></h3>
 <p>
 Returns the error number set by the last C&nbsp;function call which
-indicated an error condition.
+indicated an error condition. If the optional <tt>newerr</tt> argument
+is present, the error number is set to the new value and the previous
+value is returned.
 </p>
 <p>
-This function offers a portable and OS-independent way to get the error
-number. Note that only <em>some</em> C&nbsp;functions set the error
+This function offers a portable and OS-independent way to get and set the
+error number. Note that only <em>some</em> C&nbsp;functions set the error
 number. And it's only significant if the function actually indicated an
 error condition (e.g. with a return value of <tt>-1</tt> or
 <tt>NULL</tt>). Otherwise, it may or may not contain any previously set

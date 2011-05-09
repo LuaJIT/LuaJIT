@@ -545,7 +545,10 @@ LJLIB_CF(ffi_offsetof)
 
 LJLIB_CF(ffi_errno)
 {
-  setintV(L->top++, errno);
+  int err = errno;
+  if (L->top > L->base)
+    errno = ffi_checkint(L, 1);
+  setintV(L->top++, err);
   return 1;
 }
 
