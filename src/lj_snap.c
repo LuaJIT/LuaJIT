@@ -406,7 +406,10 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	if (irt_isinteger(t)) {
 	  setintV(o, (int32_t)ex->gpr[r-RID_MIN_GPR]);
 	} else if (irt_isnum(t)) {
-	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
+	  if (RID_NUM_FPR)
+	    setnumV(o, ex->fpr[r-RID_MIN_FPR]);
+	  else
+	    setnumV(o, *(double *)&ex->gpr[r-RID_MIN_GPR]);
 #if LJ_64
 	} else if (irt_islightud(t)) {
 	  /* 64 bit lightuserdata which may escape already has the tag bits. */

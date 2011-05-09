@@ -278,7 +278,9 @@ int lj_trace_flushall(lua_State *L)
   memset(J->penalty, 0, sizeof(J->penalty));
   /* Free the whole machine code and invalidate all exit stub groups. */
   lj_mcode_free(J);
+#ifdef EXITSTUBS_PER_GROUP
   memset(J->exitstubgroup, 0, sizeof(J->exitstubgroup));
+#endif
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "flush"));
   );
@@ -700,7 +702,7 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 
   lj_vmevent_send(L, TEXIT,
     ExitState *ex = (ExitState *)exptr;
-    uint32_t i;
+    int32_t i;
     lj_state_checkstack(L, 4+RID_NUM_GPR+RID_NUM_FPR+LUA_MINSTACK);
     setintV(L->top++, J->parent);
     setintV(L->top++, J->exitno);

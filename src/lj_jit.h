@@ -27,7 +27,8 @@
 #define JIT_F_CPU_FIRST		JIT_F_CMOV
 #define JIT_F_CPUSTRING		"\4CMOV\4SSE2\4SSE3\6SSE4.1\2P4\3AMD\2K8\4ATOM"
 #else
-#error "Missing CPU-specific JIT engine flags"
+#define JIT_F_CPU_FIRST		0
+#define JIT_F_CPUSTRING		""
 #endif
 
 /* Optimization flags. */
@@ -118,7 +119,11 @@ typedef enum {
 } PostProc;
 
 /* Machine code type. */
+#if LJ_TARGET_X86ORX64
 typedef uint8_t MCode;
+#else
+typedef uint32_t MCode;
+#endif
 
 /* Stack snapshot header. */
 typedef struct SnapShot {
@@ -252,6 +257,13 @@ enum {
 #define lj_resetsplit(J)	UNUSED(J)
 #endif
 
+/* Exit stubs. */
+#if LJ_TARGET_X86ORX64
+/* Limited by the range of a short fwd jump (127): (2+2)*(32-1)-2 = 122. */
+#define EXITSTUB_SPACING	(2+2)
+#define EXITSTUBS_PER_GROUP	32
+#endif
+
 /* Fold state is used to fold instructions on-the-fly. */
 typedef struct FoldState {
   IRIns ins;		/* Currently emitted instruction. */
@@ -318,7 +330,9 @@ typedef struct jit_State {
 
   int32_t param[JIT_P__MAX];  /* JIT engine parameters. */
 
+#if LJ_TARGET_X86ORX64
   MCode *exitstubgroup[LJ_MAX_EXITSTUBGR];  /* Exit stub group addresses. */
+#endif
 
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
@@ -344,7 +358,7 @@ typedef struct jit_State {
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
 
   TValue errinfo;	/* Additional info element for trace errors. */
-} jit_State;
+} LJ_ALIGN(16) jit_State;
 
 /* Trivial PRNG e.g. used for penalty randomization. */
 static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
@@ -354,21 +368,14 @@ static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
   return J->prngstate >> (32-bits);
 }
 
-/* Exit stubs. */
-#if LJ_TARGET_X86ORX64
-/* Limited by the range of a short fwd jump (127): (2+2)*(32-1)-2 = 122. */
-#define EXITSTUB_SPACING	(2+2)
-#define EXITSTUBS_PER_GROUP	32
-#else
-#error "Missing CPU-specific exit stub definitions"
-#endif
-
+#ifdef EXITSTUBS_PER_GROUP
 /* Return the address of an exit stub. */
 static LJ_AINLINE MCode *exitstub_addr(jit_State *J, ExitNo exitno)
 {
   lua_assert(J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] != NULL);
-  return J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] +
-	 EXITSTUB_SPACING*(exitno % EXITSTUBS_PER_GROUP);
+  return (MCode *)((char *)J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] +
+		   EXITSTUB_SPACING*(exitno % EXITSTUBS_PER_GROUP));
 }
+#endif
 
 #endif

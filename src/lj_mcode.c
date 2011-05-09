@@ -274,7 +274,7 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
   } else {
     MCode *mc = J->mcarea;
     /* Try current area first to use the protection cache. */
-    if (ptr >= mc && ptr < mc + J->szmcarea) {
+    if (ptr >= mc && ptr < (MCode *)((char *)mc + J->szmcarea)) {
       mcode_protect(J, MCPROT_GEN);
       return mc;
     }
@@ -282,7 +282,7 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
     for (;;) {
       mc = ((MCLink *)mc)->next;
       lua_assert(mc != NULL);
-      if (ptr >= mc && ptr < mc + ((MCLink *)mc)->size) {
+      if (ptr >= mc && ptr < (MCode *)((char *)mc + ((MCLink *)mc)->size)) {
 	mcode_setprot(mc, ((MCLink *)mc)->size, MCPROT_GEN);
 	return mc;
       }

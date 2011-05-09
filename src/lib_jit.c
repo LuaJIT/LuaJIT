@@ -368,12 +368,16 @@ LJLIB_CF(jit_util_tracemc)
 /* local addr = jit.util.traceexitstub(idx) */
 LJLIB_CF(jit_util_traceexitstub)
 {
+#ifdef EXITSTUBS_PER_GROUP
   ExitNo exitno = (ExitNo)lj_lib_checkint(L, 1);
   jit_State *J = L2J(L);
   if (exitno < EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR) {
     setintptrV(L->top-1, (intptr_t)(void *)exitstub_addr(J, exitno));
     return 1;
   }
+#else
+  UNUSED(L);
+#endif
   return 0;
 }
 
