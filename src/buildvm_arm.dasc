@@ -2205,7 +2205,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   mov CARG2, CARG1
     |  tst RA, #1<<MM_eq
     |  beq ->vmeta_equal		// 'no __eq' flag not set?
-    if (!vk) {
+    if (vk) {
+      |  b <2
+    } else {
       |2:  // Branch if different.
       |  sub PC, RB, #0x20000
       |1:  // Same.
