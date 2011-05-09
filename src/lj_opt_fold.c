@@ -1647,16 +1647,13 @@ LJFOLDF(comm_bxor)
 static TRef kfold_xload(jit_State *J, IRIns *ir, const void *p)
 {
   int32_t k;
-#if !LJ_TARGET_X86ORX64
-#error "Missing support for unaligned loads"
-#endif
   switch (irt_type(ir->t)) {
   case IRT_NUM: return lj_ir_knum_u64(J, *(uint64_t *)p);
   case IRT_I8: k = (int32_t)*(int8_t *)p; break;
   case IRT_U8: k = (int32_t)*(uint8_t *)p; break;
-  case IRT_I16: k = (int32_t)*(int16_t *)p; break;
-  case IRT_U16: k = (int32_t)*(uint16_t *)p; break;
-  case IRT_INT: case IRT_U32: k = *(int32_t *)p; break;
+  case IRT_I16: k = (int32_t)(int16_t)lj_getu16(p); break;
+  case IRT_U16: k = (int32_t)(uint16_t)lj_getu16(p); break;
+  case IRT_INT: case IRT_U32: k = (int32_t)lj_getu32(p); break;
   case IRT_I64: case IRT_U64: return lj_ir_kint64(J, *(uint64_t *)p);
   default: return 0;
   }

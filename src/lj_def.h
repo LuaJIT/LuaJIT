@@ -184,6 +184,28 @@ static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
 #error "missing define for lj_bswap()"
 #endif
 
+typedef union __attribute__((packed)) Unaligned16 {
+  uint16_t u;
+  uint8_t b[2];
+} Unaligned16;
+
+typedef union __attribute__((packed)) Unaligned32 {
+  uint32_t u;
+  uint8_t b[4];
+} Unaligned32;
+
+/* Unaligned load of uint16_t. */
+static LJ_AINLINE uint16_t lj_getu16(const void *p)
+{
+  return ((const Unaligned16 *)p)->u;
+}
+
+/* Unaligned load of uint32_t. */
+static LJ_AINLINE uint32_t lj_getu32(const void *p)
+{
+  return ((const Unaligned32 *)p)->u;
+}
+
 #elif defined(_MSC_VER)
 
 #define LJ_NORET	__declspec(noreturn)
@@ -207,6 +229,10 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 
 #define lj_bswap(x)	(_byteswap_ulong((x)))
 #define lj_bswap64(x)	(_byteswap_uint64((x)))
+
+/* MSVC is only supported on x86/x64, where unaligned loads are always ok. */
+#define lj_getu16(p)	(*(uint16_t *)(p))
+#define lj_getu32(p)	(*(uint32_t *)(p))
 
 #else
 #error "missing defines for your compiler"
