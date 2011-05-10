@@ -191,6 +191,7 @@ int lj_record_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
 /* Loop event. */
 typedef enum {
   LOOPEV_LEAVE,		/* Loop is left or not entered. */
+  LOOPEV_ENTERLO,	/* Loop is entered with a low iteration count left. */
   LOOPEV_ENTER		/* Loop is entered. */
 } LoopEvent;
 
@@ -316,10 +317,16 @@ static LoopEvent rec_for_iter(IROp *op, cTValue *o, int isforl)
   if (isforl)
     idxv += stepv;
   if (rec_for_direction(&o[FORL_STEP])) {
-    if (idxv <= stopv) { *op = IR_LE; return LOOPEV_ENTER; }
+    if (idxv <= stopv) {
+      *op = IR_LE;
+      return idxv + 2*stepv > stopv ? LOOPEV_ENTERLO : LOOPEV_ENTER;
+    }
     *op = IR_GT; return LOOPEV_LEAVE;
   } else {
-    if (stopv <= idxv) { *op = IR_GE; return LOOPEV_ENTER; }
+    if (stopv <= idxv) {
+      *op = IR_GE;
+      return idxv + 2*stepv < stopv ? LOOPEV_ENTERLO : LOOPEV_ENTER;
+    }
     *op = IR_LT; return LOOPEV_LEAVE;
   }
 }
@@ -522,7 +529,8 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
       */
       if (!innerloopleft(J, pc))
 	lj_trace_err(J, LJ_TRERR_LINNER);  /* Root trace hit an inner loop. */
-      if ((J->loopref && J->cur.nins - J->loopref > 24) || --J->loopunroll < 0)
+      if ((ev != LOOPEV_ENTERLO &&
+	   J->loopref && J->cur.nins - J->loopref > 24) || --J->loopunroll < 0)
 	lj_trace_err(J, LJ_TRERR_LUNROLL);  /* Limit loop unrolling. */
       J->loopref = J->cur.nins;
     }
