@@ -41,7 +41,9 @@ typedef struct ASMState {
   IRIns *ir;		/* Copy of pointer to IR instructions/constants. */
   jit_State *J;		/* JIT compiler state. */
 
+#if LJ_TARGET_X86ORX64
   x86ModRM mrm;		/* Fused x86 address operand. */
+#endif
 
   RegSet freeset;	/* Set of free registers. */
   RegSet modset;	/* Set of registers modified inside the loop. */
@@ -77,7 +79,7 @@ typedef struct ASMState {
   MCode *mctop;		/* Top of generated MCode. */
   MCode *mcloop;	/* Pointer to loop MCode (or NULL). */
   MCode *invmcp;	/* Points to invertible loop branch (or NULL). */
-  MCode *testmcp;	/* Pending opportunity to remove test r,r. */
+  MCode *flagmcp;	/* Pending opportunity to merge flag setting ins. */
   MCode *realign;	/* Realign loop if not NULL. */
 
   IRRef1 phireg[RID_MAX];  /* PHI register references. */
@@ -102,10 +104,6 @@ typedef struct ASMState {
   ((o) == IR_ALOAD || (o) == IR_HLOAD || (o) == IR_ULOAD || \
    (o) == IR_FLOAD || (o) == IR_XLOAD || (o) == IR_SLOAD || (o) == IR_VLOAD)
 
-/* Instruction selection for XMM moves. */
-#define XMM_MOVRR(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVSD : XO_MOVAPS)
-#define XMM_MOVRM(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVLPD : XO_MOVSD)
-
 /* Sparse limit checks using a red zone before the actual limit. */
 #define MCLIM_REDZONE	64
 #define checkmclim(as) \
@@ -116,7 +114,23 @@ static LJ_NORET LJ_NOINLINE void asm_mclimit(ASMState *as)
   lj_mcode_limiterr(as->J, (size_t)(as->mctop - as->mcp + 4*MCLIM_REDZONE));
 }
 
-/* -- Emit x86 instructions ----------------------------------------------- */
+/* Arch-specific field offsets. */
+static const uint8_t field_ofs[IRFL__MAX+1] = {
+#define FLOFS(name, ofs)	(uint8_t)(ofs),
+IRFLDEF(FLOFS)
+#undef FLOFS
+  0
+};
+
+/* Define this if you want to run LuaJIT with Valgrind. */
+#ifdef LUAJIT_USE_VALGRIND
+#include <valgrind/valgrind.h>
+#define VG_INVALIDATE(p, sz)	VALGRIND_DISCARD_TRANSLATIONS(p, sz)
+#else
+#define VG_INVALIDATE(p, sz)	((void)0)
+#endif
+
+/* -- Emit basic instructions --------------------------------------------- */
 
 #define MODRM(mode, r1, r2)	((MCode)((mode)+(((r1)&7)<<3)+((r2)&7)))
 
@@ -338,16 +352,6 @@ static void emit_mrm(ASMState *as, x86Op xo, Reg rr, Reg rb)
   as->mcp = emit_opm(xo, mode, rr, rb, p, 0);
 }
 
-static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
-{
-  if (ofs) {
-    if ((as->flags & JIT_F_LEA_AGU))
-      emit_rmro(as, XO_LEA, r, r, ofs);
-    else
-      emit_gri(as, XG_ARITHi(XOg_ADD), r, ofs);
-  }
-}
-
 /* op rm/mrm, i */
 static void emit_gmrmi(ASMState *as, x86Group xg, Reg rb, int32_t i)
 {
@@ -362,7 +366,11 @@ static void emit_gmrmi(ASMState *as, x86Group xg, Reg rb, int32_t i)
   emit_mrm(as, xo, (Reg)(xg & 7) | (rb & REX_64), (rb & ~REX_64));
 }
 
-/* -- Emit moves ---------------------------------------------------------- */
+/* -- Emit loads/stores --------------------------------------------------- */
+
+/* Instruction selection for XMM moves. */
+#define XMM_MOVRR(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVSD : XO_MOVAPS)
+#define XMM_MOVRM(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVLPD : XO_MOVSD)
 
 /* mov [base+ofs], i */
 static void emit_movmroi(ASMState *as, Reg base, int32_t ofs, int32_t i)
@@ -435,7 +443,7 @@ static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
     emit_rma(as, XMM_MOVRM(as), r, &tv->n);
 }
 
-/* -- Emit branches ------------------------------------------------------- */
+/* -- Emit control-flow instructions -------------------------------------- */
 
 /* Label for short jumps. */
 typedef MCode *MCLabel;
@@ -520,6 +528,59 @@ static void emit_call_(ASMState *as, MCode *target)
 
 #define emit_call(as, f)	emit_call_(as, (MCode *)(void *)(f))
 
+/* -- Emit generic operations --------------------------------------------- */
+
+/* Use 64 bit operations to handle 64 bit IR types. */
+#if LJ_64
+#define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
+#else
+#define REX_64IR(ir, r)		(r)
+#endif
+
+/* Generic move between two regs. */
+static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
+{
+  UNUSED(ir);
+  if (dst < RID_MAX_GPR)
+    emit_rr(as, XO_MOV, REX_64IR(ir, dst), src);
+  else
+    emit_rr(as, XMM_MOVRR(as), dst, src);
+}
+
+/* Generic load of register from stack slot. */
+static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+{
+  if (r < RID_MAX_GPR)
+    emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
+  else
+    emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS, r, RID_ESP, ofs);
+}
+
+/* Generic store of register to stack slot. */
+static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+{
+  if (r < RID_MAX_GPR)
+    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), RID_ESP, ofs);
+  else
+    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto, r, RID_ESP, ofs);
+}
+
+/* Add offset to pointer. */
+static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
+{
+  if (ofs) {
+    if ((as->flags & JIT_F_LEA_AGU))
+      emit_rmro(as, XO_LEA, r, r, ofs);
+    else
+      emit_gri(as, XG_ARITHi(XOg_ADD), r, ofs);
+  }
+}
+
+#define emit_spsub(as, ofs)	emit_addptr(as, RID_ESP|REX_64, -(ofs))
+
+/* Prefer rematerialization of BASE/L from global_State over spills. */
+#define emit_canremat(ref)	((ref) <= REF_BASE)
+
 /* -- Register allocator debugging ---------------------------------------- */
 
 /* #define LUAJIT_DEBUG_RA */
@@ -533,7 +594,7 @@ static void emit_call_(ASMState *as, MCode *target)
 static const char *const ra_regname[] = {
   GPRDEF(RIDNAME)
   FPRDEF(RIDNAME)
-  "mrm",
+  VRIDDEF(RIDNAME)
   NULL
 };
 #undef RIDNAME
@@ -591,7 +652,7 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 	p += sprintf(p, "K%03d", REF_BIAS - ref);
     } else if (e[1] == 's') {
       uint32_t slot = va_arg(argp, uint32_t);
-      p += sprintf(p, "[esp+0x%x]", sps_scale(slot));
+      p += sprintf(p, "[sp+0x%x]", sps_scale(slot));
     } else {
       lua_assert(0);
     }
@@ -634,14 +695,17 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 /* Setup register allocator. */
 static void ra_setup(ASMState *as)
 {
+  Reg r;
   /* Initially all regs (except the stack pointer) are free for use. */
-  as->freeset = RSET_ALL;
+  as->freeset = RSET_INIT;
   as->modset = RSET_EMPTY;
   as->weakset = RSET_EMPTY;
   as->phiset = RSET_EMPTY;
   memset(as->phireg, 0, sizeof(as->phireg));
   memset(as->cost, 0, sizeof(as->cost));
-  as->cost[RID_ESP] = REGCOST(~0u, 0u);
+  for (r = RID_MIN_GPR; r < RID_MAX; r++)
+    if (!rset_test(RSET_INIT, r))
+      as->cost[r] = REGCOST(~0u, 0u);
 }
 
 /* Rematerialize constants. */
@@ -655,11 +719,11 @@ static Reg ra_rematk(ASMState *as, IRIns *ir)
   RA_DBGX((as, "remat     $i $r", ir, r));
   if (ir->o == IR_KNUM) {
     emit_loadn(as, r, ir_knum(ir));
-  } else if (ir->o == IR_BASE) {
+  } else if (emit_canremat(REF_BASE) && ir->o == IR_BASE) {
     ra_sethint(ir->r, RID_BASE);  /* Restore BASE register hint. */
     emit_getgl(as, r, jit_base);
-  } else if (ir->o == IR_KPRI) {  /* REF_NIL stores ASMREF_L register. */
-    lua_assert(irt_isnil(ir->t));
+  } else if (emit_canremat(ASMREF_L) && ir->o == IR_KPRI) {
+    lua_assert(irt_isnil(ir->t));  /* REF_NIL stores ASMREF_L register. */
     emit_getgl(as, r, jit_L);
 #if LJ_64
   } else if (ir->o == IR_KINT64) {
@@ -708,28 +772,11 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
   return r;
 }
 
-/* Use 64 bit operations to handle 64 bit IR types. */
-#if LJ_64
-#define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
-#else
-#define REX_64IR(ir, r)		(r)
-#endif
-
-/* Generic move between two regs. */
-static void ra_movrr(ASMState *as, IRIns *ir, Reg r1, Reg r2)
-{
-  UNUSED(ir);
-  if (r1 < RID_MAX_GPR)
-    emit_rr(as, XO_MOV, REX_64IR(ir, r1), r2);
-  else
-    emit_rr(as, XMM_MOVRR(as), r1, r2);
-}
-
 /* Restore a register (marked as free). Rematerialize or force a spill. */
 static Reg ra_restore(ASMState *as, IRRef ref)
 {
   IRIns *ir = IR(ref);
-  if (irref_isk(ref) || ref == REF_BASE) {
+  if (emit_canremat(ref)) {
     return ra_rematk(as, ir);
   } else {
     int32_t ofs = ra_spill(as, ir);  /* Force a spill slot. */
@@ -740,11 +787,7 @@ static Reg ra_restore(ASMState *as, IRRef ref)
     if (!rset_test(as->weakset, r)) {  /* Only restore non-weak references. */
       ra_modified(as, r);
       RA_DBGX((as, "restore   $i $r", ir, r));
-      if (r < RID_MAX_GPR)
-	emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
-      else
-	emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
-		  r, RID_ESP, ofs);
+      emit_spload(as, ir, r, ofs);
     }
     return r;
   }
@@ -754,16 +797,13 @@ static Reg ra_restore(ASMState *as, IRRef ref)
 static void ra_save(ASMState *as, IRIns *ir, Reg r)
 {
   RA_DBGX((as, "save      $i $r", ir, r));
-  if (r < RID_MAX_GPR)
-    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), RID_ESP, sps_scale(ir->s));
-  else
-    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto,
-	      r, RID_ESP, sps_scale(ir->s));
+  emit_spstore(as, ir, r, sps_scale(ir->s));
 }
 
-#define MINCOST(r) \
-  if (LJ_LIKELY(allow&RID2RSET(r)) && as->cost[r] < cost) \
-    cost = as->cost[r]
+#define MINCOST(name) \
+  if (rset_test(RSET_ALL, RID_##name) && \
+      LJ_LIKELY(allow&RID2RSET(RID_##name)) && as->cost[RID_##name] < cost) \
+    cost = as->cost[RID_##name];
 
 /* Evict the register with the lowest cost, forcing a restore. */
 static Reg ra_evict(ASMState *as, RegSet allow)
@@ -772,19 +812,9 @@ static Reg ra_evict(ASMState *as, RegSet allow)
   RegCost cost = ~(RegCost)0;
   lua_assert(allow != RSET_EMPTY);
   if (allow < RID2RSET(RID_MAX_GPR)) {
-    MINCOST(RID_EAX);MINCOST(RID_ECX);MINCOST(RID_EDX);MINCOST(RID_EBX);
-    MINCOST(RID_EBP);MINCOST(RID_ESI);MINCOST(RID_EDI);
-#if LJ_64
-    MINCOST(RID_R8D);MINCOST(RID_R9D);MINCOST(RID_R10D);MINCOST(RID_R11D);
-    MINCOST(RID_R12D);MINCOST(RID_R13D);MINCOST(RID_R14D);MINCOST(RID_R15D);
-#endif
+    GPRDEF(MINCOST)
   } else {
-    MINCOST(RID_XMM0);MINCOST(RID_XMM1);MINCOST(RID_XMM2);MINCOST(RID_XMM3);
-    MINCOST(RID_XMM4);MINCOST(RID_XMM5);MINCOST(RID_XMM6);MINCOST(RID_XMM7);
-#if LJ_64
-    MINCOST(RID_XMM8);MINCOST(RID_XMM9);MINCOST(RID_XMM10);MINCOST(RID_XMM11);
-    MINCOST(RID_XMM12);MINCOST(RID_XMM13);MINCOST(RID_XMM14);MINCOST(RID_XMM15);
-#endif
+    FPRDEF(MINCOST)
   }
   ref = regcost_ref(cost);
   lua_assert(ref >= as->T->nk && ref < as->T->nins);
@@ -836,7 +866,7 @@ static void ra_evictk(ASMState *as)
   while (work) {
     Reg r = rset_pickbot(work);
     IRRef ref = regcost_ref(as->cost[r]);
-    if (irref_isk(ref)) {
+    if (emit_canremat(ref)) {
       ra_rematk(as, IR(ref));
       checkmclim(as);
     }
@@ -861,7 +891,7 @@ static Reg ra_allocref(ASMState *as, IRRef ref, RegSet allow)
       if (rset_test(pick, r))  /* Use hint register if possible. */
 	goto found;
       /* Rematerialization is cheaper than missing a hint. */
-      if (rset_test(allow, r) && irref_isk(regcost_ref(as->cost[r]))) {
+      if (rset_test(allow, r) && emit_canremat(regcost_ref(as->cost[r]))) {
 	ra_rematk(as, IR(regcost_ref(as->cost[r])));
 	goto found;
       }
@@ -873,11 +903,9 @@ static Reg ra_allocref(ASMState *as, IRRef ref, RegSet allow)
 	pick &= ~as->modset;
       r = rset_pickbot(pick);  /* Reduce conflicts with inverse allocation. */
     } else {
-#if LJ_64
       /* We've got plenty of regs, so get callee-save regs if possible. */
-      if ((pick & ~RSET_SCRATCH))
+      if (RID_NUM_GPR > 8 && (pick & ~RSET_SCRATCH))
 	pick &= ~RSET_SCRATCH;
-#endif
       r = rset_picktop(pick);
     }
   } else {
@@ -916,7 +944,7 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   rset_clear(as->freeset, up);  /* ... and 'up' is now allocated. */
   ra_noweak(as, up);
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
-  ra_movrr(as, ir, down, up);  /* Backwards codegen needs inverse move. */
+  emit_movrr(as, ir, down, up);  /* Backwards codegen needs inverse move. */
   if (!ra_hasspill(IR(ref)->s)) {  /* Add the rename to the IR. */
     lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), ref, as->snapno);
     ren = tref_ref(lj_ir_emit(as->J));
@@ -949,7 +977,7 @@ static void ra_destreg(ASMState *as, IRIns *ir, Reg r)
   Reg dest = ra_dest(as, ir, RID2RSET(r));
   if (dest != r) {
     ra_scratch(as, RID2RSET(r));
-    ra_movrr(as, ir, dest, r);
+    emit_movrr(as, ir, dest, r);
   }
 }
 
@@ -993,7 +1021,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
       ra_modified(as, left);
       ra_rename(as, left, dest);
     } else {
-      ra_movrr(as, ir, dest, left);
+      emit_movrr(as, ir, dest, left);
     }
   }
 }
@@ -1151,14 +1179,6 @@ static void asm_guardcc(ASMState *as, int cc)
 }
 
 /* -- Memory operand fusion ----------------------------------------------- */
-
-/* Arch-specific field offsets. */
-static const uint8_t field_ofs[IRFL__MAX+1] = {
-#define FLOFS(name, ofs)	(uint8_t)(ofs),
-IRFLDEF(FLOFS)
-#undef FLOFS
-  0
-};
 
 /* Limit linear search to this distance. Avoids O(n^2) behavior. */
 #define CONFLICT_SEARCH_LIM	31
@@ -1503,7 +1523,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
 	if (ra_hasreg(ir->r)) {
 	  ra_noweak(as, ir->r);
-	  ra_movrr(as, ir, r, ir->r);
+	  emit_movrr(as, ir, r, ir->r);
 	} else {
 	  ra_allocref(as, ref, RID2RSET(r));
 	}
@@ -2880,8 +2900,8 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   RegSet allow = RSET_GPR;
   Reg dest, right;
   int32_t k = 0;
-  if (as->testmcp == as->mcp) {  /* Drop test r,r instruction. */
-    as->testmcp = NULL;
+  if (as->flagmcp == as->mcp) {  /* Drop test r,r instruction. */
+    as->flagmcp = NULL;
     as->mcp += (LJ_64 && *as->mcp != XI_TEST) ? 3 : 2;
   }
   right = IR(rref)->r;
@@ -2996,7 +3016,7 @@ static void asm_add(ASMState *as, IRIns *ir)
 {
   if (irt_isnum(ir->t))
     asm_fparith(as, ir, XO_ADDSD);
-  else if ((as->flags & JIT_F_LEA_AGU) || as->testmcp == as->mcp ||
+  else if ((as->flags & JIT_F_LEA_AGU) || as->flagmcp == as->mcp ||
 	   irt_is64(ir->t) || !asm_lea(as, ir))
     asm_intarith(as, ir, XOg_ADD);
 }
@@ -3215,7 +3235,7 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
 	  /* Use test r,r instead of cmp r,0. */
 	  emit_rr(as, XO_TEST, r64 + left, left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
-	    as->testmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
+	    as->flagmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
 	  emit_gmrmi(as, XG_ARITHi(XOg_CMP), r64 + left, imm);
 	}
@@ -3273,7 +3293,7 @@ static void asm_comp_int64(ASMState *as, IRIns *ir)
 
   /* All register allocations must be performed _before_ this point. */
   l_around = emit_label(as);
-  as->invmcp = as->testmcp = NULL;  /* Cannot use these optimizations. */
+  as->invmcp = as->flagmcp = NULL;  /* Cannot use these optimizations. */
 
   /* Loword comparison and branch. */
   asm_guardcc(as, cc >> 4);  /* Always use unsigned compare for loword. */
@@ -3620,7 +3640,7 @@ static void asm_phi(ASMState *as, IRIns *ir)
       r = ra_allocref(as, ir->op2, allow);
     } else {  /* Duplicate right PHI, need a copy (rare). */
       r = ra_scratch(as, allow);
-      ra_movrr(as, irr, r, irr->r);
+      emit_movrr(as, irr, r, irr->r);
     }
     ir->r = (uint8_t)r;
     rset_set(as->phiset, r);
@@ -3690,7 +3710,7 @@ static void asm_loop(ASMState *as)
   if (as->gcsteps)
     asm_gc_check(as);
   /* LOOP marks the transition from the variant to the invariant part. */
-  as->testmcp = as->invmcp = NULL;
+  as->flagmcp = as->invmcp = NULL;
   as->sectref = 0;
   if (!neverfuse(as)) as->fuseref = 0;
   asm_phi_shuffle(as);
@@ -3732,7 +3752,7 @@ static void asm_head_root(ASMState *as)
   emit_setgli(as, vmstate, (int32_t)as->T->traceno);
   spadj = asm_stack_adjust(as);
   as->T->spadjust = (uint16_t)spadj;
-  emit_addptr(as, RID_ESP|REX_64, -spadj);
+  emit_spsub(as, spadj);
   /* Root traces assume a checked stack for the starting proto. */
   as->T->topslot = gcref(as->T->startpt)->pt.framesize;
 }
@@ -3846,7 +3866,7 @@ static void asm_head_side(ASMState *as)
 
   /* Store trace number and adjust stack frame relative to the parent. */
   emit_setgli(as, vmstate, (int32_t)as->T->traceno);
-  emit_addptr(as, RID_ESP|REX_64, -spdelta);
+  emit_spsub(as, spdelta);
 
   /* Restore target registers from parent spill slots. */
   if (pass3) {
@@ -3859,10 +3879,7 @@ static void asm_head_side(ASMState *as)
       if (ra_hasspill(regsp_spill(rs))) {
 	int32_t ofs = sps_scale(regsp_spill(rs));
 	ra_free(as, r);
-	if (r < RID_MAX_GPR)
-	  emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
-	else
-	  emit_rmro(as, XMM_MOVRM(as), r, RID_ESP, ofs);
+	emit_spload(as, ir, r, ofs);
 	checkmclim(as);
       }
     }
@@ -3879,7 +3896,7 @@ static void asm_head_side(ASMState *as)
       rset_clear(live, rp);
       rset_clear(allow, rp);
       ra_free(as, ir->r);
-      ra_movrr(as, ir, ir->r, rp);
+      emit_movrr(as, ir, ir->r, rp);
       checkmclim(as);
     }
 
@@ -4003,6 +4020,30 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   for (q = as->mctop-1; q >= p; q--)
     *q = XI_NOP;
   as->mctop = p;
+}
+
+/* Prepare tail of code. */
+static void asm_tail_prep(ASMState *as)
+{
+  MCode *p = as->mctop;
+  /* Realign and leave room for backwards loop branch or exit branch. */
+  if (as->realign) {
+    int i = ((int)(intptr_t)as->realign) & 15;
+    /* Fill unused mcode tail with NOPs to make the prefetcher happy. */
+    while (i-- > 0)
+      *--p = XI_NOP;
+    as->mctop = p;
+    p -= (as->loopinv ? 5 : 2);  /* Space for short/near jmp. */
+  } else {
+    p -= 5;  /* Space for exit branch (near jmp). */
+  }
+  if (as->loopref) {
+    as->invmcp = as->mcp = p;
+  } else {
+    /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
+    as->mcp = p - (((as->flags & JIT_F_LEA_AGU) ? 7 : 6)  + (LJ_64 ? 1 : 0));
+    as->invmcp = NULL;
+  }
 }
 
 /* -- Instruction dispatch ------------------------------------------------ */
@@ -4160,22 +4201,6 @@ static void asm_ir(ASMState *as, IRIns *ir)
   }
 }
 
-/* Assemble a trace in linear backwards order. */
-static void asm_trace(ASMState *as)
-{
-  for (as->curins--; as->curins > as->stopins; as->curins--) {
-    IRIns *ir = IR(as->curins);
-    lua_assert(!(LJ_32 && irt_isint64(ir->t)));  /* Handled by SPLIT. */
-    if (!ra_used(ir) && !ir_sideeff(ir) && (as->flags & JIT_F_OPT_DCE))
-      continue;  /* Dead-code elimination can be soooo easy. */
-    if (irt_isguard(ir->t))
-      asm_snap_prep(as);
-    RA_DBG_REF();
-    checkmclim(as);
-    asm_ir(as, ir);
-  }
-}
-
 /* -- Trace setup --------------------------------------------------------- */
 
 /* Ensure there are enough stack slots for call arguments. */
@@ -4215,9 +4240,16 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 #endif
 }
 
-/* Clear reg/sp for all instructions and add register hints. */
-static void asm_setup_regsp(ASMState *as, GCtrace *T)
+/* Target-specific setup. */
+static void asm_setup_target(ASMState *as)
 {
+  asm_exitstub_setup(as, as->T->nsnap);
+}
+
+/* Clear reg/sp for all instructions and add register hints. */
+static void asm_setup_regsp(ASMState *as)
+{
+  GCtrace *T = as->T;
   IRRef i, nins;
   int inloop;
 
@@ -4289,10 +4321,8 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 #endif
     /* C calls evict all scratch regs and return results in RID_RET. */
     case IR_SNEW: case IR_XSNEW: case IR_NEWREF:
-#if !LJ_64
-      if (as->evenspill < 3)  /* lj_str_new and lj_tab_newkey need 3 args. */
-	as->evenspill = 3;
-#endif
+      if (REGARG_NUMGPR < 3 && as->evenspill < 3)
+	as->evenspill = 3;  /* lj_str_new and lj_tab_newkey need 3 args. */
     case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)
@@ -4304,12 +4334,18 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
       break;
     case IR_POW:
       if (irt_isnum(ir->t)) {
+#if LJ_TARGET_X86ORX64
 	ir->prev = REGSP_HINT(RID_XMM0);
 	if (inloop)
 	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
+#else
+	ir->prev = REGSP_HINT(RID_FPRET);
+	if (inloop)
+	  as->modset |= RSET_SCRATCH;
+#endif
 	continue;
       }
-      /* fallthrough */
+      /* fallthrough for integer POW */
     case IR_DIV: case IR_MOD:
 #if LJ_64 && LJ_HASFFI
       if (!irt_isnum(ir->t)) {
@@ -4321,6 +4357,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 #endif
       break;
     case IR_FPMATH:
+#if LJ_TARGET_X86ORX64
       if (ir->op2 == IRFPM_EXP2) {  /* May be joined to lj_vm_pow_sse. */
 	ir->prev = REGSP_HINT(RID_XMM0);
 #if !LJ_64
@@ -4337,7 +4374,14 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	continue;
       }
       break;
-    /* Non-constant shift counts need to be in RID_ECX. */
+#else
+      ir->prev = REGSP_HINT(RID_FPRET);
+      if (inloop)
+	as->modset |= RSET_SCRATCH;
+      continue;
+#endif
+#if LJ_TARGET_X86ORX64
+    /* Non-constant shift counts need to be in RID_ECX on x86/x64. */
     case IR_BSHL: case IR_BSHR: case IR_BSAR: case IR_BROL: case IR_BROR:
       if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r)) {
 	IR(ir->op2)->r = REGSP_HINT(RID_ECX);
@@ -4345,6 +4389,7 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 	  rset_set(as->modset, RID_ECX);
       }
       break;
+#endif
     /* Do not propagate hints across type conversions. */
     case IR_CONV: case IR_TOBIT:
       break;
@@ -4365,14 +4410,6 @@ static void asm_setup_regsp(ASMState *as, GCtrace *T)
 }
 
 /* -- Assembler core ------------------------------------------------------ */
-
-/* Define this if you want to run LuaJIT with Valgrind. */
-#ifdef LUAJIT_USE_VALGRIND
-#include <valgrind/valgrind.h>
-#define VG_INVALIDATE(p, sz)	VALGRIND_DISCARD_TRANSLATIONS(p, sz)
-#else
-#define VG_INVALIDATE(p, sz)	((void)0)
-#endif
 
 /* Assemble a trace. */
 void lj_asm_trace(jit_State *J, GCtrace *T)
@@ -4397,45 +4434,41 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->mctop = lj_mcode_reserve(J, &as->mcbot);  /* Reserve MCode memory. */
   as->mcp = as->mctop;
   as->mclim = as->mcbot + MCLIM_REDZONE;
-  asm_exitstub_setup(as, T->nsnap);
+  asm_setup_target(as);
 
   do {
     as->mcp = as->mctop;
     as->curins = T->nins;
     RA_DBG_START();
     RA_DBGX((as, "===== STOP ====="));
-    /* Realign and leave room for backwards loop branch or exit branch. */
-    if (as->realign) {
-      int i = ((int)(intptr_t)as->realign) & 15;
-      MCode *p = as->mctop;
-      /* Fill unused mcode tail with NOPs to make the prefetcher happy. */
-      while (i-- > 0)
-	*--p = XI_NOP;
-      as->mctop = p;
-      as->mcp = p - (as->loopinv ? 5 : 2);  /* Space for short/near jmp. */
-    } else {
-      as->mcp = as->mctop - 5;  /* Space for exit branch (near jmp). */
-    }
-    as->invmcp = as->mcp;
+
+    /* General trace setup. Emit tail of trace. */
+    asm_tail_prep(as);
     as->mcloop = NULL;
-    as->testmcp = NULL;
+    as->flagmcp = NULL;
     as->topslot = 0;
     as->gcsteps = 0;
     as->sectref = as->loopref;
     as->fuseref = (as->flags & JIT_F_OPT_FUSE) ? as->loopref : FUSE_DISABLED;
-
-    /* Setup register allocation. */
-    asm_setup_regsp(as, T);
-
-    if (!as->loopref) {
-      /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
-      as->mcp -= ((as->flags & JIT_F_LEA_AGU) ? 7 : 6)  + (LJ_64 ? 1 : 0);
-      as->invmcp = NULL;
+    asm_setup_regsp(as);
+    if (!as->loopref)
       asm_tail_link(as);
+
+    /* Assemble a trace in linear backwards order. */
+    for (as->curins--; as->curins > as->stopins; as->curins--) {
+      IRIns *ir = IR(as->curins);
+      lua_assert(!(LJ_32 && irt_isint64(ir->t)));  /* Handled by SPLIT. */
+      if (!ra_used(ir) && !ir_sideeff(ir) && (as->flags & JIT_F_OPT_DCE))
+	continue;  /* Dead-code elimination can be soooo easy. */
+      if (irt_isguard(ir->t))
+	asm_snap_prep(as);
+      RA_DBG_REF();
+      checkmclim(as);
+      asm_ir(as, ir);
     }
-    asm_trace(as);
   } while (as->realign);  /* Retry in case the MCode needs to be realigned. */
 
+  /* Emit head of trace. */
   RA_DBG_REF();
   checkmclim(as);
   if (as->gcsteps) {
