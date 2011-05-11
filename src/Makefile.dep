@@ -53,7 +53,7 @@ lj_api.o: lj_api.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
 lj_asm.o: lj_asm.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
  lj_str.h lj_tab.h lj_frame.h lj_bc.h lj_ctype.h lj_ir.h lj_jit.h \
  lj_iropt.h lj_mcode.h lj_trace.h lj_dispatch.h lj_traceerr.h lj_snap.h \
- lj_asm.h lj_vm.h lj_target.h lj_target_*.h
+ lj_asm.h lj_vm.h lj_target.h lj_target_*.h lj_emit_*.h lj_asm_*.h
 lj_bc.o: lj_bc.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_bc.h \
  lj_bcdef.h
 lj_carith.o: lj_carith.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
@@ -177,7 +177,8 @@ ljamalg.o: ljamalg.c lua.h luaconf.h lauxlib.h lj_gc.c lj_obj.h lj_def.h \
  lj_opt_loop.c lj_snap.h lj_opt_split.c lj_mcode.c lj_mcode.h lj_snap.c \
  lj_target.h lj_target_*.h lj_record.c lj_record.h lj_ffrecord.h \
  lj_crecord.c lj_crecord.h lj_ffrecord.c lj_recdef.h lj_asm.c lj_asm.h \
- lj_trace.c lj_gdbjit.h lj_gdbjit.c lj_alloc.c lib_aux.c lib_base.c \
- lj_libdef.h lib_math.c lib_string.c lib_table.c lib_io.c lib_os.c \
- lib_package.c lib_debug.c lib_bit.c lib_jit.c lib_ffi.c lib_init.c
+ lj_emit_*.h lj_asm_*.h lj_trace.c lj_gdbjit.h lj_gdbjit.c lj_alloc.c \
+ lib_aux.c lib_base.c lj_libdef.h lib_math.c lib_string.c lib_table.c \
+ lib_io.c lib_os.c lib_package.c lib_debug.c lib_bit.c lib_jit.c \
+ lib_ffi.c lib_init.c
 luajit.o: luajit.c lua.h luaconf.h lauxlib.h lualib.h luajit.h lj_arch.h

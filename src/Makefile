@@ -482,7 +482,9 @@ depend:
 	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | \
 	  sed -e "s| [^ ]*/dasm_\S*\.h||g" \
 	      -e "s| buildvm_\S*\.h||g" \
-	      -e "s| lj_target_\S*\.h| lj_target_*.h|g" >Makefile.dep
+	      -e "s| lj_target_\S*\.h| lj_target_*.h|g" \
+	      -e "s| lj_emit_\S*\.h| lj_emit_*.h|g" \
+	      -e "s| lj_asm_\S*\.h| lj_asm_*.h|g" >Makefile.dep
 	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
 	  test -s $$file || $(HOST_RM) $$file; \
 	  done
