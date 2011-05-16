@@ -664,7 +664,6 @@ local function parse_load(params, nparams, n, op)
     end
   else
     local p1a, p2 = match(p1, "^([^,%s]*)%s*(.*)$")
-    local n = parse_gpr(p1a)
     op = op + parse_gpr(p1a) * 65536 + 0x01000000
     if p2 ~= "" then
       local imm = match(p2, "^,%s*#(.*)$")
