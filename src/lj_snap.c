@@ -392,8 +392,10 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  o->u32.lo = (uint32_t)*sps;
 	} else if (irt_isinteger(t)) {
 	  setintV(o, *sps);
-	} else if (!LJ_SOFTFP && irt_isnum(t)) {
+#if !LJ_SOFTFP
+	} else if (irt_isnum(t)) {
 	  o->u64 = *(uint64_t *)sps;
+#endif
 #if LJ_64
 	} else if (irt_islightud(t)) {
 	  /* 64 bit lightuserdata which may escape already has the tag bits. */
@@ -411,8 +413,10 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	  o->u32.lo = (uint32_t)ex->gpr[r-RID_MIN_GPR];
 	} else if (irt_isinteger(t)) {
 	  setintV(o, (int32_t)ex->gpr[r-RID_MIN_GPR]);
-	} else if (!LJ_SOFTFP && irt_isnum(t)) {
+#if !LJ_SOFTFP
+	} else if (irt_isnum(t)) {
 	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
+#endif
 #if LJ_64
 	} else if (irt_islightud(t)) {
 	  /* 64 bit lightuserdata which may escape already has the tag bits. */

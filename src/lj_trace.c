@@ -278,9 +278,7 @@ int lj_trace_flushall(lua_State *L)
   memset(J->penalty, 0, sizeof(J->penalty));
   /* Free the whole machine code and invalidate all exit stub groups. */
   lj_mcode_free(J);
-#ifdef EXITSTUBS_PER_GROUP
   memset(J->exitstubgroup, 0, sizeof(J->exitstubgroup));
-#endif
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "flush"));
   );
@@ -685,15 +683,58 @@ static TValue *trace_exit_cp(lua_State *L, lua_CFunction dummy, void *ud)
   return NULL;
 }
 
+#ifndef LUAJIT_DISABLE_VMEVENT
+/* Push all registers from exit state. */
+static void trace_exit_regs(lua_State *L, ExitState *ex)
+{
+  int32_t i;
+  setintV(L->top++, RID_NUM_GPR);
+  setintV(L->top++, RID_NUM_FPR);
+  for (i = 0; i < RID_NUM_GPR; i++) {
+    if (sizeof(ex->gpr[i]) == sizeof(int32_t))
+      setintV(L->top++, (int32_t)ex->gpr[i]);
+    else
+      setnumV(L->top++, (lua_Number)ex->gpr[i]);
+  }
+#if !LJ_SOFTFP
+  for (i = 0; i < RID_NUM_FPR; i++) {
+    setnumV(L->top, ex->fpr[i]);
+    if (LJ_UNLIKELY(tvisnan(L->top)))
+      setnanV(L->top);
+    L->top++;
+  }
+#endif
+}
+#endif
+
+#ifdef EXITSTATE_PCREG
+/* Determine trace number from pc of exit instruction. */
+static TraceNo trace_exit_find(jit_State *J, MCode *pc)
+{
+  TraceNo traceno;
+  for (traceno = 1; traceno < J->sizetrace; traceno++) {
+    GCtrace *T = traceref(J, traceno);
+    if (T && pc >= T->mcode && pc < (MCode *)((char *)T->mcode + T->szmcode))
+      return traceno;
+  }
+  lua_assert(0);
+  return 0;
+}
+#endif
+
 /* A trace exited. Restore interpreter state. */
 int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 {
   ERRNO_SAVE
   lua_State *L = J->L;
+  ExitState *ex = (ExitState *)exptr;
   ExitDataCP exd;
   int errcode;
   const BCIns *pc;
   void *cf;
+#ifdef EXITSTATE_PCREG
+  J->parent = trace_exit_find(J, (MCode *)(intptr_t)ex->gpr[EXITSTATE_PCREG]);
+#endif
   exd.J = J;
   exd.exptr = exptr;
   errcode = lj_vm_cpcall(L, NULL, &exd, trace_exit_cp);
@@ -701,25 +742,10 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
     return -errcode;  /* Return negated error code. */
 
   lj_vmevent_send(L, TEXIT,
-    ExitState *ex = (ExitState *)exptr;
-    int32_t i;
     lj_state_checkstack(L, 4+RID_NUM_GPR+RID_NUM_FPR+LUA_MINSTACK);
     setintV(L->top++, J->parent);
     setintV(L->top++, J->exitno);
-    setintV(L->top++, RID_NUM_GPR);
-    setintV(L->top++, RID_NUM_FPR);
-    for (i = 0; i < RID_NUM_GPR; i++) {
-      if (sizeof(ex->gpr[i]) == sizeof(int32_t))
-	setintV(L->top++, (int32_t)ex->gpr[i]);
-      else
-	setnumV(L->top++, (lua_Number)ex->gpr[i]);
-    }
-    for (i = 0; i < RID_NUM_FPR; i++) {
-      setnumV(L->top, ex->fpr[i]);
-      if (LJ_UNLIKELY(tvisnan(L->top)))
-	setnanV(L->top);
-      L->top++;
-    }
+    trace_exit_regs(L, ex);
   );
 
   pc = exd.pc;

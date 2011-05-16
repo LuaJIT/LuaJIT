@@ -1439,10 +1439,10 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 
   /* Set trace entry point before fixing up tail to allow link to self. */
   T->mcode = as->mcp;
-  T->mcloop = as->mcloop ? (MSize)(as->mcloop - as->mcp) : 0;
+  T->mcloop = as->mcloop ? (MSize)((char *)as->mcloop - (char *)as->mcp) : 0;
   if (!as->loopref)
     asm_tail_fixup(as, T->link);  /* Note: this may change as->mctop! */
-  T->szmcode = (MSize)(as->mctop - as->mcp);
+  T->szmcode = (MSize)((char *)as->mctop - (char *)as->mcp);
   VG_INVALIDATE(T->mcode, T->szmcode);
 }
 

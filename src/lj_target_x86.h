@@ -147,6 +147,10 @@ typedef struct {
   int32_t spill[256];		/* Spill slots. */
 } ExitState;
 
+/* Limited by the range of a short fwd jump (127): (2+2)*(32-1)-2 = 122. */
+#define EXITSTUB_SPACING	(2+2)
+#define EXITSTUBS_PER_GROUP	32
+
 /* -- x86 ModRM operand encoding ------------------------------------------ */
 
 typedef enum {

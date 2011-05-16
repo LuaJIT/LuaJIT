@@ -162,20 +162,7 @@ static void mcode_protect(jit_State *J, int prot)
 #define mcode_validptr(p)	((p) && (uintptr_t)(p) < 0xffff0000)
 #endif
 
-#if LJ_TARGET_X64
-#define MCODE_JUMPRANGE		31
-#elif LJ_TARGET_ARM
-#define MCODE_JUMPRANGE		26
-#else
-#define MCODE_JUMPRANGE		32
-#endif
-
-#if MCODE_JUMPRANGE == 32
-
-/* All 32 bit memory addresses are reachable by relative jumps. */
-#define mcode_alloc(J, sz)	mcode_alloc_at((J), 0, (sz), MCPROT_GEN)
-
-#else
+#ifdef LJ_TARGET_JUMPRANGE
 
 /* Get memory within relative jump distance of our code in 64 bit mode. */
 static void *mcode_alloc(jit_State *J, size_t sz)
@@ -184,7 +171,7 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   ** Try addresses within a distance of target-range/2+1MB..target+range/2-1MB.
   */
   uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
-  const uintptr_t range = (1u << MCODE_JUMPRANGE) - (1u << 21);
+  const uintptr_t range = (1u << LJ_TARGET_JUMPRANGE) - (1u << 21);
   /* First try a contiguous area below the last one. */
   uintptr_t hint = J->mcarea ? (uintptr_t)J->mcarea - sz : 0;
   int i;
@@ -207,6 +194,11 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
   return NULL;
 }
+
+#else
+
+/* All memory addresses are reachable by relative jumps. */
+#define mcode_alloc(J, sz)	mcode_alloc_at((J), 0, (sz), MCPROT_GEN)
 
 #endif
 

@@ -258,13 +258,6 @@ enum {
 #define lj_resetsplit(J)	UNUSED(J)
 #endif
 
-/* Exit stubs. */
-#if LJ_TARGET_X86ORX64
-/* Limited by the range of a short fwd jump (127): (2+2)*(32-1)-2 = 122. */
-#define EXITSTUB_SPACING	(2+2)
-#define EXITSTUBS_PER_GROUP	32
-#endif
-
 /* Fold state is used to fold instructions on-the-fly. */
 typedef struct FoldState {
   IRIns ins;		/* Currently emitted instruction. */
@@ -331,9 +324,7 @@ typedef struct jit_State {
 
   int32_t param[JIT_P__MAX];  /* JIT engine parameters. */
 
-#if LJ_TARGET_X86ORX64
   MCode *exitstubgroup[LJ_MAX_EXITSTUBGR];  /* Exit stub group addresses. */
-#endif
 
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
@@ -368,15 +359,5 @@ static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
   J->prngstate = J->prngstate * 1103515245 + 12345;
   return J->prngstate >> (32-bits);
 }
-
-#ifdef EXITSTUBS_PER_GROUP
-/* Return the address of an exit stub. */
-static LJ_AINLINE MCode *exitstub_addr(jit_State *J, ExitNo exitno)
-{
-  lua_assert(J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] != NULL);
-  return (MCode *)((char *)J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] +
-		   EXITSTUB_SPACING*(exitno % EXITSTUBS_PER_GROUP));
-}
-#endif
 
 #endif
