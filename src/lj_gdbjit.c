@@ -288,6 +288,9 @@ enum {
   DW_REG_8, DW_REG_9, DW_REG_10, DW_REG_11,
   DW_REG_12, DW_REG_13, DW_REG_14, DW_REG_15,
   DW_REG_RA,
+#elif LJ_TARGET_ARM
+  DW_REG_SP = 13,
+  DW_REG_RA = 14,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -355,6 +358,8 @@ static const ELFheader elfhdr_template = {
   .machine = 3,
 #elif LJ_TARGET_X64
   .machine = 62,
+#elif LJ_TARGET_ARM
+  .machine = 40,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -541,6 +546,13 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     /* Extra registers saved for JIT-compiled code. */
     DB(DW_CFA_offset|DW_REG_13); DUV(9);
     DB(DW_CFA_offset|DW_REG_12); DUV(10);
+#elif LJ_TARGET_ARM
+    {
+      int i;
+      for (i = 11; i >= 4; i--) {  /* R4-R11. */
+	DB(DW_CFA_offset|i); DUV(2+(11-i));
+      }
+    }
 #else
 #error "Unsupported target architecture"
 #endif
