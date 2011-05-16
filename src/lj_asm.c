@@ -729,7 +729,7 @@ static int32_t asm_stack_adjust(ASMState *as)
 {
   if (as->evenspill <= SPS_FIXED)
     return 0;
-  return sps_scale((as->evenspill - SPS_FIXED + 3) & ~3);
+  return sps_scale(sps_align(as->evenspill));
 }
 
 /* Must match with hash*() in lj_tab.c. */
