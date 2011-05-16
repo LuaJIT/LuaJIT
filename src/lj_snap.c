@@ -72,6 +72,8 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 	    (ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
 	  sn |= SNAP_NORESTORE;
       }
+      if (LJ_SOFTFP && !irref_isk(ref) && irt_isnum(ir->t))
+	sn |= SNAP_SOFTFPNUM;
       map[n++] = sn;
     }
   }
@@ -386,9 +388,11 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	rs = snap_renameref(T, snapno, ref, rs);
       if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
 	int32_t *sps = &ex->spill[regsp_spill(rs)];
-	if (irt_isinteger(t)) {
+	if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) {
+	  o->u32.lo = (uint32_t)*sps;
+	} else if (irt_isinteger(t)) {
 	  setintV(o, *sps);
-	} else if (irt_isnum(t)) {
+	} else if (!LJ_SOFTFP && irt_isnum(t)) {
 	  o->u64 = *(uint64_t *)sps;
 #if LJ_64
 	} else if (irt_islightud(t)) {
@@ -403,13 +407,12 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
       } else {  /* Restore from register. */
 	Reg r = regsp_reg(rs);
 	lua_assert(ra_hasreg(r));
-	if (irt_isinteger(t)) {
+	if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) {
+	  o->u32.lo = (uint32_t)ex->gpr[r-RID_MIN_GPR];
+	} else if (irt_isinteger(t)) {
 	  setintV(o, (int32_t)ex->gpr[r-RID_MIN_GPR]);
-	} else if (irt_isnum(t)) {
-	  if (RID_NUM_FPR)
-	    setnumV(o, ex->fpr[r-RID_MIN_FPR]);
-	  else
-	    setnumV(o, *(double *)&ex->gpr[r-RID_MIN_GPR]);
+	} else if (!LJ_SOFTFP && irt_isnum(t)) {
+	  setnumV(o, ex->fpr[r-RID_MIN_FPR]);
 #if LJ_64
 	} else if (irt_islightud(t)) {
 	  /* 64 bit lightuserdata which may escape already has the tag bits. */
@@ -420,6 +423,14 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	    setgcrefi(o->gcr, ex->gpr[r-RID_MIN_GPR]);
 	  setitype(o, irt_toitype(t));
 	}
+      }
+      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) {
+	rs = (ir+1)->prev;
+	if (LJ_UNLIKELY(bloomtest(rfilt, ref+1)))
+	  rs = snap_renameref(T, snapno, ref+1, rs);
+	o->u32.hi = (ra_hasspill(regsp_spill(rs))) ?
+	    (uint32_t)*&ex->spill[regsp_spill(rs)] :
+	    (uint32_t)ex->gpr[regsp_reg(rs)-RID_MIN_GPR];
       }
     }
   }

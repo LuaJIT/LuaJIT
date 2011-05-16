@@ -232,6 +232,8 @@
 #define LJ_HASFFI		1
 #endif
 
+#define LJ_SOFTFP		(!LJ_ARCH_HASFPU)
+
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
 #define LJ_LE			0
 #define LJ_BE			1

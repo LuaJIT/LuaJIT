@@ -786,18 +786,18 @@ static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
 
 /* -- Number to integer conversion ---------------------------------------- */
 
-#if !LJ_ARCH_HASFPU
+#if LJ_SOFTFP
 LJ_ASMF int32_t lj_vm_tobit(double x);
 #endif
 
 static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 {
-#if LJ_ARCH_HASFPU
+#if LJ_SOFTFP
+  return lj_vm_tobit(n);
+#else
   TValue o;
   o.n = n + 6755399441055744.0;  /* 2^52 + 2^51 */
   return (int32_t)o.u32.lo;
-#else
-  return lj_vm_tobit(n);
 #endif
 }
 
