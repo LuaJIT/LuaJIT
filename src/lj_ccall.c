@@ -524,6 +524,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       cc->fpr[nfpr-1].d[0] = cc->fpr[nfpr-2].d[1];  /* Split complex double. */
       cc->fpr[nfpr-2].d[1] = 0;
     }
+#else
+    UNUSED(isfp);
 #endif
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
