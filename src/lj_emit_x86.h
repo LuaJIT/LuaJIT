@@ -261,8 +261,9 @@ static void emit_movmroi(ASMState *as, Reg base, int32_t ofs, int32_t i)
   emit_rma(as, (xo), (r), (void *)&J2G(as->J)->field)
 #define emit_getgl(as, r, field)	emit_opgl(as, XO_MOV, (r), field)
 #define emit_setgl(as, r, field)	emit_opgl(as, XO_MOVto, (r), field)
-#define emit_setgli(as, field, i) \
-  (emit_i32(as, i), emit_opgl(as, XO_MOVmi, 0, field))
+
+#define emit_setvmstate(as, i) \
+  (emit_i32(as, i), emit_opgl(as, XO_MOVmi, 0, vmstate))
 
 /* mov r, i / xor r, r */
 static void emit_loadi(ASMState *as, Reg r, int32_t i)

@@ -987,7 +987,7 @@ static void asm_head_root(ASMState *as)
 {
   int32_t spadj;
   asm_head_root_base(as);
-  emit_setgli(as, vmstate, (int32_t)as->T->traceno);
+  emit_setvmstate(as, (int32_t)as->T->traceno);
   spadj = asm_stack_adjust(as);
   as->T->spadjust = (uint16_t)spadj;
   emit_spsub(as, spadj);
@@ -1082,7 +1082,7 @@ static void asm_head_side(ASMState *as)
   }
 
   /* Store trace number and adjust stack frame relative to the parent. */
-  emit_setgli(as, vmstate, (int32_t)as->T->traceno);
+  emit_setvmstate(as, (int32_t)as->T->traceno);
   emit_spsub(as, spdelta);
 
   /* Restore target registers from parent spill slots. */
@@ -1169,7 +1169,7 @@ static void asm_tail_link(ASMState *as)
 	pc = retpc;
     }
     emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
-    emit_loada(as, RID_PC, pc);
+    emit_loada(as, RID_LPC, pc);
     mres = (int32_t)(snap->nslots - baseslot);
     switch (bc_op(*pc)) {
     case BC_CALLM: case BC_CALLMT:
