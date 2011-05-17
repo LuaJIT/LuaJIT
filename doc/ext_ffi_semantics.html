@@ -506,6 +506,11 @@ with the consecutive table elements, starting at either index
 all the remaining elements. Otherwise all remaining uninitialized
 elements are filled with zero bytes.</li>
 
+<li>The above logic only applies to arrays with a known fixed size.
+A VLA is only initialized with the element(s) given in the table.
+Depending on the use case, you may need to explicitly add a
+<tt>NULL</tt> or <tt>0</tt> terminator to a VLA.</li>
+
 <li>If the table has a non-empty hash part, a
 <tt>struct</tt>/<tt>union</tt> is initialized by looking up each field
 name (as a string key) in the table. Each non-<tt>nil</tt> value is
@@ -518,7 +523,7 @@ or <tt>[1]</tt>. This process stops at the first <tt>nil</tt> table
 element.</li>
 
 <li>Uninitialized fields of a <tt>struct</tt> are filled with zero
-bytes.</li>
+bytes, except for the trailing VLA of a VLS.</li>
 
 <li>Initialization of a <tt>union</tt> stops after one field has been
 initialized. If no field has been initialized, the <tt>union</tt> is
