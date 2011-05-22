@@ -438,7 +438,7 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
 	tr[i] = emitir(IRTG(IR_STRTO, IRT_NUM), tr[i], 0);
       if (t == IRT_INT) {
 	if (!tref_isinteger(tr[i]))
-	  tr[i] = emitir(IRTI(IR_CONV), tr[i], IRCONV_INT_NUM|IRCONV_CHECK);
+	  tr[i] = emitir(IRTGI(IR_CONV), tr[i], IRCONV_INT_NUM|IRCONV_CHECK);
       } else {
 	if (!tref_isnum(tr[i]))
 	  tr[i] = emitir(IRTN(IR_CONV), tr[i], IRCONV_NUM_INT);
