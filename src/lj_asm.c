@@ -83,6 +83,9 @@ typedef struct ASMState {
   MCode *flagmcp;	/* Pending opportunity to merge flag setting ins. */
   MCode *realign;	/* Realign loop if not NULL. */
 
+#ifdef RID_NUM_KREF
+  int32_t krefk[RID_NUM_KREF];
+#endif
   IRRef1 phireg[RID_MAX];  /* PHI register references. */
   uint16_t parentmap[LJ_MAX_JSLOTS];  /* Parent slot to RegSP map. */
 #if LJ_SOFTFP
@@ -214,6 +217,8 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
     } else if (e[1] == 's') {
       uint32_t slot = va_arg(argp, uint32_t);
       p += sprintf(p, "[sp+0x%x]", sps_scale(slot));
+    } else if (e[1] == 'x') {
+      p += sprintf(p, "%08x", va_arg(argp, int32_t));
     } else {
       lua_assert(0);
     }
@@ -253,6 +258,24 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 
 #define ra_used(ir)		(ra_hasreg((ir)->r) || ra_hasspill((ir)->s))
 
+#ifdef RID_NUM_KREF
+#define ra_iskref(ref)		((ref) < RID_NUM_KREF)
+#define ra_krefreg(ref)		((Reg)(RID_MIN_KREF + (Reg)(ref)))
+#define ra_krefk(as, ref)	(as->krefk[(ref)])
+
+static LJ_AINLINE void ra_setkref(ASMState *as, Reg r, int32_t k)
+{
+  IRRef ref = (IRRef)(r - RID_MIN_KREF);
+  as->krefk[ref] = k;
+  as->cost[r] = REGCOST(ref, ref);
+}
+
+#else
+#define ra_iskref(ref)		0
+#define ra_krefreg(ref)		RID_MIN_GPR
+#define ra_krefk(as, ref)	0
+#endif
+
 /* Setup register allocator. */
 static void ra_setup(ASMState *as)
 {
@@ -268,9 +291,20 @@ static void ra_setup(ASMState *as)
 }
 
 /* Rematerialize constants. */
-static Reg ra_rematk(ASMState *as, IRIns *ir)
+static Reg ra_rematk(ASMState *as, IRRef ref)
 {
-  Reg r = ir->r;
+  IRIns *ir;
+  Reg r;
+  if (ra_iskref(ref)) {
+    r = ra_krefreg(ref);
+    lua_assert(!rset_test(as->freeset, r));
+    ra_free(as, r);
+    ra_modified(as, r);
+    emit_loadi(as, r, ra_krefk(as, ref));
+    return r;
+  }
+  ir = IR(ref);
+  r = ir->r;
   lua_assert(ra_hasreg(r) && !ra_hasspill(ir->s));
   ra_free(as, r);
   ra_modified(as, r);
@@ -337,10 +371,10 @@ static Reg ra_releasetmp(ASMState *as, IRRef ref)
 /* Restore a register (marked as free). Rematerialize or force a spill. */
 static Reg ra_restore(ASMState *as, IRRef ref)
 {
-  IRIns *ir = IR(ref);
   if (emit_canremat(ref)) {
-    return ra_rematk(as, ir);
+    return ra_rematk(as, ref);
   } else {
+    IRIns *ir = IR(ref);
     int32_t ofs = ra_spill(as, ir);  /* Force a spill slot. */
     Reg r = ir->r;
     lua_assert(ra_hasreg(r));
@@ -379,7 +413,7 @@ static Reg ra_evict(ASMState *as, RegSet allow)
     FPRDEF(MINCOST)
   }
   ref = regcost_ref(cost);
-  lua_assert(ref >= as->T->nk && ref < as->T->nins);
+  lua_assert(ra_iskref(ref) || (ref >= as->T->nk && ref < as->T->nins));
   /* Preferably pick any weak ref instead of a non-weak, non-const ref. */
   if (!irref_isk(ref) && (as->weakset & allow)) {
     IRIns *ir = IR(ref);
@@ -429,12 +463,55 @@ static void ra_evictk(ASMState *as)
     Reg r = rset_pickbot(work);
     IRRef ref = regcost_ref(as->cost[r]);
     if (emit_canremat(ref)) {
-      ra_rematk(as, IR(ref));
+      ra_rematk(as, ref);
       checkmclim(as);
     }
     rset_clear(work, r);
   }
 }
+
+#ifdef RID_NUM_KREF
+/* Allocate a register for a constant. */
+static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
+{
+  /* First try to find a register which already holds the same constant. */
+  RegSet work = ~as->freeset & RSET_GPR;
+  Reg r;
+  while (work) {
+    IRRef ref;
+    r = rset_pickbot(work);
+    ref = regcost_ref(as->cost[r]);
+    if (emit_canremat(ref) &&
+	k == (ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i))
+      return r;
+    rset_clear(work, r);
+  }
+  work = as->freeset & allow;
+  if (work)
+    r = rset_pickbot(work);
+  else
+    r = ra_evict(as, allow);
+  RA_DBGX((as, "allock    $x $r", k, r));
+  ra_setkref(as, r, k);
+  rset_clear(as->freeset, r);
+  ra_noweak(as, r);
+  return r;
+}
+
+/* Allocate a specific register for a constant. */
+static void ra_allockreg(ASMState *as, int32_t k, Reg r)
+{
+  Reg kr = ra_allock(as, k, RID2RSET(r));
+  if (kr != r) {
+    IRIns irdummy;
+    irdummy.t.irt = IRT_INT;
+    ra_scratch(as, RID2RSET(r));
+    emit_movrr(as, &irdummy, kr, r);
+  }
+}
+#else
+#define ra_allockreg(as, k, r)		emit_loadi(as, (r), (k))
+#endif
 
 /* Allocate a register for ref from the allowed set of registers.
 ** Note: this function assumes the ref does NOT have a register yet!
@@ -454,7 +531,7 @@ static Reg ra_allocref(ASMState *as, IRRef ref, RegSet allow)
 	goto found;
       /* Rematerialization is cheaper than missing a hint. */
       if (rset_test(allow, r) && emit_canremat(regcost_ref(as->cost[r]))) {
-	ra_rematk(as, IR(regcost_ref(as->cost[r])));
+	ra_rematk(as, regcost_ref(as->cost[r]));
 	goto found;
       }
       RA_DBGX((as, "hintmiss  $f $r", ref, r));
@@ -794,7 +871,7 @@ static void asm_tnew(ASMState *as, IRIns *ir)
   as->gcsteps++;
   asm_setupresult(as, ir, ci);  /* GCtab * */
   asm_gencall(as, ci, args);
-  emit_loadi(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1 | (ir->op2 << 24));
+  ra_allockreg(as, ir->op1 | (ir->op2 << 24), ra_releasetmp(as, ASMREF_TMP1));
 }
 
 static void asm_tdup(ASMState *as, IRIns *ir)
@@ -1201,8 +1278,8 @@ static void asm_tail_link(ASMState *as)
       if (bc_isret(bc_op(*retpc)))
 	pc = retpc;
     }
-    emit_loada(as, RID_DISPATCH, J2GG(as->J)->dispatch);
-    emit_loada(as, RID_LPC, pc);
+    ra_allockreg(as, i32ptr(J2GG(as->J)->dispatch), RID_DISPATCH);
+    ra_allockreg(as, i32ptr(pc), RID_LPC);
     mres = (int32_t)(snap->nslots - baseslot);
     switch (bc_op(*pc)) {
     case BC_CALLM: case BC_CALLMT:
@@ -1211,7 +1288,7 @@ static void asm_tail_link(ASMState *as)
     case BC_TSETM: mres -= (int32_t)bc_a(*pc); break;
     default: if (bc_op(*pc) < BC_FUNCF) mres = 0; break;
     }
-    emit_loadi(as, RID_RET, mres);  /* Return MULTRES or 0. */
+    ra_allockreg(as, mres, RID_RET);  /* Return MULTRES or 0. */
   } else if (baseslot) {
     /* Save modified BASE for linking to trace with higher start frame. */
     emit_setgl(as, RID_BASE, jit_base);
