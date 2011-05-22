@@ -14,6 +14,7 @@
 #include "lj_str.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
+#include "lj_ircall.h"
 #include "lj_iropt.h"
 #include "lj_vm.h"
 

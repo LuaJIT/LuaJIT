@@ -19,6 +19,7 @@
 #include "lj_gc.h"
 #include "lj_bc.h"
 #include "lj_ir.h"
+#include "lj_ircall.h"
 #include "lj_frame.h"
 #include "lj_dispatch.h"
 #if LJ_HASFFI

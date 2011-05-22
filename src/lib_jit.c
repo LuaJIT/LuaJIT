@@ -19,6 +19,7 @@
 #if LJ_HASJIT
 #include "lj_ir.h"
 #include "lj_jit.h"
+#include "lj_ircall.h"
 #include "lj_iropt.h"
 #include "lj_target.h"
 #endif

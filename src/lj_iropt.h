@@ -15,7 +15,6 @@
 /* IR emitter. */
 LJ_FUNC void LJ_FASTCALL lj_ir_growtop(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_ir_emit(jit_State *J);
-LJ_FUNC TRef lj_ir_call(jit_State *J, IRCallID id, ...);
 
 /* Save current IR in J->fold.ins, but do not emit it (yet). */
 static LJ_AINLINE void lj_ir_set_(jit_State *J, uint16_t ot, IRRef1 a, IRRef1 b)
