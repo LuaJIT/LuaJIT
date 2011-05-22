@@ -448,7 +448,7 @@ static void ra_evictset(ASMState *as, RegSet drop)
   as->modset |= drop;
   drop &= ~as->freeset;
   while (drop) {
-    Reg r = rset_picktop(drop);
+    Reg r = rset_pickbot(drop);
     ra_restore(as, regcost_ref(as->cost[r]));
     rset_clear(drop, r);
     checkmclim(as);
@@ -604,7 +604,14 @@ static Reg ra_dest(ASMState *as, IRIns *ir, RegSet allow)
     ra_free(as, dest);
     ra_modified(as, dest);
   } else {
-    dest = ra_scratch(as, allow);
+    if (ra_hashint(dest) && rset_test(as->freeset, ra_gethint(dest))) {
+      dest = ra_gethint(dest);
+      ra_modified(as, dest);
+      RA_DBGX((as, "dest           $r", dest));
+    } else {
+      dest = ra_scratch(as, allow);
+    }
+    ir->r = dest;
   }
   if (LJ_UNLIKELY(ra_hasspill(ir->s))) ra_save(as, ir, dest);
   return dest;
@@ -932,7 +939,7 @@ static void asm_phi_shuffle(ASMState *as)
     RegSet blockedby = RSET_EMPTY;
     RegSet phiset = as->phiset;
     while (phiset) {  /* Check all left PHI operand registers. */
-      Reg r = rset_picktop(phiset);
+      Reg r = rset_pickbot(phiset);
       IRIns *irl = IR(as->phireg[r]);
       Reg left = irl->r;
       if (r != left) {  /* Mismatch? */
@@ -966,7 +973,7 @@ static void asm_phi_shuffle(ASMState *as)
   /* Restore/remat invariants whose registers are modified inside the loop. */
   work = as->modset & ~(as->freeset | as->phiset);
   while (work) {
-    Reg r = rset_picktop(work);
+    Reg r = rset_pickbot(work);
     ra_restore(as, regcost_ref(as->cost[r]));
     rset_clear(work, r);
     checkmclim(as);
@@ -1311,6 +1318,9 @@ static void asm_setup_regsp(ASMState *as)
   GCtrace *T = as->T;
   IRRef i, nins;
   int inloop;
+#if LJ_TARGET_ARM
+  uint32_t rload = 0xa6402a64;
+#endif
 
   ra_setup(as);
 
@@ -1353,7 +1363,20 @@ static void asm_setup_regsp(ASMState *as)
 	  continue;
 	}
       }
+#if LJ_TARGET_ARM
+      if ((ir->op2 & IRSLOAD_TYPECHECK) || (ir+1)->o == IR_HIOP) {
+	ir->prev = (uint16_t)REGSP_HINT((rload & 15));
+	rload = lj_ror(rload, 4);
+	continue;
+      }
+#endif
       break;
+#if LJ_TARGET_ARM
+    case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+      ir->prev = (uint16_t)REGSP_HINT((rload & 15));
+      rload = lj_ror(rload, 4);
+      continue;
+#endif
     case IR_CALLXS: {
       CCallInfo ci;
       ci.flags = asm_callx_flags(as, ir);
@@ -1384,6 +1407,14 @@ static void asm_setup_regsp(ASMState *as)
 	    continue;
 	  }
 	}
+#if LJ_TARGET_ARM
+	/* fallthrough */
+      case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+	if (ra_hashint((ir-1)->r)) {
+	  ir->prev = (ir-1)->prev + 1;
+	  continue;
+	}
+#endif
 	break;
 #endif
       case IR_CALLN: case IR_CALLXS:
