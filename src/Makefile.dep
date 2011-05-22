@@ -108,7 +108,7 @@ lj_gdbjit.o: lj_gdbjit.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
 lj_ir.o: lj_ir.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
  lj_str.h lj_tab.h lj_ir.h lj_jit.h lj_ircall.h lj_iropt.h lj_trace.h \
  lj_dispatch.h lj_bc.h lj_traceerr.h lj_ctype.h lj_cdata.h lj_carith.h \
- lj_lib.h
+ lj_vm.h lj_lib.h
 lj_lex.o: lj_lex.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
  lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_ctype.h lj_cdata.h lualib.h \
  lj_state.h lj_lex.h lj_parse.h lj_char.h

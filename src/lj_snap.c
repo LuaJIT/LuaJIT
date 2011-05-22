@@ -307,7 +307,7 @@ static RegSP snap_renameref(GCtrace *T, SnapNo lim, IRRef ref, RegSP rs)
 /* Convert a snapshot into a linear slot -> RegSP map.
 ** Note: unused slots are not initialized!
 */
-void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno)
+void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno, int hi)
 {
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
@@ -316,7 +316,7 @@ void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno)
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
     IRRef ref = snap_ref(sn);
-    if (!irref_isk(ref)) {
+    if ((LJ_SOFTFP && hi) ? (ref++, (sn & SNAP_SOFTFPNUM)) : !irref_isk(ref)) {
       IRIns *ir = &T->ir[ref];
       uint32_t rs = ir->prev;
       if (bloomtest(rfilt, ref))

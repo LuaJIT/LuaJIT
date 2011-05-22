@@ -38,6 +38,72 @@ typedef struct CCallInfo {
 #define CCI_FASTCALL		0x0800	/* Fastcall convention. */
 
 /* Function definitions for CALL* instructions. */
+#if LJ_SOFTFP
+#if LJ_HASFFI
+#define IRCALLDEF_SOFTFP_FFI(_) \
+  _(softfp_ui2d,	1,   N, NUM, 0) \
+  _(softfp_l2d,		2,   N, NUM, 0) \
+  _(softfp_ul2d,	2,   N, NUM, 0) \
+  _(softfp_f2d,		1,   N, NUM, 0) \
+  _(softfp_d2ui,	2,   N, INT, 0) \
+  _(softfp_d2l,		2,   N, I64, 0) \
+  _(softfp_d2ul,	2,   N, U64, 0) \
+  _(softfp_d2f,		2,   N, FLOAT, 0) \
+  _(softfp_i2f,		1,   N, FLOAT, 0) \
+  _(softfp_ui2f,	1,   N, FLOAT, 0) \
+  _(softfp_l2f,		2,   N, FLOAT, 0) \
+  _(softfp_ul2f,	2,   N, FLOAT, 0) \
+  _(softfp_f2i,		1,   N, INT, 0) \
+  _(softfp_f2ui,	1,   N, INT, 0) \
+  _(softfp_f2l,		1,   N, I64, 0) \
+  _(softfp_f2ul,	1,   N, U64, 0)
+#else
+#define IRCALLDEF_SOFTFP_FFI(_)
+#endif
+#define IRCALLDEF_SOFTFP(_) \
+  _(lj_vm_tobit,	2,   N, INT, 0) \
+  _(softfp_add,		4,   N, NUM, 0) \
+  _(softfp_sub,		4,   N, NUM, 0) \
+  _(softfp_mul,		4,   N, NUM, 0) \
+  _(softfp_div,		4,   N, NUM, 0) \
+  _(softfp_cmp,		4,   N, NIL, 0) \
+  _(softfp_i2d,		1,   N, NUM, 0) \
+  _(softfp_d2i,		2,   N, INT, 0) \
+  IRCALLDEF_SOFTFP_FFI(_)
+#else
+#define IRCALLDEF_SOFTFP(_)
+#endif
+
+#if LJ_TARGET_X86ORX64
+/* Use lj_vm_* helpers and x87 ops. */
+#define IRCALLDEF_FPMATH(_)
+#else
+/* Use standard math library calls. */
+#if LJ_SOFTFP
+#define ARG1_FP		2	/* Treat as 2 32 bit arguments. */
+#else
+#define ARG1_FP		1
+#endif
+/* ORDER FPM */
+#define IRCALLDEF_FPMATH(_) \
+  _(lj_vm_floor,	ARG1_FP,   N, NUM, 0) \
+  _(lj_vm_ceil,		ARG1_FP,   N, NUM, 0) \
+  _(lj_vm_trunc,	ARG1_FP,   N, NUM, 0) \
+  _(sqrt,		ARG1_FP,   N, NUM, 0) \
+  _(exp,		ARG1_FP,   N, NUM, 0) \
+  _(exp2,		ARG1_FP,   N, NUM, 0) \
+  _(log,		ARG1_FP,   N, NUM, 0) \
+  _(log2,		ARG1_FP,   N, NUM, 0) \
+  _(log10,		ARG1_FP,   N, NUM, 0) \
+  _(sin,		ARG1_FP,   N, NUM, 0) \
+  _(cos,		ARG1_FP,   N, NUM, 0) \
+  _(tan,		ARG1_FP,   N, NUM, 0) \
+  _(lj_vm_powi,		ARG1_FP+1, N, NUM, 0) \
+  _(pow,		ARG1_FP*2, N, NUM, 0) \
+  _(atan2,		ARG1_FP*2, N, NUM, 0) \
+  _(ldexp,		ARG1_FP+1, N, NUM, 0)
+#endif
+
 #if LJ_HASFFI
 #if LJ_32
 #define ARG2_64		4	/* Treat as 4 32 bit arguments. */
@@ -62,6 +128,7 @@ typedef struct CCallInfo {
 #else
 #define IRCALLDEF_FFI(_)
 #endif
+
 #define IRCALLDEF(_) \
   _(lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
   _(lj_str_new,		3,   S, STR, CCI_L) \
@@ -76,6 +143,8 @@ typedef struct CCallInfo {
   _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
   _(lj_mem_newgco,	2,  FS, P32, CCI_L) \
   _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
+  IRCALLDEF_SOFTFP(_) \
+  IRCALLDEF_FPMATH(_) \
   IRCALLDEF_FFI(_) \
   _(sinh,		1,  N, NUM, 0) \
   _(cosh,		1,  N, NUM, 0) \
@@ -96,5 +165,59 @@ IRCALLDEF(IRCALLENUM)
 LJ_FUNC TRef lj_ir_call(jit_State *J, IRCallID id, ...);
 
 LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
+
+/* Soft-float declarations. */
+#if LJ_SOFTFP
+#if LJ_TARGET_ARM
+#define softfp_add __aeabi_dadd
+#define softfp_sub __aeabi_dsub
+#define softfp_mul __aeabi_dmul
+#define softfp_div __aeabi_ddiv
+#define softfp_cmp __aeabi_cdcmple
+#define softfp_i2d __aeabi_i2d
+#define softfp_ui2d __aeabi_ui2d
+#define softfp_l2d __aeabi_l2d
+#define softfp_ul2d __aeabi_ul2d
+#define softfp_f2d __aeabi_f2d
+#define softfp_d2i __aeabi_d2iz
+#define softfp_d2ui __aeabi_d2uiz
+#define softfp_d2l __aeabi_d2lz
+#define softfp_d2ul __aeabi_d2ulz
+#define softfp_d2f __aeabi_d2f
+#define softfp_i2f __aeabi_i2f
+#define softfp_ui2f __aeabi_ui2f
+#define softfp_l2f __aeabi_l2f
+#define softfp_ul2f __aeabi_ul2f
+#define softfp_f2i __aeabi_f2iz
+#define softfp_f2ui __aeabi_f2uiz
+#define softfp_f2l __aeabi_f2lz
+#define softfp_f2ul __aeabi_f2ulz
+#else
+#error "Missing soft-float definitions for target architecture"
+#endif
+extern double softfp_add(double a, double b);
+extern double softfp_sub(double a, double b);
+extern double softfp_mul(double a, double b);
+extern double softfp_div(double a, double b);
+extern void softfp_cmp(double a, double b);
+extern double softfp_i2d(int32_t a);
+extern double softfp_ui2d(uint32_t a);
+extern double softfp_l2d(int64_t a);
+extern double softfp_ul2d(uint64_t a);
+extern double softfp_f2d(float a);
+extern int32_t softfp_d2i(double a);
+extern uint32_t softfp_d2ui(double a);
+extern int64_t softfp_d2l(double a);
+extern uint64_t softfp_d2ul(double a);
+extern float softfp_d2f(double a);
+extern float softfp_i2f(int32_t a);
+extern float softfp_ui2f(uint32_t a);
+extern float softfp_l2f(int64_t a);
+extern float softfp_ul2f(uint64_t a);
+extern int32_t softfp_f2i(float a);
+extern uint32_t softfp_f2ui(float a);
+extern int64_t softfp_f2l(float a);
+extern uint64_t softfp_f2ul(float a);
+#endif
 
 #endif

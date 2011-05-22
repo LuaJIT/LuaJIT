@@ -438,7 +438,12 @@ static void LJ_FASTCALL recff_math_unary(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_math_binary(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);
-  J->base[0] = emitir(IRTN(rd->data), tr, lj_ir_tonum(J, J->base[1]));
+#if LJ_TARGET_X86ORX64
+  TRef tr2 = lj_ir_tonum(J, J->base[1]);
+#else
+  TRef tr2 = lj_opt_narrow_toint(J, J->base[1]);
+#endif
+  J->base[0] = emitir(IRTN(rd->data), tr, tr2);
 }
 
 /* Record math.asin, math.acos, math.atan. */

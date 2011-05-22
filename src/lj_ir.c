@@ -27,6 +27,7 @@
 #include "lj_cdata.h"
 #include "lj_carith.h"
 #endif
+#include "lj_vm.h"
 #include "lj_lib.h"
 
 /* Some local macros to save typing. Undef'd at the end. */

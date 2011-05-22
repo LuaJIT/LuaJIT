@@ -1992,6 +1992,7 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
     IRRef ref = snap_ref(sn);
     BCReg s = snap_slot(sn);
     IRIns *ir = &T->ir[ref];
+    IRType t = irt_type(ir->t);
     TRef tr;
     /* The bloom filter avoids O(nent^2) overhead for de-duping slots. */
     if (bloomtest(seen, ref)) {
@@ -2005,7 +2006,7 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
     bloomset(seen, ref);
     switch ((IROp)ir->o) {
     /* Only have to deal with constants that can occur in stack slots. */
-    case IR_KPRI: tr = TREF_PRI(irt_type(ir->t)); break;
+    case IR_KPRI: tr = TREF_PRI(t); break;
     case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
     case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
     case IR_KNUM: tr = lj_ir_k64(J, IR_KNUM, ir_knum(ir)); break;
@@ -2013,13 +2014,14 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
     case IR_KPTR:  tr = lj_ir_kptr(J, ir_kptr(ir)); break;  /* Continuation. */
     /* Inherited SLOADs don't need a guard or type check. */
     case IR_SLOAD:
-      tr = emitir_raw(ir->ot & ~IRT_GUARD, s,
+      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) t = IRT_NUM;
+      tr = emitir_raw(IRT(IR_SLOAD, t), s,
 	     (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
       break;
     /* Parent refs are already typed and don't need a guard. */
     default:
-      tr = emitir_raw(IRT(IR_SLOAD, irt_type(ir->t)), s,
-		      IRSLOAD_INHERIT|IRSLOAD_PARENT);
+      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) t = IRT_NUM;
+      tr = emitir_raw(IRT(IR_SLOAD, t), s, IRSLOAD_INHERIT|IRSLOAD_PARENT);
       break;
     }
   setslot:
