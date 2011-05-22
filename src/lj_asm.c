@@ -260,10 +260,8 @@ static void ra_setup(ASMState *as)
   as->weakset = RSET_EMPTY;
   as->phiset = RSET_EMPTY;
   memset(as->phireg, 0, sizeof(as->phireg));
-  memset(as->cost, 0, sizeof(as->cost));
   for (r = RID_MIN_GPR; r < RID_MAX; r++)
-    if (!rset_test(RSET_INIT, r))
-      as->cost[r] = REGCOST(~0u, 0u);
+    as->cost[r] = REGCOST(~0u, 0u);
 }
 
 /* Rematerialize constants. */
@@ -369,7 +367,7 @@ static Reg ra_evict(ASMState *as, RegSet allow)
   IRRef ref;
   RegCost cost = ~(RegCost)0;
   lua_assert(allow != RSET_EMPTY);
-  if (allow < RID2RSET(RID_MAX_GPR)) {
+  if (RID_NUM_FPR == 0 || allow < RID2RSET(RID_MAX_GPR)) {
     GPRDEF(MINCOST)
   } else {
     FPRDEF(MINCOST)
@@ -539,6 +537,7 @@ static void ra_destreg(ASMState *as, IRIns *ir, Reg r)
   }
 }
 
+#if LJ_TARGET_X86ORX64
 /* Propagate dest register to left reference. Emit moves as needed.
 ** This is a required fixup step for all 2-operand machine instructions.
 */
@@ -583,6 +582,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
     }
   }
 }
+#endif
 
 /* -- Snapshot handling --------- ----------------------------------------- */
 
@@ -866,7 +866,7 @@ static void asm_phi_shuffle(ASMState *as)
     if (!blocked) break;  /* Finished. */
     if (!(as->freeset & blocked)) {  /* Break cycles if none are free. */
       asm_phi_break(as, blocked, blockedby, RSET_GPR);
-      asm_phi_break(as, blocked, blockedby, RSET_FPR);
+      if (!LJ_SOFTFP) asm_phi_break(as, blocked, blockedby, RSET_FPR);
       checkmclim(as);
     }  /* Else retry some more renames. */
   }
@@ -921,7 +921,8 @@ static void asm_phi_fixup(ASMState *as)
 /* Setup right PHI reference. */
 static void asm_phi(ASMState *as, IRIns *ir)
 {
-  RegSet allow = (irt_isfp(ir->t) ? RSET_FPR : RSET_GPR) & ~as->phiset;
+  RegSet allow = ((!LJ_SOFTFP && irt_isfp(ir->t)) ? RSET_FPR : RSET_GPR) &
+		 ~as->phiset;
   RegSet afree = (as->freeset & allow);
   IRIns *irl = IR(ir->op1);
   IRIns *irr = IR(ir->op2);
@@ -1009,13 +1010,13 @@ static void asm_head_side(ASMState *as)
   IRRef1 sloadins[RID_MAX];
   RegSet allow = RSET_ALL;  /* Inverse of all coalesced registers. */
   RegSet live = RSET_EMPTY;  /* Live parent registers. */
-  Reg pbase = as->parent->ir[REF_BASE].r;  /* Parent base register (if any). */
+  IRIns *irp = &as->parent->ir[REF_BASE];  /* Parent base. */
   int32_t spadj, spdelta;
   int pass2 = 0;
   int pass3 = 0;
   IRRef i;
 
-  allow = asm_head_side_base(as, pbase, allow);
+  allow = asm_head_side_base(as, irp, allow);
 
   /* Scan all parent SLOADs and collect register dependencies. */
   for (i = as->stopins; i > REF_BASE; i--) {
@@ -1129,7 +1130,7 @@ static void asm_head_side(ASMState *as)
 	lj_trace_err(as->J, LJ_TRERR_NYICOAL);
       ra_rename(as, rset_pickbot(live & RSET_GPR), rset_pickbot(tmpset));
     }
-    if (live & RSET_FPR) {
+    if (!LJ_SOFTFP && (live & RSET_FPR)) {
       RegSet tmpset = as->freeset & ~live & allow & RSET_FPR;
       if (tmpset == RSET_EMPTY)
 	lj_trace_err(as->J, LJ_TRERR_NYICOAL);
@@ -1144,7 +1145,7 @@ static void asm_head_side(ASMState *as)
   if (as->topslot > as->T->topslot) {  /* Need to check for higher slot? */
     as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
     /* Reuse the parent exit in the context of the parent trace. */
-    asm_stack_check(as, as->topslot, pbase, allow & RSET_GPR, as->J->exitno);
+    asm_stack_check(as, as->topslot, irp, allow & RSET_GPR, as->J->exitno);
   }
 }
 
@@ -1191,7 +1192,7 @@ static void asm_tail_link(ASMState *as)
 
   /* Root traces that grow the stack need to check the stack at the end. */
   if (!as->parent && as->topslot)
-    asm_stack_check(as, as->topslot, RID_BASE, as->freeset & RSET_GPR, snapno);
+    asm_stack_check(as, as->topslot, NULL, as->freeset & RSET_GPR, snapno);
 }
 
 /* -- Trace setup --------------------------------------------------------- */
@@ -1283,7 +1284,7 @@ static void asm_setup_regsp(ASMState *as)
 	as->modset = RSET_SCRATCH;
       break;
     case IR_POW:
-      if (irt_isnum(ir->t)) {
+      if (!LJ_SOFTFP && irt_isnum(ir->t)) {
 #if LJ_TARGET_X86ORX64
 	ir->prev = REGSP_HINT(RID_XMM0);
 	if (inloop)
@@ -1341,8 +1342,13 @@ static void asm_setup_regsp(ASMState *as)
       break;
 #endif
     /* Do not propagate hints across type conversions. */
-    case IR_CONV: case IR_TOBIT:
+    case IR_TOBIT:
       break;
+    case IR_CONV:
+      if (irt_isfp(ir->t) || (ir->op2 & IRCONV_SRCMASK) == IRT_NUM ||
+	  (ir->op2 & IRCONV_SRCMASK) == IRT_FLOAT)
+	break;
+      /* fallthrough */
     default:
       /* Propagate hints across likely 'op reg, imm' or 'op reg'. */
       if (irref_isk(ir->op2) && !irref_isk(ir->op1)) {
@@ -1366,6 +1372,10 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 {
   ASMState as_;
   ASMState *as = &as_;
+
+  /* Ensure an initialized instruction beyond the last one for HIOP checks. */
+  J->cur.nins = lj_ir_nextins(J);
+  J->cur.ir[J->cur.nins].o = IR_NOP;
 
   /* Setup initial state. Copy some fields to reduce indirections. */
   as->J = J;

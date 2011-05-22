@@ -2191,9 +2191,10 @@ static void asm_hiop(ASMState *as, IRIns *ir)
 
 /* Check Lua stack size for overflow. Use exit handler as fallback. */
 static void asm_stack_check(ASMState *as, BCReg topslot,
-			    Reg pbase, RegSet allow, ExitNo exitno)
+			    IRIns *irp, RegSet allow, ExitNo exitno)
 {
   /* Try to get an unused temp. register, otherwise spill/restore eax. */
+  Reg pbase = irp ? irp->r : RID_BASE;
   Reg r = allow ? rset_pickbot(allow) : RID_EAX;
   emit_jcc(as, CC_B, exitstub_addr(as->J, exitno));
   if (allow == RSET_EMPTY)  /* Restore temp. register. */
@@ -2344,7 +2345,7 @@ static void asm_head_root_base(ASMState *as)
 }
 
 /* Coalesce or reload BASE register for a side trace. */
-static RegSet asm_head_side_base(ASMState *as, Reg pbase, RegSet allow)
+static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
 {
   IRIns *ir = IR(REF_BASE);
   Reg r = ir->r;
@@ -2352,11 +2353,11 @@ static RegSet asm_head_side_base(ASMState *as, Reg pbase, RegSet allow)
     ra_free(as, r);
     if (rset_test(as->modset, r))
       ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
-    if (pbase == r) {
+    if (irp->r == r) {
       rset_clear(allow, r);  /* Mark same BASE register as coalesced. */
-    } else if (ra_hasreg(pbase) && rset_test(as->freeset, pbase)) {
-      rset_clear(allow, pbase);
-      emit_rr(as, XO_MOV, r, pbase);  /* Move from coalesced parent register. */
+    } else if (ra_hasreg(irp->r) && rset_test(as->freeset, irp->r)) {
+      rset_clear(allow, irp->r);
+      emit_rr(as, XO_MOV, r, irp->r);  /* Move from coalesced parent reg. */
     } else {
       emit_getgl(as, r, jit_base);  /* Otherwise reload BASE. */
     }
