@@ -69,7 +69,7 @@ local type, tostring = type, tostring
 local stdout, stderr = io.stdout, io.stderr
 
 -- Load other modules on-demand.
-local bcline, discreate
+local bcline, disass
 
 -- Active flag, output file handle and dump mode.
 local active, out, dumpmode
@@ -87,7 +87,11 @@ local function fillsymtab(nexit)
     for i=0,#ircall do t[ircalladdr(i)] = ircall[i] end
   end
   if nexit > nexitsym then
-    for i=nexitsym,nexit-1 do t[traceexitstub(i)] = tostring(i) end
+    for i=nexitsym,nexit-1 do
+      local addr = traceexitstub(i)
+      if addr == nil then nexit = 1000000; break end
+      t[addr] = tostring(i)
+    end
     nexitsym = nexit
   end
   return t
@@ -103,11 +107,9 @@ local function dump_mcode(tr)
   if not info then return end
   local mcode, addr, loop = tracemc(tr)
   if not mcode then return end
-  if not discreate then
-    discreate = require("jit.dis_"..jit.arch).create
-  end
+  if not disass then disass = require("jit.dis_"..jit.arch) end
   out:write("---- TRACE ", tr, " mcode ", #mcode, "\n")
-  local ctx = discreate(mcode, addr, dumpwrite)
+  local ctx = disass.create(mcode, addr, dumpwrite)
   ctx.hexdump = 0
   ctx.symtab = fillsymtab(info.nexit)
   if loop ~= 0 then
@@ -346,25 +348,12 @@ local function dump_snap(tr)
   end
 end
 
--- NYI: should really get the register map from the disassembler.
-local reg_map = ({
-  x86 = {
-    [0] = "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
-    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-  },
-  x64 = {
-    [0] = "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
-    "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-    "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15",
-  }
-})[jit.arch]
-
 -- Return a register name or stack slot for a rid/sp location.
 local function ridsp_name(ridsp)
+  if not disass then disass = require("jit.dis_"..jit.arch) end
   local rid = band(ridsp, 0xff)
   if ridsp > 255 then return format("[%x]", shr(ridsp, 8)*4) end
-  if rid < 128 then return reg_map[rid] end
+  if rid < 128 then return disass.regname(rid) end
   return ""
 end
 

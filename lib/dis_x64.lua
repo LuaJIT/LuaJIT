@@ -16,4 +16,5 @@ local dis_x86 = require(_PACKAGE.."dis_x86")
 
 create = dis_x86.create64
 disass = dis_x86.disass64
+regname = dis_x86.regname64
 

@@ -813,6 +813,16 @@ local function disass64_(code, addr, out)
   create64_(code, addr, out):disass()
 end
 
+-- Return register name for RID.
+local function regname_(r)
+  if r < 8 then return map_regs.D[r+1] end
+  return map_regs.X[r-7]
+end
+
+local function regname64_(r)
+  if r < 16 then return map_regs.Q[r+1] end
+  return map_regs.X[r-15]
+end
 
 -- Public module functions.
 module(...)
@@ -821,4 +831,6 @@ create = create_
 create64 = create64_
 disass = disass_
 disass64 = disass64_
+regname = regname_
+regname64 = regname64_
 
