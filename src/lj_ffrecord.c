@@ -570,10 +570,17 @@ static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
   TRef tsh = lj_opt_narrow_tobit(J, J->base[1]);
-  if (!(rd->data < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
+  IROp op = (IROp)rd->data;
+  if (!(op < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
       !tref_isk(tsh))
     tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 31));
-  J->base[0] = emitir(IRTI(rd->data), tr, tsh);
+#ifdef LJ_TARGET_UNIFYROT
+  if (op == (LJ_TARGET_UNIFYROT == 1 ? IR_BROR : IR_BROL)) {
+    op = LJ_TARGET_UNIFYROT == 1 ? IR_BROL : IR_BROR;
+    tsh = emitir(IRTI(IR_NEG), tsh, tsh);
+  }
+#endif
+  J->base[0] = emitir(IRTI(op), tr, tsh);
 }
 
 /* -- String library fast functions --------------------------------------- */

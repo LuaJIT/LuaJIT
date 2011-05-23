@@ -137,6 +137,7 @@
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_DUALNUM		2
 #define LJ_ARCH_NOJIT		1
 
@@ -158,6 +159,7 @@
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
 #define LJ_ARCH_DUALNUM		0
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1

@@ -1303,11 +1303,13 @@ LJFOLDF(simplify_shift_ik)
     fins->op2 = (IRRef1)lj_ir_kint(J, k);
     return RETRYFOLD;
   }
+#ifndef LJ_TARGET_UNIFYROT
   if (fins->o == IR_BROR) {  /* bror(i, k) ==> brol(i, (-k)&mask) */
     fins->o = IR_BROL;
     fins->op2 = (IRRef1)lj_ir_kint(J, (-k)&mask);
     return RETRYFOLD;
   }
+#endif
   return NEXTFOLD;
 }
 
