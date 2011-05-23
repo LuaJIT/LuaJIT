@@ -38,6 +38,8 @@ enum {
 
 #define curwhite(g)	((g)->gc.currentwhite & LJ_GC_WHITES)
 #define newwhite(g, x)	(obj2gco(x)->gch.marked = (uint8_t)curwhite(g))
+#define makewhite(g, x) \
+  ((x)->gch.marked = ((x)->gch.marked & (uint8_t)~LJ_GC_COLORS) | curwhite(g))
 #define flipwhite(x)	((x)->gch.marked ^= LJ_GC_WHITES)
 #define black2gray(x)	((x)->gch.marked &= (uint8_t)~LJ_GC_BLACK)
 #define fixstring(s)	((s)->marked |= LJ_GC_FIXED)

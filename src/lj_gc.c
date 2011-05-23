@@ -34,8 +34,6 @@
 /* Macros to set GCobj colors and flags. */
 #define white2gray(x)		((x)->gch.marked &= (uint8_t)~LJ_GC_WHITES)
 #define gray2black(x)		((x)->gch.marked |= LJ_GC_BLACK)
-#define makewhite(g, x) \
-  ((x)->gch.marked = ((x)->gch.marked & (uint8_t)~LJ_GC_COLORS) | curwhite(g))
 #define isfinalized(u)		((u)->marked & LJ_GC_FINALIZED)
 #define markfinalized(u)	((u)->marked |= LJ_GC_FINALIZED)
 
@@ -500,7 +498,8 @@ static void gc_finalize(lua_State *L)
     /* Add cdata back to the GC list and make it white. */
     setgcrefr(o->gch.nextgc, g->gc.root);
     setgcref(g->gc.root, o);
-    o->gch.marked = curwhite(g);
+    makewhite(g, o);
+    o->gch.marked &= (uint8_t)~LJ_GC_CDATA_FIN;
     /* Resolve finalizer. */
     setcdataV(L, &tmp, gco2cd(o));
     tv = lj_tab_set(L, ctype_ctsG(g)->finalizer, &tmp);
@@ -544,7 +543,8 @@ void lj_gc_finalize_cdata(lua_State *L)
       if (!tvisnil(&node[i].val) && tviscdata(&node[i].key)) {
 	GCobj *o = gcV(&node[i].key);
 	TValue tmp;
-	o->gch.marked = curwhite(g);
+	makewhite(g, o);
+	o->gch.marked &= (uint8_t)~LJ_GC_CDATA_FIN;
 	copyTV(L, &tmp, &node[i].val);
 	setnilV(&node[i].val);
 	gc_call_finalizer(g, L, &tmp, o);
