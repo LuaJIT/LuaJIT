@@ -72,7 +72,7 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 	    (ir->op2 & (IRSLOAD_READONLY|IRSLOAD_PARENT)) != IRSLOAD_PARENT)
 	  sn |= SNAP_NORESTORE;
       }
-      if (LJ_SOFTFP && !irref_isk(ref) && irt_isnum(ir->t))
+      if (LJ_SOFTFP && irt_isnum(ir->t))
 	sn |= SNAP_SOFTFPNUM;
       map[n++] = sn;
     }
@@ -316,7 +316,8 @@ void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno, int hi)
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
     IRRef ref = snap_ref(sn);
-    if ((LJ_SOFTFP && hi) ? (ref++, (sn & SNAP_SOFTFPNUM)) : !irref_isk(ref)) {
+    if (!irref_isk(ref) &&
+	((LJ_SOFTFP && hi) ? (ref++, (sn & SNAP_SOFTFPNUM)) : 1)) {
       IRIns *ir = &T->ir[ref];
       uint32_t rs = ir->prev;
       if (bloomtest(rfilt, ref))

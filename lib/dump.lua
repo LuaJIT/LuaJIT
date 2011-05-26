@@ -321,13 +321,11 @@ local function printsnap(tr, snap)
       local ref = band(sn, 0xffff) - 0x8000 -- REF_BIAS
       if ref < 0 then
 	out:write(formatk(tr, ref))
+      elseif band(sn, 0x80000) ~= 0 then -- SNAP_SOFTFPNUM
+	out:write(colorize(format("%04d/%04d", ref, ref+1), 14))
       else
-	if band(sn, 0x80000) ~= 0 then -- SNAP_SOFTFPNUM
-	  out:write(colorize(format("%04d/%04d", ref, ref+1), 14))
-	else
-	  local m, ot, op1, op2 = traceir(tr, ref)
-	  out:write(colorize(format("%04d", ref), band(ot, 31)))
-	end
+	local m, ot, op1, op2 = traceir(tr, ref)
+	out:write(colorize(format("%04d", ref), band(ot, 31)))
       end
       out:write(band(sn, 0x10000) == 0 and " " or "|") -- SNAP_FRAME
     else

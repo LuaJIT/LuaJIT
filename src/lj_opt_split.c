@@ -255,8 +255,10 @@ static void split_ir(jit_State *J)
 	    if (irm12->op1 > J->loopref && irl1->o == IR_CALLN &&
 		irl1->op2 == IRCALL_log2) {
 	      IRRef tmp = irl1->op1;  /* Recycle first two args from LOG2. */
-	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, irm3->op2);
-	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, irm4->op2);
+	      IRRef arg3 = irm3->op2, arg4 = irm4->op2;
+	      J->cur.nins--;
+	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, arg3);
+	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, arg4);
 	      ir->prev = tmp = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_pow);
 	      hi = split_emit(J, IRT(IR_HIOP, LJ_SOFTFP), tmp, tmp);
 	      break;
@@ -278,7 +280,7 @@ static void split_ir(jit_State *J)
 			hisubst[ir->op1], hisubst[ir->op2]);
 	break;
       case IR_SLOAD: case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
-      case IR_MIN: case IR_MAX:
+      case IR_MIN: case IR_MAX: case IR_STRTO:
 	hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
 	break;
       case IR_XLOAD:
@@ -581,7 +583,12 @@ static void split_ir(jit_State *J)
       snap->ref = oir[snap->ref].prev;
       for (n = 0; n < nent; n++) {
 	SnapEntry sn = map[n];
-	map[n] = ((sn & 0xffff0000) | oir[snap_ref(sn)].prev);
+	IRIns *ir = &oir[snap_ref(sn)];
+	if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && irref_isk(snap_ref(sn)))
+	  map[n] = ((sn & 0xffff0000) |
+		    (IRRef1)lj_ir_k64(J, IR_KNUM, ir_knum(ir)));
+	else
+	  map[n] = ((sn & 0xffff0000) | ir->prev);
       }
     }
   }
