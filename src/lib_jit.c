@@ -520,6 +520,10 @@ JIT_PARAMDEF(JIT_PARAMINIT)
 };
 #endif
 
+#if LJ_TARGET_ARM && LJ_TARGET_LINUX
+#include <sys/utsname.h>
+#endif
+
 /* Arch-dependent CPU detection. */
 static uint32_t jit_cpudetect(lua_State *L)
 {
@@ -563,7 +567,27 @@ static uint32_t jit_cpudetect(lua_State *L)
 #endif
 #endif
 #elif LJ_TARGET_ARM
-  /* NYI */
+  /* Compile-time ARM CPU detection. */
+#if __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
+  flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
+#elif __ARM_ARCH_6T2__
+  flags |= JIT_F_ARMV6|JIT_F_ARMV6T2;
+#elif __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
+  flags |= JIT_F_ARMV6;
+#endif
+  /* Runtime ARM CPU detection. */
+#if LJ_TARGET_LINUX
+  if (!(flags & JIT_F_ARMV7)) {
+    struct utsname ut;
+    uname(&ut);
+    if (strncmp(ut.machine, "armv", 4) == 0) {
+      if (ut.machine[4] >= '7')
+	flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
+      else if (ut.machine[4] == '6')
+	flags |= JIT_F_ARMV6;
+    }
+  }
+#endif
 #elif LJ_TARGET_PPC
   /* Nothing to do. */
 #else

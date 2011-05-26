@@ -136,7 +136,7 @@ static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
   uint32_t r;
 #if __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6T2__ || __ARM_ARCH_6Z__ ||\
-    __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
+    __ARM_ARCH_6ZK__ || __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
   __asm__("rev %0, %1" : "=r" (r) : "r" (x));
   return r;
 #else
