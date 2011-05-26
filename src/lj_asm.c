@@ -488,7 +488,7 @@ static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
   }
   work = as->freeset & allow;
   if (work)
-    r = rset_pickbot(work);
+    r = rset_picktop(work);
   else
     r = ra_evict(as, allow);
   RA_DBGX((as, "allock    $x $r", k, r));
@@ -506,7 +506,7 @@ static void ra_allockreg(ASMState *as, int32_t k, Reg r)
     IRIns irdummy;
     irdummy.t.irt = IRT_INT;
     ra_scratch(as, RID2RSET(r));
-    emit_movrr(as, &irdummy, kr, r);
+    emit_movrr(as, &irdummy, r, kr);
   }
 }
 #else
@@ -958,7 +958,8 @@ static void asm_phi_shuffle(ASMState *as)
       if (r != left) {  /* Mismatch? */
 	if (!rset_test(as->freeset, r)) {  /* PHI register blocked? */
 	  IRRef ref = regcost_ref(as->cost[r]);
-	  if (irt_ismarked(IR(ref)->t)) {  /* Blocked by other PHI (w/reg)? */
+	  /* Blocked by other PHI (w/reg)? */
+	  if (!ra_iskref(ref) && irt_ismarked(IR(ref)->t)) {
 	    rset_set(blocked, r);
 	    if (ra_hasreg(left))
 	      rset_set(blockedby, left);
