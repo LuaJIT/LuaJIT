@@ -852,6 +852,19 @@ static uint32_t ir_khash(IRIns *ir)
   return hashrot(lo, hi);
 }
 
+/* Flush instruction cache. */
+static void asm_cache_flush(MCode *start, MCode *end)
+{
+  VG_INVALIDATE(start, (char *)end-(char *)start);
+#if !LJ_TARGET_X86ORX64
+#if defined(__GNUC__)
+  __clear_cache(start, end);
+#else
+#error "Missing builtin to flush instruction cache"
+#endif
+#endif
+}
+
 /* -- Allocations --------------------------------------------------------- */
 
 static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args);
@@ -1620,7 +1633,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   if (!as->loopref)
     asm_tail_fixup(as, T->link);  /* Note: this may change as->mctop! */
   T->szmcode = (MSize)((char *)as->mctop - (char *)as->mcp);
-  VG_INVALIDATE(T->mcode, T->szmcode);
+  asm_cache_flush(T->mcode, as->mctop);
 }
 
 #undef IR
