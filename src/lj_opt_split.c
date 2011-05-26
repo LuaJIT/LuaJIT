@@ -191,6 +191,7 @@ static void split_ir(jit_State *J)
 
   /* Remove all IR instructions, but retain IR constants. */
   J->cur.nins = REF_FIRST;
+  J->loopref = 0;
 
   /* Process constants and fixed references. */
   for (ref = nk; ref <= REF_BASE; ref++) {
@@ -243,6 +244,25 @@ static void split_ir(jit_State *J)
 	hi = split_call_li(J, hisubst, oir, ir, IRCALL_lj_vm_powi);
 	break;
       case IR_FPMATH:
+	/* Try to rejoin pow from EXP2, MUL and LOG2. */
+	if (nir->op2 == IRFPM_EXP2 && nir->op1 > J->loopref) {
+	  IRIns *irp = IR(nir->op1);
+	  if (irp->o == IR_CALLN && irp->op2 == IRCALL_softfp_mul) {
+	    IRIns *irm4 = IR(irp->op1);
+	    IRIns *irm3 = IR(irm4->op1);
+	    IRIns *irm12 = IR(irm3->op1);
+	    IRIns *irl1 = IR(irm12->op1);
+	    if (irm12->op1 > J->loopref && irl1->o == IR_CALLN &&
+		irl1->op2 == IRCALL_log2) {
+	      IRRef tmp = irl1->op1;  /* Recycle first two args from LOG2. */
+	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, irm3->op2);
+	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, irm4->op2);
+	      ir->prev = tmp = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_pow);
+	      hi = split_emit(J, IRT(IR_HIOP, LJ_SOFTFP), tmp, tmp);
+	      break;
+	    }
+	  }
+	}
 	hi = split_call_l(J, hisubst, oir, ir, IRCALL_lj_vm_floor + ir->op2);
 	break;
       case IR_ATAN2:

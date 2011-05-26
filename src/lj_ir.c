@@ -37,6 +37,72 @@
 /* Pass IR on to next optimization in chain (FOLD). */
 #define emitir(ot, a, b)        (lj_ir_set(J, (ot), (a), (b)), lj_opt_fold(J))
 
+/* -- Helper functions for generated machine code ------------------------- */
+
+#ifdef __ANDROID__
+/* Android doesn't have log2(). Oh well. */
+#define log2 lj_vm_log2
+static double lj_vm_log2(double a)
+{
+  return log(a) * 1.4426950408889634074;
+}
+#endif
+
+#if !LJ_TARGET_X86ORX64
+/* Unsigned x^k. */
+static double lj_vm_powui(double x, uint32_t k)
+{
+  double y;
+  lua_assert(k != 0);
+  for (; (k & 1) == 0; k >>= 1) x *= x;
+  y = x;
+  if ((k >>= 1) != 0) {
+    for (;;) {
+      x *= x;
+      if (k == 1) break;
+      if (k & 1) y *= x;
+      k >>= 1;
+    }
+    y *= x;
+  }
+  return y;
+}
+
+/* Signed x^k. */
+static double lj_vm_powi(double x, int32_t k)
+{
+  if (k > 1)
+    return lj_vm_powui(x, (uint32_t)k);
+  else if (k == 1)
+    return x;
+  else if (k == 0)
+    return 1;
+  else
+    return 1.0 / lj_vm_powui(x, (uint32_t)-k);
+}
+
+/* Computes fpm(x) for extended math functions. */
+double lj_vm_foldfpm(double x, int fpm)
+{
+  switch (fpm) {
+  case IRFPM_FLOOR: return lj_vm_floor(x);
+  case IRFPM_CEIL: return lj_vm_ceil(x);
+  case IRFPM_TRUNC: return lj_vm_trunc(x);
+  case IRFPM_SQRT: return sqrt(x);
+  case IRFPM_EXP: return exp(x);
+  case IRFPM_EXP2: return exp2(x);
+  case IRFPM_LOG: return log(x);
+  case IRFPM_LOG2: return log2(x);
+  case IRFPM_LOG10: return log10(x);
+  case IRFPM_SIN: return sin(x);
+  case IRFPM_COS: return cos(x);
+  case IRFPM_TAN: return tan(x);
+  default: lua_assert(0);
+  }
+  return 0;
+}
+#endif
+
 /* -- IR tables ----------------------------------------------------------- */
 
 /* IR instruction modes. */
@@ -54,7 +120,6 @@ IRCALLDEF(IRCALLCI)
 #undef IRCALLCI
   { NULL, 0 }
 };
-
 
 /* -- IR emitter ---------------------------------------------------------- */
 

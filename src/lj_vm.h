@@ -56,10 +56,9 @@ LJ_ASMF void lj_vm_exp2(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
 #else
-LJ_ASMF void lj_vm_floor(void);
-LJ_ASMF void lj_vm_ceil(void);
-LJ_ASMF void lj_vm_trunc(void);
-LJ_ASMF void lj_vm_powi(void);
+LJ_ASMF double lj_vm_floor(double);
+LJ_ASMF double lj_vm_ceil(double);
+LJ_ASMF double lj_vm_trunc(double);
 #endif
 #endif
 

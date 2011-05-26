@@ -2004,16 +2004,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  rsbmi CARG1, CARG1, #0		// if (sign(divisor) != sign(y)) y = -y
   |  bx lr
   |
-  |->vm_powi:
-#if LJ_HASJIT
-  |  NYI
-#endif
-  |
-  |->vm_foldfpm:
-#if LJ_HASJIT
-  |  NYI
-#endif
-  |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
   |// and basic math functions. ORDER ARITH
