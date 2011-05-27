@@ -336,7 +336,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
-  |  bic sp, CARG1, #~CFRAME_RAWMASK
+  |  bic CARG1, CARG1, #~CFRAME_RAWMASK	// Use two steps: bic sp is deprecated.
+  |  mov sp, CARG1
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  ldr L, SAVE_L
   |   mov MASKR8, #255
@@ -1921,6 +1922,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub NARGS8:RC, CARG4, BASE
   |    str CARG2, SAVE_PC		// Invalidate for subsequent line hook.
   |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |   ldr INS, [PC, #-4]
   |  bx CRET1
   |
   |//-----------------------------------------------------------------------
@@ -1929,11 +1931,74 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_exit_handler:
 #if LJ_HASJIT
-  |  NYI
+  |  sub sp, sp, #12
+  |  push {r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12}
+  |  ldr CARG1, [sp, #64]	// Load original value of lr.
+  |   ldr DISPATCH, [lr]	// Load DISPATCH.
+  |    add CARG3, sp, #64	// Recompute original value of sp.
+  |   mv_vmstate CARG4, EXIT
+  |    str CARG3, [sp, #52]	// Store sp in RID_SP
+  |   st_vmstate CARG4
+  |  ldr CARG2, [CARG1, #-4]!	// Get exit instruction.
+  |   str CARG1, [sp, #56]	// Store exit pc in RID_LR and RID_PC.
+  |   str CARG1, [sp, #60]
+  |  lsl CARG2, CARG2, #8
+  |  add CARG1, CARG1, CARG2, asr #6
+  |   ldr CARG2, [lr, #4]	// Load exit stub group offset.
+  |   sub CARG1, CARG1, lr
+  |  ldr L, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |   add CARG1, CARG2, CARG1, lsr #2	// Compute exit number.
+  |    ldr BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
+  |   str CARG1, [DISPATCH, #DISPATCH_J(exitno)]
+  |   mov CARG4, #0
+  |  str L, [DISPATCH, #DISPATCH_J(L)]
+  |    str BASE, L->base
+  |   str CARG4, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |  sub CARG1, DISPATCH, #-GG_DISP2J
+  |  mov CARG2, sp
+  |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)
+  |  // Returns MULTRES (unscaled) or negated error code.
+  |  ldr CARG2, L->cframe
+  |   ldr BASE, L->base
+  |  bic CARG2, CARG2, #~CFRAME_RAWMASK	// Use two steps: bic sp is deprecated.
+  |  mov sp, CARG2
+  |   ldr PC, SAVE_PC			// Get SAVE_PC.
+  |  str L, SAVE_L			// Set SAVE_L (on-trace resume/yield).
+  |  b >1
 #endif
   |->vm_exit_interp:
+  |  // CARG1 = MULTRES or negated error code, BASE, PC and DISPATCH set.
 #if LJ_HASJIT
-  |  NYI
+  |  ldr L, SAVE_L
+  |1:
+  |  cmp CARG1, #0
+  |  blt >3				// Check for error from exit.
+  |   lsl RC, CARG1, #3
+  |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
+  |   str RC, SAVE_MULTRES
+  |   mov CARG3, #0
+  |  ldr CARG2, LFUNC:CARG2->field_pc
+  |   str CARG3, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |    mv_vmstate CARG4, INTERP
+  |  ldr KBASE, [CARG2, #PC2PROTO(k)]
+  |  // Modified copy of ins_next which handles function header dispatch, too.
+  |  ldrb OP, [PC]
+  |     mov MASKR8, #255
+  |   ldr INS, [PC], #4
+  |     lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
+  |    st_vmstate CARG4
+  |  cmp OP, #BC_FUNCF			// Function header?
+  |  ldr OP, [DISPATCH, OP, lsl #2]
+  |   decode_RA8 RA, INS
+  |   lsrlo RC, INS, #16	// No: Decode operands A*8 and D.
+  |   subhs RC, RC, #8
+  |   addhs RA, RA, BASE	// Yes: RA = BASE+framesize*8, RC = nargs*8
+  |  bx OP
+  |
+  |3:  // Rethrow error from the right C frame.
+  |  rsb CARG2, CARG1, #0
+  |  mov CARG1, L
+  |  bl extern lj_err_throw		// (lua_State *L, int errcode)
 #endif
   |
   |//-----------------------------------------------------------------------
@@ -1945,7 +2010,8 @@ static void build_subroutines(BuildCtx *ctx)
   |// double lj_vm_floor/ceil/trunc(double x);
   |.macro vm_round, func
   |->vm_ .. func:
-  |  NYI
+  |  // NYI: Use internal implementation.
+  |  b extern func
   |.endmacro
   |
   |  vm_round floor
@@ -2022,7 +2088,30 @@ static void build_subroutines(BuildCtx *ctx)
   |  eorlo CARG2, CARG2, #0x80000000
   |  biceq CARG2, CARG2, #0x80000000
   |  bxls lr
+#if LJ_HASJIT
+  |  cmp OP, #9
+  |  blo extern atan2
+  |  beq >9  // No support needed for IR_LDEXP.
+  |  cmp OP, #11
+  |  bhi >9
+  |  push {r4, lr}
+  |  beq >1
+  |  // IR_MIN
+  |  bl extern __aeabi_cdcmple
+  |  movhi CARG1, CARG3
+  |  movhi CARG2, CARG4
+  |  pop {r4, pc}
+  |9:
+  |  NYI  // Bad op.
+  |
+  |1:  // IR_MAX
+  |  bl extern __aeabi_cdcmple
+  |  movlo CARG1, CARG3
+  |  movlo CARG2, CARG4
+  |  pop {r4, pc}
+#else
   |  NYI  // Other operations only needed by JIT compiler.
+#endif
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -3568,13 +3657,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_FORI) {
       |  subgt PC, RC, #0x20000
     } else if (op == BC_JFORI) {
-      |  subgt PC, RC, #0x20000
-      |  decode_RD RC, INS
-      |  ble =>BC_JLOOP
+      |  sub PC, RC, #0x20000
+      |  ldrhle RC, [PC, #-2]
     } else if (op == BC_IFORL) {
       |  suble PC, RC, #0x20000
-    } else {
-      |  ble =>BC_JLOOP
     }
     if (vk) {
       |  strd CARG12, FOR_IDX
@@ -3583,6 +3669,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next1
     |   ins_next2
     |  strd CARG12, FOR_EXT
+    if (op == BC_JFORI || op == BC_JFORL) {
+      |  ble =>BC_JLOOP
+    }
     |3:
     |   ins_next3
     |
@@ -3616,8 +3705,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_FORI) {
       |  subhi PC, RC, #0x20000
     } else if (op == BC_JFORI) {
-      |  subhi PC, RC, #0x20000
-      |  decode_RD RC, INS
+      |  sub PC, RC, #0x20000
+      |  ldrhls RC, [PC, #-2]
       |  bls =>BC_JLOOP
     } else if (op == BC_IFORL) {
       |  subls PC, RC, #0x20000
@@ -3687,7 +3776,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #if LJ_HASJIT
     |  // RA = base (ignored), RC = traceno
     |  ldr CARG1, [DISPATCH, #DISPATCH_J(trace)]
+    |   mov CARG2, #0  // Traces on ARM don't store the trace number, so use 0.
     |  ldr TRACE:RC, [CARG1, RC, lsl #2]
+    |   st_vmstate CARG2
     |  ldr RA, TRACE:RC->mcode
     |   str BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
     |   str L, [DISPATCH, #DISPATCH_GL(jit_L)]
@@ -3723,8 +3814,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    ldr KBASE, [PC, #-4+PC2PROTO(k)]
     |  cmp RA, CARG1
     |  bhi ->vm_growstack_l
-    |  ins_next1
-    |  ins_next2
+    if (op != BC_JFUNCF) {
+      |  ins_next1
+      |  ins_next2
+    }
     |2:
     |  cmp NARGS8:RC, CARG2, lsl #3	// Check for missing parameters.
     |   mvn CARG4, #~LJ_TNIL
