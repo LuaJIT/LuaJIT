@@ -53,7 +53,7 @@ LJLIB_ASM_(math_deg)		LJLIB_REC(math_degrad)
 LJLIB_PUSH(0.017453292519943295)
 LJLIB_ASM_(math_rad)		LJLIB_REC(math_degrad)
 
-LJLIB_ASM(math_atan2)		LJLIB_REC(math_binary IR_ATAN2)
+LJLIB_ASM(math_atan2)		LJLIB_REC(.)
 {
   lj_lib_checknum(L, 1);
   lj_lib_checknum(L, 2);
@@ -62,7 +62,7 @@ LJLIB_ASM(math_atan2)		LJLIB_REC(math_binary IR_ATAN2)
 LJLIB_ASM_(math_pow)		LJLIB_REC(.)
 LJLIB_ASM_(math_fmod)
 
-LJLIB_ASM(math_ldexp)		LJLIB_REC(math_binary IR_LDEXP)
+LJLIB_ASM(math_ldexp)		LJLIB_REC(.)
 {
   lj_lib_checknum(L, 1);
 #if LJ_DUALNUM && !LJ_TARGET_X86ORX64

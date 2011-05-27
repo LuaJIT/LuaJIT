@@ -8,6 +8,8 @@
 #define lj_opt_fold_c
 #define LUA_CORE
 
+#include <math.h>
+
 #include "lj_obj.h"
 
 #if LJ_HASJIT
@@ -175,6 +177,17 @@ LJFOLDF(kfold_numarith)
   lua_Number b = knumright;
   lua_Number y = lj_vm_foldarith(a, b, fins->o - IR_ADD);
   return lj_ir_knum(J, y);
+}
+
+LJFOLD(LDEXP KNUM KINT)
+LJFOLDF(kfold_ldexp)
+{
+#if LJ_TARGET_X86ORX64
+  UNUSED(J);
+  return NEXTFOLD;
+#else
+  return lj_ir_knum(J, ldexp(knumleft, fright->i));
+#endif
 }
 
 LJFOLD(FPMATH KNUM any)
@@ -839,9 +852,11 @@ LJFOLDF(simplify_numpow_kx)
   lua_Number n = knumleft;
   if (n == 2.0) {  /* 2.0 ^ i ==> ldexp(1.0, tonum(i)) */
     fins->o = IR_CONV;
+#if LJ_TARGET_X86ORX64
     fins->op1 = fins->op2;
     fins->op2 = IRCONV_NUM_INT;
     fins->op2 = (IRRef1)lj_opt_fold(J);
+#endif
     fins->op1 = (IRRef1)lj_ir_knum_one(J);
     fins->o = IR_LDEXP;
     return RETRYFOLD;
