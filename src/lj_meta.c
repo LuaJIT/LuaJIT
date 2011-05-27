@@ -69,6 +69,7 @@ cTValue *lj_meta_lookup(lua_State *L, cTValue *o, MMS mm)
   return niltv(L);
 }
 
+#if LJ_HASFFI
 /* Tailcall from C function. */
 int lj_meta_tailcall(lua_State *L, cTValue *tv)
 {
@@ -91,6 +92,7 @@ int lj_meta_tailcall(lua_State *L, cTValue *tv)
   */
   return 0;
 }
+#endif
 
 /* Setup call to metamethod to be run by Assembler VM. */
 static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
