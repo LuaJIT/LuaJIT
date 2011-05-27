@@ -856,7 +856,9 @@ static uint32_t ir_khash(IRIns *ir)
 static void asm_cache_flush(MCode *start, MCode *end)
 {
   VG_INVALIDATE(start, (char *)end-(char *)start);
-#if !LJ_TARGET_X86ORX64
+#if LJ_TARGET_X86ORX64
+  UNUSED(start); UNUSED(end);
+#else
 #if defined(__GNUC__)
   __clear_cache(start, end);
 #else
