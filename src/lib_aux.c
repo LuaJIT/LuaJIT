@@ -312,6 +312,13 @@ LUALIB_API int luaL_loadstring(lua_State *L, const char *s)
 
 /* -- Default allocator and panic function -------------------------------- */
 
+static int panic(lua_State *L)
+{
+  fprintf(stderr, "PANIC: unprotected error in call to Lua API (%s)\n",
+	  lua_tostring(L, -1));
+  return 0;
+}
+
 #ifdef LUAJIT_USE_SYSMALLOC
 
 #if LJ_64
@@ -330,30 +337,26 @@ static void *mem_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
   }
 }
 
-#define mem_create()	NULL
+LUALIB_API lua_State *luaL_newstate(void)
+{
+  lua_State *L = lua_newstate(mem_alloc, NULL);
+  if (L) G(L)->panic = panic;
+  return L;
+}
 
 #else
 
 #include "lj_alloc.h"
 
-#define mem_alloc	lj_alloc_f
-#define mem_create	lj_alloc_create
-
-#endif
-
-static int panic(lua_State *L)
-{
-  fprintf(stderr, "PANIC: unprotected error in call to Lua API (%s)\n",
-	  lua_tostring(L, -1));
-  return 0;
-}
-
 LUALIB_API lua_State *luaL_newstate(void)
 {
+  lua_State *L;
+  void *ud = lj_alloc_create();
+  if (ud == NULL) return NULL;
 #if LJ_64
-  lua_State *L = lj_state_newstate(mem_alloc, mem_create());
+  L = lj_state_newstate(lj_alloc_f, ud);
 #else
-  lua_State *L = lua_newstate(mem_alloc, mem_create());
+  L = lua_newstate(lj_alloc_f, ud);
 #endif
   if (L) G(L)->panic = panic;
   return L;
@@ -366,5 +369,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   fprintf(stderr, "Must use luaL_newstate() for 64 bit target\n");
   return NULL;
 }
+#endif
+
 #endif
 
