@@ -1541,7 +1541,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    mov RB, CARG3
   |   bne ->fff_fallback
   |1:
-  |  ldr CARG34, [BASE, #8]
+  |  ldrd CARG34, [BASE, #8]
   |  checktp CARG2, LJ_TSTR
   |   ldreq CARG2, STR:CARG1->len
   |  checktpeq CARG4, LJ_TISNUM

@@ -2182,7 +2182,7 @@ static const unsigned int build_actionlist[5614] = {
 0x1a000000,
 0x00050044,
 0x0006000b,
-0xe5992008,
+0xe1c920d8,
 0xe3710000,
 0x000a0000,
 0x05101000,
