@@ -17,9 +17,17 @@
 /* Scramble the bits of numbers and pointers. */
 static LJ_AINLINE uint32_t hashrot(uint32_t lo, uint32_t hi)
 {
+#if LJ_TARGET_X86ORX64
+  /* Prefer variant that compiles well for a 2-operand CPU. */
   lo ^= hi; hi = lj_rol(hi, HASH_ROT1);
   lo -= hi; hi = lj_rol(hi, HASH_ROT2);
   hi ^= lo; hi -= lj_rol(lo, HASH_ROT3);
+#else
+  lo ^= hi;
+  lo = lo - lj_rol(hi, HASH_ROT1);
+  hi = lo ^ lj_rol(hi, HASH_ROT1 + HASH_ROT2);
+  hi = hi - lj_rol(lo, HASH_ROT3);
+#endif
   return hi;
 }
 
