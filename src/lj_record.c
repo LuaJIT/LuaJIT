@@ -388,7 +388,8 @@ static void rec_for_loop(jit_State *J, const BCIns *fori, ScEvEntry *scev,
     rec_for_check(J, t, dir, stop, step);
   scev->start = tref_ref(find_kinit(J, fori, ra+FORL_IDX, IRT_INT));
   tc = (LJ_DUALNUM &&
-	!(scev->start && irref_isk(scev->stop) && irref_isk(scev->step))) ?
+	!(scev->start && irref_isk(scev->stop) && irref_isk(scev->step) &&
+	  tvisint(&tv[FORL_IDX]) == (t == IRT_INT))) ?
 	IRSLOAD_TYPECHECK : 0;
   if (tc) {
     J->base[ra+FORL_STOP] = stop;
