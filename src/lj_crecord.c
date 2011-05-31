@@ -200,7 +200,7 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
 		    (sinfo & CTF_UNSIGNED) ? 0 : IRCONV_SEXT);
     else if (dsize < 8 && ssize == 8)  /* Truncate from 64 bit integer. */
       sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, 0);
-    else if (ssize <= 4)
+    else if (st == IRT_INT)
       sp = lj_opt_narrow_toint(J, sp);
   xstore:
     if (dt == IRT_I64 || dt == IRT_U64) lj_needsplit(J);
