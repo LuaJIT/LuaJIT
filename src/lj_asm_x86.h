@@ -1416,7 +1416,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
     }
 #else
     int32_t ofs = sizeof(GCcdata);
-    if (LJ_HASFFI && sz == 8) {
+    if (sz == 8) {
       ofs += 4; ir++;
       lua_assert(ir->o == IR_HIOP);
     }
@@ -1428,11 +1428,11 @@ static void asm_cnew(ASMState *as, IRIns *ir)
 	emit_movtomro(as, r, RID_RET, ofs);
 	rset_clear(allow, r);
       }
-      if (!LJ_HASFFI || ofs == sizeof(GCcdata)) break;
+      if (ofs == sizeof(GCcdata)) break;
       ofs -= 4; ir--;
     } while (1);
 #endif
-    lua_assert(sz == 4 || (sz == 8 && (LJ_64 || LJ_HASFFI)));
+    lua_assert(sz == 4 || sz == 8);
   }
 
   /* Combine initialization of marked, gct and typeid. */
