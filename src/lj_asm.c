@@ -121,6 +121,24 @@ static LJ_NORET LJ_NOINLINE void asm_mclimit(ASMState *as)
   lj_mcode_limiterr(as->J, (size_t)(as->mctop - as->mcp + 4*MCLIM_REDZONE));
 }
 
+#ifdef RID_NUM_KREF
+#define ra_iskref(ref)		((ref) < RID_NUM_KREF)
+#define ra_krefreg(ref)		((Reg)(RID_MIN_KREF + (Reg)(ref)))
+#define ra_krefk(as, ref)	(as->krefk[(ref)])
+
+static LJ_AINLINE void ra_setkref(ASMState *as, Reg r, int32_t k)
+{
+  IRRef ref = (IRRef)(r - RID_MIN_KREF);
+  as->krefk[ref] = k;
+  as->cost[r] = REGCOST(ref, ref);
+}
+
+#else
+#define ra_iskref(ref)		0
+#define ra_krefreg(ref)		RID_MIN_GPR
+#define ra_krefk(as, ref)	0
+#endif
+
 /* Arch-specific field offsets. */
 static const uint8_t field_ofs[IRFL__MAX+1] = {
 #define FLOFS(name, ofs)	(uint8_t)(ofs),
@@ -257,24 +275,6 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 #define ra_noweak(as, r)	rset_clear(as->weakset, (r))
 
 #define ra_used(ir)		(ra_hasreg((ir)->r) || ra_hasspill((ir)->s))
-
-#ifdef RID_NUM_KREF
-#define ra_iskref(ref)		((ref) < RID_NUM_KREF)
-#define ra_krefreg(ref)		((Reg)(RID_MIN_KREF + (Reg)(ref)))
-#define ra_krefk(as, ref)	(as->krefk[(ref)])
-
-static LJ_AINLINE void ra_setkref(ASMState *as, Reg r, int32_t k)
-{
-  IRRef ref = (IRRef)(r - RID_MIN_KREF);
-  as->krefk[ref] = k;
-  as->cost[r] = REGCOST(ref, ref);
-}
-
-#else
-#define ra_iskref(ref)		0
-#define ra_krefreg(ref)		RID_MIN_GPR
-#define ra_krefk(as, ref)	0
-#endif
 
 /* Setup register allocator. */
 static void ra_setup(ASMState *as)
@@ -475,7 +475,7 @@ static void ra_evictk(ASMState *as)
 static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
 {
   /* First try to find a register which already holds the same constant. */
-  RegSet work = ~as->freeset & RSET_GPR;
+  RegSet pick, work = ~as->freeset & RSET_GPR;
   Reg r;
   while (work) {
     IRRef ref;
@@ -486,11 +486,15 @@ static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
       return r;
     rset_clear(work, r);
   }
-  work = as->freeset & allow;
-  if (work)
-    r = rset_picktop(work);
-  else
+  pick = as->freeset & allow;
+  if (pick) {
+    /* Constants should preferably get unmodified registers. */
+    if ((pick & ~as->modset))
+      pick &= ~as->modset;
+    r = rset_pickbot(pick);  /* Reduce conflicts with inverse allocation. */
+  } else {
     r = ra_evict(as, allow);
+  }
   RA_DBGX((as, "allock    $x $r", k, r));
   ra_setkref(as, r, k);
   rset_clear(as->freeset, r);
