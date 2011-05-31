@@ -3207,6 +3207,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tst RA, #1<<MM_newindex
     |  bne <1				// 'no __newindex' flag set: done.
     |  ldr INS, [PC, #-4]		// Restore INS.
+    |  decode_RA8 RA, INS
     |  b ->vmeta_tsetb
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
