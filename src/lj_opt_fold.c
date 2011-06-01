@@ -1679,7 +1679,7 @@ static TRef kfold_xload(jit_State *J, IRIns *ir, const void *p)
 
 /* Turn: string.sub(str, a, b) == kstr
 ** into: string.byte(str, a) == string.byte(kstr, 1) etc.
-** Note: this creates unaligned XLOADs!
+** Note: this creates unaligned XLOADs on x86/x64.
 */
 LJFOLD(EQ SNEW KGC)
 LJFOLD(NE SNEW KGC)
@@ -1688,7 +1688,16 @@ LJFOLDF(merge_eqne_snew_kgc)
   GCstr *kstr = ir_kstr(fright);
   int32_t len = (int32_t)kstr->len;
   lua_assert(irt_isstr(fins->t));
-  if (len <= 4) {  /* Handle string lengths 0, 1, 2, 3, 4. */
+
+#if LJ_TARGET_X86ORX64
+#define FOLD_SNEW_MAX_LEN	4  /* Handle string lengths 0, 1, 2, 3, 4. */
+#define FOLD_SNEW_TYPE8		IRT_I8	/* Creates shorter immediates. */
+#else
+#define FOLD_SNEW_MAX_LEN	1  /* Handle string lengths 0 or 1. */
+#define FOLD_SNEW_TYPE8		IRT_U8  /* Prefer unsigned loads. */
+#endif
+
+  if (len <= FOLD_SNEW_MAX_LEN) {
     IROp op = (IROp)fins->o;
     IRRef strref = fleft->op1;
     lua_assert(IR(strref)->o == IR_STRREF);
@@ -1704,7 +1713,7 @@ LJFOLDF(merge_eqne_snew_kgc)
     }
     if (len > 0) {
       /* A 4 byte load for length 3 is ok -- all strings have an extra NUL. */
-      uint16_t ot = (uint16_t)(len == 1 ? IRT(IR_XLOAD, IRT_I8) :
+      uint16_t ot = (uint16_t)(len == 1 ? IRT(IR_XLOAD, FOLD_SNEW_TYPE8) :
 			       len == 2 ? IRT(IR_XLOAD, IRT_U16) :
 			       IRTI(IR_XLOAD));
       TRef tmp = emitir(ot, strref,
