@@ -191,6 +191,14 @@ void emit_asm(BuildCtx *ctx)
   if (ctx->mode != BUILD_machasm)
     fprintf(ctx->fp, ".Lbegin:\n");
 
+#if LJ_TARGET_ARM && defined(__GNUC__)
+  /* This should really be moved into buildvm_arm.dasc. */
+  fprintf(ctx->fp,
+	  ".fnstart\n"
+	  ".save {r4, r5, r6, r7, r8, r9, r10, r11, lr}\n"
+	  ".pad #28\n");
+#endif
+
   for (i = rel = 0; i < ctx->nsym; i++) {
     int32_t ofs = ctx->sym[i].ofs;
     int32_t next = ctx->sym[i+1].ofs;
@@ -218,6 +226,13 @@ void emit_asm(BuildCtx *ctx)
     emit_asm_words(ctx, ctx->code+ofs, next-ofs);
 #endif
   }
+
+#if LJ_TARGET_ARM && defined(__GNUC__)
+  fprintf(ctx->fp,
+	  ".globl lj_err_unwind_arm\n"
+	  ".personality lj_err_unwind_arm\n"
+	  ".fnend\n");
+#endif
 
   fprintf(ctx->fp, "\n");
   switch (ctx->mode) {

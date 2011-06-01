@@ -531,7 +531,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__) && !LJ_TARGET_ARM
+#if defined(__GNUC__)
 
 #ifdef __clang__
 /* http://llvm.org/bugs/show_bug.cgi?id=8703 */
@@ -544,6 +544,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 #define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (_Unwind_Exception_Class)(c))
 #define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
 #define LJ_UEXCLASS_ERRCODE(cl)	((int)((cl) & 0xff))
+
+#if !LJ_TARGET_ARM
 
 /* DWARF2 personality handler referenced from interpreter .eh_frame. */
 LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
@@ -616,6 +618,33 @@ static void err_raise_ext(int errcode)
   static_uex.exception_cleanup = NULL;
   _Unwind_RaiseException(&static_uex);
 }
+#endif
+
+#else
+
+/* ARM unwinder personality handler referenced from interpreter .ARM.extab. */
+LJ_FUNCA _Unwind_Reason_Code lj_err_unwind_arm(_Unwind_State state,
+					       _Unwind_Control_Block *ucb,
+					       _Unwind_Context *ctx)
+{
+  void *cf = (void *)_Unwind_GetGR(ctx, 13);
+  lua_State *L = cframe_L(cf);
+  if ((state & _US_ACTION_MASK) == _US_VIRTUAL_UNWIND_FRAME) {
+    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+    return _URC_HANDLER_FOUND;
+  }
+  if ((state & _US_ACTION_MASK) == _US_UNWIND_FRAME_STARTING) {
+    _Unwind_DeleteException(ucb);
+    _Unwind_SetGR(ctx, 15, (_Unwind_Word)(void *)lj_err_throw);
+    _Unwind_SetGR(ctx, 0, (_Unwind_Word)L);
+    _Unwind_SetGR(ctx, 1, (_Unwind_Word)LUA_ERRRUN);
+    return _URC_INSTALL_CONTEXT;
+  }
+  if (__gnu_unwind_frame(ucb, ctx) != _URC_OK)
+    return _URC_FAILURE;
+  return _URC_CONTINUE_UNWIND;
+}
+
 #endif
 
 #elif LJ_TARGET_X64 && LJ_TARGET_WINDOWS
