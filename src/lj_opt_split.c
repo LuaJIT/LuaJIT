@@ -107,6 +107,25 @@ static IRRef split_emit(jit_State *J, uint16_t ot, IRRef1 op1, IRRef1 op2)
 }
 
 #if LJ_SOFTFP
+/* Emit a (checked) number to integer conversion. */
+static IRRef split_num2int(jit_State *J, IRRef lo, IRRef hi, int check)
+{
+  IRRef tmp, res;
+#if LJ_LE
+  tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), lo, hi);
+#else
+  tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), hi, lo);
+#endif
+  res = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_softfp_d2i);
+  if (check) {
+    tmp = split_emit(J, IRTI(IR_CALLN), res, IRCALL_softfp_i2d);
+    split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), tmp, tmp);
+    split_emit(J, IRTGI(IR_EQ), tmp, lo);
+    split_emit(J, IRTG(IR_HIOP, IRT_SOFTFP), tmp+1, hi);
+  }
+  return res;
+}
+
 /* Emit a CALLN with one split 64 bit argument. */
 static IRRef split_call_l(jit_State *J, IRRef1 *hisubst, IRIns *oir,
 			  IRIns *ir, IRCallID id)
@@ -161,16 +180,18 @@ static IRRef split_call_ll(jit_State *J, IRRef1 *hisubst, IRIns *oir,
 }
 
 /* Get a pointer to the other 32 bit word (LE: hiword, BE: loword). */
-static IRRef split_ptr(jit_State *J, IRRef ref)
+static IRRef split_ptr(jit_State *J, IRIns *oir, IRRef ref)
 {
-  IRIns *ir = IR(ref);
+  IRRef nref = oir[ref].prev;
+  IRIns *ir = IR(nref);
   int32_t ofs = 4;
-  if (ir->o == IR_ADD && irref_isk(ir->op2)) {  /* Reassociate address. */
+  if (ir->o == IR_ADD && irref_isk(ir->op2) && !irt_isphi(oir[ref].t)) {
+    /* Reassociate address. */
     ofs += IR(ir->op2)->i;
-    ref = ir->op1;
-    if (ofs == 0) return ref;
+    nref = ir->op1;
+    if (ofs == 0) return nref;
   }
-  return split_emit(J, IRTI(IR_ADD), ref, lj_ir_kint(J, ofs));
+  return split_emit(J, IRTI(IR_ADD), nref, lj_ir_kint(J, ofs));
 }
 
 /* Transform the old IR to the new IR. */
@@ -279,13 +300,22 @@ static void split_ir(jit_State *J)
 	hi = split_emit(J, IRT(ir->o == IR_NEG ? IR_BXOR : IR_BAND, IRT_SOFTFP),
 			hisubst[ir->op1], hisubst[ir->op2]);
 	break;
-      case IR_SLOAD: case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
-      case IR_MIN: case IR_MAX: case IR_STRTO:
+      case IR_SLOAD:
+	if ((nir->op2 & IRSLOAD_CONVERT)) {  /* Convert from int to number. */
+	  nir->op2 &= ~IRSLOAD_CONVERT;
+	  ir->prev = nref = split_emit(J, IRTI(IR_CALLN), nref,
+				       IRCALL_softfp_i2d);
+	  hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
+	  break;
+	}
+	/* fallthrough */
+      case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+      case IR_STRTO:
 	hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
 	break;
       case IR_XLOAD:
 	hi = split_emit(J, IRT(IR_XLOAD, IRT_SOFTFP),
-			split_ptr(J, nir->op1), ir->op2);
+			split_ptr(J, oir, ir->op1), ir->op2);
 #if LJ_BE
 	ir->prev = hi; hi = nref;
 #endif
@@ -300,7 +330,7 @@ static void split_ir(jit_State *J)
 	IRRef hiref = nir->op2; nir->op2 = hisubst[ir->op2];
 #endif
 	split_emit(J, IRT(IR_XSTORE, IRT_SOFTFP),
-		   split_ptr(J, nir->op1), hiref);
+		   split_ptr(J, oir, ir->op1), hiref);
 	break;
 	}
       case IR_CONV: {  /* Conversion to number. Others handled below. */
@@ -336,9 +366,9 @@ static void split_ir(jit_State *J)
 		     hisubst[ir->op1], hisubst[ir->op2]);
 	break;
       default:
-	lua_assert(ir->o <= IR_NE);
-	split_emit(J, IRTG(IR_HIOP, IRT_SOFTFP),
-		   hisubst[ir->op1], hisubst[ir->op2]);
+	lua_assert(ir->o <= IR_NE || ir->o == IR_MIN || ir->o == IR_MAX);
+	hi = split_emit(J, IRTG(IR_HIOP, IRT_SOFTFP),
+			hisubst[ir->op1], hisubst[ir->op2]);
 	break;
       }
     } else
@@ -387,7 +417,7 @@ static void split_ir(jit_State *J)
 #endif
 	break;
       case IR_XLOAD:
-	hi = split_emit(J, IRTI(IR_XLOAD), split_ptr(J, nir->op1), ir->op2);
+	hi = split_emit(J, IRTI(IR_XLOAD), split_ptr(J, oir, ir->op1), ir->op2);
 #if LJ_BE
 	ir->prev = hi; hi = nref;
 #endif
@@ -398,14 +428,14 @@ static void split_ir(jit_State *J)
 #else
 	hiref = nir->op2; nir->op2 = hisubst[ir->op2];
 #endif
-	split_emit(J, IRTI(IR_XSTORE), split_ptr(J, nir->op1), hiref);
+	split_emit(J, IRTI(IR_XSTORE), split_ptr(J, oir, ir->op1), hiref);
 	break;
       case IR_CONV: {  /* Conversion to 64 bit integer. Others handled below. */
 	IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
 #if LJ_SOFTFP
 	if (st == IRT_NUM) {  /* NUM to 64 bit int conv. */
-	  split_call_l(J, hisubst, oir, ir,
-	    irt_isi64(ir->t) ? IRCALL_softfp_d2l : IRCALL_softfp_d2ul);
+	  hi = split_call_l(J, hisubst, oir, ir,
+		 irt_isi64(ir->t) ? IRCALL_softfp_d2l : IRCALL_softfp_d2ul);
 	} else if (st == IRT_FLOAT) {  /* FLOAT to 64 bit int conv. */
 	  nir->o = IR_CALLN;
 	  nir->op2 = irt_isi64(ir->t) ? IRCALL_softfp_f2l : IRCALL_softfp_f2ul;
@@ -452,7 +482,15 @@ static void split_ir(jit_State *J)
     } else
 #endif
 #if LJ_SOFTFP
-    if (ir->o == IR_TOBIT) {
+    if (ir->o == IR_SLOAD) {
+      if ((nir->op2 & IRSLOAD_CONVERT)) {  /* Convert from number to int. */
+	nir->op2 &= ~IRSLOAD_CONVERT;
+	if (!(nir->op2 & IRSLOAD_TYPECHECK))
+	  nir->t.irt = IRT_INT;  /* Drop guard. */
+	split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
+	ir->prev = split_num2int(J, nref, nref+1, irt_isguard(ir->t));
+      }
+    } else if (ir->o == IR_TOBIT) {
       IRRef tmp, op1 = ir->op1;
       J->cur.nins--;
 #if LJ_LE
@@ -461,6 +499,16 @@ static void split_ir(jit_State *J)
       tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), hisubst[op1], oir[op1].prev);
 #endif
       ir->prev = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_lj_vm_tobit);
+    } else if (ir->o == IR_TOSTR) {
+      if (hisubst[ir->op1]) {
+	if (irref_isk(ir->op1))
+	  nir->op1 = ir->op1;
+	else
+	  split_emit(J, IRT(IR_HIOP, IRT_NIL), hisubst[ir->op1], nref);
+      }
+    } else if (ir->o == IR_HREF || ir->o == IR_NEWREF) {
+      if (irref_isk(ir->op2) && hisubst[ir->op2])
+	nir->op2 = ir->op2;
     } else
 #endif
     if (ir->o == IR_CONV) {  /* See above, too. */
@@ -505,16 +553,21 @@ static void split_ir(jit_State *J)
 #if LJ_SOFTFP
       if (st == IRT_NUM || (LJ_32 && LJ_HASFFI && st == IRT_FLOAT)) {
 	if (irt_isguard(ir->t)) {
-	  lua_assert(0);  /* NYI: missing check. */
-	}
-	split_call_l(J, hisubst, oir, ir,
+	  lua_assert(st == IRT_NUM && irt_isint(ir->t));
+	  J->cur.nins--;
+	  ir->prev = split_num2int(J, nir->op1, hisubst[ir->op1], 1);
+	} else {
+	  split_call_l(J, hisubst, oir, ir,
 #if LJ_32 && LJ_HASFFI
-		     st == IRT_NUM ? IRCALL_softfp_d2i : IRCALL_softfp_f2i
+	    st == IRT_NUM ?
+	      (irt_isint(ir->t) ? IRCALL_softfp_d2i : IRCALL_softfp_d2ui) :
+	      (irt_isint(ir->t) ? IRCALL_softfp_f2i : IRCALL_softfp_f2ui)
 #else
-		     IRCALL_softfp_d2i
+	    IRCALL_softfp_d2i
 #endif
-		     );
-	J->cur.nins--;  /* Drop unused HIOP. */
+	  );
+	  J->cur.nins--;  /* Drop unused HIOP. */
+	}
       }
 #endif
     } else if (ir->o == IR_CALLXS) {
@@ -550,8 +603,20 @@ static void split_ir(jit_State *J)
       }
       hiref = hisubst[ir->op2];
       if (hiref) {
+#if !LJ_TARGET_X86
+	int carg = 0;
+	IRIns *cir;
+	for (cir = IR(nir->op1); cir->o == IR_CARG; cir = IR(cir->op1))
+	  carg++;
+	if ((carg & 1) == 0) {  /* Align 64 bit arguments. */
+	  IRRef op2 = nir->op2;
+	  nir->op2 = REF_NIL;
+	  nref = split_emit(J, IRT(IR_CARG, IRT_NIL), nref, op2);
+	  nir = IR(nref);
+	}
+#endif
 #if LJ_BE
-	IRRef tmp = nir->op2; nir->op2 = hiref; hiref = tmp;
+	{ IRRef tmp = nir->op2; nir->op2 = hiref; hiref = tmp; }
 #endif
 	ir->prev = split_emit(J, IRT(IR_CARG, IRT_NIL), nref, hiref);
       }
@@ -580,14 +645,11 @@ static void split_ir(jit_State *J)
       SnapShot *snap = &J->cur.snap[i];
       SnapEntry *map = &J->cur.snapmap[snap->mapofs];
       MSize n, nent = snap->nent;
-      snap->ref = oir[snap->ref].prev;
+      snap->ref = snap->ref == REF_FIRST ? REF_FIRST : oir[snap->ref].prev;
       for (n = 0; n < nent; n++) {
 	SnapEntry sn = map[n];
 	IRIns *ir = &oir[snap_ref(sn)];
-	if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && irref_isk(snap_ref(sn)))
-	  map[n] = ((sn & 0xffff0000) |
-		    (IRRef1)lj_ir_k64(J, IR_KNUM, ir_knum(ir)));
-	else
+	if (!(LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && irref_isk(snap_ref(sn))))
 	  map[n] = ((sn & 0xffff0000) | ir->prev);
       }
     }
@@ -612,6 +674,11 @@ static int split_needsplit(jit_State *J)
   for (ir = IR(REF_FIRST), irend = IR(J->cur.nins); ir < irend; ir++)
     if (LJ_SOFTFP ? irt_is64(ir->t) : irt_isint64(ir->t))
       return 1;
+  if (LJ_SOFTFP) {
+    for (ref = J->chain[IR_SLOAD]; ref; ref = IR(ref)->prev)
+      if ((IR(ref)->op2 & IRSLOAD_CONVERT))
+	return 1;
+  }
   for (ref = J->chain[IR_CONV]; ref; ref = IR(ref)->prev)
     if ((LJ_SOFTFP && (IR(ref)->op2 & IRCONV_SRCMASK) == IRT_NUM) ||
 	(IR(ref)->op2 & IRCONV_SRCMASK) == IRT_I64 ||

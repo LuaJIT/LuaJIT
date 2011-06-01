@@ -741,8 +741,9 @@ static int asm_snap_checkrename(ASMState *as, IRRef ren)
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
   MSize n, nent = snap->nent;
   for (n = 0; n < nent; n++) {
-    IRRef ref = snap_ref(map[n]);
-    if (ref == ren) {
+    SnapEntry sn = map[n];
+    IRRef ref = snap_ref(sn);
+    if (ref == ren || (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && ++ref == ren)) {
       IRIns *ir = IR(ref);
       ra_spill(as, ir);  /* Register renamed, so force a spill slot. */
       RA_DBGX((as, "snaprensp $f $s", ref, ir->s));
@@ -785,9 +786,9 @@ static void asm_collectargs(ASMState *as, IRIns *ir,
   while (n-- > 1) {
     ir = IR(ir->op1);
     lua_assert(ir->o == IR_CARG);
-    args[n] = ir->op2;
+    args[n] = ir->op2 == REF_NIL ? 0 : ir->op2;
   }
-  args[0] = ir->op1;
+  args[0] = ir->op1 == REF_NIL ? 0 : ir->op1;
   lua_assert(IR(ir->op1)->o != IR_CARG);
 }
 
@@ -1181,12 +1182,6 @@ static void asm_head_side(ASMState *as)
   }
   as->T->spadjust = (uint16_t)spadj;
 
-#if !LJ_TARGET_X86ORX64
-  /* Restore BASE register from parent spill slot. */
-  if (ra_hasspill(irp->s))
-    emit_spload(as, IR(REF_BASE), IR(REF_BASE)->r, spdelta + sps_scale(irp->s));
-#endif
-
   /* Reload spilled target registers. */
   if (pass2) {
     for (i = as->stopins; i > REF_BASE; i--) {
@@ -1221,6 +1216,12 @@ static void asm_head_side(ASMState *as)
   /* Store trace number and adjust stack frame relative to the parent. */
   emit_setvmstate(as, (int32_t)as->T->traceno);
   emit_spsub(as, spdelta);
+
+#if !LJ_TARGET_X86ORX64
+  /* Restore BASE register from parent spill slot. */
+  if (ra_hasspill(irp->s))
+    emit_spload(as, IR(REF_BASE), IR(REF_BASE)->r, sps_scale(irp->s));
+#endif
 
   /* Restore target registers from parent spill slots. */
   if (pass3) {
