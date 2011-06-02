@@ -139,7 +139,10 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_DUALNUM		2
+#if LJ_TARGET_OSX
+/* Runtime code generation is restricted on iOS. Complain to Apple, not me. */
 #define LJ_ARCH_NOJIT		1
+#endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
