@@ -125,6 +125,8 @@ typedef uint32_t RegCost;
 
 #if LJ_TARGET_X86ORX64
 #include "lj_target_x86.h"
+#elif LJ_TARGET_ARM
+#include "lj_target_arm.h"
 #else
 #error "Missing include for target CPU"
 #endif

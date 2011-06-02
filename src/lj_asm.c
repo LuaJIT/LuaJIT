@@ -159,6 +159,8 @@ IRFLDEF(FLOFS)
 
 #if LJ_TARGET_X86ORX64
 #include "lj_emit_x86.h"
+#elif LJ_TARGET_ARM
+#include "lj_emit_arm.h"
 #else
 #error "Missing instruction emitter for target CPU"
 #endif
@@ -1098,6 +1100,8 @@ static void asm_loop(ASMState *as)
 
 #if LJ_TARGET_X86ORX64
 #include "lj_asm_x86.h"
+#elif LJ_TARGET_ARM
+#include "lj_asm_arm.h"
 #else
 #error "Missing instruction emitter for target CPU"
 #endif
