@@ -8,7 +8,7 @@
 
 #include "lua.h"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
 /* MSVC is stuck in the last century and doesn't have C99's stdint.h. */
 typedef __int8 int8_t;
 typedef __int16 int16_t;
@@ -25,6 +25,18 @@ typedef unsigned __int64 uintptr_t;
 typedef __int32 intptr_t;
 typedef unsigned __int32 uintptr_t;
 #endif
+#elif defined(__symbian__)
+/* Cough. */
+typedef signed char int8_t;
+typedef short int int16_t;
+typedef int int32_t;
+typedef long long int64_t;
+typedef unsigned char uint8_t;
+typedef unsigned short int uint16_t;
+typedef unsigned int uint32_t;
+typedef unsigned long long uint64_t;
+typedef int intptr_t;
+typedef unsigned int uintptr_t;
 #else
 #include <stdint.h>
 #endif
