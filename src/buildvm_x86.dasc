@@ -2028,7 +2028,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   }
   |.ffunc_n math_log, fldln2;	fyl2x;		jmp ->fff_resn
   |.ffunc_n math_log10, fldlg2;	fyl2x;		jmp ->fff_resn
-  |.ffunc_n math_exp;	call ->vm_exp;		jmp ->fff_resn
+  |.ffunc_n math_exp;	call ->vm_exp_x87;	jmp ->fff_resn
   |
   |.ffunc_n math_sin;	fsin;			jmp ->fff_resn
   |.ffunc_n math_cos;	fcos;			jmp ->fff_resn
@@ -2055,7 +2055,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  .endif
   ||}
   |  mov RB, BASE
-  |  call extern lj_wrapper_ .. func
+  |  call extern lj_vm_ .. func
   |  mov BASE, RB
   |  .if X64
   |    jmp ->fff_resxmm0
@@ -3169,9 +3169,9 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |// FP exponentiation e^x and 2^x. Called by math.exp fast function and
   |// from JIT code. Arg/ret on x87 stack. No int/xmm regs modified.
   |// Caveat: needs 3 slots on x87 stack!
-  |->vm_exp:
+  |->vm_exp_x87:
   |  fldl2e; fmulp st1				// e^x ==> 2^(x*log2(e))
-  |->vm_exp2:
+  |->vm_exp2_x87:
   |  .if X64WIN
   |    .define expscratch, dword [rsp+8]	// Use scratch area.
   |  .elif X64
@@ -3444,11 +3444,11 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  cmp fpmop, 5; ja >2
     |  .if X64WIN; pop rax; .endif
     |  je >1
-    |  call ->vm_exp
+    |  call ->vm_exp_x87
     |  .if X64WIN; push rax; .endif
     |  jmp >7
     |1:
-    |  call ->vm_exp2
+    |  call ->vm_exp2_x87
     |  .if X64WIN; push rax; .endif
     |  jmp >7
     |2: ; cmp fpmop, 7; je >1; ja >2
@@ -3487,7 +3487,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  fld qword [esp+4]
     |  ret
     |2: ; fld qword [esp+4]
-    |  cmp fpmop, 5; jb ->vm_exp; je ->vm_exp2
+    |  cmp fpmop, 5; jb ->vm_exp_x87; je ->vm_exp2_x87
     |2: ; cmp fpmop, 7; je >1; ja >2
     |  fldln2; fxch; fyl2x; ret
     |1: ; fld1; fxch; fyl2x; ret
@@ -3505,7 +3505,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
     |  cmp fpmop, 1; jb ->vm_floor; je ->vm_ceil
     |  cmp fpmop, 3; jb ->vm_trunc; ja >2
     |  fsqrt; ret
-    |2: ; cmp fpmop, 5; jb ->vm_exp; je ->vm_exp2
+    |2: ; cmp fpmop, 5; jb ->vm_exp_x87; je ->vm_exp2_x87
     |  cmp fpmop, 7; je >1; ja >2
     |  fldln2; fxch; fyl2x; ret
     |1: ; fld1; fxch; fyl2x; ret

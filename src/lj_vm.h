@@ -51,14 +51,25 @@ LJ_ASMF void lj_vm_exit_interp(void);
 LJ_ASMF void lj_vm_floor_sse(void);
 LJ_ASMF void lj_vm_ceil_sse(void);
 LJ_ASMF void lj_vm_trunc_sse(void);
-LJ_ASMF void lj_vm_exp(void);
-LJ_ASMF void lj_vm_exp2(void);
+LJ_ASMF void lj_vm_exp_x87(void);
+LJ_ASMF void lj_vm_exp2_x87(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
 #else
 LJ_ASMF double lj_vm_floor(double);
 LJ_ASMF double lj_vm_ceil(double);
 LJ_ASMF double lj_vm_trunc(double);
+LJ_ASMF double lj_vm_powi(double, int32_t);
+#if defined(__ANDROID__) || defined(__symbian__)
+LJ_ASMF double lj_vm_log2(double);
+#else
+#define lj_vm_log2	log2
+#endif
+#if defined(__symbian__)
+LJ_ASMF double lj_vm_exp2(double);
+#else
+#define lj_vm_exp2	exp2
+#endif
 #endif
 #endif
 

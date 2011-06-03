@@ -84,10 +84,6 @@ LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
 LJLIB_PUSH(3.14159265358979323846) LJLIB_SET(pi)
 LJLIB_PUSH(1e310) LJLIB_SET(huge)
 
-LJ_FUNCA double lj_wrapper_sinh(double x) { return sinh(x); }
-LJ_FUNCA double lj_wrapper_cosh(double x) { return cosh(x); }
-LJ_FUNCA double lj_wrapper_tanh(double x) { return tanh(x); }
-
 /* ------------------------------------------------------------------------ */
 
 /* This implements a Tausworthe PRNG with period 2^223. Based on:

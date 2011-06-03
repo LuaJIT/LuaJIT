@@ -274,7 +274,7 @@ static void split_ir(jit_State *J)
 	    IRIns *irm12 = IR(irm3->op1);
 	    IRIns *irl1 = IR(irm12->op1);
 	    if (irm12->op1 > J->loopref && irl1->o == IR_CALLN &&
-		irl1->op2 == IRCALL_log2) {
+		irl1->op2 == IRCALL_lj_vm_log2) {
 	      IRRef tmp = irl1->op1;  /* Recycle first two args from LOG2. */
 	      IRRef arg3 = irm3->op2, arg4 = irm4->op2;
 	      J->cur.nins--;

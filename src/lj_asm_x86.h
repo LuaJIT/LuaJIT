@@ -1591,8 +1591,8 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
     }
     emit_rmro(as, XO_FSTPq, XOg_FSTPq, RID_ESP, ofs);
     switch (fpm) {  /* st0 = lj_vm_*(st0) */
-    case IRFPM_EXP: emit_call(as, lj_vm_exp); break;
-    case IRFPM_EXP2: emit_call(as, lj_vm_exp2); break;
+    case IRFPM_EXP: emit_call(as, lj_vm_exp_x87); break;
+    case IRFPM_EXP2: emit_call(as, lj_vm_exp2_x87); break;
     case IRFPM_SIN: emit_x87op(as, XI_FSIN); break;
     case IRFPM_COS: emit_x87op(as, XI_FCOS); break;
     case IRFPM_TAN: emit_x87op(as, XI_FPOP); emit_x87op(as, XI_FPTAN); break;

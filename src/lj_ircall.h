@@ -91,9 +91,9 @@ typedef struct CCallInfo {
   _(lj_vm_trunc,	ARG1_FP,   N, NUM, 0) \
   _(sqrt,		ARG1_FP,   N, NUM, 0) \
   _(exp,		ARG1_FP,   N, NUM, 0) \
-  _(exp2,		ARG1_FP,   N, NUM, 0) \
+  _(lj_vm_exp2,		ARG1_FP,   N, NUM, 0) \
   _(log,		ARG1_FP,   N, NUM, 0) \
-  _(log2,		ARG1_FP,   N, NUM, 0) \
+  _(lj_vm_log2,		ARG1_FP,   N, NUM, 0) \
   _(log10,		ARG1_FP,   N, NUM, 0) \
   _(sin,		ARG1_FP,   N, NUM, 0) \
   _(cos,		ARG1_FP,   N, NUM, 0) \
