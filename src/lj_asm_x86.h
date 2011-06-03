@@ -1651,6 +1651,16 @@ static void asm_arith64(ASMState *as, IRIns *ir, IRCallID id)
 }
 #endif
 
+static void asm_intmod(ASMState *as, IRIns *ir)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_vm_modi];
+  IRRef args[2];
+  args[0] = ir->op1;
+  args[1] = ir->op2;
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+
 static int asm_swapops(ASMState *as, IRIns *ir)
 {
   IRIns *irl = IR(ir->op1);
@@ -2499,11 +2509,12 @@ static void asm_ir(ASMState *as, IRIns *ir)
     break;
   case IR_MOD:
 #if LJ_64 && LJ_HASFFI
-    asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
-					   IRCALL_lj_carith_modu64);
-#else
-    lua_assert(0);
+    if (!irt_isint(ir->t))
+      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
+					     IRCALL_lj_carith_modu64);
+    else
 #endif
+      asm_intmod(as, ir);
     break;
 
   case IR_NEG:

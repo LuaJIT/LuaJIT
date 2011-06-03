@@ -1110,6 +1110,16 @@ static void asm_intmul(ASMState *as, IRIns *ir)
   if (ra_hasreg(tmp)) emit_dm(as, ARMI_MOV, tmp, right);
 }
 
+static void asm_intmod(ASMState *as, IRIns *ir)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_vm_modi];
+  IRRef args[2];
+  args[0] = ir->op1;
+  args[1] = ir->op2;
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+
 static void asm_bitswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
@@ -1652,6 +1662,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_ADD: case IR_ADDOV: asm_arithop(as, ir, ARMI_ADD); break;
   case IR_SUB: case IR_SUBOV: asm_arithop(as, ir, ARMI_SUB); break;
   case IR_MUL: case IR_MULOV: asm_intmul(as, ir); break;
+  case IR_MOD: asm_intmod(as, ir); break;
 
   case IR_NEG: asm_intneg(as, ir, ARMI_RSB); break;
 
@@ -1659,7 +1670,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_MAX: asm_intmin_max(as, ir, CC_LT); break;
 
   case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
-  case IR_DIV: case IR_MOD: case IR_POW: case IR_ABS: case IR_TOBIT:
+  case IR_DIV: case IR_POW: case IR_ABS: case IR_TOBIT:
     lua_assert(0);  /* Unused for LJ_SOFTFP. */
     break;
 

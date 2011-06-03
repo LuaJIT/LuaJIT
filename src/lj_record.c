@@ -1715,7 +1715,7 @@ void lj_record_ins(jit_State *J)
   case BC_MODVN: case BC_MODVV:
   recmod:
     if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
-      rc = lj_opt_narrow_mod(J, rb, rc);
+      rc = lj_opt_narrow_mod(J, rb, rc, rcv);
     else
       rc = rec_mm_arith(J, &ix, MM_mod);
     break;

@@ -231,6 +231,7 @@ static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
   case IR_ADD: k1 += k2; break;
   case IR_SUB: k1 -= k2; break;
   case IR_MUL: k1 *= k2; break;
+  case IR_MOD: k1 = lj_vm_modi(k1, k2); break;
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
@@ -249,6 +250,7 @@ static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
 LJFOLD(ADD KINT KINT)
 LJFOLD(SUB KINT KINT)
 LJFOLD(MUL KINT KINT)
+LJFOLD(MOD KINT KINT)
 LJFOLD(BAND KINT KINT)
 LJFOLD(BOR KINT KINT)
 LJFOLD(BXOR KINT KINT)
@@ -1148,7 +1150,6 @@ LJFOLDF(simplify_intmul_k32)
 
 LJFOLD(MUL any KINT64)
 LJFOLDF(simplify_intmul_k64)
-
 {
   if (ir_kint64(fright)->u64 == 0)  /* i * 0 ==> 0 */
     return INT64FOLD(0);
@@ -1157,6 +1158,27 @@ LJFOLDF(simplify_intmul_k64)
   else if (ir_kint64(fright)->u64 < 0x80000000u)
     return simplify_intmul_k(J, (int32_t)ir_kint64(fright)->u64);
 #endif
+  return NEXTFOLD;
+}
+
+LJFOLD(MOD any KINT)
+LJFOLDF(simplify_intmod_k)
+{
+  int32_t k = fright->i;
+  lua_assert(k != 0);
+  if (k > 0 && (k & (k-1)) == 0) {  /* i % (2^k) ==> i & (2^k-1) */
+    fins->o = IR_BAND;
+    fins->op2 = lj_ir_kint(J, k-1);
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(MOD KINT any)
+LJFOLDF(simplify_intmod_kleft)
+{
+  if (fleft->i == 0)
+    return INTFOLD(0);
   return NEXTFOLD;
 }
 

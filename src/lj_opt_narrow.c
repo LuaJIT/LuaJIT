@@ -551,16 +551,16 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
 }
 
 /* Narrowing of modulo operator. */
-TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc)
+TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vc)
 {
   TRef tmp;
-  if ((J->flags & JIT_F_OPT_NARROW) &&
-      tref_isk(rc) && tref_isint(rc)) {  /* Optimize x % k. */
-    int32_t k = IR(tref_ref(rc))->i;
-    if (k > 0 && (k & (k-1)) == 0) {  /* i % 2^k ==> band(i, 2^k-1) */
-      if (tref_isinteger(rb))
-	return emitir(IRTI(IR_BAND), rb, lj_ir_kint(J, k-1));
-    }
+  if (tvisstr(vc) && !lj_str_tonum(strV(vc), vc))
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  if ((LJ_DUALNUM || (J->flags & JIT_F_OPT_NARROW)) &&
+      tref_isinteger(rb) && tref_isinteger(rc) &&
+      (tvisint(vc) ? intV(vc) != 0 : !tviszero(vc))) {
+    emitir(IRTGI(IR_NE), rc, lj_ir_kint(J, 0));
+    return emitir(IRTI(IR_MOD), rb, rc);
   }
   /* b % c ==> b - floor(b/c)*c */
   rb = lj_ir_tonum(J, rb);

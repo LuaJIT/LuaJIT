@@ -143,6 +143,7 @@ typedef struct CCallInfo {
   _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
   _(lj_mem_newgco,	2,  FS, P32, CCI_L) \
   _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
+  _(lj_vm_modi,		2,  FN, INT, 0) \
   IRCALLDEF_SOFTFP(_) \
   IRCALLDEF_FPMATH(_) \
   IRCALLDEF_FFI(_) \
