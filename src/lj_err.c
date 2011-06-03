@@ -531,7 +531,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(__symbian__)
 
 #ifdef __clang__
 /* http://llvm.org/bugs/show_bug.cgi?id=8703 */
@@ -540,12 +540,12 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 #include <unwind.h>
 
+#if !LJ_TARGET_ARM
+
 #define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
 #define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (_Unwind_Exception_Class)(c))
 #define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
 #define LJ_UEXCLASS_ERRCODE(cl)	((int)((cl) & 0xff))
-
-#if !LJ_TARGET_ARM
 
 /* DWARF2 personality handler referenced from interpreter .eh_frame. */
 LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
