@@ -1963,14 +1963,14 @@ static void build_subroutines(BuildCtx *ctx)
   |//
   |.macro vm_round, name, mode
   |  // Used temporaries: TMP0, TMP1, TMP2, TMP3.
-  |->name:				// Input: CARG2, output: CRET2
+  |->name.._efd:			// Input: CARG2, output: CRET2
   |  evmergehi CARG1, CARG2, CARG2
   |->name.._hilo:
   |  // Input: CARG1 (hi), CARG2 (hi, lo), output: CRET2
   |  rlwinm TMP2, CARG1, 12, 21, 31
   |  addic. TMP2, TMP2, -1023		// exp = exponent(x) - 1023
   |   li TMP1, -1
-  |  cmplwi cr1, TMP2, 51		// 0 <= exp < 51?
+  |  cmplwi cr1, TMP2, 51		// 0 <= exp <= 51?
   |   subfic TMP0, TMP2, 52
   |  bgt cr1, >1
   |   lus TMP3, 0xfff0
@@ -2022,12 +2022,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  blr
   |.endmacro
   |
+  |->vm_floor:
+  |  mflr CARG3
+  |  bl ->vm_floor_hilo
+  |  mtlr CARG3
+  |  evmergehi CRET1, CRET2, CRET2
+  |  blr
+  |
   |  vm_round vm_floor, 0
   |  vm_round vm_ceil,  1
 #if LJ_HASJIT
   |  vm_round vm_trunc, 2
 #else
-  |->vm_trunc:
+  |->vm_trunc_efd:
   |->vm_trunc_hilo:
 #endif
   |
@@ -2060,7 +2067,7 @@ static void build_subroutines(BuildCtx *ctx)
   |2:
   |   cmplwi CARG5, 5; beq >1; bgt >2
   |  evmr CARG3, CARG2; efddiv CRET2, CARG2, CARG4; evmr RB, CARG4
-  |  mflr RC; bl ->vm_floor; mtlr RC
+  |  mflr RC; bl ->vm_floor_efd; mtlr RC
   |  efdmul CRET2, CRET2, RB; efdsub CRET2, CARG3, CRET2
   |  evmergehi CRET1, CRET2, CRET2; blr
   |1:
@@ -2387,7 +2394,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_arithpre RD, SAVE0
     |->BC_MODVN_Z:
     |  efddiv CARG2, RD, SAVE0
-    |  bl ->vm_floor			// floor(b/c)
+    |  bl ->vm_floor_efd		// floor(b/c)
     |  efdmul TMP0, CRET2, SAVE0
     |  ins_next1
     |  efdsub TMP0, RD, TMP0		// b - floor(b/c)*c
