@@ -1308,10 +1308,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movmi CARG1, #0x80000000
   |  bmi <1
   |4:
-  |  // NYI: Use internal implementation.
-  |  IOS mov RA, BASE
-  |  bl extern func
-  |  IOS mov BASE, RA
+  |  bl ->vm_..func
   |  b ->fff_restv
   |.endmacro
   |
@@ -2010,23 +2007,76 @@ static void build_subroutines(BuildCtx *ctx)
   |// double lj_vm_floor/ceil/trunc(double x);
   |.macro vm_round, func
   |->vm_ .. func:
-  |  // NYI: Use internal implementation.
-  |  b extern func
+  |  lsl CARG3, CARG2, #1
+  |  adds RB, CARG3, #0x00200000
+  |  bpl >2				// |x| < 1?
+  |  mvn CARG4, #0x3cc
+  |  subs RB, CARG4, RB, asr #21	// 2^0: RB = 51, 2^51: RB = 0.
+  |  bxlo lr				// |x| >= 2^52: done.
+  |  mvn CARG4, #1
+  |   bic CARG3, CARG1, CARG4, lsl RB	// ztest = lo & ~lomask
+  |  and CARG1, CARG1, CARG4, lsl RB	// lo &= lomask
+  |  subs RB, RB, #32
+  |   bicpl CARG4, CARG2, CARG4, lsl RB	// |x| <= 2^20: ztest |= hi & ~himask
+  |   orrpl CARG3, CARG3, CARG4
+  |   mvnpl CARG4, #1
+  |  andpl CARG2, CARG2, CARG4, lsl RB	// |x| <= 2^20: hi &= himask
+  |.if "func" == "floor"
+  |   tst CARG3, CARG2, asr #31		// iszero = ((ztest & signmask) == 0)
+  |.else
+  |   bics CARG3, CARG3, CARG2, asr #31	// iszero = ((ztest & ~signmask) == 0)
+  |.endif
+  |  bxeq lr				// iszero: done.
+  |  mvn CARG4, #1
+  |  cmp RB, #0
+  |  lslpl CARG3, CARG4, RB
+  |  mvnmi CARG3, #0
+  |  add RB, RB, #32
+  |  subs CARG1, CARG1, CARG4, lsl RB	// lo = lo-lomask
+  |  sbc CARG2, CARG2, CARG3		// hi = hi-himask+carry
+  |  bx lr
+  |
+  |2:  // |x| < 1:
+  |  orr CARG3, CARG3, CARG1		// ztest = (2*hi) | lo
+  |.if "func" == "floor"
+  |  tst CARG3, CARG2, asr #31		// iszero = ((ztest & signmask) == 0)
+  |.else
+  |  bics CARG3, CARG3, CARG2, asr #31	// iszero = ((ztest & ~signmask) == 0)
+  |.endif
+  |  mov CARG1, #0			// lo = 0
+  |  and CARG2, CARG2, #0x80000000
+  |  ldrne CARG4, <9			// hi = sign(x) | (iszero ? 0.0 : 1.0)
+  |  orrne CARG2, CARG2, CARG4
+  |  bx lr
   |.endmacro
   |
+  |9:
+  |  .long 0x3ff00000			// hiword(1.0)
   |  vm_round floor
   |  vm_round ceil
-#if LJ_HASJIT
-  |  vm_round trunc
-#else
+  |
   |->vm_trunc:
+#if LJ_HASJIT
+  |  lsl CARG3, CARG2, #1
+  |  adds RB, CARG3, #0x00200000
+  |  andpl CARG2, CARG2, #0x80000000	// |x| < 1? hi = sign(x), lo = 0.
+  |  movpl CARG1, #0
+  |  bxpl lr
+  |  mvn CARG4, #0x3cc
+  |  subs RB, CARG4, RB, asr #21	// 2^0: RB = 51, 2^51: RB = 0.
+  |  bxlo lr				// |x| >= 2^52: already done.
+  |  mvn CARG4, #1
+  |  and CARG1, CARG1, CARG4, lsl RB	// lo &= lomask
+  |  subs RB, RB, #32
+  |  andpl CARG2, CARG2, CARG4, lsl RB	// |x| <= 2^20: hi &= himask
+  |  bx lr
 #endif
   |
   |  // double lj_vm_mod(double dividend, double divisor);
   |->vm_mod:
   |  push {r0, r1, r2, r3, r4, lr}
   |  bl extern __aeabi_ddiv
-  |  bl extern floor  // NYI: Use internal implementation of floor.
+  |  bl ->vm_floor
   |  ldrd CARG34, [sp, #8]
   |  bl extern __aeabi_dmul
   |  ldrd CARG34, [sp]
@@ -2586,9 +2636,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // FP variant.
     |  ins_arithfallback ins_arithcheck_num
     |.if "intins" == "vm_modi"
-    |  IOS mov RC, BASE
     |  bl fpcall
-    |  IOS mov BASE, RC  // NYI: remove once we use internal impl. of floor.
     |.else
     |  bl fpcall
     |   ins_next1
@@ -3966,7 +4014,6 @@ static void emit_asm_debug(BuildCtx *ctx)
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
-    /* NYI: emit ARM.exidx. */
     break;
   default:
     break;

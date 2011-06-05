@@ -45,7 +45,15 @@ LJ_ASMF void lj_vm_callhook(void);
 LJ_ASMF void lj_vm_exit_handler(void);
 LJ_ASMF void lj_vm_exit_interp(void);
 
-/* Handlers callable from compiled code. */
+/* Internal math helper functions. */
+#if LJ_TARGET_X86ORX64
+#define lj_vm_floor(x)	floor(x)
+#define lj_vm_ceil(x)	ceil(x)
+#else
+LJ_ASMF double lj_vm_floor(double);
+LJ_ASMF double lj_vm_ceil(double);
+#endif
+
 #if LJ_HASJIT
 #if LJ_TARGET_X86ORX64
 LJ_ASMF void lj_vm_floor_sse(void);
@@ -56,8 +64,6 @@ LJ_ASMF void lj_vm_exp2_x87(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
 #else
-LJ_ASMF double lj_vm_floor(double);
-LJ_ASMF double lj_vm_ceil(double);
 LJ_ASMF double lj_vm_trunc(double);
 LJ_ASMF double lj_vm_powi(double, int32_t);
 #if defined(__ANDROID__) || defined(__symbian__)
