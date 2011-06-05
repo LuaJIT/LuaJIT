@@ -261,6 +261,83 @@ static uint32_t asm_fuseopm(ASMState *as, ARMIns ai, IRRef ref, RegSet allow)
   return ra_allocref(as, ref, allow);
 }
 
+/* Fuse shifts into loads/stores. Only bother with BSHL 2 => lsl #2. */
+static IRRef asm_fuselsl2(ASMState *as, IRRef ref)
+{
+  IRIns *ir = IR(ref);
+  if (ra_noreg(ir->r) && mayfuse(as, ref) && ir->o == IR_BSHL &&
+      irref_isk(ir->op2) && IR(ir->op2)->i == 2)
+    return ir->op1;
+  return 0;  /* No fusion. */
+}
+
+/* Fuse XLOAD/XSTORE reference into load/store operand. */
+static void asm_fusexref(ASMState *as, ARMIns ai, Reg rd, IRRef ref,
+			 RegSet allow)
+{
+  IRIns *ir = IR(ref);
+  int32_t ofs = 0;
+  Reg base;
+  if (ra_noreg(ir->r) && mayfuse(as, ref)) {
+    int32_t lim = (ai & 0x04000000) ? 4096 : 256;
+    if (ir->o == IR_ADD) {
+      if (irref_isk(ir->op2) && (ofs = IR(ir->op2)->i) > -lim && ofs < lim) {
+	ref = ir->op1;
+      } else {
+	IRRef lref = ir->op1, rref = ir->op2;
+	Reg rn, rm;
+	if ((ai & 0x04000000)) {
+	  IRRef sref = asm_fuselsl2(as, rref);
+	  if (sref) {
+	    rref = sref;
+	    ai |= ARMF_SH(ARMSH_LSL, 2);
+	  } else if ((sref = asm_fuselsl2(as, lref)) != 0) {
+	    lref = rref;
+	    rref = sref;
+	    ai |= ARMF_SH(ARMSH_LSL, 2);
+	  }
+	}
+	rn = ra_alloc1(as, lref, allow);
+	rm = ra_alloc1(as, rref, rset_exclude(allow, rn));
+	if ((ai & 0x04000000)) ai |= ARMI_LS_R;
+	emit_dnm(as, ai|ARMI_LS_P|ARMI_LS_U, rd, rn, rm);
+	return;
+      }
+    } else if (ir->o == IR_STRREF) {
+      ofs = (int32_t)sizeof(GCstr);
+      if (irref_isk(ir->op2)) {
+	ofs += IR(ir->op2)->i;
+	ref = ir->op1;
+      } else if (irref_isk(ir->op1)) {
+	ofs += IR(ir->op1)->i;
+	ref = ir->op2;
+      } else {
+	/* NYI: Fuse ADD with constant. */
+	Reg rn = ra_alloc1(as, ir->op1, allow);
+	uint32_t m = asm_fuseopm(as, 0, ir->op2, rset_exclude(allow, rn));
+	if ((ai & 0x04000000))
+	  emit_lso(as, ai, rd, rd, ofs);
+	else
+	  emit_lsox(as, ai, rd, rd, ofs);
+	emit_dn(as, ARMI_ADD^m, rd, rn);
+	return;
+      }
+      if (ofs <= -lim || ofs >= lim) {
+	Reg rn = ra_alloc1(as, ref, allow);
+	Reg rm = ra_allock(as, ofs, rset_exclude(allow, rn));
+	if ((ai & 0x04000000)) ai |= ARMI_LS_R;
+	emit_dnm(as, ai|ARMI_LS_P|ARMI_LS_U, rd, rn, rm);
+	return;
+      }
+    }
+  }
+  base = ra_alloc1(as, ref, allow);
+  if ((ai & 0x04000000))
+    emit_lso(as, ai, rd, base, ofs);
+  else
+    emit_lsox(as, ai, rd, base, ofs);
+}
+
 /* -- Calls --------------------------------------------------------------- */
 
 /* Generate a call to a C function. */
@@ -749,68 +826,75 @@ static void asm_strref(ASMState *as, IRIns *ir)
 
 /* -- Loads and stores ---------------------------------------------------- */
 
-static void asm_fxload(ASMState *as, IRIns *ir)
+static ARMIns asm_fxloadins(IRIns *ir)
 {
-  Reg idx, dest = ra_dest(as, ir, RSET_GPR);
-  int32_t ofs;
-  ARMIns ai;
-  if (ir->o == IR_FLOAD) {
-    idx = ra_alloc1(as, ir->op1, RSET_GPR);
-    if (ir->op2 == IRFL_TAB_ARRAY) {
-      ofs = asm_fuseabase(as, ir->op1);
-      if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
-	emit_dn(as, ARMI_ADD|ARMI_K12|ofs, dest, idx);
-	return;
-      }
-    }
-    ofs = field_ofs[ir->op2];
-  } else {
-    /* NYI: Fuse xload operands. */
-    lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
-    idx = ra_alloc1(as, ir->op1, RSET_GPR);
-    ofs = 0;
-  }
   switch (irt_type(ir->t)) {
-  case IRT_I8: ai = ARMI_LDRSB; break;
-  case IRT_U8: ai = ARMI_LDRB; goto use_lso;
-  case IRT_I16: ai = ARMI_LDRSH; break;
-  case IRT_U16: ai = ARMI_LDRH; break;
+  case IRT_I8: return ARMI_LDRSB;
+  case IRT_U8: return ARMI_LDRB;
+  case IRT_I16: return ARMI_LDRSH;
+  case IRT_U16: return ARMI_LDRH;
   case IRT_NUM: lua_assert(0);
   case IRT_FLOAT:
-  default: ai = ARMI_LDR;
-  use_lso:
-    emit_lso(as, ai, dest, idx, ofs);
-    return;
+  default: return ARMI_LDR;
   }
-  emit_lsox(as, ai, dest, idx, ofs);
 }
 
-static void asm_fxstore(ASMState *as, IRIns *ir)
+static ARMIns asm_fxstoreins(IRIns *ir)
 {
-  Reg idx, src = ra_alloc1(as, ir->op2, RSET_GPR);
-  RegSet allow = rset_exclude(RSET_GPR, src);
-  int32_t ofs;
-  ARMIns ai;
-  if (ir->o == IR_FSTORE) {
-    IRIns *irf = IR(ir->op1);
-    idx = ra_alloc1(as, irf->op1, allow);
-    ofs = field_ofs[irf->op2];
-  } else {
-    /* NYI: Fuse xstore operands. */
-    idx = ra_alloc1(as, ir->op1, allow);
-    ofs = 0;
-  }
   switch (irt_type(ir->t)) {
-  case IRT_I8: case IRT_U8: ai = ARMI_STRB; goto use_lso;
-  case IRT_I16: case IRT_U16: ai = ARMI_STRH; break;
+  case IRT_I8: case IRT_U8: return ARMI_STRB;
+  case IRT_I16: case IRT_U16: return ARMI_STRH;
   case IRT_NUM: lua_assert(0);
   case IRT_FLOAT:
-  default: ai = ARMI_STR;
-  use_lso:
-    emit_lso(as, ai, src, idx, ofs);
-    return;
+  default: return ARMI_STR;
   }
-  emit_lsox(as, ai, src, idx, ofs);
+}
+
+static void asm_fload(ASMState *as, IRIns *ir)
+{
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
+  ARMIns ai = asm_fxloadins(ir);
+  int32_t ofs;
+  if (ir->op2 == IRFL_TAB_ARRAY) {
+    ofs = asm_fuseabase(as, ir->op1);
+    if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
+      emit_dn(as, ARMI_ADD|ARMI_K12|ofs, dest, idx);
+      return;
+    }
+  }
+  ofs = field_ofs[ir->op2];
+  if ((ai & 0x04000000))
+    emit_lso(as, ai, dest, idx, ofs);
+  else
+    emit_lsox(as, ai, dest, idx, ofs);
+}
+
+static void asm_fstore(ASMState *as, IRIns *ir)
+{
+  Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
+  IRIns *irf = IR(ir->op1);
+  Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
+  int32_t ofs = field_ofs[irf->op2];
+  ARMIns ai = asm_fxstoreins(ir);
+  if ((ai & 0x04000000))
+    emit_lso(as, ai, src, idx, ofs);
+  else
+    emit_lsox(as, ai, src, idx, ofs);
+}
+
+static void asm_xload(ASMState *as, IRIns *ir)
+{
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
+  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
+}
+
+static void asm_xstore(ASMState *as, IRIns *ir)
+{
+  Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
+  asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
+	       rset_exclude(RSET_GPR, src));
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -1687,11 +1771,13 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
     asm_ahuvload(as, ir);
     break;
-  case IR_FLOAD: case IR_XLOAD: asm_fxload(as, ir); break;
+  case IR_FLOAD: asm_fload(as, ir); break;
+  case IR_XLOAD: asm_xload(as, ir); break;
   case IR_SLOAD: asm_sload(as, ir); break;
 
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
-  case IR_FSTORE: case IR_XSTORE: asm_fxstore(as, ir); break;
+  case IR_FSTORE: asm_fstore(as, ir); break;
+  case IR_XSTORE: asm_xstore(as, ir); break;
 
   /* Allocations. */
   case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;

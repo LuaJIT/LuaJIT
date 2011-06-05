@@ -526,6 +526,13 @@ again:
 	idx = emitir(IRT(IR_BAND, IRT_INTP), idx, lj_ir_kintp(J, 1));
       sz = lj_ctype_size(cts, (sid = ctype_cid(ct->info)));
       idx = crec_reassoc_ofs(J, idx, &ofs, sz);
+#if LJ_TARGET_ARM
+      /* Hoist base add to allow fusion of shifts into operands. */
+      if (LJ_LIKELY(J->flags & JIT_F_OPT_LOOP) && ofs && (sz == 1 || sz == 4)) {
+	ptr = emitir(IRT(IR_ADD, IRT_PTR), ptr, lj_ir_kintp(J, ofs));
+	ofs = 0;
+      }
+#endif
       idx = emitir(IRT(IR_MUL, IRT_INTP), idx, lj_ir_kintp(J, sz));
       ptr = emitir(IRT(IR_ADD, IRT_PTR), idx, ptr);
     }
