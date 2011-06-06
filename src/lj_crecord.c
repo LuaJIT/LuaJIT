@@ -1138,10 +1138,18 @@ void LJ_FASTCALL recff_ffi_abi(jit_State *J, RecordFFData *rd)
 void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
 {
   CTState *cts = ctype_ctsG(J2G(J));
-  IRType st = crec_ct2irt(ctype_raw(cts, cdataV(&rd->argv[0])->typeid));
-  CTypeID did = (st >= IRT_I8 && st <= IRT_INT) ? CTID_INT32 : CTID_DOUBLE;
-  CType *d = ctype_get(cts, did);
-  J->base[0] = crec_ct_tv(J, d, 0, J->base[0], &rd->argv[0]);
+  CType *d, *ct = lj_ctype_rawref(cts, cdataV(&rd->argv[0])->typeid);
+  if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
+  if (ctype_isnum(ct->info) || ctype_iscomplex(ct->info)) {
+    if (ctype_isinteger_or_bool(ct->info) && ct->size <= 4 &&
+	!(ct->size == 4 && (ct->info & CTF_UNSIGNED)))
+      d = ctype_get(cts, CTID_INT32);
+    else
+      d = ctype_get(cts, CTID_DOUBLE);
+    J->base[0] = crec_ct_tv(J, d, 0, J->base[0], &rd->argv[0]);
+  } else {
+    J->base[0] = TREF_NIL;
+  }
 }
 
 #undef IR
