@@ -360,6 +360,10 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       char buf[2+FMTP_CHARS];
       ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
       ptrdiff_t i, lasti = 2+FMTP_CHARS;
+      if (p == 0) {
+	addstr(L, sb, "NULL", 4);
+	break;
+      }
 #if LJ_64
       /* Shorten output for 64 bit pointers. */
       lasti = 2+2*4+((p >> 32) ? 2+2*(lj_fls((uint32_t)(p >> 32))>>3) : 0);
