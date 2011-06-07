@@ -12,6 +12,7 @@
 
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_frame.h"
 #include "lj_jit.h"
 #include "lj_dispatch.h"
@@ -728,10 +729,8 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
   ctx.spadjp = CFRAME_SIZE_JIT +
 	       (MSize)(parent ? traceref(J, parent)->spadjust : 0);
   ctx.spadj = CFRAME_SIZE_JIT + T->spadjust;
-  if (startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc)
-    ctx.lineno = proto_line(pt, proto_bcpos(pt, startpc));
-  else
-    ctx.lineno = proto_line(pt, 0);  /* Wrong, but better than nothing. */
+  lua_assert(startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc);
+  ctx.lineno = lj_debug_line(pt, proto_bcpos(pt, startpc));
   ctx.filename = strdata(proto_chunkname(pt));
   if (*ctx.filename == '@' || *ctx.filename == '=')
     ctx.filename++;

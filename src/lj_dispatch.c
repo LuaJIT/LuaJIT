@@ -8,6 +8,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
@@ -380,8 +381,8 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
   if ((g->hookmask & LUA_MASKLINE)) {
     BCPos npc = proto_bcpos(pt, pc) - 1;
     BCPos opc = proto_bcpos(pt, oldpc) - 1;
-    BCLine line = proto_line(pt, npc);
-    if (pc <= oldpc || opc >= pt->sizebc || line != proto_line(pt, opc)) {
+    BCLine line = lj_debug_line(pt, npc);
+    if (pc <= oldpc || opc >= pt->sizebc || line != lj_debug_line(pt, opc)) {
       callhook(L, LUA_HOOKLINE, line);
       L->top = L->base + slots;  /* Fix top again. */
     }

@@ -18,6 +18,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_meta.h"
@@ -89,7 +90,7 @@ LJLIB_CF(getfenv)
   cTValue *o = L->base;
   if (!(o < L->top && tvisfunc(o))) {
     int level = lj_lib_optint(L, 1, 1);
-    o = lj_err_getframe(L, level, &level);
+    o = lj_debug_frame(L, level, &level);
     if (o == NULL)
       lj_err_arg(L, 1, LJ_ERR_INVLVL);
   }
@@ -110,7 +111,7 @@ LJLIB_CF(setfenv)
       setgcref(L->env, obj2gco(t));
       return 0;
     }
-    o = lj_err_getframe(L, level, &level);
+    o = lj_debug_frame(L, level, &level);
     if (o == NULL)
       lj_err_arg(L, 1, LJ_ERR_INVLVL);
   }

@@ -13,6 +13,7 @@
 #include "lj_arch.h"
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_bc.h"
@@ -189,13 +190,12 @@ LJLIB_CF(jit_util_funcinfo)
     setintfield(L, t, "nconsts", (int32_t)pt->sizekn);
     setintfield(L, t, "upvalues", (int32_t)pt->sizeuv);
     if (pc < pt->sizebc)
-      setintfield(L, t, "currentline",
-		  proto_lineinfo(pt) ? proto_line(pt, pc) : 0);
+      setintfield(L, t, "currentline", lj_debug_line(pt, pc));
     lua_pushboolean(L, (pt->flags & PROTO_IS_VARARG));
     lua_setfield(L, -2, "isvararg");
     setstrV(L, L->top++, proto_chunkname(pt));
     lua_setfield(L, -2, "source");
-    lj_err_pushloc(L, pt, pc);
+    lj_debug_pushloc(L, pt, pc);
     lua_setfield(L, -2, "loc");
   } else {
     GCfunc *fn = funcV(L->base);

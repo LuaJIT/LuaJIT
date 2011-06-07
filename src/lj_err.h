@@ -1,5 +1,5 @@
 /*
-** Error handling and debugging support.
+** Error handling.
 ** Copyright (C) 2005-2011 Mike Pall. See Copyright Notice in luajit.h
 */
 
@@ -37,8 +37,5 @@ LJ_FUNC_NORET void lj_err_arg(lua_State *L, int narg, ErrMsg em);
 LJ_FUNC_NORET void lj_err_argv(lua_State *L, int narg, ErrMsg em, ...);
 LJ_FUNC_NORET void lj_err_argtype(lua_State *L, int narg, const char *xname);
 LJ_FUNC_NORET void lj_err_argt(lua_State *L, int narg, int tt);
-
-LJ_FUNC void lj_err_pushloc(lua_State *L, GCproto *pt, BCPos pc);
-LJ_FUNC cTValue *lj_err_getframe(lua_State *L, int level, int *size);
 
 #endif

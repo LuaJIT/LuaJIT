@@ -358,7 +358,7 @@ LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o \
 LJLIB_C= $(LJLIB_O:.o=.c)
 
 LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o \
-	  lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o \
+	  lj_str.o lj_tab.o lj_func.o lj_udata.o lj_meta.o lj_debug.o \
 	  lj_state.o lj_dispatch.o lj_vmevent.o lj_vmmath.o lj_api.o \
 	  lj_lex.o lj_parse.o \
 	  lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o \

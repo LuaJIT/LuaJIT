@@ -12,6 +12,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_func.h"
@@ -27,7 +28,7 @@
 
 /* -- Common helper functions --------------------------------------------- */
 
-#define api_checknelems(L, n)	api_check(L, (n) <= (L->top - L->base))
+#define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
 #define api_checkvalidindex(L, i)	api_check(L, (i) != niltv(L))
 
 static TValue *index2adr(lua_State *L, int idx)
@@ -832,30 +833,10 @@ LUA_API int lua_next(lua_State *L, int idx)
   return more;
 }
 
-static const char *aux_upvalue(cTValue *f, uint32_t idx, TValue **val)
-{
-  GCfunc *fn;
-  if (!tvisfunc(f)) return NULL;
-  fn = funcV(f);
-  if (isluafunc(fn)) {
-    GCproto *pt = funcproto(fn);
-    if (idx < pt->sizeuv) {
-      *val = uvval(&gcref(fn->l.uvptr[idx])->uv);
-      return strdata(proto_uvname(pt, idx));
-    }
-  } else {
-    if (idx < fn->c.nupvalues) {
-      *val = &fn->c.upvalue[idx];
-      return "";
-    }
-  }
-  return NULL;
-}
-
 LUA_API const char *lua_getupvalue(lua_State *L, int idx, int n)
 {
   TValue *val;
-  const char *name = aux_upvalue(index2adr(L, idx), (uint32_t)(n-1), &val);
+  const char *name = lj_debug_uvname(index2adr(L, idx), (uint32_t)(n-1), &val);
   if (name) {
     copyTV(L, L->top, val);
     incr_top(L);
@@ -1010,7 +991,7 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
   TValue *val;
   const char *name;
   api_checknelems(L, 1);
-  name = aux_upvalue(f, (uint32_t)(n-1), &val);
+  name = lj_debug_uvname(f, (uint32_t)(n-1), &val);
   if (name) {
     L->top--;
     copyTV(L, val, L->top);

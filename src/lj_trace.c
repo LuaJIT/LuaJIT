@@ -12,6 +12,7 @@
 
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_frame.h"
 #include "lj_state.h"
@@ -103,10 +104,8 @@ static void perftools_addtrace(GCtrace *T)
     name++;
   else
     name = "(string)";
-  if (startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc)
-    lineno = proto_line(pt, proto_bcpos(pt, startpc));
-  else
-    lineno = proto_line(pt, 0);  /* Wrong, but better than nothing. */
+  lua_assert(startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc);
+  lineno = lj_debug_line(pt, proto_bcpos(pt, startpc));
   if (!fp) {
     char fname[40];
     sprintf(fname, "/tmp/perf-%d.map", getpid());
