@@ -503,7 +503,7 @@ static int trace_abort(jit_State *J)
   }
   /* Penalize or blacklist starting bytecode instruction. */
   if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins)))
-    penalty_pc(J, &gcref(J->cur.startpt)->pt, (BCIns *)J->startpc, e);
+    penalty_pc(J, &gcref(J->cur.startpt)->pt, mref(J->cur.startpc, BCIns), e);
 
   /* Is there anything to abort? */
   traceno = J->cur.traceno;
