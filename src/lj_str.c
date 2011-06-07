@@ -361,8 +361,8 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
       ptrdiff_t i, lasti = 2+FMTP_CHARS;
 #if LJ_64
-      if ((p >> 32) == 0)  /* Shorten output for true 32 bit pointers. */
-	lasti = 2+2*4;
+      /* Shorten output for 64 bit pointers. */
+      lasti = 2+2*4+((p >> 32) ? 2+2*(lj_fls((uint32_t)(p >> 32))>>3) : 0);
 #endif
       buf[0] = '0';
       buf[1] = 'x';

@@ -268,9 +268,10 @@ LJLIB_CF(ffi_meta___tostring)
   GCcdata *cd = ffi_checkcdata(L, 1);
   const char *msg = "cdata<%s>: %p";
   CTypeID id = cd->typeid;
+  void *p = cdataptr(cd);
   if (id == CTID_CTYPEID) {
     msg = "ctype<%s>";
-    id = *(CTypeID *)cdataptr(cd);
+    id = *(CTypeID *)p;
   } else {
     CType *ct = ctype_raw(ctype_cts(L), id);
     if (ctype_iscomplex(ct->info)) {
@@ -286,9 +287,13 @@ LJLIB_CF(ffi_meta___tostring)
       cTValue *tv = lj_ctype_meta(cts, id, MM_tostring);
       if (tv)
 	return lj_meta_tailcall(L, tv);
+    } else if (ctype_isptr(ct->info)) {
+      p = cdata_getptr(p, ct->size);
+    } else if (ctype_isfunc(ct->info)) {
+      p = *(void **)p;
     }
   }
-  lj_str_pushf(L, msg, strdata(lj_ctype_repr(L, id, NULL)), cdataptr(cd));
+  lj_str_pushf(L, msg, strdata(lj_ctype_repr(L, id, NULL)), p);
 checkgc:
   lj_gc_check(L);
   return 1;
