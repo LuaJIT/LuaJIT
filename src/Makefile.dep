@@ -85,7 +85,8 @@ lj_crecord.o: lj_crecord.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
 lj_ctype.o: lj_ctype.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_ctype.h
 lj_debug.o: lj_debug.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_state.h lj_frame.h lj_bc.h
+ lj_err.h lj_errmsg.h lj_debug.h lj_str.h lj_tab.h lj_state.h lj_frame.h \
+ lj_bc.h
 lj_dispatch.o: lj_dispatch.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_err.h lj_errmsg.h lj_debug.h lj_state.h lj_frame.h lj_bc.h lj_ff.h \
  lj_ffdef.h lj_jit.h lj_ir.h lj_trace.h lj_dispatch.h lj_traceerr.h \
@@ -143,8 +144,8 @@ lj_opt_split.o: lj_opt_split.c lj_obj.h lua.h luaconf.h lj_def.h \
  lj_arch.h lj_err.h lj_errmsg.h lj_str.h lj_ir.h lj_jit.h lj_ircall.h \
  lj_iropt.h lj_vm.h
 lj_parse.o: lj_parse.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_func.h lj_state.h \
- lj_bc.h lj_ctype.h lj_lex.h lj_parse.h lj_vm.h lj_vmevent.h
+ lj_gc.h lj_err.h lj_errmsg.h lj_debug.h lj_str.h lj_tab.h lj_func.h \
+ lj_state.h lj_bc.h lj_ctype.h lj_lex.h lj_parse.h lj_vm.h lj_vmevent.h
 lj_record.o: lj_record.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_meta.h lj_frame.h lj_bc.h \
  lj_ff.h lj_ffdef.h lj_ir.h lj_jit.h lj_ircall.h lj_iropt.h lj_trace.h \

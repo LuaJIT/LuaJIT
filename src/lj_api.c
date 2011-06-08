@@ -836,7 +836,7 @@ LUA_API int lua_next(lua_State *L, int idx)
 LUA_API const char *lua_getupvalue(lua_State *L, int idx, int n)
 {
   TValue *val;
-  const char *name = lj_debug_uvname(index2adr(L, idx), (uint32_t)(n-1), &val);
+  const char *name = lj_debug_uvnamev(index2adr(L, idx), (uint32_t)(n-1), &val);
   if (name) {
     copyTV(L, L->top, val);
     incr_top(L);
@@ -991,7 +991,7 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
   TValue *val;
   const char *name;
   api_checknelems(L, 1);
-  name = lj_debug_uvname(f, (uint32_t)(n-1), &val);
+  name = lj_debug_uvnamev(f, (uint32_t)(n-1), &val);
   if (name) {
     L->top--;
     copyTV(L, val, L->top);

@@ -38,6 +38,13 @@ typedef struct BCInsLine {
   BCLine line;		/* Line number for this bytecode. */
 } BCInsLine;
 
+/* Info for local variables. Only used during bytecode generation. */
+typedef struct VarInfo {
+  GCRef name;		/* Local variable name. */
+  BCPos startpc;	/* First point where the local variable is active. */
+  BCPos endpc;		/* First point where the local variable is dead. */
+} VarInfo;
+
 /* Lua lexer state. */
 typedef struct LexState {
   struct FuncState *fs;	/* Current FuncState. Defined in lj_parse.c. */

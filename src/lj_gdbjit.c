@@ -731,7 +731,7 @@ void lj_gdbjit_addtrace(jit_State *J, GCtrace *T)
   ctx.spadj = CFRAME_SIZE_JIT + T->spadjust;
   lua_assert(startpc >= proto_bc(pt) && startpc < proto_bc(pt) + pt->sizebc);
   ctx.lineno = lj_debug_line(pt, proto_bcpos(pt, startpc));
-  ctx.filename = strdata(proto_chunkname(pt));
+  ctx.filename = proto_chunknamestr(pt);
   if (*ctx.filename == '@' || *ctx.filename == '=')
     ctx.filename++;
   else

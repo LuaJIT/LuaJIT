@@ -286,12 +286,6 @@ typedef struct GCcdataVar {
 #define SCALE_NUM_GCO	((int32_t)sizeof(lua_Number)/sizeof(GCRef))
 #define round_nkgc(n)	(((n) + SCALE_NUM_GCO-1) & ~(SCALE_NUM_GCO-1))
 
-typedef struct VarInfo {
-  GCRef name;		/* Local variable name. */
-  BCPos startpc;	/* First point where the local variable is active. */
-  BCPos endpc;		/* First point where the local variable is dead. */
-} VarInfo;
-
 typedef struct GCproto {
   GCHeader;
   uint8_t numparams;	/* Number of parameters. */
@@ -308,11 +302,11 @@ typedef struct GCproto {
   uint16_t trace;	/* Anchor for chain of root traces. */
   /* ------ The following fields are for debugging/tracebacks only ------ */
   GCRef chunkname;	/* Name of the chunk this function was defined in. */
-  BCLine lastlinedefined;  /* Last line of the function definition. */
-  MSize sizevarinfo;	/* Size of local var info array. */
-  MRef varinfo;		/* Names and extents of local variables. */
-  MRef uvname;		/* Array of upvalue names (GCRef of GCstr). */
-  MRef lineinfo;	/* Map from bytecode instructions to source lines. */
+  BCLine firstline;	/* First line of the function definition. */
+  BCLine numline;	/* Number of lines for the function definition. */
+  MRef lineinfo;	/* Compressed map from bytecode ins. to source line. */
+  MRef uvinfo;		/* Upvalue names. */
+  MRef varinfo;		/* Names and compressed extents of local variables. */
 } GCproto;
 
 #define PROTO_IS_VARARG		0x01
@@ -331,14 +325,11 @@ typedef struct GCproto {
 #define proto_bcpos(pt, pc)	((BCPos)((pc) - proto_bc(pt)))
 #define proto_uv(pt)		(mref((pt)->uv, uint16_t))
 
-#define proto_uvname(pt, idx) \
-  check_exp((uintptr_t)(idx) < (pt)->sizeuv, \
-	    gco2str(gcref(mref((pt)->uvname, GCRef)[(idx)])))
-#define proto_chunkname(pt)	(gco2str(gcref((pt)->chunkname)))
-#define proto_lineinfo(pt)	(mref((pt)->lineinfo, BCLine))
-#define proto_line(pt, pos) \
-  check_exp((uintptr_t)(pos) < (pt)->sizebc, proto_lineinfo(pt)[(pos)])
-#define proto_varinfo(pt)	(mref((pt)->varinfo, VarInfo))
+#define proto_chunkname(pt)	(strref((pt)->chunkname))
+#define proto_chunknamestr(pt)	(strdata(proto_chunkname((pt))))
+#define proto_lineinfo(pt)	(mref((pt)->lineinfo, const void))
+#define proto_uvinfo(pt)	(mref((pt)->uvinfo, const uint8_t))
+#define proto_varinfo(pt)	(mref((pt)->varinfo, const uint8_t))
 
 /* -- Upvalue object ------------------------------------------------------ */
 

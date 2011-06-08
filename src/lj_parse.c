@@ -12,6 +12,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_func.h"
@@ -1021,7 +1022,8 @@ static void var_new(LexState *ls, BCReg n, GCstr *name)
       lj_lex_error(ls, 0, LJ_ERR_XLIMC, LJ_MAX_VSTACK);
     lj_mem_growvec(ls->L, ls->vstack, ls->sizevstack, LJ_MAX_VSTACK, VarInfo);
   }
-  lua_assert(lj_tab_getstr(fs->kt, name) != NULL);
+  lua_assert((uintptr_t)name < VARNAME__MAX ||
+	     lj_tab_getstr(fs->kt, name) != NULL);
   /* NOBARRIER: name is anchored in fs->kt and ls->vstack is not a GCobj. */
   setgcref(ls->vstack[vtop].name, obj2gco(name));
   fs->varmap[fs->nactvar+n] = (uint16_t)vtop;
@@ -1030,6 +1032,9 @@ static void var_new(LexState *ls, BCReg n, GCstr *name)
 
 #define var_new_lit(ls, n, v) \
   var_new(ls, (n), lj_parse_keepstr(ls, "" v, sizeof(v)-1))
+
+#define var_new_fixed(ls, n, vn) \
+  var_new(ls, (n), (GCstr *)(uintptr_t)(vn))
 
 /* Add local variables. */
 static void var_add(LexState *ls, BCReg nvars)
@@ -1053,7 +1058,7 @@ static BCReg var_lookup_local(FuncState *fs, GCstr *n)
 {
   int i;
   for (i = fs->nactvar-1; i >= 0; i--) {
-    if (n == gco2str(gcref(var_get(fs->ls, fs, i).name)))
+    if (n == strref(var_get(fs->ls, fs, i).name))
       return (BCReg)i;
   }
   return (BCReg)-1;  /* Not found. */
@@ -1109,23 +1114,16 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
 
 /* -- Function state management ------------------------------------------- */
 
-/* NYI: compress debug info. */
-
-/* Fixup bytecode and lineinfo for prototype. */
-static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, BCLine *lineinfo)
+/* Fixup bytecode for prototype. */
+static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, MSize n)
 {
-  MSize i, n = fs->pc;
   BCInsLine *base = fs->bcbase;
-  setmref(pt->lineinfo, lineinfo);
+  MSize i;
   pt->sizebc = n;
-  bc[n] = ~0u;  /* Close potentially uninitialized gap between bc and kgc. */
   bc[0] = BCINS_AD((fs->flags & PROTO_IS_VARARG) ? BC_FUNCV : BC_FUNCF,
 		   fs->framesize, 0);
-  lineinfo[0] = fs->linedefined;
-  for (i = 1; i < n; i++) {
+  for (i = 1; i < n; i++)
     bc[i] = base[i].ins;
-    lineinfo[i] = base[i].line;
-  }
 }
 
 /* Fixup constants for prototype. */
@@ -1189,19 +1187,137 @@ static void fs_fixup_uv(FuncState *fs, GCproto *pt, uint16_t *uv)
     uv[i] = fs->uvloc[i].slot;
 }
 
-/* Fixup debug info for prototype. */
-static void fs_fixup_dbg(FuncState *fs, GCproto *pt, VarInfo *vi, MSize sizevi)
+#ifndef LUAJIT_DISABLE_DEBUGINFO
+/* Prepare lineinfo for prototype. */
+static size_t fs_prep_line(FuncState *fs, BCLine numline)
 {
-  MSize i, n = fs->nuv;
-  GCRef *uvname = (GCRef *)((char *)vi + sizevi*sizeof(VarInfo));
-  VarInfo *vstack = fs->ls->vstack;
-  setmref(pt->varinfo, vi);
-  setmref(pt->uvname, uvname);
-  pt->sizevarinfo = sizevi;
-  memcpy(vi, &vstack[fs->vbase], sizevi*sizeof(VarInfo));
-  for (i = 0; i < n; i++)
-    setgcref(uvname[i], gcref(vstack[fs->uvloc[i].vidx].name));
+  return (fs->pc-1) << (numline < 256 ? 0 : numline < 65536 ? 1 : 2);
 }
+
+/* Fixup lineinfo for prototype. */
+static void fs_fixup_line(FuncState *fs, GCproto *pt,
+			  void *lineinfo, BCLine numline)
+{
+  BCInsLine *base = fs->bcbase + 1;
+  BCLine first = fs->linedefined;
+  MSize i = 0, n = fs->pc-1;
+  pt->firstline = fs->linedefined;
+  pt->numline = numline;
+  setmref(pt->lineinfo, lineinfo);
+  if (LJ_LIKELY(numline < 256)) {
+    uint8_t *li = (uint8_t *)lineinfo;
+    do {
+      BCLine delta = base[i].line - first;
+      lua_assert(delta >= 0 && delta < 256);
+      li[i] = (uint8_t)delta;
+    } while (++i < n);
+  } else if (LJ_LIKELY(numline < 65536)) {
+    uint16_t *li = (uint16_t *)lineinfo;
+    do {
+      BCLine delta = base[i].line - first;
+      lua_assert(delta >= 0 && delta < 65536);
+      li[i] = (uint16_t)delta;
+    } while (++i < n);
+  } else {
+    uint32_t *li = (uint32_t *)lineinfo;
+    do {
+      BCLine delta = base[i].line - first;
+      lua_assert(delta >= 0);
+      li[i] = (uint32_t)delta;
+    } while (++i < n);
+  }
+}
+
+/* Resize buffer if needed. */
+static LJ_NOINLINE void fs_buf_resize(LexState *ls, MSize len)
+{
+  MSize sz = ls->sb.sz * 2;
+  while (ls->sb.n + len > sz) sz = sz * 2;
+  lj_str_resizebuf(ls->L, &ls->sb, sz);
+}
+
+static LJ_AINLINE void fs_buf_need(LexState *ls, MSize len)
+{
+  if (LJ_UNLIKELY(ls->sb.n + len > ls->sb.sz))
+    fs_buf_resize(ls, len);
+}
+
+/* Add string to buffer. */
+static void fs_buf_str(LexState *ls, const char *str, MSize len)
+{
+  char *p = ls->sb.buf + ls->sb.n;
+  MSize i;
+  ls->sb.n += len;
+  for (i = 0; i < len; i++) p[i] = str[i];
+}
+
+/* Add ULEB128 value to buffer. */
+static void fs_buf_uleb128(LexState *ls, uint32_t v)
+{
+  MSize n = ls->sb.n;
+  uint8_t *p = (uint8_t *)ls->sb.buf;
+  for (; v >= 0x80; v >>= 7)
+    p[n++] = (uint8_t)((v & 0x7f) | 0x80);
+  p[n++] = (uint8_t)v;
+  ls->sb.n = n;
+}
+
+/* Prepare variable info for prototype. */
+static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
+{
+  VarInfo *vstack = fs->ls->vstack;
+  MSize i, n;
+  BCPos lastpc;
+  lj_str_resetbuf(&ls->sb);  /* Copy to temp. string buffer. */
+  /* Store upvalue names. */
+  for (i = 0, n = fs->nuv; i < n; i++) {
+    GCstr *s = strref(vstack[fs->uvloc[i].vidx].name);
+    MSize len = s->len+1;
+    fs_buf_need(ls, len);
+    fs_buf_str(ls, strdata(s), len);
+  }
+  *ofsvar = ls->sb.n;
+  vstack += fs->vbase;
+  lastpc = 0;
+  /* Store local variable names and compressed ranges. */
+  for (i = 0, n = ls->vtop - fs->vbase; i < n; i++) {
+    GCstr *s = strref(vstack[i].name);
+    BCPos startpc = vstack[i].startpc, endpc = vstack[i].endpc;
+    if ((uintptr_t)s < VARNAME__MAX) {
+      fs_buf_need(ls, 1 + 2*5);
+      ls->sb.buf[ls->sb.n++] = (uint8_t)(uintptr_t)s;
+    } else {
+      MSize len = s->len+1;
+      fs_buf_need(ls, len + 2*5);
+      fs_buf_str(ls, strdata(s), len);
+    }
+    fs_buf_uleb128(ls, startpc-lastpc);
+    fs_buf_uleb128(ls, endpc-startpc);
+    lastpc = startpc;
+  }
+  fs_buf_need(ls, 1);
+  ls->sb.buf[ls->sb.n++] = '\0';  /* Terminator for varinfo. */
+  return ls->sb.n;
+}
+
+/* Fixup variable info for prototype. */
+static void fs_fixup_var(LexState *ls, GCproto *pt, uint8_t *p, size_t ofsvar)
+{
+  setmref(pt->uvinfo, p);
+  setmref(pt->varinfo, (char *)p + ofsvar);
+  memcpy(p, ls->sb.buf, ls->sb.n);  /* Copy from temp. string buffer. */
+}
+#else
+
+/* Initialize with empty debug info, if disabled. */
+#define fs_prep_line(fs, numline)		(UNUSED(numline), 0)
+#define fs_fixup_line(fs, pt, li, numline) \
+  pt->firstline = pt->numline = 0, setmref((pt)->lineinfo, NULL)
+#define fs_prep_var(ls, fs, ofsvar)		(UNUSED(ofsvar), 0)
+#define fs_fixup_var(ls, pt, p, ofsvar) \
+  setmref((pt)->uvinfo, NULL), setmref((pt)->varinfo, NULL)
+
+#endif
 
 /* Check if bytecode op returns. */
 static int bcopisret(BCOp op)
@@ -1253,8 +1369,8 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 {
   lua_State *L = ls->L;
   FuncState *fs = ls->fs;
-  MSize sizevi;
-  size_t sizept, ofsk, ofsuv, ofsdbg, ofsli;
+  BCLine numline = line - fs->linedefined;
+  size_t sizept, ofsk, ofsuv, ofsli, ofsdbg, ofsvar;
   GCproto *pt;
 
   /* Apply final fixups. */
@@ -1264,33 +1380,29 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
 
   /* Calculate total size of prototype including all colocated arrays. */
   sizept = sizeof(GCproto) + fs->pc*sizeof(BCIns) + fs->nkgc*sizeof(GCRef);
-  sizept = (sizept + sizeof(lua_Number)-1) & ~(sizeof(lua_Number)-1);
-  ofsk = sizept;
-  sizept += fs->nkn*sizeof(lua_Number);
-  ofsuv = sizept;
-  sizept += ((fs->nuv+1)&~1)*2;
-  ofsdbg = sizept;
-  sizevi = ls->vtop - fs->vbase;
-  sizept += sizevi*sizeof(VarInfo) + fs->nuv*sizeof(GCRef);
-  ofsli = sizept;
-  sizept += fs->pc*sizeof(BCLine);
+  sizept = (sizept + sizeof(TValue)-1) & ~(sizeof(TValue)-1);
+  ofsk = sizept; sizept += fs->nkn*sizeof(TValue);
+  ofsuv = sizept; sizept += ((fs->nuv+1)&~1)*2;
+  ofsli = sizept; sizept += fs_prep_line(fs, numline);
+  ofsdbg = sizept; sizept += fs_prep_var(ls, fs, &ofsvar);
 
   /* Allocate prototype and initialize its fields. */
   pt = (GCproto *)lj_mem_newgco(L, (MSize)sizept);
   pt->gct = ~LJ_TPROTO;
   pt->sizept = (MSize)sizept;
-  setgcref(pt->chunkname, obj2gco(ls->chunkname));
   pt->trace = 0;
   pt->flags = fs->flags;
   pt->numparams = fs->numparams;
   pt->framesize = fs->framesize;
-  pt->lastlinedefined = line;
+  setgcref(pt->chunkname, obj2gco(ls->chunkname));
 
-  fs_fixup_bc(fs, pt, (BCIns *)((char *)pt + sizeof(GCproto)),
-		      (BCLine *)((char *)pt + ofsli));
+  /* Close potentially uninitialized gap between bc and kgc. */
+  *(uint32_t *)((char *)pt + ofsk - sizeof(GCRef)*(fs->nkgc+1)) = 0;
+  fs_fixup_bc(fs, pt, (BCIns *)((char *)pt + sizeof(GCproto)), fs->pc);
   fs_fixup_k(fs, pt, (void *)((char *)pt + ofsk));
   fs_fixup_uv(fs, pt, (uint16_t *)((char *)pt + ofsuv));
-  fs_fixup_dbg(fs, pt, (VarInfo *)((char *)pt + ofsdbg), sizevi);
+  fs_fixup_line(fs, pt, (void *)((char *)pt + ofsli), numline);
+  fs_fixup_var(ls, pt, (uint8_t *)((char *)pt + ofsdbg), ofsvar);
 
   lj_vmevent_send(L, BC,
     setprotoV(L, L->top++, pt);
@@ -1300,12 +1412,6 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   ls->vtop = fs->vbase;  /* Reset variable stack. */
   ls->fs = fs->prev;
   lua_assert(ls->fs != NULL || ls->token == TK_eof);
-  /* Re-anchor last string token to avoid GC. */
-  if (ls->token == TK_name || ls->token == TK_string) {
-    /* NOBARRIER: the key is new or kept alive. */
-    TValue *tv = lj_tab_setstr(ls->L, ls->fs->kt, strV(&ls->tokenval));
-    if (tvisnil(tv)) setboolV(tv, 1);
-  }
   return pt;
 }
 
@@ -1530,8 +1636,6 @@ static void parse_chunk(LexState *ls);
 static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
 {
   FuncState fs, *pfs = ls->fs;
-  BCReg kidx;
-  BCLine lastline;
   GCproto *pt;
   ptrdiff_t oldbase = pfs->bcbase - ls->bcstack;
   fs_init(ls, &fs);
@@ -1541,19 +1645,19 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
   fs.bclim = pfs->bclim - pfs->pc;
   bcemit_AD(&fs, BC_FUNCF, 0, 0);  /* Placeholder. */
   parse_chunk(ls);
-  lastline = ls->linenumber;
-  lex_match(ls, TK_end, TK_function, line);
-  pt = fs_finish(ls, lastline);
+  if (ls->token != TK_end) lex_match(ls, TK_end, TK_function, line);
+  pt = fs_finish(ls, (ls->lastline = ls->linenumber));
   pfs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
   pfs->bclim = (BCPos)(ls->sizebcstack - oldbase);
   /* Store new prototype in the constant array of the parent. */
-  kidx = const_gc(pfs, obj2gco(pt), LJ_TPROTO);
-  expr_init(e, VRELOCABLE, bcemit_AD(pfs, BC_FNEW, 0, kidx));
+  expr_init(e, VRELOCABLE,
+	    bcemit_AD(pfs, BC_FNEW, 0, const_gc(pfs, obj2gco(pt), LJ_TPROTO)));
   if (!(pfs->flags & PROTO_HAS_FNEW)) {
     if (pfs->flags & PROTO_HAS_RETURN)
       pfs->flags |= PROTO_FIXUP_RETURN;
     pfs->flags |= PROTO_HAS_FNEW;
   }
+  lj_lex_next(ls);
 }
 
 /* Parse expression list. Last expression is left open. */
@@ -2146,9 +2250,9 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
   FuncScope bl;
   BCPos loop, loopend;
   /* Hidden control variables. */
-  var_new_lit(ls, FORL_IDX, "(for index)");
-  var_new_lit(ls, FORL_STOP, "(for limit)");
-  var_new_lit(ls, FORL_STEP, "(for step)");
+  var_new_fixed(ls, FORL_IDX, VARNAME_FOR_IDX);
+  var_new_fixed(ls, FORL_STOP, VARNAME_FOR_STOP);
+  var_new_fixed(ls, FORL_STEP, VARNAME_FOR_STEP);
   /* Visible copy of index variable. */
   var_new(ls, FORL_EXT, varname);
   lex_check(ls, '=');
@@ -2220,9 +2324,9 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   FuncScope bl;
   int isnext;
   /* Hidden control variables. */
-  var_new_lit(ls, nvars++, "(for generator)");
-  var_new_lit(ls, nvars++, "(for state)");
-  var_new_lit(ls, nvars++, "(for control)");
+  var_new_fixed(ls, nvars++, VARNAME_FOR_GEN);
+  var_new_fixed(ls, nvars++, VARNAME_FOR_STATE);
+  var_new_fixed(ls, nvars++, VARNAME_FOR_CTL);
   /* Visible variables returned from iterator. */
   var_new(ls, nvars++, indexname);
   while (lex_opt(ls, ','))
@@ -2374,7 +2478,11 @@ GCproto *lj_parse(LexState *ls)
   FuncState fs;
   GCproto *pt;
   lua_State *L = ls->L;
+#ifdef LUAJIT_DISABLE_DEBUGINFO
+  ls->chunkname = lj_str_newlit(L, "=");
+#else
   ls->chunkname = lj_str_newz(L, ls->chunkarg);
+#endif
   setstrV(L, L->top, ls->chunkname);  /* Anchor chunkname string. */
   incr_top(L);
   ls->level = 0;

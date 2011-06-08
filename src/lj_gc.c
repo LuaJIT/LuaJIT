@@ -257,10 +257,6 @@ static void gc_traverse_proto(global_State *g, GCproto *pt)
   gc_mark_str(proto_chunkname(pt));
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++)  /* Mark collectable consts. */
     gc_markobj(g, proto_kgc(pt, i));
-  for (i = 0; i < (ptrdiff_t)pt->sizeuv; i++)  /* Mark upvalue names. */
-    gc_mark_str(proto_uvname(pt, i));
-  for (i = 0; i < (ptrdiff_t)pt->sizevarinfo; i++)  /* Mark names of locals. */
-    gc_mark_str(gco2str(gcref(proto_varinfo(pt)[i].name)));
 #if LJ_HASJIT
   if (pt->trace) gc_marktrace(g, pt->trace);
 #endif

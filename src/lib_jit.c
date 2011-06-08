@@ -181,8 +181,8 @@ LJLIB_CF(jit_util_funcinfo)
     GCtab *t;
     lua_createtable(L, 0, 16);  /* Increment hash size if fields are added. */
     t = tabV(L->top-1);
-    setintfield(L, t, "linedefined", proto_line(pt, 0));
-    setintfield(L, t, "lastlinedefined", pt->lastlinedefined);
+    setintfield(L, t, "linedefined", pt->firstline);
+    setintfield(L, t, "lastlinedefined", pt->firstline + pt->numline);
     setintfield(L, t, "stackslots", pt->framesize);
     setintfield(L, t, "params", pt->numparams);
     setintfield(L, t, "bytecodes", (int32_t)pt->sizebc);
@@ -254,7 +254,7 @@ LJLIB_CF(jit_util_funcuvname)
   GCproto *pt = check_Lproto(L, 0);
   uint32_t idx = (uint32_t)lj_lib_checkint(L, 2);
   if (idx < pt->sizeuv) {
-    setstrV(L, L->top-1, proto_uvname(pt, idx));
+    setstrV(L, L->top-1, lj_str_newz(L, lj_debug_uvname(pt, idx)));
     return 1;
   }
   return 0;

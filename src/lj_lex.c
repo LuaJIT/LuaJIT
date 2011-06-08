@@ -494,7 +494,7 @@ void lj_lex_error(LexState *ls, LexToken token, ErrMsg em, ...)
     tok = lj_lex_token2str(ls, token);
   }
   va_start(argp, em);
-  lj_err_lex(ls->L, strdata(ls->chunkname), tok, ls->linenumber, em, argp);
+  lj_err_lex(ls->L, ls->chunkname, tok, ls->linenumber, em, argp);
   va_end(argp);
 }
 

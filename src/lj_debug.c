@@ -8,6 +8,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_state.h"
@@ -89,9 +90,17 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 /* Get line number for a bytecode position. */
 BCLine LJ_FASTCALL lj_debug_line(GCproto *pt, BCPos pc)
 {
-  BCLine *lineinfo = proto_lineinfo(pt);
-  if (pc < pt->sizebc && lineinfo)
-    return lineinfo[pc];
+  const void *lineinfo = proto_lineinfo(pt);
+  if (pc < pt->sizebc && lineinfo) {
+    BCLine first = pt->firstline;
+    if (pc-- == 0) return first;
+    if (pt->numline < 256)
+      return first + (BCLine)((const uint8_t *)lineinfo)[pc];
+    else if (pt->numline < 65536)
+      return first + (BCLine)((const uint16_t *)lineinfo)[pc];
+    else
+      return first + (BCLine)((const uint32_t *)lineinfo)[pc];
+  }
   return 0;
 }
 
@@ -109,14 +118,49 @@ static BCLine debug_frameline(lua_State *L, GCfunc *fn, cTValue *nextframe)
 
 /* -- Variable names ------------------------------------------------------ */
 
+/* Read ULEB128 value. */
+static uint32_t debug_read_uleb128(const uint8_t **pp)
+{
+  const uint8_t *p = *pp;
+  uint32_t v = *p++;
+  if (LJ_UNLIKELY(v >= 0x80)) {
+    int sh = 0;
+    v &= 0x7f;
+    do { v |= ((*p & 0x7f) << (sh += 7)); } while (*p++ >= 0x80);
+  }
+  *pp = p;
+  return v;
+}
+
 /* Get name of a local variable from slot number and PC. */
 static const char *debug_varname(const GCproto *pt, BCPos pc, BCReg slot)
 {
-  MSize i;
-  VarInfo *vi = proto_varinfo(pt);
-  for (i = 0; i < pt->sizevarinfo && vi[i].startpc <= pc; i++)
-    if (pc < vi[i].endpc && slot-- == 0)
-      return strdata(gco2str(gcref(vi[i].name)));
+  const uint8_t *p = proto_varinfo(pt);
+  if (p) {
+    BCPos lastpc = 0;
+    for (;;) {
+      const char *name = (const char *)p;
+      uint32_t vn = *p++;
+      BCPos startpc, endpc;
+      if (vn < VARNAME__MAX) {
+	if (vn == VARNAME_END) break;  /* End of varinfo. */
+      } else {
+	while (*p++) ;  /* Skip over variable name string. */
+      }
+      lastpc = startpc = lastpc + debug_read_uleb128(&p);
+      if (startpc > pc) break;
+      endpc = startpc + debug_read_uleb128(&p);
+      if (pc < endpc && slot-- == 0) {
+	if (vn < VARNAME__MAX) {
+#define VARNAMESTR(name, str)	str "\0"
+	  name = VARNAMEDEF(VARNAMESTR);
+#undef VARNAMESTR
+	  if (--vn) while (*name++ || --vn) ;
+	}
+	return name;
+      }
+    }
+  }
   return NULL;
 }
 
@@ -141,7 +185,17 @@ static TValue *debug_localname(lua_State *L, const lua_Debug *ar,
 }
 
 /* Get name of upvalue. */
-const char *lj_debug_uvname(cTValue *o, uint32_t idx, TValue **tvp)
+const char *lj_debug_uvname(GCproto *pt, uint32_t idx)
+{
+  const uint8_t *p = proto_uvinfo(pt);
+  lua_assert(idx < pt->sizeuv);
+  if (!p) return "";
+  if (idx) while (*p++ || --idx) ;
+  return (const char *)p;
+}
+
+/* Get name and value of upvalue. */
+const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp)
 {
   if (tvisfunc(o)) {
     GCfunc *fn = funcV(o);
@@ -149,7 +203,7 @@ const char *lj_debug_uvname(cTValue *o, uint32_t idx, TValue **tvp)
       GCproto *pt = funcproto(fn);
       if (idx < pt->sizeuv) {
 	*tvp = uvval(&gcref(fn->l.uvptr[idx])->uv);
-	return strdata(proto_uvname(pt, idx));
+	return lj_debug_uvname(pt, idx);
       }
     } else {
       if (idx < fn->c.nupvalues) {
@@ -194,7 +248,7 @@ restart:
 	}
 	return "field";
       case BC_UGET:
-	*name = strdata(proto_uvname(pt, bc_d(ins)));
+	*name = lj_debug_uvname(pt, bc_d(ins));
 	return "upvalue";
       default:
 	return NULL;
@@ -234,25 +288,26 @@ const char *lj_debug_funcname(lua_State *L, TValue *frame, const char **name)
 /* -- Source code locations ----------------------------------------------- */
 
 /* Generate shortened source name. */
-void lj_debug_shortname(char *out, const char *src)
+void lj_debug_shortname(char *out, GCstr *str)
 {
+  const char *src = strdata(str);
   if (*src == '=') {
-    strncpy(out, src+1, LUA_IDSIZE);  /* remove first char */
-    out[LUA_IDSIZE-1] = '\0';  /* ensures null termination */
-  } else if (*src == '@') { /* out = "source", or "...source" */
-    size_t l = strlen(++src);  /* skip the `@' */
-    if (l >= LUA_IDSIZE) {
-      src += l-(LUA_IDSIZE-4);  /* get last part of file name */
-      strcpy(out, "...");
-      out += 3;
+    strncpy(out, src+1, LUA_IDSIZE);  /* Remove first char. */
+    out[LUA_IDSIZE-1] = '\0';  /* Ensures null termination. */
+  } else if (*src == '@') {  /* Output "source", or "...source". */
+    size_t len = str->len-1;
+    src++;  /* Skip the `@' */
+    if (len >= LUA_IDSIZE) {
+      src += len-(LUA_IDSIZE-4);  /* Get last part of file name. */
+      *out++ = '.'; *out++ = '.'; *out++ = '.';
     }
     strcpy(out, src);
-  } else {  /* out = [string "string"] */
-    size_t len; /* Length, up to first control char. */
+  } else {  /* Output [string "string"]. */
+    size_t len;  /* Length, up to first control char. */
     for (len = 0; len < LUA_IDSIZE-12; len++)
       if (((const unsigned char *)src)[len] < ' ') break;
     strcpy(out, "[string \""); out += 9;
-    if (src[len] != '\0') {  /* must truncate? */
+    if (src[len] != '\0') {  /* Must truncate? */
       if (len > LUA_IDSIZE-15) len = LUA_IDSIZE-15;
       strncpy(out, src, len); out += len;
       strcpy(out, "..."); out += 3;
@@ -273,7 +328,7 @@ void lj_debug_addloc(lua_State *L, const char *msg,
       BCLine line = debug_frameline(L, fn, nextframe);
       if (line >= 0) {
 	char buf[LUA_IDSIZE];
-	lj_debug_shortname(buf, strdata(proto_chunkname(funcproto(fn))));
+	lj_debug_shortname(buf, proto_chunkname(funcproto(fn)));
 	lj_str_pushf(L, "%s:%d: %s", buf, line, msg);
 	return;
       }
@@ -286,27 +341,23 @@ void lj_debug_addloc(lua_State *L, const char *msg,
 void lj_debug_pushloc(lua_State *L, GCproto *pt, BCPos pc)
 {
   GCstr *name = proto_chunkname(pt);
-  if (name) {
-    const char *s = strdata(name);
-    MSize i, len = name->len;
-    BCLine line = lj_debug_line(pt, pc);
-    if (*s == '@') {
-      s++; len--;
-      for (i = len; i > 0; i--)
-	if (s[i] == '/' || s[i] == '\\') {
-	  s += i+1;
-	  break;
-	}
-      lj_str_pushf(L, "%s:%d", s, line);
-    } else if (len > 40) {
-      lj_str_pushf(L, "%p:%d", pt, line);
-    } else if (*s == '=') {
-      lj_str_pushf(L, "%s:%d", s+1, line);
-    } else {
-      lj_str_pushf(L, "\"%s\":%d", s, line);
-    }
+  const char *s = strdata(name);
+  MSize i, len = name->len;
+  BCLine line = lj_debug_line(pt, pc);
+  if (*s == '@') {
+    s++; len--;
+    for (i = len; i > 0; i--)
+      if (s[i] == '/' || s[i] == '\\') {
+	s += i+1;
+	break;
+      }
+    lj_str_pushf(L, "%s:%d", s, line);
+  } else if (len > 40) {
+    lj_str_pushf(L, "%p:%d", pt, line);
+  } else if (*s == '=') {
+    lj_str_pushf(L, "%s:%d", s+1, line);
   } else {
-    lj_str_pushf(L, "%p:%u", pt, pc);
+    lj_str_pushf(L, "\"%s\":%d", s, line);
   }
 }
 
@@ -359,56 +410,63 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     lua_assert(fn->c.gct == ~LJ_TFUNC);
   }
   for (; *what; what++) {
-    switch (*what) {
-    case 'S':
+    if (*what == 'S') {
       if (isluafunc(fn)) {
 	GCproto *pt = funcproto(fn);
-	ar->source = strdata(proto_chunkname(pt));
-	ar->linedefined = (int)proto_line(pt, 0);
-	ar->lastlinedefined = (int)pt->lastlinedefined;
-	ar->what = ar->linedefined ? "Lua" : "main";
+	BCLine firstline = pt->firstline;
+	GCstr *name = proto_chunkname(pt);
+	ar->source = strdata(name);
+	lj_debug_shortname(ar->short_src, name);
+	ar->linedefined = (int)firstline;
+	ar->lastlinedefined = (int)(firstline + pt->numline);
+	ar->what = firstline ? "Lua" : "main";
       } else {
 	ar->source = "=[C]";
+	ar->short_src[0] = '[';
+	ar->short_src[1] = 'C';
+	ar->short_src[2] = ']';
+	ar->short_src[3] = '\0';
 	ar->linedefined = -1;
 	ar->lastlinedefined = -1;
 	ar->what = "C";
       }
-      lj_debug_shortname(ar->short_src, ar->source);
-      break;
-    case 'l':
+    } else if (*what == 'l') {
       ar->currentline = frame ? debug_frameline(L, fn, nextframe) : -1;
-      break;
-    case 'u':
+    } else if (*what == 'u') {
       ar->nups = fn->c.nupvalues;
-      break;
-    case 'n':
+    } else if (*what == 'n') {
       ar->namewhat = frame ? lj_debug_funcname(L, frame, &ar->name) : NULL;
       if (ar->namewhat == NULL) {
 	ar->namewhat = "";
 	ar->name = NULL;
       }
-      break;
-    case 'f':
+    } else if (*what == 'f') {
       setfuncV(L, L->top, fn);
       incr_top(L);
-      break;
-    case 'L':
+    } else if (*what == 'L') {
       if (isluafunc(fn)) {
 	GCtab *t = lj_tab_new(L, 0, 0);
 	GCproto *pt = funcproto(fn);
-	BCLine *lineinfo = proto_lineinfo(pt);
-	MSize i, szl = pt->sizebc;
-	for (i = 1; i < szl; i++)
-	  setboolV(lj_tab_setint(L, t, lineinfo[i]), 1);
+	const void *lineinfo = proto_lineinfo(pt);
+	if (lineinfo) {
+	  BCLine first = pt->firstline;
+	  int sz = pt->numline < 256 ? 1 : pt->numline < 65536 ? 2 : 4;
+	  MSize i, szl = pt->sizebc-1;
+	  for (i = 0; i < szl; i++) {
+	    BCLine line = first +
+	      (sz == 1 ? (BCLine)((const uint8_t *)lineinfo)[i] :
+	       sz == 2 ? (BCLine)((const uint16_t *)lineinfo)[i] :
+	       (BCLine)((const uint32_t *)lineinfo)[i]);
+	    setboolV(lj_tab_setint(L, t, line), 1);
+	  }
+	}
 	settabV(L, L->top, t);
       } else {
 	setnilV(L->top);
       }
       incr_top(L);
-      break;
-    default:
+    } else {
       status = 0;  /* Bad option. */
-      break;
     }
   }
   return status;
