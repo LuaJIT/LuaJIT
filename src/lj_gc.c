@@ -674,7 +674,6 @@ int LJ_FASTCALL lj_gc_step(lua_State *L)
   do {
     lim -= (MSize)gc_onestep(L);
     if (g->gc.state == GCSpause) {
-      lua_assert(g->gc.total >= g->gc.estimate);
       g->gc.threshold = (g->gc.estimate/100) * g->gc.pause;
       g->vmstate = ostate;
       return 1;  /* Finished a GC cycle. */
