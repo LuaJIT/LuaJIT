@@ -163,10 +163,10 @@ void LJ_FASTCALL lj_trace_free(global_State *g, GCtrace *T)
 /* Re-enable compiling a prototype by unpatching any modified bytecode. */
 void lj_trace_reenableproto(GCproto *pt)
 {
-  if ((pt->flags & PROTO_HAS_ILOOP)) {
+  if ((pt->flags & PROTO_ILOOP)) {
     BCIns *bc = proto_bc(pt);
     BCPos i, sizebc = pt->sizebc;;
-    pt->flags &= ~PROTO_HAS_ILOOP;
+    pt->flags &= ~PROTO_ILOOP;
     if (bc_op(bc[0]) == BC_IFUNCF)
       setbc_op(&bc[0], BC_FUNCF);
     for (i = 1; i < sizebc; i++) {
@@ -323,7 +323,7 @@ void lj_trace_freestate(global_State *g)
 static void blacklist_pc(GCproto *pt, BCIns *pc)
 {
   setbc_op(pc, (int)bc_op(*pc)+(int)BC_ILOOP-(int)BC_LOOP);
-  pt->flags |= PROTO_HAS_ILOOP;
+  pt->flags |= PROTO_ILOOP;
 }
 
 /* Penalize a bytecode instruction. */
@@ -359,13 +359,13 @@ static void trace_start(jit_State *J)
   lua_State *L;
   TraceNo traceno;
 
-  if ((J->pt->flags & PROTO_NO_JIT)) {  /* JIT disabled for this proto? */
+  if ((J->pt->flags & PROTO_NOJIT)) {  /* JIT disabled for this proto? */
     if (J->parent == 0) {
       /* Lazy bytecode patching to disable hotcount events. */
       lua_assert(bc_op(*J->pc) == BC_FORL || bc_op(*J->pc) == BC_ITERL ||
 		 bc_op(*J->pc) == BC_LOOP || bc_op(*J->pc) == BC_FUNCF);
       setbc_op(J->pc, (int)bc_op(*J->pc)+(int)BC_ILOOP-(int)BC_LOOP);
-      J->pt->flags |= PROTO_HAS_ILOOP;
+      J->pt->flags |= PROTO_ILOOP;
     }
     J->state = LJ_TRACE_IDLE;  /* Silently ignored. */
     return;

@@ -1276,7 +1276,7 @@ static void rec_func_setup(jit_State *J)
 {
   GCproto *pt = J->pt;
   BCReg s, numparams = pt->numparams;
-  if ((pt->flags & PROTO_NO_JIT))
+  if ((pt->flags & PROTO_NOJIT))
     lj_trace_err(J, LJ_TRERR_CJITOFF);
   if (J->baseslot + pt->framesize >= LJ_MAX_JSLOTS)
     lj_trace_err(J, LJ_TRERR_STACKOV);
@@ -1292,7 +1292,7 @@ static void rec_func_vararg(jit_State *J)
 {
   GCproto *pt = J->pt;
   BCReg s, fixargs, vframe = J->maxslot+1;
-  lua_assert((pt->flags & PROTO_IS_VARARG));
+  lua_assert((pt->flags & PROTO_VARARG));
   if (J->baseslot + vframe + pt->framesize >= LJ_MAX_JSLOTS)
     lj_trace_err(J, LJ_TRERR_STACKOV);
   J->base[vframe-1] = J->base[-1];  /* Copy function up. */

@@ -172,11 +172,11 @@ void lj_dispatch_update(global_State *g)
 static void setptmode(global_State *g, GCproto *pt, int mode)
 {
   if ((mode & LUAJIT_MODE_ON)) {  /* (Re-)enable JIT compilation. */
-    pt->flags &= ~PROTO_NO_JIT;
+    pt->flags &= ~PROTO_NOJIT;
     lj_trace_reenableproto(pt);  /* Unpatch all ILOOP etc. bytecodes. */
   } else {  /* Flush and/or disable JIT compilation. */
     if (!(mode & LUAJIT_MODE_FLUSH))
-      pt->flags |= PROTO_NO_JIT;
+      pt->flags |= PROTO_NOJIT;
     lj_trace_flushproto(g, pt);  /* Flush all traces of prototype. */
   }
 }
@@ -185,6 +185,7 @@ static void setptmode(global_State *g, GCproto *pt, int mode)
 static void setptmode_all(global_State *g, GCproto *pt, int mode)
 {
   ptrdiff_t i;
+  if (!(pt->flags & PROTO_CHILD)) return;
   for (i = -(ptrdiff_t)pt->sizekgc; i < 0; i++) {
     GCobj *o = proto_kgc(pt, i);
     if (o->gch.gct == ~LJ_TPROTO) {
@@ -400,7 +401,7 @@ static int call_init(lua_State *L, GCfunc *fn)
     int numparams = pt->numparams;
     int gotparams = (int)(L->top - L->base);
     int need = pt->framesize;
-    if ((pt->flags & PROTO_IS_VARARG)) need += 1+gotparams;
+    if ((pt->flags & PROTO_VARARG)) need += 1+gotparams;
     lj_state_checkstack(L, (MSize)need);
     numparams -= gotparams;
     return numparams >= 0 ? numparams : 0;

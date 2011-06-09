@@ -513,6 +513,7 @@ static void expr_toreg_nobranch(FuncState *fs, ExpDesc *e, BCReg reg)
       ins = BCINS_AD(BC_KNUM, reg, const_num(fs, e));
 #if LJ_HASFFI
   } else if (e->k == VKCDATA) {
+    fs->flags |= PROTO_FFI;
     ins = BCINS_AD(BC_KCDATA, reg,
 		   const_gc(fs, obj2gco(cdataV(&e->u.nval)), LJ_TCDATA));
 #endif
@@ -1120,7 +1121,7 @@ static void fs_fixup_bc(FuncState *fs, GCproto *pt, BCIns *bc, MSize n)
   BCInsLine *base = fs->bcbase;
   MSize i;
   pt->sizebc = n;
-  bc[0] = BCINS_AD((fs->flags & PROTO_IS_VARARG) ? BC_FUNCV : BC_FUNCF,
+  bc[0] = BCINS_AD((fs->flags & PROTO_VARARG) ? BC_FUNCV : BC_FUNCF,
 		   fs->framesize, 0);
   for (i = 1; i < n; i++)
     bc[i] = base[i].ins;
@@ -1336,7 +1337,7 @@ static void fs_fixup_ret(FuncState *fs)
 {
   BCPos lastpc = fs->pc;
   if (lastpc <= fs->lasttarget || !bcopisret(bc_op(fs->bcbase[lastpc-1].ins))) {
-    if (fs->flags & PROTO_HAS_FNEW)
+    if (fs->flags & PROTO_CHILD)
       bcemit_AJ(fs, BC_UCLO, 0, 0);
     bcemit_AD(fs, BC_RET0, 0, 1);  /* Need final return. */
   }
@@ -1615,7 +1616,7 @@ static BCReg parse_params(LexState *ls, int needself)
 	var_new(ls, nparams++, lex_str(ls));
       } else if (ls->token == TK_dots) {
 	lj_lex_next(ls);
-	fs->flags |= PROTO_IS_VARARG;
+	fs->flags |= PROTO_VARARG;
 	break;
       } else {
 	err_syntax(ls, LJ_ERR_XPARAM);
@@ -1652,10 +1653,13 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
   /* Store new prototype in the constant array of the parent. */
   expr_init(e, VRELOCABLE,
 	    bcemit_AD(pfs, BC_FNEW, 0, const_gc(pfs, obj2gco(pt), LJ_TPROTO)));
-  if (!(pfs->flags & PROTO_HAS_FNEW)) {
+#if LJ_HASFFI
+  pfs->flags |= (fs.flags & PROTO_FFI);
+#endif
+  if (!(pfs->flags & PROTO_CHILD)) {
     if (pfs->flags & PROTO_HAS_RETURN)
       pfs->flags |= PROTO_FIXUP_RETURN;
-    pfs->flags |= PROTO_HAS_FNEW;
+    pfs->flags |= PROTO_CHILD;
   }
   lj_lex_next(ls);
 }
@@ -1781,7 +1785,7 @@ static void expr_simple(LexState *ls, ExpDesc *v)
   case TK_dots: {  /* Vararg. */
     FuncState *fs = ls->fs;
     BCReg base;
-    checkcond(ls, fs->flags & PROTO_IS_VARARG, LJ_ERR_XDOTS);
+    checkcond(ls, fs->flags & PROTO_VARARG, LJ_ERR_XDOTS);
     bcreg_reserve(fs, 1);
     base = fs->freereg-1;
     expr_init(v, VCALL, bcemit_ABC(fs, BC_VARG, base, 2, fs->numparams));
@@ -2018,7 +2022,7 @@ static void parse_return(LexState *ls)
       }
     }
   }
-  if (fs->flags & PROTO_HAS_FNEW)
+  if (fs->flags & PROTO_CHILD)
     bcemit_AJ(fs, BC_UCLO, 0, 0);  /* May need to close upvalues first. */
   bcemit_INS(fs, ins);
 }
@@ -2491,7 +2495,7 @@ GCproto *lj_parse(LexState *ls)
   fs.numparams = 0;
   fs.bcbase = NULL;
   fs.bclim = 0;
-  fs.flags |= PROTO_IS_VARARG;  /* Main chunk is always a vararg func. */
+  fs.flags |= PROTO_VARARG;  /* Main chunk is always a vararg func. */
   bcemit_AD(&fs, BC_FUNCV, 0, 0);  /* Placeholder. */
   lj_lex_next(ls);  /* Read-ahead first token. */
   parse_chunk(ls);

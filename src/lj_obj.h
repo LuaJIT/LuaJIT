@@ -309,12 +309,15 @@ typedef struct GCproto {
   MRef varinfo;		/* Names and compressed extents of local variables. */
 } GCproto;
 
-#define PROTO_IS_VARARG		0x01
-#define PROTO_HAS_FNEW		0x02
-#define PROTO_HAS_RETURN	0x04
-#define PROTO_FIXUP_RETURN	0x08
-#define PROTO_NO_JIT		0x10
-#define PROTO_HAS_ILOOP		0x20
+/* Flags for prototype. */
+#define PROTO_VARARG		0x01	/* Vararg function. */
+#define PROTO_CHILD		0x02	/* Has child prototypes. */
+#define PROTO_NOJIT		0x04	/* JIT disabled for this function. */
+#define PROTO_ILOOP		0x08	/* Patched bytecode with ILOOP etc. */
+#define PROTO_FFI		0x10	/* Uses BC_KCDATA for FFI datatypes. */
+/* Only used during parsing. */
+#define PROTO_HAS_RETURN	0x20	/* Already emitted a return. */
+#define PROTO_FIXUP_RETURN	0x40	/* Need to fixup emitted returns. */
 
 #define proto_kgc(pt, idx) \
   check_exp((uintptr_t)(intptr_t)(idx) >= (uintptr_t)-(intptr_t)(pt)->sizekgc, \

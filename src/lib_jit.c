@@ -191,7 +191,7 @@ LJLIB_CF(jit_util_funcinfo)
     setintfield(L, t, "upvalues", (int32_t)pt->sizeuv);
     if (pc < pt->sizebc)
       setintfield(L, t, "currentline", lj_debug_line(pt, pc));
-    lua_pushboolean(L, (pt->flags & PROTO_IS_VARARG));
+    lua_pushboolean(L, (pt->flags & PROTO_VARARG));
     lua_setfield(L, -2, "isvararg");
     setstrV(L, L->top++, proto_chunkname(pt));
     lua_setfield(L, -2, "source");
