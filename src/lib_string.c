@@ -736,7 +736,7 @@ static unsigned LUA_INTFRM_T num2uintfrm(lua_State *L, int arg)
 
 LJLIB_CF(string_format)
 {
-  int arg = 1;
+  int arg = 1, top = (int)(L->top - L->base);
   GCstr *fmt = lj_lib_checkstr(L, arg);
   const char *strfrmt = strdata(fmt);
   const char *strfrmt_end = strfrmt + fmt->len;
@@ -750,7 +750,8 @@ LJLIB_CF(string_format)
     } else { /* format item */
       char form[MAX_FMTSPEC];  /* to store the format (`%...') */
       char buff[MAX_FMTITEM];  /* to store the formatted item */
-      arg++;
+      if (++arg > top)
+	luaL_argerror(L, arg, lj_obj_typename[0]);
       strfrmt = scanformat(L, strfrmt, form);
       switch (*strfrmt++) {
       case 'c':
