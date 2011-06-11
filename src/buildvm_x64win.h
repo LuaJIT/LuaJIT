@@ -3060,7 +3060,11 @@ static void emit_asm_debug(BuildCtx *ctx)
 #endif
 	"\t.align " SZPTR "\n"
 	".LEFDE0:\n\n", (int)ctx->codesz, CFRAME_SIZE);
+#ifdef __solaris__
+    fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
+#else
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
+#endif
     fprintf(ctx->fp,
 	".Lframe1:\n"
 	"\t.long .LECIE1-.LSCIE1\n"
