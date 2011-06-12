@@ -193,6 +193,8 @@ LJLIB_CF(jit_util_funcinfo)
       setintfield(L, t, "currentline", lj_debug_line(pt, pc));
     lua_pushboolean(L, (pt->flags & PROTO_VARARG));
     lua_setfield(L, -2, "isvararg");
+    lua_pushboolean(L, (pt->flags & PROTO_CHILD));
+    lua_setfield(L, -2, "children");
     setstrV(L, L->top++, proto_chunkname(pt));
     lua_setfield(L, -2, "source");
     lj_debug_pushloc(L, pt, pc);

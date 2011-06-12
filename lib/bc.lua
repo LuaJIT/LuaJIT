@@ -125,9 +125,16 @@ local function bctargets(func)
 end
 
 -- Dump bytecode instructions of a function.
-local function bcdump(func, out)
+local function bcdump(func, out, all)
   if not out then out = stdout end
   local fi = funcinfo(func)
+  if all and fi.children then
+    for n=-1,-1000000000,-1 do
+      local k = funck(func, n)
+      if not k then break end
+      if type(k) == "proto" then bcdump(k, out, true) end
+    end
+  end
   out:write(format("-- BYTECODE -- %s-%d\n", fi.loc, fi.lastlinedefined))
   local target = bctargets(func)
   for pc=1,1000000000 do
