@@ -364,7 +364,7 @@ static void cp_init(CPState *cp)
   cp->depth = 0;
   cp->curpack = 0;
   cp->packstack[0] = 255;
-  lj_str_initbuf(cp->L, &cp->sb);
+  lj_str_initbuf(&cp->sb);
   lj_str_resizebuf(cp->L, &cp->sb, LJ_MIN_SBUF);
   lua_assert(cp->p != NULL);
   cp_get(cp);  /* Read-ahead first char. */
