@@ -22,6 +22,7 @@
 #include "lj_tab.h"
 #include "lj_state.h"
 #include "lj_ff.h"
+#include "lj_bcdump.h"
 #include "lj_char.h"
 #include "lj_lib.h"
 
@@ -114,10 +115,24 @@ LJLIB_ASM_(string_upper)
 
 /* ------------------------------------------------------------------------ */
 
+static int writer_buf(lua_State *L, const void *p, size_t size, void *b)
+{
+  luaL_addlstring((luaL_Buffer *)b, (const char *)p, size);
+  UNUSED(L);
+  return 0;
+}
+
 LJLIB_CF(string_dump)
 {
-  lj_err_caller(L, LJ_ERR_STRDUMP);
-  return 0;  /* unreachable */
+  GCfunc *fn = lj_lib_checkfunc(L, 1);
+  int strip = L->base+1 < L->top && tvistruecond(L->base+1);
+  luaL_Buffer b;
+  L->top = L->base+1;
+  luaL_buffinit(L, &b);
+  if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, &b, strip))
+    lj_err_caller(L, LJ_ERR_STRDUMP);
+  luaL_pushresult(&b);
+  return 1;
 }
 
 /* ------------------------------------------------------------------------ */

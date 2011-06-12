@@ -24,6 +24,7 @@
 #include "lj_trace.h"
 #include "lj_vm.h"
 #include "lj_lex.h"
+#include "lj_bcdump.h"
 #include "lj_parse.h"
 
 /* -- Common helper functions --------------------------------------------- */
@@ -1115,12 +1116,13 @@ LUA_API int lua_resume(lua_State *L, int nargs)
 static TValue *cpparser(lua_State *L, lua_CFunction dummy, void *ud)
 {
   LexState *ls = (LexState *)ud;
+  GCproto *pt;
   GCfunc *fn;
   UNUSED(dummy);
   cframe_errfunc(L->cframe) = -1;  /* Inherit error function. */
-  lj_lex_setup(L, ls);
-  fn = lj_func_newL(L, lj_parse(ls), tabref(L->env));
-  /* Parser may realloc stack. Don't combine above/below into one statement. */
+  pt = lj_lex_setup(L, ls) ? lj_bcread(ls) : lj_parse(ls);
+  fn = lj_func_newL_empty(L, pt, tabref(L->env));
+  /* Don't combine above/below into one statement. */
   setfuncV(L, L->top++, fn);
   return NULL;
 }
@@ -1142,9 +1144,12 @@ LUA_API int lua_load(lua_State *L, lua_Reader reader, void *data,
 
 LUA_API int lua_dump(lua_State *L, lua_Writer writer, void *data)
 {
+  cTValue *o = L->top-1;
   api_checknelems(L, 1);
-  UNUSED(L); UNUSED(writer); UNUSED(data);
-  return 1;  /* Error, not supported. */
+  if (tvisfunc(o) && isluafunc(funcV(o)))
+    return lj_bcwrite(L, funcproto(funcV(o)), writer, data, 0);
+  else
+    return 1;
 }
 
 /* -- GC and memory management -------------------------------------------- */

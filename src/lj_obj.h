@@ -310,11 +310,11 @@ typedef struct GCproto {
 } GCproto;
 
 /* Flags for prototype. */
-#define PROTO_VARARG		0x01	/* Vararg function. */
-#define PROTO_CHILD		0x02	/* Has child prototypes. */
-#define PROTO_NOJIT		0x04	/* JIT disabled for this function. */
-#define PROTO_ILOOP		0x08	/* Patched bytecode with ILOOP etc. */
-#define PROTO_FFI		0x10	/* Uses BC_KCDATA for FFI datatypes. */
+#define PROTO_CHILD		0x01	/* Has child prototypes. */
+#define PROTO_VARARG		0x02	/* Vararg function. */
+#define PROTO_FFI		0x04	/* Uses BC_KCDATA for FFI datatypes. */
+#define PROTO_NOJIT		0x08	/* JIT disabled for this function. */
+#define PROTO_ILOOP		0x10	/* Patched bytecode with ILOOP etc. */
 /* Only used during parsing. */
 #define PROTO_HAS_RETURN	0x20	/* Already emitted a return. */
 #define PROTO_FIXUP_RETURN	0x40	/* Need to fixup emitted returns. */

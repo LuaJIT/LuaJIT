@@ -408,7 +408,7 @@ static int llex(LexState *ls, TValue *tv)
 /* -- Lexer API ----------------------------------------------------------- */
 
 /* Setup lexer state. */
-void lj_lex_setup(lua_State *L, LexState *ls)
+int lj_lex_setup(lua_State *L, LexState *ls)
 {
   ls->L = L;
   ls->fs = NULL;
@@ -433,14 +433,11 @@ void lj_lex_setup(lua_State *L, LexState *ls)
   if (ls->current == '#') {  /* Skip POSIX #! header line. */
     do {
       next(ls);
-      if (ls->current == END_OF_STREAM) return;
+      if (ls->current == END_OF_STREAM) return 0;
     } while (!currIsNewline(ls));
     inclinenumber(ls);
   }
-  if (ls->current == LUA_SIGNATURE[0]) {
-    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_XBCLOAD));
-    lj_err_throw(L, LUA_ERRSYNTAX);
-  }
+  return (ls->current == LUA_SIGNATURE[0]);  /* Bytecode dump? */
 }
 
 /* Cleanup lexer state. */

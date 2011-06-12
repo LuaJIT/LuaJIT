@@ -46,6 +46,8 @@
 #include "lj_api.c"
 #include "lj_lex.c"
 #include "lj_parse.c"
+#include "lj_bcread.c"
+#include "lj_bcwrite.c"
 #include "lj_ctype.c"
 #include "lj_cdata.c"
 #include "lj_cconv.c"

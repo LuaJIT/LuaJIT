@@ -204,7 +204,7 @@ static void gc_traverse_func(global_State *g, GCfunc *fn)
   gc_markobj(g, tabref(fn->c.env));
   if (isluafunc(fn)) {
     uint32_t i;
-    lua_assert(fn->l.nupvalues == funcproto(fn)->sizeuv);
+    lua_assert(fn->l.nupvalues <= funcproto(fn)->sizeuv);
     gc_markobj(g, funcproto(fn));
     for (i = 0; i < fn->l.nupvalues; i++)  /* Mark Lua function upvalues. */
       gc_markobj(g, &gcref(fn->l.uvptr[i])->uv);

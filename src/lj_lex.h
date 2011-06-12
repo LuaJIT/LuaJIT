@@ -71,7 +71,7 @@ typedef struct LexState {
   uint32_t level;	/* Syntactical nesting level. */
 } LexState;
 
-LJ_FUNC void lj_lex_setup(lua_State *L, LexState *ls);
+LJ_FUNC int lj_lex_setup(lua_State *L, LexState *ls);
 LJ_FUNC void lj_lex_cleanup(lua_State *L, LexState *ls);
 LJ_FUNC void lj_lex_next(LexState *ls);
 LJ_FUNC LexToken lj_lex_lookahead(LexState *ls);

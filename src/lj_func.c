@@ -65,6 +65,17 @@ static GCupval *func_finduv(lua_State *L, TValue *slot)
   return uv;
 }
 
+/* Create an empty and closed upvalue. */
+static GCupval *func_emptyuv(lua_State *L)
+{
+  GCupval *uv = (GCupval *)lj_mem_newgco(L, sizeof(GCupval));
+  uv->gct = ~LJ_TUPVAL;
+  uv->closed = 1;
+  setnilV(&uv->tv);
+  setmref(uv->v, &uv->tv);
+  return uv;
+}
+
 /* Close all open upvalues pointing to some stack level or above. */
 void LJ_FASTCALL lj_func_closeuv(lua_State *L, TValue *level)
 {
@@ -105,15 +116,30 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
   return fn;
 }
 
-GCfunc *lj_func_newL(lua_State *L, GCproto *pt, GCtab *env)
+static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
   GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv));
   fn->l.gct = ~LJ_TFUNC;
   fn->l.ffid = FF_LUA;
-  fn->l.nupvalues = (uint8_t)pt->sizeuv;
+  fn->l.nupvalues = 0;  /* Set to zero until upvalues are initialized. */
   /* NOBARRIER: Really a setgcref. But the GCfunc is new (marked white). */
   setmref(fn->l.pc, proto_bc(pt));
   setgcref(fn->l.env, obj2gco(env));
+  return fn;
+}
+
+/* Create a new Lua function with empty upvalues. */
+GCfunc *lj_func_newL_empty(lua_State *L, GCproto *pt, GCtab *env)
+{
+  GCfunc *fn = func_newL(L, pt, env);
+  MSize i, nuv = pt->sizeuv;
+  /* NOBARRIER: The GCfunc is new (marked white). */
+  for (i = 0; i < nuv; i++) {
+    GCupval *uv = func_emptyuv(L);
+    uv->dhash = (uint32_t)(uintptr_t)pt ^ ((uint32_t)proto_uv(pt)[i] << 24);
+    setgcref(fn->l.uvptr[i], obj2gco(uv));
+  }
+  fn->l.nupvalues = (uint8_t)nuv;
   return fn;
 }
 
@@ -122,13 +148,13 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
 {
   GCfunc *fn;
   GCRef *puv;
-  uint32_t i, nuv;
+  MSize i, nuv;
   TValue *base;
   lj_gc_check_fixtop(L);
-  fn = lj_func_newL(L, pt, tabref(parent->env));
+  fn = func_newL(L, pt, tabref(parent->env));
   /* NOBARRIER: The GCfunc is new (marked white). */
   puv = parent->uvptr;
-  nuv = fn->l.nupvalues;
+  nuv = pt->sizeuv;
   base = L->base;
   for (i = 0; i < nuv; i++) {
     uint32_t v = proto_uv(pt)[i];
@@ -141,6 +167,7 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
     }
     setgcref(fn->l.uvptr[i], obj2gco(uv));
   }
+  fn->l.nupvalues = (uint8_t)nuv;
   return fn;
 }
 

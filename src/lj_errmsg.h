@@ -84,7 +84,7 @@ ERRDEF(IOCLFL,	"attempt to use a closed file")
 ERRDEF(IOSTDCL,	"standard file is closed")
 ERRDEF(OSUNIQF,	"unable to generate a unique filename")
 ERRDEF(OSDATEF,	"field " LUA_QS " missing in date table")
-ERRDEF(STRDUMP,	"cannot dump functions")
+ERRDEF(STRDUMP,	"unable to dump given function")
 ERRDEF(STRSLC,	"string slice too long")
 ERRDEF(STRPATB,	"missing " LUA_QL("[") " after " LUA_QL("%f") " in pattern")
 ERRDEF(STRPATC,	"invalid pattern capture")
@@ -119,7 +119,6 @@ ERRDEF(XLCOM,	"unfinished long comment")
 ERRDEF(XSTR,	"unfinished string")
 ERRDEF(XESC,	"invalid escape sequence")
 ERRDEF(XLDELIM,	"invalid long string delimiter")
-ERRDEF(XBCLOAD,	"cannot load Lua bytecode")
 ERRDEF(XTOKEN,	LUA_QS " expected")
 ERRDEF(XJUMP,	"control structure too long")
 ERRDEF(XSLOTS,	"function or expression too complex")
@@ -136,6 +135,10 @@ ERRDEF(XDOTS,	"cannot use " LUA_QL("...") " outside a vararg function")
 ERRDEF(XSYNTAX,	"syntax error")
 ERRDEF(XBREAK,	"no loop to break")
 ERRDEF(XFOR,	LUA_QL("=") " or " LUA_QL("in") " expected")
+
+/* Bytecode reader errors. */
+ERRDEF(BCFMT,	"cannot load incompatible bytecode")
+ERRDEF(BCBAD,	"cannot load malformed bytecode")
 
 #if LJ_HASFFI
 /* FFI errors. */
