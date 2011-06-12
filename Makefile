@@ -76,7 +76,7 @@ FILE_SO= libluajit.so
 FILE_MAN= luajit.1
 FILE_PC= luajit.pc
 FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h
-FILES_JITLIB= bc.lua v.lua dump.lua dis_x86.lua dis_x64.lua vmdef.lua
+FILES_JITLIB= bc.lua v.lua dump.lua dis_x86.lua dis_x64.lua bcsave.lua vmdef.lua
 
 ifeq (,$(findstring Windows,$(OS)))
   ifeq (Darwin,$(shell uname -s))

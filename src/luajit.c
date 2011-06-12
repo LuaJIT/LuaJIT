@@ -61,6 +61,7 @@ static void print_usage(void)
   "Available options are:\n"
   "  -e chunk  Execute string " LUA_QL("chunk") ".\n"
   "  -l name   Require library " LUA_QL("name") ".\n"
+  "  -b ...    Save or list bytecode.\n"
   "  -j cmd    Perform LuaJIT control command.\n"
   "  -O[opt]   Control LuaJIT optimizations.\n"
   "  -i        Enter interactive mode after executing " LUA_QL("script") ".\n"
@@ -288,7 +289,7 @@ static int handle_script(lua_State *L, char **argv, int n)
 }
 
 /* Load add-on module. */
-static int loadjitmodule(lua_State *L, const char *notfound)
+static int loadjitmodule(lua_State *L)
 {
   lua_getglobal(L, "require");
   lua_pushliteral(L, "jit.");
@@ -298,7 +299,8 @@ static int loadjitmodule(lua_State *L, const char *notfound)
     const char *msg = lua_tostring(L, -1);
     if (msg && !strncmp(msg, "module ", 7)) {
     err:
-      l_message(progname, notfound);
+      l_message(progname,
+		"unknown luaJIT command or jit.* modules not installed");
       return 1;
     } else {
       return report(L, 1);
@@ -345,7 +347,7 @@ static int dojitcmd(lua_State *L, const char *cmd)
   lua_gettable(L, -2);  /* Lookup library function. */
   if (!lua_isfunction(L, -1)) {
     lua_pop(L, 2);  /* Drop non-function and jit.* table, keep module name. */
-    if (loadjitmodule(L, "unknown luaJIT command"))
+    if (loadjitmodule(L))
       return 1;
   } else {
     lua_remove(L, -2);  /* Drop jit.* table. */
@@ -365,16 +367,38 @@ static int dojitopt(lua_State *L, const char *opt)
   return runcmdopt(L, opt);
 }
 
+/* Save or list bytecode. */
+static int dobytecode(lua_State *L, char **argv)
+{
+  int narg = 0;
+  lua_pushliteral(L, "bcsave");
+  if (loadjitmodule(L))
+    return 1;
+  if (argv[0][2]) {
+    narg++;
+    argv[0][1] = '-';
+    lua_pushstring(L, argv[0]+1);
+  }
+  for (argv++; *argv != NULL; narg++, argv++)
+    lua_pushstring(L, *argv);
+  return report(L, lua_pcall(L, narg, 0, 0));
+}
+
 /* check that argument has no extra characters at the end */
 #define notail(x)	{if ((x)[2] != '\0') return -1;}
 
-static int collectargs(char **argv, int *pi, int *pv, int *pe)
+#define FLAGS_INTERACTIVE	1
+#define FLAGS_VERSION		2
+#define FLAGS_EXEC		4
+#define FLAGS_OPTION		8
+
+static int collectargs(char **argv, int *flags)
 {
   int i;
   for (i = 1; argv[i] != NULL; i++) {
-    if (argv[i][0] != '-')  /* not an option? */
+    if (argv[i][0] != '-')  /* Not an option? */
       return i;
-    switch (argv[i][1]) {  /* option */
+    switch (argv[i][1]) {  /* Check option. */
     case '-':
       notail(argv[i]);
       return (argv[i+1] != NULL ? i+1 : 0);
@@ -382,21 +406,27 @@ static int collectargs(char **argv, int *pi, int *pv, int *pe)
       return i;
     case 'i':
       notail(argv[i]);
-      *pi = 1;  /* go through */
+      *flags |= FLAGS_INTERACTIVE;
+      /* fallthrough */
     case 'v':
       notail(argv[i]);
-      *pv = 1;
+      *flags |= FLAGS_VERSION;
       break;
     case 'e':
-      *pe = 1;  /* go through */
+      *flags |= FLAGS_EXEC;
     case 'j':  /* LuaJIT extension */
     case 'l':
+      *flags |= FLAGS_OPTION;
       if (argv[i][2] == '\0') {
 	i++;
 	if (argv[i] == NULL) return -1;
       }
       break;
     case 'O': break;  /* LuaJIT extension */
+    case 'b':  /* LuaJIT extension */
+      if (*flags) return -1;
+      *flags |= FLAGS_EXEC;
+      return 0;
     default: return -1;  /* invalid option */
     }
   }
@@ -438,6 +468,8 @@ static int runargs(lua_State *L, char **argv, int n)
       if (dojitopt(L, argv[i] + 2))
 	return 1;
       break;
+    case 'b':  /* LuaJIT extension */
+      return dobytecode(L, argv+i);
     default: break;
     }
   }
@@ -466,7 +498,7 @@ static int pmain(lua_State *L)
   struct Smain *s = (struct Smain *)lua_touserdata(L, 1);
   char **argv = s->argv;
   int script;
-  int has_i = 0, has_v = 0, has_e = 0;
+  int flags = 0;
   globalL = L;
   if (argv[0] && argv[0][0]) progname = argv[0];
   LUAJIT_VERSION_SYM();  /* linker-enforced version check */
@@ -475,22 +507,22 @@ static int pmain(lua_State *L)
   lua_gc(L, LUA_GCRESTART, -1);
   s->status = handle_luainit(L);
   if (s->status != 0) return 0;
-  script = collectargs(argv, &has_i, &has_v, &has_e);
+  script = collectargs(argv, &flags);
   if (script < 0) {  /* invalid args? */
     print_usage();
     s->status = 1;
     return 0;
   }
-  if (has_v) print_version();
+  if ((flags & FLAGS_VERSION)) print_version();
   s->status = runargs(L, argv, (script > 0) ? script : s->argc);
   if (s->status != 0) return 0;
   if (script)
     s->status = handle_script(L, argv, script);
   if (s->status != 0) return 0;
-  if (has_i) {
+  if ((flags & FLAGS_INTERACTIVE)) {
     print_jit_status(L);
     dotty(L);
-  } else if (script == 0 && !has_e && !has_v) {
+  } else if (script == 0 && !(flags & (FLAGS_EXEC|FLAGS_VERSION))) {
     if (lua_stdin_is_tty()) {
       print_version();
       print_jit_status(L);

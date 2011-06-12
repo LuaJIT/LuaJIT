@@ -106,8 +106,33 @@ prints a short list of the available options. Please have a look at the
 for details.
 </p>
 <p>
-Two additional options control the behavior of LuaJIT:
+LuaJIT has some additional options:
 </p>
+
+<h3 id="opt_b"><tt>-b[options] input output</tt></h3>
+<p>
+This option saves or lists bytecode. The following additional options
+are accepted:
+</p>
+<ul>
+<li><tt>-l</tt> &mdash; Only list bytecode.</li>
+<li><tt>-s</tt> &mdash; Strip debug info (this is the default).</li>
+<li><tt>-g</tt> &mdash; Keep debug info.</li>
+<li><tt>-e chunk</tt> &mdash; Use chunk string as input.</li>
+<li><tt>-</tt> (a single minus sign) &mdash; Use stdin as input and/or stdout as output.</li>
+</ul>
+<p>
+Typical usage examples:
+</p>
+<pre class="code">
+luajit -b test.lua test.out                     # Save to test.out
+luajit -bg test.lua test.out                    # Keep debug info
+luajit -be "print('hello world') end" test.out  # Save cmdline script
+
+luajit -bl test.lua                             # List to stdout
+luajit -bl test.lua test.txt                    # List to test.txt
+luajit -ble "print('hello world') end"          # List cmdline script
+</pre>
 
 <h3 id="opt_j"><tt>-j cmd[=arg[,arg...]]</tt></h3>
 <p>
