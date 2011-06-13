@@ -291,7 +291,8 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
   bcwrite_uleb128(ctx, pt->sizekn);
   bcwrite_uleb128(ctx, pt->sizebc-1);
   if (!ctx->strip) {
-    sizedbg = pt->sizept - (MSize)((char *)proto_lineinfo(pt) - (char *)pt);
+    if (proto_lineinfo(pt))
+      sizedbg = pt->sizept - (MSize)((char *)proto_lineinfo(pt) - (char *)pt);
     bcwrite_uleb128(ctx, sizedbg);
     if (sizedbg) {
       bcwrite_uleb128(ctx, pt->firstline);
