@@ -133,6 +133,13 @@ luajit -bl test.lua                             # List to stdout
 luajit -bl test.lua test.txt                    # List to test.txt
 luajit -ble "print('hello world') end"          # List cmdline script
 </pre>
+<p>
+Note: A file in bytecode format is auto-detected and can be loaded like
+any Lua source file. E.g. directly from the command line or with
+<tt>loadfile()</tt>, <tt>dofile()</tt> etc. See also
+<a href="extensions.html#string_dump">string.dump()</a> for information
+on bytecode portability and compatibility.
+</p>
 
 <h3 id="opt_j"><tt>-j cmd[=arg[,arg...]]</tt></h3>
 <p>
