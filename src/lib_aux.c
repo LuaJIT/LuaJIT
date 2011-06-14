@@ -255,7 +255,7 @@ LUALIB_API int luaL_loadfile(lua_State *L, const char *filename)
   int status;
   const char *chunkname;
   if (filename) {
-    ctx.fp = fopen(filename, "r");
+    ctx.fp = fopen(filename, "rb");
     if (ctx.fp == NULL) {
       lua_pushfstring(L, "cannot open %s: %s", filename, strerror(errno));
       return LUA_ERRFILE;
