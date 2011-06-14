@@ -292,7 +292,9 @@ ifeq (iOS,$(TARGET_SYS))
     TARGET_XSHLDFLAGS+= -install_name $(PREFIX)/lib/$(TARGET_DYLIBNAME)
   endif
 else
-  TARGET_XLDFLAGS+= -Wl,-E
+  ifneq (SunOS,$(TARGET_SYS))
+    TARGET_XLDFLAGS+= -Wl,-E
+  endif
   ifeq (Linux,$(TARGET_SYS))
     TARGET_XLIBS+= -ldl
   endif
@@ -419,6 +421,9 @@ ifeq (Darwin,$(TARGET_SYS))
 endif
 ifeq (iOS,$(TARGET_SYS))
   LJVM_MODE= machasm
+endif
+ifeq (SunOS,$(TARGET_SYS))
+  BUILDMODE= static
 endif
 
 ifeq (static,$(BUILDMODE))

@@ -65,7 +65,8 @@
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || \
       defined(__NetBSD__) || defined(__OpenBSD__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
-#elif defined(__solaris__) || defined(__CYGWIN__)
+#elif (defined(__sun__) && defined(__svr4__)) || defined(__solaris__) || \
+      defined(__CYGWIN__)
 #define LUAJIT_OS	LUAJIT_OS_POSIX
 #else
 #define LUAJIT_OS	LUAJIT_OS_OTHER

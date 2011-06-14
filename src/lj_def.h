@@ -118,7 +118,9 @@ typedef uintptr_t BloomFilter;
 #define LJ_NOINLINE	__attribute__((noinline))
 
 #if defined(__ELF__) || defined(__MACH__)
+#if !((defined(__sun__) && defined(__svr4__)) || defined(__solaris__))
 #define LJ_NOAPI	extern __attribute__((visibility("hidden")))
+#endif
 #endif
 
 /* Note: it's only beneficial to use fastcall on x86 and then only for up to
