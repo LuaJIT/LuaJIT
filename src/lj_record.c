@@ -333,14 +333,15 @@ static LoopEvent rec_for_iter(IROp *op, cTValue *o, int isforl)
 }
 
 /* Record checks for FOR loop overflow and step direction. */
-static void rec_for_check(jit_State *J, IRType t, int dir, TRef stop, TRef step)
+static void rec_for_check(jit_State *J, IRType t, int dir,
+			  TRef stop, TRef step, int init)
 {
   if (!tref_isk(step)) {
     /* Non-constant step: need a guard for the direction. */
     TRef zero = (t == IRT_INT) ? lj_ir_kint(J, 0) : lj_ir_knum_zero(J);
     emitir(IRTG(dir ? IR_GE : IR_LT, t), step, zero);
     /* Add hoistable overflow checks for a narrowed FORL index. */
-    if (t == IRT_INT) {
+    if (init && t == IRT_INT) {
       if (tref_isk(stop)) {
 	/* Constant stop: optimize check away or to a range check for step. */
 	int32_t k = IR(tref_ref(stop))->i;
@@ -357,7 +358,7 @@ static void rec_for_check(jit_State *J, IRType t, int dir, TRef stop, TRef step)
 	emitir(IRTI(IR_USE), tr, 0);  /* ADDOV is weak. Avoid dead result. */
       }
     }
-  } else if (t == IRT_INT && !tref_isk(stop)) {
+  } else if (init && t == IRT_INT && !tref_isk(stop)) {
     /* Constant step: optimize overflow check to a range check for stop. */
     int32_t k = IR(tref_ref(step))->i;
     k = (int32_t)(dir ? 0x7fffffff : 0x80000000) - k;
@@ -384,8 +385,7 @@ static void rec_for_loop(jit_State *J, const BCIns *fori, ScEvEntry *scev,
   scev->dir = dir;
   scev->stop = tref_ref(stop);
   scev->step = tref_ref(step);
-  if (init)
-    rec_for_check(J, t, dir, stop, step);
+  rec_for_check(J, t, dir, stop, step, init);
   scev->start = tref_ref(find_kinit(J, fori, ra+FORL_IDX, IRT_INT));
   tc = (LJ_DUALNUM &&
 	!(scev->start && irref_isk(scev->stop) && irref_isk(scev->step) &&
@@ -447,7 +447,8 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
     }
     tr[FORL_EXT] = tr[FORL_IDX];
     stop = tr[FORL_STOP];
-    rec_for_check(J, t, rec_for_direction(&tv[FORL_STEP]), stop, tr[FORL_STEP]);
+    rec_for_check(J, t, rec_for_direction(&tv[FORL_STEP]),
+		  stop, tr[FORL_STEP], 1);
   }
 
   ev = rec_for_iter(&op, tv, isforl);
