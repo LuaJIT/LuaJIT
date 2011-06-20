@@ -819,7 +819,7 @@ nocheck:
   return 0;  /* No metamethod. */
 }
 
-/* Record call to arithmetic metamethod (and MM_len). */
+/* Record call to arithmetic metamethod. */
 static TRef rec_mm_arith(jit_State *J, RecordIndex *ix, MMS mm)
 {
   /* Set up metamethod call first to save ix->tab and ix->tabv. */
@@ -830,7 +830,7 @@ static TRef rec_mm_arith(jit_State *J, RecordIndex *ix, MMS mm)
   copyTV(J->L, basev+1, &ix->tabv);
   copyTV(J->L, basev+2, &ix->keyv);
   if (!lj_record_mm_lookup(J, ix, mm)) {  /* Lookup mm on 1st operand. */
-    if (mm != MM_len) {
+    if (mm != MM_unm) {
       ix->tab = ix->key;
       copyTV(J->L, &ix->tabv, &ix->keyv);
       if (lj_record_mm_lookup(J, ix, mm))  /* Lookup mm on 2nd operand. */
@@ -842,6 +842,34 @@ ok:
   base[0] = ix->mobj;
   copyTV(J->L, basev+0, &ix->mobjv);
   lj_record_call(J, func, 2);
+  return 0;  /* No result yet. */
+}
+
+/* Record call to __len metamethod. */
+static TRef rec_mm_len(jit_State *J, TRef tr, TValue *tv)
+{
+  RecordIndex ix;
+  ix.tab = tr;
+  copyTV(J->L, &ix.tabv, tv);
+  if (lj_record_mm_lookup(J, &ix, MM_len)) {
+    BCReg func = rec_mm_prep(J, lj_cont_ra);
+    TRef *base = J->base + func;
+    TValue *basev = J->L->base + func;
+    base[0] = ix.mobj; copyTV(J->L, basev+0, &ix.mobjv);
+    base[1] = tr; copyTV(J->L, basev+1, tv);
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    base[2] = tr; copyTV(J->L, basev+2, tv);
+#else
+    base[2] = TREF_NIL; setnilV(basev+2);
+#endif
+    lj_record_call(J, func, 2);
+  } else {
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    if (tref_istab(tr))
+      return lj_ir_call(J, IRCALL_lj_tab_len, tr);
+#endif
+    lj_trace_err(J, LJ_TRERR_NOMM);
+  }
   return 0;  /* No result yet. */
 }
 
@@ -1667,17 +1695,14 @@ void lj_record_ins(jit_State *J)
     break;
 
   case BC_LEN:
-    if (tref_isstr(rc)) {
+    if (tref_isstr(rc))
       rc = emitir(IRTI(IR_FLOAD), rc, IRFL_STR_LEN);
-    } else if (tref_istab(rc)) {
+#ifndef LUAJIT_ENABLE_LUA52COMPAT
+    else if (tref_istab(rc))
       rc = lj_ir_call(J, IRCALL_lj_tab_len, rc);
-    } else {
-      ix.tab = rc;
-      copyTV(J->L, &ix.tabv, rcv);
-      ix.key = TREF_NIL;
-      setnilV(&ix.keyv);
-      rc = rec_mm_arith(J, &ix, MM_len);
-    }
+#endif
+    else
+      rc = rec_mm_len(J, rc, rcv);
     break;
 
   /* -- Arithmetic ops ---------------------------------------------------- */

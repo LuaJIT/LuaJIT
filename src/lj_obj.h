@@ -441,9 +441,9 @@ enum {
 #endif
 
 #define MMDEF(_) \
-  _(index) _(newindex) _(gc) _(mode) _(eq) \
+  _(index) _(newindex) _(gc) _(mode) _(eq) _(len) \
   /* Only the above (fast) metamethods are negative cached (max. 8). */ \
-  _(len) _(lt) _(le) _(concat) _(call) \
+  _(lt) _(le) _(concat) _(call) \
   /* The following must be in ORDER ARITH. */ \
   _(add) _(sub) _(mul) _(div) _(mod) _(pow) _(unm) \
   /* The following are used in the standard libraries. */ \
@@ -455,7 +455,7 @@ MMDEF(MMENUM)
 #undef MMENUM
   MM__MAX,
   MM____ = MM__MAX,
-  MM_FAST = MM_eq
+  MM_FAST = MM_len
 } MMS;
 
 /* GC root IDs. */

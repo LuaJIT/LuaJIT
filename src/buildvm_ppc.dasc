@@ -818,13 +818,23 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_call_dispatch
   |
   |->vmeta_len:
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  mr SAVE0, CARG1
+#endif
   |  add CARG2, BASE, RD
   |   stw BASE, L->base
   |  mr CARG1, L
   |   stw PC, SAVE_PC
   |  bl extern lj_meta_len		// (lua_State *L, TValue *o)
-  |  // Returns TValue * (metamethod base).
+  |  // Returns NULL (retry) or TValue * (metamethod base).
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  cmplwi CRET1, 0
+  |  bne ->vmeta_binop			// Binop call for compatibility.
+  |  mr CARG1, SAVE0
+  |  b ->BC_LEN_Z
+#else
   |  b ->vmeta_binop			// Binop call for compatibility.
+#endif
   |
   |//-- Call metamethod ----------------------------------------------------
   |
@@ -2337,9 +2347,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  checktab CARG1
     |  checkfail ->vmeta_len
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    |  lwz TAB:TMP2, TAB:CARG1->metatable
+    |  cmplwi TAB:TMP2, 0
+    |  bne >9
+    |3:
+#endif
+    |->BC_LEN_Z:
     |  bl extern lj_tab_len		// (GCtab *t)
     |  // Returns uint32_t (but less than 2^31).
     |  b <1
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    |9:
+    |  lbz TMP0, TAB:TMP2->nomm
+    |  andi. TMP0, TMP0, 1<<MM_len
+    |  bne <3				// 'no __len' flag set: done.
+    |  b ->vmeta_len
+#endif
     break;
 
   /* -- Binary ops -------------------------------------------------------- */

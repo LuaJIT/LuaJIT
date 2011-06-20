@@ -1167,9 +1167,17 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov L:FCARG1, L:RB
   |  mov SAVE_PC, PC
   |  call extern lj_meta_len@8		// (lua_State *L, TValue *o)
-  |  // TValue * (metamethod) returned in eax (RC).
+  |  // NULL (retry) or TValue * (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+  |  test RC, RC
+  |  jne ->vmeta_binop			// Binop call for compatibility.
+  |  movzx RD, PC_RD
+  |  mov TAB:FCARG1, [BASE+RD*8]
+  |  jmp ->BC_LEN_Z
+#else
   |  jmp ->vmeta_binop			// Binop call for compatibility.
+#endif
   |
   |//-- Call metamethod ----------------------------------------------------
   |
@@ -4244,6 +4252,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |2:
     |  checktab RD, ->vmeta_len
     |  mov TAB:FCARG1, [BASE+RD*8]
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    |  mov TAB:RB, TAB:FCARG1->metatable
+    |  cmp TAB:RB, 0
+    |  jnz >9
+    |3:
+#endif
+    |->BC_LEN_Z:
     |  mov RB, BASE			// Save BASE.
     |  call extern lj_tab_len@4		// (GCtab *t)
     |  // Length of table returned in eax (RD).
@@ -4260,6 +4275,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
     |  mov BASE, RB			// Restore BASE.
     |  movzx RA, PC_RA
     |  jmp <1
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+    |9:  // Check for __len.
+    |  test byte TAB:RB->nomm, 1<<MM_len
+    |  jnz <3
+    |  jmp ->vmeta_len			// 'no __len' flag NOT set: check.
+#endif
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
