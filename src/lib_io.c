@@ -354,7 +354,7 @@ LJLIB_CF(io_method_lines)
 LJLIB_CF(io_method___gc)
 {
   IOFileUD *iof = io_tofilep(L);
-  if (iof->fp != NULL)
+  if (iof->fp != NULL && (iof->type & IOFILE_TYPE_MASK) != IOFILE_TYPE_STDF)
     io_file_close(L, iof);
   return 0;
 }
