@@ -191,7 +191,8 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
       }
       break;
     default:
-      lua_assert(ir->o == IR_HREF || ir->o == IR_NEWREF || ir->o == IR_UREFO);
+      lua_assert(ir->o == IR_HREF || ir->o == IR_NEWREF || ir->o == IR_UREFO ||
+		 ir->o == IR_KKPTR);
       break;
     }
   }
