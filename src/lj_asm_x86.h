@@ -2037,6 +2037,8 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
 	  left = asm_fuseload(as, lref, RSET_GPR);
 	  irl->t = origt;
 	  if (left == RID_MRM) {  /* Fusion succeeded? */
+	    if (irt_isu8(irl->t) || irt_isu16(irl->t))
+	      cc >>= 4;  /* Need unsigned compare. */
 	    asm_guardcc(as, cc);
 	    emit_i8(as, imm);
 	    emit_mrm(as, (irt_isi8(origt) || irt_isu8(origt)) ?
