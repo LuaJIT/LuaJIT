@@ -1878,15 +1878,17 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
     default: emit_shifti(as, REX_64IR(ir, xs), dest, shift); break;
     }
   } else {  /* Variable shifts implicitly use register cl (i.e. ecx). */
-    RegSet allow = rset_exclude(RSET_GPR, RID_ECX);
-    Reg right = irr->r;
-    if (ra_noreg(right)) {
-      right = ra_allocref(as, rref, RID2RSET(RID_ECX));
-    } else if (right != RID_ECX) {
-      rset_clear(allow, right);
-      ra_scratch(as, RID2RSET(RID_ECX));
+    Reg right;
+    dest = ra_dest(as, ir, rset_exclude(RSET_GPR, RID_ECX));
+    if (dest == RID_ECX) {
+      dest = ra_scratch(as, rset_exclude(RSET_GPR, RID_ECX));
+      emit_rr(as, XO_MOV, RID_ECX, dest);
     }
-    dest = ra_dest(as, ir, allow);
+    right = irr->r;
+    if (ra_noreg(right))
+      right = ra_allocref(as, rref, RID2RSET(RID_ECX));
+    else if (right != RID_ECX)
+      ra_scratch(as, RID2RSET(RID_ECX));
     emit_rr(as, XO_SHIFTcl, REX_64IR(ir, xs), dest);
     if (right != RID_ECX) {
       ra_noweak(as, right);
