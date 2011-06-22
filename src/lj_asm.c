@@ -464,7 +464,7 @@ static void ra_evictk(ASMState *as)
   while (work) {
     Reg r = rset_pickbot(work);
     IRRef ref = regcost_ref(as->cost[r]);
-    if (emit_canremat(ref)) {
+    if (irref_isk(ref)) {
       ra_rematk(as, ref);
       checkmclim(as);
     }
