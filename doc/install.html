@@ -367,6 +367,13 @@ make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF" TARGET=arm
 You can cross-compile for <b id="ios">iOS 3.0+</b> (iPhone/iPad) using the <a href="http://developer.apple.com/devcenter/ios/index.action"><span class="ext">&raquo;</span>&nbsp;iOS SDK</a>.
 The environment variables need to match the iOS SDK version:
 </p>
+<p style="font-size: 8pt;">
+Note: <b>the JIT compiler is disabled for iOS</b>, because regular iOS Apps
+are not allowed to generate code at runtime. You'll only get the performance
+of the LuaJIT interpreter on iOS. This is still faster than plain Lua, but
+much slower than the JIT compiler. Please complain to Apple, not me.
+Or use Android. :-p
+</p>
 <pre class="code">
 ISDK=/Developer/Platforms/iPhoneOS.platform/Developer
 ISDKVER=iPhoneOS4.3.sdk
