@@ -125,13 +125,13 @@ are accepted:
 Typical usage examples:
 </p>
 <pre class="code">
-luajit -b test.lua test.out                     # Save to test.out
-luajit -bg test.lua test.out                    # Keep debug info
-luajit -be "print('hello world') end" test.out  # Save cmdline script
+luajit -b test.lua test.out                 # Save to test.out
+luajit -bg test.lua test.out                # Keep debug info
+luajit -be "print('hello world')" test.out  # Save cmdline script
 
-luajit -bl test.lua                             # List to stdout
-luajit -bl test.lua test.txt                    # List to test.txt
-luajit -ble "print('hello world') end"          # List cmdline script
+luajit -bl test.lua                         # List to stdout
+luajit -bl test.lua test.txt                # List to test.txt
+luajit -ble "print('hello world')"          # List cmdline script
 </pre>
 <p>
 Note: A file in bytecode format is auto-detected and can be loaded like
