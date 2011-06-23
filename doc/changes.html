@@ -69,6 +69,47 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta8">LuaJIT 2.0.0-beta8 &mdash; 2011-06-23</h2>
+<ul>
+<li>New features:
+<ul>
+<li>Soft-float ARM port of LuaJIT is complete.</li>
+<li>Add support for bytecode loading/saving and <tt>-b</tt> command line
+option.</li>
+<li>From Lua 5.2: <tt>__len</tt> metamethod for tables
+(disabled by default).</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>ARM: Misc. fixes for interpreter.</li>
+<li>x86/x64: Fix <tt>bit.*</tt> argument checking in interpreter.</li>
+<li>Catch early out-of-memory in memory allocator initialization.</li>
+<li>Fix data-flow analysis for paths leading to an upvalue close.</li>
+<li>Fix check for missing arguments in <tt>string.format()</tt>.</li>
+<li>Fix Solaris/x86 build (note: not a supported target).</li>
+<li>Fix recording of loops with instable directions in side traces.</li>
+<li>x86/x64: Fix fusion of comparisons with <tt>u8</tt>/<tt>u16</tt>
+<tt>XLOAD</tt>.</li>
+<li>x86/x64: Fix register allocation for variable shifts.</li>
+</ul></li>
+<li>FFI library:
+<ul>
+<li>Add <tt>ffi.errno()</tt>. Save <tt>errno</tt>/<tt>GetLastError()</tt>
+around allocations etc.</li>
+<li>Fix <tt>__gc</tt> for VLA/VLS cdata objects.</li>
+<li>Fix recording of casts from 32 bit cdata pointers to integers.</li>
+<li><tt>tonumber(cdata)</tt> returns <tt>nil</tt> for non-numbers.</li>
+<li>Show address pointed to for <tt>tostring(pointer)</tt>.</li>
+<li>Print <tt>NULL</tt> pointers as <tt>"cdata&lt;... *&gt;: NULL"</tt>.</li>
+<li>Support <tt>__tostring</tt> metamethod for pointers to structs, too.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>More tuning for loop unrolling heuristics.</li>
+<li>Flatten and compress in-memory debug info (saves ~70%).</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta7">LuaJIT 2.0.0-beta7 &mdash; 2011-05-05</h2>
 <ul>
 <li>New features:
