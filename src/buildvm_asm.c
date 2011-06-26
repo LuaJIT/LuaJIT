@@ -191,7 +191,8 @@ void emit_asm(BuildCtx *ctx)
   if (ctx->mode != BUILD_machasm)
     fprintf(ctx->fp, ".Lbegin:\n");
 
-#if LJ_TARGET_ARM && defined(__GNUC__) && !defined(__symbian__)
+#if LJ_TARGET_ARM && defined(__GNUC__) && !defined(__symbian__) && \
+    !LJ_TARGET_OSX
   /* This should really be moved into buildvm_arm.dasc. */
   fprintf(ctx->fp,
 	  ".fnstart\n"
@@ -227,7 +228,8 @@ void emit_asm(BuildCtx *ctx)
 #endif
   }
 
-#if LJ_TARGET_ARM && defined(__GNUC__) && !defined(__symbian__)
+#if LJ_TARGET_ARM && defined(__GNUC__) && !defined(__symbian__) && \
+    !LJ_TARGET_OSX
   fprintf(ctx->fp,
 	  ".globl lj_err_unwind_arm\n"
 	  ".personality lj_err_unwind_arm\n"

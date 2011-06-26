@@ -182,8 +182,6 @@ LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
 #define softfp_f2d __aeabi_f2d
 #define softfp_d2i __aeabi_d2iz
 #define softfp_d2ui __aeabi_d2uiz
-#define softfp_d2l __aeabi_d2lz
-#define softfp_d2ul __aeabi_d2ulz
 #define softfp_d2f __aeabi_d2f
 #define softfp_i2f __aeabi_i2f
 #define softfp_ui2f __aeabi_ui2f
@@ -191,8 +189,17 @@ LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
 #define softfp_ul2f __aeabi_ul2f
 #define softfp_f2i __aeabi_f2iz
 #define softfp_f2ui __aeabi_f2uiz
+#if LJ_TARGET_OSX
+#define softfp_d2l __fixdfdi
+#define softfp_d2ul __fixunsdfdi
+#define softfp_f2l __fixsfdi
+#define softfp_f2ul __fixunssfdi
+#else
+#define softfp_d2l __aeabi_d2lz
+#define softfp_d2ul __aeabi_d2ulz
 #define softfp_f2l __aeabi_f2lz
 #define softfp_f2ul __aeabi_f2ulz
+#endif
 #else
 #error "Missing soft-float definitions for target architecture"
 #endif

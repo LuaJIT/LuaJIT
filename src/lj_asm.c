@@ -859,18 +859,22 @@ static uint32_t ir_khash(IRIns *ir)
   return hashrot(lo, hi);
 }
 
+#if !LJ_TARGET_X86ORX64 && LJ_TARGET_OSX
+void sys_icache_invalidate(void *start, size_t len);
+#endif
+
 /* Flush instruction cache. */
 static void asm_cache_flush(MCode *start, MCode *end)
 {
   VG_INVALIDATE(start, (char *)end-(char *)start);
 #if LJ_TARGET_X86ORX64
   UNUSED(start); UNUSED(end);
-#else
-#if defined(__GNUC__)
+#elif LJ_TARGET_OSX
+  sys_icache_invalidate(start, end-start);
+#elif defined(__GNUC__)
   __clear_cache(start, end);
 #else
 #error "Missing builtin to flush instruction cache"
-#endif
 #endif
 }
 
