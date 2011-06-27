@@ -228,7 +228,9 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
     }
 #if LJ_UNWIND_EXT
     cf = err_unwind(L, cf, errcode);
-    if (cf) {
+    if ((actions & _UA_FORCE_UNWIND)) {
+      return _URC_CONTINUE_UNWIND;
+    } else if (cf) {
       _Unwind_SetGR(ctx, LJ_TARGET_EHRETREG, errcode);
       _Unwind_SetIP(ctx, (_Unwind_Ptr)(cframe_unwind_ff(cf) ?
 				       lj_vm_unwind_ff_eh :
@@ -280,7 +282,7 @@ LJ_FUNCA _Unwind_Reason_Code lj_err_unwind_arm(_Unwind_State state,
     setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
     return _URC_HANDLER_FOUND;
   }
-  if ((state & _US_ACTION_MASK) == _US_UNWIND_FRAME_STARTING) {
+  if ((state&(_US_ACTION_MASK|_US_FORCE_UNWIND)) == _US_UNWIND_FRAME_STARTING) {
     _Unwind_DeleteException(ucb);
     _Unwind_SetGR(ctx, 15, (_Unwind_Word)(void *)lj_err_throw);
     _Unwind_SetGR(ctx, 0, (_Unwind_Word)L);
