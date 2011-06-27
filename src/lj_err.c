@@ -256,8 +256,7 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
 }
 
 #if LJ_UNWIND_EXT
-/* NYI: this is not thread-safe. */
-static struct _Unwind_Exception static_uex;
+static __thread struct _Unwind_Exception static_uex;
 
 /* Raise DWARF2 exception. */
 static void err_raise_ext(int errcode)
