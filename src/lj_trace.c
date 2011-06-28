@@ -545,9 +545,13 @@ static int trace_abort(jit_State *J)
 /* Perform pending re-patch of a bytecode instruction. */
 static LJ_AINLINE void trace_pendpatch(jit_State *J, int force)
 {
-  if (LJ_UNLIKELY(J->patchpc) && (force || J->chain[IR_RETF])) {
-    *J->patchpc = J->patchins;
-    J->patchpc = NULL;
+  if (LJ_UNLIKELY(J->patchpc)) {
+    if (force || J->bcskip == 0) {
+      *J->patchpc = J->patchins;
+      J->patchpc = NULL;
+    } else {
+      J->bcskip = 0;
+    }
   }
 }
 
@@ -769,6 +773,7 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
 	J->patchins = *pc;
 	J->patchpc = (BCIns *)pc;
 	*J->patchpc = *retpc;
+	J->bcskip = 1;
       } else {
 	pc = retpc;
 	setcframe_pc(cf, pc);
