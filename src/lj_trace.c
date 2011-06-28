@@ -643,9 +643,10 @@ void lj_trace_ins(jit_State *J, const BCIns *pc)
 /* A hotcount triggered. Start recording a root trace. */
 void LJ_FASTCALL lj_trace_hot(jit_State *J, const BCIns *pc)
 {
-  ERRNO_SAVE
   /* Note: pc is the interpreter bytecode PC here. It's offset by 1. */
-  hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]+1);  /* Reset hotcount. */
+  ERRNO_SAVE
+  /* Reset hotcount. */
+  hotcount_set(J2GG(J), pc, J->param[JIT_P_hotloop]*HOTCOUNT_LOOP);
   /* Only start a new trace if not recording or inside __gc call or vmevent. */
   if (J->state == LJ_TRACE_IDLE &&
       !(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT))) {

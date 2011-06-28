@@ -185,23 +185,23 @@
 |
 #define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
 |
-|.macro hotcheck
+|.macro hotcheck, delta
 |  lsr CARG1, PC, #1
 |  and CARG1, CARG1, #126
 |  sub CARG1, CARG1, #-GG_DISP2HOT
 |  ldrh CARG2, [DISPATCH, CARG1]
-|  subs CARG2, CARG2, #1
+|  subs CARG2, CARG2, #delta
 |  strh CARG2, [DISPATCH, CARG1]
 |.endmacro
 |
 |.macro hotloop
-|  hotcheck
-|  beq ->vm_hotloop
+|  hotcheck HOTCOUNT_LOOP
+|  blo ->vm_hotloop
 |.endmacro
 |
 |.macro hotcall
-|  hotcheck
-|  beq ->vm_hotcall
+|  hotcheck HOTCOUNT_CALL
+|  blo ->vm_hotcall
 |.endmacro
 |
 |// Set current VM state.

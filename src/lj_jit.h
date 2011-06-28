@@ -232,7 +232,7 @@ typedef struct HotPenalty {
 } HotPenalty;
 
 #define PENALTY_SLOTS	64	/* Penalty cache slot. Must be a power of 2. */
-#define PENALTY_MIN	36	/* Minimum penalty value. */
+#define PENALTY_MIN	(36*2)	/* Minimum penalty value. */
 #define PENALTY_MAX	60000	/* Maximum penalty value. */
 #define PENALTY_RNDBITS	4	/* # of random bits to add to penalty value. */
 

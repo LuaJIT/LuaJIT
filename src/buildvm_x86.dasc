@@ -333,16 +333,16 @@
 |  mov reg, PC
 |  shr reg, 1
 |  and reg, HOTCOUNT_PCMASK
-|  sub word [DISPATCH+reg+GG_DISP2HOT], 1
-|  jz ->vm_hotloop
+|  sub word [DISPATCH+reg+GG_DISP2HOT], HOTCOUNT_LOOP
+|  jb ->vm_hotloop
 |.endmacro
 |
 |.macro hotcall, reg
 |  mov reg, PC
 |  shr reg, 1
 |  and reg, HOTCOUNT_PCMASK
-|  sub word [DISPATCH+reg+GG_DISP2HOT], 1
-|  jz ->vm_hotcall
+|  sub word [DISPATCH+reg+GG_DISP2HOT], HOTCOUNT_CALL
+|  jb ->vm_hotcall
 |.endmacro
 |
 |// Set current VM state.

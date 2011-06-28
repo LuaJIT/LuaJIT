@@ -20,6 +20,10 @@ typedef uint16_t HotCount;
 #define HOTCOUNT_SIZE		64
 #define HOTCOUNT_PCMASK		((HOTCOUNT_SIZE-1)*sizeof(HotCount))
 
+/* Hotcount decrements. */
+#define HOTCOUNT_LOOP		2
+#define HOTCOUNT_CALL		1
+
 /* This solves a circular dependency problem -- bump as needed. Sigh. */
 #define GG_NUM_ASMFF	62
 
