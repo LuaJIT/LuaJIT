@@ -1305,7 +1305,7 @@ static void asm_tail_link(ASMState *as)
   checkmclim(as);
   ra_allocref(as, REF_BASE, RID2RSET(RID_BASE));
 
-  if (as->T->link == TRACE_INTERP) {
+  if (as->T->link == 0) {
     /* Setup fixed registers for exit to interpreter. */
     const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
     int32_t mres;

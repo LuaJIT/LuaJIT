@@ -276,18 +276,26 @@ static GCtrace *jit_checktrace(lua_State *L)
   return NULL;
 }
 
+/* Names of link types. ORDER LJ_TRLINK */
+static const char *const jit_trlinkname[] = {
+  "none", "root", "loop", "tail-recursion", "up-recursion", "down-recursion",
+  "interpreter", "return"
+};
+
 /* local info = jit.util.traceinfo(tr) */
 LJLIB_CF(jit_util_traceinfo)
 {
   GCtrace *T = jit_checktrace(L);
   if (T) {
     GCtab *t;
-    lua_createtable(L, 0, 4);  /* Increment hash size if fields are added. */
+    lua_createtable(L, 0, 8);  /* Increment hash size if fields are added. */
     t = tabV(L->top-1);
     setintfield(L, t, "nins", (int32_t)T->nins - REF_BIAS - 1);
     setintfield(L, t, "nk", REF_BIAS - (int32_t)T->nk);
     setintfield(L, t, "link", T->link);
     setintfield(L, t, "nexit", T->nsnap);
+    setstrV(L, L->top++, lj_str_newz(L, jit_trlinkname[T->linktype]));
+    lua_setfield(L, -2, "linktype");
     /* There are many more fields. Add them only when needed. */
     return 1;
   }

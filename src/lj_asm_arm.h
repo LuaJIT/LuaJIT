@@ -1681,8 +1681,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
     p[-2] = (ARMI_ADD^k) | ARMF_D(RID_SP) | ARMF_N(RID_SP);
   }
   /* Patch exit branch. */
-  target = lnk == TRACE_INTERP ? (MCode *)lj_vm_exit_interp :
-				 traceref(as->J, lnk)->mcode;
+  target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)lj_vm_exit_interp;
   p[-1] = ARMI_B|(((target-p)-1)&0x00ffffffu);
 }
 

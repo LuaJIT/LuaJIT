@@ -2418,8 +2418,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
     }
   }
   /* Patch exit branch. */
-  target = lnk == TRACE_INTERP ? (MCode *)lj_vm_exit_interp :
-				 traceref(as->J, lnk)->mcode;
+  target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)lj_vm_exit_interp;
   *(int32_t *)(p-4) = jmprel(p, target);
   p[-5] = XI_JMP;
   /* Drop unused mcode tail. Fill with NOPs to make the prefetcher happy. */

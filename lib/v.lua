@@ -22,7 +22,7 @@
 --
 -- The output from the first example should look like this:
 --
--- [TRACE   1 (command line):1]
+-- [TRACE   1 (command line):1 loop]
 -- [TRACE   2 (1/3) (command line):1 -> 1]
 --
 -- The first number in each line is the internal trace number. Next are
@@ -111,15 +111,20 @@ local function dump_trace(what, tr, func, pc, otr, oex)
 	  startex, startloc, fmterr(otr, oex)))
       end
     elseif what == "stop" then
-      local link = traceinfo(tr).link
-      if link == 0 then
+      local info = traceinfo(tr)
+      local link, ltype = info.link, info.linktype
+      if ltype == "interpreter" then
 	out:write(format("[TRACE %3s %s%s -- fallback to interpreter]\n",
 	  tr, startex, startloc))
-      elseif link == tr then
-	out:write(format("[TRACE %3s %s%s]\n", tr, startex, startloc))
-      else
+      elseif link == tr or link == 0 then
+	out:write(format("[TRACE %3s %s%s %s]\n",
+	  tr, startex, startloc, ltype))
+      elseif ltype == "root" then
 	out:write(format("[TRACE %3s %s%s -> %d]\n",
 	  tr, startex, startloc, link))
+      else
+	out:write(format("[TRACE %3s %s%s -> %d %s]\n",
+	  tr, startex, startloc, link, ltype))
       end
     else
       out:write(format("[TRACE %s]\n", what))

@@ -509,6 +509,7 @@ static int trace_abort(jit_State *J)
   if (traceno) {
     ptrdiff_t errobj = savestack(L, L->top-1);  /* Stack may be resized. */
     J->cur.link = 0;
+    J->cur.linktype = LJ_TRLINK_NONE;
     lj_vmevent_send(L, TRACE,
       TValue *frame;
       const BCIns *pc;
@@ -590,6 +591,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 	lj_opt_dce(J);
 	if (lj_opt_loop(J)) {  /* Loop optimization failed? */
 	  J->cur.link = 0;
+	  J->cur.linktype = LJ_TRLINK_NONE;
 	  J->loopref = J->cur.nins;
 	  J->state = LJ_TRACE_RECORD;  /* Try to continue recording. */
 	  break;

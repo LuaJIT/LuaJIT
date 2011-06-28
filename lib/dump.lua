@@ -504,13 +504,15 @@ local function dump_trace(what, tr, func, pc, otr, oex)
     if what == "abort" then
       out:write(" ", fmtfunc(func, pc), " -- ", fmterr(otr, oex), "\n")
     else
-      local link = traceinfo(tr).link
-      if link == tr then
-	link = "loop"
-      elseif link == 0 then
-	link = "interpreter"
+      local info = traceinfo(tr)
+      local link, ltype = info.link, info.linktype
+      if link == tr or link == 0 then
+	out:write(" -> ", ltype, "\n")
+      elseif ltype == "root" then
+	out:write(" -> ", link, "\n")
+      else
+	out:write(" -> ", link, " ", ltype, "\n")
       end
-      out:write(" -> ", link, "\n")
     end
     if dumpmode.H then out:write("</pre>\n\n") else out:write("\n") end
   else
