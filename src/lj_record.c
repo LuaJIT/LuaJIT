@@ -661,6 +661,17 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
     frame = frame_prevd(frame);
   }
+  /* Return to lower frame via interpreter for unhandled cases. */
+  if (J->framedepth == 0 && J->pt && bc_isret(bc_op(*J->pc)) &&
+       (!frame_islua(frame) ||
+	(J->parent == 0 && !bc_isret(bc_op(J->cur.startins))))) {
+    /* NYI: specialize to frame type and return directly, not via RET*. */
+    for (i = -1; i < (ptrdiff_t)rbase; i++)
+      J->base[i] = 0;  /* Purge dead slots. */
+    J->maxslot = rbase + (BCReg)gotresults;
+    rec_stop(J, LJ_TRLINK_RETURN, 0);  /* Return to interpreter. */
+    return;
+  }
   if (frame_isvarg(frame)) {
     BCReg cbase = (BCReg)frame_delta(frame);
     if (--J->framedepth < 0)  /* NYI: return of vararg func to lower frame. */
@@ -1283,7 +1294,7 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 /* -- Record calls to Lua functions --------------------------------------- */
 
 /* Check unroll limits for calls. */
-static void check_call_unroll(jit_State *J)
+static void check_call_unroll(jit_State *J, TraceNo lnk)
 {
   IRRef fref = tref_ref(J->base[-1]);
   int32_t count = 0;
@@ -1300,8 +1311,14 @@ static void check_call_unroll(jit_State *J)
 	rec_stop(J, LJ_TRLINK_UPREC, J->cur.traceno);  /* Up-recursion. */
     }
   } else {
-    if (count > J->param[JIT_P_callunroll])
+    if (count > J->param[JIT_P_callunroll]) {
+      if (lnk) {  /* Possible tail- or up-recursion. */
+	lj_trace_flush(J, lnk);  /* Flush trace that only returns. */
+	/* Set a small, pseudo-random hotcount for a quick retry of JFUNC*. */
+	hotcount_set(J2GG(J), J->pc+1, LJ_PRNG_BITS(J, 4));
+      }
       lj_trace_err(J, LJ_TRERR_CUNROLL);
+    }
   }
 }
 
@@ -1346,13 +1363,23 @@ static void rec_func_vararg(jit_State *J)
 static void rec_func_lua(jit_State *J)
 {
   rec_func_setup(J);
-  check_call_unroll(J);
+  check_call_unroll(J, 0);
 }
 
 /* Record entry to an already compiled function. */
 static void rec_func_jit(jit_State *J, TraceNo lnk)
 {
+  GCtrace *T;
   rec_func_setup(J);
+  T = traceref(J, lnk);
+  if (T->linktype == LJ_TRLINK_RETURN) {  /* Trace returns to interpreter? */
+    check_call_unroll(J, lnk);
+    /* Temporarily unpatch JFUNC* to continue recording across function. */
+    J->patchins = *J->pc;
+    J->patchpc = (BCIns *)J->pc;
+    *J->patchpc = T->startins;
+    return;
+  }
   J->instunroll = 0;  /* Cannot continue across a compiled function. */
   if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
     rec_stop(J, LJ_TRLINK_TAILREC, J->cur.traceno);  /* Extra tail-recursion. */
