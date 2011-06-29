@@ -258,7 +258,12 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
 }
 
 #if LJ_UNWIND_EXT
+#if LJ_TARGET_OSX
+/* Sorry, no thread safety for OSX. Complain to Apple, not me. */
+static struct _Unwind_Exception static_uex;
+#else
 static __thread struct _Unwind_Exception static_uex;
+#endif
 
 /* Raise DWARF2 exception. */
 static void err_raise_ext(int errcode)
