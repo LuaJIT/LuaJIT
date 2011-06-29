@@ -24,45 +24,77 @@
 
 if not exist buildvm_x86.h^
   %DASM% -LN -o buildvm_x86.h buildvm_x86.dasc
+@if errorlevel 1 goto :BAD
 if not exist buildvm_x64win.h^
   %DASM% -LN -D X64 -D X64WIN -o buildvm_x64win.h buildvm_x86.dasc
+@if errorlevel 1 goto :BAD
 
 %LJCOMPILE% /I "." /I %DASMDIR% buildvm*.c
+@if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
+@if errorlevel 1 goto :BAD
 if exist buildvm.exe.manifest^
   %LJMT% -manifest buildvm.exe.manifest -outputresource:buildvm.exe
 
 buildvm -m peobj -o lj_vm.obj
+@if errorlevel 1 goto :BAD
 buildvm -m bcdef -o lj_bcdef.h %ALL_LIB%
+@if errorlevel 1 goto :BAD
 buildvm -m ffdef -o lj_ffdef.h %ALL_LIB%
+@if errorlevel 1 goto :BAD
 buildvm -m libdef -o lj_libdef.h %ALL_LIB%
+@if errorlevel 1 goto :BAD
 buildvm -m recdef -o lj_recdef.h %ALL_LIB%
+@if errorlevel 1 goto :BAD
 buildvm -m vmdef -o ..\lib\vmdef.lua %ALL_LIB%
+@if errorlevel 1 goto :BAD
 buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
+@if errorlevel 1 goto :BAD
 
+@if "%1" neq "debug" goto :NODEBUG
+@shift
+@set LJCOMPILE=%LJCOMPILE% /Zi /Fdluajit.pdb
+@set LJLINK=%LJLINK% /debug /PDB:luajit.pdb
+:NODEBUG
 @if "%1"=="amalg" goto :AMALGDLL
 @if "%1"=="static" goto :STATIC
 %LJCOMPILE% /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
+@if errorlevel 1 goto :BAD
 %LJLINK% /DLL /out:lua51.dll lj_*.obj lib_*.obj
+@if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC
 %LJCOMPILE% /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
+@if errorlevel 1 goto :BAD
 %LJLIB% /OUT:lua51.lib lj_*.obj lib_*.obj
+@if errorlevel 1 goto :BAD
 @goto :MTDLL
 :AMALGDLL
 %LJCOMPILE% /DLUA_BUILD_AS_DLL ljamalg.c
+@if errorlevel 1 goto :BAD
 %LJLINK% /DLL /out:lua51.dll ljamalg.obj lj_vm.obj
+@if errorlevel 1 goto :BAD
 :MTDLL
 if exist lua51.dll.manifest^
   %LJMT% -manifest lua51.dll.manifest -outputresource:lua51.dll;2
 
 %LJCOMPILE% luajit.c
+@if errorlevel 1 goto :BAD
 %LJLINK% /out:luajit.exe luajit.obj lua51.lib
+@if errorlevel 1 goto :BAD
 if exist luajit.exe.manifest^
   %LJMT% -manifest luajit.exe.manifest -outputresource:luajit.exe
 
-del *.obj *.manifest buildvm.exe
+@del *.obj *.manifest buildvm.exe
+@echo.
+@echo === Successfully built LuaJIT ===
 
+@goto :END
+:BAD
+@echo.
+@echo *******************************************************
+@echo *** Build FAILED -- Please check the error messages ***
+@echo *******************************************************
 @goto :END
 :FAIL
 @echo You must open a "Visual Studio .NET Command Prompt" to run this script
