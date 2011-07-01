@@ -243,7 +243,7 @@ typedef struct CTState {
 /* -- Predefined types ---------------------------------------------------- */
 
 /* Target-dependent types. */
-#if LJ_TARGET_PPC
+#if LJ_TARGET_PPC || LJ_TARGET_PPCSPE
 #define CTTYDEFP(_) \
   _(LINT32,		4,	CT_NUM, CTF_LONG|CTALIGN(2))
 #else

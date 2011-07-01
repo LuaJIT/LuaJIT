@@ -157,7 +157,6 @@
 #define LJ_ARCH_HASFPU		1
 #define LJ_ABI_SOFTFP		1
 #define LJ_ABI_EABI		1
-#define LJ_TARGET_PPC		1
 #define LJ_TARGET_PPCSPE	1
 #define LJ_TARGET_EHRETREG	3
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
@@ -206,7 +205,7 @@
 #if !(__ARM_EABI__ || LJ_TARGET_OSX)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
-#elif LJ_TARGET_PPC
+#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif

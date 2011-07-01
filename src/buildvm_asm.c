@@ -107,7 +107,7 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 	    ins, sym);
     exit(1);
   }
-#elif LJ_TARGET_PPC
+#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
   if ((ins >> 26) == 16) {
     fprintf(ctx->fp, "\t%s %d, %d, %s\n",
 	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
