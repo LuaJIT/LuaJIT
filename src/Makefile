@@ -341,7 +341,7 @@ DASM_FLAGS_X86=
 DASM_FLAGS_X64= -D X64
 DASM_FLAGS_X64WIN= -D X64 -D X64WIN
 DASM_FLAGS_ARM=
-DASM_FLAGS_PPCSPE= -D SPE
+DASM_FLAGS_PPCSPE=
 
 BUILDVM_O= buildvm.o buildvm_asm.o buildvm_peobj.o buildvm_lib.o buildvm_fold.o
 BUILDVM_T= buildvm
@@ -478,7 +478,7 @@ distclean:	clean
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64) -o buildvm_x64.h buildvm_x86.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64WIN) -o buildvm_x64win.h buildvm_x86.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_ARM) -o buildvm_arm.h buildvm_arm.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPCSPE) -o buildvm_ppcspe.h buildvm_ppc.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPCSPE) -o buildvm_ppcspe.h buildvm_ppcspe.dasc
 
 depend:
 	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
@@ -516,9 +516,9 @@ buildvm_arm.h: buildvm_arm.dasc
 	$(E) "DYNASM    $@"
 	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_ARM) -o $@ buildvm_arm.dasc
 
-buildvm_ppcspe.h: buildvm_ppc.dasc
+buildvm_ppcspe.h: buildvm_ppcspe.dasc
 	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_PPCSPE) -o $@ buildvm_ppc.dasc
+	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_PPCSPE) -o $@ buildvm_ppcspe.dasc
 
 buildvm.o: $(ALL_DYNGEN) $(DASM_DIR)/dasm_*.h
 

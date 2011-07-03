@@ -2,7 +2,7 @@
 ** This file has been pre-processed with DynASM.
 ** http://luajit.org/dynasm.html
 ** DynASM version 1.3.0, DynASM ppc version 1.3.0
-** DO NOT EDIT! The original file is in "buildvm_ppc.dasc".
+** DO NOT EDIT! The original file is in "buildvm_ppcspe.dasc".
 */
 
 #if DASM_VERSION != 10300
@@ -6048,14 +6048,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
-#if LJ_TARGET_PPCSPE
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
 	"\t.byte 5\n\t.uleb128 %d\n\t.uleb128 %d\n",
 	0x80+i, 1+2*(31-i), 1200+i, 2+2*(31-i));
-#else
-#error "missing frame info for saved registers"
-#endif
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
@@ -6089,14 +6085,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
-#if LJ_TARGET_PPCSPE
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
 	"\t.byte 5\n\t.uleb128 %d\n\t.uleb128 %d\n",
 	0x80+i, 1+2*(31-i), 1200+i, 2+2*(31-i));
-#else
-#error "missing frame info for saved registers"
-#endif
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE1:\n\n");
