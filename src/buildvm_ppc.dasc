@@ -10,10 +10,6 @@
 |.globalnames globnames
 |.externnames extnames
 |
-|.if not SPE
-|.error "No support for plain PowerPC CPUs (yet)"
-|.endif
-|
 |// Note: The ragged indentation of the instructions is intentional.
 |//       The starting columns indicate data dependencies.
 |
@@ -32,14 +28,12 @@
 |
 |// Constants for vectorized type-comparisons (hi+low GPR). C callee-save.
 |.define TISNUM,	r22
-|.if SPE
-|.define TISSTR,	r23
-|.define TISTAB,	r24
-|.define TISFUNC,	r25
-|.define TISNIL,	r26
-|.define TOBIT,		r27
-|.define ZERO,		TOBIT	// Zero in lo word.
-|.endif
+|.define TISNIL,	r23
+|.define ZERO,		r24
+|.define TISSTR,	r25	// NYI: remove.
+|.define TISTAB,	r26	// NYI: remove.
+|.define TISFUNC,	r27	// NYI: remove.
+|.define TOBIT,		r28	// NYI: use FP reg.
 |
 |// The following temporaries are not saved across C calls, except for RA.
 |.define RA,		r20	// Callee-save.
@@ -63,32 +57,19 @@
 |.define CARG4,		r6	// Overlaps TMP3.
 |.define CARG5,		r7	// Overlaps INS.
 |
+|.define CARGF1,	f1
+|.define CARGF2,	f2
+|
 |.define CRET1,		r3
 |.define CRET2,		r4
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
-|.if SPE
-|.define SAVE_LR,	180(sp)
-|.define CFRAME_SPACE,	176	// Delta for sp.
-|// Back chain for sp:	176(sp)	<-- sp entering interpreter
-|.define SAVE_r31,	168(sp)	// 64 bit register saves.
-|.define SAVE_r30,	160(sp)
-|.define SAVE_r29,	152(sp)
-|.define SAVE_r28,	144(sp)
-|.define SAVE_r27,	136(sp)
-|.define SAVE_r26,	128(sp)
-|.define SAVE_r25,	120(sp)
-|.define SAVE_r24,	112(sp)
-|.define SAVE_r23,	104(sp)
-|.define SAVE_r22,	96(sp)
-|.define SAVE_r21,	88(sp)
-|.define SAVE_r20,	80(sp)
-|.define SAVE_r19,	72(sp)
-|.define SAVE_r18,	64(sp)
-|.define SAVE_r17,	56(sp)
-|.define SAVE_r16,	48(sp)
-|.define SAVE_r15,	40(sp)
-|.define SAVE_r14,	32(sp)
+|.define SAVE_LR,	260(sp)
+|.define CFRAME_SPACE,	256	// Delta for sp.
+|// Back chain for sp:	256(sp)	<-- sp entering interpreter
+|.define SAVE_GPR_,	184	// .. 184+18*4: 32 bit GPR saves.
+|.define SAVE_FPR_,	40	// .. 40+18*8: 64 bit FPR saves.
+|.define SAVE_UNUSED,	32(sp)	// 8 unused bytes for alignment.
 |.define SAVE_ERRF,	28(sp)	// 32 bit C frame info.
 |.define SAVE_NRES,	24(sp)
 |.define SAVE_CFRAME,	20(sp)
@@ -98,25 +79,30 @@
 |// Next frame lr:	4(sp)
 |// Back chain for sp:	0(sp)	<-- sp while in interpreter
 |
-|.macro save_, reg; evstdd reg, SAVE_..reg; .endmacro
-|.macro rest_, reg; evldd reg, SAVE_..reg; .endmacro
-|.endif
+|.macro save_, reg
+|  stw r..reg, SAVE_GPR_+(reg-14)*4(sp)
+|  stfd f..reg, SAVE_FPR_+(reg-14)*8(sp)
+|.endmacro
+|.macro rest_, reg
+|  lwz r..reg, SAVE_GPR_+(reg-14)*4(sp)
+|  lfd f..reg, SAVE_FPR_+(reg-14)*8(sp)
+|.endmacro
 |
 |.macro saveregs
 |  stwu sp, -CFRAME_SPACE(sp)
-|  save_ r14; save_ r15; save_ r16; save_ r17; save_ r18; save_ r19
+|  save_ 14; save_ 15; save_ 16; save_ 17; save_ 18; save_ 19
 |  mflr r0
-|  save_ r20; save_ r21; save_ r22; save_ r23; save_ r24; save_ r25
+|  save_ 20; save_ 21; save_ 22; save_ 23; save_ 24; save_ 25
 |  stw  r0, SAVE_LR
-|  save_ r26; save_ r27; save_ r28; save_ r29; save_ r30; save_ r31
+|  save_ 26; save_ 27; save_ 28; save_ 29; save_ 30; save_ 31
 |.endmacro
 |
 |.macro restoreregs
 |  lwz r0, SAVE_LR
-|  rest_ r14; rest_ r15; rest_ r16; rest_ r17; rest_ r18; rest_ r19
+|  rest_ 14; rest_ 15; rest_ 16; rest_ 17; rest_ 18; rest_ 19
 |  mtlr r0
-|  rest_ r20; rest_ r21; rest_ r22; rest_ r23; rest_ r24; rest_ r25
-|  rest_ r26; rest_ r27; rest_ r28; rest_ r29; rest_ r30; rest_ r31
+|  rest_ 20; rest_ 21; rest_ 22; rest_ 23; rest_ 24; rest_ 25
+|  rest_ 26; rest_ 27; rest_ 28; rest_ 29; rest_ 30; rest_ 31
 |  addi sp, sp, CFRAME_SPACE
 |.endmacro
 |
@@ -231,17 +217,15 @@
 |//-----------------------------------------------------------------------
 |
 |// Macros to test operand types.
-|.if SPE
-|.macro checknum, reg; evcmpltu reg, TISNUM; .endmacro
-|.macro checkstr, reg; evcmpeq reg, TISSTR; .endmacro
-|.macro checktab, reg; evcmpeq reg, TISTAB; .endmacro
-|.macro checkfunc, reg; evcmpeq reg, TISFUNC; .endmacro
-|.macro checknil, reg; evcmpeq reg, TISNIL; .endmacro
-|.macro checkok, label; blt label; .endmacro
-|.macro checkfail, label; bge label; .endmacro
-|.macro checkanyfail, label; bns label; .endmacro
-|.macro checkallok, label; bso label; .endmacro
-|.endif
+|.macro checknum, reg; cmplw reg, TISNUM; .endmacro
+|.macro checkstr, reg; cmpwi reg, LJ_TSTR; .endmacro
+|.macro checktab, reg; cmpwi reg, LJ_TTAB; .endmacro
+|.macro checkfunc, reg; cmpwi reg, LJ_TFUNC; .endmacro
+|.macro checknil, reg; cmpwi reg, LJ_TNIL; .endmacro
+|.macro checkok, label; beq label; .endmacro  // NYI: remove.
+|.macro checkfail, label; bne label; .endmacro  // NYI: remove.
+|.macro checkanyfail, label; bns label; .endmacro  // NYI: remove.
+|.macro checkallok, label; bso label; .endmacro  // NYI: remove.
 |
 |.macro branch_RD
 |  srwi TMP0, RD, 1
@@ -1067,11 +1051,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknum CARG1
   |  cmplwi cr1, TMP0, 0
   |   stw BASE, L->base			// Add frame since C call can throw.
-  |.if SPE
-  |  crand 4*cr0+eq, 4*cr0+lt, 4*cr1+eq
-  |.else
-  |.error "NYI"
-  |.endif
+  |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
   |   stw PC, SAVE_PC			// Redundant (but a defined value).
   |  bne ->fff_fallback
   |  ffgccheck
@@ -3672,14 +3652,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
-#if LJ_TARGET_PPCSPE
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
-	"\t.byte 5\n\t.uleb128 %d\n\t.uleb128 %d\n",
-	0x80+i, 1+2*(31-i), 1200+i, 2+2*(31-i));
-#else
-#error "missing frame info for saved registers"
-#endif
+	"\t.byte %d\n\t.uleb128 %d\n",
+	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i));
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
@@ -3713,14 +3689,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
-#if LJ_TARGET_PPCSPE
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
-	"\t.byte 5\n\t.uleb128 %d\n\t.uleb128 %d\n",
-	0x80+i, 1+2*(31-i), 1200+i, 2+2*(31-i));
-#else
-#error "missing frame info for saved registers"
-#endif
+	"\t.byte %d\n\t.uleb128 %d\n",
+	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i));
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE1:\n\n");

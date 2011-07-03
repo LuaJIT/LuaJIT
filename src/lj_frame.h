@@ -67,7 +67,6 @@ enum {
 #define CFRAME_OFS_PC		(6*4)
 #define CFRAME_OFS_MULTRES	(5*4)
 #define CFRAME_SIZE		(12*4)
-#define CFRAME_SIZE_JIT		CFRAME_SIZE
 #define CFRAME_SHIFT_MULTRES	0
 #elif LJ_TARGET_X64
 #if LJ_ABI_WIN
@@ -99,7 +98,15 @@ enum {
 #define CFRAME_OFS_PC		8
 #define CFRAME_OFS_MULTRES	4
 #define CFRAME_SIZE		64
-#define CFRAME_SIZE_JIT		CFRAME_SIZE
+#define CFRAME_SHIFT_MULTRES	3
+#elif LJ_TARGET_PPC
+#define CFRAME_OFS_ERRF		28
+#define CFRAME_OFS_NRES		24
+#define CFRAME_OFS_PREV		20
+#define CFRAME_OFS_L		16
+#define CFRAME_OFS_PC		12
+#define CFRAME_OFS_MULTRES	8
+#define CFRAME_SIZE		256
 #define CFRAME_SHIFT_MULTRES	3
 #elif LJ_TARGET_PPCSPE
 #define CFRAME_OFS_ERRF		28
@@ -109,10 +116,13 @@ enum {
 #define CFRAME_OFS_PC		12
 #define CFRAME_OFS_MULTRES	8
 #define CFRAME_SIZE		176
-#define CFRAME_SIZE_JIT		CFRAME_SIZE
 #define CFRAME_SHIFT_MULTRES	3
 #else
 #error "Missing CFRAME_* definitions for this architecture"
+#endif
+
+#ifndef CFRAME_SIZE_JIT
+#define CFRAME_SIZE_JIT		CFRAME_SIZE
 #endif
 
 #define CFRAME_RESUME		1
