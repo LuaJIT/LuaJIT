@@ -264,7 +264,11 @@ static CPToken cp_string(CPState *cp)
 static void cp_comment_c(CPState *cp)
 {
   do {
-    if (cp_get(cp) == '*' && cp_get(cp) == '/') { cp_get(cp); break; }
+    if (cp_get(cp) == '*') {
+      do {
+	if (cp_get(cp) == '/') { cp_get(cp); return; }
+      } while (cp->c == '*');
+    }
     if (cp_iseol(cp->c)) cp_newline(cp);
   } while (cp->c != '\0');
 }
