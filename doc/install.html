@@ -122,14 +122,21 @@ operating systems, CPUs and compilers:
 <td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
 </tr>
 <tr class="odd">
-<td class="compatcpu">ARMv5+<br>ARM9E+</td>
+<td class="compatcpu"><a href="#android">ARMv5+<br>ARM9E+</a></td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
-<td class="compatcpu">PPC/e500v2</td>
+<td class="compatcpu"><a href="#ppc">PPC</a></td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
+</tr>
+<tr class="odd">
+<td class="compatcpu"><a href="#ppc">PPC/e500v2</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos compatno">&nbsp;</td>
@@ -383,12 +390,18 @@ make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
      TARGET=arm TARGET_SYS=iOS
 </pre>
 <p>
-You can cross-compile for a <b>PPC/e500v2 target</b> on an x86 or x64 host system
-using a standard GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
+You can cross-compile for a <b id="ppc">PPC target</b> or a
+<b>PPC/e500v2 target</b> on x86 or x64 host systems using a standard
+GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
 The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
 of the toolchain:
 </p>
 <pre class="code">
+# PPC
+make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu- TARGET=ppc
+</pre>
+<pre class="code">
+# PPC/e500v2
 make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe- TARGET=ppcspe
 </pre>
 <p>
