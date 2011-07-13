@@ -166,8 +166,6 @@
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
-#error "No support for plain PowerPC CPUs (yet)"
-
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPCSPE
 
 #define LJ_ARCH_NAME		"ppcspe"
