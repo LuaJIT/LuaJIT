@@ -95,6 +95,11 @@
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
 
+#define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
+#define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
+#define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
+#define LJ_NUMMODE_DUAL_SINGLE	3	/* Default to dual-number mode. */
+
 /* Set target architecture properties. */
 #if LUAJIT_TARGET == LUAJIT_ARCH_X86
 
@@ -108,7 +113,7 @@
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
-#define LJ_ARCH_DUALNUM		1
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_X64
 
@@ -123,7 +128,7 @@
 #define LJ_TARGET_JUMPRANGE	31	/* +-2^31 = +-2GB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
-#define LJ_ARCH_DUALNUM		1
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
 
@@ -139,7 +144,7 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
-#define LJ_ARCH_DUALNUM		2
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 #if LJ_TARGET_OSX
 /* Runtime code generation is restricted on iOS. Complain to Apple, not me. */
 #define LJ_ARCH_NOJIT		1
@@ -157,7 +162,7 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_DUALNUM		1
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE	/* NYI: dual-num. */
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
@@ -177,7 +182,7 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_DUALNUM		0
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
@@ -232,9 +237,10 @@
 #endif
 #endif
 
-/* Enable or disable the dual-number VM. */
-#if LJ_ARCH_DUALNUM == 2 || \
-    (defined(LUAJIT_ENABLE_DUALNUM) && LJ_ARCH_DUALNUM == 1)
+/* Enable or disable the dual-number mode for the VM. */
+#if LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL || \
+    (LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL_SINGLE && LUAJIT_NUMMODE != 1) || \
+    (LJ_ARCH_NUMMODE == LJ_NUMMODE_SINGLE_DUAL && LUAJIT_NUMMODE == 2)
 #define LJ_DUALNUM		1
 #else
 #define LJ_DUALNUM		0
