@@ -802,6 +802,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = old base, CRET1 = new base, stack = cont/func/o1/o2
   |  sub TMP1, CRET1, BASE
   |   stw PC, -16(CRET1)		// [cont|PC]
+  |   mr TMP2, BASE
   |  addi PC, TMP1, FRAME_CONT
   |   mr BASE, CRET1
   |  li NARGS8:RC, 16			// 2 args for func(o1, o2).
