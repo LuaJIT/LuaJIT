@@ -368,7 +368,11 @@ typedef struct jit_State {
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
 
   TValue errinfo;	/* Additional info element for trace errors. */
-} LJ_ALIGN(16) jit_State;
+}
+#if LJ_TARGET_ARM
+LJ_ALIGN(16)		/* For DISPATCH-relative addresses in assembler part. */
+#endif
+jit_State;
 
 /* Trivial PRNG e.g. used for penalty randomization. */
 static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
