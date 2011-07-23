@@ -969,6 +969,10 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
 	tr = emitir(IRT(IR_FLOAD, t), tr, IRFL_CDATA_INT64);
 	lj_needsplit(J);
 	goto ok;
+      } else if (ctype_isfunc(ct->info)) {
+	tr = emitir(IRT(IR_FLOAD, IRT_PTR), tr, IRFL_CDATA_PTR);
+	ct = ctype_get(cts,
+	  lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR));
       } else {
 	tr = emitir(IRT(IR_ADD, IRT_PTR), tr, lj_ir_kintp(J, sizeof(GCcdata)));
       }

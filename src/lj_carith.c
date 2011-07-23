@@ -35,11 +35,16 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
   for (i = 0; i < 2; i++, o++) {
     if (tviscdata(o)) {
       GCcdata *cd = cdataV(o);
-      CType *ct = ctype_raw(cts, (CTypeID)cd->typeid);
+      CTypeID id = (CTypeID)cd->typeid;
+      CType *ct = ctype_raw(cts, id);
       uint8_t *p = (uint8_t *)cdataptr(cd);
       if (ctype_isptr(ct->info)) {
 	p = (uint8_t *)cdata_getptr(p, ct->size);
 	if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
+      } else if (ctype_isfunc(ct->info)) {
+	p = (uint8_t *)*(void **)p;
+	ct = ctype_get(cts,
+	  lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR));
       }
       ca->ct[i] = ct;
       ca->p[i] = p;
