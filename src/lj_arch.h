@@ -162,7 +162,7 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE	/* NYI: dual-num. */
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
 #define LJ_ARCH_NOJIT		1
 
