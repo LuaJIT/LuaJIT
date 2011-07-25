@@ -1608,6 +1608,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lus CARG1, 0x8000			// -(2^31).
   |  beq ->fff_resi
   |5:
+  |  lfd FARG1, 0(BASE)
   |  bl extern func
   |  b ->fff_resn
   |.endmacro
