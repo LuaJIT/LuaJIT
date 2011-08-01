@@ -2382,7 +2382,62 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_ffi_call:
 #if LJ_HASFFI
-  |  NYI
+  |  .type CCSTATE, CCallState, CARG1
+  |  lwz TMP1, CCSTATE->spadj
+  |    mflr TMP0
+  |   lbz CARG2, CCSTATE->nsp
+  |   lbz CARG3, CCSTATE->nfpr
+  |  neg TMP1, TMP1
+  |    stw TMP0, 4(sp)
+  |   cmpwi cr1, CARG3, 0
+  |  mr TMP2, sp
+  |   addic. CARG2, CARG2, -1
+  |  stwux sp, sp, TMP1
+  |   crnot 4*cr1+eq, 4*cr1+eq		// For vararg calls.
+  |  stw CCSTATE, -4(TMP2)
+  |   li TMP3, 0
+  |  la TMP1, CCSTATE->stack
+  |   slwi CARG2, CARG2, 2
+  |   blt >2
+  |  la TMP2, 8(sp)
+  |1:
+  |  lwzx TMP0, TMP1, CARG2
+  |  stwx TMP0, TMP2, CARG2
+  |   addic. CARG2, CARG2, -4
+  |  bge <1
+  |2:
+  |  bne cr1, >3
+  |  lfd f1, CCSTATE->fpr[0]
+  |  lfd f2, CCSTATE->fpr[1]
+  |  lfd f3, CCSTATE->fpr[2]
+  |  lfd f4, CCSTATE->fpr[3]
+  |  lfd f5, CCSTATE->fpr[4]
+  |  lfd f6, CCSTATE->fpr[5]
+  |  lfd f7, CCSTATE->fpr[6]
+  |  lfd f8, CCSTATE->fpr[7]
+  |3:
+  |   lwz TMP0, CCSTATE->func
+  |  lwz CARG2, CCSTATE->gpr[1]
+  |  lwz CARG3, CCSTATE->gpr[2]
+  |  lwz CARG4, CCSTATE->gpr[3]
+  |  lwz CARG5, CCSTATE->gpr[4]
+  |   mtctr TMP0
+  |  lwz r8, CCSTATE->gpr[5]
+  |  lwz r9, CCSTATE->gpr[6]
+  |  lwz r10, CCSTATE->gpr[7]
+  |  lwz CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
+  |   bctrl
+  |  lwz TMP2, 0(sp)
+  |  lwz CCSTATE:TMP1, -4(TMP2)
+  |   lwz TMP0, 4(TMP2)
+  |  stw CARG1, CCSTATE:TMP1->gpr[0]
+  |  stfd FARG1, CCSTATE:TMP1->fpr[0]
+  |  stw CARG2, CCSTATE:TMP1->gpr[1]
+  |   mtlr TMP0
+  |  stw CARG3, CCSTATE:TMP1->gpr[2]
+  |   mr sp, TMP2
+  |  stw CARG4, CCSTATE:TMP1->gpr[3]
+  |  blr
 #endif
   |
   |//-----------------------------------------------------------------------
@@ -2440,7 +2495,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  tonum_i f1, CARG3
       |  b >5
       |
-      |8: // RA is an integer, RD is a number.
+      |8: // RA is an integer, RD is not an integer.
+      |  bgt cr1, ->vmeta_comp
+      |  // RA is an integer, RD is a number.
       |  tonum_i f0, CARG2
       |4:
       |  lfd f1, 0(RD)
@@ -2498,9 +2555,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |   lwz CARG2, 4(RA)
       |  lwzux TMP1, RD, BASE
       |  checknum cr0, TMP0
-      |    lwz INS, -4(PC)
+      |    lwz TMP2, -4(PC)
       |  checknum cr1, TMP1
-      |    decode_RD4 TMP2, INS
+      |    decode_RD4 TMP2, TMP2
       |   lwz CARG3, 4(RD)
       |  cror 4*cr7+gt, 4*cr0+gt, 4*cr1+gt
       |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
@@ -2538,10 +2595,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |    lwz CARG2, 4(RA)
       |    lwz CARG3, 4(RD)
     }
+    if (LJ_HASFFI) {
+      |  cmpwi cr7, TMP0, LJ_TCDATA
+      |  cmpwi cr5, TMP1, LJ_TCDATA
+    }
     |   not TMP3, TMP0
     |  cmplw TMP0, TMP1
     |   cmplwi cr1, TMP3, ~LJ_TISPRI		// Primitive?
+    if (LJ_HASFFI) {
+      |  cror 4*cr7+eq, 4*cr7+eq, 4*cr5+eq
+    }
     |   cmplwi cr6, TMP3, ~LJ_TISTABUD		// Table or userdata?
+    if (LJ_HASFFI) {
+      |  beq cr7, ->vmeta_equal_cd
+    }
     |    cmplw cr5, CARG2, CARG3
     |  crandc 4*cr0+gt, 4*cr0+eq, 4*cr1+gt	// 2: Same type and primitive.
     |  crorc 4*cr0+lt, 4*cr5+eq, 4*cr0+eq	// 1: Same tv or different type.
@@ -2587,14 +2654,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwzux TMP0, RA, BASE
     |   srwi RD, RD, 1
     |  lwz STR:TMP3, 4(RA)
-    |    lwz INS, 0(PC)
+    |    lwz TMP2, 0(PC)
     |   subfic RD, RD, -4
     |    addi PC, PC, 4
+    if (LJ_HASFFI) {
+      |  cmpwi TMP0, LJ_TCDATA
+    }
     |   lwzx STR:TMP1, KBASE, RD	// KBASE-4-str_const*4
     |  subfic TMP0, TMP0, LJ_TSTR
+    if (LJ_HASFFI) {
+      |  beq ->vmeta_equal_cd
+    }
     |  sub TMP1, STR:TMP1, STR:TMP3
     |  or TMP0, TMP0, TMP1
-    |    decode_RD4 TMP2, INS
+    |    decode_RD4 TMP2, TMP2
     |  subfic TMP0, TMP0, 0
     |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
     |  subfe TMP1, TMP1, TMP1
@@ -2616,9 +2689,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |   lwz CARG2, 4(RA)
       |  lwzux TMP1, RD, KBASE
       |  checknum cr0, TMP0
-      |    lwz INS, -4(PC)
+      |    lwz TMP2, -4(PC)
       |  checknum cr1, TMP1
-      |    decode_RD4 TMP2, INS
+      |    decode_RD4 TMP2, TMP2
       |   lwz CARG3, 4(RD)
       |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
       if (vk) {
@@ -2639,9 +2712,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  lwzx TMP0, BASE, RA
       |    addi PC, PC, 4
       |   lfdx f0, BASE, RA
-      |    lwz INS, -4(PC)
+      |    lwz TMP2, -4(PC)
       |  lfdx f1, KBASE, RD
-      |    decode_RD4 TMP2, INS
+      |    decode_RD4 TMP2, TMP2
       |  checknum TMP0
       |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
       |  bge >3
@@ -2695,11 +2768,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = src*8, RD = primitive_type*8 (~), JMP with RD = target
     |  lwzx TMP0, BASE, RA
     |   srwi TMP1, RD, 3
-    |    lwz INS, 0(PC)
+    |    lwz TMP2, 0(PC)
     |   not TMP1, TMP1
     |    addi PC, PC, 4
+    if (LJ_HASFFI) {
+      |  cmpwi TMP0, LJ_TCDATA
+    }
     |  sub TMP0, TMP0, TMP1
-    |    decode_RD4 TMP2, INS
+    if (LJ_HASFFI) {
+      |  beq ->vmeta_equal_cd
+    }
+    |    decode_RD4 TMP2, TMP2
     |  addic TMP0, TMP0, -1
     |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
     |  subfe TMP1, TMP1, TMP1

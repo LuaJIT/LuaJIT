@@ -205,6 +205,54 @@
     goto done; \
   }
 
+#elif LJ_TARGET_PPC
+/* -- PPC calling conventions --------------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  cc->retref = 1;  /* Return all structs by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in 2 or 4 GPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+  sz = CTSIZE_PTR;  /* Pass all structs by reference. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex by value in 2 or 4 GPRs. */
+
+#define CCALL_HANDLE_REGARG \
+  if (isfp) {  /* Try to pass argument in FPRs. */ \
+    if (nfpr + 1 <= CCALL_NARG_FPR) { \
+      dp = &cc->fpr[nfpr]; \
+      nfpr += 1; \
+      d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
+      goto done; \
+    } \
+  } else {  /* Try to pass argument in GPRs. */ \
+    if (n > 1) { \
+      lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
+      if (ctype_isinteger(d->info)) \
+	ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+      else if (ngpr + n > maxgpr) \
+	ngpr = maxgpr;  /* Prevent reordering. */ \
+    } \
+    if (ngpr + n <= maxgpr) { \
+      dp = &cc->gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } \
+  }
+
+#define CCALL_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    ctr = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */
+
 #elif LJ_TARGET_PPCSPE
 /* -- PPC/SPE calling conventions ----------------------------------------- */
 
@@ -530,7 +578,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
 
-#if LJ_TARGET_X64
+#if LJ_TARGET_X64 || LJ_TARGET_PPC || LJ_TARGET_PPCSPE
   cc->nfpr = nfpr;  /* Required for vararg functions. */
 #endif
   cc->nsp = nsp;
@@ -565,6 +613,9 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
     CCALL_HANDLE_COMPLEXRET2
     return 1;  /* One GC step. */
   }
+#ifdef CCALL_HANDLE_RET
+  CCALL_HANDLE_RET
+#endif
 #if CCALL_NUM_FPR
   if (ctype_isfp(ctr->info) || ctype_isvector(ctr->info))
     sp = &cc->fpr[0];

@@ -53,9 +53,21 @@ typedef intptr_t GPRArg;
 #define CCALL_NARG_FPR		0
 #define CCALL_NRET_GPR		2	/* For softfp double. */
 #define CCALL_NRET_FPR		0
-#define CCALL_SPS_FREE		0	/* NYI */
+#define CCALL_SPS_FREE		0
 
 typedef intptr_t GPRArg;
+
+#elif LJ_TARGET_PPC
+
+#define CCALL_NARG_GPR		8
+#define CCALL_NARG_FPR		8
+#define CCALL_NRET_GPR		4	/* For complex double. */
+#define CCALL_NRET_FPR		1
+#define CCALL_SPS_EXTRA		3
+#define CCALL_SPS_FREE		1
+
+typedef intptr_t GPRArg;
+typedef double FPRArg;
 
 #elif LJ_TARGET_PPCSPE
 
@@ -100,8 +112,13 @@ typedef struct CCallState {
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #elif LJ_TARGET_X86
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
+#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+  uint8_t nfpr;			/* Number of arguments in FPRs. */
 #endif
 #if CCALL_NUM_FPR
+#if LJ_32
+  int32_t align1;
+#endif
   FPRArg fpr[CCALL_NUM_FPR];	/* Arguments/results in FPRs. */
 #endif
   GPRArg gpr[CCALL_NUM_GPR];	/* Arguments/results in GPRs. */
