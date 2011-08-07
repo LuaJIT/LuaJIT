@@ -1003,7 +1003,8 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
 	(tr = crec_arith_ptr(J, sp, s, (MMS)rd->data))) {
       J->base[0] = tr;
       /* Fixup cdata comparisons, too. Avoids some cdata escapes. */
-      if (J->postproc == LJ_POST_FIXGUARD && frame_iscont(J->L->base-1)) {
+      if (J->postproc == LJ_POST_FIXGUARD && frame_iscont(J->L->base-1) &&
+	  !irt_isguard(J->guardemit)) {
 	const BCIns *pc = frame_contpc(J->L->base-1) - 1;
 	if (bc_op(*pc) <= BC_ISNEP) {
 	  setframe_pc(&J2G(J)->tmptv, pc);
