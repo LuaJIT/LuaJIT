@@ -497,6 +497,7 @@ static int trace_abort(jit_State *J)
   if (tvisnumber(L->top-1))
     e = (TraceError)numberVint(L->top-1);
   if (e == LJ_TRERR_MCODELM) {
+    L->top--;  /* Remove error object */
     J->state = LJ_TRACE_ASM;
     return 1;  /* Retry ASM with new MCode area. */
   }
