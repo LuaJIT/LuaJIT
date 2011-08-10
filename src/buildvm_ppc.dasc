@@ -183,15 +183,15 @@
 |  lwz INS, 0(PC)
 |   addi PC, PC, 4
 |.endmacro
-|// Instruction decode+dispatch.
+|// Instruction decode+dispatch. Note: optimized for e300!
 |.macro ins_NEXT2
 |  decode_OP4 TMP1, INS
+|  lwzx TMP0, DISPATCH, TMP1
+|  mtctr TMP0
 |   decode_RB8 RB, INS
 |   decode_RD8 RD, INS
-|  lwzx TMP0, DISPATCH, TMP1
 |   decode_RA8 RA, INS
 |   decode_RC8 RC, INS
-|  mtctr TMP0
 |  bctr
 |.endmacro
 |.macro ins_NEXT
@@ -255,8 +255,8 @@
 |
 |.macro branch_RD
 |  srwi TMP0, RD, 1
-|  add PC, PC, TMP0
 |  addis PC, PC, -(BCBIAS_J*4 >> 16)
+|  add PC, PC, TMP0
 |.endmacro
 |
 |// Assumes DISPATCH is relative to GL.
@@ -2983,14 +2983,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endmacro
     |
     |.macro intmod, a, b, c
-    |->BC_MODVNI_Z:
     |  bl ->vm_modi
     |.endmacro
     |
     |.macro fpmod, a, b, c
-    ||if (!LJ_DUALNUM) {
-    |->BC_MODVNI_Z:
-    ||}
     |->BC_MODVN_Z:
     |  fdiv FARG1, b, c
     |  // NYI: Use internal implementation of floor.
@@ -3038,11 +3034,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     ||  break;
     ||}
     |  checknum cr1, TMP2
-    |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
     |  bne >5
-    |.if "intins" == "intmod_"
-    |  b ->BC_MODVNI_Z			// Avoid 3 copies. It's slow anyway.
-    |.else
+    |  bne cr1, >5
     |  intins CARG1, CARG1, CARG2
     |  bso >4
     |1:
@@ -3054,7 +3047,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |4:  // Overflow.
     |  mcrxr cr0; ble <1		// Ignore unrelated overflow.
     |  ins_arithfallback b
-    |.endif
     |5:  // FP variant.
     ||if (vk == 1) {
     |  lfd f15, 0(RB)
@@ -3100,7 +3092,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_arith intmod, fpmod
     break;
   case BC_MODNV: case BC_MODVV:
-    |  ins_arith intmod_, fpmod_
+    |  ins_arith intmod, fpmod_
     break;
   case BC_POW:
     |  // NYI: (partial) integer arithmetic.
@@ -3113,8 +3105,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  crand 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
     |  bge ->vmeta_arith_vv
     |  bl extern pow
+    |  ins_next1
     |  stfdx FARG1, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
 
   case BC_CAT:
@@ -3132,9 +3125,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmplwi CRET1, 0
     |   lwz BASE, L->base
     |  bne ->vmeta_binop
+    |  ins_next1
     |  lfdx f0, BASE, SAVE0		// Copy result from RB to RA.
     |  stfdx f0, BASE, RA
-    |  ins_next
+    |  ins_next2
     break;
 
   /* -- Constant ops ------------------------------------------------------ */
@@ -3143,9 +3137,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = dst*8, RD = str_const*8 (~)
     |  srwi TMP1, RD, 1
     |  subfic TMP1, TMP1, -4
+    |  ins_next1
     |  lwzx TMP0, KBASE, TMP1		// KBASE-4-str_const*4
     |  li TMP2, LJ_TSTR
-    |  ins_next1
     |  stwux TMP2, RA, BASE
     |  stw TMP0, 4(RA)
     |  ins_next2
@@ -3155,9 +3149,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = dst*8, RD = cdata_const*8 (~)
     |  srwi TMP1, RD, 1
     |  subfic TMP1, TMP1, -4
+    |  ins_next1
     |  lwzx TMP0, KBASE, TMP1		// KBASE-4-cdata_const*4
     |  li TMP2, LJ_TCDATA
-    |  ins_next1
     |  stwux TMP2, RA, BASE
     |  stw TMP0, 4(RA)
     |  ins_next2
@@ -3173,21 +3167,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |   stw RD, 4(RA)
       |  ins_next2
     } else {
-      |  // NYI: which approach is faster?
-      |.if 1
-      |  slwi RD, RD, 13
-      |  srawi RD, RD, 16
-      |  tonum_i f0, RD
-      |  ins_next1
-      |   stfdx f0, BASE, RA
-      |  ins_next2
-      |.else
+      |  // The soft-float approach is faster.
       |  slwi RD, RD, 13
       |  srawi TMP1, RD, 31
       |  xor TMP2, TMP1, RD
       |  sub TMP2, TMP2, TMP1		// TMP2 = abs(x)
       |  cntlzw TMP3, TMP2
-      |  subfic TMP1, TMP3, 0x40d		// TMP1 = exponent-1
+      |  subfic TMP1, TMP3, 0x40d	// TMP1 = exponent-1
       |   slw TMP2, TMP2, TMP3		// TMP2 = left aligned mantissa
       |    subfic TMP3, RD, 0
       |  slwi TMP1, TMP1, 20
@@ -3199,13 +3185,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |    stwux RD, RA, BASE
       |    stw ZERO, 4(RA)
       |  ins_next2
-      |.endif
     }
     break;
   case BC_KNUM:
     |  // RA = dst*8, RD = num_const*8
-    |  lfdx f0, KBASE, RD
     |  ins_next1
+    |  lfdx f0, KBASE, RD
     |  stfdx f0, BASE, RA
     |  ins_next2
     break;
@@ -3233,11 +3218,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_UGET:
     |  // RA = dst*8, RD = uvnum*8
-    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RD, RD, 1
     |   addi RD, RD, offsetof(GCfuncL, uvptr)
     |  lwzx UPVAL:RB, LFUNC:RB, RD
+    |  ins_next1
     |  lwz TMP1, UPVAL:RB->v
     |  lfd f0, 0(TMP1)
     |  stfdx f0, BASE, RA
@@ -3250,6 +3235,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addi RA, RA, offsetof(GCfuncL, uvptr)
     |   lfdux f0, RD, BASE
     |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  ins_next1
     |  lbz TMP3, UPVAL:RB->marked
     |   lwz CARG2, UPVAL:RB->v
     |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
@@ -3262,7 +3248,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   subi TMP2, TMP2, (LJ_TISNUM+1)
     |  bne >2				// Upvalue is closed and black?
     |1:
-    |  ins_next
+    |  ins_next2
     |
     |2:  // Check if new value is collectable.
     |  cmplwi TMP2, LJ_TISGCV - (LJ_TISNUM+1)
@@ -3277,7 +3263,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETS:
     |  // RA = uvnum*8, RD = str_const*8 (~)
-    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi TMP1, RD, 1
     |    srwi RA, RA, 1
@@ -3285,6 +3270,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addi RA, RA, offsetof(GCfuncL, uvptr)
     |   lwzx STR:TMP1, KBASE, TMP1	// KBASE-4-str_const*4
     |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  ins_next1
     |  lbz TMP3, UPVAL:RB->marked
     |   lwz CARG2, UPVAL:RB->v
     |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
@@ -3309,25 +3295,25 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETN:
     |  // RA = uvnum*8, RD = num_const*8
-    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RA, RA, 1
     |   addi RA, RA, offsetof(GCfuncL, uvptr)
     |    lfdx f0, KBASE, RD
     |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  ins_next1
     |  lwz TMP1, UPVAL:RB->v
     |  stfd f0, 0(TMP1)
     |  ins_next2
     break;
   case BC_USETP:
     |  // RA = uvnum*8, RD = primitive_type*8 (~)
-    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi RA, RA, 1
-    |   addi RA, RA, offsetof(GCfuncL, uvptr)
     |    srwi TMP0, RD, 3
-    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |   addi RA, RA, offsetof(GCfuncL, uvptr)
     |    not TMP0, TMP0
+    |  lwzx UPVAL:RB, LFUNC:RB, RA
+    |  ins_next1
     |  lwz TMP1, UPVAL:RB->v
     |  stw TMP0, 0(TMP1)
     |  ins_next2
@@ -3538,8 +3524,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_TGETB:
     |  // RA = dst*8, RB = table*8, RC = index*8
     |  lwzux CARG1, RB, BASE
-    |   lwz TAB:RB, 4(RB)
     |   srwi TMP0, RC, 3
+    |   lwz TAB:RB, 4(RB)
     |  checktab CARG1; bne ->vmeta_tgetb
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
@@ -3717,8 +3703,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_TSETB:
     |  // RA = src*8, RB = table*8, RC = index*8
     |  lwzux CARG1, RB, BASE
-    |   lwz TAB:RB, 4(RB)
     |   srwi TMP0, RC, 3
+    |   lwz TAB:RB, 4(RB)
     |  checktab CARG1; bne ->vmeta_tsetb
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
@@ -4470,9 +4456,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |     st_vmstate
     |  bctrl				// (lua_State *L [, lua_CFunction f])
     |  // Returns nresults.
-    |  lwz TMP1, L->top
-    |   slwi RD, CRET1, 3
     |  lwz BASE, L->base
+    |   slwi RD, CRET1, 3
+    |  lwz TMP1, L->top
     |    li_vmstate INTERP
     |  lwz PC, FRAME_PC(BASE)		// Fetch PC of caller.
     |   sub RA, TMP1, RD		// RA = L->top - nresults*8
