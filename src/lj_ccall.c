@@ -578,7 +578,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
 
-#if LJ_TARGET_X64 || LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#if LJ_TARGET_X64 || LJ_TARGET_PPC
   cc->nfpr = nfpr;  /* Required for vararg functions. */
 #endif
   cc->nsp = nsp;

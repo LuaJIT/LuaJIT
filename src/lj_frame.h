@@ -115,7 +115,7 @@ enum {
 #define CFRAME_OFS_L		16
 #define CFRAME_OFS_PC		12
 #define CFRAME_OFS_MULTRES	8
-#define CFRAME_SIZE		176
+#define CFRAME_SIZE		184
 #define CFRAME_SHIFT_MULTRES	3
 #else
 #error "Missing CFRAME_* definitions for this architecture"

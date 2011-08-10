@@ -61,27 +61,29 @@
 |.define CRET2,		r4
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
-|.define SAVE_LR,	180(sp)
-|.define CFRAME_SPACE,	176	// Delta for sp.
-|// Back chain for sp:	176(sp)	<-- sp entering interpreter
-|.define SAVE_r31,	168(sp)	// 64 bit register saves.
-|.define SAVE_r30,	160(sp)
-|.define SAVE_r29,	152(sp)
-|.define SAVE_r28,	144(sp)
-|.define SAVE_r27,	136(sp)
-|.define SAVE_r26,	128(sp)
-|.define SAVE_r25,	120(sp)
-|.define SAVE_r24,	112(sp)
-|.define SAVE_r23,	104(sp)
-|.define SAVE_r22,	96(sp)
-|.define SAVE_r21,	88(sp)
-|.define SAVE_r20,	80(sp)
-|.define SAVE_r19,	72(sp)
-|.define SAVE_r18,	64(sp)
-|.define SAVE_r17,	56(sp)
-|.define SAVE_r16,	48(sp)
-|.define SAVE_r15,	40(sp)
-|.define SAVE_r14,	32(sp)
+|.define SAVE_LR,	188(sp)
+|.define CFRAME_SPACE,	184	// Delta for sp.
+|// Back chain for sp:	184(sp)	<-- sp entering interpreter
+|.define SAVE_r31,	176(sp)	// 64 bit register saves.
+|.define SAVE_r30,	168(sp)
+|.define SAVE_r29,	160(sp)
+|.define SAVE_r28,	152(sp)
+|.define SAVE_r27,	144(sp)
+|.define SAVE_r26,	136(sp)
+|.define SAVE_r25,	128(sp)
+|.define SAVE_r24,	120(sp)
+|.define SAVE_r23,	112(sp)
+|.define SAVE_r22,	104(sp)
+|.define SAVE_r21,	96(sp)
+|.define SAVE_r20,	88(sp)
+|.define SAVE_r19,	80(sp)
+|.define SAVE_r18,	72(sp)
+|.define SAVE_r17,	64(sp)
+|.define SAVE_r16,	56(sp)
+|.define SAVE_r15,	48(sp)
+|.define SAVE_r14,	40(sp)
+|.define SAVE_CR,	36(sp)
+|.define UNUSED1,	32(sp)
 |.define SAVE_ERRF,	28(sp)	// 32 bit C frame info.
 |.define SAVE_NRES,	24(sp)
 |.define SAVE_CFRAME,	20(sp)
@@ -97,16 +99,16 @@
 |.macro saveregs
 |  stwu sp, -CFRAME_SPACE(sp)
 |  save_ r14; save_ r15; save_ r16; save_ r17; save_ r18; save_ r19
-|  mflr r0
+|  mflr r0; mfcr r12
 |  save_ r20; save_ r21; save_ r22; save_ r23; save_ r24; save_ r25
-|  stw  r0, SAVE_LR
+|  stw  r0, SAVE_LR; stw r12, SAVE_CR
 |  save_ r26; save_ r27; save_ r28; save_ r29; save_ r30; save_ r31
 |.endmacro
 |
 |.macro restoreregs
-|  lwz r0, SAVE_LR
+|  lwz r0, SAVE_LR; lwz r12, SAVE_CR
 |  rest_ r14; rest_ r15; rest_ r16; rest_ r17; rest_ r18; rest_ r19
-|  mtlr r0
+|  mtlr r0; mtcrf 0x38, r12
 |  rest_ r20; rest_ r21; rest_ r22; rest_ r23; rest_ r24; rest_ r25
 |  rest_ r26; rest_ r27; rest_ r28; rest_ r29; rest_ r30; rest_ r31
 |  addi sp, sp, CFRAME_SPACE
@@ -3656,7 +3658,8 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin\n"
 	"\t.long %d\n"
 	"\t.byte 0xe\n\t.uleb128 %d\n"
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x5\n\t.uleb128 70\n\t.sleb128 37\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
@@ -3693,7 +3696,8 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
 	"\t.byte 0xe\n\t.uleb128 %d\n"
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x5\n\t.uleb128 70\n\t.sleb128 37\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,

@@ -112,7 +112,7 @@ typedef struct CCallState {
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #elif LJ_TARGET_X86
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_PPC
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #endif
 #if CCALL_NUM_FPR
