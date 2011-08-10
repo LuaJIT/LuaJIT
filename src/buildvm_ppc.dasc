@@ -62,26 +62,28 @@
 |.define CRET2,		r4
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
-|.define SAVE_LR,	260(sp)
-|.define CFRAME_SPACE,	256	// Delta for sp.
-|// Back chain for sp:	256(sp)	<-- sp entering interpreter
-|.define SAVE_GPR_,	184	// .. 184+18*4: 32 bit GPR saves.
-|.define SAVE_FPR_,	40	// .. 40+18*8: 64 bit FPR saves.
-|.define TONUM_LO,	36(sp)
-|.define TONUM_HI,	32(sp)
-|.define SAVE_ERRF,	28(sp)	// 32 bit C frame info.
-|.define SAVE_NRES,	24(sp)
-|.define SAVE_CFRAME,	20(sp)
-|.define SAVE_L,	16(sp)
-|.define SAVE_MULTRES,	12(sp)
-|.define SAVE_PC,	8(sp)
+|.define SAVE_LR,	276(sp)
+|.define CFRAME_SPACE,	272	// Delta for sp.
+|// Back chain for sp:	272(sp)	<-- sp entering interpreter
+|.define SAVE_FPR_,	128	// .. 128+18*8: 64 bit FPR saves.
+|.define SAVE_GPR_,	56	// .. 56+18*4: 32 bit GPR saves.
+|.define SAVE_CR,	52(sp)	// 32 bit CR save.
+|.define SAVE_ERRF,	48(sp)	// 32 bit C frame info.
+|.define SAVE_NRES,	44(sp)
+|.define SAVE_CFRAME,	40(sp)
+|.define SAVE_L,	36(sp)
+|.define SAVE_PC,	32(sp)
+|.define SAVE_MULTRES,	28(sp)
+|.define UNUSED1,	24(sp)
+|.define TMPD_LO,	20(sp)
+|.define TMPD_HI,	16(sp)
+|.define TONUM_LO,	12(sp)
+|.define TONUM_HI,	8(sp)
 |// Next frame lr:	4(sp)
 |// Back chain for sp:	0(sp)	<-- sp while in interpreter
 |
-|.define TMPD_LO,	SAVE_MULTRES
-|.define TMPD_BLO,	15(sp)
-|.define TMPD_HI,	SAVE_PC
-|.define TMPD,		SAVE_PC
+|.define TMPD_BLO,	23(sp)
+|.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
 |
 |.macro save_, reg
@@ -96,16 +98,16 @@
 |.macro saveregs
 |  stwu sp, -CFRAME_SPACE(sp)
 |  save_ 14; save_ 15; save_ 16; save_ 17; save_ 18; save_ 19
-|  mflr r0
+|  mflr r0; mfcr r12
 |  save_ 20; save_ 21; save_ 22; save_ 23; save_ 24; save_ 25
-|  stw  r0, SAVE_LR
+|  stw  r0, SAVE_LR; stw r12, SAVE_CR
 |  save_ 26; save_ 27; save_ 28; save_ 29; save_ 30; save_ 31
 |.endmacro
 |
 |.macro restoreregs
-|  lwz r0, SAVE_LR
+|  lwz r0, SAVE_LR; lwz r12, SAVE_CR
 |  rest_ 14; rest_ 15; rest_ 16; rest_ 17; rest_ 18; rest_ 19
-|  mtlr r0
+|  mtlr r0; mtcrf 0x38, r12
 |  rest_ 20; rest_ 21; rest_ 22; rest_ 23; rest_ 24; rest_ 25
 |  rest_ 26; rest_ 27; rest_ 28; rest_ 29; rest_ 30; rest_ 31
 |  addi sp, sp, CFRAME_SPACE
@@ -4518,7 +4520,8 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin\n"
 	"\t.long %d\n"
 	"\t.byte 0xe\n\t.uleb128 %d\n"
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
@@ -4555,7 +4558,8 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
 	"\t.byte 0xe\n\t.uleb128 %d\n"
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n",
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
 	(int)ctx->codesz, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
