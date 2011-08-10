@@ -22,7 +22,7 @@ LJ_FUNC void LJ_FASTCALL lj_state_growstack1(lua_State *L);
 static LJ_AINLINE void lj_state_checkstack(lua_State *L, MSize need)
 {
   if ((mref(L->maxstack, char) - (char *)L->top) <=
-      need*(ptrdiff_t)sizeof(TValue))
+      (ptrdiff_t)need*(ptrdiff_t)sizeof(TValue))
     lj_state_growstack(L, need);
 }
 
