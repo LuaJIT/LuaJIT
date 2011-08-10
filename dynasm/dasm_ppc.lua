@@ -339,7 +339,8 @@ local map_op = {
   iselgt_3 =	"7c00005eRRR",
   iseleq_3 =	"7c00009eRRR",
   mfcr_1 =	"7c000026R",
-  -- NYI: mtcrf, mtocrf, mfocrf
+  mtcrf_2 =	"7c000120GR",
+  -- NYI: mtocrf, mfocrf
   lwarx_3 =	"7c000028RR0R",
   ldx_3 =	"7c00002aRR0R",
   lwzx_3 =	"7c00002eRR0R",
@@ -1025,6 +1026,8 @@ map_op[".template__"] = function(params, template, nparams)
       rs = rs - 5; op = op + parse_cr(params[n]) * 2^(rs+2); n = n + 1
     elseif p == "W" then
       op = op + parse_cr(params[n]); n = n + 1
+    elseif p == "G" then
+      op = op + parse_imm(params[n], 8, 12, 0, false); n = n + 1
     elseif p == "J" or p == "K" then
       local mode, n, s = parse_label(params[n], false)
       if p == "K" then n = n + 2048 end
