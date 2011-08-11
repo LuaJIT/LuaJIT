@@ -67,7 +67,7 @@ static void rec_check_ir(jit_State *J)
     if (ir->prev) {
       lua_assert(ir->prev >= nk);
       lua_assert(i >= REF_BIAS ? ir->prev < i : ir->prev > i);
-      lua_assert(IR(ir->prev)->o == ir->o);
+      lua_assert(ir->o == IR_NOP || IR(ir->prev)->o == ir->o);
     }
   }
 }

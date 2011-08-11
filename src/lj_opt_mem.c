@@ -323,7 +323,7 @@ TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;  /* Unchained NOP -- does anybody care? */
+	store->o = IR_NOP;
 	store->t.irt = IRT_NIL;
 	store->op1 = store->op2 = 0;
 	store->prev = 0;
@@ -418,7 +418,7 @@ TRef LJ_FASTCALL lj_opt_dse_ustore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;  /* Unchained NOP -- does anybody care? */
+	store->o = IR_NOP;
 	store->t.irt = IRT_NIL;
 	store->op1 = store->op2 = 0;
 	store->prev = 0;
@@ -511,7 +511,7 @@ TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;  /* Unchained NOP -- does anybody care? */
+	store->o = IR_NOP;
 	store->t.irt = IRT_NIL;
 	store->op1 = store->op2 = 0;
 	store->prev = 0;
@@ -761,7 +761,7 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;  /* Unchained NOP -- does anybody care? */
+	store->o = IR_NOP;
 	store->t.irt = IRT_NIL;
 	store->op1 = store->op2 = 0;
 	store->prev = 0;

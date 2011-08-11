@@ -47,17 +47,15 @@ static void dce_propagate(jit_State *J)
       pchain[ir->o] = &ir->prev;
     } else if (!ir_sideeff(ir)) {
       *pchain[ir->o] = ir->prev;  /* Reroute original instruction chain. */
-      *pchain[IR_NOP] = (IRRef1)ins;
       ir->t.irt = IRT_NIL;
       ir->o = IR_NOP;  /* Replace instruction with NOP. */
       ir->op1 = ir->op2 = 0;
-      pchain[IR_NOP] = &ir->prev;
+      ir->prev = 0;
       continue;
     }
     if (ir->op1 >= REF_FIRST) irt_setmark(IR(ir->op1)->t);
     if (ir->op2 >= REF_FIRST) irt_setmark(IR(ir->op2)->t);
   }
-  *pchain[IR_NOP] = 0;  /* Terminate NOP chain. */
 }
 
 /* Dead Code Elimination.
