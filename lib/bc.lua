@@ -2,7 +2,7 @@
 -- LuaJIT bytecode listing module.
 --
 -- Copyright (C) 2005-2011 Mike Pall. All rights reserved.
--- Released under the MIT/X license. See Copyright Notice in luajit.h
+-- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
 -- This module lists the bytecode of a Lua function. If it's loaded by -jbc

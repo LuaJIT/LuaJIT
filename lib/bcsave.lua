@@ -2,7 +2,7 @@
 -- LuaJIT module to save/list bytecode.
 --
 -- Copyright (C) 2005-2011 Mike Pall. All rights reserved.
--- Released under the MIT/X license. See Copyright Notice in luajit.h
+-- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
 -- This module saves or lists the bytecode for an input file.
