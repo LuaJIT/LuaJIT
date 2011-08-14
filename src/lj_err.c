@@ -191,13 +191,13 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 #if !LJ_TARGET_ARM
 
 #define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
-#define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (_Unwind_Exception_Class)(c))
+#define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (uint64_t)(c))
 #define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
 #define LJ_UEXCLASS_ERRCODE(cl)	((int)((cl) & 0xff))
 
 /* DWARF2 personality handler referenced from interpreter .eh_frame. */
 LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
-  _Unwind_Exception_Class uexclass, struct _Unwind_Exception *uex,
+  uint64_t uexclass, struct _Unwind_Exception *uex,
   struct _Unwind_Context *ctx)
 {
   void *cf;
@@ -232,9 +232,9 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
       return _URC_CONTINUE_UNWIND;
     } else if (cf) {
       _Unwind_SetGR(ctx, LJ_TARGET_EHRETREG, errcode);
-      _Unwind_SetIP(ctx, (_Unwind_Ptr)(cframe_unwind_ff(cf) ?
-				       lj_vm_unwind_ff_eh :
-				       lj_vm_unwind_c_eh));
+      _Unwind_SetIP(ctx, (uintptr_t)(cframe_unwind_ff(cf) ?
+				     lj_vm_unwind_ff_eh :
+				     lj_vm_unwind_c_eh));
       return _URC_INSTALL_CONTEXT;
     }
 #if LJ_TARGET_X86ORX64
@@ -243,7 +243,7 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, _Unwind_Action actions,
       ** Real fix: http://gcc.gnu.org/viewcvs/trunk/gcc/unwind-dw2.c?r1=121165&r2=124837&pathrev=153877&diff_format=h
       */
       _Unwind_SetGR(ctx, LJ_TARGET_EHRETREG, errcode);
-      _Unwind_SetIP(ctx, (_Unwind_Ptr)lj_vm_unwind_rethrow);
+      _Unwind_SetIP(ctx, (uintptr_t)lj_vm_unwind_rethrow);
       return _URC_INSTALL_CONTEXT;
     }
 #endif
