@@ -22,10 +22,15 @@
 /* Error codes for ll_loadfunc. */
 #define PACKAGE_ERR_LIB		1
 #define PACKAGE_ERR_FUNC	2
+#define PACKAGE_ERR_LOAD	3
 
 /* Redefined in platform specific part. */
 #define PACKAGE_LIB_FAIL	"open"
 #define setprogdir(L)		((void)0)
+
+/* Symbol name prefixes. */
+#define SYMPREFIX_CF		"luaopen_%s"
+#define SYMPREFIX_BC		"luaJIT_BC_%s"
 
 #if LJ_TARGET_DLOPEN
 
@@ -50,10 +55,28 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
   return f;
 }
 
+static const char *ll_bcsym(void *lib, const char *sym)
+{
+#if defined(RTLD_DEFAULT)
+  if (lib == NULL) lib = RTLD_DEFAULT;
+#elif LJ_TARGET_OSX || LJ_TARGET_BSD
+  if (lib == NULL) lib = (void *)(intptr_t)-2;
+#endif
+  return (const char *)dlsym(lib, sym);
+}
+
 #elif LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef WINVER
+#define WINVER 0x0500
+#endif
 #include <windows.h>
+
+#ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+#define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS  4
+BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
+#endif
 
 #undef setprogdir
 
@@ -102,6 +125,20 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
   return f;
 }
 
+static const char *ll_bcsym(void *lib, const char *sym)
+{
+  if (lib) {
+    return (const char *)GetProcAddress((HINSTANCE)lib, sym);
+  } else {
+    HINSTANCE h = GetModuleHandle(NULL);
+    const char *p = (const char *)GetProcAddress(h, sym);
+    if (p == NULL && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+					(const char *)ll_bcsym, &h))
+      p = (const char *)GetProcAddress(h, sym);
+    return p;
+  }
+}
+
 #else
 
 #undef PACKAGE_LIB_FAIL
@@ -127,6 +164,13 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
   lua_pushliteral(L, DLMSG);
   return NULL;
 }
+
+static const char *ll_bcsym(void *lib, const char *sym)
+{
+  (void)lib; (void)sym;
+  return NULL;
+}
+
 #endif
 
 /* ------------------------------------------------------------------------ */
@@ -151,18 +195,41 @@ static void **ll_register(lua_State *L, const char *path)
   return plib;
 }
 
-static int ll_loadfunc(lua_State *L, const char *path, const char *sym)
+static const char *mksymname(lua_State *L, const char *modname,
+			     const char *prefix)
+{
+  const char *funcname;
+  const char *mark = strchr(modname, *LUA_IGMARK);
+  if (mark) modname = mark + 1;
+  funcname = luaL_gsub(L, modname, ".", "_");
+  funcname = lua_pushfstring(L, prefix, funcname);
+  lua_remove(L, -2);  /* remove 'gsub' result */
+  return funcname;
+}
+
+static int ll_loadfunc(lua_State *L, const char *path, const char *name, int r)
 {
   void **reg = ll_register(L, path);
   if (*reg == NULL) *reg = ll_load(L, path);
   if (*reg == NULL) {
     return PACKAGE_ERR_LIB;  /* unable to load library */
   } else {
+    const char *sym = r ? name : mksymname(L, name, SYMPREFIX_CF);
     lua_CFunction f = ll_sym(L, *reg, sym);
-    if (f == NULL)
-      return PACKAGE_ERR_FUNC;  /* unable to find function */
-    lua_pushcfunction(L, f);
-    return 0;  /* return function */
+    if (f) {
+      lua_pushcfunction(L, f);
+      return 0;
+    }
+    if (!r) {
+      const char *bcdata = ll_bcsym(*reg, mksymname(L, name, SYMPREFIX_BC));
+      lua_pop(L, 1);
+      if (bcdata) {
+	if (luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+	  return PACKAGE_ERR_LOAD;
+	return 0;
+      }
+    }
+    return PACKAGE_ERR_FUNC;  /* unable to find function */
   }
 }
 
@@ -170,7 +237,7 @@ static int lj_cf_package_loadlib(lua_State *L)
 {
   const char *path = luaL_checkstring(L, 1);
   const char *init = luaL_checkstring(L, 2);
-  int st = ll_loadfunc(L, path, init);
+  int st = ll_loadfunc(L, path, init, 1);
   if (st == 0) {  /* no errors? */
     return 1;  /* return the loaded function */
   } else {  /* error; error message is on stack top */
@@ -268,32 +335,18 @@ static int lj_cf_package_loader_lua(lua_State *L)
   return 1;  /* library loaded successfully */
 }
 
-static const char *mkfuncname(lua_State *L, const char *modname)
-{
-  const char *funcname;
-  const char *mark = strchr(modname, *LUA_IGMARK);
-  if (mark) modname = mark + 1;
-  funcname = luaL_gsub(L, modname, ".", "_");
-  funcname = lua_pushfstring(L, "luaopen_%s", funcname);
-  lua_remove(L, -2);  /* remove 'gsub' result */
-  return funcname;
-}
-
 static int lj_cf_package_loader_c(lua_State *L)
 {
-  const char *funcname;
   const char *name = luaL_checkstring(L, 1);
   const char *filename = findfile(L, name, "cpath");
   if (filename == NULL) return 1;  /* library not found in this path */
-  funcname = mkfuncname(L, name);
-  if (ll_loadfunc(L, filename, funcname) != 0)
+  if (ll_loadfunc(L, filename, name, 0) != 0)
     loaderror(L, filename);
   return 1;  /* library loaded successfully */
 }
 
 static int lj_cf_package_loader_croot(lua_State *L)
 {
-  const char *funcname;
   const char *filename;
   const char *name = luaL_checkstring(L, 1);
   const char *p = strchr(name, '.');
@@ -302,8 +355,7 @@ static int lj_cf_package_loader_croot(lua_State *L)
   lua_pushlstring(L, name, (size_t)(p - name));
   filename = findfile(L, lua_tostring(L, -1), "cpath");
   if (filename == NULL) return 1;  /* root not found */
-  funcname = mkfuncname(L, name);
-  if ((st = ll_loadfunc(L, filename, funcname)) != 0) {
+  if ((st = ll_loadfunc(L, filename, name, 0)) != 0) {
     if (st != PACKAGE_ERR_FUNC) loaderror(L, filename);  /* real error */
     lua_pushfstring(L, "\n\tno module " LUA_QS " in file " LUA_QS,
 		    name, filename);
@@ -319,8 +371,12 @@ static int lj_cf_package_loader_preload(lua_State *L)
   if (!lua_istable(L, -1))
     luaL_error(L, LUA_QL("package.preload") " must be a table");
   lua_getfield(L, -1, name);
-  if (lua_isnil(L, -1))  /* not found? */
-    lua_pushfstring(L, "\n\tno field package.preload['%s']", name);
+  if (lua_isnil(L, -1)) {  /* Not found? */
+    const char *bcname = mksymname(L, name, SYMPREFIX_BC);
+    const char *bcdata = ll_bcsym(NULL, bcname);
+    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+      lua_pushfstring(L, "\n\tno field package.preload['%s']", name);
+  }
   return 1;
 }
 

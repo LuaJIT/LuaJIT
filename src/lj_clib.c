@@ -27,7 +27,7 @@
 #if defined(RTLD_DEFAULT)
 #define CLIB_DEFHANDLE	RTLD_DEFAULT
 #elif LJ_TARGET_OSX || LJ_TARGET_BSD
-#define CLIB_DEFHANDLE	((void *)-2)
+#define CLIB_DEFHANDLE	((void *)(intptr_t)-2)
 #else
 #define CLIB_DEFHANDLE	NULL
 #endif
