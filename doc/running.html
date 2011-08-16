@@ -118,28 +118,56 @@ are accepted:
 <li><tt>-l</tt> &mdash; Only list bytecode.</li>
 <li><tt>-s</tt> &mdash; Strip debug info (this is the default).</li>
 <li><tt>-g</tt> &mdash; Keep debug info.</li>
+<li><tt>-n name</tt> &mdash; Set module name (default: auto-detect from input name)</li>
+<li><tt>-t type</tt> &mdash; Set output file type (default: auto-detect from output name).</li>
+<li><tt>-a arch</tt> &mdash; Override architecture for object files (default: native).</li>
+<li><tt>-o os</tt> &mdash; Override OS for object files (default: native).</li>
 <li><tt>-e chunk</tt> &mdash; Use chunk string as input.</li>
 <li><tt>-</tt> (a single minus sign) &mdash; Use stdin as input and/or stdout as output.</li>
+</ul>
+<p>
+The output file type is auto-detected from the extension of the output
+file name:
+</p>
+<ul>
+<li><tt>c</tt> &mdash; C source file, exported bytecode data.</li>
+<li><tt>h</tt> &mdash; C header file, static bytecode data.</li>
+<li><tt>obj</tt> or <tt>o</tt> &mdash; Object file, exported bytecode data
+(OS- and architecture-specific).</li>
+<li><tt>raw</tt> or any other extension &mdash; Raw bytecode file (portable).
+</ul>
+<p>
+Notes:
+</p>
+<ul>
+<li>See also <a href="extensions.html#string_dump">string.dump()</a>
+for information on bytecode portability and compatibility.</li>
+<li>A file in raw bytecode format is auto-detected and can be loaded like
+any Lua source file. E.g. directly from the command line or with
+<tt>loadfile()</tt>, <tt>dofile()</tt> etc.</li>
+<li>To statically embed the bytecode of a module in your application,
+generate an object file and just link it with your application.</li>
+<li>On most ELF-based systems (e.g. Linux) you need to explicitly export the
+global symbols when linking your application, e.g. with: <tt>-Wl,-E</tt></li>
+<li><tt>require()</tt> tries to load embedded bytecode data from exported
+symbols (in <tt>*.exe</tt> or <tt>lua51.dll</tt> on Windows) and from
+shared libraries in <tt>package.cpath</tt>.</li>
 </ul>
 <p>
 Typical usage examples:
 </p>
 <pre class="code">
-luajit -b test.lua test.out                 # Save to test.out
+luajit -b test.lua test.out                 # Save bytecode to test.out
 luajit -bg test.lua test.out                # Keep debug info
 luajit -be "print('hello world')" test.out  # Save cmdline script
 
 luajit -bl test.lua                         # List to stdout
 luajit -bl test.lua test.txt                # List to test.txt
 luajit -ble "print('hello world')"          # List cmdline script
+
+luajit -b test.lua test.obj                 # Generate object file
+# Link test.obj with your application and load it with require("test")
 </pre>
-<p>
-Note: A file in bytecode format is auto-detected and can be loaded like
-any Lua source file. E.g. directly from the command line or with
-<tt>loadfile()</tt>, <tt>dofile()</tt> etc. See also
-<a href="extensions.html#string_dump">string.dump()</a> for information
-on bytecode portability and compatibility.
-</p>
 
 <h3 id="opt_j"><tt>-j cmd[=arg[,arg...]]</tt></h3>
 <p>
