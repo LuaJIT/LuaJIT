@@ -526,7 +526,7 @@ local map_op = {
   frip_2 =	"fc000390F-F.",
   frim_2 =	"fc0003d0F-F.",
   mffs_1 =	"fc00048eF.",
-  mtfsf_1 =	"fc00058eF.",
+  -- NYI: mtfsf, mtfsb0, mtfsb1.
   fctid_2 =	"fc00065cF-F.",
   fctidz_2 =	"fc00065eF-F.",
   fcfid_2 =	"fc00069cF-F.",
