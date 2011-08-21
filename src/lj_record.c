@@ -435,6 +435,7 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
     t = (LJ_DUALNUM || tref_isint(tr[FORL_IDX])) ? lj_opt_narrow_forl(J, tv) :
 						   IRT_NUM;
     for (i = FORL_IDX; i <= FORL_STEP; i++) {
+      if (!tr[i]) sload(J, ra+i);
       lua_assert(tref_isnumber_str(tr[i]));
       if (tref_isstr(tr[i]))
 	tr[i] = emitir(IRTG(IR_STRTO, IRT_NUM), tr[i], 0);
