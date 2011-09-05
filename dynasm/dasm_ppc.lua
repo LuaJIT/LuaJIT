@@ -832,8 +832,10 @@ for cond,c in pairs(map_cond) do
   local c1 = (c%4)*0x00010000 + (c < 4 and 0x01000000 or 0)
   -- bX[l]
   map_op[b1.."_1"] = tohex(0x40800000 + c1).."K"
+  map_op[b1.."y_1"] = tohex(0x40a00000 + c1).."K"
   map_op[b1.."l_1"] = tohex(0x40800001 + c1).."K"
   map_op[b1.."_2"] = tohex(0x40800000 + c1).."-XK"
+  map_op[b1.."y_2"] = tohex(0x40a00000 + c1).."-XK"
   map_op[b1.."l_2"] = tohex(0x40800001 + c1).."-XK"
   -- bXlr[l]
   map_op[b1.."lr_0"] = tohex(0x4c800020 + c1)
