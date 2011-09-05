@@ -326,7 +326,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   rlwinm TMP2, PC, 0, 0, 28
   |    li_vmstate C
   |   sub TMP2, BASE, TMP2		// TMP2 = previous base.
-  |  bne ->vm_returnp
+  |  bney ->vm_returnp
   |
   |  addic. TMP1, RD, -8
   |   stw TMP2, L->base
@@ -341,7 +341,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    addi RA, RA, 8
   |   stfd f0, 0(BASE)
   |    addi BASE, BASE, 8
-  |  bne <1
+  |  bney <1
   |
   |2:
   |  cmpw TMP2, RD			// More/less results wanted?
@@ -627,7 +627,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub CARG3, CARG2, TMP1
   |  decode_RA8 RA, INS
   |   stfd f0, 0(CARG2)
-  |  bne ->BC_CAT_Z
+  |  bney ->BC_CAT_Z
   |   stfdx f0, BASE, RA
   |  b ->cont_nop
   |
@@ -962,7 +962,7 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |  decode_RD8 RD, SAVE0
 #if LJ_HASJIT
-  |   beq =>BC_JFORI
+  |   beqy =>BC_JFORI
 #endif
   |  b =>BC_FORI
   |
@@ -1040,7 +1040,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   lfdx f0, BASE, TMP1
   |   stfdx f0, RA, TMP1
   |    addi TMP1, TMP1, 8
-  |  bne <1
+  |  bney <1
   |  b ->fff_res
   |
   |.ffunc type
@@ -1513,7 +1513,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // RA = results, RD = (nresults+1)*8, PC = return.
   |  andi. TMP0, PC, FRAME_TYPE
   |   mr MULTRES, RD
-  |  bne ->vm_return
+  |  bney ->vm_return
   |  lwz INS, -4(PC)
   |  decode_RB8 RB, INS
   |5:
@@ -1545,7 +1545,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro math_round, func
   |  .ffunc_1 math_ .. func
-  |   checknum CARG3; beq ->fff_restv
+  |   checknum CARG3; beqy ->fff_restv
   |  rlwinm TMP2, CARG3, 12, 21, 31
   |   bge ->fff_fallback
   |  addic. TMP2, TMP2, -1023		// exp = exponent(x) - 1023
@@ -1580,7 +1580,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sub CARG1, CARG1, TMP2
   |  bns ->fff_resi
   |  // Potential overflow.
-  |  mcrxr cr0; ble ->fff_resi		// Ignore unrelated overflow.
+  |  mcrxr cr0; bley ->fff_resi		// Ignore unrelated overflow.
   |  lus CARG3, 0x41e0			// 2^31.
   |  li CARG1, 0
   |  b ->fff_restv
@@ -1608,7 +1608,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  orc. TMP1, TMP1, TMP2
   |  crand 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
   |  lus CARG1, 0x8000			// -(2^31).
-  |  beq ->fff_resi
+  |  beqy ->fff_resi
   |5:
   |  lfd FARG1, 0(BASE)
   |  bl extern func
@@ -1792,7 +1792,7 @@ static void build_subroutines(BuildCtx *ctx)
     |   lwz PC, FRAME_PC(BASE)
     |  cmplwi TMP0, 0
     |   la RA, -8(BASE)
-    |  beq ->fff_res
+    |  beqy ->fff_res
     |  b ->fff_resi
   } else {
     |   lbz TMP1, STR:CARG1[1]		// Access is always ok (NUL at end).
@@ -1965,7 +1965,7 @@ static void build_subroutines(BuildCtx *ctx)
   |1:  // Reverse string copy.
   |  cmpwi TMP3, 0
   |   lbzx TMP1, CARG1, TMP2
-  |  blt ->fff_newstr
+  |  blty ->fff_newstr
   |   stbx TMP1, CARG2, TMP3
   |  subi TMP3, TMP3, 1
   |  addi TMP2, TMP2, 1
@@ -1990,7 +1990,7 @@ static void build_subroutines(BuildCtx *ctx)
   |1:  // ASCII case conversion.
   |  cmplw TMP2, CARG3
   |   lbzx TMP1, CARG1, TMP2
-  |  bge ->fff_newstr
+  |  bgey ->fff_newstr
   |   subi TMP0, TMP1, lo
   |    xori TMP3, TMP1, 0x20
   |   addic TMP0, TMP0, -26
@@ -2039,7 +2039,7 @@ static void build_subroutines(BuildCtx *ctx)
   ||} else {
   |  lfd FARG1, 0(TMP1)
   ||}
-  |   bge cr1, ->fff_resi
+  |   bgey cr1, ->fff_resi
   |  checknum CARG4
   ||if (LJ_DUALNUM) {
   |  bnel ->fff_bitop_fb
@@ -2400,7 +2400,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   li TMP3, 0
   |  la TMP1, CCSTATE->stack
   |   slwi CARG2, CARG2, 2
-  |   blt >2
+  |   blty >2
   |  la TMP2, 8(sp)
   |1:
   |  lwzx TMP0, TMP1, CARG2
@@ -2408,7 +2408,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   addic. CARG2, CARG2, -4
   |  bge <1
   |2:
-  |  bne cr1, >3
+  |  bney cr1, >3
   |  lfd f1, CCSTATE->fpr[0]
   |  lfd f2, CCSTATE->fpr[1]
   |  lfd f3, CCSTATE->fpr[2]
@@ -2863,7 +2863,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |3:
       |  ins_next2
       |4:  // Potential overflow.
-      |  mcrxr cr0; ble <1		// Ignore unrelated overflow.
+      |  mcrxr cr0; bley <1		// Ignore unrelated overflow.
       |  lus TMP1, 0x41e0		// 2^31.
       |  li TMP0, 0
       |  b >7
@@ -3047,7 +3047,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  ins_next2
     |4:  // Overflow.
-    |  mcrxr cr0; ble <1		// Ignore unrelated overflow.
+    |  mcrxr cr0; bley <1		// Ignore unrelated overflow.
     |  ins_arithfallback b
     |5:  // FP variant.
     ||if (vk == 1) {
@@ -3924,7 +3924,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |6:
     |  cmplw RC, TMP1			// End of iteration? Branch to ITERL+1.
     |   slwi TMP3, RC, 5
-    |  bgt <3
+    |  bgty <3
     |   slwi RB, RC, 3
     |   sub TMP3, TMP3, RB
     |  lwzx RB, TMP2, TMP3
@@ -4015,7 +4015,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Copy all varargs.
     |  lwz TMP0, L->maxstack
     |   li MULTRES, 8			// MULTRES = (0+1)*8
-    |  ble <3				// No vararg slots?
+    |  bley <3				// No vararg slots?
     |  add TMP2, RA, TMP1
     |  cmplw TMP2, TMP0
     |   addi MULTRES, TMP1, 8
@@ -4117,7 +4117,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    mr MULTRES, RD
     |  andi. TMP0, PC, FRAME_TYPE
     |   xori TMP1, PC, FRAME_VARG
-    |  bne ->BC_RETV_Z
+    |  bney ->BC_RETV_Z
     |
     |  lwz INS, -4(PC)
     |   subi TMP2, BASE, 8
@@ -4217,7 +4217,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  b <1
       if (vk) {
 	|6:  // Potential overflow.
-	|  mcrxr cr0; ble <4		// Ignore unrelated overflow.
+	|  mcrxr cr0; bley <4		// Ignore unrelated overflow.
 	|  b <2
       }
     }
@@ -4268,7 +4268,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  bgt >3
     } else if (op == BC_IFORL) {
       if (LJ_DUALNUM) {
-	|  bgt <2
+	|  bgty <2
       } else {
 	|  bgt >2
       }
@@ -4289,7 +4289,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |3:  // Used by integer loop, too.
       |  addis PC, RD, -(BCBIAS_J*4 >> 16)
     } else if (op == BC_IFORL) {
-      |  bge <1
+      |  bgey <1
     } else {
       |  bge =>BC_JLOOP
     }
