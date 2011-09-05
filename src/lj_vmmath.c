@@ -39,7 +39,7 @@ double lj_vm_exp2(double a)
 }
 #endif
 
-#if !LJ_TARGET_ARM
+#if !(LJ_TARGET_ARM || LJ_TARGET_PPC)
 int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b)
 {
   uint32_t y, ua, ub;
@@ -81,7 +81,7 @@ double lj_vm_powi(double x, int32_t k)
   else if (k == 1)
     return x;
   else if (k == 0)
-    return 1;
+    return 1.0;
   else
     return 1.0 / lj_vm_powui(x, (uint32_t)-k);
 }

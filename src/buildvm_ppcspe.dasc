@@ -2037,16 +2037,6 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_trunc_hilo:
 #endif
   |
-  |->vm_powi:
-#if LJ_HASJIT
-  |  NYI
-#endif
-  |
-  |->vm_foldfpm:
-#if LJ_HASJIT
-  |  NYI
-#endif
-  |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
   |// and basic math functions. ORDER ARITH

@@ -2316,7 +2316,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_modi:
   |  divwo. TMP0, CARG1, CARG2
-  |  bsolr
+  |  bso >1
   |   xor. CARG3, CARG1, CARG2
   |  mullw TMP0, TMP0, CARG2
   |  sub CARG1, CARG1, TMP0
@@ -2324,16 +2324,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmpwi CARG1, 0; beqlr
   |  add CARG1, CARG1, CARG2
   |  blr
-  |
-  |->vm_powi:
-#if LJ_HASJIT
-  |  NYI
-#endif
-  |
-  |->vm_foldfpm:
-#if LJ_HASJIT
-  |  NYI
-#endif
+  |1:
+  |  cmpwi CARG2, 0
+  |   li CARG1, 0
+  |  beqlr
+  |  mcrxr cr0			// Clear SO for -2147483648 % -1 and return 0.
+  |  blr
   |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
