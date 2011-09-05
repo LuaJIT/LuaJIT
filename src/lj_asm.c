@@ -678,6 +678,76 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
     }
   }
 }
+#else
+/* Similar to ra_left, except we override any hints. */
+static void ra_leftov(ASMState *as, Reg dest, IRRef lref)
+{
+  IRIns *ir = IR(lref);
+  Reg left = ir->r;
+  if (ra_noreg(left)) {
+    ra_sethint(ir->r, dest);  /* Propagate register hint. */
+    left = ra_allocref(as, lref,
+		       (LJ_SOFTFP || dest < RID_MAX_GPR) ? RSET_GPR : RSET_FPR);
+  }
+  ra_noweak(as, left);
+  if (dest != left) {
+    /* Use register renaming if dest is the PHI reg. */
+    if (irt_isphi(ir->t) && as->phireg[dest] == lref) {
+      ra_modified(as, left);
+      ra_rename(as, left, dest);
+    } else {
+      emit_movrr(as, ir, dest, left);
+    }
+  }
+}
+#endif
+
+#if !LJ_TARGET_X86ORX64
+/* Force a RID_RET/RID_RETHI destination register pair (marked as free). */
+static void ra_destpair(ASMState *as, IRIns *ir)
+{
+  Reg destlo = ir->r, desthi = (ir+1)->r;
+  /* First spill unrelated refs blocking the destination registers. */
+  if (!rset_test(as->freeset, RID_RET) &&
+      destlo != RID_RET && desthi != RID_RET)
+    ra_restore(as, regcost_ref(as->cost[RID_RET]));
+  if (!rset_test(as->freeset, RID_RETHI) &&
+      destlo != RID_RETHI && desthi != RID_RETHI)
+    ra_restore(as, regcost_ref(as->cost[RID_RETHI]));
+  /* Next free the destination registers (if any). */
+  if (ra_hasreg(destlo)) {
+    ra_free(as, destlo);
+    ra_modified(as, destlo);
+  } else {
+    destlo = RID_RET;
+  }
+  if (ra_hasreg(desthi)) {
+    ra_free(as, desthi);
+    ra_modified(as, desthi);
+  } else {
+    desthi = RID_RETHI;
+  }
+  /* Check for conflicts and shuffle the registers as needed. */
+  if (destlo == RID_RETHI) {
+    if (desthi == RID_RET) {
+      emit_movrr(as, ir, RID_RETHI, RID_TMP);
+      emit_movrr(as, ir, RID_RET, RID_RETHI);
+      emit_movrr(as, ir, RID_TMP, RID_RET);
+    } else {
+      emit_movrr(as, ir, RID_RETHI, RID_RET);
+      if (desthi != RID_RETHI) emit_movrr(as, ir, desthi, RID_RETHI);
+    }
+  } else if (desthi == RID_RET) {
+    emit_movrr(as, ir, RID_RET, RID_RETHI);
+    if (destlo != RID_RET) emit_movrr(as, ir, destlo, RID_RET);
+  } else {
+    if (desthi != RID_RETHI) emit_movrr(as, ir, desthi, RID_RETHI);
+    if (destlo != RID_RET) emit_movrr(as, ir, destlo, RID_RET);
+  }
+  /* Restore spill slots (if any). */
+  if (ra_hasspill((ir+1)->s)) ra_save(as, ir+1, RID_RETHI);
+  if (ra_hasspill(ir->s)) ra_save(as, ir, RID_RET);
+}
 #endif
 
 /* -- Snapshot handling --------- ----------------------------------------- */
