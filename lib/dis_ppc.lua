@@ -559,10 +559,16 @@ local function disass_(code, addr, out)
   create_(code, addr, out):disass()
 end
 
+-- Return register name for RID.
+local function regname_(r)
+  if r < 32 then return map_gpr[r] end
+  return "f"..(r-32)
+end
 
 -- Public module functions.
 module(...)
 
 create = create_
 disass = disass_
+regname = regname_
 
