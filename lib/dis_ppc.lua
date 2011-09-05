@@ -464,23 +464,13 @@ local function disass_ins(ctx)
 	cn = band(bo, 2) == 0 and "dnz" or "dz"
 	if band(bo, 0x10) == 0 then
 	  cn = cn..(band(bo, 8) == 0 and "f" or "t")
-	  if band(bo, 1) ~= 0 then
-	    name = name..(band(op, 0x8000) ~= 0 and "-" or "+")
-	  end
-	elseif band(bo, 8) ~= 0 then
-	  name = name..(band(bo, 1) == 0 and "-" or "+")
-	elseif band(bo, 1) ~= 0 then
-	  name = name..(band(op, 0x8000) ~= 0 and "-" or "+")
 	end
 	if band(bo, 0x10) == 0 then x = condfmt(cond) end
+	name = name..(band(bo, 1) == band(rshift(op, 15), 1) and "-" or "+")
       elseif band(bo, 0x10) == 0 then
 	cn = map_cond[band(cond, 3) + (band(bo, 8) == 0 and 4 or 0)]
-	if band(bo, 2) ~= 0 then
-	  name = name..(band(bo, 1) == 0 and "-" or "+")
-	elseif band(bo, 1) ~= 0 then
-	  name = name..(band(op, 0x8000) ~= 0 and "-" or "+")
-	end
 	if cond > 3 then x = "cr"..rshift(cond, 2) end
+	name = name..(band(bo, 1) == band(rshift(op, 15), 1) and "-" or "+")
       end
       name = gsub(name, "_", cn)
     elseif p == "J" then
