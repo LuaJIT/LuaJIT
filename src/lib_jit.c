@@ -577,6 +577,7 @@ static uint32_t jit_cpudetect(lua_State *L)
 #endif
 #endif
 #elif LJ_TARGET_ARM
+#if LJ_HASJIT
   /* Compile-time ARM CPU detection. */
 #if __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
   flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
@@ -597,6 +598,7 @@ static uint32_t jit_cpudetect(lua_State *L)
 	flags |= JIT_F_ARMV6;
     }
   }
+#endif
 #endif
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
   /* Nothing to do. */
