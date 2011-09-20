@@ -37,127 +37,130 @@ typedef struct CCallInfo {
 #define CCI_NOFPRCLOBBER	0x0400	/* Does not clobber any FPRs. */
 #define CCI_FASTCALL		0x0800	/* Fastcall convention. */
 
-/* Function definitions for CALL* instructions. */
-#if LJ_SOFTFP
-#if LJ_HASFFI
-#define IRCALLDEF_SOFTFP_FFI(_) \
-  _(softfp_ui2d,	1,   N, NUM, 0) \
-  _(softfp_l2d,		2,   N, NUM, 0) \
-  _(softfp_ul2d,	2,   N, NUM, 0) \
-  _(softfp_f2d,		1,   N, NUM, 0) \
-  _(softfp_d2ui,	2,   N, INT, 0) \
-  _(softfp_d2l,		2,   N, I64, 0) \
-  _(softfp_d2ul,	2,   N, U64, 0) \
-  _(softfp_d2f,		2,   N, FLOAT, 0) \
-  _(softfp_i2f,		1,   N, FLOAT, 0) \
-  _(softfp_ui2f,	1,   N, FLOAT, 0) \
-  _(softfp_l2f,		2,   N, FLOAT, 0) \
-  _(softfp_ul2f,	2,   N, FLOAT, 0) \
-  _(softfp_f2i,		1,   N, INT, 0) \
-  _(softfp_f2ui,	1,   N, INT, 0) \
-  _(softfp_f2l,		1,   N, I64, 0) \
-  _(softfp_f2ul,	1,   N, U64, 0)
-#else
-#define IRCALLDEF_SOFTFP_FFI(_)
-#endif
-#define IRCALLDEF_SOFTFP(_) \
-  _(lj_vm_tobit,	2,   N, INT, 0) \
-  _(softfp_add,		4,   N, NUM, 0) \
-  _(softfp_sub,		4,   N, NUM, 0) \
-  _(softfp_mul,		4,   N, NUM, 0) \
-  _(softfp_div,		4,   N, NUM, 0) \
-  _(softfp_cmp,		4,   N, NIL, 0) \
-  _(softfp_i2d,		1,   N, NUM, 0) \
-  _(softfp_d2i,		2,   N, INT, 0) \
-  IRCALLDEF_SOFTFP_FFI(_)
-#else
-#define IRCALLDEF_SOFTFP(_)
-#endif
+/* Helpers for conditional function definitions. */
+#define IRCALLCOND_ANY(x)		x
 
 #if LJ_TARGET_X86ORX64
-/* Use lj_vm_* helpers and x87 ops. */
-#define IRCALLDEF_FPMATH(_)
+#define IRCALLCOND_FPMATH(x)		NULL
 #else
-/* Use standard math library calls. */
+#define IRCALLCOND_FPMATH(x)		x
+#endif
+
+#if LJ_SOFTFP
+#define IRCALLCOND_SOFTFP(x)		x
+#if LJ_HASFFI
+#define IRCALLCOND_SOFTFP_FFI(x)	x
+#else
+#define IRCALLCOND_SOFTFP_FFI(x)	NULL
+#endif
+#else
+#define IRCALLCOND_SOFTFP(x)		NULL
+#define IRCALLCOND_SOFTFP_FFI(x)	NULL
+#endif
+
+#if LJ_HASFFI
+#define IRCALLCOND_FFI(x)		x
+#if LJ_32
+#define IRCALLCOND_FFI32(x)		x
+#else
+#define IRCALLCOND_FFI32(x)		NULL
+#endif
+#else
+#define IRCALLCOND_FFI(x)		NULL
+#define IRCALLCOND_FFI32(x)		NULL
+#endif
+
 #if LJ_SOFTFP
 #define ARG1_FP		2	/* Treat as 2 32 bit arguments. */
 #else
 #define ARG1_FP		1
 #endif
-/* ORDER FPM */
-#define IRCALLDEF_FPMATH(_) \
-  _(lj_vm_floor,	ARG1_FP,   N, NUM, 0) \
-  _(lj_vm_ceil,		ARG1_FP,   N, NUM, 0) \
-  _(lj_vm_trunc,	ARG1_FP,   N, NUM, 0) \
-  _(sqrt,		ARG1_FP,   N, NUM, 0) \
-  _(exp,		ARG1_FP,   N, NUM, 0) \
-  _(lj_vm_exp2,		ARG1_FP,   N, NUM, 0) \
-  _(log,		ARG1_FP,   N, NUM, 0) \
-  _(lj_vm_log2,		ARG1_FP,   N, NUM, 0) \
-  _(log10,		ARG1_FP,   N, NUM, 0) \
-  _(sin,		ARG1_FP,   N, NUM, 0) \
-  _(cos,		ARG1_FP,   N, NUM, 0) \
-  _(tan,		ARG1_FP,   N, NUM, 0) \
-  _(lj_vm_powi,		ARG1_FP+1, N, NUM, 0) \
-  _(pow,		ARG1_FP*2, N, NUM, 0) \
-  _(atan2,		ARG1_FP*2, N, NUM, 0) \
-  _(ldexp,		ARG1_FP+1, N, NUM, 0)
-#endif
 
-#if LJ_HASFFI
 #if LJ_32
 #define ARG2_64		4	/* Treat as 4 32 bit arguments. */
-#define IRCALLDEF_FFI32(_) \
-  _(lj_carith_mul64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER)
 #else
 #define ARG2_64		2
-#define IRCALLDEF_FFI32(_)
-#endif
-#define IRCALLDEF_FFI(_) \
-  IRCALLDEF_FFI32(_) \
-  _(lj_carith_divi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_divu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_modi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_modu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
-  _(lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
-  _(lj_cdata_setfin,	2,        FN, P32, CCI_L) \
-  _(strlen,		1,         N, INTP, 0) \
-  _(memcpy,		3,         S, PTR, 0) \
-  _(memset,		3,         S, PTR, 0)
-#else
-#define IRCALLDEF_FFI(_)
 #endif
 
+/* Function definitions for CALL* instructions. */
 #define IRCALLDEF(_) \
-  _(lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
-  _(lj_str_new,		3,   S, STR, CCI_L) \
-  _(lj_str_tonum,	2,  FN, INT, 0) \
-  _(lj_str_fromint,	2,  FN, STR, CCI_L) \
-  _(lj_str_fromnum,	2,  FN, STR, CCI_L) \
-  _(lj_tab_new1,	2,  FS, TAB, CCI_L) \
-  _(lj_tab_dup,		2,  FS, TAB, CCI_L) \
-  _(lj_tab_newkey,	3,   S, P32, CCI_L) \
-  _(lj_tab_len,		1,  FL, INT, 0) \
-  _(lj_gc_step_jit,	2,  FS, NIL, CCI_L) \
-  _(lj_gc_barrieruv,	2,  FS, NIL, 0) \
-  _(lj_mem_newgco,	2,  FS, P32, CCI_L) \
-  _(lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
-  _(lj_vm_modi,		2,  FN, INT, 0) \
-  IRCALLDEF_SOFTFP(_) \
-  IRCALLDEF_FPMATH(_) \
-  IRCALLDEF_FFI(_) \
-  _(sinh,		1,  N, NUM, 0) \
-  _(cosh,		1,  N, NUM, 0) \
-  _(tanh,		1,  N, NUM, 0) \
-  _(fputc,		2,  S, INT, 0) \
-  _(fwrite,		4,  S, INT, 0) \
-  _(fflush,		1,  S, INT, 0) \
+  _(ANY,	lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
+  _(ANY,	lj_str_new,		3,   S, STR, CCI_L) \
+  _(ANY,	lj_str_tonum,		2,  FN, INT, 0) \
+  _(ANY,	lj_str_fromint,		2,  FN, STR, CCI_L) \
+  _(ANY,	lj_str_fromnum,		2,  FN, STR, CCI_L) \
+  _(ANY,	lj_tab_new1,		2,  FS, TAB, CCI_L) \
+  _(ANY,	lj_tab_dup,		2,  FS, TAB, CCI_L) \
+  _(ANY,	lj_tab_newkey,		3,   S, P32, CCI_L) \
+  _(ANY,	lj_tab_len,		1,  FL, INT, 0) \
+  _(ANY,	lj_gc_step_jit,		2,  FS, NIL, CCI_L) \
+  _(ANY,	lj_gc_barrieruv,	2,  FS, NIL, 0) \
+  _(ANY,	lj_mem_newgco,		2,  FS, P32, CCI_L) \
+  _(ANY,	lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
+  _(ANY,	lj_vm_modi,		2,  FN, INT, 0) \
+  _(ANY,	sinh,			1,  N, NUM, 0) \
+  _(ANY,	cosh,			1,  N, NUM, 0) \
+  _(ANY,	tanh,			1,  N, NUM, 0) \
+  _(ANY,	fputc,			2,  S, INT, 0) \
+  _(ANY,	fwrite,			4,  S, INT, 0) \
+  _(ANY,	fflush,			1,  S, INT, 0) \
+  /* ORDER FPM */ \
+  _(FPMATH,	lj_vm_floor,		ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	lj_vm_ceil,		ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	lj_vm_trunc,		ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	sqrt,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	exp,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	lj_vm_exp2,		ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	log,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	lj_vm_log2,		ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	log10,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	sin,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	cos,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	tan,			ARG1_FP,   N, NUM, 0) \
+  _(FPMATH,	lj_vm_powi,		ARG1_FP+1, N, NUM, 0) \
+  _(FPMATH,	pow,			ARG1_FP*2, N, NUM, 0) \
+  _(FPMATH,	atan2,			ARG1_FP*2, N, NUM, 0) \
+  _(FPMATH,	ldexp,			ARG1_FP+1, N, NUM, 0) \
+  _(SOFTFP,	lj_vm_tobit,		2,   N, INT, 0) \
+  _(SOFTFP,	softfp_add,		4,   N, NUM, 0) \
+  _(SOFTFP,	softfp_sub,		4,   N, NUM, 0) \
+  _(SOFTFP,	softfp_mul,		4,   N, NUM, 0) \
+  _(SOFTFP,	softfp_div,		4,   N, NUM, 0) \
+  _(SOFTFP,	softfp_cmp,		4,   N, NIL, 0) \
+  _(SOFTFP,	softfp_i2d,		1,   N, NUM, 0) \
+  _(SOFTFP,	softfp_d2i,		2,   N, INT, 0) \
+  _(SOFTFP_FFI,	softfp_ui2d,		1,   N, NUM, 0) \
+  _(SOFTFP_FFI,	softfp_l2d,		2,   N, NUM, 0) \
+  _(SOFTFP_FFI,	softfp_ul2d,		2,   N, NUM, 0) \
+  _(SOFTFP_FFI,	softfp_f2d,		1,   N, NUM, 0) \
+  _(SOFTFP_FFI,	softfp_d2ui,		2,   N, INT, 0) \
+  _(SOFTFP_FFI,	softfp_d2l,		2,   N, I64, 0) \
+  _(SOFTFP_FFI,	softfp_d2ul,		2,   N, U64, 0) \
+  _(SOFTFP_FFI,	softfp_d2f,		2,   N, FLOAT, 0) \
+  _(SOFTFP_FFI,	softfp_i2f,		1,   N, FLOAT, 0) \
+  _(SOFTFP_FFI,	softfp_ui2f,		1,   N, FLOAT, 0) \
+  _(SOFTFP_FFI,	softfp_l2f,		2,   N, FLOAT, 0) \
+  _(SOFTFP_FFI,	softfp_ul2f,		2,   N, FLOAT, 0) \
+  _(SOFTFP_FFI,	softfp_f2i,		1,   N, INT, 0) \
+  _(SOFTFP_FFI,	softfp_f2ui,		1,   N, INT, 0) \
+  _(SOFTFP_FFI,	softfp_f2l,		1,   N, I64, 0) \
+  _(SOFTFP_FFI,	softfp_f2ul,		1,   N, U64, 0) \
+  _(FFI,	lj_carith_divi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_carith_divu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_carith_modi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_carith_modu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_carith_powi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_carith_powu64,	ARG2_64,   N, U64, CCI_NOFPRCLOBBER) \
+  _(FFI,	lj_cdata_setfin,	2,        FN, P32, CCI_L) \
+  _(FFI,	strlen,			1,         N, INTP, 0) \
+  _(FFI,	memcpy,			3,         S, PTR, 0) \
+  _(FFI,	memset,			3,         S, PTR, 0) \
+  _(FFI32,	lj_carith_mul64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER)
   \
   /* End of list. */
 
 typedef enum {
-#define IRCALLENUM(name, nargs, kind, type, flags)	IRCALL_##name,
+#define IRCALLENUM(cond, name, nargs, kind, type, flags)	IRCALL_##name,
 IRCALLDEF(IRCALLENUM)
 #undef IRCALLENUM
   IRCALL__MAX

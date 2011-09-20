@@ -271,7 +271,7 @@ IRFLDEF(FLNAME)
 };
 
 const char *const ircall_names[] = {
-#define IRCALLNAME(name, nargs, kind, type, flags)	#name,
+#define IRCALLNAME(cond, name, nargs, kind, type, flags)	#name,
 IRCALLDEF(IRCALLNAME)
 #undef IRCALLNAME
   NULL

@@ -47,8 +47,8 @@ IRDEF(IRMODE)
 
 /* C call info for CALL* instructions. */
 LJ_DATADEF const CCallInfo lj_ir_callinfo[] = {
-#define IRCALLCI(name, nargs, kind, type, flags) \
-  { (ASMFunction)name, \
+#define IRCALLCI(cond, name, nargs, kind, type, flags) \
+  { (ASMFunction)IRCALLCOND_##cond(name), \
     (nargs)|(CCI_CALL_##kind)|(IRT_##type<<CCI_OTSHIFT)|(flags) },
 IRCALLDEF(IRCALLCI)
 #undef IRCALLCI

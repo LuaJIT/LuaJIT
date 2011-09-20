@@ -84,7 +84,10 @@ local function fillsymtab(nexit)
   local t = symtab
   if nexitsym == 0 then
     local ircall = vmdef.ircall
-    for i=0,#ircall do t[ircalladdr(i)] = ircall[i] end
+    for i=0,#ircall do
+      local addr = ircalladdr(i)
+      if addr ~= 0 then t[addr] = ircall[i] end
+    end
   end
   if nexit > nexitsym then
     for i=nexitsym,nexit-1 do
