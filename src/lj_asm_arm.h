@@ -670,7 +670,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 	     (int32_t)ir_knum(irkey)->u32.hi, allow);
     emit_opk(as, ARMI_CMP, 0, key,
 	     (int32_t)ir_knum(irkey)->u32.lo, allow);
-  } if (ra_hasreg(key)) {
+  } else if (ra_hasreg(key)) {
     emit_n(as, ARMF_CC(ARMI_CMN, CC_EQ)|ARMI_K12|-irt_toitype(irkey->t), type);
     emit_opk(as, ARMI_CMP, 0, key, irkey->i, allow);
   } else {
