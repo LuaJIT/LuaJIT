@@ -415,7 +415,7 @@ static CTypeID ccall_ctid_vararg(CTState *cts, cTValue *o)
     } else if (ctype_isstruct(s->info) || ctype_isfunc(s->info)) {
       /* NYI: how to pass a struct by value in a vararg argument? */
       return lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR);
-    } if (ctype_isfp(s->info) && s->size == sizeof(float)) {
+    } else if (ctype_isfp(s->info) && s->size == sizeof(float)) {
       return CTID_DOUBLE;
     } else {
       return id;
