@@ -297,15 +297,17 @@ static int recff_metacall(jit_State *J, RecordFFData *rd, MMS mm)
   copyTV(J->L, &ix.tabv, &rd->argv[0]);
   if (lj_record_mm_lookup(J, &ix, mm)) {  /* Has metamethod? */
     int errcode;
+    TValue argv0;
     /* Temporarily insert metamethod below object. */
     J->base[1] = J->base[0];
     J->base[0] = ix.mobj;
+    copyTV(J->L, &argv0, &rd->argv[0]);
     copyTV(J->L, &rd->argv[1], &rd->argv[0]);
     copyTV(J->L, &rd->argv[0], &ix.mobjv);
     /* Need to protect lj_record_tailcall because it may throw. */
     errcode = lj_vm_cpcall(J->L, NULL, J, recff_metacall_cp);
     /* Always undo Lua stack changes to avoid confusing the interpreter. */
-    copyTV(J->L, &rd->argv[0], &rd->argv[1]);
+    copyTV(J->L, &rd->argv[0], &argv0);
     if (errcode)
       lj_err_throw(J->L, errcode);  /* Propagate errors. */
     rd->nres = -1;  /* Pending call. */
