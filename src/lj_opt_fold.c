@@ -1450,7 +1450,6 @@ LJFOLD(BAND BAND any)
 LJFOLD(BOR BOR any)
 LJFOLDF(reassoc_dup)
 {
-  PHIBARRIER(fleft);
   if (fins->op2 == fleft->op1 || fins->op2 == fleft->op2)
     return LEFTFOLD;  /* (a o b) o a ==> a o b; (a o b) o b ==> a o b */
   return NEXTFOLD;
