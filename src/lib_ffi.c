@@ -325,7 +325,7 @@ static TValue *ffi_clib_index(lua_State *L)
   return lj_clib_index(L, cl, strV(o+1));
 }
 
-LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index)
+LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index 1)
 {
   TValue *tv = ffi_clib_index(L);
   if (tviscdata(tv)) {
@@ -335,7 +335,9 @@ LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index)
     if (ctype_isextern(s->info)) {
       CTypeID sid = ctype_cid(s->info);
       void *sp = *(void **)cdataptr(cd);
-      if (lj_cconv_tv_ct(cts, ctype_raw(cts, sid), sid, L->top-1, sp))
+      CType *ct = ctype_raw(cts, sid);
+      if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
+      if (lj_cconv_tv_ct(cts, ct, sid, L->top-1, sp))
 	lj_gc_check(L);
       return 1;
     }
@@ -344,7 +346,7 @@ LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index)
   return 1;
 }
 
-LJLIB_CF(ffi_clib___newindex)
+LJLIB_CF(ffi_clib___newindex)	LJLIB_REC(clib_index 0)
 {
   TValue *tv = ffi_clib_index(L);
   TValue *o = L->base+2;
