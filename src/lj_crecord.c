@@ -1031,7 +1031,7 @@ void LJ_FASTCALL recff_clib_index(jit_State *J, RecordFFData *rd)
     CType *ct;
     CTypeID id = lj_ctype_getname(cts, &ct, name, CLNS_INDEX);
     cTValue *tv = lj_tab_getstr(cl->cache, name);
-    if (id && tv && tviscdata(tv)) {
+    if (id && tv && !tvisnil(tv)) {
       /* Specialize to the symbol name and make the result a constant. */
       emitir(IRTG(IR_EQ, IRT_STR), J->base[1], lj_ir_kstr(J, name));
       if (ctype_isconstval(ct->info)) {
