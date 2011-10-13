@@ -759,7 +759,14 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
     if (!(ctype_isnum(d->info) || ctype_isptr(d->info) ||
 	  ctype_isenum(d->info)))
       lj_trace_err(J, LJ_TRERR_NYICALL);
-    args[n] = crec_ct_tv(J, d, 0, J->base[n+1], &rd->argv[n+1]);
+    tr = crec_ct_tv(J, d, 0, J->base[n+1], &rd->argv[n+1]);
+    if (ctype_isinteger_or_bool(d->info) && d->size < 4) {
+      if ((d->info & CTF_UNSIGNED))
+	tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_U8 : IRT_U16, 0);
+      else
+	tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_I8 : IRT_I16, IRCONV_SEXT);
+    }
+    args[n] = tr;
   }
   tr = args[0];
   for (i = 1; i < n; i++)
@@ -799,6 +806,10 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     tr = emitir(IRT(IR_CALLXS, t), crec_call_args(J, rd, cts, ct), func);
     if (t == IRT_FLOAT || t == IRT_U32) {
       tr = emitconv(tr, IRT_NUM, t, 0);
+    } else if (t == IRT_I8 || t == IRT_I16) {
+      tr = emitconv(tr, IRT_INT, t, IRCONV_SEXT);
+    } else if (t == IRT_U8 || t == IRT_U16) {
+      tr = emitconv(tr, IRT_INT, t, 0);
     } else if (t == IRT_PTR || (LJ_64 && t == IRT_P32) ||
 	       (t == IRT_I64 || t == IRT_U64)) {
       TRef trid = lj_ir_kint(J, ctype_cid(ct->info));

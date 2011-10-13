@@ -515,11 +515,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     /* Find out how (by value/ref) and where (GPR/FPR) to pass an argument. */
     if (ctype_isnum(d->info)) {
       if (sz > 8) goto err_nyi;
-      if ((d->info & CTF_FP)) {
+      if ((d->info & CTF_FP))
 	isfp = 1;
-      } else if (sz < CTSIZE_PTR) {
-	d = ctype_get(cts, CTID_INT_PSZ);
-      }
     } else if (ctype_isvector(d->info)) {
       if (CCALL_VECTOR_REG && (sz == 8 || sz == 16))
 	isfp = 1;
@@ -557,6 +554,15 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       dp = rp;
     }
     lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, CCF_ARG(narg));
+    /* Extend passed integers to 32 bits at least. */
+    if (ctype_isinteger_or_bool(d->info) && d->size < 4) {
+      if (d->info & CTF_UNSIGNED)
+	*(uint32_t *)dp = d->size == 1 ? (uint32_t)*(uint8_t *)dp :
+					 (uint32_t)*(uint16_t *)dp;
+      else
+	*(int32_t *)dp = d->size == 1 ? (int32_t)*(int8_t *)dp :
+					(int32_t)*(int16_t *)dp;
+    }
 #if LJ_TARGET_X64 && LJ_ABI_WIN
     if (isva) {  /* Windows/x64 mirrors varargs in both register sets. */
       if (nfpr == ngpr)
@@ -593,7 +599,7 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
 			     CCallState *cc, int *ret)
 {
   CType *ctr = ctype_rawchild(cts, ct);
-  void *sp = &cc->gpr[0];
+  uint8_t *sp = (uint8_t *)&cc->gpr[0];
   if (ctype_isvoid(ctr->info)) {
     *ret = 0;  /* Zero results. */
     return 0;  /* No additional GC step. */
@@ -613,17 +619,19 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
     CCALL_HANDLE_COMPLEXRET2
     return 1;  /* One GC step. */
   }
+  if (LJ_BE && ctype_isinteger_or_bool(ctr->info) && ctr->size < CTSIZE_PTR)
+    sp += (CTSIZE_PTR - ctr->size);
 #ifdef CCALL_HANDLE_RET
   CCALL_HANDLE_RET
 #endif
 #if CCALL_NUM_FPR
   if (ctype_isfp(ctr->info) || ctype_isvector(ctr->info))
-    sp = &cc->fpr[0];
+    sp = (uint8_t *)&cc->fpr[0];
 #endif
   /* No reference types end up here, so there's no need for the CTypeID. */
   lua_assert(!(ctype_isrefarray(ctr->info) || ctype_isstruct(ctr->info)));
   if (ctype_isenum(ctr->info)) ctr = ctype_child(cts, ctr);
-  return lj_cconv_tv_ct(cts, ctr, 0, L->top-1, (uint8_t *)sp);
+  return lj_cconv_tv_ct(cts, ctr, 0, L->top-1, sp);
 }
 
 /* Call C function. */
