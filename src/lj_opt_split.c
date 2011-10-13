@@ -672,18 +672,19 @@ static int split_needsplit(jit_State *J)
   IRIns *ir, *irend;
   IRRef ref;
   for (ir = IR(REF_FIRST), irend = IR(J->cur.nins); ir < irend; ir++)
-    if (LJ_SOFTFP ? irt_is64(ir->t) : irt_isint64(ir->t))
+    if (LJ_SOFTFP ? irt_is64orfp(ir->t) : irt_isint64(ir->t))
       return 1;
   if (LJ_SOFTFP) {
     for (ref = J->chain[IR_SLOAD]; ref; ref = IR(ref)->prev)
       if ((IR(ref)->op2 & IRSLOAD_CONVERT))
 	return 1;
   }
-  for (ref = J->chain[IR_CONV]; ref; ref = IR(ref)->prev)
-    if ((LJ_SOFTFP && (IR(ref)->op2 & IRCONV_SRCMASK) == IRT_NUM) ||
-	(IR(ref)->op2 & IRCONV_SRCMASK) == IRT_I64 ||
-	(IR(ref)->op2 & IRCONV_SRCMASK) == IRT_U64)
+  for (ref = J->chain[IR_CONV]; ref; ref = IR(ref)->prev) {
+    IRType st = (IR(ref)->op2 & IRCONV_SRCMASK);
+    if ((LJ_SOFTFP && (st == IRT_NUM || st == IRT_FLOAT)) ||
+	st == IRT_I64 || st == IRT_U64)
       return 1;
+  }
   return 0;  /* Nope. */
 }
 #endif

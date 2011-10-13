@@ -354,6 +354,7 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #endif
 
 #define irt_is64(t)		((IRT_IS64 >> irt_type(t)) & 1)
+#define irt_is64orfp(t)		(((IRT_IS64|(1u<<IRT_FLOAT))>>irt_type(t)) & 1)
 
 static LJ_AINLINE IRType itype2irt(const TValue *tv)
 {
