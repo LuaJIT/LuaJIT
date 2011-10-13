@@ -1147,13 +1147,13 @@ static void asm_strref(ASMState *as, IRIns *ir)
 
 static void asm_fxload(ASMState *as, IRIns *ir)
 {
-  Reg dest = ra_dest(as, ir, irt_isnum(ir->t) ? RSET_FPR : RSET_GPR);
+  Reg dest = ra_dest(as, ir, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
   x86Op xo;
   if (ir->o == IR_FLOAD)
     asm_fusefref(as, ir, RSET_GPR);
   else
     asm_fusexref(as, ir->op1, RSET_GPR);
-    /* ir->op2 is ignored -- unaligned loads are ok on x86. */
+  /* ir->op2 is ignored -- unaligned loads are ok on x86. */
   switch (irt_type(ir->t)) {
   case IRT_I8: xo = XO_MOVSXb; break;
   case IRT_U8: xo = XO_MOVZXb; break;
