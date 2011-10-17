@@ -232,6 +232,7 @@ static int32_t kfold_intop(int32_t k1, int32_t k2, IROp op)
   case IR_SUB: k1 -= k2; break;
   case IR_MUL: k1 *= k2; break;
   case IR_MOD: k1 = lj_vm_modi(k1, k2); break;
+  case IR_NEG: k1 = -k1; break;
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
@@ -251,6 +252,7 @@ LJFOLD(ADD KINT KINT)
 LJFOLD(SUB KINT KINT)
 LJFOLD(MUL KINT KINT)
 LJFOLD(MOD KINT KINT)
+LJFOLD(NEG KINT KINT)
 LJFOLD(BAND KINT KINT)
 LJFOLD(BOR KINT KINT)
 LJFOLD(BXOR KINT KINT)
