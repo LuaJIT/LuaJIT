@@ -14,6 +14,9 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#if LJ_HASJIT
+#include "lj_jit.h"
+#endif
 
 /* -- Frames -------------------------------------------------------------- */
 
@@ -49,6 +52,8 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
 static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 {
   const BCIns *ins;
+  GCproto *pt;
+  BCPos pos;
   lua_assert(fn->c.gct == ~LJ_TFUNC || fn->c.gct == ~LJ_TTHREAD);
   if (!isluafunc(fn)) {  /* Cannot derive a PC for non-Lua functions. */
     return NO_BCPOS;
@@ -82,7 +87,16 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
       ins = cframe_pc(cf);
     }
   }
-  return proto_bcpos(funcproto(fn), ins) - 1;
+  pt = funcproto(fn);
+  pos = proto_bcpos(pt, ins) - 1;
+#if LJ_HASJIT
+  if (pos >= pt->sizebc) {  /* Undo the effects of lj_trace_exit for JLOOP. */
+    GCtrace *T = (GCtrace *)((char *)(ins-1) - offsetof(GCtrace, startins));
+    lua_assert(bc_isret(bc_op(ins[-1])));
+    pos = proto_bcpos(pt, mref(T->startpc, const BCIns));
+  }
+#endif
+  return pos;
 }
 
 /* -- Line numbers -------------------------------------------------------- */
