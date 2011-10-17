@@ -35,6 +35,23 @@ local map_crops = {
   [150] = "isync",
 }
 
+local map_rlwinm = setmetatable({
+  shift = 0, mask = -1,
+},
+{ __index = function(t, x)
+    local rot = band(rshift(x, 11), 31)
+    local mb = band(rshift(x, 6), 31)
+    local me = band(rshift(x, 1), 31)
+    if mb == 0 and me == 31-rot then
+      return "slwiRR~A."
+    elseif me == 31 and mb == 32-rot then
+      return "srwiRR~-A."
+    else
+      return "rlwinmRR~AAA."
+    end
+  end
+})
+
 local map_rld = {
   shift = 2, mask = 7,
   [0] = "rldiclRR~HM.", "rldicrRR~HM.", "rldicRR~HM.", "rldimiRR~HM.",
@@ -342,7 +359,7 @@ local map_pri = {
   "subficRRI",	false,		"cmpl_iYLRU",	"cmp_iYLRI",
   "addicRRI",	"addic.RRI",	"addi|liRR0I",	"addis|lisRR0I",
   "b_KBJ",	"sc",		 "bKJ",		map_crops,
-  "rlwimiRR~AAA.", "rlwinmRR~AAA.", false,	"rlwnmRR~RAA.",
+  "rlwimiRR~AAA.", map_rlwinm,	false,		"rlwnmRR~RAA.",
   "oriNRR~U",	"orisRR~U",	"xoriRR~U",	"xorisRR~U",
   "andi.RR~U",	"andis.RR~U",	map_rld,	map_ext,
   "lwzRRD",	"lwzuRRD",	"lbzRRD",	"lbzuRRD",
