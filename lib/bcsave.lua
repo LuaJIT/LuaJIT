@@ -330,20 +330,18 @@ typedef struct {
 } PEobj;
 ]]
   local symname = LJBC_PREFIX..ctx.modname
-  local is64, isbe = false, false
+  local is64 = false
   if ctx.arch == "x86" then
     symname = "_"..symname
   elseif ctx.arch == "x64" then
     is64 = true
-  elseif ctx.arch == "ppc" or ctx.arch == "ppcspe" then
-    isbe = true
   end
   local symexport = "   /EXPORT:"..symname..",DATA "
 
-  -- Handle different host/target endianess.
+  -- The file format is always little-endian. Swap if the host is big-endian.
   local function f32(x) return x end
   local f16 = f32
-  if ffi.abi("be") ~= isbe then
+  if ffi.abi("be") then
     f32 = bit.bswap
     function f16(x) return bit.rshift(bit.bswap(x), 16) end
   end
@@ -351,7 +349,7 @@ typedef struct {
   -- Create PE object and fill in header.
   local o = ffi.new("PEobj")
   local hdr = o.hdr
-  hdr.arch = f16(({ x86=0x14c, x64=0x8664, arm=0x1c0, ppc=0x1f1 })[ctx.arch])
+  hdr.arch = f16(({ x86=0x14c, x64=0x8664, arm=0x1c0, ppc=0x1f2 })[ctx.arch])
   hdr.nsects = f16(2)
   hdr.symtabofs = f32(ffi.offsetof(o, "sym0"))
   hdr.nsyms = f32(6)
