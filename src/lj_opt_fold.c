@@ -931,11 +931,11 @@ LJFOLDF(simplify_conv_int_i64)
   return NEXTFOLD;
 }
 
-LJFOLD(CONV CONV IRCONV_NUM_FLOAT)  /* _NUM */
+LJFOLD(CONV CONV IRCONV_FLOAT_NUM)  /* _FLOAT */
 LJFOLDF(simplify_conv_flt_num)
 {
   PHIBARRIER(fleft);
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_NUM)
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_FLOAT)
     return fleft->op1;
   return NEXTFOLD;
 }
