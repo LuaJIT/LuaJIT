@@ -119,7 +119,7 @@ static int32_t asm_fuseabase(ASMState *as, IRRef ref)
 {
   IRIns *ir = IR(ref);
   if (ir->o == IR_TNEW && ir->op1 <= LJ_MAX_COLOSIZE &&
-      noconflict(as, ref, IR_NEWREF))
+      !neverfuse(as) && noconflict(as, ref, IR_NEWREF))
     return (int32_t)sizeof(GCtab);
   return 0;
 }
