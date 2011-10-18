@@ -620,33 +620,23 @@ static void asm_conv(ASMState *as, IRIns *ir)
       x86Op op = st == IRT_NUM ?
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
 		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
-      if (LJ_32 && irt_isu32(ir->t)) {  /* FP to U32 conversion on x86. */
-	/* u32 = (int32_t)(number - 2^31) + 2^31 */
-	Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
-					  ra_scratch(as, RSET_FPR);
-	emit_gri(as, XG_ARITHi(XOg_ADD), dest, (int32_t)0x80000000);
-	emit_rr(as, op, dest, tmp);
-	if (st == IRT_NUM)
-	  emit_rma(as, XO_ADDSD, tmp,
-		   lj_ir_k64_find(as->J, U64x(c1e00000,00000000)));
-	else
-	  emit_rma(as, XO_ADDSS, tmp,
-		   lj_ir_k64_find(as->J, U64x(00000000,cf000000)));
-	ra_left(as, tmp, lref);
-      } else if (LJ_64 && irt_isu64(ir->t)) {
-	/* For inputs in [2^63,2^64-1] add -2^64 and convert again. */
+      if (LJ_64 ? irt_isu64(ir->t) : irt_isu32(ir->t)) {
+	/* LJ_64: For inputs >= 2^63 add -2^64, convert again. */
+	/* LJ_32: For inputs >= 2^31 add -2^31, convert again and add 2^31. */
 	Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
 					  ra_scratch(as, RSET_FPR);
 	MCLabel l_end = emit_label(as);
+	if (LJ_32)
+	  emit_gri(as, XG_ARITHi(XOg_ADD), dest, (int32_t)0x80000000);
 	emit_rr(as, op, dest|REX_64, tmp);
 	if (st == IRT_NUM)
-	  emit_rma(as, XO_ADDSD, tmp,
-		   lj_ir_k64_find(as->J, U64x(c3f00000,00000000)));
+	  emit_rma(as, XO_ADDSD, tmp, lj_ir_k64_find(as->J,
+		   LJ_64 ? U64x(c3f00000,00000000) : U64x(c1e00000,00000000)));
 	else
-	  emit_rma(as, XO_ADDSS, tmp,
-		   lj_ir_k64_find(as->J, U64x(00000000,df800000)));
+	  emit_rma(as, XO_ADDSS, tmp, lj_ir_k64_find(as->J,
+		   LJ_64 ? U64x(00000000,df800000) : U64x(00000000,cf000000)));
 	emit_sjcc(as, CC_NS, l_end);
-	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest < 2^63. */
+	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest negative. */
 	emit_rr(as, op, dest|REX_64, tmp);
 	ra_left(as, tmp, lref);
       } else {
