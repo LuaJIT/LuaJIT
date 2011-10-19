@@ -66,12 +66,12 @@ LJ_ASMF void lj_vm_powi_sse(void);
 #else
 LJ_ASMF double lj_vm_trunc(double);
 LJ_ASMF double lj_vm_powi(double, int32_t);
-#if defined(__ANDROID__) || defined(__symbian__)
+#ifdef LUAJIT_NO_LOG2
 LJ_ASMF double lj_vm_log2(double);
 #else
 #define lj_vm_log2	log2
 #endif
-#if defined(__symbian__)
+#ifdef LUAJIT_NO_EXP2
 LJ_ASMF double lj_vm_exp2(double);
 #else
 #define lj_vm_exp2	exp2

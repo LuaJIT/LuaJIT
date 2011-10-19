@@ -279,4 +279,16 @@
 #define LJ_64			1
 #endif
 
+/* Various workarounds for embedded operating systems. */
+#if defined(__ANDROID__) || defined(__symbian__)
+#define LUAJIT_NO_LOG2
+#endif
+#if defined(__symbian__)
+#define LUAJIT_NO_EXP2
+#endif
+
+#if defined(__symbian__) || (LJ_TARGET_ARM && LJ_TARGET_OSX)
+#define LUAJIT_NO_UNWIND
+#endif
+
 #endif

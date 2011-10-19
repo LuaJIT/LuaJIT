@@ -178,8 +178,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__) && !defined(__symbian__) && \
-    !(LJ_TARGET_ARM && LJ_TARGET_OSX)
+#if defined(__GNUC__) && !defined(LUAJIT_NO_UNWIND)
 
 #ifdef __clang__
 /* http://llvm.org/bugs/show_bug.cgi?id=8703 */

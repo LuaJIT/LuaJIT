@@ -25,14 +25,14 @@ LJ_FUNCA double lj_vm_tanh(double x) { return tanh(x); }
 
 #if LJ_HASJIT
 
-#if defined(__ANDROID__) || defined(__symbian__)
+#ifdef LUAJIT_NO_LOG2
 double lj_vm_log2(double a)
 {
   return log(a) * 1.4426950408889634074;
 }
 #endif
 
-#if defined(__symbian__)
+#ifdef LUAJIT_NO_EXP2
 double lj_vm_exp2(double a)
 {
   return exp(a * 0.6931471805599453);
