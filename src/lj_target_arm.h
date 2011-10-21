@@ -28,6 +28,7 @@ enum {
 
   /* Calling conventions. */
   RID_RET = RID_R0,
+  RID_RETLO = RID_R0,
   RID_RETHI = RID_R1,
   RID_FPRET = RID_R0,
 

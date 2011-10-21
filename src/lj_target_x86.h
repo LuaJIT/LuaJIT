@@ -37,6 +37,7 @@ enum {
 #if LJ_64
   RID_FPRET = RID_XMM0,
 #else
+  RID_RETLO = RID_EAX,
   RID_RETHI = RID_EDX,
 #endif
 

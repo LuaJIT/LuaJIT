@@ -703,14 +703,14 @@ static void ra_leftov(ASMState *as, Reg dest, IRRef lref)
 #endif
 
 #if !LJ_TARGET_X86ORX64
-/* Force a RID_RET/RID_RETHI destination register pair (marked as free). */
+/* Force a RID_RETLO/RID_RETHI destination register pair (marked as free). */
 static void ra_destpair(ASMState *as, IRIns *ir)
 {
   Reg destlo = ir->r, desthi = (ir+1)->r;
   /* First spill unrelated refs blocking the destination registers. */
-  if (!rset_test(as->freeset, RID_RET) &&
-      destlo != RID_RET && desthi != RID_RET)
-    ra_restore(as, regcost_ref(as->cost[RID_RET]));
+  if (!rset_test(as->freeset, RID_RETLO) &&
+      destlo != RID_RETLO && desthi != RID_RETLO)
+    ra_restore(as, regcost_ref(as->cost[RID_RETLO]));
   if (!rset_test(as->freeset, RID_RETHI) &&
       destlo != RID_RETHI && desthi != RID_RETHI)
     ra_restore(as, regcost_ref(as->cost[RID_RETHI]));
@@ -719,7 +719,7 @@ static void ra_destpair(ASMState *as, IRIns *ir)
     ra_free(as, destlo);
     ra_modified(as, destlo);
   } else {
-    destlo = RID_RET;
+    destlo = RID_RETLO;
   }
   if (ra_hasreg(desthi)) {
     ra_free(as, desthi);
@@ -729,24 +729,24 @@ static void ra_destpair(ASMState *as, IRIns *ir)
   }
   /* Check for conflicts and shuffle the registers as needed. */
   if (destlo == RID_RETHI) {
-    if (desthi == RID_RET) {
+    if (desthi == RID_RETLO) {
       emit_movrr(as, ir, RID_RETHI, RID_TMP);
-      emit_movrr(as, ir, RID_RET, RID_RETHI);
-      emit_movrr(as, ir, RID_TMP, RID_RET);
+      emit_movrr(as, ir, RID_RETLO, RID_RETHI);
+      emit_movrr(as, ir, RID_TMP, RID_RETLO);
     } else {
-      emit_movrr(as, ir, RID_RETHI, RID_RET);
+      emit_movrr(as, ir, RID_RETHI, RID_RETLO);
       if (desthi != RID_RETHI) emit_movrr(as, ir, desthi, RID_RETHI);
     }
-  } else if (desthi == RID_RET) {
-    emit_movrr(as, ir, RID_RET, RID_RETHI);
-    if (destlo != RID_RET) emit_movrr(as, ir, destlo, RID_RET);
+  } else if (desthi == RID_RETLO) {
+    emit_movrr(as, ir, RID_RETLO, RID_RETHI);
+    if (destlo != RID_RETLO) emit_movrr(as, ir, destlo, RID_RETLO);
   } else {
     if (desthi != RID_RETHI) emit_movrr(as, ir, desthi, RID_RETHI);
-    if (destlo != RID_RET) emit_movrr(as, ir, destlo, RID_RET);
+    if (destlo != RID_RETLO) emit_movrr(as, ir, destlo, RID_RETLO);
   }
   /* Restore spill slots (if any). */
   if (ra_hasspill((ir+1)->s)) ra_save(as, ir+1, RID_RETHI);
-  if (ra_hasspill(ir->s)) ra_save(as, ir, RID_RET);
+  if (ra_hasspill(ir->s)) ra_save(as, ir, RID_RETLO);
 }
 #endif
 
@@ -1519,6 +1519,9 @@ static void asm_setup_regsp(ASMState *as)
       case IR_CALLN: case IR_CALLXS:
 #if LJ_SOFTFP
       case IR_MIN: case IR_MAX:
+#endif
+#if LJ_BE
+	(ir-1)->prev = REGSP_HINT(RID_RETLO);
 #endif
 	ir->prev = REGSP_HINT(RID_RETHI);
 	continue;

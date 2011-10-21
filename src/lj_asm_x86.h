@@ -479,7 +479,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 		  dest, RID_ESP, ofs);
       }
       if ((ci->flags & CCI_CASTU64)) {
-	emit_movtomro(as, RID_RET, RID_ESP, ofs);
+	emit_movtomro(as, RID_RETLO, RID_ESP, ofs);
 	emit_movtomro(as, RID_RETHI, RID_ESP, ofs+4);
       } else {
 	emit_rmro(as, irt_isnum(ir->t) ? XO_FSTPq : XO_FSTPd,
@@ -2180,7 +2180,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   case IR_CALLXS:
     ra_destreg(as, ir, RID_RETHI);
     if (!uselo)
-      ra_allocref(as, ir->op1, RID2RSET(RID_RET));  /* Mark call as used. */
+      ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark call as used. */
     break;
   case IR_CNEWI:
     /* Nothing to do here. Handled by CNEWI itself. */

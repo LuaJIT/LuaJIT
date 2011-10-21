@@ -195,7 +195,7 @@ IRFPMDEF(FPMENUM)
   _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
   _(CDATA_PTR,	sizeof(GCcdata)) \
   _(CDATA_INT64, sizeof(GCcdata)) \
-  _(CDATA_INT64HI, sizeof(GCcdata) + 4)
+  _(CDATA_INT64_4, sizeof(GCcdata) + 4)
 
 typedef enum {
 #define FLENUM(name, ofs)	IRFL_##name,

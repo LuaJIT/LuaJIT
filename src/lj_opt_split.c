@@ -411,7 +411,7 @@ static void split_ir(jit_State *J)
 	break;
       case IR_FLOAD:
 	lua_assert(ir->op2 == IRFL_CDATA_INT64);
-	hi = split_emit(J, IRTI(IR_FLOAD), nir->op1, IRFL_CDATA_INT64HI);
+	hi = split_emit(J, IRTI(IR_FLOAD), nir->op1, IRFL_CDATA_INT64_4);
 #if LJ_BE
 	ir->prev = hi; hi = nref;
 #endif

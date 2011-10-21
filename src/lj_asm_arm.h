@@ -516,7 +516,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   int destused = ra_used(ir);
   Reg dest = ra_dest(as, ir, allow);
   Reg tab = ra_alloc1(as, ir->op1, rset_clear(allow, dest));
-  Reg key = 0, keyhi = 0, keynumhi = RID_NONE, tmp = RID_LR;
+  Reg key = 0, keyhi = 0, keynumhi = RID_NONE, tmp = RID_TMP;
   IRRef refkey = ir->op2;
   IRIns *irkey = IR(refkey);
   IRType1 kt = irkey->t;
@@ -1213,7 +1213,7 @@ static void asm_fpmin_max(ASMState *as, IRIns *ir, int cc)
   ra_evictset(as, drop);
   ra_destpair(as, ir);
   emit_dm(as, ARMF_CC(ARMI_MOV, cc), RID_RETHI, RID_R3);
-  emit_dm(as, ARMF_CC(ARMI_MOV, cc), RID_RET, RID_R2);
+  emit_dm(as, ARMF_CC(ARMI_MOV, cc), RID_RETLO, RID_R2);
   emit_call(as, (void *)ci->func);
   for (r = RID_R0; r <= RID_R3; r++)
     ra_leftov(as, r, args[r-RID_R0]);
@@ -1407,7 +1407,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   case IR_CALLS:
   case IR_CALLXS:
     if (!uselo)
-      ra_allocref(as, ir->op1, RID2RSET(RID_RET));  /* Mark lo op as used. */
+      ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE:
   case IR_TOSTR: case IR_CNEWI:
