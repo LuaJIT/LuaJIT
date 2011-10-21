@@ -1516,6 +1516,14 @@ static void asm_setup_regsp(ASMState *as)
 #endif
 	break;
 #endif
+#if LJ_NEED_FP64
+      case IR_CONV:
+	if (irt_isfp((ir-1)->t)) {
+	  ir->prev = REGSP_HINT(RID_FPRET);
+	  continue;
+	}
+	/* fallthrough */
+#endif
       case IR_CALLN: case IR_CALLXS:
 #if LJ_SOFTFP
       case IR_MIN: case IR_MAX:

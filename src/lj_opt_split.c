@@ -338,7 +338,7 @@ static void split_ir(jit_State *J)
 #if LJ_32 && LJ_HASFFI
 	if (st == IRT_I64 || st == IRT_U64) {
 	  hi = split_call_l(J, hisubst, oir, ir,
-		 st == IRT_I64 ? IRCALL_softfp_l2d : IRCALL_softfp_ul2d);
+		 st == IRT_I64 ? IRCALL_fp64_l2d : IRCALL_fp64_ul2d);
 	  break;
 	}
 #endif
@@ -435,10 +435,10 @@ static void split_ir(jit_State *J)
 #if LJ_SOFTFP
 	if (st == IRT_NUM) {  /* NUM to 64 bit int conv. */
 	  hi = split_call_l(J, hisubst, oir, ir,
-		 irt_isi64(ir->t) ? IRCALL_softfp_d2l : IRCALL_softfp_d2ul);
+		 irt_isi64(ir->t) ? IRCALL_fp64_d2l : IRCALL_fp64_d2ul);
 	} else if (st == IRT_FLOAT) {  /* FLOAT to 64 bit int conv. */
 	  nir->o = IR_CALLN;
-	  nir->op2 = irt_isi64(ir->t) ? IRCALL_softfp_f2l : IRCALL_softfp_f2ul;
+	  nir->op2 = irt_isi64(ir->t) ? IRCALL_fp64_f2l : IRCALL_fp64_f2ul;
 	  hi = split_emit(J, IRTI(IR_HIOP), nref, nref);
 	}
 #else
@@ -518,7 +518,7 @@ static void split_ir(jit_State *J)
 #if LJ_SOFTFP
 	if (irt_isfloat(ir->t)) {
 	  split_call_l(J, hisubst, oir, ir,
-		       st == IRT_I64 ? IRCALL_softfp_l2f : IRCALL_softfp_ul2f);
+		       st == IRT_I64 ? IRCALL_fp64_l2f : IRCALL_fp64_ul2f);
 	  J->cur.nins--;  /* Drop unused HIOP. */
 	}
 #else
