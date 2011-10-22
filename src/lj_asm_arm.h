@@ -932,12 +932,18 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[2];
   RegSet allow = (RSET_GPR & ~RSET_SCRATCH);
+  RegSet drop = RSET_SCRATCH;
   lua_assert(sz != CTSIZE_INVALID);
 
   args[0] = ASMREF_L;     /* lua_State *L */
   args[1] = ASMREF_TMP1;  /* MSize size   */
   as->gcsteps++;
-  asm_setupresult(as, ir, ci);  /* GCcdata * */
+
+  if (ra_hasreg(ir->r))
+    rset_clear(drop, ir->r);  /* Dest reg handled below. */
+  ra_evictset(as, drop);
+  if (ra_used(ir))
+    ra_destreg(as, ir, RID_RET);  /* GCcdata * */
 
   /* Initialize immutable cdata object. */
   if (ir->o == IR_CNEWI) {
@@ -1360,42 +1366,28 @@ static void asm_hiop(ASMState *as, IRIns *ir)
       asm_fpcomp(as, ir-1);
     return;
   } else if ((ir-1)->o == IR_MIN || (ir-1)->o == IR_MAX) {
-    if (uselo || usehi || !(as->flags & JIT_F_OPT_DCE)) {
-      as->curins--;  /* Always skip the loword min/max. */
+    as->curins--;  /* Always skip the loword min/max. */
+    if (uselo || usehi)
       asm_fpmin_max(as, ir-1, (ir-1)->o == IR_MIN ? CC_HI : CC_LO);
-    }
     return;
   }
-  if (!usehi && (as->flags & JIT_F_OPT_DCE))
-    return;  /* Skip unused hiword op for all remaining ops. */
+  if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
 #if LJ_HASFFI
   case IR_ADD:
-    if (uselo) {
-      as->curins--;
-      asm_intop(as, ir, ARMI_ADC);
-      asm_intop(as, ir-1, ARMI_ADD|ARMI_S);
-    } else {
-      asm_intop(as, ir, ARMI_ADD);
-    }
+    as->curins--;
+    asm_intop(as, ir, ARMI_ADC);
+    asm_intop(as, ir-1, ARMI_ADD|ARMI_S);
     break;
   case IR_SUB:
-    if (uselo) {
-      as->curins--;
-      asm_intop(as, ir, ARMI_SBC);
-      asm_intop(as, ir-1, ARMI_SUB|ARMI_S);
-    } else {
-      asm_intop(as, ir, ARMI_SUB);
-    }
+    as->curins--;
+    asm_intop(as, ir, ARMI_SBC);
+    asm_intop(as, ir-1, ARMI_SUB|ARMI_S);
     break;
   case IR_NEG:
-    if (uselo) {
-      as->curins--;
-      asm_intneg(as, ir, ARMI_RSC);
-      asm_intneg(as, ir-1, ARMI_RSB|ARMI_S);
-    } else {
-      asm_intneg(as, ir, ARMI_RSB);
-    }
+    as->curins--;
+    asm_intneg(as, ir, ARMI_RSC);
+    asm_intneg(as, ir-1, ARMI_RSB|ARMI_S);
     break;
 #endif
   case IR_SLOAD: case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:

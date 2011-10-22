@@ -2160,19 +2160,25 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
   case IR_ADD:
-    asm_intarith(as, ir, uselo ? XOg_ADC : XOg_ADD);
+    as->flagmcp = NULL;
+    as->curins--;
+    asm_intarith(as, ir, XOg_ADC);
+    asm_intarith(as, ir-1, XOg_ADD);
     break;
   case IR_SUB:
-    asm_intarith(as, ir, uselo ? XOg_SBB : XOg_SUB);
+    as->flagmcp = NULL;
+    as->curins--;
+    asm_intarith(as, ir, XOg_SBB);
+    asm_intarith(as, ir-1, XOg_SUB);
     break;
   case IR_NEG: {
     Reg dest = ra_dest(as, ir, RSET_GPR);
     emit_rr(as, XO_GROUP3, XOg_NEG, dest);
-    if (uselo) {
-      emit_i8(as, 0);
-      emit_rr(as, XO_ARITHi8, XOg_ADC, dest);
-    }
+    emit_i8(as, 0);
+    emit_rr(as, XO_ARITHi8, XOg_ADC, dest);
     ra_left(as, dest, ir->op1);
+    as->curins--;
+    asm_neg_not(as, ir-1, XOg_NEG);
     break;
     }
   case IR_CALLN:
