@@ -967,6 +967,7 @@ LJFOLDF(simplify_floor_conv)
 
 /* Strength reduction of widening. */
 LJFOLD(CONV any IRCONV_I64_INT)
+LJFOLD(CONV any IRCONV_U64_INT)
 LJFOLDF(simplify_conv_sext)
 {
   IRRef ref = fins->op1;
