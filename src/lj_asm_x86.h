@@ -463,9 +463,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 	  ra_free(as, dest);
 	  ra_modified(as, dest);
 	  emit_rr(as, XO_MOVD, dest|REX_64, RID_RET);  /* Really MOVQ. */
-	} else {
-	  emit_movtomro(as, RID_RET|REX_64, RID_ESP, ofs);
 	}
+	if (ofs) emit_movtomro(as, RID_RET|REX_64, RID_ESP, ofs);
       } else {
 	ra_destreg(as, ir, RID_FPRET);
       }
