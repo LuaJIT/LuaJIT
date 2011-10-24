@@ -575,17 +575,16 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       trace_pendpatch(J, 0);
       setvmstate(J2G(J), RECORD);
       lj_vmevent_send_(L, RECORD,
-	TValue savetv;  /* Save tmptv state for trace recorder. */
-	TValue savetv2;
-	copyTV(L, &savetv, &J2G(J)->tmptv);
-	copyTV(L, &savetv2, &J2G(J)->tmptv2);
+	/* Save/restore tmptv state for trace recorder. */
+	TValue savetv = J2G(J)->tmptv;
+	TValue savetv2 = J2G(J)->tmptv2;
 	setintV(L->top++, J->cur.traceno);
 	setfuncV(L, L->top++, J->fn);
 	setintV(L->top++, J->pt ? (int32_t)proto_bcpos(J->pt, J->pc) : -1);
 	setintV(L->top++, J->framedepth);
       ,
-	copyTV(L, &J2G(J)->tmptv, &savetv);
-	copyTV(L, &J2G(J)->tmptv2, &savetv2);
+	J2G(J)->tmptv = savetv;
+	J2G(J)->tmptv2 = savetv2;
       );
       lj_record_ins(J);
       break;
