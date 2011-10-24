@@ -232,8 +232,10 @@ enum {
 
 enum {
   DW_CFA_nop = 0x0,
+  DW_CFA_offset_extended = 0x5,
   DW_CFA_def_cfa = 0xc,
   DW_CFA_def_cfa_offset = 0xe,
+  DW_CFA_offset_extended_sf = 0x11,
   DW_CFA_advance_loc = 0x40,
   DW_CFA_offset = 0x80
 };
@@ -292,6 +294,10 @@ enum {
 #elif LJ_TARGET_ARM
   DW_REG_SP = 13,
   DW_REG_RA = 14,
+#elif LJ_TARGET_PPC
+  DW_REG_SP = 1,
+  DW_REG_RA = 65,
+  DW_REG_CR = 70,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -361,6 +367,8 @@ static const ELFheader elfhdr_template = {
   .machine = 62,
 #elif LJ_TARGET_ARM
   .machine = 40,
+#elif LJ_TARGET_PPC
+  .machine = 20,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -523,7 +531,11 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     DB(DW_REG_RA);		/* Return address register. */
     DB(1); DB(DW_EH_PE_textrel|DW_EH_PE_udata4);  /* Augmentation data. */
     DB(DW_CFA_def_cfa); DUV(DW_REG_SP); DUV(sizeof(uintptr_t));
+#if LJ_TARGET_PPC
+    DB(DW_CFA_offset_extended_sf); DB(DW_REG_RA); DSV(-1);
+#else
     DB(DW_CFA_offset|DW_REG_RA); DUV(1);
+#endif
     DALIGNNOP(sizeof(uintptr_t));
   )
 
@@ -550,8 +562,17 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
 #elif LJ_TARGET_ARM
     {
       int i;
+      DB(DW_CFA_offset_extended); DB(DW_REG_CR); DUV(55);
       for (i = 11; i >= 4; i--) {  /* R4-R11. */
 	DB(DW_CFA_offset|i); DUV(2+(11-i));
+      }
+    }
+#elif LJ_TARGET_PPC
+    {
+      int i;
+      for (i = 14; i <= 31; i++) {
+	DB(DW_CFA_offset|i); DUV(37+(31-i));
+	DB(DW_CFA_offset|32|i); DUV(2+2*(31-i));
       }
     }
 #else
