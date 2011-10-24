@@ -50,21 +50,30 @@ typedef uint32_t RegSP;
 
 /* -- Register sets ------------------------------------------------------- */
 
-/* Bitset for registers. 32 registers suffice right now.
+/* Bitset for registers. 32 registers suffice for most architectures.
 ** Note that one set holds bits for both GPRs and FPRs.
 */
+#if LJ_TARGET_PPC
+typedef uint64_t RegSet;
+#else
 typedef uint32_t RegSet;
+#endif
 
 #define RID2RSET(r)		(((RegSet)1) << (r))
-#define RSET_EMPTY		0
+#define RSET_EMPTY		((RegSet)0)
 #define RSET_RANGE(lo, hi)	((RID2RSET((hi)-(lo))-1) << (lo))
 
 #define rset_test(rs, r)	(((rs) >> (r)) & 1)
 #define rset_set(rs, r)		(rs |= RID2RSET(r))
 #define rset_clear(rs, r)	(rs &= ~RID2RSET(r))
 #define rset_exclude(rs, r)	(rs & ~RID2RSET(r))
+#if LJ_TARGET_PPC
+#define rset_picktop(rs)	((Reg)(__builtin_clzll(rs)^63))
+#define rset_pickbot(rs)	((Reg)__builtin_ctzll(rs))
+#else
 #define rset_picktop(rs)	((Reg)lj_fls(rs))
 #define rset_pickbot(rs)	((Reg)lj_ffs(rs))
+#endif
 
 /* -- Register allocation cost -------------------------------------------- */
 
@@ -127,6 +136,8 @@ typedef uint32_t RegCost;
 #include "lj_target_x86.h"
 #elif LJ_TARGET_ARM
 #include "lj_target_arm.h"
+#elif LJ_TARGET_PPC
+#include "lj_target_ppc.h"
 #else
 #error "Missing include for target CPU"
 #endif

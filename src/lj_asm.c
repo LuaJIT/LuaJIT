@@ -161,6 +161,8 @@ IRFLDEF(FLOFS)
 #include "lj_emit_x86.h"
 #elif LJ_TARGET_ARM
 #include "lj_emit_arm.h"
+#elif LJ_TARGET_PPC
+#include "lj_emit_ppc.h"
 #else
 #error "Missing instruction emitter for target CPU"
 #endif
@@ -1205,8 +1207,10 @@ static void asm_loop(ASMState *as)
 #include "lj_asm_x86.h"
 #elif LJ_TARGET_ARM
 #include "lj_asm_arm.h"
+#elif LJ_TARGET_PPC
+#include "lj_asm_ppc.h"
 #else
-#error "Missing instruction emitter for target CPU"
+#error "Missing assembler for target CPU"
 #endif
 
 /* -- Head of trace ------------------------------------------------------- */
