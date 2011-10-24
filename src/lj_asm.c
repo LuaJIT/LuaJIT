@@ -1652,6 +1652,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 {
   ASMState as_;
   ASMState *as = &as_;
+  MCode *origtop;
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
   J->cur.nins = lj_ir_nextins(J);
@@ -1674,7 +1675,8 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   } else {
     as->parent = NULL;
   }
-  as->mctop = lj_mcode_reserve(J, &as->mcbot);  /* Reserve MCode memory. */
+  /* Reserve MCode memory. */
+  as->mctop = origtop = lj_mcode_reserve(J, &as->mcbot);
   as->mcp = as->mctop;
   as->mclim = as->mcbot + MCLIM_REDZONE;
   asm_setup_target(as);
@@ -1737,7 +1739,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   if (!as->loopref)
     asm_tail_fixup(as, T->link);  /* Note: this may change as->mctop! */
   T->szmcode = (MSize)((char *)as->mctop - (char *)as->mcp);
-  asm_cache_flush(T->mcode, as->mctop);
+  asm_cache_flush(T->mcode, origtop);
 }
 
 #undef IR
