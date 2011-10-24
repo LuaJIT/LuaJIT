@@ -3382,7 +3382,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addi RA, RA, offsetof(GCfuncL, uvptr)
     |   lfdux f0, RD, BASE
     |  lwzx UPVAL:RB, LFUNC:RB, RA
-    |  ins_next1
     |  lbz TMP3, UPVAL:RB->marked
     |   lwz CARG2, UPVAL:RB->v
     |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
@@ -3395,7 +3394,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   subi TMP2, TMP2, (LJ_TISNUM+1)
     |  bne >2				// Upvalue is closed and black?
     |1:
-    |  ins_next2
+    |  ins_next
     |
     |2:  // Check if new value is collectable.
     |  cmplwi TMP2, LJ_TISGCV - (LJ_TISNUM+1)
@@ -3417,7 +3416,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addi RA, RA, offsetof(GCfuncL, uvptr)
     |   lwzx STR:TMP1, KBASE, TMP1	// KBASE-4-str_const*4
     |  lwzx UPVAL:RB, LFUNC:RB, RA
-    |  ins_next1
     |  lbz TMP3, UPVAL:RB->marked
     |   lwz CARG2, UPVAL:RB->v
     |  andi. TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
@@ -3428,7 +3426,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   stw TMP0, 0(CARG2)
     |  bne >2
     |1:
-    |  ins_next2
+    |  ins_next
     |
     |2:  // Check if string is white and ensure upvalue is closed.
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(str)
