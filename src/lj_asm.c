@@ -460,7 +460,20 @@ static void ra_evictset(ASMState *as, RegSet drop)
 /* Evict (rematerialize) all registers allocated to constants. */
 static void ra_evictk(ASMState *as)
 {
-  RegSet work = ~as->freeset & RSET_ALL;
+  RegSet work;
+#if !LJ_SOFTFP
+  work = ~as->freeset & RSET_FPR;
+  while (work) {
+    Reg r = rset_pickbot(work);
+    IRRef ref = regcost_ref(as->cost[r]);
+    if (emit_canremat(ref) && irref_isk(ref)) {
+      ra_rematk(as, ref);
+      checkmclim(as);
+    }
+    rset_clear(work, r);
+  }
+#endif
+  work = ~as->freeset & RSET_GPR;
   while (work) {
     Reg r = rset_pickbot(work);
     IRRef ref = regcost_ref(as->cost[r]);
@@ -483,7 +496,7 @@ static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
     IRRef ref;
     r = rset_pickbot(work);
     ref = regcost_ref(as->cost[r]);
-    if (emit_canremat(ref) &&
+    if (ref < ASMREF_L &&
 	k == (ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i))
       return r;
     rset_clear(work, r);
