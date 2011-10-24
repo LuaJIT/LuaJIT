@@ -1739,7 +1739,7 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
   int nslots = 0, ngpr = REGARG_NUMGPR;
   asm_collectargs(as, ir, ci, args);
   for (i = 0; i < nargs; i++)
-    if (!LJ_SOFTFP && irt_isfp(IR(args[i])->t)) {
+    if (!LJ_SOFTFP && args[i] && irt_isnum(IR(args[i])->t)) {
       ngpr &= ~1;
       if (ngpr > 0) ngpr -= 2; else nslots += 2;
     } else {

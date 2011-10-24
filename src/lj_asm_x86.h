@@ -2618,7 +2618,7 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
     uint32_t i;
     int ngpr = 6, nfpr = 8;
     for (i = 0; i < nargs; i++)
-      if (irt_isfp(IR(args[i])->t)) {
+      if (args[i] && irt_isfp(IR(args[i])->t)) {
 	if (nfpr > 0) nfpr--; else nslots += 2;
       } else {
 	if (ngpr > 0) ngpr--; else nslots += 2;
@@ -2633,7 +2633,7 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
   } else {
     uint32_t i;
     for (i = 0; i < nargs; i++)
-      nslots += irt_isnum(IR(args[i])->t) ? 2 : 1;
+      nslots += (args[i] && irt_isnum(IR(args[i])->t)) ? 2 : 1;
     if (nslots > as->evenspill)  /* Leave room for args. */
       as->evenspill = nslots;
   }
