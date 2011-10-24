@@ -235,6 +235,10 @@
 #endif
 
 /* Enable or disable the dual-number mode for the VM. */
+#if (LJ_ARCH_NUMMODE == LJ_NUMMODE_SINGLE && LUAJIT_NUMMODE == 2) || \
+    (LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL && LUAJIT_NUMMODE == 1)
+#error "No support for this number mode on this architecture"
+#endif
 #if LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL || \
     (LJ_ARCH_NUMMODE == LJ_NUMMODE_DUAL_SINGLE && LUAJIT_NUMMODE != 1) || \
     (LJ_ARCH_NUMMODE == LJ_NUMMODE_SINGLE_DUAL && LUAJIT_NUMMODE == 2)

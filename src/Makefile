@@ -118,6 +118,12 @@ XCFLAGS=
 # interpreter. Don't bother if your OS wouldn't run on them, anyway.
 #XCFLAGS+= -DLUAJIT_CPU_NOCMOV
 #
+# Some architectures (e.g. PPC) can use either single-number (1) or
+# dual-number (2) mode. Uncomment one of these lines to override the
+# default mode. Please see LJ_ARCH_NUMMODE in lj_arch.h for details.
+#XCFLAGS+= -DLUAJIT_NUMMODE=1
+#XCFLAGS+= -DLUAJIT_NUMMODE=2
+#
 ##############################################################################
 
 ##############################################################################
