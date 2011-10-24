@@ -1357,9 +1357,15 @@ static void asm_head_side(ASMState *as)
   /* Inherit top stack slot already checked by parent trace. */
   as->T->topslot = as->parent->topslot;
   if (as->topslot > as->T->topslot) {  /* Need to check for higher slot? */
-    as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
+#ifdef EXITSTATE_CHECKEXIT
+    /* Highest exit + 1 indicates stack check. */
+    ExitNo exitno = as->T->nsnap;
+#else
     /* Reuse the parent exit in the context of the parent trace. */
-    asm_stack_check(as, as->topslot, irp, allow & RSET_GPR, as->J->exitno);
+    ExitNo exitno = as->J->exitno;
+#endif
+    as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
+    asm_stack_check(as, as->topslot, irp, allow & RSET_GPR, exitno);
   }
 }
 

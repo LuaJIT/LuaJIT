@@ -117,6 +117,8 @@ typedef struct {
 
 /* PC after instruction that caused an exit. Used to find the trace number. */
 #define EXITSTATE_PCREG		RID_PC
+/* Highest exit + 1 indicates stack check. */
+#define EXITSTATE_CHECKEXIT	1
 
 #define EXITSTUB_SPACING        4
 #define EXITSTUBS_PER_GROUP     32

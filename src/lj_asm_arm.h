@@ -1418,7 +1418,6 @@ static void asm_stack_check(ASMState *as, BCReg topslot,
   Reg pbase;
   uint32_t k;
   if (irp) {
-    exitno = as->T->nsnap;  /* Highest exit + 1 indicates stack check. */
     if (ra_hasreg(irp->r)) {
       pbase = irp->r;
     } else if (allow) {
