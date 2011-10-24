@@ -342,7 +342,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_STOP: case DASM_SECTION: goto stop;
 	case DASM_ESC: *cp++ = *p++; break;
 	case DASM_REL_EXT:
-	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1);
+	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
 	  goto patchrel;
 	case DASM_ALIGN:
 	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0x60000000;
