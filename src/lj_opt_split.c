@@ -335,6 +335,7 @@ static void split_ir(jit_State *J)
 	}
       case IR_CONV: {  /* Conversion to number. Others handled below. */
 	IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
+	UNUSED(st);
 #if LJ_32 && LJ_HASFFI
 	if (st == IRT_I64 || st == IRT_U64) {
 	  hi = split_call_l(J, hisubst, oir, ir,
