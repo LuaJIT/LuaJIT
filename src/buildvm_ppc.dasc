@@ -25,8 +25,7 @@
 |.define DISPATCH,	r17	// Opcode dispatch table.
 |.define LREG,		r18	// Register holding lua_State (also in SAVE_L).
 |.define MULTRES,	r19	// Size of multi-result: (nresults+1)*8.
-|.define JGL,		r30	// On-trace: global_State + 32768.
-|.define JTR,		r31	// On-trace: trace number.
+|.define JGL,		r31	// On-trace: global_State + 32768.
 |
 |// Constants for type-comparisons, stores and conversions. C callee-save.
 |.define TISNUM,	r22
@@ -2318,6 +2317,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sub NARGS8:RC, TMP0, BASE
   |  add RA, BASE, RA
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+  |  lwz INS, -4(PC)
   |  mtctr CRET1
   |  bctr
   |
@@ -2353,7 +2353,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  savex_ 16,17,18,19
   |   stw TMP1, 16+32*8+0*4(sp)		// Clear RID_TMP.
   |  savex_ 20,21,22,23
-  |   lwz CARG4, 0(CARG3)		// Load exit stub group offset.
+  |   lhz CARG4, 2(CARG3)		// Load trace number.
   |  savex_ 24,25,26,27
   |  lwz L, DISPATCH_GL(jit_L)(DISPATCH)
   |  savex_ 28,29,30,31
@@ -2363,12 +2363,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  stw L, DISPATCH_J(L)(DISPATCH)
   |   subi CARG3, CARG3, 2
   |  stw TMP1, DISPATCH_GL(jit_L)(DISPATCH)
-  |   add CARG3, CARG4, CARG3
+  |   stw CARG4, DISPATCH_J(parent)(DISPATCH)
   |  stw BASE, L->base
   |  addi CARG1, DISPATCH, GG_DISP2J
   |   stw CARG3, DISPATCH_J(exitno)(DISPATCH)
   |  addi CARG2, sp, 16
-  |   stw JTR, DISPATCH_J(parent)(DISPATCH)
   |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)
   |  // Returns MULTRES (unscaled) or negated error code.
   |  lwz TMP1, L->cframe
@@ -2416,13 +2415,14 @@ static void build_subroutines(BuildCtx *ctx)
   |   decode_RA8 RA, INS
   |  lwzx TMP0, DISPATCH, TMP1
   |  mtctr TMP0
-  |  cmpwi TMP1, BC_FUNCF*4		// Function header?
-  |  beq >2
+  |  cmplwi TMP1, BC_FUNCF*4		// Function header?
+  |  bge >2
   |   decode_RB8 RB, INS
   |   decode_RD8 RD, INS
   |   decode_RC8 RC, INS
   |  bctr
   |2:
+  |   subi RC, MULTRES, 8
   |   add RA, RA, BASE
   |  bctr
   |
@@ -4348,12 +4348,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 	|  bgt >3  // See FP loop below.
       } else if (op == BC_JFORI) {
 	|  addis PC, RD, -(BCBIAS_J*4 >> 16)
-	|  ble =>BC_JLOOP
+	|  bley >7
       } else if (op == BC_IFORL) {
 	|  bgt >2
 	|  addis PC, RD, -(BCBIAS_J*4 >> 16)
       } else {
-	|  ble =>BC_JLOOP
+	|  bley =>BC_JLOOP
       }
       |2:
       |  ins_next
@@ -4419,8 +4419,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       }
       |1:
       |  addis PC, RD, -(BCBIAS_J*4 >> 16)
+    } else if (op == BC_JFORI) {
+      |  bley >7
     } else {
-      |  ble =>BC_JLOOP
+      |  bley =>BC_JLOOP
     }
     if (LJ_DUALNUM) {
       |  b <2
@@ -4435,10 +4437,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  addis PC, RD, -(BCBIAS_J*4 >> 16)
     } else if (op == BC_IFORL) {
       |  bgey <1
+    } else if (op == BC_JFORI) {
+      |  bgey >7
     } else {
-      |  bge =>BC_JLOOP
+      |  bgey =>BC_JLOOP
     }
     |  b <2
+    if (op == BC_JFORI) {
+      |7:
+      |  lwz INS, -4(PC)
+      |  decode_RD8 RD, INS
+      |  b =>BC_JLOOP
+    }
     break;
 
   case BC_ITERL:
@@ -4490,6 +4500,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8 (ignored), RD = traceno*8
     |  lwz TMP1, DISPATCH_J(trace)(DISPATCH)
     |  srwi RD, RD, 1
+    |  // Traces on PPC don't store the trace number, so use 0.
+    |   stw ZERO, DISPATCH_GL(vmstate)(DISPATCH)
     |  lwzx TRACE:TMP2, TMP1, RD
     |  mcrxr cr0			// Clear SO flag.
     |  lwz TMP2, TRACE:TMP2->mcode
