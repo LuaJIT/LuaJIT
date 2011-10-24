@@ -131,6 +131,7 @@ typedef uint32_t RegCost;
 #error "Missing include for target CPU"
 #endif
 
+#ifdef EXITSTUBS_PER_GROUP
 /* Return the address of an exit stub. */
 static LJ_AINLINE MCode *exitstub_addr(jit_State *J, ExitNo exitno)
 {
@@ -138,5 +139,6 @@ static LJ_AINLINE MCode *exitstub_addr(jit_State *J, ExitNo exitno)
   return (MCode *)((char *)J->exitstubgroup[exitno / EXITSTUBS_PER_GROUP] +
 		   EXITSTUB_SPACING*(exitno % EXITSTUBS_PER_GROUP));
 }
+#endif
 
 #endif

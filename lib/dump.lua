@@ -76,11 +76,24 @@ local active, out, dumpmode
 
 ------------------------------------------------------------------------------
 
+local symtabmt = { __index = false }
 local symtab = {}
 local nexitsym = 0
 
--- Fill symbol table with trace exit addresses.
-local function fillsymtab(nexit)
+-- Fill nested symbol table with per-trace exit stub addresses.
+local function fillsymtab_tr(tr, nexit)
+  local t = {}
+  symtabmt.__index = t
+  for i=0,nexit-1 do
+    local addr = traceexitstub(tr, i)
+    t[addr] = tostring(i)
+  end
+  local addr = traceexitstub(tr, nexit)
+  if addr then t[addr] = "stack_check" end
+end
+
+-- Fill symbol table with trace exit stub addresses.
+local function fillsymtab(tr, nexit)
   local t = symtab
   if nexitsym == 0 then
     local ircall = vmdef.ircall
@@ -89,10 +102,17 @@ local function fillsymtab(nexit)
       if addr ~= 0 then t[addr] = ircall[i] end
     end
   end
-  if nexit > nexitsym then
+  if nexitsym == 1000000 then -- Per-trace exit stubs.
+    fillsymtab_tr(tr, nexit)
+  elseif nexit > nexitsym then -- Shared exit stubs.
     for i=nexitsym,nexit-1 do
       local addr = traceexitstub(i)
-      if addr == nil then nexit = 1000000; break end
+      if addr == nil then -- Fall back to per-trace exit stubs.
+	fillsymtab_tr(tr, nexit)
+	setmetatable(symtab, symtabmt)
+	nexit = 1000000
+	break
+      end
       t[addr] = tostring(i)
     end
     nexitsym = nexit
@@ -114,7 +134,7 @@ local function dump_mcode(tr)
   out:write("---- TRACE ", tr, " mcode ", #mcode, "\n")
   local ctx = disass.create(mcode, addr, dumpwrite)
   ctx.hexdump = 0
-  ctx.symtab = fillsymtab(info.nexit)
+  ctx.symtab = fillsymtab(tr, info.nexit)
   if loop ~= 0 then
     symtab[addr+loop] = "LOOP"
     ctx:disass(0, loop)

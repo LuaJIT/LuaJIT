@@ -377,15 +377,27 @@ LJLIB_CF(jit_util_tracemc)
   return 0;
 }
 
-/* local addr = jit.util.traceexitstub(idx) */
+/* local addr = jit.util.traceexitstub([tr,] exitno) */
 LJLIB_CF(jit_util_traceexitstub)
 {
+#ifdef EXITSTUBS_PER_GROUP
   ExitNo exitno = (ExitNo)lj_lib_checkint(L, 1);
   jit_State *J = L2J(L);
   if (exitno < EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR) {
     setintptrV(L->top-1, (intptr_t)(void *)exitstub_addr(J, exitno));
     return 1;
   }
+#else
+  if (L->top > L->base+1) {  /* Don't throw for one-argument variant. */
+    GCtrace *T = jit_checktrace(L);
+    ExitNo exitno = (ExitNo)lj_lib_checkint(L, 2);
+    ExitNo maxexit = T->root ? T->nsnap+1 : T->nsnap;
+    if (T && T->mcode != NULL && exitno < maxexit) {
+      setintptrV(L->top-1, (intptr_t)(void *)exitstub_trace_addr(T, exitno));
+      return 1;
+    }
+  }
+#endif
   return 0;
 }
 
