@@ -933,6 +933,15 @@ static uint32_t ir_khash(IRIns *ir)
 void sys_icache_invalidate(void *start, size_t len);
 #endif
 
+#if LJ_TARGET_LINUX && LJ_TARGET_PPC
+#include <dlfcn.h>
+static void (*asm_ppc_cache_flush)(MCode *start, MCode *end);
+static void asm_dummy_cache_flush(MCode *start, MCode *end)
+{
+  UNUSED(start); UNUSED(end);
+}
+#endif
+
 /* Flush instruction cache. */
 static void asm_cache_flush(MCode *start, MCode *end)
 {
@@ -941,7 +950,14 @@ static void asm_cache_flush(MCode *start, MCode *end)
   UNUSED(start); UNUSED(end);
 #elif LJ_TARGET_OSX
   sys_icache_invalidate(start, end-start);
-#elif defined(__GNUC__)
+#elif LJ_TARGET_LINUX && LJ_TARGET_PPC
+  if (!asm_ppc_cache_flush) {
+    void *vdso = dlopen("linux-vdso32.so.1", RTLD_LAZY);
+    if (!vdso || !(asm_ppc_cache_flush = dlsym(vdso, "__kernel_sync_dicache")))
+      asm_ppc_cache_flush = asm_dummy_cache_flush;
+  }
+  asm_ppc_cache_flush(start, end);
+#elif defined(__GNUC__) && !LJ_TARGET_PPC
   __clear_cache(start, end);
 #else
 #error "Missing builtin to flush instruction cache"
