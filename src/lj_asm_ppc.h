@@ -205,6 +205,22 @@ static void asm_fusexref(ASMState *as, PPCIns pi, Reg rt, IRRef ref,
   emit_fai(as, pi, rt, base, ofs);
 }
 
+/* Fuse XLOAD/XSTORE reference into indexed-only load/store operand. */
+static void asm_fusexrefx(ASMState *as, PPCIns pi, Reg rt, IRRef ref,
+			  RegSet allow)
+{
+  IRIns *ira = IR(ref);
+  Reg right, left;
+  if (mayfuse(as, ref) && ira->o == IR_ADD && ra_noreg(ira->r)) {
+    left = ra_alloc2(as, ira, allow);
+    right = (left >> 8); left &= 255;
+  } else {
+    right = ra_alloc1(as, ref, allow);
+    left = RID_R0;
+  }
+  emit_tab(as, pi, rt, left, right);
+}
+
 /* Fuse to multiply-add/sub instruction. */
 static int asm_fusemadd(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pir)
 {
@@ -886,10 +902,17 @@ static void asm_xload(ASMState *as, IRIns *ir)
 
 static void asm_xstore(ASMState *as, IRIns *ir)
 {
-  // NYI: fuse with bswap to stwbrx.
-  Reg src = ra_alloc1(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
-  asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
-	       rset_exclude(RSET_GPR, src));
+  IRIns *irb;
+  if (mayfuse(as, ir->op2) && (irb = IR(ir->op2))->o == IR_BSWAP &&
+      ra_noreg(irb->r) && (irt_isint(ir->t) || irt_isu32(ir->t))) {
+    /* Fuse BSWAP with XSTORE to stwbrx. */
+    Reg src = ra_alloc1(as, irb->op1, RSET_GPR);
+    asm_fusexrefx(as, PPCI_STWBRX, src, ir->op1, rset_exclude(RSET_GPR, src));
+  } else {
+    Reg src = ra_alloc1(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
+    asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
+		 rset_exclude(RSET_GPR, src));
+  }
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -1410,17 +1433,23 @@ nofuse:
 
 static void asm_bitswap(ASMState *as, IRIns *ir)
 {
-  // NYI: fuse with XLOAD to lwbrx.
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg left = ra_alloc1(as, ir->op1, RSET_GPR);
-  Reg tmp = dest;
-  if (tmp == left) {
-    tmp = RID_TMP;
-    emit_mr(as, dest, RID_TMP);
+  IRIns *irx;
+  if (mayfuse(as, ir->op1) && (irx = IR(ir->op1))->o == IR_XLOAD &&
+      ra_noreg(irx->r) && (irt_isint(irx->t) || irt_isu32(irx->t))) {
+    /* Fuse BSWAP with XLOAD to lwbrx. */
+    asm_fusexrefx(as, PPCI_LWBRX, dest, irx->op1, RSET_GPR);
+  } else {
+    Reg left = ra_alloc1(as, ir->op1, RSET_GPR);
+    Reg tmp = dest;
+    if (tmp == left) {
+      tmp = RID_TMP;
+      emit_mr(as, dest, RID_TMP);
+    }
+    emit_rot(as, PPCI_RLWIMI, tmp, left, 24, 16, 23);
+    emit_rot(as, PPCI_RLWIMI, tmp, left, 24, 0, 7);
+    emit_rotlwi(as, tmp, left, 8);
   }
-  emit_rot(as, PPCI_RLWIMI, tmp, left, 24, 16, 23);
-  emit_rot(as, PPCI_RLWIMI, tmp, left, 24, 0, 7);
-  emit_rotlwi(as, tmp, left, 8);
 }
 
 static void asm_bitop(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)

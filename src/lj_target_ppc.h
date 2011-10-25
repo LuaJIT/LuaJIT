@@ -240,6 +240,9 @@ typedef enum PPCIns {
   PPCI_LHAX = 0x7c0002ae,
   PPCI_STHX = 0x7c00032e,
 
+  PPCI_LWBRX = 0x7c00042c,
+  PPCI_STWBRX = 0x7c00052c,
+
   PPCI_LFSX = 0x7c00042e,
   PPCI_LFDX = 0x7c0004ae,
   PPCI_STFSX = 0x7c00052e,
