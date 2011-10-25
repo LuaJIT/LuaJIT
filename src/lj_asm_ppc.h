@@ -1478,9 +1478,40 @@ static void asm_bitop(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
   emit_asb(as, pi, dest, left, right);
 }
 
+/* Fuse BAND with contiguous bitmask and a shift to rlwinm. */
+static void asm_fuseandsh(ASMState *as, PPCIns pi, int32_t mask, IRRef ref)
+{
+  IRIns *ir;
+  Reg left;
+  if (mayfuse(as, ref) && (ir = IR(ref), ra_noreg(ir->r)) &&
+      irref_isk(ir->op2)) {
+    int32_t sh = (IR(ir->op2)->i & 31);
+    switch (ir->o) {
+    case IR_BSHL:
+      if ((mask & ((1u<<sh)-1))) goto nofuse;
+      break;
+    case IR_BSHR:
+      if ((mask & ~((~0u)>>sh))) goto nofuse;
+      sh = ((32-sh)&31);
+      break;
+    case IR_BROL:
+      break;
+    default:
+      goto nofuse;
+    }
+    left = ra_alloc1(as, ir->op1, RSET_GPR);
+    *--as->mcp = pi | PPCF_T(left) | PPCF_B(sh);
+    return;
+  }
+nofuse:
+  left = ra_alloc1(as, ref, RSET_GPR);
+  *--as->mcp = pi | PPCF_T(left);
+}
+
 static void asm_bitand(ASMState *as, IRIns *ir)
 {
   Reg dest, left, right;
+  IRRef lref = ir->op1;
   PPCIns dot = 0;
   IRRef op2;
   if (as->flagmcp == as->mcp) {
@@ -1489,48 +1520,51 @@ static void asm_bitand(ASMState *as, IRIns *ir)
     dot = PPCF_DOT;
   }
   dest = ra_dest(as, ir, RSET_GPR);
-  left = ra_hintalloc(as, ir->op1, dest, RSET_GPR);
   if (irref_isk(ir->op2)) {
     int32_t k = IR(ir->op2)->i;
     if (k) {
-      // NYI: fuse with shifts/rotates.
+      /* First check for a contiguous bitmask as used by rlwinm. */
       uint32_t s1 = lj_ffs((uint32_t)k);
       uint32_t k1 = ((uint32_t)k >> s1);
       if ((k1 & (k1+1)) == 0) {
-	emit_rot(as, PPCI_RLWINM|dot, dest, left, 0,
-		 31-lj_fls((uint32_t)k), 31-s1);
+	asm_fuseandsh(as, PPCI_RLWINM|dot | PPCF_A(dest) |
+			  PPCF_MB(31-lj_fls((uint32_t)k)) | PPCF_ME(31-s1),
+			  k, lref);
 	return;
       }
       if (~(uint32_t)k) {
 	uint32_t s2 = lj_ffs(~(uint32_t)k);
 	uint32_t k2 = (~(uint32_t)k >> s2);
 	if ((k2 & (k2+1)) == 0) {
-	  emit_rot(as, PPCI_RLWINM|dot, dest, left, 0,
-		   32-s2, 30-lj_fls(~(uint32_t)k));
+	  asm_fuseandsh(as, PPCI_RLWINM|dot | PPCF_A(dest) |
+			    PPCF_MB(32-s2) | PPCF_ME(30-lj_fls(~(uint32_t)k)),
+			    k, lref);
 	  return;
 	}
       }
     }
     if (checku16(k)) {
+      left = ra_alloc1(as, lref, RSET_GPR);
       emit_asi(as, PPCI_ANDIDOT, dest, left, k);
       return;
     } else if ((k & 0xffff) == 0) {
+      left = ra_alloc1(as, lref, RSET_GPR);
       emit_asi(as, PPCI_ANDISDOT, dest, left, (k >> 16));
       return;
     }
   }
   op2 = ir->op2;
-  if (mayfuse(as, op2) && IR(op2)->o == IR_BNOT) {
+  if (mayfuse(as, op2) && IR(op2)->o == IR_BNOT && ra_noreg(IR(op2)->r)) {
     dot ^= (PPCI_AND ^ PPCI_ANDC);
     op2 = IR(op2)->op1;
   }
+  left = ra_hintalloc(as, lref, dest, RSET_GPR);
   right = ra_alloc1(as, op2, rset_exclude(RSET_GPR, left));
   emit_asb(as, PPCI_AND ^ dot, dest, left, right);
 }
 
 static void asm_bitshift(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
 {
-  // NYI: fuse with IR_BAND.
   Reg dest, left;
   Reg dot = 0;
   if (as->flagmcp == as->mcp) {
