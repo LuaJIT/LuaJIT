@@ -2549,7 +2549,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETS:
     |  // RA = uvnum*8, RD = str_const*8 (~)
-    |  ins_next1
     |  lwz LFUNC:RB, FRAME_FUNC(BASE)
     |   srwi TMP1, RD, 1
     |    srwi RA, RA, 1
@@ -2566,7 +2565,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   evstdd STR:TMP1, 0(CARG2)
     |  bne >2
     |1:
-    |  ins_next2
+    |  ins_next
     |
     |2:  // Check if string is white and ensure upvalue is closed.
     |  andi. TMP3, TMP3, LJ_GC_WHITES	// iswhite(str)
