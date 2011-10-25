@@ -1849,7 +1849,7 @@ static void asm_bitswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
   as->mcp = emit_op(XO_BSWAP + ((dest&7) << 24),
-		    REX_64IR(ir, dest), 0, 0, as->mcp, 1);
+		    REX_64IR(ir, 0), dest, 0, as->mcp, 1);
   ra_left(as, dest, ir->op1);
 }
 
