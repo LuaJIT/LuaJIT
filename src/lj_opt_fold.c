@@ -1402,6 +1402,36 @@ LJFOLDF(simplify_shift2_ki)
   return NEXTFOLD;
 }
 
+LJFOLD(BSHL BAND KINT)
+LJFOLD(BSHR BAND KINT)
+LJFOLD(BROL BAND KINT)
+LJFOLD(BROR BAND KINT)
+LJFOLDF(simplify_shiftk_andk)
+{
+  IRIns *irk = IR(fleft->op2);
+  PHIBARRIER(fleft);
+  if (irk->o == IR_KINT) {  /* (i & k1) o k2 ==> (i o k2) & (k1 o k2) */
+    int32_t k = kfold_intop(irk->i, fright->i, (IROp)fins->o);
+    fins->op1 = fleft->op1;
+    fins->op1 = (IRRef1)lj_opt_fold(J);
+    fins->op2 = (IRRef1)lj_ir_kint(J, k);
+    fins->ot = IRTI(IR_BAND);
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(BAND BSHL KINT)
+LJFOLD(BAND BSHR KINT)
+LJFOLDF(simplify_andk_shiftk)
+{
+  IRIns *irk = IR(fleft->op2);
+  if (irk->o == IR_KINT &&
+      kfold_intop(-1, irk->i, (IROp)fleft->o) == fright->i)
+    return LEFTFOLD;  /* (i o k1) & k2 ==> i, if (-1 o k1) == k2 */
+  return NEXTFOLD;
+}
+
 /* -- Reassociation ------------------------------------------------------- */
 
 LJFOLD(ADD ADD KINT)
