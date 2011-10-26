@@ -117,7 +117,7 @@ LJ_STATIC_ASSERT(((int)CT_STRUCT & (int)CT_ARRAY) == CT_STRUCT);
   info = (info & ~(CTMASK_##field<<CTSHIFT_##field)) | \
 	  (((CTSize)(val) & CTMASK_##field) << CTSHIFT_##field)
 
-/* Calling conventions. */
+/* Calling conventions. ORDER CC */
 enum { CTCC_CDECL, CTCC_THISCALL, CTCC_FASTCALL, CTCC_STDCALL };
 
 /* Attribute numbers. */

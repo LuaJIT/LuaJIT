@@ -18,6 +18,7 @@
 #include "lj_cparse.h"
 #include "lj_cconv.h"
 #include "lj_clib.h"
+#include "lj_ccall.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_ircall.h"
@@ -364,7 +365,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
 
 /* -- Convert TValue to C type (store) ------------------------------------ */
 
-static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, TValue *sval)
+static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
 {
   CTState *cts = ctype_ctsG(J2G(J));
   CTypeID sid = CTID_P_VOID;
@@ -747,29 +748,88 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
 			   CTState *cts, CType *ct)
 {
   TRef args[CCI_NARGS_MAX];
+  CTypeID fid;
   MSize i, n;
-  TRef tr;
+  TRef tr, *base;
+  cTValue *o;
+#if LJ_TARGET_X86
+#if LJ_ABI_WIN
+  TRef *arg0 = NULL, *arg1 = NULL;
+#endif
+  int ngpr = 0;
+  if (ctype_cconv(ct->info) == CTCC_THISCALL)
+    ngpr = 1;
+  else if (ctype_cconv(ct->info) == CTCC_FASTCALL)
+    ngpr = 2;
+#endif
+
+  /* Skip initial attributes. */
+  fid = ct->sib;
+  while (fid) {
+    CType *ctf = ctype_get(cts, fid);
+    if (!ctype_isattrib(ctf->info)) break;
+    fid = ctf->sib;
+  }
   args[0] = TREF_NIL;
-  for (n = 0; J->base[n+1]; n++) {
+  for (n = 0, base = J->base+1, o = rd->argv+1; *base; n++, base++, o++) {
+    CTypeID did;
     CType *d;
-    do {
-      if (!ct->sib || n >= CCI_NARGS_MAX)
-	lj_trace_err(J, LJ_TRERR_NYICALL);
-      ct = ctype_get(cts, ct->sib);
-    } while (ctype_isattrib(ct->info));
-    if (!ctype_isfield(ct->info))
+
+    if (n >= CCI_NARGS_MAX)
       lj_trace_err(J, LJ_TRERR_NYICALL);
-    d = ctype_rawchild(cts, ct);
+
+    if (fid) {  /* Get argument type from field. */
+      CType *ctf = ctype_get(cts, fid);
+      fid = ctf->sib;
+      lua_assert(ctype_isfield(ctf->info));
+      did = ctype_cid(ctf->info);
+    } else {
+      if (!(ct->info & CTF_VARARG))
+        lj_trace_err(J, LJ_TRERR_NYICALL);  /* Too many arguments. */
+      did = lj_ccall_ctid_vararg(cts, o);  /* Infer vararg type. */
+    }
+    d = ctype_raw(cts, did);
     if (!(ctype_isnum(d->info) || ctype_isptr(d->info) ||
 	  ctype_isenum(d->info)))
       lj_trace_err(J, LJ_TRERR_NYICALL);
-    tr = crec_ct_tv(J, d, 0, J->base[n+1], &rd->argv[n+1]);
-    if (ctype_isinteger_or_bool(d->info) && d->size < 4) {
-      if ((d->info & CTF_UNSIGNED))
-	tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_U8 : IRT_U16, 0);
-      else
-	tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_I8 : IRT_I16, IRCONV_SEXT);
+    tr = crec_ct_tv(J, d, 0, *base, o);
+    if (ctype_isinteger_or_bool(d->info)) {
+      if (d->size < 4) {
+	if ((d->info & CTF_UNSIGNED))
+	  tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_U8 : IRT_U16, 0);
+	else
+	  tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_I8 : IRT_I16,IRCONV_SEXT);
+      }
     }
+#if LJ_TARGET_X86
+    /* 64 bit args must not end up in registers for fastcall/thiscall. */
+#if LJ_ABI_WIN
+    if (!ctype_isfp(d->info)) {
+      /* Sigh, the Windows/x86 ABI allows reordering across 64 bit args. */
+      if (tref_typerange(tr, IRT_I64, IRT_U64)) {
+	if (ngpr) {
+	  arg0 = &args[n]; args[n++] = TREF_NIL; ngpr--;
+	  if (ngpr) {
+	    arg1 = &args[n]; args[n++] = TREF_NIL; ngpr--;
+	  }
+	}
+      } else {
+	if (arg0) { *arg0 = tr; arg0 = NULL; n--; continue; }
+	if (arg1) { *arg1 = tr; arg1 = NULL; n--; continue; }
+	if (ngpr) ngpr--;
+      }
+    }
+#else
+    if (!ctype_isfp(d->info) && ngpr) {
+      if (tref_typerange(tr, IRT_I64, IRT_U64)) {
+	/* No reordering for other x86 ABIs. Simply add alignment args. */
+	do { args[n++] = TREF_NIL; } while (--ngpr);
+      } else {
+	ngpr--;
+      }
+    }
+#endif
+#endif
     args[n] = tr;
   }
   tr = args[0];
@@ -801,12 +861,15 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     }
     if (!(ctype_isnum(ctr->info) || ctype_isptr(ctr->info) ||
 	  ctype_isvoid(ctr->info)) ||
-	ctype_isbool(ctr->info) || (ct->info & CTF_VARARG) ||
-#if LJ_TARGET_X86
-	ctype_cconv(ct->info) != CTCC_CDECL ||
-#endif
-	t == IRT_CDATA)
+	ctype_isbool(ctr->info) || t == IRT_CDATA)
       lj_trace_err(J, LJ_TRERR_NYICALL);
+    if ((ct->info & CTF_VARARG)
+#if LJ_TARGET_X86
+	|| ctype_cconv(ct->info) != CTCC_CDECL
+#endif
+	)
+      func = emitir(IRT(IR_CARG, IRT_NIL), func,
+		    lj_ir_kint(J, ctype_typeid(cts, ct)));
     tr = emitir(IRT(IR_CALLXS, t), crec_call_args(J, rd, cts, ct), func);
     if (t == IRT_FLOAT || t == IRT_U32) {
       tr = emitconv(tr, IRT_NUM, t, 0);

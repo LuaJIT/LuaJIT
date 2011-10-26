@@ -284,6 +284,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	ofs += 4;
     }
   }
+  if ((ci->flags & CCI_VARARG))  /* Vararg calls need to know about FPR use. */
+    emit_tab(as, fpr == REGARG_FIRSTFPR ? PPCI_CRXOR : PPCI_CREQV, 6, 6, 6);
 }
 
 /* Setup result reg/sp for call. Evict scratch regs. */
@@ -336,14 +338,18 @@ static void asm_callx(ASMState *as, IRIns *ir)
 {
   IRRef args[CCI_NARGS_MAX];
   CCallInfo ci;
+  IRRef func;
+  IRIns *irf;
   ci.flags = asm_callx_flags(as, ir);
   asm_collectargs(as, ir, &ci, args);
   asm_setupresult(as, ir, &ci);
-  if (irref_isk(ir->op2)) {  /* Call to constant address. */
-    ci.func = (ASMFunction)(void *)(IR(ir->op2)->i);
+  func = ir->op2; irf = IR(func);
+  if (irf->o == IR_CARG) { func = irf->op1; irf = IR(func); }
+  if (irref_isk(func)) {  /* Call to constant address. */
+    ci.func = (ASMFunction)(void *)(irf->i);
   } else {  /* Need a non-argument register for indirect calls. */
     RegSet allow = RSET_GPR & ~RSET_RANGE(RID_R0, REGARG_LASTGPR+1);
-    Reg freg = ra_alloc1(as, ir->op2, allow);
+    Reg freg = ra_alloc1(as, func, allow);
     *--as->mcp = PPCI_BCTRL;
     *--as->mcp = PPCI_MTCTR | PPCF_T(freg);
     ci.func = (ASMFunction)(void *)0;

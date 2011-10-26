@@ -378,6 +378,24 @@ local function ridsp_name(ridsp)
   return ""
 end
 
+-- Dump CALL* function ref and return optional ctype.
+local function dumpcallfunc(tr, ins)
+  local ctype
+  if ins > 0 then
+    local m, ot, op1, op2 = traceir(tr, ins)
+    if band(ot, 31) == 0 then -- nil type means CARG(func, ctype).
+      ins = op1
+      ctype = formatk(tr, op2)
+    end
+  end
+  if ins < 0 then
+    out:write(format("[0x%x](", tonumber((tracek(tr, ins)))))
+  else
+    out:write(format("%04d (", ins))
+  end
+  return ctype
+end
+
 -- Recursively gather CALL* args and dump them.
 local function dumpcallargs(tr, ins)
   if ins < 0 then
@@ -447,15 +465,15 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 		       irtype[t], op))
       local m1, m2 = band(m, 3), band(m, 3*4)
       if sub(op, 1, 4) == "CALL" then
+	local ctype
 	if m2 == 1*4 then -- op2 == IRMlit
 	  out:write(format("%-10s  (", vmdef.ircall[op2]))
-	elseif op2 < 0 then
-	  out:write(format("[0x%x](", tonumber((tracek(tr, op2)))))
 	else
-	  out:write(format("%04d (", op2))
+	  ctype = dumpcallfunc(tr, op2)
 	end
 	if op1 ~= -1 then dumpcallargs(tr, op1) end
 	out:write(")")
+	if ctype then out:write(" ctype ", ctype) end
       elseif op == "CNEW  " and op2 == -1 then
 	out:write(formatk(tr, op1))
       elseif m1 ~= 3 then -- op1 != IRMnone

@@ -27,15 +27,23 @@ typedef struct CCallInfo {
 #define CCI_CALL_N		(IR_CALLN << CCI_OPSHIFT)
 #define CCI_CALL_L		(IR_CALLL << CCI_OPSHIFT)
 #define CCI_CALL_S		(IR_CALLS << CCI_OPSHIFT)
-#define CCI_CALL_FN		(CCI_CALL_N|CCI_FASTCALL)
-#define CCI_CALL_FL		(CCI_CALL_L|CCI_FASTCALL)
-#define CCI_CALL_FS		(CCI_CALL_S|CCI_FASTCALL)
+#define CCI_CALL_FN		(CCI_CALL_N|CCI_CC_FASTCALL)
+#define CCI_CALL_FL		(CCI_CALL_L|CCI_CC_FASTCALL)
+#define CCI_CALL_FS		(CCI_CALL_S|CCI_CC_FASTCALL)
 
 /* C call info flags. */
 #define CCI_L			0x0100	/* Implicit L arg. */
 #define CCI_CASTU64		0x0200	/* Cast u64 result to number. */
 #define CCI_NOFPRCLOBBER	0x0400	/* Does not clobber any FPRs. */
-#define CCI_FASTCALL		0x0800	/* Fastcall convention. */
+#define CCI_VARARG		0x0800	/* Vararg function. */
+
+#define CCI_CC_MASK		0x3000	/* Calling convention mask. */
+#define CCI_CC_SHIFT		12
+/* ORDER CC */
+#define CCI_CC_CDECL		0x0000	/* Default cdecl calling convention. */
+#define CCI_CC_THISCALL		0x1000	/* Thiscall calling convention. */
+#define CCI_CC_FASTCALL		0x2000	/* Fastcall calling convention. */
+#define CCI_CC_STDCALL		0x3000	/* Stdcall calling convention. */
 
 /* Helpers for conditional function definitions. */
 #define IRCALLCOND_ANY(x)		x

@@ -888,7 +888,16 @@ static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
     nargs++;
     while (ira->o == IR_CARG) { nargs++; ira = IR(ira->op1); }
   }
-  /* NYI: fastcall etc. */
+#if LJ_HASFFI
+  if (IR(ir->op2)->o == IR_CARG) {  /* Copy calling convention info. */
+    CTypeID id = (CTypeID)IR(IR(ir->op2)->op2)->i;
+    CType *ct = ctype_get(ctype_ctsG(J2G(as->J)), id);
+    nargs |= ((ct->info & CTF_VARARG) ? CCI_VARARG : 0);
+#if LJ_TARGET_X86
+    nargs |= (ctype_cconv(ct->info) << CCI_CC_SHIFT);
+#endif
+  }
+#endif
   return (nargs | (ir->t.irt << CCI_OTSHIFT));
 }
 

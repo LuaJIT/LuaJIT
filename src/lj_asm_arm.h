@@ -331,13 +331,17 @@ static void asm_callx(ASMState *as, IRIns *ir)
 {
   IRRef args[CCI_NARGS_MAX];
   CCallInfo ci;
+  IRRef func;
+  IRIns *irf;
   ci.flags = asm_callx_flags(as, ir);
   asm_collectargs(as, ir, &ci, args);
   asm_setupresult(as, ir, &ci);
-  if (irref_isk(ir->op2)) {  /* Call to constant address. */
-    ci.func = (ASMFunction)(void *)(IR(ir->op2)->i);
+  func = ir->op2; irf = IR(func);
+  if (irf->o == IR_CARG) { func = irf->op1; irf = IR(func); }
+  if (irref_isk(func)) {  /* Call to constant address. */
+    ci.func = (ASMFunction)(void *)(irf->i);
   } else {  /* Need a non-argument register for indirect calls. */
-    Reg freg = ra_alloc1(as, ir->op2, RSET_RANGE(RID_R4, RID_R12+1));
+    Reg freg = ra_alloc1(as, func, RSET_RANGE(RID_R4, RID_R12+1));
     emit_m(as, ARMI_BLXr, freg);
     ci.func = (ASMFunction)(void *)0;
   }

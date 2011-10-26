@@ -7,6 +7,7 @@
 #define _LJ_CCALL_H
 
 #include "lj_obj.h"
+#include "lj_ctype.h"
 
 #if LJ_HASFFI
 
@@ -129,6 +130,8 @@ typedef struct CCallState {
 
 /* Really belongs to lj_vm.h. */
 LJ_ASMF void LJ_FASTCALL lj_vm_ffi_call(CCallState *cc);
+
+LJ_FUNC CTypeID lj_ccall_ctid_vararg(CTState *cts, cTValue *o);
 LJ_FUNC int lj_ccall_func(lua_State *L, GCcdata *cd);
 
 #endif
