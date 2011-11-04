@@ -16,7 +16,7 @@
 #define ljamalg_c
 #define LUA_CORE
 
-/* To get the mremap prototype. Must be defind before any system includes. */
+/* To get the mremap prototype. Must be defined before any system includes. */
 #if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
 #endif
