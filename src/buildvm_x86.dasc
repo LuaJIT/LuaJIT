@@ -4022,6 +4022,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop, int cmov, int sse)
       |  je <1				// Same GCobjs or pvalues?
       |  cmp RB, LJ_TISTABUD
       |  ja <2				// Different objects and not table/ud?
+      |.if X64
+      |  cmp RB, LJ_TUDATA		// And not 64 bit lightuserdata.
+      |  jb <2
+      |.endif
       |
       |  // Different tables or userdatas. Need to check __eq metamethod.
       |  // Field metatable must be at same offset for GCtab and GCudata!
