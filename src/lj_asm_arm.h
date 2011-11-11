@@ -851,7 +851,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     rset_clear(allow, dest);
   }
   idx = asm_fuseahuref(as, ir->op1, &ofs, allow);
-  if (!hiop) {
+  if (!hiop || type == RID_NONE) {
     rset_clear(allow, idx);
     if (ofs < 256 && ra_hasreg(dest) && (dest & 1) == 0 &&
 	rset_test((as->freeset & allow), dest+1)) {
