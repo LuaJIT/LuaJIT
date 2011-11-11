@@ -313,13 +313,21 @@ static void split_ir(jit_State *J)
       case IR_STRTO:
 	hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
 	break;
-      case IR_XLOAD:
-	hi = split_emit(J, IRT(IR_XLOAD, IRT_SOFTFP),
-			split_ptr(J, oir, ir->op1), ir->op2);
-#if LJ_BE
+      case IR_XLOAD: {
+	IRIns inslo = *nir;  /* Save/undo the emit of the lo XLOAD. */
+	J->cur.nins--;
+	hi = split_ptr(J, oir, ir->op1);  /* Insert the hiref ADD. */
+	nref = lj_ir_nextins(J);
+	nir = IR(nref);
+	*nir = inslo;  /* Re-emit lo XLOAD immediately before hi XLOAD. */
+	hi = split_emit(J, IRT(IR_XLOAD, IRT_SOFTFP), hi, ir->op2);
+#if LJ_LE
+	ir->prev = nref;
+#else
 	ir->prev = hi; hi = nref;
 #endif
 	break;
+	}
       case IR_ASTORE: case IR_HSTORE: case IR_USTORE:
 	split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nir->op1, hisubst[ir->op2]);
 	break;

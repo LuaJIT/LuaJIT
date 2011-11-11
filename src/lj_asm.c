@@ -809,8 +809,10 @@ static void asm_snap_alloc(ASMState *as)
     IRRef ref = snap_ref(sn);
     if (!irref_isk(ref)) {
       asm_snap_alloc1(as, ref);
-      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM))
+      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) {
+	lua_assert(irt_type(IR(ref+1)->t) == IRT_SOFTFP);
 	asm_snap_alloc1(as, ref+1);
+      }
     }
   }
 }
