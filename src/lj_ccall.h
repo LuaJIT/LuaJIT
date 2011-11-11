@@ -64,8 +64,8 @@ typedef intptr_t GPRArg;
 #define CCALL_NARG_FPR		8
 #define CCALL_NRET_GPR		4	/* For complex double. */
 #define CCALL_NRET_FPR		1
-#define CCALL_SPS_EXTRA		3
-#define CCALL_SPS_FREE		1
+#define CCALL_SPS_EXTRA		4
+#define CCALL_SPS_FREE		0
 
 typedef intptr_t GPRArg;
 typedef double FPRArg;

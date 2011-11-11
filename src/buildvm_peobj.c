@@ -191,15 +191,15 @@ void emit_peobj(BuildCtx *ctx)
 #if LJ_TARGET_X64
   memcpy(pesect[PEOBJ_SECT_PDATA].name, ".pdata", sizeof(".pdata")-1);
   pesect[PEOBJ_SECT_PDATA].ofs = sofs;
-  sofs += (pesect[PEOBJ_SECT_PDATA].size = 3*4);
+  sofs += (pesect[PEOBJ_SECT_PDATA].size = 6*4);
   pesect[PEOBJ_SECT_PDATA].relocofs = sofs;
-  sofs += (pesect[PEOBJ_SECT_PDATA].nreloc = 3) * PEOBJ_RELOC_SIZE;
+  sofs += (pesect[PEOBJ_SECT_PDATA].nreloc = 6) * PEOBJ_RELOC_SIZE;
   /* Flags: 40 = read, 30 = align4, 40 = initialized data. */
   pesect[PEOBJ_SECT_PDATA].flags = 0x40300040;
 
   memcpy(pesect[PEOBJ_SECT_XDATA].name, ".xdata", sizeof(".xdata")-1);
   pesect[PEOBJ_SECT_XDATA].ofs = sofs;
-  sofs += (pesect[PEOBJ_SECT_XDATA].size = 8*2+4);  /* See below. */
+  sofs += (pesect[PEOBJ_SECT_XDATA].size = 8*2+4+6*2);  /* See below. */
   pesect[PEOBJ_SECT_XDATA].relocofs = sofs;
   sofs += (pesect[PEOBJ_SECT_XDATA].nreloc = 1) * PEOBJ_RELOC_SIZE;
   /* Flags: 40 = read, 30 = align4, 40 = initialized data. */
@@ -247,9 +247,12 @@ void emit_peobj(BuildCtx *ctx)
 
 #if LJ_TARGET_X64
   { /* Write .pdata section. */
+    uint32_t fcofs = (uint32_t)ctx->sym[ctx->nsym-1].ofs;
     uint32_t pdata[3];  /* Start of .text, end of .text and .xdata. */
     PEreloc reloc;
-    pdata[0] = 0; pdata[1] = (uint32_t)ctx->codesz; pdata[2] = 0;
+    pdata[0] = 0; pdata[1] = fcofs; pdata[2] = 0;
+    owrite(ctx, &pdata, sizeof(pdata));
+    pdata[0] = fcofs; pdata[1] = (uint32_t)ctx->codesz; pdata[2] = 20;
     owrite(ctx, &pdata, sizeof(pdata));
     reloc.vaddr = 0; reloc.symidx = 1+2+nrsym+2+2+1;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
@@ -260,12 +263,21 @@ void emit_peobj(BuildCtx *ctx)
     reloc.vaddr = 8; reloc.symidx = 1+2+nrsym+2;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+    reloc.vaddr = 12; reloc.symidx = 1+2+nrsym+2+2+1;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+    reloc.vaddr = 16; reloc.symidx = 1+2+nrsym+2+2+1;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
+    reloc.vaddr = 20; reloc.symidx = 1+2+nrsym+2;
+    reloc.type = PEOBJ_RELOC_ADDR32NB;
+    owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }
   { /* Write .xdata section. */
-    uint16_t xdata[8+2];
+    uint16_t xdata[8+2+6];
     PEreloc reloc;
-    xdata[0] = 0x01|0x08|0x10;  /* Ver. 1, uhander/ehandler, prolog size 0. */
-    xdata[1] = 5;  /* Number of unwind codes, no frame pointer. */
+    xdata[0] = 0x01|0x08|0x10;  /* Ver. 1, uhandler/ehandler, prolog size 0. */
+    xdata[1] = 0x0005;  /* Number of unwind codes, no frame pointer. */
     xdata[2] = 0x4200;  /* Stack offset 4*8+8 = aword*5. */
     xdata[3] = 0x3000;  /* Push rbx. */
     xdata[4] = 0x6000;  /* Push rsi. */
@@ -273,8 +285,14 @@ void emit_peobj(BuildCtx *ctx)
     xdata[6] = 0x5000;  /* Push rbp. */
     xdata[7] = 0;  /* Alignment. */
     xdata[8] = xdata[9] = 0;  /* Relocated address of exception handler. */
+    xdata[10] = 0x01;  /* Ver. 1, no handler, prolog size 0. */
+    xdata[11] = 0x1504;  /* Number of unwind codes, fp = rbp, fpofs = 16. */
+    xdata[12] = 0x0300;  /* set_fpreg. */
+    xdata[13] = 0x0200;  /* stack offset 0*8+8 = aword*1. */
+    xdata[14] = 0x3000;  /* Push rbx. */
+    xdata[15] = 0x5000;  /* Push rbp. */
     owrite(ctx, &xdata, sizeof(xdata));
-    reloc.vaddr = sizeof(xdata)-4; reloc.symidx = 1+2+nrsym+2+2;
+    reloc.vaddr = 2*8; reloc.symidx = 1+2+nrsym+2+2;
     reloc.type = PEOBJ_RELOC_ADDR32NB;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);
   }

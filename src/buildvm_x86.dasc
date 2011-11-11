@@ -3687,10 +3687,21 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |.endif
   |
   |//-----------------------------------------------------------------------
+  |//-- Assertions ---------------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->assert_bad_for_arg_type:
+#ifdef LUA_USE_ASSERT
+  |  int3
+#endif
+  |  int3
+  |
+  |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |->vm_ffi_call@4:
+  |->vm_ffi_call@4:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
 #if LJ_HASFFI
   |.if X64
   |  .type CCSTATE, CCallState, rbx
@@ -3786,16 +3797,7 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov ebx, [ebp-4]; leave; ret
   |.endif
 #endif
-  |
-  |//-----------------------------------------------------------------------
-  |//-- Assertions ---------------------------------------------------------
-  |//-----------------------------------------------------------------------
-  |
-  |->assert_bad_for_arg_type:
-#ifdef LUA_USE_ASSERT
-  |  int3
-#endif
-  |  int3
+  |// Note: vm_ffi_call must be the last function in this object file!
   |
   |//-----------------------------------------------------------------------
 }
@@ -6001,6 +6003,7 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
+  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
 #if LJ_64
 #define SZPTR	"8"
 #define BSZPTR	"3"
@@ -6034,22 +6037,49 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .LEFDE0-.LASFDE0\n"
 	".LASFDE0:\n"
 	"\t.long .Lframe0\n"
-	"\t.long .Lbegin\n"
-	"\t.long %d\n"
-	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
 #if LJ_64
+	"\t.quad .Lbegin\n"
+	"\t.quad %d\n"
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
 	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
 	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
 	"\t.byte 0x8f\n\t.uleb128 0x4\n"	/* offset r15 */
 	"\t.byte 0x8e\n\t.uleb128 0x5\n"	/* offset r14 */
 #else
+	"\t.long .Lbegin\n"
+	"\t.long %d\n"
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
 	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
 	"\t.byte 0x87\n\t.uleb128 0x3\n"	/* offset edi */
 	"\t.byte 0x86\n\t.uleb128 0x4\n"	/* offset esi */
 	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
 #endif
 	"\t.align " SZPTR "\n"
-	".LEFDE0:\n\n", (int)ctx->codesz, CFRAME_SIZE);
+	".LEFDE0:\n\n", fcofs, CFRAME_SIZE);
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .Lframe0\n"
+#if LJ_64
+	"\t.quad lj_vm_ffi_call\n"
+	"\t.quad %d\n"
+	"\t.byte 0xe\n\t.uleb128 16\n"		/* def_cfa_offset */
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0xd\n\t.uleb128 0x6\n"		/* def_cfa_register rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+#else
+	"\t.long lj_vm_ffi_call\n"
+	"\t.long %d\n"
+	"\t.byte 0xe\n\t.uleb128 8\n"		/* def_cfa_offset */
+	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
+	"\t.byte 0xd\n\t.uleb128 0x5\n"		/* def_cfa_register ebp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset ebx */
+#endif
+	"\t.align " SZPTR "\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
+#endif
 #if (defined(__sun__) && defined(__svr4__)) || defined(__solaris_)
     fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
 #else
@@ -6074,10 +6104,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align " SZPTR "\n"
 	".LECIE1:\n\n");
     fprintf(ctx->fp,
-	".LSFDE1:\n"
-	"\t.long .LEFDE1-.LASFDE1\n"
-	".LASFDE1:\n"
-	"\t.long .LASFDE1-.Lframe1\n"
+	".LSFDE2:\n"
+	"\t.long .LEFDE2-.LASFDE2\n"
+	".LASFDE2:\n"
+	"\t.long .LASFDE2-.Lframe1\n"
 	"\t.long .Lbegin-.\n"
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
@@ -6094,7 +6124,46 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x83\n\t.uleb128 0x5\n"	/* offset ebx */
 #endif
 	"\t.align " SZPTR "\n"
-	".LEFDE1:\n\n", (int)ctx->codesz, CFRAME_SIZE);
+	".LEFDE2:\n\n", fcofs, CFRAME_SIZE);
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".Lframe2:\n"
+	"\t.long .LECIE2-.LSCIE2\n"
+	".LSCIE2:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -" SZPTR "\n"
+	"\t.byte " REG_RA "\n"
+	"\t.uleb128 1\n"			/* augmentation length */
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 " REG_SP "\n\t.uleb128 " SZPTR "\n"
+	"\t.byte 0x80+" REG_RA "\n\t.uleb128 0x1\n"
+	"\t.align " SZPTR "\n"
+	".LECIE2:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE3:\n"
+	"\t.long .LEFDE3-.LASFDE3\n"
+	".LASFDE3:\n"
+	"\t.long .LASFDE3-.Lframe2\n"
+	"\t.long lj_vm_ffi_call-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+#if LJ_64
+	"\t.byte 0xe\n\t.uleb128 16\n"		/* def_cfa_offset */
+	"\t.byte 0x86\n\t.uleb128 0x2\n"	/* offset rbp */
+	"\t.byte 0xd\n\t.uleb128 0x6\n"		/* def_cfa_register rbp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset rbx */
+#else
+	"\t.byte 0xe\n\t.uleb128 8\n"		/* def_cfa_offset */
+	"\t.byte 0x85\n\t.uleb128 0x2\n"	/* offset ebp */
+	"\t.byte 0xd\n\t.uleb128 0x5\n"		/* def_cfa_register ebp */
+	"\t.byte 0x83\n\t.uleb128 0x3\n"	/* offset ebx */
+#endif
+	"\t.align " SZPTR "\n"
+	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
     break;
   case BUILD_coffasm:
     fprintf(ctx->fp, "\t.section .eh_frame,\"dr\"\n");
@@ -6145,6 +6214,9 @@ static void emit_asm_debug(BuildCtx *ctx)
   ** Or a linker. Or a plastic case. But I digress.
   */
   case BUILD_machasm: {
+#if LJ_HASFFI
+    int fcsize = 0;
+#endif
     int i;
     fprintf(ctx->fp, "\t.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support\n");
     fprintf(ctx->fp,
@@ -6176,6 +6248,9 @@ static void emit_asm_debug(BuildCtx *ctx)
       const char *name = ctx->sym[i].name;
       int32_t size = ctx->sym[i+1].ofs - ctx->sym[i].ofs;
       if (size == 0) continue;
+#if LJ_HASFFI
+      if (!strcmp(name, "_lj_vm_ffi_call")) { fcsize = size; continue; }
+#endif
       fprintf(ctx->fp,
 	  "%s.eh:\n"
 	  "LSFDE%d:\n"
@@ -6185,23 +6260,72 @@ static void emit_asm_debug(BuildCtx *ctx)
 	  "\t.long LASFDE%d-EH_frame1\n"
 	  "\t.long %s-.\n"
 	  "\t.long %d\n"
-	  "\t.byte 0\n"			/* augmentation length */
+	  "\t.byte 0\n"				/* augmentation length */
 	  "\t.byte 0xe\n\t.byte %d\n"		/* def_cfa_offset */
 #if LJ_64
-	  "\t.byte 0x86\n\t.byte 0x2\n"	/* offset rbp */
-	  "\t.byte 0x83\n\t.byte 0x3\n"	/* offset rbx */
-	  "\t.byte 0x8f\n\t.byte 0x4\n"	/* offset r15 */
-	  "\t.byte 0x8e\n\t.byte 0x5\n"	/* offset r14 */
+	  "\t.byte 0x86\n\t.byte 0x2\n"		/* offset rbp */
+	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset rbx */
+	  "\t.byte 0x8f\n\t.byte 0x4\n"		/* offset r15 */
+	  "\t.byte 0x8e\n\t.byte 0x5\n"		/* offset r14 */
 #else
-	  "\t.byte 0x84\n\t.byte 0x2\n"	/* offset ebp (4 for MACH-O)*/
-	  "\t.byte 0x87\n\t.byte 0x3\n"	/* offset edi */
-	  "\t.byte 0x86\n\t.byte 0x4\n"	/* offset esi */
-	  "\t.byte 0x83\n\t.byte 0x5\n"	/* offset ebx */
+	  "\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
+	  "\t.byte 0x87\n\t.byte 0x3\n"		/* offset edi */
+	  "\t.byte 0x86\n\t.byte 0x4\n"		/* offset esi */
+	  "\t.byte 0x83\n\t.byte 0x5\n"		/* offset ebx */
 #endif
 	  "\t.align " BSZPTR "\n"
 	  "LEFDE%d:\n\n",
 	  name, i, i, i, i, i, i, i, name, size, CFRAME_SIZE, i);
     }
+#if LJ_HASFFI
+    if (fcsize) {
+      fprintf(ctx->fp,
+	  "EH_frame2:\n"
+	  "\t.set L$set$y,LECIEY-LSCIEY\n"
+	  "\t.long L$set$y\n"
+	  "LSCIEY:\n"
+	  "\t.long 0\n"
+	  "\t.byte 0x1\n"
+	  "\t.ascii \"zR\\0\"\n"
+	  "\t.byte 0x1\n"
+	  "\t.byte 128-" SZPTR "\n"
+	  "\t.byte " REG_RA "\n"
+	  "\t.byte 1\n"				/* augmentation length */
+#if LJ_64
+	  "\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	  "\t.byte 0xc\n\t.byte " REG_SP "\n\t.byte " SZPTR "\n"
+#else
+	  "\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	  "\t.byte 0xc\n\t.byte 0x5\n\t.byte 0x4\n"  /* esp=5 on 32 bit MACH. */
+#endif
+	  "\t.byte 0x80+" REG_RA "\n\t.byte 0x1\n"
+	  "\t.align " BSZPTR "\n"
+	  "LECIEY:\n\n");
+      fprintf(ctx->fp,
+	  "_lj_vm_ffi_call.eh:\n"
+	  "LSFDEY:\n"
+	  "\t.set L$set$yy,LEFDEY-LASFDEY\n"
+	  "\t.long L$set$yy\n"
+	  "LASFDEY:\n"
+	  "\t.long LASFDEY-EH_frame2\n"
+	  "\t.long _lj_vm_ffi_call-.\n"
+	  "\t.long %d\n"
+	  "\t.byte 0\n"				/* augmentation length */
+#if LJ_64
+	  "\t.byte 0xe\n\t.byte 16\n"		/* def_cfa_offset */
+	  "\t.byte 0x86\n\t.byte 0x2\n"		/* offset rbp */
+	  "\t.byte 0xd\n\t.uleb128 0x6\n"	/* def_cfa_register rbp */
+	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset rbx */
+#else
+	  "\t.byte 0xe\n\t.byte 8\n"		/* def_cfa_offset */
+	  "\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
+	  "\t.byte 0xd\n\t.uleb128 0x4\n"	/* def_cfa_register ebp */
+	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset ebx */
+#endif
+	  "\t.align " BSZPTR "\n"
+	  "LEFDEY:\n\n", fcsize);
+    }
+#endif
 #if LJ_64
     fprintf(ctx->fp, "\t.subsections_via_symbols\n");
 #else

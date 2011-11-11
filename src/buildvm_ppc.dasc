@@ -2527,7 +2527,8 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |->vm_ffi_call:
+  |->vm_ffi_call:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
 #if LJ_HASFFI
   |  .type CCSTATE, CCallState, CARG1
   |  lwz TMP1, CCSTATE->spadj
@@ -2541,8 +2542,10 @@ static void build_subroutines(BuildCtx *ctx)
   |   addic. CARG2, CARG2, -1
   |  stwux sp, sp, TMP1
   |   crnot 4*cr1+eq, 4*cr1+eq		// For vararg calls.
-  |  stw CCSTATE, -4(TMP2)
+  |  stw r14, -4(TMP2)
   |   li TMP3, 0
+  |  stw CCSTATE, -8(TMP2)
+  |  mr r14, TMP2
   |  la TMP1, CCSTATE->stack
   |   slwi CARG2, CARG2, 2
   |   blty >2
@@ -2574,18 +2577,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  lwz r10, CCSTATE->gpr[7]
   |  lwz CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
   |   bctrl
-  |  lwz TMP2, 0(sp)
-  |  lwz CCSTATE:TMP1, -4(TMP2)
-  |   lwz TMP0, 4(TMP2)
+  |  lwz CCSTATE:TMP1, -8(r14)
+  |  lwz TMP2, -4(r14)
+  |   lwz TMP0, 4(r14)
   |  stw CARG1, CCSTATE:TMP1->gpr[0]
   |  stfd FARG1, CCSTATE:TMP1->fpr[0]
   |  stw CARG2, CCSTATE:TMP1->gpr[1]
   |   mtlr TMP0
   |  stw CARG3, CCSTATE:TMP1->gpr[2]
-  |   mr sp, TMP2
+  |   mr sp, r14
   |  stw CARG4, CCSTATE:TMP1->gpr[3]
+  |   mr r14, TMP2
   |  blr
 #endif
+  |// Note: vm_ffi_call must be the last function in this object file!
   |
   |//-----------------------------------------------------------------------
 }
@@ -4665,6 +4670,7 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
+  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
   int i;
   switch (ctx->mode) {
   case BUILD_elfasm:
@@ -4692,7 +4698,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0xe\n\t.uleb128 %d\n"
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
 	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
-	(int)ctx->codesz, CFRAME_SIZE);
+	fcofs, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
@@ -4701,6 +4707,20 @@ static void emit_asm_debug(BuildCtx *ctx)
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .Lframe0\n"
+	"\t.long lj_vm_ffi_call\n"
+	"\t.long %d\n"
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x8e\n\t.uleb128 2\n"
+	"\t.byte 0xd\n\t.uleb128 0xe\n"
+	"\t.align 2\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
+#endif
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
     fprintf(ctx->fp,
 	".Lframe1:\n"
@@ -4720,17 +4740,17 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 2\n"
 	".LECIE1:\n\n");
     fprintf(ctx->fp,
-	".LSFDE1:\n"
-	"\t.long .LEFDE1-.LASFDE1\n"
-	".LASFDE1:\n"
-	"\t.long .LASFDE1-.Lframe1\n"
+	".LSFDE2:\n"
+	"\t.long .LEFDE2-.LASFDE2\n"
+	".LASFDE2:\n"
+	"\t.long .LASFDE2-.Lframe1\n"
 	"\t.long .Lbegin-.\n"
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
 	"\t.byte 0xe\n\t.uleb128 %d\n"
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
 	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
-	(int)ctx->codesz, CFRAME_SIZE);
+	fcofs, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
@@ -4738,7 +4758,37 @@ static void emit_asm_debug(BuildCtx *ctx)
 	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i));
     fprintf(ctx->fp,
 	"\t.align 2\n"
-	".LEFDE1:\n\n");
+	".LEFDE2:\n\n");
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".Lframe2:\n"
+	"\t.long .LECIE2-.LSCIE2\n"
+	".LSCIE2:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -4\n"
+	"\t.byte 65\n"
+	"\t.uleb128 1\n"			/* augmentation length */
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"
+	"\t.align 2\n"
+	".LECIE2:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE3:\n"
+	"\t.long .LEFDE3-.LASFDE3\n"
+	".LASFDE3:\n"
+	"\t.long .LASFDE3-.Lframe2\n"
+	"\t.long lj_vm_ffi_call-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
+	"\t.byte 0x8e\n\t.uleb128 2\n"
+	"\t.byte 0xd\n\t.uleb128 0xe\n"
+	"\t.align 2\n"
+	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
     break;
   default:
     break;

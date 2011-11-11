@@ -2178,7 +2178,8 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |->vm_ffi_call:
+  |->vm_ffi_call:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
 #if LJ_HASFFI
   |  .type CCSTATE, CCallState, r4
   |  push {CCSTATE, r5, r11, lr}
@@ -2207,6 +2208,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  str CRET2, CCSTATE->gpr[1]
   |  pop {CCSTATE, r5, r11, pc}
 #endif
+  |// Note: vm_ffi_call must be the last function in this object file!
   |
   |//-----------------------------------------------------------------------
 }
@@ -4003,6 +4005,7 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
+  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
   int i;
   switch (ctx->mode) {
   case BUILD_elfasm:
@@ -4028,13 +4031,30 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin\n"
 	"\t.long %d\n"
 	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
-	"\t.byte 0x8e\n\t.uleb128 1\n",		/* Restore lr. */
-	(int)ctx->codesz, CFRAME_SIZE);
-    for (i = 11; i >= 4; i--)  /* Restore r4-r11. */
+	"\t.byte 0x8e\n\t.uleb128 1\n",		/* offset lr */
+	fcofs, CFRAME_SIZE);
+    for (i = 11; i >= 4; i--)  /* offset r4-r11 */
       fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+i, 2+(11-i));
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .Lframe0\n"
+	"\t.long lj_vm_ffi_call\n"
+	"\t.long %d\n"
+	"\t.byte 0xe\n\t.uleb128 16\n"		/* def_cfa_offset */
+	"\t.byte 0x8e\n\t.uleb128 1\n"		/* offset lr */
+	"\t.byte 0x8b\n\t.uleb128 2\n"		/* offset r11 */
+	"\t.byte 0x85\n\t.uleb128 3\n"		/* offset r5 */
+	"\t.byte 0x84\n\t.uleb128 4\n"		/* offset r4 */
+	"\t.byte 0xd\n\t.uleb128 0xb\n"		/* def_cfa_register r11 */
+	"\t.align 2\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
+#endif
     break;
   default:
     break;
