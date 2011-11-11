@@ -15,6 +15,7 @@ span.mark { color: #4040c0; font-family: Courier New, Courier, monospace;
 pre.mark { padding-left: 2em; }
 table.idiomtable { line-height: 1.2; }
 table.idiomtable tt { font-size: 100%; }
+table.idiomtable td { vertical-align: top; }
 tr.idiomhead td { font-weight: bold; }
 td.idiomc { width: 12em; }
 td.idiomlua { width: 14em; }
@@ -454,7 +455,7 @@ the origin.
 <span class="mark">&#9315;</span> If we run out of operators, we can
 define named methods, too. Here the <tt>__index</tt> table defines an
 <tt>area</tt> function. For custom indexing needs, one might want to
-define <tt>__index</tt> and <tt>__newindex</tt> functions instead.
+define <tt>__index</tt> and <tt>__newindex</tt> <em>functions</em> instead.
 </p>
 <p>
 <span class="mark">&#9316;</span> This associates the metamethods with
@@ -477,6 +478,24 @@ operations (such as <tt>a.x</tt>) can be freely mixed with the newly
 defined metamethods. Note that <tt>area</tt> is a method and must be
 called with the Lua syntax for methods: <tt>a:area()</tt>, not
 <tt>a.area()</tt>.
+</p>
+<p>
+The C&nbsp;type metamethod mechanism is most useful when used in
+conjunction with C&nbsp;libraries that are written in an object-oriented
+style. Creators return a pointer to a new instance and methods take an
+instance pointer as the first argument. Sometimes you can just point
+<tt>__index</tt> to the library namespace and <tt>__gc</tt> to the
+destructor and you're done. But often enough you'll want to add
+convenience wrappers, e.g. to return actual Lua strings or when
+returning multiple values.
+</p>
+<p>
+Some C libraries only declare instance pointers as an opaque
+<tt>void&nbsp;*</tt> type. In this case you can use a fake type for all
+declarations, e.g. a pointer to a named (incomplete) struct will do:
+<tt>typedef struct foo_type *foo_handle</tt>. The C&nbsp;side doesn't
+know what you declare with the LuaJIT FFI, but as long as the underlying
+types are compatible, everything still works.
 </p>
 
 <h2 id="idioms">Translating C&nbsp;Idioms</h2>
