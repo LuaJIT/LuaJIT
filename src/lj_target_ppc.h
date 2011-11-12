@@ -112,13 +112,14 @@ typedef struct {
 #define EXITSTATE_CHECKEXIT	1
 
 /* Return the address of a per-trace exit stub. */
-static LJ_AINLINE MCode *exitstub_trace_addr(GCtrace *T, ExitNo exitno)
+static LJ_AINLINE uint32_t *exitstub_trace_addr_(uint32_t *p, uint32_t exitno)
 {
-  /* Keep this in-sync with asm_exitstub_*. */
-  MCode *p = (MCode *)((char *)T->mcode + T->szmcode);
   while (*p == 0x60000000) p++;  /* Skip PPCI_NOP. */
   return p + 3 + exitno;
 }
+/* Avoid dependence on lj_jit.h if only including lj_target.h. */
+#define exitstub_trace_addr(T, exitno) \
+  exitstub_trace_addr_((MCode *)((char *)(T)->mcode + (T)->szmcode), (exitno))
 
 /* -- Instructions -------------------------------------------------------- */
 
