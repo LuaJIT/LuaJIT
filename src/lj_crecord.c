@@ -15,6 +15,7 @@
 #include "lj_tab.h"
 #include "lj_frame.h"
 #include "lj_ctype.h"
+#include "lj_cdata.h"
 #include "lj_cparse.h"
 #include "lj_cconv.h"
 #include "lj_clib.h"
@@ -785,7 +786,7 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
       did = ctype_cid(ctf->info);
     } else {
       if (!(ct->info & CTF_VARARG))
-        lj_trace_err(J, LJ_TRERR_NYICALL);  /* Too many arguments. */
+	lj_trace_err(J, LJ_TRERR_NYICALL);  /* Too many arguments. */
       did = lj_ccall_ctid_vararg(cts, o);  /* Infer vararg type. */
     }
     d = ctype_raw(cts, did);
@@ -853,6 +854,12 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     CType *ctr = ctype_rawchild(cts, ct);
     IRType t = crec_ct2irt(ctr);
     TRef tr;
+    TValue tv;
+    /* Check for blacklisted C functions that might call a callback. */
+    setlightudV(&tv,
+		cdata_getptr(cdataptr(cd), (LJ_64 && tp == IRT_P64) ? 8 : 4));
+    if (tvistrue(lj_tab_get(J->L, cts->miscmap, &tv)))
+      lj_trace_err(J, LJ_TRERR_BLACKL);
     if (ctype_isvoid(ctr->info)) {
       t = IRT_NIL;
       rd->nres = 0;

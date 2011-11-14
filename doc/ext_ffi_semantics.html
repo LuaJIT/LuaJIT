@@ -297,10 +297,12 @@ arguments to C&nbsp;calls:
 <tr class="even">
 <td class="convin">string</td><td class="convop">string data &rarr;</td><td class="convout"><tt>const char[]</tt></td></tr>
 <tr class="odd separate">
+<td class="convin">function</td><td class="convop"><a href="#callback">create callback</a> &rarr;</td><td class="convout">C function type</td></tr>
+<tr class="even separate">
 <td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout">Array</td></tr>
-<tr class="even">
+<tr class="odd">
 <td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout"><tt>struct</tt>/<tt>union</tt></td></tr>
-<tr class="odd separate">
+<tr class="even separate">
 <td class="convin">cdata</td><td class="convop">cdata payload &rarr;</td><td class="convout">C type</td></tr>
 </table>
 <p>
@@ -821,6 +823,127 @@ cdata objects are indistinguishable from pointers returned by C
 functions (which is one of the reasons why the GC cannot follow them).
 </p>
 
+<h2 id="callback">Callbacks</h2>
+<p>
+The LuaJIT FFI automatically generates special callback functions
+whenever a Lua function is converted to a C&nbsp;function pointer. This
+associates the generated callback function pointer with the C&nbsp;type
+of the function pointer and the Lua function object (closure).
+</p>
+<p>
+This can happen implicitly due to the usual conversions, e.g. when
+passing a Lua function to a function pointer argument. Or you can use
+<tt>ffi.cast()</tt> to explicitly cast a Lua function to a
+C&nbsp;function pointer.
+</p>
+<p>
+Currently only certain C&nbsp;function types can be used as callback
+functions. Neither C&nbsp;vararg functions nor functions with
+pass-by-value aggregate argument or result types are supported. There
+are no restrictions for the kind of Lua functions that can be called
+from the callback &mdash; no checks for the proper number of arguments
+are made. The return value of the Lua function will be converted to the
+result type and an error will be thrown for invalid conversions.
+</p>
+<p>
+It's allowed to throw errors across a callback invocation, but it's not
+advisable in general. Do this only if you know the C&nbsp;function, that
+called the callback, copes with the forced stack unwinding and doesn't
+leak resources.
+</p>
+
+<h3 id="callback_resources">Callback resource handling</h3>
+<p>
+Callbacks take up resources &mdash; you can only have a limited number
+of them at the same time (500&nbsp;-&nbsp;1000, depending on the
+architecture). The associated Lua functions are anchored to prevent
+garbage collection, too.
+</p>
+<p>
+<b>Callbacks due to implicit conversions are permanent!</b> There is no
+way to guess their lifetime, since the C&nbsp;side might store the
+function pointer for later use (typical for GUI toolkits). The associated
+resources cannot be reclaimed until termination:
+</p>
+<pre class="code">
+ffi.cdef[[
+typedef int (__stdcall *WNDENUMPROC)(void *hwnd, intptr_t l);
+int EnumWindows(WNDENUMPROC func, intptr_t l);
+]]
+
+-- Implicit conversion to a callback via function pointer argument.
+local count = 0
+ffi.C.EnumWindows(function(hwnd, l)
+  count = count + 1
+end, 0)
+-- The callback is permanent and its resources cannot be reclaimed!
+-- Ok, so this may not be a problem, if you do this only once.
+</pre>
+<p>
+Note: this example shows that you <em>must</em> properly declare
+<tt>__stdcall</tt> callbacks on Windows/x86 systems. The calling
+convention cannot be automatically detected, unlike for
+<tt>__stdcall</tt> calls <em>to</em> Windows functions.
+</p>
+<p>
+For some use cases it's necessary to free up the resources or to
+dynamically redirect callbacks. Use an explicit cast to a
+C&nbsp;function pointer and keep the resulting cdata object. Then use
+the <a href="ext_ffi_api.html#callback_free"><tt>cb:free()</tt></a>
+or <a href="ext_ffi_api.html#callback_set"><tt>cb:set()</tt></a> methods
+on the cdata object:
+</p>
+<pre class="code">
+-- Explicitly convert to a callback via cast.
+local count = 0
+local cb = ffi.cast("WNDENUMPROC", function(hwnd, l)
+  count = count + 1
+end)
+
+-- Pass it to a C function.
+ffi.C.EnumWindows(cb, 0)
+-- EnumWindows doesn't need the callback after it returns, so free it.
+
+cb:free()
+-- The callback function pointer is no longer valid and its resources
+-- will be reclaimed. The created Lua closure will be garbage collected.
+</pre>
+
+<h3 id="callback_performance">Callback performance</h3>
+<p>
+<b>Callbacks are slow!</b> First, the C&nbsp;to Lua transition itself
+has an unavoidable cost, similar to a <tt>lua_call()</tt> or
+<tt>lua_pcall()</tt>. Argument and result marshalling add to that cost.
+And finally, neither the C&nbsp;compiler nor LuaJIT can inline or
+optimize across the language barrier and hoist repeated computations out
+of a callback function.
+</p>
+<p>
+Do not use callbacks for performance-sensitive work: e.g. consider a
+numerical integration routine which takes a user-defined function to
+integrate over. It's a bad idea to call a user-defined Lua function from
+C&nbsp;code millions of times. The callback overhead will be absolutely
+detrimental for performance.
+</p>
+<p>
+It's considerably faster to write the numerical integration routine
+itself in Lua &mdash; the JIT compiler will be able to inline the
+user-defined function and optimize it together with its calling context,
+with very competitive performance.
+</p>
+<p>
+As a general guideline: <b>use callbacks only when you must</b>, because
+of existing C&nbsp;APIs. E.g. callback performance is irrelevant for a
+GUI application, which waits for user input most of the time, anyway.
+</p>
+<p>
+For new designs <b>avoid push-style APIs</b> (C&nbsp;function repeatedly
+calling a callback for each result). Instead <b>use pull-style APIs</b>
+(call a C&nbsp;function repeatedly to get a new result). Calls from Lua
+to C via the FFI are much faster than the other way round. Most well
+designed libraries already use pull-style APIs (read/write, get/put).
+</p>
+
 <h2 id="clib">C Library Namespaces</h2>
 <p>
 A C&nbsp;library namespace is a special kind of object which allows
@@ -1002,7 +1125,6 @@ Other missing features:
 <ul>
 <li>Bit operations for 64&nbsp;bit types.</li>
 <li>Arithmetic for <tt>complex</tt> numbers.</li>
-<li>Callbacks from C&nbsp;code to Lua functions.</li>
 <li>Passing structs by value to vararg C&nbsp;functions.</li>
 <li><a href="extensions.html#exceptions">C++ exception interoperability</a>
 does not extend to C&nbsp;functions called via the FFI, if the call is

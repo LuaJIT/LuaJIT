@@ -12,6 +12,7 @@
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_ctype.h"
+#include "lj_ccallback.h"
 
 /* -- C type definitions -------------------------------------------------- */
 
@@ -315,7 +316,11 @@ cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
     id = ctype_cid(ct->info);
     ct = ctype_get(cts, id);
   }
-  tv = lj_tab_getint(cts->metatype, (int32_t)id);
+  if (ctype_isptr(ct->info) &&
+      ctype_isfunc(ctype_get(cts, ctype_cid(ct->info))->info))
+    tv = lj_tab_getstr(cts->miscmap, &cts->g->strempty);
+  else
+    tv = lj_tab_getinth(cts->miscmap, -(int32_t)id);
   if (tv && tvistab(tv) &&
       (tv = lj_tab_getstr(tabV(tv), mmname_str(cts->g, mm))) && !tvisnil(tv))
     return tv;
@@ -592,7 +597,9 @@ void lj_ctype_freestate(global_State *g)
 {
   CTState *cts = ctype_ctsG(g);
   if (cts) {
+    lj_ccallback_mcode_free(cts);
     lj_mem_freevec(g, cts->tab, cts->sizetab, CType);
+    lj_mem_freevec(g, cts->cb.cbid, cts->cb.sizeid, CTypeID1);
     lj_mem_freet(g, cts);
   }
 }

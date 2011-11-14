@@ -10,6 +10,7 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 #include "lj_ctype.h"
 #include "lj_cconv.h"
 #include "lj_cdata.h"
@@ -290,7 +291,7 @@
   }
 
 #else
-#error "missing calling convention definitions for this architecture"
+#error "Missing calling convention definitions for this architecture"
 #endif
 
 #ifndef CCALL_HANDLE_STRUCTRET2
@@ -649,7 +650,13 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
     int gcsteps, ret;
     cc.func = (void (*)(void))cdata_getptr(cdataptr(cd), sz);
     gcsteps = ccall_set_args(L, cts, ct, &cc);
+    cts->cb.slot = ~0u;
     lj_vm_ffi_call(&cc);
+    if (cts->cb.slot != ~0u) {  /* Blacklist function that called a callback. */
+      TValue tv;
+      setlightudV(&tv, (void *)cc.func);
+      setboolV(lj_tab_set(L, cts->miscmap, &tv), 1);
+    }
     gcsteps += ccall_get_results(L, cts, ct, &cc, &ret);
 #if LJ_TARGET_X86 && LJ_ABI_WIN
     /* Automatically detect __stdcall and fix up C function declaration. */

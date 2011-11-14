@@ -138,6 +138,8 @@ enum {
   (&gcref(*(GCRef *)(((char *)(cf))+CFRAME_OFS_L))->th)
 #define cframe_pc(cf) \
   (mref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), const BCIns))
+#define setcframe_L(cf, L) \
+  (setmref(*(MRef *)(((char *)(cf))+CFRAME_OFS_L), (L)))
 #define setcframe_pc(cf, pc) \
   (setmref(*(MRef *)(((char *)(cf))+CFRAME_OFS_PC), (pc)))
 #define cframe_canyield(cf)	((intptr_t)(cf) & CFRAME_RESUME)

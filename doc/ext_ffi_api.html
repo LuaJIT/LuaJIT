@@ -78,6 +78,9 @@ corresponding <b>ctype</b>.</li>
 <li><b>ct</b> &mdash; A C&nbsp;type specification which can be used for
 most of the API functions. Either a <b>cdecl</b>, a <b>ctype</b> or a
 <b>cdata</b> serving as a template type.</li>
+<li><b>cb</b> &mdash; A callback object. This is a C&nbsp;data object
+holding a special function pointer. Calling this function from
+C&nbsp;code runs an associated Lua function.</li>
 <li><b>VLA</b> &mdash; A variable-length array is declared with a
 <tt>?</tt> instead of the number of elements, e.g. <tt>"int[?]"</tt>.
 The number of elements (<tt>nelem</tt>) must be given when it's
@@ -471,6 +474,31 @@ Contains the target OS name. Same contents as
 <p>
 Contains the target architecture name. Same contents as
 <a href="ext_jit.html#jit_arch"><tt>jit.arch</tt></a>.
+</p>
+
+<h2 id="callback">Methods for Callbacks</h2>
+<p>
+The C&nbsp;types for <a href="ext_ffi_semantics.html#callback">callbacks</a>
+have some extra methods:
+</p>
+
+<h3 id="callback_free"><tt>cb:free()</tt></h3>
+<p>
+Free the resources associated with a callback. The associated Lua
+function is unanchored and may be garbage collected. The callback
+function pointer is no longer valid and must not be called anymore
+(it may be reused by a subsequently created callback).
+</p>
+
+<h3 id="callback_set"><tt>cb:set(func)</tt></h3>
+<p>
+Associate a new Lua function with a callback. The C&nbsp;type of the
+callback and the callback function pointer are unchanged.
+</p>
+<p>
+This method is useful to dynamically switch the receiver of callbacks
+without creating a new callback each time and registering it again (e.g.
+with a GUI library).
 </p>
 
 <h2 id="extended">Extended Standard Library Functions</h2>

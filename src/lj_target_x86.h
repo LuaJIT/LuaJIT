@@ -192,6 +192,7 @@ typedef enum {
   XI_CALL =	0xe8,
   XI_JMP =	0xe9,
   XI_JMPs =	0xeb,
+  XI_PUSH =	0x50, /* Really 50+r. */
   XI_JCCs =	0x70, /* Really 7x. */
   XI_JCCn =	0x80, /* Really 0f8x. */
   XI_LEA =	0x8d,
@@ -203,6 +204,7 @@ typedef enum {
   XI_PUSHi8 =	0x6a,
   XI_TEST =	0x85,
   XI_MOVmi =	0xc7,
+  XI_GROUP5 =	0xff,
 
   /* Note: little-endian byte-order! */
   XI_FLDZ =	0xeed9,

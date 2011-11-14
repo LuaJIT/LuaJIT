@@ -107,6 +107,7 @@ BCLine LJ_FASTCALL lj_debug_line(GCproto *pt, BCPos pc)
   const void *lineinfo = proto_lineinfo(pt);
   if (pc < pt->sizebc && lineinfo) {
     BCLine first = pt->firstline;
+    if (pc == pt->sizebc-1) return first + pt->numline;
     if (pc-- == 0) return first;
     if (pt->numline < 256)
       return first + (BCLine)((const uint8_t *)lineinfo)[pc];
@@ -124,7 +125,7 @@ static BCLine debug_frameline(lua_State *L, GCfunc *fn, cTValue *nextframe)
   BCPos pc = debug_framepc(L, fn, nextframe);
   if (pc != NO_BCPOS) {
     GCproto *pt = funcproto(fn);
-    lua_assert(pc < pt->sizebc);
+    lua_assert(pc <= pt->sizebc);
     return lj_debug_line(pt, pc);
   }
   return -1;

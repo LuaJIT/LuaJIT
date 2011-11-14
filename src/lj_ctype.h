@@ -151,6 +151,25 @@ typedef struct CType {
 #define CTHASH_SIZE	128	/* Number of hash anchors. */
 #define CTHASH_MASK	(CTHASH_SIZE-1)
 
+/* Simplify target-specific configuration. Checked in lj_ccall.h. */
+#define CCALL_MAX_GPR		8
+#define CCALL_MAX_FPR		8
+
+typedef LJ_ALIGN(8) union FPRCBArg { double d; float f; } FPRCBArg;
+
+/* C callback state. Defined here, to avoid dragging in lj_ccall.h. */
+
+typedef LJ_ALIGN(8) struct CCallback {
+  FPRCBArg fpr[CCALL_MAX_FPR];	/* Arguments/results in FPRs. */
+  intptr_t gpr[CCALL_MAX_GPR];	/* Arguments/results in GPRs. */
+  intptr_t *stack;		/* Pointer to arguments on stack. */
+  void *mcode;			/* Machine code for callback func. pointers. */
+  CTypeID1 *cbid;		/* Callback type table. */
+  MSize sizeid;			/* Size of callback type table. */
+  MSize topid;			/* Highest unused callback type table slot. */
+  MSize slot;			/* Current callback slot. */
+} CCallback;
+
 /* C type state. */
 typedef struct CTState {
   CType *tab;		/* C type table. */
@@ -159,7 +178,8 @@ typedef struct CTState {
   lua_State *L;		/* Lua state (needed for errors and allocations). */
   global_State *g;	/* Global state. */
   GCtab *finalizer;	/* Map of cdata to finalizer. */
-  GCtab *metatype;	/* Map of CTypeID to metatable. */
+  GCtab *miscmap;	/* Map of -CTypeID to metatable and cb slot to func. */
+  CCallback cb;		/* Temporary callback state. */
   CTypeID1 hash[CTHASH_SIZE];  /* Hash anchors for C type table. */
 } CTState;
 

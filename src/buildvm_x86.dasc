@@ -114,9 +114,12 @@
 |.if not X64		// x86 stack layout.
 |
 |.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
-|.macro saveregs
-|  push ebp; push edi; push esi; push ebx
+|.macro saveregs_
+|  push edi; push esi; push ebx
 |  sub esp, CFRAME_SPACE
+|.endmacro
+|.macro saveregs
+|  push ebp; saveregs_
 |.endmacro
 |.macro restoreregs
 |  add esp, CFRAME_SPACE
@@ -166,9 +169,12 @@
 |.elif X64WIN		// x64/Windows stack layout
 |
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
-|.macro saveregs
-|  push rbp; push rdi; push rsi; push rbx
+|.macro saveregs_
+|  push rdi; push rsi; push rbx
 |  sub rsp, CFRAME_SPACE
+|.endmacro
+|.macro saveregs
+|  push rbp; saveregs_
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
@@ -206,9 +212,12 @@
 |.else			// x64/POSIX stack layout
 |
 |.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
-|.macro saveregs
-|  push rbp; push rbx; push r15; push r14
+|.macro saveregs_
+|  push rbx; push r15; push r14
 |  sub rsp, CFRAME_SPACE
+|.endmacro
+|.macro saveregs
+|  push rbp; saveregs_
 |.endmacro
 |.macro restoreregs
 |  add rsp, CFRAME_SPACE
@@ -760,14 +769,18 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  mov PC, [RB-12]			// Restore PC from [cont|PC].
   |.if X64
   |  movsxd RAa, dword [RB-16]		// May be negative on WIN64 with debug.
-  |  test RA, RA
-  |  jz >1
+#if LJ_HASFFI
+  |  cmp RA, 1
+  |  jbe >1
+#endif
   |  lea KBASEa, qword [=>0]
   |  add RAa, KBASEa
   |.else
   |  mov RA, dword [RB-16]
-  |  test RA, RA
-  |  jz >1
+#if LJ_HASFFI
+  |  cmp RA, 1
+  |  jbe >1
+#endif
   |.endif
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
@@ -775,11 +788,15 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |  // BASE = base, RC = result, RB = meta base
   |  jmp RAa				// Jump to continuation.
   |
-  |1:  // Tail call from C function.
+#if LJ_HASFFI
+  |1:
+  |  je ->cont_ffi_callback		// cont = 1: return from FFI callback.
+  |  // cont = 0: Tail call from C function.
   |  sub RB, BASE
   |  shr RB, 3
   |  lea RD, [RB-1]
   |  jmp ->vm_call_tail
+#endif
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
   |  movzx RA, PC_RB
@@ -3699,6 +3716,103 @@ static void build_subroutines(BuildCtx *ctx, int cmov, int sse)
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
+  |
+  |// Handler for callback functions. Callback slot number in ah/al.
+  |->vm_ffi_callback:
+#if LJ_HASFFI
+  |.type CTSTATE, CTState, PC
+  |.if not X64
+  |  sub esp, 16			// Leave room for SAVE_ERRF etc.
+  |.endif
+  |  saveregs_	// ebp/rbp already saved. ebp now holds global_State *.
+  |  lea DISPATCH, [ebp+GG_G2DISP]
+  |  mov CTSTATE, GL:ebp->ctype_state
+  |  movzx eax, ax
+  |  mov CTSTATE->cb.slot, eax
+  |.if X64
+  |  mov CTSTATE->cb.gpr[0], CARG1
+  |  mov CTSTATE->cb.gpr[1], CARG2
+  |  mov CTSTATE->cb.gpr[2], CARG3
+  |  mov CTSTATE->cb.gpr[3], CARG4
+  |  movsd qword CTSTATE->cb.fpr[0], xmm0
+  |  movsd qword CTSTATE->cb.fpr[1], xmm1
+  |  movsd qword CTSTATE->cb.fpr[2], xmm2
+  |  movsd qword CTSTATE->cb.fpr[3], xmm3
+  |.if X64WIN
+  |  lea rax, [rsp+CFRAME_SIZE+4*8]
+  |.else
+  |  lea rax, [rsp+CFRAME_SIZE]
+  |  mov CTSTATE->cb.gpr[4], CARG5
+  |  mov CTSTATE->cb.gpr[5], CARG6
+  |  movsd qword CTSTATE->cb.fpr[4], xmm4
+  |  movsd qword CTSTATE->cb.fpr[5], xmm5
+  |  movsd qword CTSTATE->cb.fpr[6], xmm6
+  |  movsd qword CTSTATE->cb.fpr[7], xmm7
+  |.endif
+  |  mov CTSTATE->cb.stack, rax
+  |  mov CARG2, rsp
+  |.else
+  |  lea eax, [esp+CFRAME_SIZE+16]
+  |  mov CTSTATE->cb.gpr[0], FCARG1
+  |  mov CTSTATE->cb.gpr[1], FCARG2
+  |  mov CTSTATE->cb.stack, eax
+  |  mov FCARG1, [esp+CFRAME_SIZE+12]	// Move around misplaced retaddr/ebp.
+  |  mov FCARG2, [esp+CFRAME_SIZE+8]
+  |  mov SAVE_RET, FCARG1
+  |  mov SAVE_R4, FCARG2
+  |  mov FCARG2, esp
+  |.endif
+  |  mov SAVE_PC, CTSTATE		// Any value outside of bytecode is ok.
+  |  mov FCARG1, CTSTATE
+  |  call extern lj_ccallback_enter@8	// (CTState *cts, void *cf)
+  |  // lua_State * returned in eax (RD).
+  |  set_vmstate INTERP
+  |  mov BASE, L:RD->base
+  |  mov RD, L:RD->top
+  |  sub RD, BASE
+  |  mov LFUNC:RB, [BASE-8]
+  |  shr RD, 3
+  |  add RD, 1
+  |  ins_callt
+#endif
+  |
+  |->cont_ffi_callback:			// Return from FFI callback.
+#if LJ_HASFFI
+  |  mov L:RA, SAVE_L
+  |  mov CTSTATE, [DISPATCH+DISPATCH_GL(ctype_state)]
+  |  mov aword CTSTATE->L, L:RAa
+  |  mov L:RA->base, BASE
+  |  mov L:RA->top, RB
+  |  mov FCARG1, CTSTATE
+  |  mov FCARG2, RC
+  |  call extern lj_ccallback_leave@8	// (CTState *cts, TValue *o)
+  |.if X64
+  |  mov rax, CTSTATE->cb.gpr[0]
+  |  movsd xmm0, qword CTSTATE->cb.fpr[0]
+  |  jmp ->vm_leave_unw
+  |.else
+  |  mov L:RB, SAVE_L
+  |  mov eax, CTSTATE->cb.gpr[0]
+  |  mov edx, CTSTATE->cb.gpr[1]
+  |  cmp dword CTSTATE->cb.gpr[2], 1
+  |  jb >7
+  |  je >6
+  |  fld qword CTSTATE->cb.fpr[0].d
+  |  jmp >7
+  |6:
+  |  fld dword CTSTATE->cb.fpr[0].f
+  |7:
+  |  mov ecx, L:RB->top
+  |  movzx ecx, word [ecx+6]		// Get stack adjustment and copy up.
+  |  mov SAVE_L, ecx			// Must be one slot above SAVE_RET
+  |  restoreregs
+  |  pop ecx				// Move return addr from SAVE_RET.
+  |  add esp, [esp]			// Adjust stack.
+  |  add esp, 16
+  |  push ecx
+  |  ret
+  |.endif
+#endif
   |
   |->vm_ffi_call@4:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
