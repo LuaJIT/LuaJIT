@@ -207,7 +207,10 @@ LJLIB_CF(ffi_meta___concat)	LJLIB_REC(cdata_arith MM_concat)
 static int ffi_call_meta(lua_State *L, CTypeID id)
 {
   CTState *cts = ctype_cts(L);
-  cTValue *tv = lj_ctype_meta(cts, id, MM_call);
+  CType *ct = ctype_raw(cts, id);
+  cTValue *tv;
+  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+  tv = lj_ctype_meta(cts, id, MM_call);
   if (!tv)
     lj_err_callerv(L, LJ_ERR_FFI_BADCALL, strdata(lj_ctype_repr(L, id, NULL)));
   return lj_meta_tailcall(L, tv);

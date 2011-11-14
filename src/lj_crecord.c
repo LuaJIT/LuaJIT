@@ -890,13 +890,30 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
   return 0;
 }
 
+/* Record ctype call metamethod. */
+static void crec_call_meta(jit_State *J, RecordFFData *rd, CTypeID id)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  CType *ct = ctype_raw(cts, id);
+  cTValue *tv;
+  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+  tv = lj_ctype_meta(cts, id, MM_call);
+  if (tv && tvisfunc(tv)) {
+    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+    rd->nres = -1;  /* Pending tailcall. */
+  } else {
+    /* NYI: non-function metamethods. */
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+}
+
 void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
 {
   GCcdata *cd = argv2cdata(J, J->base[0], &rd->argv[0]);
   if (cd->typeid == CTID_CTYPEID)
     crec_alloc(J, rd, crec_constructor(J, cd, J->base[0]));
   else if (!crec_call(J, rd, cd))
-    lj_trace_err(J, LJ_TRERR_BADTYPE);
+    crec_call_meta(J, rd, cd->typeid);
 }
 
 static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
