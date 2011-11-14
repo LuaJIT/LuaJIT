@@ -625,7 +625,7 @@ static Reg ra_dest(ASMState *as, IRIns *ir, RegSet allow)
     ra_free(as, dest);
     ra_modified(as, dest);
   } else {
-    if (ra_hashint(dest) && rset_test(as->freeset, ra_gethint(dest))) {
+    if (ra_hashint(dest) && rset_test((as->freeset&allow), ra_gethint(dest))) {
       dest = ra_gethint(dest);
       ra_modified(as, dest);
       RA_DBGX((as, "dest           $r", dest));
