@@ -169,7 +169,9 @@ static const char *clib_extname(lua_State *L, const char *name)
 
 static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
+  DWORD oldwerr = GetLastError();
   void *h = (void *)LoadLibraryA(clib_extname(L, name));
+  SetLastError(oldwerr);
   if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", name);
   UNUSED(global);
   return h;
@@ -194,6 +196,7 @@ static void clib_unloadlib(CLibrary *cl)
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
   void *p = NULL;
+  DWORD oldwerr = GetLastError();
   if (cl->handle == CLIB_DEFHANDLE) {  /* Search default libraries. */
     MSize i;
     for (i = 0; i < CLIB_HANDLE_MAX; i++) {
@@ -222,6 +225,7 @@ static void *clib_getsym(CLibrary *cl, const char *name)
   } else {
     p = (void *)GetProcAddress((HINSTANCE)cl->handle, name);
   }
+  SetLastError(oldwerr);
   return p;
 }
 
