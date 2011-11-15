@@ -875,6 +875,7 @@ int EnumWindows(WNDENUMPROC func, intptr_t l);
 local count = 0
 ffi.C.EnumWindows(function(hwnd, l)
   count = count + 1
+  return true
 end, 0)
 -- The callback is permanent and its resources cannot be reclaimed!
 -- Ok, so this may not be a problem, if you do this only once.
@@ -898,6 +899,7 @@ on the cdata object:
 local count = 0
 local cb = ffi.cast("WNDENUMPROC", function(hwnd, l)
   count = count + 1
+  return true
 end)
 
 -- Pass it to a C function.
