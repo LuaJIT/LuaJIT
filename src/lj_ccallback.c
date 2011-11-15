@@ -453,6 +453,7 @@ void *lj_ccallback_new(CTState *cts, CType *ct, GCfunc *fn)
     MSize slot = callback_slot_new(cts, ct);
     GCtab *t = cts->miscmap;
     setfuncV(cts->L, lj_tab_setint(cts->L, t, (int32_t)slot), fn);
+    lj_gc_anybarriert(cts->L, t);
     return callback_slot2ptr(cts, slot);
   }
   return NULL;  /* Bad conversion. */
