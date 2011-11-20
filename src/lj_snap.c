@@ -63,7 +63,8 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
     if (ref) {
       SnapEntry sn = SNAP_TR(s, tr);
       IRIns *ir = IR(ref);
-      if (ir->o == IR_SLOAD && ir->op1 == s && ref > retf) {
+      if (!(sn & (SNAP_CONT|SNAP_FRAME)) &&
+	  ir->o == IR_SLOAD && ir->op1 == s && ref > retf) {
 	/* No need to snapshot unmodified non-inherited slots. */
 	if (!(ir->op2 & IRSLOAD_INHERIT))
 	  continue;
@@ -81,16 +82,19 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
 }
 
 /* Add frame links at the end of the snapshot. */
-static void snapshot_framelinks(jit_State *J, SnapEntry *map)
+static BCReg snapshot_framelinks(jit_State *J, SnapEntry *map)
 {
   cTValue *frame = J->L->base - 1;
   cTValue *lim = J->L->base - J->baseslot;
+  cTValue *ftop = frame + funcproto(frame_func(frame))->framesize;
   MSize f = 0;
   map[f++] = SNAP_MKPC(J->pc);  /* The current PC is always the first entry. */
   while (frame > lim) {  /* Backwards traversal of all frames above base. */
     if (frame_islua(frame)) {
       map[f++] = SNAP_MKPC(frame_pc(frame));
       frame = frame_prevl(frame);
+      if (frame + funcproto(frame_func(frame))->framesize > ftop)
+	ftop = frame + funcproto(frame_func(frame))->framesize;
     } else if (frame_iscont(frame)) {
       map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
       map[f++] = SNAP_MKPC(frame_contpc(frame));
@@ -102,6 +106,7 @@ static void snapshot_framelinks(jit_State *J, SnapEntry *map)
     }
   }
   lua_assert(f == (MSize)(1 + J->framedepth));
+  return (BCReg)(ftop - lim);
 }
 
 /* Take a snapshot of the current stack. */
@@ -114,7 +119,7 @@ static void snapshot_stack(jit_State *J, SnapShot *snap, MSize nsnapmap)
   lj_snap_grow_map(J, nsnapmap + nslots + (MSize)J->framedepth+1);
   p = &J->cur.snapmap[nsnapmap];
   nent = snapshot_slots(J, p, nslots);
-  snapshot_framelinks(J, p + nent);
+  snap->topslot = (uint8_t)snapshot_framelinks(J, p + nent);
   snap->mapofs = (uint16_t)nsnapmap;
   snap->ref = (IRRef1)J->cur.nins;
   snap->nent = (uint8_t)nent;
@@ -338,7 +343,6 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   SnapEntry *map = &T->snapmap[snap->mapofs];
   SnapEntry *flinks = &T->snapmap[snap_nextofs(T, snap)-1];
   int32_t ftsz0;
-  BCReg nslots = snap->nslots;
   TValue *frame;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
   const BCIns *pc = snap_pc(map[nent]);
@@ -348,9 +352,9 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   setcframe_pc(cframe_raw(L->cframe), pc+1);
 
   /* Make sure the stack is big enough for the slots from the snapshot. */
-  if (LJ_UNLIKELY(L->base + nslots > tvref(L->maxstack))) {
+  if (LJ_UNLIKELY(L->base + snap->topslot > tvref(L->maxstack))) {
     L->top = curr_topL(L);
-    lj_state_growstack(L, nslots - curr_proto(L)->framesize);
+    lj_state_growstack(L, snap->topslot - curr_proto(L)->framesize);
   }
 
   /* Fill stack slots with data from the registers and spill slots. */
@@ -364,27 +368,9 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
     IRIns *ir = &T->ir[ref];
     if (irref_isk(ref)) {  /* Restore constant slot. */
       lj_ir_kvalue(L, o, ir);
-      if ((sn & (SNAP_CONT|SNAP_FRAME))) {
-	/* Overwrite tag with frame link. */
-	o->fr.tp.ftsz = s != 0 ? (int32_t)*flinks-- : ftsz0;
-	if ((sn & SNAP_FRAME)) {
-	  GCfunc *fn = ir_kfunc(ir);
-	  if (isluafunc(fn)) {
-	    MSize framesize = funcproto(fn)->framesize;
-	    L->base = ++o;
-	    if (LJ_UNLIKELY(o + framesize > tvref(L->maxstack))) {
-	      ptrdiff_t fsave = savestack(L, frame);
-	      L->top = o;
-	      lj_state_growstack(L, framesize);  /* Grow again. */
-	      frame = restorestack(L, fsave);
-	    }
-	  }
-	}
-      }
     } else if (!(sn & SNAP_NORESTORE)) {
       IRType1 t = ir->t;
       RegSP rs = ir->prev;
-      lua_assert(!(sn & (SNAP_CONT|SNAP_FRAME)));
       if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
 	rs = snap_renameref(T, snapno, ref, rs);
       if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
@@ -438,10 +424,14 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	    (uint32_t)ex->gpr[regsp_reg(rs)-RID_MIN_GPR];
       }
     }
+    if ((sn & (SNAP_CONT|SNAP_FRAME))) {  /* Overwrite tag with frame link. */
+      o->fr.tp.ftsz = s != 0 ? (int32_t)*flinks-- : ftsz0;
+      L->base = o+1;
+    }
   }
   switch (bc_op(*pc)) {
   case BC_CALLM: case BC_CALLMT: case BC_RETM: case BC_TSETM:
-    L->top = frame + nslots;
+    L->top = frame + snap->nslots;
     break;
   default:
     L->top = curr_topL(L);

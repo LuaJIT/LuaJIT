@@ -199,6 +199,7 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
   snap->mapofs = (uint16_t)nmapofs;
   snap->ref = (IRRef1)J->cur.nins;
   snap->nslots = nslots;
+  snap->topslot = osnap->topslot;
   snap->count = 0;
   nmap = &J->cur.snapmap[nmapofs];
   /* Substitute snapshot slots. */

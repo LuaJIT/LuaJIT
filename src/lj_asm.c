@@ -903,30 +903,6 @@ static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
   return (nargs | (ir->t.irt << CCI_OTSHIFT));
 }
 
-/* Get extent of the stack for a snapshot. */
-static BCReg asm_stack_extent(ASMState *as, SnapShot *snap, BCReg *ptopslot)
-{
-  SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  MSize n, nent = snap->nent;
-  BCReg baseslot = 0, topslot = 0;
-  /* Must check all frames to find topslot (outer can be larger than inner). */
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    if ((sn & SNAP_FRAME)) {
-      IRIns *ir = IR(snap_ref(sn));
-      GCfunc *fn = ir_kfunc(ir);
-      if (isluafunc(fn)) {
-	BCReg s = snap_slot(sn);
-	BCReg fs = s + funcproto(fn)->framesize;
-	if (fs > topslot) topslot = fs;
-	baseslot = s;
-      }
-    }
-  }
-  *ptopslot = topslot;
-  return baseslot;
-}
-
 /* Calculate stack adjustment. */
 static int32_t asm_stack_adjust(ASMState *as)
 {
@@ -1415,13 +1391,30 @@ static void asm_head_side(ASMState *as)
 
 /* -- Tail of trace ------------------------------------------------------- */
 
+/* Get base slot for a snapshot. */
+static BCReg asm_baseslot(ASMState *as, SnapShot *snap, int *gotframe)
+{
+  SnapEntry *map = &as->T->snapmap[snap->mapofs];
+  MSize n;
+  for (n = snap->nent; n > 0; n--) {
+    SnapEntry sn = map[n-1];
+    if ((sn & SNAP_FRAME)) {
+      *gotframe = 1;
+      return snap_slot(sn);
+    }
+  }
+  return 0;
+}
+
 /* Link to another trace. */
 static void asm_tail_link(ASMState *as)
 {
   SnapNo snapno = as->T->nsnap-1;  /* Last snapshot. */
   SnapShot *snap = &as->T->snap[snapno];
-  BCReg baseslot = asm_stack_extent(as, snap, &as->topslot);
+  int gotframe = 0;
+  BCReg baseslot = asm_baseslot(as, snap, &gotframe);
 
+  as->topslot = snap->topslot;
   checkmclim(as);
   ra_allocref(as, REF_BASE, RID2RSET(RID_BASE));
 
@@ -1454,8 +1447,8 @@ static void asm_tail_link(ASMState *as)
   /* Sync the interpreter state with the on-trace state. */
   asm_stack_restore(as, snap);
 
-  /* Root traces that grow the stack need to check the stack at the end. */
-  if (!as->parent && as->topslot)
+  /* Root traces that add frames need to check the stack at the end. */
+  if (!as->parent && gotframe)
     asm_stack_check(as, as->topslot, NULL, as->freeset & RSET_GPR, snapno);
 }
 

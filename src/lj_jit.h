@@ -138,9 +138,9 @@ typedef struct SnapShot {
   uint16_t mapofs;	/* Offset into snapshot map. */
   IRRef1 ref;		/* First IR ref for this snapshot. */
   uint8_t nslots;	/* Number of valid slots. */
+  uint8_t topslot;	/* Maximum frame extent. */
   uint8_t nent;		/* Number of compressed entries. */
   uint8_t count;	/* Count of taken exits for this snapshot. */
-  uint8_t unused;
 } SnapShot;
 
 #define SNAPCOUNT_DONE	255	/* Already compiled and linked a side trace. */
