@@ -183,6 +183,7 @@ IRFPMDEF(FPMENUM)
 #define IRFLDEF(_) \
   _(STR_LEN,	offsetof(GCstr, len)) \
   _(FUNC_ENV,	offsetof(GCfunc, l.env)) \
+  _(FUNC_PC,	offsetof(GCfunc, l.pc)) \
   _(TAB_META,	offsetof(GCtab, metatable)) \
   _(TAB_ARRAY,	offsetof(GCtab, array)) \
   _(TAB_NODE,	offsetof(GCtab, node)) \

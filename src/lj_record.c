@@ -563,12 +563,32 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
 
 /* -- Record calls and returns -------------------------------------------- */
 
+/* Specialize to the runtime value of the called function or its prototype. */
+static TRef rec_call_specialize(jit_State *J, GCfunc *fn, TRef tr)
+{
+  TRef kfunc;
+  if (isluafunc(fn)) {
+    GCproto *pt = funcproto(fn);
+    /* 3 or more closures created? Probably not a monomorphic function. */
+    if (pt->flags >= 3*PROTO_CLCOUNT) {  /* Specialize to prototype instead. */
+      TRef trpt = emitir(IRT(IR_FLOAD, IRT_P32), tr, IRFL_FUNC_PC);
+      emitir(IRTG(IR_EQ, IRT_P32), trpt, lj_ir_kptr(J, proto_bc(pt)));
+      (void)lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);  /* Prevent GC of proto. */
+      return tr;
+    }
+  }
+  /* Otherwise specialize to the function (closure) value itself. */
+  kfunc = lj_ir_kfunc(J, fn);
+  emitir(IRTG(IR_EQ, IRT_FUNC), tr, kfunc);
+  return kfunc;
+}
+
 /* Record call setup. */
 static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
 {
   RecordIndex ix;
   TValue *functv = &J->L->base[func];
-  TRef trfunc, *fbase = &J->base[func];
+  TRef *fbase = &J->base[func];
   ptrdiff_t i;
   for (i = 0; i <= nargs; i++)
     (void)getslot(J, func+i);  /* Ensure func and all args have a reference. */
@@ -582,11 +602,7 @@ static void rec_call_setup(jit_State *J, BCReg func, ptrdiff_t nargs)
     fbase[0] = ix.mobj;  /* Replace function. */
     functv = &ix.mobjv;
   }
-
-  /* Specialize to the runtime value of the called function. */
-  trfunc = lj_ir_kfunc(J, funcV(functv));
-  emitir(IRTG(IR_EQ, IRT_FUNC), fbase[0], trfunc);
-  fbase[0] = trfunc | TREF_FRAME;
+  fbase[0] = TREF_FRAME | rec_call_specialize(J, funcV(functv), fbase[0]);
   J->maxslot = (BCReg)nargs;
 }
 

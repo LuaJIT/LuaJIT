@@ -148,14 +148,6 @@ with me, before writing major improvements, to avoid duplication of
 effort.
 </li>
 <li>
-The trace compiler currently doesn't back off specialization for
-function call dispatch. It should really fall back to specializing on
-the prototype, not the closure identity. This can lead to the so-called
-"trace explosion" problem with <b>closure-heavy programming</b>. The
-trace linking heuristics prevent this, but in the worst case this
-means the code always falls back to the interpreter.
-</li>
-<li>
 <b>Trace management</b> needs more tuning: less drastic countermeasures
 against trace explosion and better heuristics in general.
 </li>

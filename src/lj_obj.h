@@ -318,6 +318,9 @@ typedef struct GCproto {
 /* Only used during parsing. */
 #define PROTO_HAS_RETURN	0x20	/* Already emitted a return. */
 #define PROTO_FIXUP_RETURN	0x40	/* Need to fixup emitted returns. */
+/* Top bits used for counting created closures. */
+#define PROTO_CLCOUNT		0x20	/* Base of saturating 3 bit counter. */
+#define PROTO_CLC_BITS		3
 
 #define proto_kgc(pt, idx) \
   check_exp((uintptr_t)(intptr_t)(idx) >= (uintptr_t)-(intptr_t)(pt)->sizekgc, \
