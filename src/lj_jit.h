@@ -139,8 +139,8 @@ typedef struct SnapShot {
   IRRef1 ref;		/* First IR ref for this snapshot. */
   uint8_t nslots;	/* Number of valid slots. */
   uint8_t nent;		/* Number of compressed entries. */
-  uint8_t depth;	/* Number of frame links. */
   uint8_t count;	/* Count of taken exits for this snapshot. */
+  uint8_t unused;
 } SnapShot;
 
 #define SNAPCOUNT_DONE	255	/* Already compiled and linked a side trace. */
@@ -223,6 +223,14 @@ typedef struct GCtrace {
   check_exp((n)>0 && (MSize)(n)<J->sizetrace, (GCtrace *)gcref(J->trace[(n)]))
 
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCtrace, gclist));
+
+static LJ_AINLINE MSize snap_nextofs(GCtrace *T, SnapShot *snap)
+{
+  if (snap+1 == &T->snap[T->nsnap])
+    return T->nsnapmap;
+  else
+    return (snap+1)->mapofs;
+}
 
 /* Round-robin penalty cache for bytecodes leading to aborted traces. */
 typedef struct HotPenalty {

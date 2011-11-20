@@ -182,7 +182,8 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
 			    SnapEntry *loopmap, IRRef1 *subst)
 {
   SnapEntry *nmap, *omap = &J->cur.snapmap[osnap->mapofs];
-  MSize nmapofs, depth;
+  SnapEntry *nextmap = &J->cur.snapmap[snap_nextofs(&J->cur, osnap)];
+  MSize nmapofs;
   MSize on, ln, nn, onent = osnap->nent;
   BCReg nslots = osnap->nslots;
   SnapShot *snap = &J->cur.snap[J->cur.nsnap];
@@ -194,11 +195,9 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
     nmapofs = snap->mapofs;
   }
   J->guardemit.irt = 0;
-  depth = osnap->depth;
   /* Setup new snapshot. */
   snap->mapofs = (uint16_t)nmapofs;
   snap->ref = (IRRef1)J->cur.nins;
-  snap->depth = (uint8_t)depth;
   snap->nslots = nslots;
   snap->count = 0;
   nmap = &J->cur.snapmap[nmapofs];
@@ -220,11 +219,11 @@ static void loop_subst_snap(jit_State *J, SnapShot *osnap,
   while (snap_slot(loopmap[ln]) < nslots)  /* Copy remaining loop slots. */
     nmap[nn++] = loopmap[ln++];
   snap->nent = (uint8_t)nn;
-  J->cur.nsnapmap = (uint16_t)(nmapofs + nn + 1 + depth);
   omap += onent;
   nmap += nn;
-  for (nn = 0; nn <= depth; nn++)  /* Copy PC + frame links. */
-    nmap[nn] = omap[nn];
+  while (omap < nextmap)  /* Copy PC + frame links. */
+    *nmap++ = *omap++;
+  J->cur.nsnapmap = (uint16_t)(nmap - J->cur.snapmap);
 }
 
 /* Unroll loop. */
@@ -335,13 +334,13 @@ static void loop_unroll(jit_State *J)
 }
 
 /* Undo any partial changes made by the loop optimization. */
-static void loop_undo(jit_State *J, IRRef ins, SnapNo nsnap)
+static void loop_undo(jit_State *J, IRRef ins, SnapNo nsnap, MSize nsnapmap)
 {
   ptrdiff_t i;
   SnapShot *snap = &J->cur.snap[nsnap-1];
   SnapEntry *map = J->cur.snapmap;
   map[snap->mapofs + snap->nent] = map[J->cur.snap[0].nent];  /* Restore PC. */
-  J->cur.nsnapmap = (uint16_t)(snap->mapofs + snap->nent + 1 + snap->depth);
+  J->cur.nsnapmap = (uint16_t)nsnapmap;
   J->cur.nsnap = nsnap;
   J->guardemit.irt = 0;
   lj_ir_rollback(J, ins);
@@ -370,6 +369,7 @@ int lj_opt_loop(jit_State *J)
 {
   IRRef nins = J->cur.nins;
   SnapNo nsnap = J->cur.nsnap;
+  MSize nsnapmap = J->cur.nsnapmap;
   int errcode = lj_vm_cpcall(J->L, NULL, J, cploop_opt);
   if (LJ_UNLIKELY(errcode)) {
     lua_State *L = J->L;
@@ -382,7 +382,7 @@ int lj_opt_loop(jit_State *J)
 	if (--J->instunroll < 0)  /* But do not unroll forever. */
 	  break;
 	L->top--;  /* Remove error object. */
-	loop_undo(J, nins, nsnap);
+	loop_undo(J, nins, nsnap, nsnapmap);
 	return 1;  /* Loop optimization failed, continue recording. */
       default:
 	break;

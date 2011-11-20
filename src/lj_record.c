@@ -2047,6 +2047,7 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
   SnapEntry *map = &T->snapmap[snap->mapofs];
   MSize n, nent = snap->nent;
   BloomFilter seen = 0;
+  J->framedepth = 0;
   /* Emit IR for slots inherited from parent snapshot. */
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
@@ -2087,12 +2088,12 @@ static void rec_setup_side(jit_State *J, GCtrace *T)
     }
   setslot:
     J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
+    J->framedepth += ((sn & (SNAP_CONT|SNAP_FRAME)) && s);
     if ((sn & SNAP_FRAME))
       J->baseslot = s+1;
   }
   J->base = J->slot + J->baseslot;
   J->maxslot = snap->nslots - J->baseslot;
-  J->framedepth = snap->depth;
   lj_snap_add(J);
 }
 

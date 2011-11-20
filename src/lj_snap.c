@@ -118,7 +118,6 @@ static void snapshot_stack(jit_State *J, SnapShot *snap, MSize nsnapmap)
   snap->mapofs = (uint16_t)nsnapmap;
   snap->ref = (IRRef1)J->cur.nins;
   snap->nent = (uint8_t)nent;
-  snap->depth = (uint8_t)J->framedepth;
   snap->nslots = (uint8_t)nslots;
   snap->count = 0;
   J->cur.nsnapmap = (uint16_t)(nsnapmap + nent + 1 + J->framedepth);
@@ -274,7 +273,7 @@ void lj_snap_shrink(jit_State *J)
       map[m++] = map[n];  /* Only copy used slots. */
   }
   snap->nent = (uint8_t)m;
-  nlim = nent + snap->depth;
+  nlim = J->cur.nsnapmap - snap->mapofs - 1;
   while (n <= nlim) map[m++] = map[n++];  /* Move PC + frame links down. */
   J->cur.nsnapmap = (uint16_t)(snap->mapofs + m);  /* Free up space in map. */
 }
@@ -337,7 +336,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
-  SnapEntry *flinks = map + nent + snap->depth;
+  SnapEntry *flinks = &T->snapmap[snap_nextofs(T, snap)-1];
   int32_t ftsz0;
   BCReg nslots = snap->nslots;
   TValue *frame;
