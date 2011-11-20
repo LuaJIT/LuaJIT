@@ -1297,12 +1297,16 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 /* Check unroll limits for calls. */
 static void check_call_unroll(jit_State *J, TraceNo lnk)
 {
-  IRRef fref = tref_ref(J->base[-1]);
+  cTValue *frame = J->L->base - 1;
+  void *pc = mref(frame_func(frame)->l.pc, void);
+  int32_t depth = J->framedepth;
   int32_t count = 0;
-  BCReg s;
-  for (s = J->baseslot - 1; s > 0; s--)
-    if ((J->slot[s] & TREF_FRAME) && tref_ref(J->slot[s]) == fref)
+  if ((J->pt->flags & PROTO_VARARG)) depth--;  /* Vararg frame still missing. */
+  for (; depth > 0; depth--) {  /* Count frames with same prototype. */
+    frame = frame_prev(frame);
+    if (mref(frame_func(frame)->l.pc, void) == pc)
       count++;
+  }
   if (J->pc == J->startpc) {
     if (count + J->tailcalled > J->param[JIT_P_recunroll]) {
       J->pc++;
