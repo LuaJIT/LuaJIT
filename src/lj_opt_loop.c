@@ -104,7 +104,7 @@
 static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
 			  SnapNo onsnap)
 {
-  int pass2 = 0;
+  int passx = 0;
   IRRef i, nslots;
   IRRef invar = J->chain[IR_LOOP];
   /* Pass #1: mark redundant and potentially redundant PHIs. */
@@ -116,16 +116,28 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
     } else if (!(IR(rref)->op1 == lref || IR(rref)->op2 == lref)) {
       /* Quick check for simple recurrences failed, need pass2. */
       irt_setmark(IR(lref)->t);
-      pass2 = 1;
+      passx = 1;
     }
   }
   /* Pass #2: traverse variant part and clear marks of non-redundant PHIs. */
-  if (pass2) {
+  if (passx) {
     SnapNo s;
     for (i = J->cur.nins-1; i > invar; i--) {
       IRIns *ir = IR(i);
-      if (!irref_isk(ir->op1)) irt_clearmark(IR(ir->op1)->t);
       if (!irref_isk(ir->op2)) irt_clearmark(IR(ir->op2)->t);
+      if (!irref_isk(ir->op1)) {
+	irt_clearmark(IR(ir->op1)->t);
+	if (ir->op1 < invar &&
+	    ir->o >= IR_CALLN && ir->o <= IR_CARG) {  /* ORDER IR */
+	  ir = IR(ir->op1);
+	  while (ir->o == IR_CARG) {
+	    if (!irref_isk(ir->op2)) irt_clearmark(IR(ir->op2)->t);
+	    if (irref_isk(ir->op1)) break;
+	    ir = IR(ir->op1);
+	    irt_clearmark(ir->t);
+	  }
+	}
+      }
     }
     for (s = J->cur.nsnap-1; s >= onsnap; s--) {
       SnapShot *snap = &J->cur.snap[s];
@@ -155,19 +167,35 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
 	break;
     }
   }
-  /* Pass #4: emit PHI instructions or eliminate PHIs. */
+  /* Pass #4: propagate non-redundant PHIs. */
+  while (passx) {
+    passx = 0;
+    for (i = 0; i < nphi; i++) {
+      IRRef lref = phi[i];
+      IRIns *ir = IR(lref);
+      if (!irt_ismarked(ir->t)) {  /* Propagate only from unmarked PHIs. */
+	IRRef rref = subst[lref];
+	if (lref == rref) {  /* Mark redundant PHI. */
+	  irt_setmark(ir->t);
+	} else {
+	  IRIns *irr = IR(rref);
+	  if (irt_ismarked(irr->t)) {  /* Right ref points to other PHI? */
+	    irt_clearmark(irr->t);  /* Mark that PHI as non-redundant. */
+	    passx = 1;  /* Retry. */
+	  }
+	}
+      }
+    }
+  }
+  /* Pass #5: emit PHI instructions or eliminate PHIs. */
   for (i = 0; i < nphi; i++) {
     IRRef lref = phi[i];
     IRIns *ir = IR(lref);
-    if (!irt_ismarked(ir->t)) {  /* Emit PHI if not marked and not redundant. */
+    if (!irt_ismarked(ir->t)) {  /* Emit PHI if not marked. */
       IRRef rref = subst[lref];
-      if (lref == rref) {
-	irt_clearphi(ir->t);
-      } else {
-	if (rref > invar)
-	  irt_setphi(IR(rref)->t);
-	emitir_raw(IRT(IR_PHI, irt_type(ir->t)), lref, rref);
-      }
+      if (rref > invar)
+	irt_setphi(IR(rref)->t);
+      emitir_raw(IRT(IR_PHI, irt_type(ir->t)), lref, rref);
     } else {  /* Otherwise eliminate PHI. */
       irt_clearmark(ir->t);
       irt_clearphi(ir->t);
