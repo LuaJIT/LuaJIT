@@ -391,7 +391,7 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
 	lua_assert(tvisnum(o));
       }
     } else {
-      uint32_t b = ((*sp) & 1);
+      uint32_t b = (*sp != 0);
       setboolV(o, b);
       setboolV(&cts->g->tmptv2, b);  /* Remember for trace recorder. */
     }

@@ -1573,8 +1573,14 @@ void lj_record_ins(jit_State *J)
       rec_comp_fixup(J, pc, (!tvistruecond(&J2G(J)->tmptv2) ^ (bc_op(*pc)&1)));
       /* fallthrough */
     case LJ_POST_FIXGUARD:  /* Fixup and emit pending guard. */
-      if (!tvistruecond(&J2G(J)->tmptv2))
+    case LJ_POST_FIXGUARDSNAP:  /* Fixup and emit pending guard and snapshot. */
+      if (!tvistruecond(&J2G(J)->tmptv2)) {
 	J->fold.ins.o ^= 1;  /* Flip guard to opposite. */
+	if (J->postproc == LJ_POST_FIXGUARDSNAP) {
+	  SnapShot *snap = &J->cur.snap[J->cur.nsnap-1];
+	  J->cur.snapmap[snap->mapofs+snap->nent-1]--;  /* False -> true. */
+	}
+      }
       lj_opt_fold(J);  /* Emit pending guard. */
       /* fallthrough */
     case LJ_POST_FIXBOOL:
