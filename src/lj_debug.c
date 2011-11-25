@@ -90,7 +90,7 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
   pt = funcproto(fn);
   pos = proto_bcpos(pt, ins) - 1;
 #if LJ_HASJIT
-  if (pos >= pt->sizebc) {  /* Undo the effects of lj_trace_exit for JLOOP. */
+  if (pos > pt->sizebc) {  /* Undo the effects of lj_trace_exit for JLOOP. */
     GCtrace *T = (GCtrace *)((char *)(ins-1) - offsetof(GCtrace, startins));
     lua_assert(bc_isret(bc_op(ins[-1])));
     pos = proto_bcpos(pt, mref(T->startpc, const BCIns));
@@ -105,9 +105,9 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 BCLine LJ_FASTCALL lj_debug_line(GCproto *pt, BCPos pc)
 {
   const void *lineinfo = proto_lineinfo(pt);
-  if (pc < pt->sizebc && lineinfo) {
+  if (pc <= pt->sizebc && lineinfo) {
     BCLine first = pt->firstline;
-    if (pc == pt->sizebc-1) return first + pt->numline;
+    if (pc == pt->sizebc) return first + pt->numline;
     if (pc-- == 0) return first;
     if (pt->numline < 256)
       return first + (BCLine)((const uint8_t *)lineinfo)[pc];

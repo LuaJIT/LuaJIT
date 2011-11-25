@@ -377,7 +377,7 @@ void LJ_FASTCALL lj_ccallback_leave(CTState *cts, TValue *o)
   fn = curr_func(L);
   if (isluafunc(fn)) {
     GCproto *pt = funcproto(fn);
-    setcframe_pc(L->cframe, proto_bc(pt)+pt->sizebc);
+    setcframe_pc(L->cframe, proto_bc(pt)+pt->sizebc+1);
   }
   callback_conv_result(cts, L, o);
   /* Finally drop C frame and continuation frame. */
