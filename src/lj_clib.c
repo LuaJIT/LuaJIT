@@ -185,8 +185,8 @@ static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   DWORD oldwerr = GetLastError();
   void *h = (void *)LoadLibraryA(clib_extname(L, name));
-  SetLastError(oldwerr);
   if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", name);
+  SetLastError(oldwerr);
   UNUSED(global);
   return h;
 }
