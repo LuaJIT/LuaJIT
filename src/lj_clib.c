@@ -60,25 +60,39 @@ static const char *clib_extname(lua_State *L, const char *name)
   return name;
 }
 
+/* Check for a recognized ld script line. */
+static const char *clib_check_lds(lua_State *L, const char *buf)
+{
+  char *p, *e;
+  if ((!strncmp(buf, "GROUP", 5) || !strncmp(buf, "INPUT", 5)) &&
+      (p = strchr(buf, '('))) {
+    while (*++p == ' ') ;
+    for (e = p; *e && *e != ' ' && *e != ')'; e++) ;
+    return strdata(lj_str_new(L, p, e-p));
+  }
+  return NULL;
+}
+
 /* Quick and dirty solution to resolve shared library name from ld script. */
 static const char *clib_resolve_lds(lua_State *L, const char *name)
 {
   FILE *fp = fopen(name, "r");
+  const char *p = NULL;
   if (fp) {
-    char *p, *e, buf[256];
-    if (fgets(buf, sizeof(buf), fp) && !strncmp(buf, "/* GNU ld script", 16)) {
-      while (fgets(buf, sizeof(buf), fp)) {
-	if (!strncmp(buf, "GROUP", 5) && (p = strchr(buf, '('))) {
-	  while (*++p == ' ') ;
-	  for (e = p; *e && *e != ' ' && *e != ')'; e++) ;
-	  fclose(fp);
-	  return strdata(lj_str_new(L, p, e-p));
+    char buf[256];
+    if (fgets(buf, sizeof(buf), fp)) {
+      if (!strncmp(buf, "/* GNU ld script", 16)) {  /* ld script magic? */
+	while (fgets(buf, sizeof(buf), fp)) {  /* Check all lines. */
+	  p = clib_check_lds(L, buf);
+	  if (p) break;
 	}
+      } else {  /* Otherwise check only the first line. */
+	p = clib_check_lds(L, buf);
       }
     }
     fclose(fp);
   }
-  return NULL;
+  return p;
 }
 
 static void *clib_loadlib(lua_State *L, const char *name, int global)
