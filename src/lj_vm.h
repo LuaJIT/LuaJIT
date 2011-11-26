@@ -78,6 +78,9 @@ LJ_ASMF double lj_vm_exp2(double);
 #endif
 #endif
 LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t, int32_t);
+#if LJ_HASFFI
+LJ_ASMF int lj_vm_errno(void);
+#endif
 #endif
 
 /* Continuations for metamethods. */

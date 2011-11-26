@@ -603,7 +603,7 @@ LJLIB_CF(ffi_offsetof)
   return 0;
 }
 
-LJLIB_CF(ffi_errno)
+LJLIB_CF(ffi_errno)	LJLIB_REC(.)
 {
   int err = errno;
   if (L->top > L->base)

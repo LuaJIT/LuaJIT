@@ -6,6 +6,7 @@
 #define lj_vmmath_c
 #define LUA_CORE
 
+#include <errno.h>
 #include <math.h>
 
 #include "lj_obj.h"
@@ -105,6 +106,13 @@ double lj_vm_foldfpm(double x, int fpm)
   default: lua_assert(0);
   }
   return 0;
+}
+#endif
+
+#if LJ_HASFFI
+int lj_vm_errno(void)
+{
+  return errno;
 }
 #endif
 

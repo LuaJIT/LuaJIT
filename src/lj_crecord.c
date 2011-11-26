@@ -1205,6 +1205,14 @@ void LJ_FASTCALL recff_ffi_new(jit_State *J, RecordFFData *rd)
   crec_alloc(J, rd, argv2ctype(J, J->base[0], &rd->argv[0]));
 }
 
+void LJ_FASTCALL recff_ffi_errno(jit_State *J, RecordFFData *rd)
+{
+  UNUSED(rd);
+  if (J->base[0])
+    lj_trace_err(J, LJ_TRERR_NYICALL);
+  J->base[0] = lj_ir_call(J, IRCALL_lj_vm_errno);
+}
+
 void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
 {
   CTState *cts = ctype_ctsG(J2G(J));
