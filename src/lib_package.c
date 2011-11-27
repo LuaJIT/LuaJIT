@@ -75,6 +75,7 @@ static const char *ll_bcsym(void *lib, const char *sym)
 
 #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
 #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS  4
+#define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT  2
 BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
 #endif
 
@@ -132,7 +133,7 @@ static const char *ll_bcsym(void *lib, const char *sym)
   } else {
     HINSTANCE h = GetModuleHandleA(NULL);
     const char *p = (const char *)GetProcAddress(h, sym);
-    if (p == NULL && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    if (p == NULL && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 					(const char *)ll_bcsym, &h))
       p = (const char *)GetProcAddress(h, sym);
     return p;

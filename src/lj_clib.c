@@ -134,6 +134,7 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 
 #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
 #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS	4
+#define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT	2
 BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
 #endif
 
@@ -217,13 +218,13 @@ static void *clib_getsym(CLibrary *cl, const char *name)
       HINSTANCE h = (HINSTANCE)clib_def_handle[i];
       if (!(void *)h) {  /* Resolve default library handles (once). */
 	switch (i) {
-	case CLIB_HANDLE_EXE: GetModuleHandleExA(0, NULL, &h); break;
+	case CLIB_HANDLE_EXE: GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, NULL, &h); break;
 	case CLIB_HANDLE_DLL:
-	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 			     (const char *)clib_def_handle, &h);
 	  break;
 	case CLIB_HANDLE_CRT:
-	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 			     (const char *)&_fmode, &h);
 	  break;
 	case CLIB_HANDLE_KERNEL32: h = LoadLibraryA("kernel32.dll"); break;
