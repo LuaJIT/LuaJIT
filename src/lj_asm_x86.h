@@ -593,13 +593,14 @@ static void asm_callx(ASMState *as, IRIns *ir)
   CCallInfo ci;
   IRRef func;
   IRIns *irf;
+  int32_t spadj = 0;
   ci.flags = asm_callx_flags(as, ir);
   asm_collectargs(as, ir, &ci, args);
   asm_setupresult(as, ir, &ci);
 #if LJ_32
   /* Have to readjust stack after non-cdecl calls due to callee cleanup. */
   if ((ci.flags & CCI_CC_MASK) != CCI_CC_CDECL)
-    emit_spsub(as, 4 * asm_count_call_slots(as, &ci, args));
+    spadj = 4 * asm_count_call_slots(as, &ci, args);
 #endif
   func = ir->op2; irf = IR(func);
   if (irf->o == IR_CARG) { func = irf->op1; irf = IR(func); }
@@ -608,7 +609,10 @@ static void asm_callx(ASMState *as, IRIns *ir)
     /* Use a (hoistable) non-scratch register for indirect calls. */
     RegSet allow = (RSET_GPR & ~RSET_SCRATCH);
     Reg r = ra_alloc1(as, func, allow);
+    if (LJ_32) emit_spsub(as, spadj);  /* Above code may cause restores! */
     emit_rr(as, XO_GROUP5, XOg_CALL, r);
+  } else if (LJ_32) {
+    emit_spsub(as, spadj);
   }
   asm_gencall(as, &ci, args);
 }
