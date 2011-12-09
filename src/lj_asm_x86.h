@@ -496,7 +496,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	emit_movmroi(as, RID_ESP, ofs, ir->i);
       } else {
 	r = ra_alloc1(as, ref, RSET_GPR);
-	emit_movtomro(as, REX_64IR(ir, r), RID_ESP, ofs);
+	emit_movtomro(as, REX_64 + r, RID_ESP, ofs);
       }
       ofs += sizeof(intptr_t);
     }
