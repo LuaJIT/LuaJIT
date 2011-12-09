@@ -853,10 +853,12 @@ static void crec_snap_caller(jit_State *J)
   J->pc = frame_pc(base-1); delta = 1+bc_a(J->pc[-1]);
   L->top = base; L->base = base - delta;
   J->base[-1] = TREF_FALSE;
-  J->base -= delta; J->baseslot -= delta; J->maxslot = delta; J->framedepth--;
+  J->base -= delta; J->baseslot -= (BCReg)delta;
+  J->maxslot = (BCReg)delta; J->framedepth--;
   lj_snap_add(J);
   L->base = base; L->top = top;
-  J->framedepth++; J->base += delta; J->baseslot += delta; J->maxslot = 1;
+  J->framedepth++; J->maxslot = 1;
+  J->base += delta; J->baseslot += (BCReg)delta;
   J->base[-1] = ftr; J->pc = pc;
 }
 
