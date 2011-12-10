@@ -217,6 +217,9 @@
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
 #endif
+#if defined(__ARM_PCS_VFP)
+#error "No support for ARM hard-float ABI (yet)"
+#endif
 #if !(__ARM_EABI__ || LJ_TARGET_OSX)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
