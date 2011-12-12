@@ -6,9 +6,16 @@
 #ifndef _LJ_MCODE_H
 #define _LJ_MCODE_H
 
-#include "lj_jit.h"
+#include "lj_obj.h"
+
+#if LJ_HASJIT || LJ_HASFFI
+LJ_FUNC void lj_mcode_sync(void *start, void *end);
+#endif
 
 #if LJ_HASJIT
+
+#include "lj_jit.h"
+
 LJ_FUNC void lj_mcode_free(jit_State *J);
 LJ_FUNC MCode *lj_mcode_reserve(jit_State *J, MCode **lim);
 LJ_FUNC void lj_mcode_commit(jit_State *J, MCode *m);

@@ -2130,13 +2130,13 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     *px = PPCI_B | ((uint32_t)delta & 0x03ffffffu);
   }
   if (!cstart) cstart = px;
-  asm_cache_flush(cstart, px+1);
+  lj_mcode_sync(cstart, px+1);
   if (clearso) {  /* Extend the current trace. Ugly workaround. */
     MCode *pp = J->cur.mcode;
     J->cur.szmcode += sizeof(MCode);
     *--pp = PPCI_MCRXR;  /* Clear SO flag. */
     J->cur.mcode = pp;
-    asm_cache_flush(pp, pp+1);
+    lj_mcode_sync(pp, pp+1);
   }
   lj_mcode_patch(J, mcarea, 1);
 }

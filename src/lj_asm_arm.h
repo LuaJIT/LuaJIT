@@ -1779,7 +1779,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     }
   }
   lua_assert(cstart != NULL);
-  asm_cache_flush(cstart, cend);
+  lj_mcode_sync(cstart, cend);
   lj_mcode_patch(J, mcarea, 1);
 }
 

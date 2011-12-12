@@ -147,14 +147,6 @@ IRFLDEF(FLOFS)
   0
 };
 
-/* Define this if you want to run LuaJIT with Valgrind. */
-#ifdef LUAJIT_USE_VALGRIND
-#include <valgrind/valgrind.h>
-#define VG_INVALIDATE(p, sz)	VALGRIND_DISCARD_TRANSLATIONS(p, sz)
-#else
-#define VG_INVALIDATE(p, sz)	((void)0)
-#endif
-
 /* -- Target-specific instruction emitter --------------------------------- */
 
 #if LJ_TARGET_X86ORX64
@@ -929,41 +921,6 @@ static uint32_t ir_khash(IRIns *ir)
     hi = lo + HASH_BIAS;
   }
   return hashrot(lo, hi);
-}
-
-#if !LJ_TARGET_X86ORX64 && LJ_TARGET_OSX
-void sys_icache_invalidate(void *start, size_t len);
-#endif
-
-#if LJ_TARGET_LINUX && LJ_TARGET_PPC
-#include <dlfcn.h>
-static void (*asm_ppc_cache_flush)(MCode *start, MCode *end);
-static void asm_dummy_cache_flush(MCode *start, MCode *end)
-{
-  UNUSED(start); UNUSED(end);
-}
-#endif
-
-/* Flush instruction cache. */
-static void asm_cache_flush(MCode *start, MCode *end)
-{
-  VG_INVALIDATE(start, (char *)end-(char *)start);
-#if LJ_TARGET_X86ORX64
-  UNUSED(start); UNUSED(end);
-#elif LJ_TARGET_OSX
-  sys_icache_invalidate(start, end-start);
-#elif LJ_TARGET_LINUX && LJ_TARGET_PPC
-  if (!asm_ppc_cache_flush) {
-    void *vdso = dlopen("linux-vdso32.so.1", RTLD_LAZY);
-    if (!vdso || !(asm_ppc_cache_flush = dlsym(vdso, "__kernel_sync_dicache")))
-      asm_ppc_cache_flush = asm_dummy_cache_flush;
-  }
-  asm_ppc_cache_flush(start, end);
-#elif defined(__GNUC__) && !LJ_TARGET_PPC
-  __clear_cache(start, end);
-#else
-#error "Missing builtin to flush instruction cache"
-#endif
 }
 
 /* -- Allocations --------------------------------------------------------- */
@@ -1776,7 +1733,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   if (!as->loopref)
     asm_tail_fixup(as, T->link);  /* Note: this may change as->mctop! */
   T->szmcode = (MSize)((char *)as->mctop - (char *)as->mcp);
-  asm_cache_flush(T->mcode, origtop);
+  lj_mcode_sync(T->mcode, origtop);
 }
 
 #undef IR

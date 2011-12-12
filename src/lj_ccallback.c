@@ -17,6 +17,7 @@
 #include "lj_ccall.h"
 #include "lj_ccallback.h"
 #include "lj_target.h"
+#include "lj_mcode.h"
 #include "lj_vm.h"
 
 /* -- Target-specific handling of callback slots -------------------------- */
@@ -145,6 +146,7 @@ static void callback_mcode_new(CTState *cts)
 #endif
   cts->cb.mcode = p;
   callback_mcode_init(cts->g, p);
+  lj_mcode_sync(p, (char *)p + sz);
 #if LJ_TARGET_WINDOWS
   {
     DWORD oprot;

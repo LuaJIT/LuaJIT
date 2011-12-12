@@ -2745,7 +2745,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
       p += 5;
     }
   }
+  lj_mcode_sync(T->mcode, T->mcode + T->szmcode);
   lj_mcode_patch(J, mcarea, 1);
-  VG_INVALIDATE(T->mcode, T->szmcode);
 }
 
