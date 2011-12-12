@@ -161,7 +161,7 @@ ERRDEF(FFI_BADIDX,	LUA_QS " cannot be indexed")
 ERRDEF(FFI_WRCONST,	"attempt to write to constant location")
 ERRDEF(FFI_NODECL,	"missing declaration for symbol " LUA_QS)
 ERRDEF(FFI_BADCBACK,	"bad callback")
-#if LJ_TARGET_X86ORX64
+#if LJ_TARGET_X86ORX64 || LJ_TARGET_PPC
 ERRDEF(FFI_CBACKOV,	"too many callbacks")
 #else
 ERRDEF(FFI_CBACKOV,	"no support for callbacks (yet)")

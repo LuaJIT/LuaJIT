@@ -43,6 +43,13 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #define CALLBACK_MAX_SLOT \
   (((CALLBACK_MCODE_SIZE-CALLBACK_MCODE_HEAD)/(CALLBACK_MCODE_GROUP+4*32))*32)
 
+#elif LJ_TARGET_PPC
+
+#define CALLBACK_MCODE_HEAD		24
+#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
+#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
+#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
+
 #else
 
 /* Missing support for this architecture. */
@@ -70,8 +77,8 @@ MSize lj_ccallback_ptr2slot(CTState *cts, void *p)
   return ~0u;  /* Not a known callback function pointer. */
 }
 
-#if LJ_TARGET_X86ORX64
 /* Initialize machine code for callback function pointers. */
+#if LJ_TARGET_X86ORX64
 static void callback_mcode_init(global_State *g, uint8_t *page)
 {
   uint8_t *p = page;
@@ -100,6 +107,25 @@ static void callback_mcode_init(global_State *g, uint8_t *page)
     } else {
       *p++ = XI_JMPs; *p++ = (uint8_t)((2+2)*(31-(slot&31)) - 2);
     }
+  }
+  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+}
+#elif LJ_TARGET_PPC
+static void callback_mcode_init(global_State *g, uint32_t *page)
+{
+  uint32_t *p = page;
+  void *target = (void *)lj_vm_ffi_callback;
+  MSize slot;
+  *p++ = PPCI_LIS | PPCF_T(RID_TMP) | (u32ptr(target) >> 16);
+  *p++ = PPCI_LIS | PPCF_T(RID_R12) | (u32ptr(g) >> 16);
+  *p++ = PPCI_ORI | PPCF_A(RID_TMP)|PPCF_T(RID_TMP) | (u32ptr(target) & 0xffff);
+  *p++ = PPCI_ORI | PPCF_A(RID_R12)|PPCF_T(RID_R12) | (u32ptr(g) & 0xffff);
+  *p++ = PPCI_MTCTR | PPCF_T(RID_TMP);
+  *p++ = PPCI_BCTR;
+  for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+    *p++ = PPCI_LI | PPCF_T(RID_R11) | slot;
+    *p = PPCI_B | (((page-p) & 0x00ffffffu) << 2);
+    p++;
   }
   lua_assert(p - page <= CALLBACK_MCODE_SIZE);
 }
@@ -224,8 +250,28 @@ void lj_ccallback_mcode_free(CTState *cts)
 #elif LJ_TARGET_PPC
 
 #define CALLBACK_HANDLE_REGARG \
-  UNUSED(ngpr); UNUSED(nfpr); UNUSED(maxgpr); goto done;  /* NYI */
-#define CALLBACK_HANDLE_RET		/* NYI */
+  if (isfp) { \
+    if (nfpr + 1 <= CCALL_NARG_FPR) { \
+      sp = &cts->cb.fpr[nfpr]; \
+      nfpr += 1; \
+      cta = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
+      goto done; \
+    } \
+  } else {  /* Try to pass argument in GPRs. */ \
+    if (n > 1) { \
+      lua_assert(ctype_isinteger(cta->info) && n == 2);  /* int64_t. */ \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+    } \
+    if (ngpr + n <= maxgpr) { \
+      sp = &cts->cb.gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } \
+  }
+
+#define CALLBACK_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    *(double *)dp = *(float *)dp;  /* FPRs always hold doubles. */
 
 #else
 #error "Missing calling convention definitions for this architecture"
@@ -327,14 +373,14 @@ static void callback_conv_result(CTState *cts, lua_State *L, TValue *o)
 #endif
   if (!ctype_isvoid(ctr->info)) {
     uint8_t *dp = (uint8_t *)&cts->cb.gpr[0];
-#ifdef CALLBACK_HANDLE_RET
-    CALLBACK_HANDLE_RET
-#endif
 #if CCALL_NUM_FPR
     if (ctype_isfp(ctr->info))
       dp = (uint8_t *)&cts->cb.fpr[0];
 #endif
     lj_cconv_ct_tv(cts, ctr, dp, o, 0);
+#ifdef CALLBACK_HANDLE_RET
+    CALLBACK_HANDLE_RET
+#endif
     /* Extend returned integers to (at least) 32 bits. */
     if (ctype_isinteger_or_bool(ctr->info) && ctr->size < 4) {
       if (ctr->info & CTF_UNSIGNED)

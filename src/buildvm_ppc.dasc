@@ -98,11 +98,14 @@
 |
 |.macro saveregs
 |  stwu sp, -CFRAME_SPACE(sp)
-|  save_ 14; save_ 15; save_ 16; save_ 17; save_ 18; save_ 19
-|  mflr r0; mfcr r12
-|  save_ 20; save_ 21; save_ 22; save_ 23; save_ 24; save_ 25
-|  stw  r0, SAVE_LR; stw r12, SAVE_CR
+|  save_ 14; save_ 15; save_ 16
+|  mflr r0
+|  save_ 17; save_ 18; save_ 19; save_ 20; save_ 21; save_ 22
+|  stw  r0, SAVE_LR
+|  save_ 23; save_ 24; save_ 25
+|  mfcr r0
 |  save_ 26; save_ 27; save_ 28; save_ 29; save_ 30; save_ 31
+|  stw r0, SAVE_CR
 |.endmacro
 |
 |.macro restoreregs
@@ -610,21 +613,29 @@ static void build_subroutines(BuildCtx *ctx)
   |   mr RB, BASE
   |   mr BASE, TMP2			// Restore caller BASE.
   |    lwz LFUNC:TMP1, FRAME_FUNC(TMP2)
-  |  cmplwi TMP0, 0
+#if LJ_HASFFI
+  |  cmplwi TMP0, 1
+#endif
   |     lwz PC, -16(RB)			// Restore PC from [cont|PC].
-  |  beq >1
   |   subi TMP2, RD, 8
   |    lwz TMP1, LFUNC:TMP1->pc
   |   stwx TISNIL, RA, TMP2		// Ensure one valid arg.
+#if LJ_HASFFI
+  |  ble >1
+#endif
   |    lwz KBASE, PC2PROTO(k)(TMP1)
   |  // BASE = base, RA = resultptr, RB = meta base
   |  mtctr TMP0
   |  bctr				// Jump to continuation.
   |
-  |1:  // Tail call from C function.
+#if LJ_HASFFI
+  |1:
+  |  beq ->cont_ffi_callback		// cont = 1: return from FFI callback.
+  |  // cont = 0: tailcall from C function.
   |  subi TMP1, RB, 16
   |  sub RC, TMP1, BASE
   |  b ->vm_call_tail
+#endif
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  lwz INS, -4(PC)
@@ -2490,7 +2501,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz r0, 36(sp)
   |  fmul FARG1, FARG1, f15
   |   mtlr r0
-  |  fsub FARG1, f14, FARG1;
+  |  fsub FARG1, f14, FARG1
   |  lfd f14, 16(sp); lfd f15, 24(sp); addi sp, sp, 32; blr
   |1:
   |  b extern pow
@@ -2526,6 +2537,71 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
+  |
+  |// Handler for callback functions. Callback slot number in r11, g in r12.
+  |->vm_ffi_callback:
+#if LJ_HASFFI
+  |.type CTSTATE, CTState, PC
+  |  saveregs
+  |  lwz CTSTATE, GL:r12->ctype_state
+  |   addi DISPATCH, r12, GG_G2DISP
+  |  stw r11, CTSTATE->cb.slot
+  |  stw r3, CTSTATE->cb.gpr[0]
+  |   stfd f1, CTSTATE->cb.fpr[0]
+  |  stw r4, CTSTATE->cb.gpr[1]
+  |   stfd f2, CTSTATE->cb.fpr[1]
+  |  stw r5, CTSTATE->cb.gpr[2]
+  |   stfd f3, CTSTATE->cb.fpr[2]
+  |  stw r6, CTSTATE->cb.gpr[3]
+  |   stfd f4, CTSTATE->cb.fpr[3]
+  |  stw r7, CTSTATE->cb.gpr[4]
+  |   stfd f5, CTSTATE->cb.fpr[4]
+  |  stw r8, CTSTATE->cb.gpr[5]
+  |   stfd f6, CTSTATE->cb.fpr[5]
+  |  stw r9, CTSTATE->cb.gpr[6]
+  |   stfd f7, CTSTATE->cb.fpr[6]
+  |  stw r10, CTSTATE->cb.gpr[7]
+  |   stfd f8, CTSTATE->cb.fpr[7]
+  |  addi TMP0, sp, CFRAME_SPACE+8
+  |  stw TMP0, CTSTATE->cb.stack
+  |   mr CARG1, CTSTATE
+  |  stw CTSTATE, SAVE_PC		// Any value outside of bytecode is ok.
+  |   mr CARG2, sp
+  |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
+  |  // Returns lua_State *.
+  |  lwz BASE, L:CRET1->base
+  |     li TISNUM, LJ_TISNUM            // Setup type comparison constants.
+  |  lwz RC, L:CRET1->top
+  |     lus TMP3, 0x59c0                // TOBIT = 2^52 + 2^51 (float).
+  |     li ZERO, 0
+  |   mr L, CRET1
+  |     stw TMP3, TMPD
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)
+  |     ori TMP3, TMP3, 0x0004          // TONUM = 2^52 + 2^51 + 2^31 (float).
+  |     li TISNIL, LJ_TNIL
+  |    li_vmstate INTERP
+  |     lfs TOBIT, TMPD
+  |     stw TMP3, TMPD
+  |  sub RC, RC, BASE
+  |    st_vmstate
+  |     lfs TONUM, TMPD
+  |  ins_callt
+#endif
+  |
+  |->cont_ffi_callback:                 // Return from FFI callback.
+#if LJ_HASFFI
+  |  lwz CTSTATE, DISPATCH_GL(ctype_state)(DISPATCH)
+  |   stw BASE, L->base
+  |   stw RB, L->top
+  |  stw L, CTSTATE->L
+  |  mr CARG1, CTSTATE
+  |  mr CARG2, RA
+  |  bl extern lj_ccallback_leave	// (CTState *cts, TValue *o)
+  |  lwz CRET1, CTSTATE->cb.gpr[0]
+  |  lfd FARG1, CTSTATE->cb.fpr[0]
+  |  lwz CRET2, CTSTATE->cb.gpr[1]
+  |  b ->vm_leave_unw
+#endif
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
