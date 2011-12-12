@@ -43,6 +43,13 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #define CALLBACK_MAX_SLOT \
   (((CALLBACK_MCODE_SIZE-CALLBACK_MCODE_HEAD)/(CALLBACK_MCODE_GROUP+4*32))*32)
 
+#elif LJ_TARGET_ARM
+
+#define CALLBACK_MCODE_HEAD		32
+#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
+#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
+#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
+
 #elif LJ_TARGET_PPC
 
 #define CALLBACK_MCODE_HEAD		24
@@ -107,6 +114,28 @@ static void callback_mcode_init(global_State *g, uint8_t *page)
     } else {
       *p++ = XI_JMPs; *p++ = (uint8_t)((2+2)*(31-(slot&31)) - 2);
     }
+  }
+  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+}
+#elif LJ_TARGET_ARM
+static void callback_mcode_init(global_State *g, uint32_t *page)
+{
+  uint32_t *p = page;
+  void *target = (void *)lj_vm_ffi_callback;
+  MSize slot;
+  /* This must match with the saveregs macro in buildvm_arm.dasc. */
+  *p++ = ARMI_SUB|ARMF_D(RID_R12)|ARMF_N(RID_R12)|ARMF_M(RID_PC);
+  *p++ = ARMI_PUSH|ARMF_N(RID_SP)|RSET_RANGE(RID_R4,RID_R11+1)|RID2RSET(RID_LR);
+  *p++ = ARMI_SUB|ARMI_K12|ARMF_D(RID_R12)|ARMF_N(RID_R12)|CALLBACK_MCODE_HEAD;
+  *p++ = ARMI_STR|ARMI_LS_P|ARMI_LS_W|ARMF_D(RID_R12)|ARMF_N(RID_SP)|(CFRAME_SIZE-4*9);
+  *p++ = ARMI_LDR|ARMI_LS_P|ARMI_LS_U|ARMF_D(RID_R12)|ARMF_N(RID_PC);
+  *p++ = ARMI_LDR|ARMI_LS_P|ARMI_LS_U|ARMF_D(RID_PC)|ARMF_N(RID_PC);
+  *p++ = u32ptr(g);
+  *p++ = u32ptr(target);
+  for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+    *p++ = ARMI_MOV|ARMF_D(RID_R12)|ARMF_M(RID_PC);
+    *p = ARMI_B | ((page-p-2) & 0x00ffffffu);
+    p++;
   }
   lua_assert(p - page <= CALLBACK_MCODE_SIZE);
 }
@@ -245,7 +274,12 @@ void lj_ccallback_mcode_free(CTState *cts)
 #elif LJ_TARGET_ARM
 
 #define CALLBACK_HANDLE_REGARG \
-  UNUSED(ngpr); UNUSED(maxgpr); goto done;  /* NYI */
+  if (n > 1) ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+  if (ngpr + n <= maxgpr) { \
+    sp = &cts->cb.gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  }
 
 #elif LJ_TARGET_PPC
 

@@ -502,22 +502,30 @@ static void build_subroutines(BuildCtx *ctx)
   |    ldr CARG1, [BASE, #-16]		// Get continuation.
   |   mov CARG4, BASE
   |   mov BASE, RB			// Restore caller BASE.
-  |    cmp CARG1, #0
+#if LJ_HASFFI
+  |    cmp CARG1, #1
+#endif
   |   ldr PC, [CARG4, #-12]		// Restore PC from [cont|PC].
-  |    beq >1
   |  ldr CARG3, LFUNC:CARG3->field_pc
   |    mvn INS, #~LJ_TNIL
   |    add CARG2, RA, RC
   |    str INS, [CARG2, #-4]		// Ensure one valid arg.
+#if LJ_HASFFI
+  |    bls >1
+#endif
   |  ldr KBASE, [CARG3, #PC2PROTO(k)]
   |  // BASE = base, RA = resultptr, CARG4 = meta base
-  |   bx CARG1
+  |    bx CARG1
   |
-  |1:  // Tail call from C function.
+#if LJ_HASFFI
+  |1:
+  |  beq ->cont_ffi_callback		// cont = 1: return from FFI callback.
+  |  // cont = 0: tailcall from C function.
   |  ldr CARG3, [BASE, FRAME_FUNC]
   |   sub CARG4, CARG4, #16
   |   sub RC, CARG4, BASE
   |  b ->vm_call_tail
+#endif
   |
   |->cont_cat:				// RA = resultptr, CARG4 = meta base
   |  ldr INS, [PC, #-4]
@@ -2177,6 +2185,50 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
+  |
+  |// Handler for callback functions.
+  |// Saveregs already performed. Callback slot number in [sp], g in r12.
+  |->vm_ffi_callback:
+#if LJ_HASFFI
+  |.type CTSTATE, CTState, PC
+  |  ldr CTSTATE, GL:r12->ctype_state
+  |   add DISPATCH, r12, #GG_G2DISP
+  |  strd CARG12, CTSTATE->cb.gpr[0]
+  |  strd CARG34, CTSTATE->cb.gpr[2]
+  |  ldr CARG4, [sp]
+  |   add CARG3, sp, #CFRAME_SIZE
+  |    mov CARG1, CTSTATE
+  |  lsr CARG4, CARG4, #3
+  |   str CARG3, CTSTATE->cb.stack
+  |    mov CARG2, sp
+  |  str CARG4, CTSTATE->cb.slot
+  |  str CTSTATE, SAVE_PC		// Any value outside of bytecode is ok.
+  |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
+  |  // Returns lua_State *.
+  |  ldr BASE, L:CRET1->base
+  |    mv_vmstate CARG2, INTERP
+  |  ldr RC, L:CRET1->top
+  |    mov MASKR8, #255
+  |   ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |    mov L, CRET1
+  |  sub RC, RC, BASE
+  |    lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
+  |    st_vmstate CARG2
+  |  ins_callt
+#endif
+  |
+  |->cont_ffi_callback:                 // Return from FFI callback.
+#if LJ_HASFFI
+  |  ldr CTSTATE, [DISPATCH, #DISPATCH_GL(ctype_state)]
+  |   str BASE, L->base
+  |   str CARG4, L->top
+  |  str L, CTSTATE->L
+  |  mov CARG1, CTSTATE
+  |  mov CARG2, RA
+  |  bl extern lj_ccallback_leave	// (CTState *cts, TValue *o)
+  |  ldrd CARG12, CTSTATE->cb.gpr[0]
+  |  b ->vm_leave_unw
+#endif
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
