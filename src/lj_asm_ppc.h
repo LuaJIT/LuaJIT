@@ -1490,7 +1490,7 @@ static void asm_fuseandsh(ASMState *as, PPCIns pi, int32_t mask, IRRef ref)
   IRIns *ir;
   Reg left;
   if (mayfuse(as, ref) && (ir = IR(ref), ra_noreg(ir->r)) &&
-      irref_isk(ir->op2)) {
+      irref_isk(ir->op2) && ir->o >= IR_BSHL && ir->o <= IR_BROR) {
     int32_t sh = (IR(ir->op2)->i & 31);
     switch (ir->o) {
     case IR_BSHL:
