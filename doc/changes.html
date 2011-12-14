@@ -69,6 +69,79 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta9">LuaJIT 2.0.0-beta9 &mdash; 2011-12-14</h2>
+<ul>
+<li>New features:
+<ul>
+<li>PPC port of LuaJIT is complete. Default is the dual-number port
+(usually faster). Single-number port selectable via <tt>src/Makefile</tt>
+at build time.</li>
+<li>Add FFI callback support.</li>
+<li>Extend <tt>-b</tt> to generate <tt>.c</tt>, <tt>.h</tt> or <tt>.obj/.o</tt>
+files with embedded bytecode.</li>
+<li>Allow loading embedded bytecode with <tt>require()</tt>.</li>
+<li>From Lua 5.2: Change to <tt>'\z'</tt> escape. Reject undefined escape
+sequences.</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>Fix OSX 10.7 build. Fix <tt>install_name</tt> and versioning on OSX.</li>
+<li>Fix iOS build.</li>
+<li>Install <tt>dis_arm.lua</tt>, too.</li>
+<li>Mark installed shared library as executable.</li>
+<li>Add debug option to <tt>msvcbuild.bat</tt> and improve error handling.</li>
+<li>Fix data-flow analysis for iterators.</li>
+<li>Fix forced unwinding triggered by external unwinder.</li>
+<li>Record missing <tt>for</tt> loop slot loads (return to lower frame).</li>
+<li>Always use ANSI variants of Windows system functions.</li>
+<li>Fix GC barrier for multi-result table constructor (<tt>TSETM</tt>).</li>
+<li>Fix/add various FOLD rules.</li>
+<li>Add potential PHI for number conversions due to type instability.</li>
+<li>Do not eliminate PHIs only referenced from other PHIs.</li>
+<li>Correctly anchor implicit number to string conversions in Lua/C API.</li>
+<li>Fix various stack limit checks.</li>
+<li>x64: Use thread-safe exceptions for external unwinding (GCC platforms).</li>
+<li>x64: Fix result type of cdata index conversions.</li>
+<li>x64: Fix <tt>math.random()</tt> and <tt>bit.bswap()</tt> code generation.</li>
+<li>x64: Fix <tt>lightuserdata</tt> comparisons.</li>
+<li>x64: Always extend stack-passed arguments to pointer size.</li>
+<li>ARM: Many fixes to code generation backend.</li>
+<li>PPC/e500: Fix dispatch for binop metamethods.</li>
+<li>PPC/e500: Save/restore condition registers when entering/leaving the VM.</li>
+<li>PPC/e500: Fix write barrier in stores of strings to upvalues.</li>
+</ul></li>
+<li>FFI library:
+<ul>
+<li>Fix C comment parsing.</li>
+<li>Fix snapshot optimization for cdata comparisons.</li>
+<li>Fix recording of const/enum lookups in namespaces.</li>
+<li>Fix call argument and return handling for <tt>I8/U8/I16/U16</tt> types.</li>
+<li>Fix unfused loads of float fields.</li>
+<li>Fix <tt>ffi.string()</tt> recording.</li>
+<li>Save <tt>GetLastError()</tt> around <tt>ffi.load()</tt> and symbol
+resolving, too.</li>
+<li>Improve ld script detection in <tt>ffi.load()</tt>.</li>
+<li>Record loads/stores to external variables in namespaces.</li>
+<li>Compile calls to stdcall, fastcall and vararg functions.</li>
+<li>Treat function ctypes like pointers in comparisons.</li>
+<li>Resolve <tt>__call</tt> metamethod for pointers, too.</li>
+<li>Record C function calls with bool return values.</li>
+<li>Record <tt>ffi.errno()</tt>.</li>
+<li>x86: Fix number to <tt>uint32_t</tt> conversion rounding.</li>
+<li>x86: Fix 64 bit arithmetic in assembler backend.</li>
+<li>x64: Fix struct-by-value calling conventions.</li>
+<li>ARM: Ensure invocation of SPLIT pass for float conversions.</li>
+</ul></li>
+<li>Structural and performance enhancements:
+<ul>
+<li>Display trace types with <tt>-jv</tt> and <tt>-jdump</tt>.</li>
+<li>Record isolated calls. But prefer recording loops over calls.</li>
+<li>Specialize to prototype for non-monomorphic functions. Solves the
+trace-explosion problem for closure-heavy programming styles.</li>
+<li>Always generate a portable <tt>vmdef.lua</tt>. Easier for distros.</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta8">LuaJIT 2.0.0-beta8 &mdash; 2011-06-23</h2>
 <ul>
 <li>New features:
