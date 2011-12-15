@@ -355,7 +355,7 @@ EGLIBC). The <tt>CROSS</tt> prefix may vary depending on the
 <tt>--target</tt> of the toolchain:
 </p>
 <pre class="code">
-make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- TARGET=arm
+make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi-
 </pre>
 <p>
 You can cross-compile for <b id="android">Android (ARM)</b> using the <a href="http://developer.android.com/sdk/ndk/index.html"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
@@ -368,7 +368,7 @@ NDKABI=8
 NDKVER=$NDK/toolchains/arm-linux-androideabi-4.4.3
 NDKP=$NDKVER/prebuilt/linux-x86/bin/arm-linux-androideabi-
 NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-arm"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF" TARGET=arm
+make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF"
 </pre>
 <p>
 You can cross-compile for <b id="ios">iOS 3.0+</b> (iPhone/iPad) using the <a href="http://developer.apple.com/devcenter/ios/index.action"><span class="ext">&raquo;</span>&nbsp;iOS SDK</a>.
@@ -387,7 +387,7 @@ ISDKVER=iPhoneOS4.3.sdk
 ISDKP=$ISDK/usr/bin/
 ISDKF="-arch armv6 -isysroot $ISDK/SDKs/$ISDKVER"
 make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
-     TARGET=arm TARGET_SYS=iOS
+     TARGET_SYS=iOS
 </pre>
 <p>
 You can cross-compile for a <b id="ppc">PPC target</b> or a
@@ -398,11 +398,11 @@ of the toolchain:
 </p>
 <pre class="code">
 # PPC
-make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu- TARGET=ppc
+make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
 </pre>
 <pre class="code">
 # PPC/e500v2
-make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe- TARGET=ppcspe
+make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
 </pre>
 <p>
 Whenever the <b>host OS and the target OS differ</b>, you need to specify
