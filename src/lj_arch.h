@@ -23,6 +23,8 @@
 #define LUAJIT_ARCH_ppc		4
 #define LUAJIT_ARCH_PPCSPE	5
 #define LUAJIT_ARCH_ppcspe	5
+#define LUAJIT_ARCH_MIPS	6
+#define LUAJIT_ARCH_mips	6
 
 /* Target OS. */
 #define LUAJIT_OS_OTHER		0
@@ -47,6 +49,8 @@
 #else
 #define LUAJIT_TARGET	LUAJIT_ARCH_PPC
 #endif
+#elif defined(__mips__) || defined(__mips) || defined(__MIPS__) || defined(__MIPS)
+#define LUAJIT_TARGET	LUAJIT_ARCH_MIPS
 #else
 #error "No support for this architecture (yet)"
 #endif
@@ -180,6 +184,26 @@
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
 #define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
+#define LJ_ARCH_NOJIT		1
+
+#elif LUAJIT_TARGET == LUAJIT_ARCH_MIPS
+
+#define LJ_ARCH_NAME		"mips"
+#define LJ_ARCH_BITS		32
+#if defined(__MIPSEL__) || defined(__MIPSEL) || defined(_MIPSEL)
+#define LJ_ARCH_ENDIAN		LUAJIT_LE
+#else
+#define LJ_ARCH_ENDIAN		LUAJIT_BE
+#endif
+#define LJ_ARCH_HASFPU		1
+#define LJ_TARGET_MIPS		1
+#define LJ_TARGET_EHRETREG	4
+#define LJ_TARGET_JUMPRANGE	27	/* 2*2^27 = 256MB-aligned region */
+#define LJ_TARGET_MASKSHIFT	1
+#define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
+#define LJ_ARCH_NOFFI		1
 #define LJ_ARCH_NOJIT		1
 
 #else

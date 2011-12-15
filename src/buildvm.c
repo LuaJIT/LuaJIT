@@ -74,6 +74,9 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #elif LJ_TARGET_PPCSPE
 #include "../dynasm/dasm_ppc.h"
 #include "buildvm_ppcspe.h"
+#elif LJ_TARGET_MIPS
+#include "../dynasm/dasm_mips.h"
+#include "buildvm_mips.h"
 #else
 #error "No support for this architecture (yet)"
 #endif

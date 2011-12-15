@@ -117,6 +117,16 @@ enum {
 #define CFRAME_OFS_MULTRES	8
 #define CFRAME_SIZE		184
 #define CFRAME_SHIFT_MULTRES	3
+#elif LJ_TARGET_MIPS
+/* NYI: Dummy definitions for now. */
+#define CFRAME_OFS_ERRF		0
+#define CFRAME_OFS_NRES		0
+#define CFRAME_OFS_PREV		0
+#define CFRAME_OFS_L		0
+#define CFRAME_OFS_PC		0
+#define CFRAME_OFS_MULTRES	0
+#define CFRAME_SIZE		256
+#define CFRAME_SHIFT_MULTRES	3
 #else
 #error "Missing CFRAME_* definitions for this architecture"
 #endif

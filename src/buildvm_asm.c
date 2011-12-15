@@ -119,6 +119,8 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 	    ins, sym);
     exit(1);
   }
+#elif LJ_TARGET_MIPS
+  UNUSED(sym);  /* NYI */
 #else
 #error "missing relocation support for this architecture"
 #endif
