@@ -187,7 +187,7 @@ static CPToken cp_integer(CPState *cp)
       break;
     cp_get(cp);
   }
-  if (lj_char_isident(cp->c))
+  if (lj_char_isident(cp->c) && !(cp->mode & CPARSE_MODE_SKIP))
     cp_errmsg(cp, cp->c, LJ_ERR_XNUMBER);
   return CTOK_INTEGER;
 }
@@ -1593,12 +1593,14 @@ static void cp_decl_func(CPState *cp, CPDecl *fdecl)
   cp_check(cp, ')');
   if (cp_opt(cp, '{')) {  /* Skip function definition. */
     int level = 1;
+    cp->mode |= CPARSE_MODE_SKIP;
     for (;;) {
       if (cp->tok == '{') level++;
       else if (cp->tok == '}' && --level == 0) break;
       else if (cp->tok == CTOK_EOF) cp_err_token(cp, '}');
       cp_next(cp);
     }
+    cp->mode &= ~CPARSE_MODE_SKIP;
     cp->tok = ';';  /* Ok for cp_decl_multi(), error in cp_decl_single(). */
   }
   info |= (fdecl->fattr & ~CTMASK_CID);
