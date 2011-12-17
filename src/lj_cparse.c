@@ -1728,6 +1728,10 @@ static void cp_decl_multi(CPState *cp)
   while (cp->tok != CTOK_EOF) {
     CPDecl decl;
     CPscl scl;
+    if (cp_opt(cp, ';')) {  /* Skip empty statements. */
+      first = 0;
+      continue;
+    }
     if (cp->tok == '#') {  /* Workaround, since we have no preprocessor, yet. */
       BCLine pragmaline = cp->linenumber;
       if (!(cp_next(cp) == CTOK_IDENT &&
