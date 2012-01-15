@@ -274,6 +274,7 @@ void lj_ccallback_mcode_free(CTState *cts)
 #elif LJ_TARGET_ARM
 
 #define CALLBACK_HANDLE_REGARG \
+  UNUSED(isfp); \
   if (n > 1) ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
   if (ngpr + n <= maxgpr) { \
     sp = &cts->cb.gpr[ngpr]; \
@@ -455,11 +456,13 @@ void LJ_FASTCALL lj_ccallback_leave(CTState *cts, TValue *o)
   GCfunc *fn;
   TValue *obase = L->base;
   L->base = L->top;  /* Keep continuation frame for throwing errors. */
-  /* PC of RET* is lost. Point to last line for result conv. errors. */
-  fn = curr_func(L);
-  if (isluafunc(fn)) {
-    GCproto *pt = funcproto(fn);
-    setcframe_pc(L->cframe, proto_bc(pt)+pt->sizebc+1);
+  if (o >= L->base) {
+    /* PC of RET* is lost. Point to last line for result conv. errors. */
+    fn = curr_func(L);
+    if (isluafunc(fn)) {
+      GCproto *pt = funcproto(fn);
+      setcframe_pc(L->cframe, proto_bc(pt)+pt->sizebc+1);
+    }
   }
   callback_conv_result(cts, L, o);
   /* Finally drop C frame and continuation frame. */
