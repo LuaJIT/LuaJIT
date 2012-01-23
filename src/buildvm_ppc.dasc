@@ -501,22 +501,22 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz TMP1, L->top
   |  lwz PC, FRAME_PC(BASE)
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
-  |   sub RD, TMP1, BASE
   |    stb CARG3, L->status
   |     stw TMP3, TMPD
-  |  andi. TMP0, PC, FRAME_TYPE
   |     ori TMP3, TMP3, 0x0004		// TONUM = 2^52 + 2^51 + 2^31 (float).
   |     lfs TOBIT, TMPD
-  |     li ZERO, 0
+  |   sub RD, TMP1, BASE
   |     stw TMP3, TMPD
-  |   addi RD, RD, 8
   |     lus TMP0, 0x4338		// Hiword of 2^52 + 2^51 (double)
-  |   mr MULTRES, RD
+  |   addi RD, RD, 8
   |     stw TMP0, TONUM_HI
   |    li_vmstate INTERP
+  |     li ZERO, 0
+  |    st_vmstate
+  |  andi. TMP0, PC, FRAME_TYPE
+  |   mr MULTRES, RD
   |     lfs TONUM, TMPD
   |     li TISNIL, LJ_TNIL
-  |    st_vmstate
   |  beq ->BC_RET_Z
   |  b ->vm_return
   |
