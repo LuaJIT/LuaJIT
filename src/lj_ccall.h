@@ -80,6 +80,21 @@ typedef double FPRArg;
 
 typedef intptr_t GPRArg;
 
+#elif LJ_TARGET_MIPS
+
+#define CCALL_NARG_GPR		4
+#define CCALL_NARG_FPR		2
+#define CCALL_NRET_GPR		2
+#define CCALL_NRET_FPR		2
+#define CCALL_SPS_EXTRA		7
+#define CCALL_SPS_FREE		1
+
+typedef intptr_t GPRArg;
+typedef union FPRArg {
+  double d;
+  struct { LJ_ENDIAN_LOHI(float f; , float g;) };
+} FPRArg;
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif

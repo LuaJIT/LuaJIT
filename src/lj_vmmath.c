@@ -10,7 +10,7 @@
 #include <math.h>
 
 #include "lj_obj.h"
-#if LJ_HASJIT
+#if LJ_HASJIT || LJ_TARGET_MIPS
 #include "lj_ir.h"
 #endif
 #include "lj_vm.h"
@@ -22,6 +22,29 @@
 LJ_FUNCA double lj_vm_sinh(double x) { return sinh(x); }
 LJ_FUNCA double lj_vm_cosh(double x) { return cosh(x); }
 LJ_FUNCA double lj_vm_tanh(double x) { return tanh(x); }
+#endif
+
+#if LJ_TARGET_MIPS
+double lj_vm_foldarith(double x, double y, int op)
+{
+  switch (op) {
+  case IR_ADD - IR_ADD: return x+y; break;
+  case IR_SUB - IR_ADD: return x-y; break;
+  case IR_MUL - IR_ADD: return x*y; break;
+  case IR_DIV - IR_ADD: return x/y; break;
+  case IR_MOD - IR_ADD: return x-lj_vm_floor(x/y)*y; break;
+  case IR_POW - IR_ADD: return pow(x, y); break;
+  case IR_NEG - IR_ADD: return -x; break;
+  case IR_ABS - IR_ADD: return fabs(x); break;
+#if LJ_HASJIT
+  case IR_ATAN2 - IR_ADD: return atan2(x, y); break;
+  case IR_LDEXP - IR_ADD: return ldexp(x, (int)y); break;
+  case IR_MIN - IR_ADD: return x > y ? y : x; break;
+  case IR_MAX - IR_ADD: return x < y ? y : x; break;
+#endif
+  default: return x;
+  }
+}
 #endif
 
 #if LJ_HASJIT

@@ -290,6 +290,59 @@
     goto done; \
   }
 
+#elif LJ_TARGET_MIPS
+/* -- MIPS calling conventions -------------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  cc->retref = 1;  /* Return all structs by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in 1 or 2 FPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPRs. */ \
+    ((float *)dp)[0] = cc->fpr[0].f; \
+    ((float *)dp)[1] = cc->fpr[1].f; \
+  } else {  /* Copy complex double from FPRs. */ \
+    ((double *)dp)[0] = cc->fpr[0].d; \
+    ((double *)dp)[1] = cc->fpr[1].d; \
+  }
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass all structs by value in registers and/or on the stack. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex by value in 2 or 4 GPRs. */
+
+#define CCALL_HANDLE_REGARG \
+  if (isfp && nfpr < CCALL_NARG_FPR && !(ct->info & CTF_VARARG)) { \
+    /* Try to pass argument in FPRs. */ \
+    dp = n == 1 ? (void *)&cc->fpr[nfpr].f : (void *)&cc->fpr[nfpr].d; \
+    nfpr++; ngpr += n; \
+    goto done; \
+  } else {  /* Try to pass argument in GPRs. */ \
+    nfpr = CCALL_NARG_FPR; \
+    if ((d->info & CTF_ALIGN) > CTALIGN_PTR) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+    if (ngpr < maxgpr) { \
+      dp = &cc->gpr[ngpr]; \
+      if (ngpr + n > maxgpr) { \
+	nsp += ngpr + n - maxgpr;  /* Assumes contiguous gpr/stack fields. */ \
+	if (nsp > CCALL_MAXSTACK) goto err_nyi;  /* Too many arguments. */ \
+	ngpr = maxgpr; \
+      } else { \
+	ngpr += n; \
+      } \
+      goto done; \
+    } \
+  }
+
+#define CCALL_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    sp = (uint8_t *)&cc->fpr[0].f;
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
@@ -622,12 +675,12 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
   }
   if (LJ_BE && ctype_isinteger_or_bool(ctr->info) && ctr->size < CTSIZE_PTR)
     sp += (CTSIZE_PTR - ctr->size);
-#ifdef CCALL_HANDLE_RET
-  CCALL_HANDLE_RET
-#endif
 #if CCALL_NUM_FPR
   if (ctype_isfp(ctr->info) || ctype_isvector(ctr->info))
     sp = (uint8_t *)&cc->fpr[0];
+#endif
+#ifdef CCALL_HANDLE_RET
+  CCALL_HANDLE_RET
 #endif
   /* No reference types end up here, so there's no need for the CTypeID. */
   lua_assert(!(ctype_isrefarray(ctr->info) || ctype_isstruct(ctr->info)));

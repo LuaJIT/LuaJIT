@@ -57,6 +57,13 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
 #define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
 
+#elif LJ_TARGET_MIPS
+
+#define CALLBACK_MCODE_HEAD		24
+#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
+#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
+#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
+
 #else
 
 /* Missing support for this architecture. */
@@ -155,6 +162,25 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
     *p++ = PPCI_LI | PPCF_T(RID_R11) | slot;
     *p = PPCI_B | (((page-p) & 0x00ffffffu) << 2);
     p++;
+  }
+  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+}
+#elif LJ_TARGET_MIPS
+static void callback_mcode_init(global_State *g, uint32_t *page)
+{
+  uint32_t *p = page;
+  void *target = (void *)lj_vm_ffi_callback;
+  MSize slot;
+  *p++ = MIPSI_SW | MIPSF_T(RID_R1)|MIPSF_S(RID_SP) | 0;
+  *p++ = MIPSI_LUI | MIPSF_T(RID_R3) | (u32ptr(target) >> 16);
+  *p++ = MIPSI_LUI | MIPSF_T(RID_R2) | (u32ptr(g) >> 16);
+  *p++ = MIPSI_ORI | MIPSF_T(RID_R3)|MIPSF_S(RID_R3) |(u32ptr(target)&0xffff);
+  *p++ = MIPSI_JR | MIPSF_S(RID_R3);
+  *p++ = MIPSI_ORI | MIPSF_T(RID_R2)|MIPSF_S(RID_R2) | (u32ptr(g)&0xffff);
+  for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+    *p = MIPSI_B | ((page-p-1) & 0x0000ffffu);
+    p++;
+    *p++ = MIPSI_LI | MIPSF_T(RID_R1) | slot;
   }
   lua_assert(p - page <= CALLBACK_MCODE_SIZE);
 }
@@ -307,6 +333,27 @@ void lj_ccallback_mcode_free(CTState *cts)
 #define CALLBACK_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     *(double *)dp = *(float *)dp;  /* FPRs always hold doubles. */
+
+#elif LJ_TARGET_MIPS
+
+#define CALLBACK_HANDLE_REGARG \
+  if (isfp && nfpr < CCALL_NARG_FPR) {  /* Try to pass argument in FPRs. */ \
+    sp = (void *)((uint8_t *)&cts->cb.fpr[nfpr] + ((LJ_BE && n==1) ? 4 : 0)); \
+    nfpr++; ngpr += n; \
+    goto done; \
+  } else {  /* Try to pass argument in GPRs. */ \
+    nfpr = CCALL_NARG_FPR; \
+    if (n > 1) ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+    if (ngpr + n <= maxgpr) { \
+      sp = &cts->cb.gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } \
+  }
+
+#define CALLBACK_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    ((float *)dp)[1] = *(float *)dp;
 
 #else
 #error "Missing calling convention definitions for this architecture"

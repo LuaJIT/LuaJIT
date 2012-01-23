@@ -408,8 +408,7 @@ ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
 ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h
 ALL_GEN= $(LJVM_S) $(ALL_HDRGEN) $(LIB_VMDEFP)
 ALL_DYNGEN= buildvm_x86.h buildvm_x64.h buildvm_x64win.h buildvm_arm.h \
-	    buildvm_ppc.h buildvm_ppcspe.h
-###ALL_DYNGEN+= buildvm_mips.h
+	    buildvm_ppc.h buildvm_ppcspe.h buildvm_mips.h
 WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
 ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
 
@@ -502,7 +501,7 @@ distclean:	clean
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_ARM) -o buildvm_arm.h buildvm_arm.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPC) -o buildvm_ppc.h buildvm_ppc.dasc
 	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPCSPE) -o buildvm_ppcspe.h buildvm_ppcspe.dasc
-	@### $(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_MIPS) -o buildvm_mips.h buildvm_mips.dasc
+	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_MIPS) -o buildvm_mips.h buildvm_mips.dasc
 
 depend:
 	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \

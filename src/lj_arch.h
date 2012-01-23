@@ -188,13 +188,14 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_MIPS
 
-#define LJ_ARCH_NAME		"mips"
-#define LJ_ARCH_BITS		32
 #if defined(__MIPSEL__) || defined(__MIPSEL) || defined(_MIPSEL)
+#define LJ_ARCH_NAME		"mipsel"
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
 #else
+#define LJ_ARCH_NAME		"mips"
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
 #endif
+#define LJ_ARCH_BITS		32
 #define LJ_ARCH_HASFPU		1
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
@@ -203,7 +204,6 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
-#define LJ_ARCH_NOFFI		1
 #define LJ_ARCH_NOJIT		1
 
 #else
