@@ -142,6 +142,13 @@ operating systems, CPUs and compilers:
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
+<tr class="even">
+<td class="compatcpu"><a href="#mips">MIPS</a></td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos">GCC 4.3+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos compatno">&nbsp;</td>
+</tr>
 </table>
 
 <h2>Configuring LuaJIT</h2>
@@ -403,6 +410,21 @@ make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
 <pre class="code">
 # PPC/e500v2
 make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
+</pre>
+<p>
+You can cross-compile for a big-endian or little-endian
+<b id="mips">MIPS target</b> on x86 or x64 host systems using a standard
+GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
+The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
+of the toolchain:
+</p>
+<pre class="code">
+# MIPS big-endian
+make HOST_CC="gcc -m32" CROSS=mips-linux-
+</pre>
+<pre class="code">
+# MIPS little-endian
+make HOST_CC="gcc -m32" CROSS=mipsel-linux-
 </pre>
 <p>
 Whenever the <b>host OS and the target OS differ</b>, you need to specify
