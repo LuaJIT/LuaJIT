@@ -11,7 +11,7 @@ local _info = {
   description =	"DynASM MIPS module",
   version =	"1.3.0",
   vernum =	 10300,
-  release =	"2011-12-16",
+  release =	"2012-01-23",
   author =	"Mike Pall",
   license =	"MIT",
 }
@@ -278,7 +278,9 @@ local map_op = {
   -- Opcode SPECIAL.
   nop_0 =	"00000000",
   sll_3 =	"00000000DTA",
+  movf_2 =	"00000001DS",
   movf_3 =	"00000001DSC",
+  movt_2 =	"00010001DS",
   movt_3 =	"00010001DSC",
   srl_3 =	"00000002DTA",
   rotr_3 =	"00200002DTA",
@@ -309,10 +311,12 @@ local map_op = {
   move_2 =	"00000021DS",
   addu_3 =	"00000021DST",
   sub_3 =	"00000022DST",
+  negu_2 =	"00000023DT",
   subu_3 =	"00000023DST",
   and_3 =	"00000024DST",
   or_3 =	"00000025DST",
   xor_3 =	"00000026DST",
+  not_2 =	"00000027DS",
   nor_3 =	"00000027DST",
   slt_3 =	"0000002aDST",
   sltu_3 =	"0000002bDST",
@@ -341,6 +345,7 @@ local map_op = {
   teqi_2 =	"040c0000SI",
   tnei_2 =	"040e0000SI",
   bltzal_2 =	"04100000SB",
+  bal_1 =	"04110000B",
   bgezal_2 =	"04110000SB",
   bltzall_2 =	"04120000SB",
   bgezall_2 =	"04130000SB",
@@ -659,8 +664,14 @@ end
 local function parse_disp(disp)
   local imm, reg = match(disp, "^(.*)%(([%w_:]+)%)$")
   if imm then
-    local r = parse_gpr(reg)
-    return r*2^21 + parse_imm(imm, 16, 0, 0, true)
+    local r = parse_gpr(reg)*2^21
+    local extname = match(imm, "^extern%s+(%S+)$")
+    if extname then
+      waction("REL_EXT", map_extern[extname], nil, 1)
+      return r
+    else
+      return r + parse_imm(imm, 16, 0, 0, true)
+    end
   end
   local reg, tailr = match(disp, "^([%w_:]+)%s*(.*)$")
   if reg and tailr ~= "" then

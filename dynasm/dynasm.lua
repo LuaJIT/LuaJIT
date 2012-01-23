@@ -390,7 +390,7 @@ map_coreop[".macro_*"] = function(mparams)
   -- Split off and validate macro name.
   local name = remove(mparams, 1)
   if not name then werror("missing macro name") end
-  if not (match(name, "^[%a_][%w_%.]*$") or match(name, "^%.[%w_%.]+$")) then
+  if not (match(name, "^[%a_][%w_%.]*$") or match(name, "^%.[%w_%.]*$")) then
     wfatal("bad macro name `"..name.."'")
   end
   -- Validate macro parameter names.
