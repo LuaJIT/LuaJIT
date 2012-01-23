@@ -1571,7 +1571,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   add CARG1, STR:CARG1, #sizeof(GCstr)-1
   |  movgt RB, CARG2
   |   add CARG2, CARG1, CARG3
-  |  subs CARG3, RB, CARG3		// len = start - end
+  |  subs CARG3, RB, CARG3		// len = end - start
   |   add CARG3, CARG3, #1		// len += 1
   |  bge ->fff_newstr
   |->fff_emptystr:
@@ -2217,7 +2217,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ins_callt
 #endif
   |
-  |->cont_ffi_callback:                 // Return from FFI callback.
+  |->cont_ffi_callback:			// Return from FFI callback.
 #if LJ_HASFFI
   |  ldr CTSTATE, [DISPATCH, #DISPATCH_GL(ctype_state)]
   |   str BASE, L->base
@@ -3369,7 +3369,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   str BASE, L->base
     |  mov CARG1, L
     |   str PC, SAVE_PC
-    |  bl extern lj_tab_reasize         // (lua_State *L, GCtab *t, int nasize)
+    |  bl extern lj_tab_reasize		// (lua_State *L, GCtab *t, int nasize)
     |  // Must not reallocate the stack.
     |  IOS ldr BASE, L->base
     |  b <1
@@ -3945,7 +3945,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  cmp NARGS8:RC, CARG2, lsl #3	// Check for missing parameters.
     |   mvn CARG4, #~LJ_TNIL
-    |  ble >3
+    |  blo >3
     if (op == BC_JFUNCF) {
       |  decode_RD RC, INS
       |  b =>BC_JLOOP
