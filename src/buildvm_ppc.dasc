@@ -1142,7 +1142,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_restv
   |
   |.ffunc rawget
-  |  cmplwi NARGS8:RC, 8
+  |  cmplwi NARGS8:RC, 16
   |   lwz CARG4, 0(BASE)
   |    lwz TAB:CARG2, 4(BASE)
   |  blt ->fff_fallback
