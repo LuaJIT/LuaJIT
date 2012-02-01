@@ -114,7 +114,7 @@ static void *clib_loadlib(lua_State *L, const char *name, int global)
 
 static void clib_unloadlib(CLibrary *cl)
 {
-  if (!cl->handle && cl->handle != CLIB_DEFHANDLE)
+  if (cl->handle && cl->handle != CLIB_DEFHANDLE)
     dlclose(cl->handle);
 }
 
