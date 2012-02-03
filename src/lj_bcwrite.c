@@ -219,13 +219,19 @@ static void bcwrite_knum(BCWriteCtx *ctx, GCproto *pt)
 	k = lj_num2int(num);
 	if (num == (lua_Number)k) {  /* -0 is never a constant. */
 	save_int:
-	  bcwrite_uleb128(ctx, 2*(uint32_t)k);
-	  if (k < 0) ctx->sb.buf[ctx->sb.n-1] |= 0x10;
+	  bcwrite_uleb128(ctx, 2*(uint32_t)k | ((uint32_t)k & 0x80000000u));
+	  if (k < 0) {
+	    char *p = &ctx->sb.buf[ctx->sb.n-1];
+	    *p = (*p & 7) | ((k>>27) & 0x18);
+	  }
 	  continue;
 	}
       }
-      bcwrite_uleb128(ctx, 1+2*o->u32.lo);
-      if (o->u32.lo >= 0x80000000u) ctx->sb.buf[ctx->sb.n-1] |= 0x10;
+      bcwrite_uleb128(ctx, 1+(2*o->u32.lo | (o->u32.lo & 0x80000000u)));
+      if (o->u32.lo >= 0x80000000u) {
+	char *p = &ctx->sb.buf[ctx->sb.n-1];
+	*p = (*p & 7) | ((o->u32.lo>>27) & 0x18);
+      }
       bcwrite_uleb128(ctx, o->u32.hi);
     }
   }
