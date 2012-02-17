@@ -259,9 +259,17 @@ local condstack = {}
 
 -- Evaluate condition with a Lua expression. Substitutions already performed.
 local function cond_eval(cond)
-  local func, err = loadstring("return "..cond)
+  local func, err
+  if setfenv then
+    func, err = loadstring("return "..cond, "=expr")
+  else
+    -- No globals. All unknown identifiers evaluate to nil.
+    func, err = load("return "..cond, "=expr", "t", {})
+  end
   if func then
-    setfenv(func, {}) -- No globals. All unknown identifiers evaluate to nil.
+    if setfenv then
+      setfenv(func, {}) -- No globals. All unknown identifiers evaluate to nil.
+    end
     local ok, res = pcall(func)
     if ok then
       if res == 0 then return false end -- Oh well.
