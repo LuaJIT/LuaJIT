@@ -676,7 +676,7 @@ LJ_NOINLINE void lj_err_arg(lua_State *L, int narg, ErrMsg em)
 /* Typecheck error for arguments. */
 LJ_NOINLINE void lj_err_argtype(lua_State *L, int narg, const char *xname)
 {
-  TValue *o = L->base + narg-1;
+  TValue *o = narg < 0 ? L->top + narg : L->base + narg-1;
   const char *tname = o < L->top ? typename(o) : lj_obj_typename[0];
   const char *msg = lj_str_pushf(L, err2msg(LJ_ERR_BADTYPE), xname, tname);
   err_argmsg(L, narg, msg);
