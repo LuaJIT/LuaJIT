@@ -279,6 +279,8 @@ const char *lj_debug_funcname(lua_State *L, TValue *frame, const char **name)
   TValue *pframe;
   GCfunc *fn;
   BCPos pc;
+  if (frame <= tvref(L->stack))
+    return NULL;
   if (frame_isvarg(frame))
     frame = frame_prevd(frame);
   pframe = frame_prev(frame);
