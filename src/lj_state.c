@@ -225,8 +225,8 @@ static TValue *cpfinalize(lua_State *L, lua_CFunction dummy, void *ud)
 {
   UNUSED(dummy);
   UNUSED(ud);
-  lj_gc_finalize_udata(L);
   lj_gc_finalize_cdata(L);
+  lj_gc_finalize_udata(L);
   /* Frame pop omitted. */
   return NULL;
 }
