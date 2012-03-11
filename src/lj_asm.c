@@ -1211,8 +1211,10 @@ static void asm_head_side(ASMState *as)
     rs = asm_head_parentrs(as, ir);
     if (ra_hasreg(ir->r)) {
       rset_clear(allow, ir->r);
-      if (ra_hasspill(ir->s))
+      if (ra_hasspill(ir->s)) {
 	ra_save(as, ir, ir->r);
+	checkmclim(as);
+      }
     } else if (ra_hasspill(ir->s)) {
       irt_setmark(ir->t);
       pass2 = 1;
