@@ -188,14 +188,14 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
   return ptr;
 }
 
-#elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__)
 
 /* OSX and FreeBSD mmap() use a naive first-fit linear search.
 ** That's perfect for us. Except that -pagezero_size must be set for OSX,
 ** otherwise the lower 4GB are blocked. And the 32GB RLIMIT_DATA needs
 ** to be reduced to 250MB on FreeBSD.
 */
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__)
 #include <sys/resource.h>
 #define MMAP_REGION_START	((uintptr_t)0x10000000)
 #else
