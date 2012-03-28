@@ -187,10 +187,11 @@ static void asm_fusexref(ASMState *as, PPCIns pi, Reg rt, IRRef ref,
 	ref = ir->op2;
       } else {
 	/* NYI: Fuse ADD with constant. */
-	Reg right, left = ra_alloc2(as, ir, allow);
+	Reg tmp, right, left = ra_alloc2(as, ir, allow);
 	right = (left >> 8); left &= 255;
-	emit_fai(as, pi, rt, rt, ofs);
-	emit_tab(as, PPCI_ADD, rt, left, right);
+	tmp = ra_scratch(as, rset_exclude(rset_exclude(allow, left), right));
+	emit_fai(as, pi, rt, tmp, ofs);
+	emit_tab(as, PPCI_ADD, tmp, left, right);
 	return;
       }
       if (!checki16(ofs)) {
