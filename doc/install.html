@@ -104,7 +104,7 @@ operating systems, CPUs and compilers:
 <td class="compatcpu">CPU / OS</td>
 <td class="compatos"><a href="#posix">Linux</a> or<br><a href="#android">Android</a></td>
 <td class="compatos"><a href="#posix">*BSD, Other</a></td>
-<td class="compatos"><a href="#posix">OSX 10.3+</a> or<br><a href="#ios">iOS 3.0+</a></td>
+<td class="compatos"><a href="#posix">OSX 10.4+</a> or<br><a href="#ios">iOS 3.0+</a></td>
 <td class="compatos"><a href="#windows">Windows<br>XP/Vista/7</a></td>
 </tr>
 <tr class="odd separate">
@@ -210,8 +210,8 @@ You can add an extra prefix to the search paths by appending the
 make PREFIX=/home/myself/lj2
 </pre>
 <p>
-Note for OSX: <tt>MACOSX_DEPLOYMENT_TARGET</tt> is set to <tt>10.4</tt>
-in <tt>src/Makefile</tt>. Change it, if you want to build on an older version.
+Note for OSX: if the <tt>MACOSX_DEPLOYMENT_TARGET</tt> environment
+variable is not set, then it's forced to <tt>10.4</tt>.
 </p>
 <h3>Installing LuaJIT</h3>
 <p>

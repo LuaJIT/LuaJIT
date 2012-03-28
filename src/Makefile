@@ -219,10 +219,6 @@ TARGET_ALDFLAGS= $(LDOPTIONS) $(TARGET_XLDFLAGS) $(TARGET_FLAGS) $(TARGET_LDFLAG
 TARGET_ASHLDFLAGS= $(LDOPTIONS) $(TARGET_XSHLDFLAGS) $(TARGET_FLAGS) $(TARGET_SHLDFLAGS)
 TARGET_ALIBS= $(TARGET_XLIBS) $(LIBS) $(TARGET_LIBS)
 
-ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
-  TARGET_XCFLAGS+= -fno-stack-protector
-endif
-
 TARGET_TESTARCH=$(shell $(TARGET_CC) $(TARGET_TCFLAGS) -E lj_arch.h -dM)
 ifneq (,$(findstring LJ_TARGET_X64 ,$(TARGET_TESTARCH)))
   TARGET_CCARCH= x64
@@ -293,9 +289,12 @@ ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNXLDOPTS=
 else
 ifeq (Darwin,$(TARGET_SYS))
-  export MACOSX_DEPLOYMENT_TARGET=10.4
+  ifeq (,$(MACOSX_DEPLOYMENT_TARGET))
+    export MACOSX_DEPLOYMENT_TARGET=10.4
+  endif
   TARGET_STRIP+= -x
   TARGET_AR+= 2>/dev/null
+  TARGET_XCFLAGS+= -fno-stack-protector
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
@@ -307,10 +306,14 @@ else
 ifeq (iOS,$(TARGET_SYS))
   TARGET_STRIP+= -x
   TARGET_AR+= 2>/dev/null
+  TARGET_XCFLAGS+= -fno-stack-protector
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
 else
+  ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
+    TARGET_XCFLAGS+= -fno-stack-protector
+  endif
   ifneq (SunOS,$(TARGET_SYS))
     TARGET_XLDFLAGS+= -Wl,-E
   endif
