@@ -730,12 +730,12 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   IRIns *irkey = IR(kslot->op1);
   int32_t ofs = (int32_t)(kslot->op2 * sizeof(Node));
   int32_t kofs = ofs + (int32_t)offsetof(Node, key);
-  Reg dest = (ra_used(ir)||ofs > 65535) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
+  Reg dest = (ra_used(ir)||ofs > 32736) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
   Reg node = ra_alloc1(as, ir->op1, RSET_GPR);
   Reg key = RID_NONE, type = RID_TMP, idx = node;
   RegSet allow = rset_exclude(RSET_GPR, node);
   lua_assert(ofs % sizeof(Node) == 0);
-  if (ofs > 65535) {
+  if (ofs > 32736) {
     idx = dest;
     rset_clear(allow, dest);
     kofs = (int32_t)offsetof(Node, key);
@@ -761,7 +761,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   }
   if (ra_hasreg(key)) emit_tai(as, PPCI_LWZ, key, idx, kofs+4);
   emit_tai(as, PPCI_LWZ, type, idx, kofs);
-  if (ofs > 65535) {
+  if (ofs > 32736) {
     emit_tai(as, PPCI_ADDIS, dest, dest, (ofs + 32768) >> 16);
     emit_tai(as, PPCI_ADDI, dest, node, ofs);
   }
