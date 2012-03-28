@@ -2533,6 +2533,31 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------
   |
+  |// void lj_vm_cachesync(void *start, void *end)
+  |// Flush D-Cache and invalidate I-Cache. Assumes 32 byte cache line size.
+  |// This is a good lower bound, except for very ancient PPC models.
+  |->vm_cachesync:
+  |  // Compute start of first cache line and number of cache lines.
+  |  rlwinm CARG1, CARG1, 0, 0, 26
+  |  sub CARG2, CARG2, CARG1
+  |  addi CARG2, CARG2, 31
+  |  rlwinm. CARG2, CARG2, 27, 5, 31
+  |  beqlr
+  |  mtctr CARG2
+  |  mr CARG3, CARG1
+  |1:  // Flush D-Cache.
+  |  dcbst r0, CARG1
+  |  addi CARG1, CARG1, 32
+  |  bdnz <1
+  |  sync
+  |  mtctr CARG2
+  |1:  // Invalidate I-Cache.
+  |  icbi r0, CARG3
+  |  addi CARG3, CARG3, 32
+  |  bdnz <1
+  |  isync
+  |  blr
+  |
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
