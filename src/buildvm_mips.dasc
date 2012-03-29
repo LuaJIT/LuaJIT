@@ -270,7 +270,13 @@
 |.macro jmp_extern; jr CFUNCADDR; .endmacro
 |
 |.macro hotcheck, delta, target
-|NYI
+|  srl TMP1, PC, 1
+|  andi TMP1, TMP1, 126
+|  addu TMP1, TMP1, DISPATCH
+|  lhu TMP2, GG_DISP2HOT(TMP1)
+|  addiu TMP2, TMP2, -delta
+|  bltz TMP2, target
+|.  sh TMP2, GG_DISP2HOT(TMP1)
 |.endmacro
 |
 |.macro hotloop
@@ -1995,7 +2001,21 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_hotloop:			// Hot loop counter underflow.
 #if LJ_HASJIT
-  |NYI
+  |  lw LFUNC:TMP1, FRAME_FUNC(BASE)
+  |   addiu CARG1, DISPATCH, GG_DISP2J
+  |   sw PC, SAVE_PC
+  |  lw TMP1, LFUNC:TMP1->pc
+  |   move CARG2, PC
+  |   sw L, DISPATCH_J(L)(DISPATCH)
+  |  lbu TMP1, PC2PROTO(framesize)(TMP1)
+  |  load_got lj_trace_hot
+  |   sw BASE, L->base
+  |  sll TMP1, TMP1, 3
+  |  addu TMP1, BASE, TMP1
+  |  call_intern lj_trace_hot		// (jit_State *J, const BCIns *pc)
+  |.  sw TMP1, L->top
+  |  b <3
+  |.  nop
 #endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
@@ -2031,13 +2051,102 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Trace exit handler -------------------------------------------------
   |//-----------------------------------------------------------------------
   |
+  |.macro savex_, a, b
+  |  sdc1 f..a, 16+a*8(sp)
+  |  sw r..a, 16+32*8+a*4(sp)
+  |  sw r..b, 16+32*8+b*4(sp)
+  |.endmacro
+  |
   |->vm_exit_handler:
 #if LJ_HASJIT
-  |NYI
+  |  addiu sp, sp, -(16+32*8+32*4)
+  |  savex_ 0, 1
+  |  savex_ 2, 3
+  |  savex_ 4, 5
+  |  savex_ 6, 7
+  |  savex_ 8, 9
+  |  savex_ 10, 11
+  |  savex_ 12, 13
+  |  savex_ 14, 15
+  |  savex_ 16, 17
+  |  savex_ 18, 19
+  |  savex_ 20, 21
+  |  savex_ 22, 23
+  |  savex_ 24, 25
+  |  savex_ 26, 27
+  |  sdc1 f28, 16+28*8(sp)
+  |  sw r28, 16+32*8+28*4(sp)
+  |  sdc1 f30, 16+30*8(sp)
+  |  sw r30, 16+32*8+30*4(sp)
+  |  sw r0, 16+32*8+31*4(sp)		// Clear RID_TMP.
+  |  li_vmstate EXIT
+  |   addiu TMP2, sp, 16+32*8+32*4	// Recompute original value of sp.
+  |  addiu DISPATCH, JGL, -GG_DISP2G-32768
+  |  lw TMP1, 0(TMP2)			// Load exit number.
+  |  st_vmstate
+  |   sw TMP2, 16+32*8+29*4(sp)		// Store sp in RID_SP.
+  |  lw L, DISPATCH_GL(jit_L)(DISPATCH)
+  |  lw BASE, DISPATCH_GL(jit_base)(DISPATCH)
+  |  load_got lj_trace_exit
+  |  sw L, DISPATCH_J(L)(DISPATCH)
+  |  sw ra, DISPATCH_J(parent)(DISPATCH)  // Store trace number.
+  |  sw TMP1, DISPATCH_J(exitno)(DISPATCH)  // Store exit number.
+  |  addiu CARG1, DISPATCH, GG_DISP2J
+  |  sw BASE, L->base
+  |  call_intern lj_trace_exit		// (jit_State *J, ExitState *ex)
+  |.  addiu CARG2, sp, 16
+  |  // Returns MULTRES (unscaled) or negated error code.
+  |  lw TMP1, L->cframe
+  |  li AT, -4
+  |   lw BASE, L->base
+  |  and sp, TMP1, AT
+  |   lw PC, SAVE_PC			// Get SAVE_PC.
+  |  b >1
+  |.  sw L, SAVE_L			// Set SAVE_L (on-trace resume/yield).
 #endif
   |->vm_exit_interp:
 #if LJ_HASJIT
-  |NYI
+  |  // CRET1 = MULTRES or negated error code, BASE, PC and JGL set.
+  |  lw L, SAVE_L
+  |  addiu DISPATCH, JGL, -GG_DISP2G-32768
+  |1:
+  |  bltz CRET1, >3			// Check for error from exit.
+  |.  lw LFUNC:TMP1, FRAME_FUNC(BASE)
+  |    lui TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
+  |  sll MULTRES, CRET1, 3
+  |    li TISNIL, LJ_TNIL
+  |  sw MULTRES, SAVE_MULTRES
+  |    mtc1 TMP3, TOBIT
+  |  lw TMP1, LFUNC:TMP1->pc
+  |   sw r0, DISPATCH_GL(jit_L)(DISPATCH)
+  |  lw KBASE, PC2PROTO(k)(TMP1)
+  |    cvt.d.s TOBIT, TOBIT
+  |  // Modified copy of ins_next which handles function header dispatch, too.
+  |  lw INS, 0(PC)
+  |   addiu PC, PC, 4
+  |    // Assumes TISNIL == ~LJ_VMST_INTERP == -1
+  |    sw TISNIL, DISPATCH_GL(vmstate)(DISPATCH)
+  |  decode_OP4a TMP1, INS
+  |  decode_OP4b TMP1
+  |    sltiu TMP2, TMP1, BC_FUNCF*4	// Function header?
+  |  addu TMP0, DISPATCH, TMP1
+  |   decode_RD8a RD, INS
+  |  lw AT, 0(TMP0)
+  |   decode_RA8a RA, INS
+  |    beqz TMP2, >2
+  |.  decode_RA8b RA
+  |  jr AT
+  |.  decode_RD8b RD
+  |2:
+  |  addiu RC, MULTRES, -8
+  |  jr AT
+  |.  add RA, RA, BASE
+  |
+  |3:  // Rethrow error from the right C frame.
+  |  load_got lj_err_throw
+  |  negu CARG2, CRET1
+  |  call_intern lj_err_throw		// (lua_State *L, int errcode)
+  |.  move CARG1, L
 #endif
   |
   |//-----------------------------------------------------------------------
@@ -3739,13 +3848,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_JFORI) {
       |  li TMP1, 1
       |  li TMP2, 1
-      |   lw INS, -4(PC)
+      |   addu TMP0, RD, TMP0
       |  slt TMP3, TMP3, r0
-      |  movt TMP1, r0, 0
-      |  movt TMP2, r0, 1
-      |    addu PC, RD, TMP0
+      |  movf TMP1, r0, 0
+      |   addu PC, PC, TMP0
+      |  movf TMP2, r0, 1
+      |   lhu RD, -4+OFS_RD(PC)
       |  movn TMP1, TMP2, TMP3
-      |   decode_RD8a RD, INS
       |  bnez TMP1, =>BC_JLOOP
       |.  decode_RD8b RD
     } else if (op == BC_JFORL) {
