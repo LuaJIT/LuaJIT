@@ -84,6 +84,10 @@ local nexitsym = 0
 local function fillsymtab_tr(tr, nexit)
   local t = {}
   symtabmt.__index = t
+  if jit.arch == "mips" or jit.arch == "mipsel" then
+    t[traceexitstub(tr, 0)] = "exit"
+    return
+  end
   for i=0,nexit-1 do
     local addr = traceexitstub(tr, i)
     t[addr] = tostring(i)
@@ -604,9 +608,16 @@ local function dump_texit(tr, ex, ngpr, nfpr, ...)
 	if i % 8 == 0 then out:write("\n") end
       end
     end
-    for i=1,nfpr do
-      out:write(format(" %+17.14g", regs[ngpr+i]))
-      if i % 4 == 0 then out:write("\n") end
+    if jit.arch == "mips" or jit.arch == "mipsel" then
+      for i=1,nfpr,2 do
+	out:write(format(" %+17.14g", regs[ngpr+i]))
+	if i % 8 == 7 then out:write("\n") end
+      end
+    else
+      for i=1,nfpr do
+	out:write(format(" %+17.14g", regs[ngpr+i]))
+	if i % 4 == 0 then out:write("\n") end
+      end
     end
   end
 end

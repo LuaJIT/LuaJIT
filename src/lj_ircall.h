@@ -66,7 +66,7 @@ typedef struct CCallInfo {
 #define IRCALLCOND_SOFTFP_FFI(x)	NULL
 #endif
 
-#define LJ_NEED_FP64			LJ_TARGET_PPC
+#define LJ_NEED_FP64			(LJ_TARGET_PPC || LJ_TARGET_MIPS)
 
 #if LJ_HASFFI && (LJ_SOFTFP || LJ_NEED_FP64)
 #define IRCALLCOND_FP64_FFI(x)		x
@@ -157,8 +157,8 @@ typedef struct CCallInfo {
   _(FP64_FFI,	fp64_ul2d,		2,   N, NUM, 0) \
   _(FP64_FFI,	fp64_l2f,		2,   N, FLOAT, 0) \
   _(FP64_FFI,	fp64_ul2f,		2,   N, FLOAT, 0) \
-  _(FP64_FFI,	fp64_d2l,		2,   N, I64, 0) \
-  _(FP64_FFI,	fp64_d2ul,		2,   N, U64, 0) \
+  _(FP64_FFI,	fp64_d2l,		ARG1_FP,   N, I64, 0) \
+  _(FP64_FFI,	fp64_d2ul,		ARG1_FP,   N, U64, 0) \
   _(FP64_FFI,	fp64_f2l,		1,   N, I64, 0) \
   _(FP64_FFI,	fp64_f2ul,		1,   N, U64, 0) \
   _(FFI,	lj_carith_divi64,	ARG2_64,   N, I64, CCI_NOFPRCLOBBER) \

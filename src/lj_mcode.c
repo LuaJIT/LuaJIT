@@ -203,7 +203,13 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   /* Target an address in the static assembler code (64K aligned).
   ** Try addresses within a distance of target-range/2+1MB..target+range/2-1MB.
   */
+#if LJ_TARGET_MIPS
+  /* Use the middle of the 256MB-aligned region. */
+  uintptr_t target = ((uintptr_t)(void *)lj_vm_exit_handler & 0xf0000000u) +
+		     0x08000000u;
+#else
   uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
+#endif
   const uintptr_t range = (1u << LJ_TARGET_JUMPRANGE) - (1u << 21);
   /* First try a contiguous area below the last one. */
   uintptr_t hint = J->mcarea ? (uintptr_t)J->mcarea - sz : 0;
