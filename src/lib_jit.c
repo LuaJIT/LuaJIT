@@ -615,7 +615,21 @@ static uint32_t jit_cpudetect(lua_State *L)
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
   /* Nothing to do. */
 #elif LJ_TARGET_MIPS
-  /* NYI */
+#if LJ_HASJIT
+  /* Compile-time MIPS CPU detection. */
+#if _MIPS_ARCH_MIPS32R2
+  flags |= JIT_F_MIPS32R2;
+#endif
+  /* Runtime MIPS CPU detection. */
+#if defined(__GNUC__)
+  if (!(flags & JIT_F_MIPS32R2)) {
+    int x;
+    /* On MIPS32R1 rotr is treated as srl. rotr r2,r2,1 -> srl r2,r2,1. */
+    __asm__("li $2, 1\n\t.long 0x00221042\n\tmove %0, $2" : "=r"(x) : : "$2");
+    if (x) flags |= JIT_F_MIPS32R2;  /* Either 0x80000000 (R2) or 0 (R1). */
+  }
+#endif
+#endif
 #else
 #error "Missing CPU detection for this architecture"
 #endif
