@@ -228,7 +228,6 @@ static void clib_unloadlib(CLibrary *cl)
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
   void *p = NULL;
-  DWORD oldwerr = GetLastError();
   if (cl->handle == CLIB_DEFHANDLE) {  /* Search default libraries. */
     MSize i;
     for (i = 0; i < CLIB_HANDLE_MAX; i++) {
@@ -257,7 +256,6 @@ static void *clib_getsym(CLibrary *cl, const char *name)
   } else {
     p = (void *)GetProcAddress((HINSTANCE)cl->handle, name);
   }
-  SetLastError(oldwerr);
   return p;
 }
 
@@ -340,6 +338,9 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 	setintV(tv, (int32_t)ct->size);
     } else {
       const char *sym = clib_extsym(cts, ct, name);
+#if LJ_TARGET_WINDOWS
+      DWORD oldwerr = GetLastError();
+#endif
       void *p = clib_getsym(cl, sym);
       GCcdata *cd;
       lua_assert(ctype_isfunc(ct->info) || ctype_isextern(ct->info));
@@ -349,15 +350,19 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 	CTInfo cconv = ctype_cconv(ct->info);
 	if (cconv == CTCC_FASTCALL || cconv == CTCC_STDCALL) {
 	  CTSize sz = clib_func_argsize(cts, ct);
-	  sym = lj_str_pushf(L, cconv == CTCC_FASTCALL ? "@%s@%d" : "_%s@%d",
-			     sym, sz);
+	  const char *symd = lj_str_pushf(L,
+			       cconv == CTCC_FASTCALL ? "@%s@%d" : "_%s@%d",
+			       sym, sz);
 	  L->top--;
-	  p = clib_getsym(cl, sym);
+	  p = clib_getsym(cl, symd);
 	}
       }
 #endif
       if (!p)
-	clib_error(L, "cannot resolve symbol " LUA_QS ": %s", strdata(name));
+	clib_error(L, "cannot resolve symbol " LUA_QS ": %s", sym);
+#if LJ_TARGET_WINDOWS
+      SetLastError(oldwerr);
+#endif
       cd = lj_cdata_new(cts, id, CTSIZE_PTR);
       *(void **)cdataptr(cd) = p;
       setcdataV(L, tv, cd);
