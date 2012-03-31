@@ -301,9 +301,10 @@ static CTSize clib_func_argsize(CTState *cts, CType *ct)
   while (ct->sib) {
     CType *d;
     ct = ctype_get(cts, ct->sib);
-    lua_assert(ctype_isfield(ct->info));
-    d = ctype_rawchild(cts, ct);
-    n += ((d->size + 3) & ~3);
+    if (ctype_isfield(ct->info)) {
+      d = ctype_rawchild(cts, ct);
+      n += ((d->size + 3) & ~3);
+    }
   }
   return n;
 }
