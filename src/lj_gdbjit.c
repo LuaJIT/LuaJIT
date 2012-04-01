@@ -298,6 +298,9 @@ enum {
   DW_REG_SP = 1,
   DW_REG_RA = 65,
   DW_REG_CR = 70,
+#elif LJ_TARGET_MIPS
+  DW_REG_SP = 29,
+  DW_REG_RA = 31,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -369,6 +372,8 @@ static const ELFheader elfhdr_template = {
   .machine = 40,
 #elif LJ_TARGET_PPC
   .machine = 20,
+#elif LJ_TARGET_MIPS
+  .machine = 8,
 #else
 #error "Unsupported target architecture"
 #endif
@@ -562,18 +567,23 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
 #elif LJ_TARGET_ARM
     {
       int i;
-      DB(DW_CFA_offset_extended); DB(DW_REG_CR); DUV(55);
-      for (i = 11; i >= 4; i--) {  /* R4-R11. */
-	DB(DW_CFA_offset|i); DUV(2+(11-i));
-      }
+      for (i = 11; i >= 4; i--) { DB(DW_CFA_offset|i); DUV(2+(11-i)); }
     }
 #elif LJ_TARGET_PPC
     {
       int i;
+      DB(DW_CFA_offset_extended); DB(DW_REG_CR); DUV(55);
       for (i = 14; i <= 31; i++) {
 	DB(DW_CFA_offset|i); DUV(37+(31-i));
 	DB(DW_CFA_offset|32|i); DUV(2+2*(31-i));
       }
+    }
+#elif LJ_TARGET_MIPS
+    {
+      int i;
+      DB(DW_CFA_offset|30); DUV(2);
+      for (i = 23; i >= 16; i--) { DB(DW_CFA_offset|i); DUV(26-i); }
+      for (i = 30; i >= 20; i -= 2) { DB(DW_CFA_offset|32|i); DUV(42-i); }
     }
 #else
 #error "Unsupported target architecture"
