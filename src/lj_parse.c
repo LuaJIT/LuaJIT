@@ -833,13 +833,14 @@ static void bcemit_comp(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
     }
   } else {
     uint32_t op = opr-OPR_LT+BC_ISLT;
-    BCReg ra;
+    BCReg ra, rd;
     if ((op-BC_ISLT) & 1) {  /* GT -> LT, GE -> LE */
       e1 = e2; e2 = eret;  /* Swap operands. */
       op = ((op-BC_ISLT)^3)+BC_ISLT;
     }
+    rd = expr_toanyreg(fs, e2);
     ra = expr_toanyreg(fs, e1);
-    ins = BCINS_AD(op, ra, expr_toanyreg(fs, e2));
+    ins = BCINS_AD(op, ra, rd);
   }
   /* Using expr_free might cause asserts if the order is wrong. */
   if (e1->k == VNONRELOC && e1->u.s.info >= fs->nactvar) fs->freereg--;
