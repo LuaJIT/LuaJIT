@@ -422,6 +422,19 @@ TRef LJ_FASTCALL lj_opt_dse_ustore(jit_State *J)
 	store->t.irt = IRT_NIL;
 	store->op1 = store->op2 = 0;
 	store->prev = 0;
+	if (ref+1 < J->cur.nins &&
+	    store[1].o == IR_OBAR && store[1].op1 == xref) {
+	  IRRef1 *bp = &J->chain[IR_OBAR];
+	  IRIns *obar;
+	  for (obar = IR(*bp); *bp > ref+1; obar = IR(*bp))
+	    bp = &obar->prev;
+	  /* Remove OBAR, too. */
+	  *bp = obar->prev;
+	  obar->o = IR_NOP;
+	  obar->t.irt = IRT_NIL;
+	  obar->op1 = obar->op2 = 0;
+	  obar->prev = 0;
+	}
 	/* Now emit the new store instead. */
       }
       goto doemit;
