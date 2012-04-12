@@ -709,7 +709,7 @@ LUA_API void lua_concat(lua_State *L, int n)
   if (n >= 2) {
     n--;
     do {
-      TValue *top = lj_meta_cat(L, L->top-1, n);
+      TValue *top = lj_meta_cat(L, L->top-1, -n);
       if (top == NULL) {
 	L->top -= n;
 	break;
