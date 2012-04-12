@@ -18,6 +18,7 @@
 #include "lj_ccallback.h"
 #include "lj_target.h"
 #include "lj_mcode.h"
+#include "lj_trace.h"
 #include "lj_vm.h"
 
 /* -- Target-specific handling of callback slots -------------------------- */
@@ -486,6 +487,7 @@ lua_State * LJ_FASTCALL lj_ccallback_enter(CTState *cts, void *cf)
   lua_assert(L != NULL);
   if (gcref(cts->g->jit_L))
     lj_err_caller(gco2th(gcref(cts->g->jit_L)), LJ_ERR_FFI_BADCBACK);
+  lj_trace_abort(cts->g);  /* Never record across callback. */
   /* Setup C frame. */
   cframe_prev(cf) = L->cframe;
   setcframe_L(cf, L);
@@ -516,6 +518,7 @@ void LJ_FASTCALL lj_ccallback_leave(CTState *cts, TValue *o)
   L->cframe = cframe_prev(L->cframe);
   L->top -= 2;
   L->base = obase;
+  cts->cb.slot = 0;  /* Blacklist C function that called the callback. */
 }
 
 /* -- C callback management ----------------------------------------------- */
