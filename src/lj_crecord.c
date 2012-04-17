@@ -1005,7 +1005,7 @@ static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)
 	CTSize sz = lj_ctype_size(cts, ctype_cid(ctp->info));
 	if (sz == 0 || (sz & (sz-1)) != 0)
 	  return 0;  /* NYI: integer division. */
-	tr = emitir(IRT(IR_SUB, IRT_PTR), sp[0], sp[1]);
+	tr = emitir(IRT(IR_SUB, IRT_INTP), sp[0], sp[1]);
 	tr = emitir(IRT(IR_BSAR, IRT_INTP), tr, lj_ir_kint(J, lj_fls(sz)));
 #if LJ_64
 	tr = emitconv(tr, IRT_NUM, IRT_INTP, 0);
