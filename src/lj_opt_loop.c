@@ -321,29 +321,37 @@ static void loop_unroll(jit_State *J)
       IRType1 t = ir->t;  /* Get this first, since emitir may invalidate ir. */
       IRRef ref = tref_ref(emitir(ir->ot & ~IRT_ISPHI, op1, op2));
       subst[ins] = (IRRef1)ref;
-      if (ref != ins && ref < invar) {  /* Loop-carried dependency? */
+      if (ref != ins) {
 	IRIns *irr = IR(ref);
-	/* Potential PHI? */
-	if (!irref_isk(ref) && !irt_isphi(irr->t) && !irt_ispri(irr->t)) {
-	  irt_setphi(irr->t);
-	  if (nphi >= LJ_MAX_PHI)
-	    lj_trace_err(J, LJ_TRERR_PHIOV);
-	  phi[nphi++] = (IRRef1)ref;
-	}
-	/* Check all loop-carried dependencies for type instability. */
-	if (!irt_sametype(t, irr->t)) {
-	  if (irt_isinteger(t) && irt_isinteger(irr->t))
-	    continue;
-	  else if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num. */
-	    ref = tref_ref(emitir(IRTN(IR_CONV), ref, IRCONV_NUM_INT));
-	  else if (irt_isnum(irr->t) && irt_isinteger(t))  /* Fix num->int. */
-	    ref = tref_ref(emitir(IRTGI(IR_CONV), ref,
-				  IRCONV_INT_NUM|IRCONV_CHECK));
-	  else
-	    lj_trace_err(J, LJ_TRERR_TYPEINS);
-	  subst[ins] = (IRRef1)ref;
-	  /* May need a PHI for the CONV, too. */
+	if (ref < invar) {  /* Loop-carried dependency? */
+	  /* Potential PHI? */
+	  if (!irref_isk(ref) && !irt_isphi(irr->t) && !irt_ispri(irr->t)) {
+	    irt_setphi(irr->t);
+	    if (nphi >= LJ_MAX_PHI)
+	      lj_trace_err(J, LJ_TRERR_PHIOV);
+	    phi[nphi++] = (IRRef1)ref;
+	  }
+	  /* Check all loop-carried dependencies for type instability. */
+	  if (!irt_sametype(t, irr->t)) {
+	    if (irt_isinteger(t) && irt_isinteger(irr->t))
+	      continue; //XXX
+	    else if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num. */
+	      ref = tref_ref(emitir(IRTN(IR_CONV), ref, IRCONV_NUM_INT));
+	    else if (irt_isnum(irr->t) && irt_isinteger(t))  /* Fix num->int. */
+	      ref = tref_ref(emitir(IRTGI(IR_CONV), ref,
+				    IRCONV_INT_NUM|IRCONV_CHECK));
+	    else
+	      lj_trace_err(J, LJ_TRERR_TYPEINS);
+	    subst[ins] = (IRRef1)ref;
+	    irr = IR(ref);
+	    goto phiconv;
+	  }
+	} else if (ref != REF_DROP && irr->o == IR_CONV &&
+		   ref > invar && irr->op1 < invar) {
+	  /* May need an extra PHI for a CONV. */
+	  ref = irr->op1;
 	  irr = IR(ref);
+	phiconv:
 	  if (ref < invar && !irref_isk(ref) && !irt_isphi(irr->t)) {
 	    irt_setphi(irr->t);
 	    if (nphi >= LJ_MAX_PHI)
