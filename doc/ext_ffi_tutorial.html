@@ -93,6 +93,11 @@ Please note this doesn't define an <tt>ffi</tt> variable in the table
 of globals &mdash; you really need to use the local variable. The
 <tt>require</tt> function ensures the library is only loaded once.
 </p>
+<p style="font-size: 8pt;">
+Note: If you want to experiment with the FFI from the interactive prompt
+of the command line executable, omit the <tt>local</tt>, as it doesn't
+preserve local variables across lines.
+</p>
 
 <h2 id="sleep">Accessing Standard System Functions</h2>
 <p>
