@@ -656,7 +656,8 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   }
   asm_guardcc(as, CC_NE);
   if (!irt_ispri(irkey->t)) {
-    RegSet even = (as->freeset & (as->freeset >> 1) & allow & RSET_GPREVEN);
+    RegSet even = (as->freeset & allow);
+    even = even & (even >> 1) & RSET_GPREVEN;
     if (even) {
       key = ra_scratch(as, even);
       if (rset_test(as->freeset, key+1)) {
