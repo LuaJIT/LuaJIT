@@ -802,6 +802,8 @@ static TRef crec_call_args(jit_State *J, RecordFFData *rd,
 	else
 	  tr = emitconv(tr, IRT_INT, d->size==1 ? IRT_I8 : IRT_I16,IRCONV_SEXT);
       }
+    } else if (LJ_SOFTFP && ctype_isfp(d->info) && d->size > 4) {
+      lj_needsplit(J);
     }
 #if LJ_TARGET_X86
     /* 64 bit args must not end up in registers for fastcall/thiscall. */
