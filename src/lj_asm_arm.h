@@ -1017,8 +1017,8 @@ static void asm_obar(ASMState *as, IRIns *ir)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ir->op1;      /* TValue *tv      */
   asm_gencall(as, ci, args);
-  if ((*as->mcp >> 28) == CC_AL)
-    *as->mcp = ARMF_CC(*as->mcp, CC_NE);
+  if ((l_end[-1] >> 28) == CC_AL)
+    l_end[-1] = ARMF_CC(l_end[-1], CC_NE);
   else
     emit_branch(as, ARMF_CC(ARMI_B, CC_EQ), l_end);
   ra_allockreg(as, i32ptr(J2G(as->J)), ra_releasetmp(as, ASMREF_TMP1));
