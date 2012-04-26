@@ -935,8 +935,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldrd CARG34, NODE:INS->key  // STALL: early NODE:INS.
   |   ldrd CARG12, NODE:INS->val
   |    ldr NODE:INS, NODE:INS->next
-  |  cmp CARG3, STR:RC
-  |  checktpeq CARG4, LJ_TSTR
+  |  checktp CARG4, LJ_TSTR
+  |  cmpeq CARG3, STR:RC
   |  beq >5
   |  cmp NODE:INS, #0
   |  bne <3
@@ -3111,8 +3111,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrd CARG12, NODE:INS->key  // STALL: early NODE:INS.
     |   ldrd CARG34, NODE:INS->val
     |    ldr NODE:INS, NODE:INS->next
-    |  cmp CARG1, STR:RC
-    |  checktpeq CARG2, LJ_TSTR
+    |  checktp CARG2, LJ_TSTR
+    |  cmpeq CARG1, STR:RC
     |  bne >4
     |   checktp CARG4, LJ_TNIL
     |   beq >5
@@ -3242,8 +3242,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldrd CARG12, NODE:INS->key
     |   ldr CARG4, NODE:INS->val.it
     |    ldr NODE:CARG3, NODE:INS->next
-    |  cmp CARG1, STR:RC
-    |  checktpeq CARG2, LJ_TSTR
+    |  checktp CARG2, LJ_TSTR
+    |  cmpeq CARG1, STR:RC
     |  bne >5
     |  ldrb CARG2, TAB:RB->marked
     |   checktp CARG4, LJ_TNIL		// Key found, but nil value?
