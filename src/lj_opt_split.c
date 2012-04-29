@@ -364,6 +364,8 @@ static void split_ir(jit_State *J)
 	hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nref, nref);
 	break;
 	}
+      case IR_CALLN:
+      case IR_CALLL:
       case IR_CALLS:
       case IR_CALLXS:
 	goto split_call;
