@@ -476,7 +476,7 @@ static void LJ_FASTCALL recff_math_atrig(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_math_htrig(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);
-  J->base[0] = lj_ir_call(J, rd->data, tr);
+  J->base[0] = emitir(IRTN(IR_CALLN), tr, rd->data);
 }
 
 static void LJ_FASTCALL recff_math_modf(jit_State *J, RecordFFData *rd)
