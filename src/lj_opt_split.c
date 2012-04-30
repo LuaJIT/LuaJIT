@@ -281,7 +281,7 @@ static void split_ir(jit_State *J)
 	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, arg3);
 	      tmp = split_emit(J, IRT(IR_CARG, IRT_NIL), tmp, arg4);
 	      ir->prev = tmp = split_emit(J, IRTI(IR_CALLN), tmp, IRCALL_pow);
-	      hi = split_emit(J, IRT(IR_HIOP, LJ_SOFTFP), tmp, tmp);
+	      hi = split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), tmp, tmp);
 	      break;
 	    }
 	  }
