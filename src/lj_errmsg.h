@@ -139,6 +139,7 @@ ERRDEF(XFOR,	LUA_QL("=") " or " LUA_QL("in") " expected")
 /* Bytecode reader errors. */
 ERRDEF(BCFMT,	"cannot load incompatible bytecode")
 ERRDEF(BCBAD,	"cannot load malformed bytecode")
+ERRDEF(BCHEAD,	"attempt to load bytecode with extra header")
 
 #if LJ_HASFFI
 /* FFI errors. */

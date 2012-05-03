@@ -411,6 +411,7 @@ static int llex(LexState *ls, TValue *tv)
 /* Setup lexer state. */
 int lj_lex_setup(lua_State *L, LexState *ls)
 {
+  int header = 0;
   ls->L = L;
   ls->fs = NULL;
   ls->n = 0;
@@ -430,6 +431,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
     ls->n -= 2;
     ls->p += 2;
     next(ls);
+    header = 1;
   }
   if (ls->current == '#') {  /* Skip POSIX #! header line. */
     do {
@@ -437,8 +439,22 @@ int lj_lex_setup(lua_State *L, LexState *ls)
       if (ls->current == END_OF_STREAM) return 0;
     } while (!currIsNewline(ls));
     inclinenumber(ls);
+    header = 1;
   }
-  return (ls->current == LUA_SIGNATURE[0]);  /* Bytecode dump? */
+  if (ls->current == LUA_SIGNATURE[0]) {  /* Bytecode dump. */
+    if (header) {
+      /*
+      ** Loading bytecode with an extra header is disabled for security
+      ** reasons. This may circumvent the usual check for bytecode vs.
+      ** Lua code by looking at the first char. Since this is a potential
+      ** security violation no attempt is made to echo the chunkname either.
+      */
+      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_BCHEAD));
+      lj_err_throw(L, LUA_ERRSYNTAX);
+    }
+    return 1;
+  }
+  return 0;
 }
 
 /* Cleanup lexer state. */
