@@ -660,6 +660,7 @@ LJ_NOINLINE void lj_err_callermsg(lua_State *L, const char *msg)
 	  frame_func(frame)->c.ffid <= FF_ffi_meta___tostring) {
 	L->base = pframe+1;
 	L->top = frame;
+	setcframe_pc(cframe_raw(L->cframe), frame_contpc(frame));
       }
 #endif
     }
