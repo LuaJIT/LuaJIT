@@ -383,6 +383,15 @@ static void emit_jcc(ASMState *as, int cc, MCode *target)
   as->mcp = p - 6;
 }
 
+/* jmp target */
+static void emit_jmp(ASMState *as, MCode *target)
+{
+  MCode *p = as->mcp;
+  *(int32_t *)(p-4) = jmprel(p, target);
+  p[-5] = XI_JMP;
+  as->mcp = p - 5;
+}
+
 /* call target */
 static void emit_call_(ASMState *as, MCode *target)
 {

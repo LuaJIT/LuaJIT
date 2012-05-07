@@ -231,6 +231,8 @@ static void emit_branch(ASMState *as, ARMIns ai, MCode *target)
   as->mcp = p;
 }
 
+#define emit_jmp(as, target) emit_branch(as, ARMI_B, (target))
+
 static void emit_call(ASMState *as, void *target)
 {
   MCode *p = --as->mcp;

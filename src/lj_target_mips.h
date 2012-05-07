@@ -102,6 +102,8 @@ enum {
 #define SPS_FIXED	5
 #define SPS_FIRST	4
 
+#define SPOFS_TMP	0
+
 #define sps_scale(slot)		(4 * (int32_t)(slot))
 #define sps_align(slot)		(((slot) - SPS_FIXED + 1) & ~1)
 

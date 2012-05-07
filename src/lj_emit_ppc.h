@@ -142,12 +142,18 @@ typedef MCode *MCLabel;
 
 static void emit_condbranch(ASMState *as, PPCIns pi, PPCCC cc, MCode *target)
 {
-  MCode *p = as->mcp;
-  ptrdiff_t delta = ((char *)target - (char *)p) + 4;
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = (char *)target - (char *)p;
   lua_assert(((delta + 0x8000) >> 16) == 0);
   pi ^= (delta & 0x8000) * (PPCF_Y/0x8000);
-  *--p = pi | PPCF_CC(cc) | ((uint32_t)delta & 0xffffu);
-  as->mcp = p;
+  *p = pi | PPCF_CC(cc) | ((uint32_t)delta & 0xffffu);
+}
+
+static void emit_jmp(ASMState *as, MCode *target)
+{
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = (char *)target - (char *)p;
+  *p = PPCI_B | (delta & 0x03fffffcu);
 }
 
 static void emit_call(ASMState *as, void *target)

@@ -146,6 +146,12 @@ static void emit_branch(ASMState *as, MIPSIns mi, Reg rs, Reg rt, MCode *target)
   as->mcp = p;
 }
 
+static void emit_jmp(ASMState *as, MCode *target)
+{
+  *--as->mcp = MIPSI_NOP;
+  emit_branch(as, MIPSI_B, RID_ZERO, RID_ZERO, (target));
+}
+
 static void emit_call(ASMState *as, void *target)
 {
   MCode *p = as->mcp;
