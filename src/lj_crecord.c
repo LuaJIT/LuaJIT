@@ -902,7 +902,10 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
       func = emitir(IRT(IR_CARG, IRT_NIL), func,
 		    lj_ir_kint(J, ctype_typeid(cts, ct)));
     tr = emitir(IRT(IR_CALLXS, t), crec_call_args(J, rd, cts, ct), func);
+    J->needsnap = 1;
     if (ctype_isbool(ctr->info)) {
+      if (frame_islua(J->L->base-1) && bc_b(frame_pc(J->L->base-1)[-1]) == 1)
+	return 1;  /* Don't check result if ignored. */
       crec_snap_caller(J);
       lj_ir_set(J, IRTGI(IR_NE), tr, lj_ir_kint(J, 0));
       J->postproc = LJ_POST_FIXGUARDSNAP;
@@ -920,7 +923,6 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
       if (t == IRT_I64 || t == IRT_U64) lj_needsplit(J);
     }
     J->base[0] = tr;
-    J->needsnap = 1;
     return 1;
   }
   return 0;
