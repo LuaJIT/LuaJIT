@@ -1502,8 +1502,13 @@ end_decl:
     /* Determine type info and size. */
     CTInfo info = CTINFO(CT_NUM, (cds & CDF_UNSIGNED) ? CTF_UNSIGNED : 0);
     if ((cds & CDF_BOOL)) {
-      info = CTINFO(CT_NUM, CTF_UNSIGNED|CTF_BOOL);
-      lua_assert(sz == 1);
+      if ((cds & ~(CDF_SCL|CDF_BOOL|CDF_INT|CDF_SIGNED|CDF_UNSIGNED)))
+	cp_errmsg(cp, 0, LJ_ERR_FFI_INVTYPE);
+      info |= CTF_BOOL;
+      if (!sz) {
+	if (!(cds & CDF_SIGNED)) info |= CTF_UNSIGNED;
+	sz = 1;
+      }
     } else if ((cds & CDF_FP)) {
       info = CTINFO(CT_NUM, CTF_FP);
       if ((cds & CDF_LONG)) sz = sizeof(long double);

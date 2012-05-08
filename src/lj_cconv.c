@@ -131,21 +131,23 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
   /* Some basic sanity checks. */
   lua_assert(!ctype_isnum(dinfo) || dsize > 0);
   lua_assert(!ctype_isnum(sinfo) || ssize > 0);
-  lua_assert(!ctype_isbool(dinfo) || dsize == 1);
-  lua_assert(!ctype_isbool(sinfo) || ssize == 1);
+  lua_assert(!ctype_isbool(dinfo) || dsize == 1 || dsize == 4);
+  lua_assert(!ctype_isbool(sinfo) || ssize == 1 || ssize == 4);
   lua_assert(!ctype_isinteger(dinfo) || (1u<<lj_fls(dsize)) == dsize);
   lua_assert(!ctype_isinteger(sinfo) || (1u<<lj_fls(ssize)) == ssize);
 
   switch (cconv_idx2(dinfo, sinfo)) {
   /* Destination is a bool. */
   case CCX(B, B):
-    *dp = *sp;  /* Source operand is already normalized. */
+    /* Source operand is already normalized. */
+    if (dsize == 1) *dp = *sp; else *(int *)dp = *sp;
     break;
   case CCX(B, I): {
     MSize i;
     uint8_t b = 0;
     for (i = 0; i < ssize; i++) b |= sp[i];
-    *dp = (b != 0);
+    b = (b != 0);
+    if (dsize == 1) *dp = b; else *(int *)dp = b;
     break;
     }
   case CCX(B, F): {
@@ -153,7 +155,7 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
     if (ssize == sizeof(double)) b = (*(double *)sp != 0);
     else if (ssize == sizeof(float)) b = (*(float *)sp != 0);
     else goto err_conv;  /* NYI: long double. */
-    *dp = b;
+    if (dsize == 1) *dp = b; else *(int *)dp = b;
     break;
     }
 
@@ -391,7 +393,7 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
 	lua_assert(tvisnum(o));
       }
     } else {
-      uint32_t b = (*sp != 0);
+      uint32_t b = s->size == 1 ? (*sp != 0) : (*(int *)sp != 0);
       setboolV(o, b);
       setboolV(&cts->g->tmptv2, b);  /* Remember for trace recorder. */
     }

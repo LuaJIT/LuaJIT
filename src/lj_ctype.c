@@ -43,7 +43,7 @@
 #define CTKWDEF(_) \
   /* Type specifiers. */ \
   _("void",		-1,	CTOK_VOID) \
-  _("_Bool",		1,	CTOK_BOOL) \
+  _("_Bool",		0,	CTOK_BOOL) \
   _("bool",		1,	CTOK_BOOL) \
   _("char",		1,	CTOK_CHAR) \
   _("int",		4,	CTOK_INT) \
