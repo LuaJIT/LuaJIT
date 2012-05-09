@@ -334,7 +334,7 @@ static void loop_unroll(jit_State *J)
 	  /* Check all loop-carried dependencies for type instability. */
 	  if (!irt_sametype(t, irr->t)) {
 	    if (irt_isinteger(t) && irt_isinteger(irr->t))
-	      continue; //XXX
+	      continue;
 	    else if (irt_isnum(t) && irt_isinteger(irr->t))  /* Fix int->num. */
 	      ref = tref_ref(emitir(IRTN(IR_CONV), ref, IRCONV_NUM_INT));
 	    else if (irt_isnum(irr->t) && irt_isinteger(t))  /* Fix num->int. */
