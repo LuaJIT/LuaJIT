@@ -71,6 +71,78 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #ffd0d0;">
+<h2 id="LuaJIT-2.0.0-beta10">LuaJIT 2.0.0-beta10 &mdash; 2012-05-09</h2>
+<ul>
+<li>New features:
+<ul>
+<li>The MIPS of LuaJIT is complete. It requires a CPU conforming to the
+MIPS32&nbsp;R1 architecture with hardware FPU. O32 hard-fp ABI,
+little-endian or big-endian.</li>
+<li>Auto-detect target arch via cross-compiler. No need for
+<tt>TARGET=arch</tt> anymore.</li>
+<li>Make DynASM compatible with Lua 5.2.</li>
+<li>From Lua 5.2: Try <tt>__tostring</tt> metamethod on non-string error
+messages..</li>
+</ul></li>
+<li>Correctness and completeness:
+<ul>
+<li>Fix parsing of hex literals with exponents.</li>
+<li>Fix bytecode dump for certain number constants.</li>
+<li>Fix argument type in error message for relative arguments.</li>
+<li>Fix argument error handling on Lua stacks without a frame.</li>
+<li>Add missing mcode limit check in assembler backend.</li>
+<li>Fix compilation on OpenBSD.</li>
+<li>Avoid recursive GC steps after GC-triggered trace exit.</li>
+<li>Replace <tt>&lt;unwind.h&gt;</tt> definitions with our own.</li>
+<li>Fix OSX build issues. Bump minimum required OSX version to 10.4.</li>
+<li>Fix discharge order of comparisons in Lua parser.</li>
+<li>Ensure running <tt>__gc</tt> of userdata created in <tt>__gc</tt>
+at state close.</li>
+<li>Limit number of userdata <tt>__gc</tt> separations at state close.</li>
+<li>Fix bytecode <tt>JMP</tt> slot range when optimizing
+<tt>and</tt>/<tt>or</tt> with constant LHS.</li>
+<li>Fix DSE of <tt>USTORE</tt>.</li>
+<li>Make <tt>lua_concat()</tt> work from C&nbsp;hook with partial frame.</li>
+<li>Add required PHIs for implicit conversions, e.g. via <tt>XREF</tt>
+forwarding.</li>
+<li>Add more comparison variants to Valgrind suppressions file.</li>
+<li>Disable loading bytecode with an extra header (BOM or <tt>#!</tt>).</li>
+<li>Fix PHI stack slot syncing.</li>
+<li>ARM: Reorder type/value tests to silence Valgrind.</li>
+<li>ARM: Fix register allocation for <tt>ldrd</tt>-optimized
+<tt>HREFK</tt>.</li>
+<li>ARM: Fix conditional branch fixup for <tt>OBAR</tt>.</li>
+<li>ARM: Invoke SPLIT pass for <tt>double</tt> args in FFI call.</li>
+<li>ARM: Handle all <tt>CALL*</tt> ops with <tt>double</tt> results in
+SPLIT pass.</li>
+<li>ARM: Fix rejoin of <tt>POW</tt> in SPLIT pass.</li>
+<li>ARM: Fix compilation of <tt>math.sinh</tt>, <tt>math.cosh</tt>,
+<tt>math.tanh</tt>.</li>
+<li>ARM, PPC: Avoid pointless arg clearing in <tt>BC_IFUNCF</tt>.</li>
+<li>PPC: Fix resume after yield from hook.</li>
+<li>PPC: Fix argument checking for <tt>rawget()</tt>.</li>
+<li>PPC: Fix fusion of floating-point <tt>XLOAD</tt>/<tt>XSTORE</tt>.</li>
+<li>PPC: Fix <tt>HREFK</tt> code generation for huge tables.</li>
+<li>PPC: Use builtin D-Cache/I-Cache sync code.</li>
+</ul></li>
+<li>FFI library:
+<ul>
+<li>Ignore empty statements in <tt>ffi.cdef()</tt>.</li>
+<li>Ignore number parsing errors while skipping definitions.</li>
+<li>Don't touch frame in callbacks with tailcalls to fast functions.</li>
+<li>Fix library unloading on POSIX systems.</li>
+<li>Finalize cdata before userdata when closing the state.</li>
+<li>Change <tt>ffi.load()</tt> library name resolution for Cygwin.</li>
+<li>Fix resolving of function name redirects on Windows/x86.</li>
+<li>Fix symbol resolving error messages on Windows.</li>
+<li>Fix blacklisting of C functions calling callbacks.</li>
+<li>Fix result type of pointer difference.</li>
+<li>Use correct PC in FFI metamethod error message.</li>
+<li>Allow <tt>'typedef _Bool int BOOL;'</tt> for the Windows API.</li>
+<li>Don't record test for bool result of call, if ignored.</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta9">LuaJIT 2.0.0-beta9 &mdash; 2011-12-14</h2>
 <ul>
 <li>New features:
