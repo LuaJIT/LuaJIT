@@ -125,7 +125,7 @@ C&nbsp;function &mdash; Yes, it's that simple!
 Actually, what goes on behind the scenes is far from simple: <span
 style="color:#4040c0;">&#9314;</span> makes use of the standard
 C&nbsp;library namespace <tt>ffi.C</tt>. Indexing this namespace with
-a symbol name (<tt>"printf"</tt>) automatically binds it to the the
+a symbol name (<tt>"printf"</tt>) automatically binds it to the
 standard C&nbsp;library. The result is a special kind of object which,
 when called, runs the <tt>printf</tt> function. The arguments passed
 to this function are automatically converted from Lua objects to the
