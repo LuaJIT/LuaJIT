@@ -988,8 +988,11 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Base library: conversions ------------------------------------------
   |
-  |.ffunc_1 tonumber
+  |.ffunc tonumber
   |  // Only handles the number case inline (without a base argument).
+  |  ldrd CARG12, [BASE]
+  |   cmp NARGS8:RC, #8
+  |   bne ->fff_fallback
   |  checktp CARG2, LJ_TISNUM
   |  bls ->fff_restv
   |  b ->fff_fallback
