@@ -1809,6 +1809,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   bic CARG2, PC, #FRAME_TYPEP
   |  ldreq INS, [PC, #-4]
   |  andeq CARG2, MASKR8, INS, lsr #5	// Conditional decode_RA8.
+  |  addeq CARG2, CARG2, #8
   |  sub RB, BASE, CARG2
   |  b ->vm_call_dispatch		// Resolve again for tailcall.
   |
