@@ -1303,6 +1303,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_restv
   |
   |2:  // |x| < 1
+  |  bcs ->fff_restv			// |x| is not finite.
   |  orr CARG3, CARG3, CARG1		// ztest = abs(hi) | lo
   |.if "func" == "floor"
   |  tst CARG3, CARG2, asr #31		// return (ztest & sign) == 0 ? 0 : -1
@@ -2055,6 +2056,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bx lr
   |
   |2:  // |x| < 1:
+  |  bxcs lr				// |x| is not finite.
   |  orr CARG3, CARG3, CARG1		// ztest = (2*hi) | lo
   |.if "func" == "floor"
   |  tst CARG3, CARG2, asr #31		// iszero = ((ztest & signmask) == 0)
