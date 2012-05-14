@@ -136,6 +136,11 @@ void lj_snap_add(jit_State *J)
   /* Merge if no ins. inbetween or if requested and no guard inbetween. */
   if (J->mergesnap ? !irt_isguard(J->guardemit) :
       (nsnap > 0 && J->cur.snap[nsnap-1].ref == J->cur.nins)) {
+    if (nsnap == 1 && J->parent == 0) {
+      /* But preserve snap #0 PC for root traces. */
+      J->mergesnap = 0;
+      return;
+    }
     nsnapmap = J->cur.snap[--nsnap].mapofs;
   } else {
     lj_snap_grow_buf(J, nsnap+1);
