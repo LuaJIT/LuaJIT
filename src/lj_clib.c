@@ -213,7 +213,7 @@ static void clib_unloadlib(CLibrary *cl)
 {
   if (cl->handle == CLIB_DEFHANDLE) {
     MSize i;
-    for (i = 0; i < CLIB_HANDLE_MAX; i++) {
+    for (i = CLIB_HANDLE_KERNEL32; i < CLIB_HANDLE_MAX; i++) {
       void *h = clib_def_handle[i];
       if (h) {
 	clib_def_handle[i] = NULL;
