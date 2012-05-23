@@ -205,6 +205,10 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
   if (!tv) {
     const char *repr[2];
     int i;
+    if (mm == MM_eq) {  /* Equality checks never raise an error. */
+      setboolV(L->top-1, 0);
+      return 1;
+    }
     for (i = 0; i < 2; i++) {
       if (ca->ct[i])
 	repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, ca->ct[i]), NULL));

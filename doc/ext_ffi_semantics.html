@@ -724,6 +724,11 @@ of them is an <tt>uint64_t</tt>, the other side is converted to an
 both sides are converted to an <tt>int64_t</tt> and a signed
 comparison is performed.</li>
 
+<li><b>Comparisons for equality/inequality</b> never raise an error.
+Even incompatible pointers can be compared for equality by address. Any
+other incompatible comparison (also with non-cdata objects) treats the
+two sides as unequal.</li>
+
 </ul>
 
 <h3 id="cdata_key">cdata objects as table keys</h3>

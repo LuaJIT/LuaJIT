@@ -1073,13 +1073,17 @@ static void crec_arith_meta(jit_State *J, CTState *cts, RecordFFData *rd)
       tv = lj_ctype_meta(cts, argv2cdata(J, J->base[1], &rd->argv[1])->typeid,
 			 (MMS)rd->data);
   }
-  if (tv && tvisfunc(tv)) {
-    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
-    rd->nres = -1;  /* Pending tailcall. */
-  } else {
-    /* NYI: non-function metamethods. */
-    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  if (tv) {
+    if (tvisfunc(tv)) {
+      J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+      rd->nres = -1;  /* Pending tailcall. */
+      return;
+    }  /* NYI: non-function metamethods. */
+  } else if ((MMS)rd->data == MM_eq) {
+    J->base[0] = TREF_FALSE;
+    return;
   }
+  lj_trace_err(J, LJ_TRERR_BADTYPE);
 }
 
 void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
