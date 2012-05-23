@@ -1813,6 +1813,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bne >3
   |  lwz INS, -4(PC)
   |  decode_RA8 TMP1, INS
+  |  addi TMP1, TMP1, 8
   |3:
   |  sub TMP2, BASE, TMP1
   |  b ->vm_call_dispatch		// Resolve again for tailcall.
