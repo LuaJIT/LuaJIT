@@ -550,9 +550,10 @@ LJLIB_CF(coroutine_running)
 
 LJLIB_CF(coroutine_create)
 {
-  lua_State *L1 = lua_newthread(L);
+  lua_State *L1;
   if (!(L->base < L->top && tvisfunc(L->base)))
     lj_err_argt(L, 1, LUA_TFUNCTION);
+  L1 = lua_newthread(L);
   setfuncV(L, L1->top++, funcV(L->base));
   return 1;
 }
