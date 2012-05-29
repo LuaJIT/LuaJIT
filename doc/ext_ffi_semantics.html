@@ -289,22 +289,24 @@ arguments to C&nbsp;calls:
 <tr class="odd separate">
 <td class="convin">nil</td><td class="convop"><tt>NULL</tt> &rarr;</td><td class="convout"><tt>(void *)</tt></td></tr>
 <tr class="even">
-<td class="convin">userdata</td><td class="convop">userdata payload &rarr;</td><td class="convout"><tt>(void *)</tt></td></tr>
-<tr class="odd">
 <td class="convin">lightuserdata</td><td class="convop">lightuserdata address &rarr;</td><td class="convout"><tt>(void *)</tt></td></tr>
-<tr class="even separate">
-<td class="convin">string</td><td class="convop">match against <tt>enum</tt> constant</td><td class="convout"><tt>enum</tt></td></tr>
 <tr class="odd">
-<td class="convin">string</td><td class="convop">copy string data + zero-byte</td><td class="convout"><tt>int8_t[]</tt>, <tt>uint8_t[]</tt></td></tr>
+<td class="convin">userdata</td><td class="convop">userdata payload &rarr;</td><td class="convout"><tt>(void *)</tt></td></tr>
 <tr class="even">
-<td class="convin">string</td><td class="convop">string data &rarr;</td><td class="convout"><tt>const char[]</tt></td></tr>
+<td class="convin">io.* file</td><td class="convop">get FILE * handle &rarr;</td><td class="convout"><tt>(void *)</tt></td></tr>
 <tr class="odd separate">
-<td class="convin">function</td><td class="convop"><a href="#callback">create callback</a> &rarr;</td><td class="convout">C function type</td></tr>
-<tr class="even separate">
-<td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout">Array</td></tr>
+<td class="convin">string</td><td class="convop">match against <tt>enum</tt> constant</td><td class="convout"><tt>enum</tt></td></tr>
+<tr class="even">
+<td class="convin">string</td><td class="convop">copy string data + zero-byte</td><td class="convout"><tt>int8_t[]</tt>, <tt>uint8_t[]</tt></td></tr>
 <tr class="odd">
-<td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout"><tt>struct</tt>/<tt>union</tt></td></tr>
+<td class="convin">string</td><td class="convop">string data &rarr;</td><td class="convout"><tt>const char[]</tt></td></tr>
 <tr class="even separate">
+<td class="convin">function</td><td class="convop"><a href="#callback">create callback</a> &rarr;</td><td class="convout">C function type</td></tr>
+<tr class="odd separate">
+<td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout">Array</td></tr>
+<tr class="even">
+<td class="convin">table</td><td class="convop"><a href="#init_table">table initializer</a></td><td class="convout"><tt>struct</tt>/<tt>union</tt></td></tr>
+<tr class="odd separate">
 <td class="convin">cdata</td><td class="convop">cdata payload &rarr;</td><td class="convout">C type</td></tr>
 </table>
 <p>

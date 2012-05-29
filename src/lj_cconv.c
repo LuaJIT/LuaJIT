@@ -603,7 +603,10 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
     tmpptr = (void *)0;
     flags |= CCF_FROMTV;
   } else if (tvisudata(o)) {
-    tmpptr = uddata(udataV(o));
+    GCudata *ud = udataV(o);
+    tmpptr = uddata(ud);
+    if (ud->udtype == UDTYPE_IO_FILE)
+      tmpptr = *(void **)tmpptr;
   } else if (tvislightud(o)) {
     tmpptr = lightudV(o);
   } else if (tvisfunc(o)) {

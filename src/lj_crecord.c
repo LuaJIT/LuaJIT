@@ -385,7 +385,14 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
   } else if (tref_isnil(sp)) {
     sp = lj_ir_kptr(J, NULL);
   } else if (tref_isudata(sp)) {
-    sp = emitir(IRT(IR_ADD, IRT_P32), sp, lj_ir_kint(J, sizeof(GCudata)));
+    GCudata *ud = udataV(sval);
+    if (ud->udtype == UDTYPE_IO_FILE) {
+      TRef tr = emitir(IRT(IR_FLOAD, IRT_U8), sp, IRFL_UDATA_UDTYPE);
+      emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
+      sp = emitir(IRT(IR_FLOAD, IRT_PTR), sp, IRFL_UDATA_FILE);
+    } else {
+      sp = emitir(IRT(IR_ADD, IRT_P32), sp, lj_ir_kint(J, sizeof(GCudata)));
+    }
   } else if (tref_isstr(sp)) {
     if (ctype_isenum(d->info)) {  /* Match string against enum constant. */
       GCstr *str = strV(sval);
