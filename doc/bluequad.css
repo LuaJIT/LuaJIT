@@ -193,6 +193,12 @@ img.right {
 .ext {
   color: #ff8000;
 }
+.new {
+  font-size: 6pt;
+  vertical-align: middle;
+  background: #ff8000;
+  color: #ffffff;
+}
 #site {
   clear: both;
   float: left;
