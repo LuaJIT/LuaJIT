@@ -195,6 +195,7 @@ IRFPMDEF(FPMENUM)
   _(UDATA_FILE,	sizeof(GCudata)) \
   _(CDATA_TYPEID, offsetof(GCcdata, typeid)) \
   _(CDATA_PTR,	sizeof(GCcdata)) \
+  _(CDATA_INT, sizeof(GCcdata)) \
   _(CDATA_INT64, sizeof(GCcdata)) \
   _(CDATA_INT64_4, sizeof(GCcdata) + 4)
 
