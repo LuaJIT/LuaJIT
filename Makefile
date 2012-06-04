@@ -35,9 +35,12 @@ INSTALL_LIB=   $(DPREFIX)/lib
 INSTALL_SHARE= $(DPREFIX)/share
 INSTALL_INC=   $(DPREFIX)/include/luajit-$(MAJVER).$(MINVER)
 
-INSTALL_JITLIB= $(INSTALL_SHARE)/luajit-$(VERSION)/jit
-INSTALL_LMOD= $(INSTALL_SHARE)/lua/$(ABIVER)
-INSTALL_CMOD= $(INSTALL_LIB)/lua/$(ABIVER)
+INSTALL_LJLIBD= $(INSTALL_SHARE)/luajit-$(VERSION)
+INSTALL_JITLIB= $(INSTALL_LJLIBD)/jit
+INSTALL_LMODD= $(INSTALL_SHARE)/lua
+INSTALL_LMOD= $(INSTALL_LMODD)/$(ABIVER)
+INSTALL_CMODD= $(INSTALL_LIB)/lua
+INSTALL_CMOD= $(INSTALL_CMODD)/$(ABIVER)
 INSTALL_MAN= $(INSTALL_SHARE)/man/man1
 INSTALL_PKGCONFIG= $(INSTALL_LIB)/pkgconfig
 
@@ -61,12 +64,16 @@ INSTALL_PC= $(INSTALL_PKGCONFIG)/$(INSTALL_PCNAME)
 
 INSTALL_DIRS= $(INSTALL_BIN) $(INSTALL_LIB) $(INSTALL_INC) $(INSTALL_MAN) \
   $(INSTALL_PKGCONFIG) $(INSTALL_JITLIB) $(INSTALL_LMOD) $(INSTALL_CMOD)
+UNINSTALL_DIRS= $(INSTALL_JITLIB) $(INSTALL_LJLIBD) $(INSTALL_INC) \
+  $(INSTALL_LMOD) $(INSTALL_LMODD) $(INSTALL_CMOD) $(INSTALL_CMODD)
 
 RM= rm -f
 MKDIR= mkdir -p
+RMDIR= rmdir 2>/dev/null
 SYMLINK= ln -sf
 INSTALL_X= install -m 0755
 INSTALL_F= install -m 0644
+UNINSTALL= $(RM)
 LDCONFIG= ldconfig -n
 SED_PC= sed -e "s|^prefix=.*|prefix=$(PREFIX)|"
 
@@ -121,6 +128,20 @@ install: $(INSTALL_DEP)
 	@echo ""
 	@echo "  $(SYMLINK) $(INSTALL_TNAME) $(INSTALL_TSYM)"
 	@echo ""
+
+uninstall:
+	@echo "==== Uninstalling LuaJIT $(VERSION) from $(PREFIX) ===="
+	$(UNINSTALL) $(INSTALL_T) $(INSTALL_STATIC) $(INSTALL_DYN) $(INSTALL_SHORT1) $(INSTALL_SHORT2) $(INSTALL_MAN)/$(FILE_MAN) $(INSTALL_PC)
+	for file in $(FILES_JITLIB); do \
+	  $(UNINSTALL) $(INSTALL_JITLIB)/$$file; \
+	  done
+	for file in $(FILES_INC); do \
+	  $(UNINSTALL) $(INSTALL_INC)/$$file; \
+	  done
+	$(LDCONFIG) $(INSTALL_LIB)
+	test -f $(INSTALL_TSYM) || $(UNINSTALL) $(INSTALL_TSYM)
+	$(RMDIR) $(UNINSTALL_DIRS) || :
+	@echo "==== Successfully uninstalled LuaJIT $(VERSION) from $(PREFIX) ===="
 
 ##############################################################################
 
