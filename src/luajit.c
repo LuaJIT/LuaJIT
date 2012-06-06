@@ -133,8 +133,7 @@ static int docall(lua_State *L, int narg, int clear)
 
 static void print_version(void)
 {
-  fprintf(stderr,
-    LUAJIT_VERSION " -- " LUAJIT_COPYRIGHT ". " LUAJIT_URL "\n");
+  fputs(LUAJIT_VERSION " -- " LUAJIT_COPYRIGHT ". " LUAJIT_URL "\n", stdout);
 }
 
 static void print_jit_status(lua_State *L)
@@ -148,10 +147,12 @@ static void print_jit_status(lua_State *L)
   lua_remove(L, -2);
   n = lua_gettop(L);
   lua_call(L, 0, LUA_MULTRET);
-  fputs(lua_toboolean(L, n) ? "JIT: ON" : "JIT: OFF", stderr);
-  for (n++; (s = lua_tostring(L, n)); n++)
-    fprintf(stderr, " %s", s);
-  fputs("\n", stderr);
+  fputs(lua_toboolean(L, n) ? "JIT: ON" : "JIT: OFF", stdout);
+  for (n++; (s = lua_tostring(L, n)); n++) {
+    putc(' ', stdout);
+    fputs(s, stdout);
+  }
+  putc('\n', stdout);
 }
 
 static int getargs(lua_State *L, char **argv, int n)
