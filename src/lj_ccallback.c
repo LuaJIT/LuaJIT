@@ -25,7 +25,14 @@
 
 #define CALLBACK_MCODE_SIZE	(LJ_PAGESIZE * LJ_NUM_CBPAGE)
 
-#if LJ_TARGET_X86ORX64
+#if LJ_OS_NOJIT
+
+/* Disabled callback support. */
+#define CALLBACK_SLOT2OFS(slot)	(0*(slot))
+#define CALLBACK_OFS2SLOT(ofs)	(0*(ofs))
+#define CALLBACK_MAX_SLOT	0
+
+#elif LJ_TARGET_X86ORX64
 
 #define CALLBACK_MCODE_HEAD	(LJ_64 ? 8 : 0)
 #define CALLBACK_MCODE_GROUP	(-2+1+2+5+(LJ_64 ? 6 : 5))
@@ -93,7 +100,10 @@ MSize lj_ccallback_ptr2slot(CTState *cts, void *p)
 }
 
 /* Initialize machine code for callback function pointers. */
-#if LJ_TARGET_X86ORX64
+#if LJ_OS_NOJIT
+/* Disabled callback support. */
+#define callback_mcode_init(g, p)	UNUSED(p)
+#elif LJ_TARGET_X86ORX64
 static void callback_mcode_init(global_State *g, uint8_t *page)
 {
   uint8_t *p = page;

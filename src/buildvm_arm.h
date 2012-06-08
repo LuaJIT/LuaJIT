@@ -6205,15 +6205,15 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 329);
 #endif
   dasm_put(Dst, 338, Dt1(->base), -DISPATCH_GL(tmptv), ~LJ_TTAB, ~LJ_TSTR, ~LJ_TISNUM, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 395, Dt1(->base));
   }
   dasm_put(Dst, 398, FRAME_CONT, Dt1(->top), -DISPATCH_GL(tmptv), ~LJ_TTAB, ~LJ_TSTR, ~LJ_TISNUM, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 460, Dt1(->base));
   }
   dasm_put(Dst, 463, FRAME_CONT, Dt1(->top), Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 499, Dt1(->base));
   }
   dasm_put(Dst, 502, ~LJ_TTRUE, -LJ_TFALSE, Dt1(->base));
@@ -6221,11 +6221,11 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 549, Dt1(->base));
 #endif
   dasm_put(Dst, 560, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 597, Dt1(->base));
   }
   dasm_put(Dst, 600, FRAME_CONT, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 621, Dt1(->base));
   }
 #ifdef LUAJIT_ENABLE_LUA52COMPAT
@@ -6234,19 +6234,19 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 631);
 #endif
   dasm_put(Dst, 634, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 642);
   }
   dasm_put(Dst, 644);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 647);
   }
   dasm_put(Dst, 649, Dt7(->field_pc), Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 670, Dt1(->base));
   }
   dasm_put(Dst, 673, Dt1(->base));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 687, Dt1(->base));
   }
 #if LJ_HASJIT
@@ -6264,16 +6264,16 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 760, ~LJ_TNIL, DISPATCH_GL(gcroot[GCROOT_MMNAME+MM_metatable]), Dt6(->hmask), Dt5(->hash), Dt6(->node), DtB(->key), DtB(->val), DtB(->next), -LJ_TSTR, ~LJ_TTAB, -LJ_TNIL, -LJ_TISNUM);
   dasm_put(Dst, 808, ~LJ_TISNUM, DISPATCH_GL(gcroot[GCROOT_BASEMT]), -LJ_TTAB, Dt6(->metatable), -LJ_TTAB, Dt6(->marked), LJ_GC_BLACK, Dt6(->metatable), DISPATCH_GL(gc.grayagain), LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), Dt6(->marked), Dt6(->gclist), -LJ_TTAB);
   dasm_put(Dst, 860);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 865);
   }
   dasm_put(Dst, 867);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 870);
   }
   dasm_put(Dst, 872, -LJ_TISNUM, -LJ_TSTR, DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM]), Dt1(->base), -LJ_TISNUM, DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), Dt1(->base), ~LJ_TSTR);
   dasm_put(Dst, 924, ~LJ_TNIL, -LJ_TTAB, Dt1(->base), Dt1(->top));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 947, Dt1(->base));
   }
   dasm_put(Dst, 950, ~LJ_TNIL, (2+1)*8, -LJ_TTAB);
@@ -6285,11 +6285,11 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 980);
 #endif
   dasm_put(Dst, 984, ~LJ_TNIL, (3+1)*8, -LJ_TTAB, -LJ_TISNUM, Dt6(->asize), Dt6(->array), (0+1)*8, -LJ_TNIL, (2+1)*8, Dt6(->hmask));
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1034);
   }
   dasm_put(Dst, 1036);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1039);
   }
   dasm_put(Dst, 1041, -LJ_TTAB);
@@ -6309,155 +6309,155 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 1429, -LJ_TISNUM, ~LJ_TISNUM, ~LJ_TISNUM);
   dasm_put(Dst, 1493, -LJ_TISNUM, (1+1)*8, FRAME_TYPE, ~LJ_TNIL);
   dasm_put(Dst, 1555, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1564);
   }
   dasm_put(Dst, 1566);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1569);
   }
   dasm_put(Dst, 1571, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1583);
   }
   dasm_put(Dst, 1585);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1588);
   }
   dasm_put(Dst, 1590, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1602);
   }
   dasm_put(Dst, 1604);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1607);
   }
   dasm_put(Dst, 1609, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1621);
   }
   dasm_put(Dst, 1623);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1626);
   }
   dasm_put(Dst, 1628, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1640);
   }
   dasm_put(Dst, 1642);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1645);
   }
   dasm_put(Dst, 1647, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1659);
   }
   dasm_put(Dst, 1661);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1664);
   }
   dasm_put(Dst, 1666, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1678);
   }
   dasm_put(Dst, 1680);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1683);
   }
   dasm_put(Dst, 1685, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1697);
   }
   dasm_put(Dst, 1699);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1702);
   }
   dasm_put(Dst, 1704, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1716);
   }
   dasm_put(Dst, 1718);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1721);
   }
   dasm_put(Dst, 1723, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1735);
   }
   dasm_put(Dst, 1737);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1740);
   }
   dasm_put(Dst, 1742, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1754);
   }
   dasm_put(Dst, 1756);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1759);
   }
   dasm_put(Dst, 1761, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1773);
   }
   dasm_put(Dst, 1775);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1778);
   }
   dasm_put(Dst, 1780, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1792);
   }
   dasm_put(Dst, 1794);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1797);
   }
   dasm_put(Dst, 1799, -LJ_TISNUM, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1814);
   }
   dasm_put(Dst, 1816);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1819);
   }
   dasm_put(Dst, 1821, -LJ_TISNUM, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1836);
   }
   dasm_put(Dst, 1838);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1841);
   }
   dasm_put(Dst, 1843, -LJ_TISNUM, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1858);
   }
   dasm_put(Dst, 1860);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1863);
   }
   dasm_put(Dst, 1865, -LJ_TISNUM, Dt8(->upvalue[0]), -LJ_TISNUM, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1898);
   }
   dasm_put(Dst, 1900);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1903);
   }
   dasm_put(Dst, 1905, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1918);
   }
   dasm_put(Dst, 1920);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1923);
   }
   dasm_put(Dst, 1925, ~LJ_TISNUM, (2+1)*8, -LJ_TISNUM);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1947);
   }
   dasm_put(Dst, 1949);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 1952);
   }
   dasm_put(Dst, 1954, (2+1)*8, -LJ_TISNUM, -LJ_TISNUM, -LJ_TISNUM);
@@ -6468,11 +6468,11 @@ static void build_subroutines(BuildCtx *ctx)
   dasm_put(Dst, 2234, DISPATCH_GL(tmpbuf.sz), DISPATCH_GL(tmpbuf.buf), Dt5([1]), DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), -LJ_TSTR, Dt5(->len), DISPATCH_GL(tmpbuf.sz), DISPATCH_GL(tmpbuf.buf), sizeof(GCstr));
   dasm_put(Dst, 2287, DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold), -LJ_TSTR, Dt5(->len), DISPATCH_GL(tmpbuf.sz), DISPATCH_GL(tmpbuf.buf), sizeof(GCstr), DISPATCH_GL(gc.total), DISPATCH_GL(gc.threshold));
   dasm_put(Dst, 2347, -LJ_TSTR, Dt5(->len), DISPATCH_GL(tmpbuf.sz), DISPATCH_GL(tmpbuf.buf), sizeof(GCstr), -LJ_TTAB);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 2385);
   }
   dasm_put(Dst, 2387);
-  if (LJ_TARGET_OSX) {
+  if (LJ_TARGET_IOS) {
   dasm_put(Dst, 2390);
   }
   dasm_put(Dst, 2392, ~LJ_TISNUM, -LJ_TISNUM, ~LJ_TISNUM, -LJ_TISNUM, -LJ_TISNUM);
@@ -6709,11 +6709,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     dasm_put(Dst, 3647, Dt6(->metatable));
 #endif
     dasm_put(Dst, 3654);
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
     dasm_put(Dst, 3656);
     }
     dasm_put(Dst, 3658);
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
     dasm_put(Dst, 3661);
     }
     dasm_put(Dst, 3663);
@@ -7050,11 +7050,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     dasm_put(Dst, 4152);
       break;
     }
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
     dasm_put(Dst, 4155);
     }
     dasm_put(Dst, 4157);
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
     dasm_put(Dst, 4160);
     }
     dasm_put(Dst, 4162);
@@ -7094,7 +7094,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETV:
     dasm_put(Dst, 4286, offsetof(GCfuncL, uvptr), DtA(->marked), DtA(->closed), DtA(->v), LJ_GC_BLACK, -LJ_TISGCV, -(LJ_TISNUM - LJ_TISGCV), Dt4(->gch.marked), -GG_DISP2G, LJ_GC_WHITES);
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
       dasm_put(Dst, 4326);
     } else {
       dasm_put(Dst, 4333);
@@ -7103,7 +7103,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETS:
     dasm_put(Dst, 4339, offsetof(GCfuncL, uvptr), ~LJ_TSTR, DtA(->marked), DtA(->v), DtA(->closed), LJ_GC_BLACK, Dt5(->marked), LJ_GC_WHITES, -GG_DISP2G);
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
       dasm_put(Dst, 4375);
     } else {
       dasm_put(Dst, 4382);
@@ -7178,7 +7178,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TSETM:
     dasm_put(Dst, 4958, Dt6(->asize), Dt6(->array), Dt6(->marked), LJ_GC_BLACK, Dt1(->base));
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
     dasm_put(Dst, 5003, Dt1(->base));
     }
     dasm_put(Dst, 5006, DISPATCH_GL(gc.grayagain), LJ_GC_BLACK, DISPATCH_GL(gc.grayagain), Dt6(->marked), Dt6(->gclist));

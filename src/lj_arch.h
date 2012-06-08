@@ -96,6 +96,7 @@
 #define LJ_TARGET_WINDOWS	(LUAJIT_OS == LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_LINUX		(LUAJIT_OS == LUAJIT_OS_LINUX)
 #define LJ_TARGET_OSX		(LUAJIT_OS == LUAJIT_OS_OSX)
+#define LJ_TARGET_IOS		(LJ_TARGET_OSX && LUAJIT_TARGET == LUAJIT_ARCH_ARM)
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
 
@@ -149,10 +150,6 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
-#if LJ_TARGET_OSX
-/* Runtime code generation is restricted on iOS. Complain to Apple, not me. */
-#define LJ_ARCH_NOJIT		1
-#endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
@@ -243,7 +240,7 @@
 #if defined(__ARM_PCS_VFP)
 #error "No support for ARM hard-float ABI (yet)"
 #endif
-#if !(__ARM_EABI__ || LJ_TARGET_OSX)
+#if !(__ARM_EABI__ || LJ_TARGET_IOS)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
@@ -272,8 +269,15 @@
 #define LJ_DUALNUM		0
 #endif
 
+#if LJ_TARGET_IOS
+/* Runtime code generation is restricted on iOS. Complain to Apple, not me. */
+#ifndef LUAJIT_ENABLE_JIT
+#define LJ_OS_NOJIT		1
+#endif
+#endif
+
 /* Disable or enable the JIT compiler. */
-#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT)
+#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT)
 #define LJ_HASJIT		0
 #else
 #define LJ_HASJIT		1
@@ -316,7 +320,7 @@
 #define LUAJIT_NO_EXP2
 #endif
 
-#if defined(__symbian__) || (LJ_TARGET_ARM && LJ_TARGET_OSX)
+#if defined(__symbian__) || LJ_TARGET_IOS
 #define LUAJIT_NO_UNWIND
 #endif
 

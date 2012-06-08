@@ -218,7 +218,7 @@
 |.endmacro
 |
 |.macro IOS, a, b
-||if (LJ_TARGET_OSX) {
+||if (LJ_TARGET_IOS) {
 |  a, b
 ||}
 |.endmacro
@@ -2892,7 +2892,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    sub CARG1, DISPATCH, #-GG_DISP2G
     |   tst RC, #LJ_GC_WHITES
     |  // Crossed a write barrier. Move the barrier forward.
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
       |  beq <1
       |  mov RC, BASE
       |  bl extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
@@ -2926,7 +2926,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmpne RC, #0
     |   sub CARG1, DISPATCH, #-GG_DISP2G
     |  // Crossed a write barrier. Move the barrier forward.
-    if (LJ_TARGET_OSX) {
+    if (LJ_TARGET_IOS) {
       |  beq <1
       |  mov RC, BASE
       |  bl extern lj_gc_barrieruv	// (global_State *g, TValue *tv)

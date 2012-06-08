@@ -209,7 +209,7 @@ LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
 #define fp64_ul2d __aeabi_ul2d
 #define fp64_l2f __aeabi_l2f
 #define fp64_ul2f __aeabi_ul2f
-#if LJ_TARGET_OSX
+#if LJ_TARGET_IOS
 #define fp64_d2l __fixdfdi
 #define fp64_d2ul __fixunsdfdi
 #define fp64_f2l __fixsfdi

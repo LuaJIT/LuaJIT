@@ -25,7 +25,7 @@
 #include <valgrind/valgrind.h>
 #endif
 
-#if !LJ_TARGET_X86ORX64 && LJ_TARGET_OSX
+#if LJ_TARGET_IOS
 void sys_icache_invalidate(void *start, size_t len);
 #endif
 
@@ -37,7 +37,7 @@ void lj_mcode_sync(void *start, void *end)
 #endif
 #if LJ_TARGET_X86ORX64
   UNUSED(start); UNUSED(end);
-#elif LJ_TARGET_OSX
+#elif LJ_TARGET_IOS
   sys_icache_invalidate(start, (char *)end-(char *)start);
 #elif LJ_TARGET_PPC
   lj_vm_cachesync(start, end);
