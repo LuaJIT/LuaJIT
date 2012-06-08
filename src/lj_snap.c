@@ -24,6 +24,9 @@
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)		(&J->cur.ir[(ref)])
 
+/* Emit raw IR without passing through optimizations. */
+#define emitir_raw(ot, a, b)	(lj_ir_set(J, (ot), (a), (b)), lj_ir_emit(J))
+
 /* -- Snapshot buffer allocation ------------------------------------------ */
 
 /* Grow snapshot buffer. */
@@ -138,11 +141,12 @@ void lj_snap_add(jit_State *J)
       (nsnap > 0 && J->cur.snap[nsnap-1].ref == J->cur.nins)) {
     if (nsnap == 1 && J->parent == 0) {
       /* But preserve snap #0 PC for root traces. */
-      J->mergesnap = 0;
-      return;
+      emitir_raw(IRT(IR_NOP, IRT_NIL), 0, 0);
+      goto nomerge;
     }
     nsnapmap = J->cur.snap[--nsnap].mapofs;
   } else {
+  nomerge:
     lj_snap_grow_buf(J, nsnap+1);
     J->cur.nsnap = (uint16_t)(nsnap+1);
   }
@@ -447,5 +451,6 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 }
 
 #undef IR
+#undef emitir_raw
 
 #endif
