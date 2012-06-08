@@ -46,7 +46,7 @@ buildvm -m libdef -o lj_libdef.h %ALL_LIB%
 @if errorlevel 1 goto :BAD
 buildvm -m recdef -o lj_recdef.h %ALL_LIB%
 @if errorlevel 1 goto :BAD
-buildvm -m vmdef -o ..\lib\vmdef.lua %ALL_LIB%
+buildvm -m vmdef -o jit\vmdef.lua %ALL_LIB%
 @if errorlevel 1 goto :BAD
 buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if errorlevel 1 goto :BAD

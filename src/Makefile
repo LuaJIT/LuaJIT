@@ -401,7 +401,7 @@ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o \
 LJVMCORE_O= $(LJVM_O) $(LJCORE_O)
 LJVMCORE_DYNO= $(LJVMCORE_O:.o=_dyn.o)
 
-LIB_VMDEF= ../lib/vmdef.lua
+LIB_VMDEF= jit/vmdef.lua
 LIB_VMDEFP= $(LIB_VMDEF)
 
 LUAJIT_O= luajit.o

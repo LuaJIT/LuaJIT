@@ -120,7 +120,7 @@ install: $(INSTALL_DEP)
 	  $(INSTALL_F) $(FILE_PC).tmp $(INSTALL_PC) && \
 	  $(RM) $(FILE_PC).tmp
 	cd src && $(INSTALL_F) $(FILES_INC) $(INSTALL_INC)
-	cd lib && $(INSTALL_F) $(FILES_JITLIB) $(INSTALL_JITLIB)
+	cd src/jit && $(INSTALL_F) $(FILES_JITLIB) $(INSTALL_JITLIB)
 	@echo "==== Successfully installed LuaJIT $(VERSION) to $(PREFIX) ===="
 	@echo ""
 	@echo "Note: the beta releases deliberately do NOT install a symlink for luajit"
