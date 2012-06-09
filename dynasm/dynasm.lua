@@ -352,7 +352,7 @@ end
 
 -- Search for a file in the given path and open it for reading.
 local function pathopen(path, name)
-  local dirsep = match(package.path, "\\") and "\\" or "/"
+  local dirsep = package and match(package.path, "\\") and "\\" or "/"
   for _,p in ipairs(path) do
     local fullname = p == "" and name or p..dirsep..name
     local fin = io.open(fullname, "r")
@@ -615,6 +615,17 @@ local function dumpsections(out, lvl)
 end
 
 ------------------------------------------------------------------------------
+
+-- Replacement for customized Lua, which lacks the package library.
+local prefix = ""
+if not require then
+  function require(name)
+    local fp = assert(io.open(prefix..name..".lua"))
+    local s = fp:read("*a")
+    assert(fp:close())
+    return assert(loadstring(s, "@"..name..".lua"))()
+  end
+end
 
 -- Load architecture-specific module.
 local function loadarch(arch)
@@ -1073,8 +1084,8 @@ end
 -- Add the directory dynasm.lua resides in to the Lua module search path.
 local arg = arg
 if arg and arg[0] then
-  local prefix = match(arg[0], "^(.*[/\\])")
-  if prefix then package.path = prefix.."?.lua;"..package.path end
+  prefix = match(arg[0], "^(.*[/\\])")
+  if package and prefix then package.path = prefix.."?.lua;"..package.path end
 end
 
 -- Start DynASM.
