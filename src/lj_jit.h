@@ -34,6 +34,16 @@
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_ARMV6
 #define JIT_F_CPUSTRING		"\5ARMv6\7ARMv6T2\5ARMv7"
+#elif LJ_TARGET_PPC
+#define JIT_F_PPC64		0x00000010
+#define JIT_F_SQRT		0x00000020
+#define JIT_F_ROUND		0x00000040
+#define JIT_F_CELL		0x00000080
+#define JIT_F_XENON		0x00000100
+
+/* Names for the CPU-specific flags. Must match the order above. */
+#define JIT_F_CPU_FIRST		JIT_F_PPC64
+#define JIT_F_CPUSTRING		"\5PPC64\4SQRT\5ROUND\4CELL\5XENON"
 #elif LJ_TARGET_MIPS
 #define JIT_F_MIPS32R2		0x00000010
 

@@ -120,7 +120,7 @@ typedef uintptr_t BloomFilter;
 #define LJ_NOINLINE	__attribute__((noinline))
 
 #if defined(__ELF__) || defined(__MACH__)
-#if !((defined(__sun__) && defined(__svr4__)) || defined(__solaris__))
+#if !((defined(__sun__) && defined(__svr4__)) || defined(__solaris__) || defined(__CELLOS_LV2__))
 #define LJ_NOAPI	extern __attribute__((visibility("hidden")))
 #endif
 #endif
