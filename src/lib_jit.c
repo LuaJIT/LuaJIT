@@ -591,11 +591,11 @@ static uint32_t jit_cpudetect(lua_State *L)
 #elif LJ_TARGET_ARM
 #if LJ_HASJIT
   /* Compile-time ARM CPU detection. */
-#if __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
+#if LJ_ARCH_VERSION >= 70
   flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
-#elif __ARM_ARCH_6T2__
+#elif LJ_ARCH_VERSION >= 61
   flags |= JIT_F_ARMV6|JIT_F_ARMV6T2;
-#elif __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
+#elif LJ_ARCH_VERSION >= 60
   flags |= JIT_F_ARMV6;
 #endif
   /* Runtime ARM CPU detection. */
@@ -612,12 +612,28 @@ static uint32_t jit_cpudetect(lua_State *L)
   }
 #endif
 #endif
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_PPC
+#if LJ_ARCH_PPC64
+  flags |= JIT_F_PPC64;
+#endif
+#if LJ_ARCH_SQRT
+  flags |= JIT_F_SQRT;
+#endif
+#if LJ_ARCH_ROUND
+  flags |= JIT_F_ROUND;
+#endif
+#if LJ_ARCH_CELL
+  flags |= JIT_F_CELL;
+#endif
+#if LJ_ARCH_XENON
+  flags |= JIT_F_XENON;
+#endif
+#elif LJ_TARGET_PPCSPE
   /* Nothing to do. */
 #elif LJ_TARGET_MIPS
 #if LJ_HASJIT
   /* Compile-time MIPS CPU detection. */
-#if _MIPS_ARCH_MIPS32R2
+#if LJ_ARCH_VERSION >= 20
   flags |= JIT_F_MIPS32R2;
 #endif
   /* Runtime MIPS CPU detection. */
