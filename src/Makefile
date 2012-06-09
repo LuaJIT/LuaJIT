@@ -49,12 +49,12 @@ CCOPT= -O2 -fomit-frame-pointer
 # x86/x64 only: For GCC 4.2 or higher and if you don't intend to distribute
 # the binaries to a different machine you could also use: -march=native
 #
-CCOPT_X86= -march=i686
-CCOPT_X64=
-CCOPT_ARM=
-CCOPT_PPC=
-CCOPT_PPCSPE=
-CCOPT_MIPS=
+CCOPT_x86= -march=i686
+CCOPT_x64=
+CCOPT_arm=
+CCOPT_ppc=
+CCOPT_ppcspe=
+CCOPT_mips=
 #
 CCDEBUG=
 # Uncomment the next line to generate debug information:
@@ -182,13 +182,11 @@ LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
 
 HOST_CC= $(CC)
 HOST_RM= rm -f
-# NOTE: The LuaJIT distribution comes with pre-generated buildvm_*.h files.
-# You DO NOT NEED an installed copy of (plain) Lua 5.1 to run DynASM unless
-# you want to MODIFY the corresponding *.dasc file. You can also use LuaJIT
-# itself (bootstrapped from a pre-generated file) to run DynASM of course.
-HOST_LUA= lua
+# If left blank, minilua is built and used. You can supply an installed
+# copy of (plain) Lua 5.1 or 5.2, e.g. with: HOST_LUA=lua
+HOST_LUA=
 
-HOST_XCFLAGS=
+HOST_XCFLAGS= -I.
 HOST_XLDFLAGS=
 HOST_XLIBS=
 HOST_ACFLAGS= $(CCOPTIONS) $(HOST_XCFLAGS) $(TARGET_ARCH) $(HOST_CFLAGS)
@@ -223,31 +221,25 @@ TARGET_ALIBS= $(TARGET_XLIBS) $(LIBS) $(TARGET_LIBS)
 
 TARGET_TESTARCH=$(shell $(TARGET_CC) $(TARGET_TCFLAGS) -E lj_arch.h -dM)
 ifneq (,$(findstring LJ_TARGET_X64 ,$(TARGET_TESTARCH)))
-  TARGET_CCARCH= x64
-  TARGET_XCFLAGS+= $(CCOPT_X64)
+  TARGET_LJARCH= x64
 else
 ifneq (,$(findstring LJ_TARGET_X86 ,$(TARGET_TESTARCH)))
-  TARGET_CCARCH= x86
-  TARGET_XCFLAGS+= $(CCOPT_X86)
+  TARGET_LJARCH= x86
 else
 ifneq (,$(findstring LJ_TARGET_ARM ,$(TARGET_TESTARCH)))
-  TARGET_CCARCH= arm
-  TARGET_XCFLAGS+= $(CCOPT_ARM)
+  TARGET_LJARCH= arm
 else
 ifneq (,$(findstring LJ_TARGET_PPC ,$(TARGET_TESTARCH)))
-  TARGET_CCARCH= ppc
-  TARGET_XCFLAGS+= $(CCOPT_PPC)
+  TARGET_LJARCH= ppc
 else
 ifneq (,$(findstring LJ_TARGET_PPCSPE ,$(TARGET_TESTARCH)))
-  TARGET_CCARCH= ppcspe
-  TARGET_XCFLAGS+= $(CCOPT_PPCSPE)
+  TARGET_LJARCH= ppcspe
 else
 ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring MIPSEL ,$(TARGET_TESTARCH)))
     TARGET_ARCH= -D__MIPSEL__=1
   endif
-  TARGET_CCARCH= mips
-  TARGET_XCFLAGS+= $(CCOPT_MIPS)
+  TARGET_LJARCH= mips
 else
   $(error Unsupported target architecture)
 endif
@@ -257,7 +249,8 @@ endif
 endif
 endif
 
-TARGET_ARCH+= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET_CCARCH))
+TARGET_XCFLAGS+= $(CCOPT_$(TARGET_LJARCH))
+TARGET_ARCH+= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET_LJARCH))
 
 ifneq (,$(PREFIX))
 ifneq (/usr/local,$(PREFIX))
@@ -300,7 +293,7 @@ ifeq (Darwin,$(TARGET_SYS))
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
-  ifeq (x64,$(TARGET_CCARCH))
+  ifeq (x64,$(TARGET_LJARCH))
     TARGET_XLDFLAGS+= -pagezero_size 10000 -image_base 100000000
     TARGET_XSHLDFLAGS+= -image_base 7fff04c4a000
   endif
@@ -357,24 +350,41 @@ endif
 # Files and pathnames.
 ##############################################################################
 
+MINILUA_O= host/minilua.o
+MINILUA_LIBS= -lm
+MINILUA_T= host/minilua
+MINILUA_X= $(MINILUA_T)
+
+ifeq (,$(HOST_LUA))
+  HOST_LUA= $(MINILUA_X)
+  DASM_DEP= $(MINILUA_T)
+endif
+
 DASM_DIR= ../dynasm
 DASM= $(HOST_LUA) $(DASM_DIR)/dynasm.lua
-DASM_FLAGS=
-DASM_DISTFLAGS= -LN
-DASM_FLAGS_X86=
-DASM_FLAGS_X64= -D X64
-DASM_FLAGS_X64WIN= -D X64 -D X64WIN
-DASM_FLAGS_ARM=
-DASM_FLAGS_PPC=
-DASM_FLAGS_PPCSPE=
-DASM_FLAGS_MIPS=
+DASM_XFLAGS=
+DASM_AFLAGS=
+DASM_ARCH= $(TARGET_LJARCH)
 
-BUILDVM_O= buildvm.o buildvm_asm.o buildvm_peobj.o buildvm_lib.o buildvm_fold.o
-BUILDVM_T= buildvm
-BUILDVM_X= ./$(BUILDVM_T)
+ifeq (x64,$(TARGET_LJARCH))
+  DASM_ARCH= x86
+  ifeq (Windows,$(TARGET_SYS))
+    DASM_AFLAGS+= -D X64 -D X64WIN
+  else
+    DASM_AFLAGS+= -D X64
+  endif
+endif
 
-HOST_O= $(BUILDVM_O)
-HOST_T= $(BUILDVM_T)
+DASM_FLAGS= $(DASM_XFLAGS) $(DASM_AFLAGS)
+DASM_DASC= vm_$(DASM_ARCH).dasc
+
+BUILDVM_O= host/buildvm.o host/buildvm_asm.o host/buildvm_peobj.o \
+	   host/buildvm_lib.o host/buildvm_fold.o
+BUILDVM_T= host/buildvm
+BUILDVM_X= $(BUILDVM_T)
+
+HOST_O= $(MINILUA_O) $(BUILDVM_O)
+HOST_T= $(MINILUA_T) $(BUILDVM_T)
 
 LJVM_S= lj_vm.s
 LJVM_O= lj_vm.o
@@ -409,13 +419,12 @@ LUAJIT_A= libluajit.a
 LUAJIT_SO= libluajit.so
 LUAJIT_T= luajit
 
-ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(BUILDVM_T)
-ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h
+ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(HOST_T)
+ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h \
+	    host/buildvm_arch.h
 ALL_GEN= $(LJVM_S) $(ALL_HDRGEN) $(LIB_VMDEFP)
-ALL_DYNGEN= buildvm_x86.h buildvm_x64.h buildvm_x64win.h buildvm_arm.h \
-	    buildvm_ppc.h buildvm_ppcspe.h buildvm_mips.h
 WIN_RM= *.obj *.lib *.exp *.dll *.exe *.manifest *.pdb *.ilk
-ALL_RM= $(ALL_T) $(ALL_GEN) *.o $(WIN_RM)
+ALL_RM= $(ALL_T) $(ALL_GEN) *.o host/*.o $(WIN_RM)
 
 ##############################################################################
 # Build mode handling.
@@ -427,8 +436,11 @@ TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
 TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
 
 ifeq (Windows,$(HOST_SYS))
-  BUILDVM_T= buildvm.exe
-  LIB_VMDEFP= $(subst /,\\,$(LIB_VMDEF))
+  MINILUA_T= host/minilua.exe
+  MINILUA_X= host\minilua
+  BUILDVM_T= host/buildvm.exe
+  BUILDVM_X= host\buildvm
+  ALL_RM:= $(subst /,\,$(ALL_RM))
 endif
 ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
@@ -495,68 +507,39 @@ amalg:
 clean:
 	$(HOST_RM) $(ALL_RM)
 
-cleaner:
-	$(HOST_RM) $(ALL_RM) $(ALL_DYNGEN)
-
-distclean:	clean
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X86) -o buildvm_x86.h buildvm_x86.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64) -o buildvm_x64.h buildvm_x86.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_X64WIN) -o buildvm_x64win.h buildvm_x86.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_ARM) -o buildvm_arm.h buildvm_arm.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPC) -o buildvm_ppc.h buildvm_ppc.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_PPCSPE) -o buildvm_ppcspe.h buildvm_ppcspe.dasc
-	$(Q)$(DASM) $(DASM_DISTFLAGS) $(DASM_FLAGS_MIPS) -o buildvm_mips.h buildvm_mips.dasc
+# Temporary rule for migration from old file layout.
+cleaner:	clean
+	$(HOST_RM) buildvm*
 
 depend:
-	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
+	@for file in $(ALL_HDRGEN); do \
 	  test -f $$file || touch $$file; \
 	  done
-	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c | \
+	@$(HOST_CC) $(HOST_ACFLAGS) -MM *.c host/*.c | \
 	  sed -e "s| [^ ]*/dasm_\S*\.h||g" \
-	      -e "s| buildvm_\S*\.h||g" \
+	      -e "s|^\([^l ]\)|host/\1|" \
 	      -e "s| lj_target_\S*\.h| lj_target_*.h|g" \
 	      -e "s| lj_emit_\S*\.h| lj_emit_*.h|g" \
 	      -e "s| lj_asm_\S*\.h| lj_asm_*.h|g" >Makefile.dep
-	@for file in $(ALL_HDRGEN) $(ALL_DYNGEN); do \
+	@for file in $(ALL_HDRGEN); do \
 	  test -s $$file || $(HOST_RM) $$file; \
 	  done
 
-.PHONY: default all amalg clean cleaner distclean depend
+.PHONY: default all amalg clean cleaner depend
 
 ##############################################################################
 # Rules for generated files.
 ##############################################################################
 
-buildvm_x86.h: buildvm_x86.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X86) -o $@ buildvm_x86.dasc
+$(MINILUA_T): $(MINILUA_O)
+	$(E) "HOSTLINK  $@"
+	$(Q)$(HOST_CC) $(HOST_ALDFLAGS) -o $@ $(MINILUA_O) $(MINILUA_LIBS) $(HOST_ALIBS)
 
-buildvm_x64.h: buildvm_x86.dasc
+host/buildvm_arch.h: $(DASM_DASC) $(DASM_DEP)
 	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64) -o $@ buildvm_x86.dasc
+	$(Q)$(DASM) $(DASM_FLAGS) -o $@ $(DASM_DASC)
 
-buildvm_x64win.h: buildvm_x86.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_X64WIN) -o $@ buildvm_x86.dasc
-
-buildvm_arm.h: buildvm_arm.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_ARM) -o $@ buildvm_arm.dasc
-
-buildvm_ppc.h: buildvm_ppc.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_PPC) -o $@ buildvm_ppc.dasc
-
-buildvm_ppcspe.h: buildvm_ppcspe.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_PPCSPE) -o $@ buildvm_ppcspe.dasc
-
-buildvm_mips.h: buildvm_mips.dasc
-	$(E) "DYNASM    $@"
-	$(Q)$(DASM) $(DASM_FLAGS) $(DASM_FLAGS_MIPS) -o $@ buildvm_mips.dasc
-
-buildvm.o: $(ALL_DYNGEN) $(DASM_DIR)/dasm_*.h
+host/buildvm.o: $(DASM_DIR)/dasm_*.h
 
 $(BUILDVM_T): $(BUILDVM_O)
 	$(E) "HOSTLINK  $@"

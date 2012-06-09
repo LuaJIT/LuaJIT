@@ -19,17 +19,28 @@
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo
 @set DASMDIR=..\dynasm
-@set DASM=lua %DASMDIR%\dynasm.lua
+@set DASM=%DASMDIR%\dynasm.lua
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c
 
-if not exist buildvm_x86.h^
-  %DASM% -LN -o buildvm_x86.h buildvm_x86.dasc
+%LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
-if not exist buildvm_x64win.h^
-  %DASM% -LN -D X64 -D X64WIN -o buildvm_x64win.h buildvm_x86.dasc
+%LJLINK% /out:minilua.exe minilua.obj
+@if errorlevel 1 goto :BAD
+if exist minilua.exe.manifest^
+  %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
+
+@set DASMFLAGS=-D X64 -D X64WIN
+@if defined CPU goto :XCPU
+@set CPU=%PROCESSOR_ARCHITECTURE%
+:XCPU
+@if "%CPU%"=="AMD64" goto :X64
+@if "%CPU%"=="X64" goto :X64
+@set DASMFLAGS=
+:X64
+minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
 @if errorlevel 1 goto :BAD
 
-%LJCOMPILE% /I "." /I %DASMDIR% buildvm*.c
+%LJCOMPILE% /I "." /I %DASMDIR% host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
@@ -85,7 +96,7 @@ if exist lua51.dll.manifest^
 if exist luajit.exe.manifest^
   %LJMT% -manifest luajit.exe.manifest -outputresource:luajit.exe
 
-@del *.obj *.manifest buildvm.exe
+@del *.obj *.manifest minilua.exe buildvm.exe
 @echo.
 @echo === Successfully built LuaJIT ===
 

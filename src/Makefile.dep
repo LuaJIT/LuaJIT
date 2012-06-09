@@ -1,15 +1,3 @@
-buildvm.o: buildvm.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
- lj_obj.h lj_gc.h lj_bc.h lj_ir.h lj_ircall.h lj_jit.h lj_frame.h \
- lj_dispatch.h lj_ctype.h lj_ccall.h luajit.h \
- lj_traceerr.h
-buildvm_asm.o: buildvm_asm.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
- lj_bc.h
-buildvm_fold.o: buildvm_fold.c buildvm.h lj_def.h lua.h luaconf.h \
- lj_arch.h lj_obj.h lj_ir.h
-buildvm_lib.o: buildvm_lib.c buildvm.h lj_def.h lua.h luaconf.h lj_arch.h \
- lj_obj.h lj_lib.h
-buildvm_peobj.o: buildvm_peobj.c buildvm.h lj_def.h lua.h luaconf.h \
- lj_arch.h lj_bc.h
 lib_aux.o: lib_aux.c lua.h luaconf.h lauxlib.h lj_obj.h lj_def.h \
  lj_arch.h lj_err.h lj_errmsg.h lj_state.h lj_lib.h lj_alloc.h
 lib_base.o: lib_base.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h \
@@ -207,3 +195,17 @@ ljamalg.o: ljamalg.c lua.h luaconf.h lauxlib.h lj_gc.c lj_obj.h lj_def.h \
  lj_libdef.h lib_math.c lib_string.c lib_table.c lib_io.c lib_os.c \
  lib_package.c lib_debug.c lib_bit.c lib_jit.c lib_ffi.c lib_init.c
 luajit.o: luajit.c lua.h luaconf.h lauxlib.h lualib.h luajit.h lj_arch.h
+host/buildvm.o: host/buildvm.c host/buildvm.h lj_def.h lua.h luaconf.h \
+ lj_arch.h lj_obj.h lj_def.h lj_arch.h lj_gc.h lj_obj.h lj_bc.h lj_ir.h \
+ lj_ircall.h lj_ir.h lj_jit.h lj_frame.h lj_bc.h lj_dispatch.h lj_ctype.h \
+ lj_gc.h lj_ccall.h lj_ctype.h luajit.h \
+ host/buildvm_arch.h lj_traceerr.h
+host/buildvm_asm.o: host/buildvm_asm.c host/buildvm.h lj_def.h lua.h luaconf.h \
+ lj_arch.h lj_bc.h lj_def.h lj_arch.h
+host/buildvm_fold.o: host/buildvm_fold.c host/buildvm.h lj_def.h lua.h \
+ luaconf.h lj_arch.h lj_obj.h lj_def.h lj_arch.h lj_ir.h lj_obj.h
+host/buildvm_lib.o: host/buildvm_lib.c host/buildvm.h lj_def.h lua.h luaconf.h \
+ lj_arch.h lj_obj.h lj_def.h lj_arch.h lj_lib.h lj_obj.h
+host/buildvm_peobj.o: host/buildvm_peobj.c host/buildvm.h lj_def.h lua.h \
+ luaconf.h lj_arch.h lj_bc.h lj_def.h lj_arch.h
+host/minilua.o: host/minilua.c

@@ -155,9 +155,6 @@ clean:
 cleaner:
 	$(MAKE) -C src cleaner
 
-distclean:
-	$(MAKE) -C src distclean
-
-.PHONY: all install amalg clean cleaner distclean
+.PHONY: all install amalg clean cleaner
 
 ##############################################################################
