@@ -197,7 +197,16 @@ static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
 }
 #endif
 #else
-#error "missing define for lj_bswap()"
+static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
+{
+  return (x << 24) | ((x & 0xff00) << 8) | ((x >> 8) & 0xff00) | (x >> 24);
+}
+
+static LJ_AINLINE uint64_t lj_bswap64(uint64_t x)
+{
+  return (uint64_t)lj_bswap((uint32_t)(x >> 32)) |
+	 ((uint64_t)lj_bswap((uint32_t)x) << 32);
+}
 #endif
 
 typedef union __attribute__((packed)) Unaligned16 {

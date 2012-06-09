@@ -279,7 +279,7 @@
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
 #error "Need at least GCC 4.2 or newer"
 #endif
-#else
+#elif !LJ_TARGET_PS3
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
 #endif
@@ -379,8 +379,8 @@
 #define LUAJIT_NO_EXP2
 #endif
 
-#if defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3
-#define LUAJIT_NO_UNWIND
+#if defined(LUAJIT_NO_UNWIND) || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3
+#define LJ_NO_UNWIND		1
 #endif
 
 #endif

@@ -613,20 +613,13 @@ static uint32_t jit_cpudetect(lua_State *L)
 #endif
 #endif
 #elif LJ_TARGET_PPC
-#if LJ_ARCH_PPC64
-  flags |= JIT_F_PPC64;
-#endif
+#if LJ_HASJIT
 #if LJ_ARCH_SQRT
   flags |= JIT_F_SQRT;
 #endif
 #if LJ_ARCH_ROUND
   flags |= JIT_F_ROUND;
 #endif
-#if LJ_ARCH_CELL
-  flags |= JIT_F_CELL;
-#endif
-#if LJ_ARCH_XENON
-  flags |= JIT_F_XENON;
 #endif
 #elif LJ_TARGET_PPCSPE
   /* Nothing to do. */

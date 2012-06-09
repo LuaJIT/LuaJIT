@@ -13,6 +13,8 @@
 #include "lj_mcode.h"
 #include "lj_trace.h"
 #include "lj_dispatch.h"
+#endif
+#if LJ_HASJIT || LJ_HASFFI
 #include "lj_vm.h"
 #endif
 

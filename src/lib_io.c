@@ -405,7 +405,7 @@ LJLIB_CF(io_popen)
 #endif
   return iof->fp != NULL ? 1 : io_pushresult(L, 0, fname);
 #else
-  luaL_error(L, LUA_QL("popen") " not supported");
+  return luaL_error(L, LUA_QL("popen") " not supported");
 #endif
 }
 

@@ -70,6 +70,10 @@ LJLIB_CF(os_rename)
 
 LJLIB_CF(os_tmpname)
 {
+#if LJ_TARGET_PS3
+  lj_err_caller(L, LJ_ERR_OSUNIQF);
+  return 0;
+#else
 #if LJ_TARGET_POSIX
   char buf[15+1];
   int fp;
@@ -86,6 +90,7 @@ LJLIB_CF(os_tmpname)
 #endif
   lua_pushstring(L, buf);
   return 1;
+#endif
 }
 
 LJLIB_CF(os_getenv)
