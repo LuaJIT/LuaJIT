@@ -212,7 +212,11 @@
 
 /* Check for minimum required compiler versions. */
 #if defined(__GNUC__)
-#if LJ_TARGET_X64
+#if LJ_TARGET_X86
+#if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
+#error "Need at least GCC 3.4 or newer"
+#endif
+#elif LJ_TARGET_X64
 #if __GNUC__ < 4
 #error "Need at least GCC 4.0 or newer"
 #endif
@@ -220,13 +224,9 @@
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
 #error "Need at least GCC 4.2 or newer"
 #endif
-#elif LJ_TARGET_PPC
+#else
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
-#endif
-#else
-#if (__GNUC__ < 3) || ((__GNUC__ == 3) && __GNUC_MINOR__ < 4)
-#error "Need at least GCC 3.4 or newer"
 #endif
 #endif
 #endif
