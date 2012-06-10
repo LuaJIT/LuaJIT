@@ -2601,8 +2601,10 @@ static void build_subroutines(BuildCtx *ctx)
   |     li ZERO, 0
   |   mr L, CRET1
   |     stw TMP3, TMPD
+  |     lus TMP0, 0x4338		// Hiword of 2^52 + 2^51 (double)
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
   |     ori TMP3, TMP3, 0x0004		// TONUM = 2^52 + 2^51 + 2^31 (float).
+  |     stw TMP0, TONUM_HI
   |     li TISNIL, LJ_TNIL
   |    li_vmstate INTERP
   |     lfs TOBIT, TMPD
