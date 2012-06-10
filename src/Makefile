@@ -390,6 +390,11 @@ ifeq (x64,$(TARGET_LJARCH))
   DASM_AFLAGS+= -D X64
   DASM_ARCH= x86
 else
+ifeq (arm,$(TARGET_LJARCH))
+  ifeq (iOS,$(TARGET_SYS))
+    DASM_AFLAGS+= -D IOS
+  endif
+else
 ifeq (ppc,$(TARGET_LJARCH))
   ifneq (,$(findstring LJ_ARCH_SQRT 1,$(TARGET_TESTARCH)))
     DASM_AFLAGS+= -D SQRT
@@ -400,6 +405,7 @@ ifeq (ppc,$(TARGET_LJARCH))
   ifeq (PS3,$(TARGET_SYS))
     DASM_AFLAGS+= -D PS3
   endif
+endif
 endif
 endif
 endif
