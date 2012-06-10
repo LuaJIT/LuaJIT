@@ -596,28 +596,28 @@ static void build_subroutines(BuildCtx *ctx)
   |   move RB, BASE
   |   move BASE, TMP2			// Restore caller BASE.
   |    lw LFUNC:TMP1, FRAME_FUNC(TMP2)
-#if LJ_HASFFI
+  |.if FFI
   |  sltiu AT, TMP0, 2
-#endif
+  |.endif
   |     lw PC, -16+HI(RB)		// Restore PC from [cont|PC].
   |   addu TMP2, RA, RD
   |    lw TMP1, LFUNC:TMP1->pc
-#if LJ_HASFFI
+  |.if FFI
   |  bnez AT, >1
-#endif
+  |.endif
   |.  sw TISNIL, -8+HI(TMP2)		// Ensure one valid arg.
   |  // BASE = base, RA = resultptr, RB = meta base
   |  jr TMP0				// Jump to continuation.
   |.  lw KBASE, PC2PROTO(k)(TMP1)
   |
-#if LJ_HASFFI
+  |.if FFI
   |1:
   |  bnez TMP0, ->cont_ffi_callback	// cont = 1: return from FFI callback.
   |  // cont = 0: tailcall from C function.
   |.  addiu TMP1, RB, -16
   |  b ->vm_call_tail
   |.  subu RC, TMP1, BASE
-#endif
+  |.endif
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  lw INS, -4(PC)
@@ -798,7 +798,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  nop
   |
   |->vmeta_equal_cd:
-#if LJ_HASFFI
+  |.if FFI
   |  load_got lj_meta_equal_cd
   |  move CARG2, INS
   |  addiu PC, PC, -4
@@ -809,7 +809,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns 0/1 or TValue * (metamethod).
   |  b <3
   |.  nop
-#endif
+  |.endif
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -902,22 +902,22 @@ static void build_subroutines(BuildCtx *ctx)
   |  move MULTRES, INS
   |  call_intern lj_meta_for	// (lua_State *L, TValue *base)
   |.  move CARG1, L
-#if LJ_HASJIT
+  |.if JIT
   |  decode_OP1 TMP0, MULTRES
   |  li AT, BC_JFORI
-#endif
+  |.endif
   |  decode_RA8a RA, MULTRES
   |   decode_RD8a RD, MULTRES
   |  decode_RA8b RA
-#if LJ_HASJIT
+  |.if JIT
   |  beq TMP0, AT, =>BC_JFORI
   |.  decode_RD8b RD
   |  b =>BC_FORI
   |.  nop
-#else
+  |.else
   |  b =>BC_FORI
   |.  decode_RD8b RD
-#endif
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
@@ -1936,7 +1936,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_record:				// Dispatch target for recording phase.
-#if LJ_HASJIT
+  |.if JIT
   |  lbu TMP3, DISPATCH_GL(hookmask)(DISPATCH)
   |  andi AT, TMP3, HOOK_VMEVENT	// No recording while in vmevent.
   |  bnez AT, >5
@@ -1950,7 +1950,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  nop
   |  b >1
   |.  sw TMP2, DISPATCH_GL(hookcount)(DISPATCH)
-#endif
+  |.endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
   |  lbu TMP3, DISPATCH_GL(hookmask)(DISPATCH)
@@ -2001,7 +2001,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  lw MULTRES, -24+LO(RB)		// Restore MULTRES for *M ins.
   |
   |->vm_hotloop:			// Hot loop counter underflow.
-#if LJ_HASJIT
+  |.if JIT
   |  lw LFUNC:TMP1, FRAME_FUNC(BASE)
   |   addiu CARG1, DISPATCH, GG_DISP2J
   |   sw PC, SAVE_PC
@@ -2017,19 +2017,19 @@ static void build_subroutines(BuildCtx *ctx)
   |.  sw TMP1, L->top
   |  b <3
   |.  nop
-#endif
+  |.endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-#if LJ_HASJIT
+  |.if JIT
   |  b >1
-#endif
+  |.endif
   |.  move CARG2, PC
   |
   |->vm_hotcall:			// Hot call counter underflow.
-#if LJ_HASJIT
+  |.if JIT
   |  ori CARG2, PC, 1
   |1:
-#endif
+  |.endif
   |  load_got lj_dispatch_call
   |  addu TMP0, BASE, RC
   |   sw PC, SAVE_PC
@@ -2059,7 +2059,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endmacro
   |
   |->vm_exit_handler:
-#if LJ_HASJIT
+  |.if JIT
   |  addiu sp, sp, -(16+32*8+32*4)
   |  savex_ 0, 1
   |  savex_ 2, 3
@@ -2104,9 +2104,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   lw PC, SAVE_PC			// Get SAVE_PC.
   |  b >1
   |.  sw L, SAVE_L			// Set SAVE_L (on-trace resume/yield).
-#endif
+  |.endif
   |->vm_exit_interp:
-#if LJ_HASJIT
+  |.if JIT
   |  // CRET1 = MULTRES or negated error code, BASE, PC and JGL set.
   |  lw L, SAVE_L
   |  addiu DISPATCH, JGL, -GG_DISP2G-32768
@@ -2148,7 +2148,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  negu CARG2, CRET1
   |  call_intern lj_err_throw		// (lua_State *L, int errcode)
   |.  move CARG1, L
-#endif
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Math helper functions ----------------------------------------------
@@ -2202,9 +2202,9 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_ceil:
   |  vm_round ceil
   |->vm_trunc:
-#if LJ_HASJIT
+  |.if JIT
   |  vm_round trunc
-#endif
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -2216,7 +2216,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Handler for callback functions. Callback slot number in r1, g in r2.
   |->vm_ffi_callback:
-#if LJ_HASFFI
+  |.if FFI
   |.type CTSTATE, CTState, PC
   |  saveregs
   |  lw CTSTATE, GL:r2->ctype_state
@@ -2248,10 +2248,10 @@ static void build_subroutines(BuildCtx *ctx)
   |    st_vmstate
   |     cvt.d.s TOBIT, TOBIT
   |  ins_callt
-#endif
+  |.endif
   |
   |->cont_ffi_callback:			// Return from FFI callback.
-#if LJ_HASFFI
+  |.if FFI
   |  load_got lj_ccallback_leave
   |  lw CTSTATE, DISPATCH_GL(ctype_state)(DISPATCH)
   |   sw BASE, L->base
@@ -2265,11 +2265,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw CRET2, CTSTATE->cb.gpr[1]
   |  b ->vm_leave_unw
   |.  ldc1 FRET2, CTSTATE->cb.fpr[1]
-#endif
+  |.endif
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
-#if LJ_HASFFI
+  |.if FFI
   |  .type CCSTATE, CCallState, CARG1
   |  lw TMP1, CCSTATE->spadj
   |   lbu CARG2, CCSTATE->nsp
@@ -2310,7 +2310,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  move sp, r16
   |  jr ra
   |.  move r16, TMP2
-#endif
+  |.endif
   |// Note: vm_ffi_call must be the last function in this object file!
   |
   |//-----------------------------------------------------------------------
@@ -2390,14 +2390,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Either or both types are not numbers.
     |  lw CARG2, LO(RA)
     |  lw CARG3, LO(RD)
-    if (LJ_HASFFI) {
-      |  li TMP3, LJ_TCDATA
-      |  beq TMP0, TMP3, ->vmeta_equal_cd
-    }
+    |.if FFI
+    |  li TMP3, LJ_TCDATA
+    |  beq TMP0, TMP3, ->vmeta_equal_cd
+    |.endif
     |.  sltiu AT, TMP0, LJ_TISPRI		// Not a primitive?
-    if (LJ_HASFFI) {
-      |  beq TMP1, TMP3, ->vmeta_equal_cd
-    }
+    |.if FFI
+    |  beq TMP1, TMP3, ->vmeta_equal_cd
+    |.endif
     |.  xor TMP3, CARG2, CARG3			// Same tv?
     |  xor TMP1, TMP1, TMP0			// Same type?
     |  sltiu CARG1, TMP0, LJ_TISTABUD+1		// Table or userdata?
@@ -2434,10 +2434,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw STR:TMP3, LO(RA)
     |   subu RD, KBASE, RD
     |    lhu TMP2, -4+OFS_RD(PC)
-    if (LJ_HASFFI) {
-      |  li AT, LJ_TCDATA
-      |  beq TMP0, AT, ->vmeta_equal_cd
-    }
+    |.if FFI
+    |  li AT, LJ_TCDATA
+    |  beq TMP0, AT, ->vmeta_equal_cd
+    |.endif
     |.  lw STR:TMP1, -4(RD)		// KBASE-4-str_const*4
     |  addiu TMP0, TMP0, -LJ_TSTR
     |   decode_RD4b TMP2
@@ -2467,11 +2467,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
     |  sltiu AT, TMP0, LJ_TISNUM
     |    decode_RD4b TMP2
-    if (LJ_HASFFI) {
-      |  beqz AT, >5
-    } else {
-      |  beqz AT, >1
-    }
+    |.if FFI
+    |  beqz AT, >5
+    |.else
+    |  beqz AT, >1
+    |.endif
     |.   addu TMP2, TMP2, TMP3
     |   c.eq.d f0, f2
     if (vk) {
@@ -2484,14 +2484,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  addu PC, PC, TMP2
     }
     |  ins_next
-    if (LJ_HASFFI) {
-      |5:
-      |  li AT, LJ_TCDATA
-      |  beq TMP0, AT, ->vmeta_equal_cd
-      |.  nop
-      |  b <1
-      |.  nop
-    }
+    |.if FFI
+    |5:
+    |  li AT, LJ_TCDATA
+    |  beq TMP0, AT, ->vmeta_equal_cd
+    |.  nop
+    |  b <1
+    |.  nop
+    |.endif
     break;
 
   case BC_ISEQP: case BC_ISNEP:
@@ -2503,10 +2503,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    lhu TMP2, OFS_RD(PC)
     |   not TMP1, TMP1
     |    addiu PC, PC, 4
-    if (LJ_HASFFI) {
-      |  li AT, LJ_TCDATA
-      |  beq TMP0, AT, ->vmeta_equal_cd
-    }
+    |.if FFI
+    |  li AT, LJ_TCDATA
+    |  beq TMP0, AT, ->vmeta_equal_cd
+    |.endif
     |.  xor TMP0, TMP0, TMP1
     |  decode_RD4b TMP2
     |  lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
@@ -2781,7 +2781,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next2
     break;
   case BC_KCDATA:
-#if LJ_HASFFI
+    |.if FFI
     |  // RA = dst*8, RD = cdata_const*8 (~)
     |  srl TMP1, RD, 1
     |  subu TMP1, KBASE, TMP1
@@ -2792,7 +2792,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sw TMP0, LO(RA)
     |   sw TMP2, HI(RA)
     |  ins_next2
-#endif
+    |.endif
     break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
@@ -3538,9 +3538,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERN:
     |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
-#if LJ_HASJIT
+    |.if JIT
     |  // NYI: add hotloop, record BC_ITERN.
-#endif
+    |.endif
     |  addu RA, BASE, RA
     |  lw TAB:RB, -16+LO(RA)
     |  lw RC, -8+LO(RA)			// Get index from control var.
@@ -3803,9 +3803,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Loops and branches ------------------------------------------------ */
 
   case BC_FORL:
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_IFORL follows.
     break;
 
@@ -3885,9 +3885,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERL:
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_IITERL follows.
     break;
 
@@ -3918,9 +3918,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8, RD = target (loop extent)
     |  // Note: RA/RD is only used by trace recorder to determine scope/extent
     |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_ILOOP follows.
     break;
 
@@ -3930,7 +3930,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JLOOP:
-#if LJ_HASJIT
+    |.if JIT
     |  // RA = base*8 (ignored), RD = traceno*8
     |  lw TMP1, DISPATCH_J(trace)(DISPATCH)
     |  srl RD, RD, 1
@@ -3944,7 +3944,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw TMP2, TRACE:TMP2->mcode
     |  jr TMP2
     |.  addiu JGL, DISPATCH, GG_DISP2G+32768
-#endif
+    |.endif
     break;
 
   case BC_JMP:
@@ -3956,9 +3956,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Function headers -------------------------------------------------- */
 
   case BC_FUNCF:
-#if LJ_HASJIT
+    |.if JIT
     |  hotcall
-#endif
+    |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     |  // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow.
     break;
