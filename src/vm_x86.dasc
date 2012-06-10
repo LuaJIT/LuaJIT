@@ -4041,13 +4041,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  movzx RD, PC_RD
       |  branchPC RD
       |2:				// NE: Fallthrough to next instruction.
-      if (!LJ_HASFFI) {
-	|3:
-      }
+      |.if not FFI
+      |3:
+      |.endif
     } else {
-      if (!LJ_HASFFI) {
-	|3:
-      }
+      |.if not FFI
+      |3:
+      |.endif
       |2:				// NE: Branch to the target.
       |  movzx RD, PC_RD
       |  branchPC RD
