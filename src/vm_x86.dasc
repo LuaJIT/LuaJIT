@@ -16,6 +16,13 @@
 |
 |//-----------------------------------------------------------------------
 |
+|.if X64
+|.define SSE, 1
+|.if WIN
+|.define X64WIN, 1
+|.endif
+|.endif
+|
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
 |.define BASE,		edx		// Not C callee-save, refetched anyway.

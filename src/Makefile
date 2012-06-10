@@ -249,12 +249,12 @@ endif
 endif
 endif
 
-ifneq (,$(findstring __CELLOS_LV2__ ,$(TARGET_TESTARCH)))
+ifneq (,$(findstring LJ_TARGET_PS3 1,$(TARGET_TESTARCH)))
   TARGET_SYS= PS3
   TARGET_ARCH+= -D__CELLOS_LV2__
   TARGET_XCFLAGS+= -DLUAJIT_USE_SYSMALLOC
 endif
-ifneq (,$(findstring LJ_NO_UNWIND ,$(TARGET_TESTARCH)))
+ifneq (,$(findstring LJ_NO_UNWIND 1,$(TARGET_TESTARCH)))
   TARGET_ARCH+= -DLUAJIT_NO_UNWIND
 endif
 
@@ -377,13 +377,46 @@ DASM_XFLAGS=
 DASM_AFLAGS=
 DASM_ARCH= $(TARGET_LJARCH)
 
-ifeq (x64,$(TARGET_LJARCH))
-  DASM_ARCH= x86
-  ifeq (Windows,$(TARGET_SYS))
-    DASM_AFLAGS+= -D X64 -D X64WIN
-  else
-    DASM_AFLAGS+= -D X64
+ifneq (,$(findstring LJ_HASJIT 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D JIT
+endif
+ifneq (,$(findstring LJ_HASFFI 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D FFI
+endif
+ifneq (,$(findstring LJ_DUALNUM 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D DUALNUM
+endif
+ifneq (,$(findstring LJ_ARCH_HASFPU 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D FPU
+endif
+ifeq (,$(findstring LJ_ABI_SOFTFP 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D HF
+endif
+DASM_AFLAGS+= -D VER=$(subst LJ_ARCH_VERSION_,,$(filter LJ_ARCH_VERSION_%,$(subst LJ_ARCH_VERSION ,LJ_ARCH_VERSION_,$(TARGET_TESTARCH))))
+ifeq (Windows,$(TARGET_SYS))
+  DASM_AFLAGS+= -D WIN
+endif
+ifeq (x86,$(TARGET_LJARCH))
+  ifneq (,$(findstring __SSE2__ 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D SSE
   endif
+else
+ifeq (x64,$(TARGET_LJARCH))
+  DASM_AFLAGS+= -D X64
+  DASM_ARCH= x86
+else
+ifeq (ppc,$(TARGET_LJARCH))
+  ifneq (,$(findstring LJ_ARCH_SQRT 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D SQRT
+  endif
+  ifneq (,$(findstring LJ_ARCH_ROUND 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D ROUND
+  endif
+  ifeq (PS3,$(TARGET_SYS))
+    DASM_AFLAGS+= -D PS3
+  endif
+endif
+endif
 endif
 
 DASM_FLAGS= $(DASM_XFLAGS) $(DASM_AFLAGS)
