@@ -275,7 +275,9 @@ void emit_asm(BuildCtx *ctx)
   fprintf(ctx->fp, "\n");
   switch (ctx->mode) {
   case BUILD_elfasm:
+#if !LJ_TARGET_PS3
     fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\"," ELFASM_PX "progbits\n");
+#endif
 #if LJ_TARGET_PPCSPE
     /* Soft-float ABI + SPE. */
     fprintf(ctx->fp, "\t.gnu_attribute 4, 2\n\t.gnu_attribute 8, 3\n");

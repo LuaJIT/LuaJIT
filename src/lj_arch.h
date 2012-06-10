@@ -204,7 +204,7 @@
 #if _ARCH_PPCSQ
 #define LJ_ARCH_SQRT		1
 #endif
-#if _ARCH_PPC5X
+#if _ARCH_PWR5X
 #define LJ_ARCH_ROUND		1
 #endif
 #if __PPU__
