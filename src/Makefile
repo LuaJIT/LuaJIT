@@ -42,9 +42,8 @@ CCOPT= -O2 -fomit-frame-pointer
 #
 # Target-specific compiler options:
 #
-# x86 only: it's recommended to compile at least for i686. By default the
-# assembler part of the interpreter makes use of CMOV/FCOMI*/FUCOMI*
-# instructions, anyway.
+# x86 only: it's recommended to compile at least for i686. Better yet,
+# compile for an architecture that has SSE2, too (-msse -msse2).
 #
 # x86/x64 only: For GCC 4.2 or higher and if you don't intend to distribute
 # the binaries to a different machine you could also use: -march=native
@@ -104,20 +103,6 @@ XCFLAGS=
 #
 # Disable the JIT compiler, i.e. turn LuaJIT into a pure interpreter.
 #XCFLAGS+= -DLUAJIT_DISABLE_JIT
-#
-# x86 only: use SSE2 instead of x87 instructions in the interpreter
-# (always enabled for x64). A pure interpreter built with this flag won't
-# run on older CPUs (before P4 or K8). There isn't much of a speed
-# difference, so this is not enabled by default.
-# The JIT compiler is not affected by this flag. It always uses runtime
-# CPU feature detection before emitting code for SSE2 up to SSE4.1.
-#XCFLAGS+= -DLUAJIT_CPU_SSE2
-#
-# x86 only: Disable the use of CMOV and FCOMI*/FUCOMI* instructions in the
-# interpreter. Do this only if you intend to use REALLY ANCIENT CPUs
-# (before Pentium Pro, or on the VIA C3). This generally slows down the
-# interpreter. Don't bother if your OS wouldn't run on them, anyway.
-#XCFLAGS+= -DLUAJIT_CPU_NOCMOV
 #
 # Some architectures (e.g. PPC) can use either single-number (1) or
 # dual-number (2) mode. Uncomment one of these lines to override the

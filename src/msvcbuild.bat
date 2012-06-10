@@ -29,15 +29,16 @@
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
-@set DASMFLAGS=-D X64 -D WIN
+@set DASMFLAGS=-D WIN -D JIT -D FFI
+@set DASMX64=-D X64
 @if defined CPU goto :XCPU
 @set CPU=%PROCESSOR_ARCHITECTURE%
 :XCPU
 @if "%CPU%"=="AMD64" goto :X64
 @if "%CPU%"=="X64" goto :X64
-@set DASMFLAGS=-D WIN
+@set DASMX64=
 :X64
-minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
+minilua %DASM% -LN %DASMFLAGS% %DASMX64% -o host\buildvm_arch.h vm_x86.dasc
 @if errorlevel 1 goto :BAD
 
 %LJCOMPILE% /I "." /I %DASMDIR% host\buildvm*.c
