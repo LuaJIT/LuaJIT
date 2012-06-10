@@ -867,17 +867,17 @@ static void build_subroutines(BuildCtx *ctx)
   |   stw PC, SAVE_PC
   |  mr SAVE0, INS
   |  bl extern lj_meta_for	// (lua_State *L, TValue *base)
-#if LJ_HASJIT
+  |.if JIT
   |   decode_OP1 TMP0, SAVE0
-#endif
+  |.endif
   |  decode_RA8 RA, SAVE0
-#if LJ_HASJIT
+  |.if JIT
   |   cmpwi TMP0, BC_JFORI
-#endif
+  |.endif
   |  decode_RD8 RD, SAVE0
-#if LJ_HASJIT
+  |.if JIT
   |   beq =>BC_JFORI
-#endif
+  |.endif
   |  b =>BC_FORI
   |
   |//-----------------------------------------------------------------------
@@ -1846,9 +1846,9 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_record:				// Dispatch target for recording phase.
-#if LJ_HASJIT
+  |.if JIT
   |  NYI
-#endif
+  |.endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
   |  lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
@@ -1900,21 +1900,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <4
   |
   |->vm_hotloop:			// Hot loop counter underflow.
-#if LJ_HASJIT
+  |.if JIT
   |  NYI
-#endif
+  |.endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
   |  mr CARG2, PC
-#if LJ_HASJIT
+  |.if JIT
   |  b >1
-#endif
+  |.endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
-#if LJ_HASJIT
+  |.if JIT
   |  ori CARG2, PC, 1
   |1:
-#endif
+  |.endif
   |  add TMP0, BASE, RC
   |   stw PC, SAVE_PC
   |  mr CARG1, L
@@ -1937,13 +1937,13 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_exit_handler:
-#if LJ_HASJIT
+  |.if JIT
   |  NYI
-#endif
+  |.endif
   |->vm_exit_interp:
-#if LJ_HASJIT
+  |.if JIT
   |  NYI
-#endif
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Math helper functions ----------------------------------------------
@@ -2031,12 +2031,12 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  vm_round vm_floor, 0
   |  vm_round vm_ceil,  1
-#if LJ_HASJIT
+  |.if JIT
   |  vm_round vm_trunc, 2
-#else
+  |.else
   |->vm_trunc_efd:
   |->vm_trunc_hilo:
-#endif
+  |.endif
   |
   |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
   |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
@@ -2079,9 +2079,9 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_ffi_call:
-#if LJ_HASFFI
+  |.if FFI
   |  NYI
-#endif
+  |.endif
   |
   |//-----------------------------------------------------------------------
 }
@@ -2455,7 +2455,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next2
     break;
   case BC_KCDATA:
-#if LJ_HASFFI
+    |.if FFI
     |  // RA = dst*8, RD = cdata_const*8 (~)
     |  ins_next1
     |  srwi TMP1, RD, 1
@@ -2465,7 +2465,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  evmergelo TMP0, TMP2, TMP0
     |  evstddx TMP0, BASE, RA
     |  ins_next2
-#endif
+    |.endif
     break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
@@ -3106,9 +3106,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERN:
     |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
-#if LJ_HASJIT
+    |.if JIT
     |  // NYI: add hotloop, record BC_ITERN.
-#endif
+    |.endif
     |  add RA, BASE, RA
     |  lwz TAB:RB, -12(RA)
     |  lwz RC, -4(RA)			// Get index from control var.
@@ -3368,9 +3368,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Loops and branches ------------------------------------------------ */
 
   case BC_FORL:
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_IFORL follows.
     break;
 
@@ -3427,9 +3427,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERL:
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_IITERL follows.
     break;
 
@@ -3457,9 +3457,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8, RD = target (loop extent)
     |  // Note: RA/RD is only used by trace recorder to determine scope/extent
     |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
-#if LJ_HASJIT
+    |.if JIT
     |  hotloop
-#endif
+    |.endif
     |  // Fall through. Assumes BC_ILOOP follows.
     break;
 
@@ -3469,9 +3469,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JLOOP:
-#if LJ_HASJIT
+    |.if JIT
     |  NYI
-#endif
+    |.endif
     break;
 
   case BC_JMP:
@@ -3483,9 +3483,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Function headers -------------------------------------------------- */
 
   case BC_FUNCF:
-#if LJ_HASJIT
+    |.if JIT
     |  hotcall
-#endif
+    |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     |  // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow.
     break;
