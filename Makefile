@@ -19,7 +19,6 @@ RELVER=  0
 PREREL=  -beta10
 VERSION= $(MAJVER).$(MINVER).$(RELVER)$(PREREL)
 ABIVER=  5.1
-NODOTABIVER=  51
 
 ##############################################################################
 #
@@ -49,9 +48,9 @@ INSTALL_TSYMNAME= luajit
 INSTALL_ANAME= libluajit-$(ABIVER).a
 INSTALL_SONAME= libluajit-$(ABIVER).so.$(MAJVER).$(MINVER).$(RELVER)
 INSTALL_SOSHORT= libluajit-$(ABIVER).so
-INSTALL_DYLIBNAME= libluajit-$(NODOTABIVER).$(MAJVER).$(MINVER).$(RELVER).dylib
-INSTALL_DYLIBSHORT1= libluajit-$(NODOTABIVER).dylib
-INSTALL_DYLIBSHORT2= libluajit-$(NODOTABIVER).$(MAJVER).dylib
+INSTALL_DYLIBNAME= libluajit-$(ABIVER).$(MAJVER).$(MINVER).$(RELVER).dylib
+INSTALL_DYLIBSHORT1= libluajit-$(ABIVER).dylib
+INSTALL_DYLIBSHORT2= libluajit-$(ABIVER).$(MAJVER).dylib
 INSTALL_PCNAME= luajit.pc
 
 INSTALL_STATIC= $(INSTALL_LIB)/$(INSTALL_ANAME)
