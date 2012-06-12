@@ -57,7 +57,7 @@ local map_rld = {
   [0] = "rldiclRR~HM.", "rldicrRR~HM.", "rldicRR~HM.", "rldimiRR~HM.",
   {
     shift = 1, mask = 1,
-    [0] = "rldclRR~HM.", "rldcrRR~HM.",
+    [0] = "rldclRR~RM.", "rldcrRR~RM.",
   },
 }
 
