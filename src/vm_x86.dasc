@@ -2,7 +2,7 @@
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2012 Mike Pall. See Copyright Notice in luajit.h
 |
-|.if X64
+|.if P64
 |.arch x64
 |.else
 |.arch x86
@@ -16,7 +16,8 @@
 |
 |//-----------------------------------------------------------------------
 |
-|.if X64
+|.if P64
+|.define X64, 1
 |.define SSE, 1
 |.if WIN
 |.define X64WIN, 1

@@ -362,6 +362,9 @@ DASM_XFLAGS=
 DASM_AFLAGS=
 DASM_ARCH= $(TARGET_LJARCH)
 
+ifneq (,$(findstring LJ_ARCH_BITS 64,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D P64
+endif
 ifneq (,$(findstring LJ_HASJIT 1,$(TARGET_TESTARCH)))
   DASM_AFLAGS+= -D JIT
 endif
@@ -387,7 +390,6 @@ ifeq (x86,$(TARGET_LJARCH))
   endif
 else
 ifeq (x64,$(TARGET_LJARCH))
-  DASM_AFLAGS+= -D X64
   DASM_ARCH= x86
 else
 ifeq (arm,$(TARGET_LJARCH))
