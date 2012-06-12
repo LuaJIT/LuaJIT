@@ -49,9 +49,9 @@ LJ_ASMF void lj_vm_exit_handler(void);
 LJ_ASMF void lj_vm_exit_interp(void);
 
 /* Internal math helper functions. */
-#if LJ_TARGET_X86ORX64
-#define lj_vm_floor(x)	floor(x)
-#define lj_vm_ceil(x)	ceil(x)
+#if LJ_TARGET_X86ORX64 || LJ_TARGET_PPC
+#define lj_vm_floor	floor
+#define lj_vm_ceil	ceil
 #else
 LJ_ASMF double lj_vm_floor(double);
 LJ_ASMF double lj_vm_ceil(double);
@@ -67,7 +67,11 @@ LJ_ASMF void lj_vm_exp2_x87(void);
 LJ_ASMF void lj_vm_pow_sse(void);
 LJ_ASMF void lj_vm_powi_sse(void);
 #else
+#if LJ_TARGET_PPC
+#define lj_vm_trunc	trunc
+#else
 LJ_ASMF double lj_vm_trunc(double);
+#endif
 LJ_ASMF double lj_vm_powi(double, int32_t);
 #ifdef LUAJIT_NO_LOG2
 LJ_ASMF double lj_vm_log2(double);

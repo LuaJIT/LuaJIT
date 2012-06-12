@@ -2447,15 +2447,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Math helper functions ----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |  // NYI: Use internal implementation.
-  |->vm_floor:
-  |  b extern floor
-  |->vm_ceil:
-  |  b extern ceil
-  |->vm_trunc:
-  |.if JIT
-  |  b extern trunc
-  |.endif
+  |// NYI: Use internal implementations of floor, ceil, trunc.
   |
   |->vm_modi:
   |  divwo. TMP0, CARG1, CARG2
