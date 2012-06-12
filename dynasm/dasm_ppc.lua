@@ -339,8 +339,9 @@ local map_op = {
   iselgt_3 =	"7c00005eRRR",
   iseleq_3 =	"7c00009eRRR",
   mfcr_1 =	"7c000026R",
+  mfocrf_2 =	"7c100026RG",
   mtcrf_2 =	"7c000120GR",
-  -- NYI: mtocrf, mfocrf
+  mtocrf_2 =	"7c100120GR",
   lwarx_3 =	"7c000028RR0R",
   ldx_3 =	"7c00002aRR0R",
   lwzx_3 =	"7c00002eRR0R",
@@ -467,6 +468,7 @@ local map_op = {
   sraw_3 =	"7c000630RR~R.",
   srad_3 =	"7c000634RR~R.",
   srawi_3 =	"7c000670RR~A.",
+  sradi_3 =	"7c000674RR~H.",
   eieio_0 =	"7c0006ac",
   lfiwax_3 =	"7c0006aeFR0R",
   sthbrx_3 =	"7c00072cRR0R",
@@ -480,6 +482,14 @@ local map_op = {
   divdo_3 =	"7c0007d2RRR.",
   divwo_3 =	"7c0007d6RRR.",
   dcbz_2 =	"7c0007ec-RR",
+
+  -- Primary opcode 30:
+  rldicl_4 =	"78000000RR~HM.",
+  rldicr_4 =	"78000004RR~HM.",
+  rldic_4 =	"78000008RR~HM.",
+  rldimi_4 =	"7800000cRR~HM.",
+  rldcl_4 =	"78000010RR~RM.",
+  rldcr_4 =	"78000012RR~RM.",
 
   -- Primary opcode 59:
   fdivs_3 =	"ec000024FFF.",
@@ -807,9 +817,7 @@ local map_op = {
   evmwlumianw_3 =	"100005c8RRR",
   evmwlsmianw_3 =	"100005c9RRR",
 
-  -- NYI: some 64 bit PowerPC and Book E instructions:
-  --   rldicl, rldicr, rldic, rldimi, rldcl, rldcr, sradi, 64 bit ext. add/sub,
-  --   extended addressing branches, cache management, loads and stores
+  -- NYI: Book E instructions.
 }
 
 -- Add mnemonics for "." variants.
@@ -916,6 +924,23 @@ local function parse_imm(imm, bits, shift, scale, signed)
   else
     waction("IMM", (signed and 32768 or 0)+scale*1024+bits*32+shift, imm)
     return 0
+  end
+end
+
+local function parse_shiftmask(imm, isshift)
+  local n = tonumber(imm)
+  if n then
+    if n % 1 == 0 and n >= 0 and n <= 63 then
+      local lsb = imm % 32
+      local msb = imm - lsb
+      return isshift and (lsb*2048+msb/16) or (lsb*64+msb)
+    end
+    werror("out of range immediate `"..imm.."'")
+  elseif match(imm, "^r([1-3]?[0-9])$") or
+	 match(imm, "^([%w_]+):(r[1-3]?[0-9])$") then
+    werror("expected immediate operand, got register")
+  else
+    werror("NYI: parameterized 64 bit shift/mask")
   end
 end
 
@@ -1030,6 +1055,10 @@ map_op[".template__"] = function(params, template, nparams)
       op = op + parse_cr(params[n]); n = n + 1
     elseif p == "G" then
       op = op + parse_imm(params[n], 8, 12, 0, false); n = n + 1
+    elseif p == "H" then
+      op = op + parse_shiftmask(params[n], true); n = n + 1
+    elseif p == "M" then
+      op = op + parse_shiftmask(params[n], false); n = n + 1
     elseif p == "J" or p == "K" then
       local mode, n, s = parse_label(params[n], false)
       if p == "K" then n = n + 2048 end
