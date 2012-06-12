@@ -2474,62 +2474,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mcrxr cr0			// Clear SO for -2147483648 % -1 and return 0.
   |  blr
   |
-  |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
-  |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
-  |// and basic math functions. ORDER ARITH
-  |->vm_foldarith:
-  |  cmplwi CARG1, 1
-  |  beq >1; bgt >2
-  |  fadd FARG1, FARG1, FARG2; blr
-  |1:
-  |  fsub FARG1, FARG1, FARG2; blr
-  |2:
-  |   cmplwi CARG1, 3; beq >1; bgt >2
-  |  fmul FARG1, FARG1, FARG2; blr
-  |1:
-  |  fdiv FARG1, FARG1, FARG2; blr
-  |2:
-  |   cmplwi CARG1, 5; beq >1; bgt >2
-  |  // NYI: Use internal implementation of floor and avoid spills.
-  |  stwu sp, -32(sp); stfd f14, 16(sp); stfd f15, 24(sp)
-  |   mflr r0
-  |  fmr f14, FARG1
-  |  fdiv FARG1, FARG1, FARG2
-  |   stw r0, 36(sp)
-  |  fmr f15, FARG2
-  |  bl extern floor
-  |   lwz r0, 36(sp)
-  |  fmul FARG1, FARG1, f15
-  |   mtlr r0
-  |  fsub FARG1, f14, FARG1
-  |  lfd f14, 16(sp); lfd f15, 24(sp); addi sp, sp, 32; blr
-  |1:
-  |  b extern pow
-  |2:
-  |   cmplwi CARG1, 7; beq >1; bgt >2
-  |  fneg FARG1, FARG1; blr
-  |1:
-  |  fabs FARG1, FARG1; blr
-  |2:
-  |.if JIT
-  |   cmplwi CARG1, 9; beq >9; bgt >2
-  |  b extern atan2
-  |  // No support needed for IR_LDEXP.
-  |2:
-  |   cmplwi CARG1, 11; bgt >9
-  |  fsub f0, FARG1, FARG2
-  |  beq >1
-  |  fsel FARG1, f0, FARG2, FARG1	// IR_MAX
-  |  blr
-  |1:
-  |  fsel FARG1, f0, FARG1, FARG2	// IR_MIN
-  |  blr
-  |9:
-  |  NYI  // Bad op.
-  |.else
-  |  NYI  // Other operations only needed by JIT compiler.
-  |.endif
-  |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------

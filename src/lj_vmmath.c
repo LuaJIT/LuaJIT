@@ -10,9 +10,7 @@
 #include <math.h>
 
 #include "lj_obj.h"
-#if LJ_HASJIT || LJ_TARGET_MIPS
 #include "lj_ir.h"
-#endif
 #include "lj_vm.h"
 
 /* -- Helper functions for generated machine code ------------------------- */
@@ -24,7 +22,7 @@ LJ_FUNCA double lj_vm_cosh(double x) { return cosh(x); }
 LJ_FUNCA double lj_vm_tanh(double x) { return tanh(x); }
 #endif
 
-#if LJ_TARGET_MIPS
+#if !LJ_TARGET_X86ORX64
 double lj_vm_foldarith(double x, double y, int op)
 {
   switch (op) {
