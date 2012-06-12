@@ -212,7 +212,8 @@ typedef struct {
     f32 = bit.bswap
     function f16(x) return bit.rshift(bit.bswap(x), 16) end
     if is64 then
-      function fofs(x) return bit.bswap(x)*(2ll^32) end
+      local two32 = ffi.cast("int64_t", 2^32)
+      function fofs(x) return bit.bswap(x)*two32 end
     else
       fofs = f32
     end
