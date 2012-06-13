@@ -404,8 +404,11 @@ ifeq (ppc,$(TARGET_LJARCH))
   ifneq (,$(findstring LJ_ARCH_ROUND 1,$(TARGET_TESTARCH)))
     DASM_AFLAGS+= -D ROUND
   endif
+  ifneq (,$(findstring LJ_ARCH_PPC64 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D GPR64
+  endif
   ifeq (PS3,$(TARGET_SYS))
-    DASM_AFLAGS+= -D PS3
+    DASM_AFLAGS+= -D PPE -D TOC
   endif
 endif
 endif

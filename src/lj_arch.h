@@ -174,7 +174,11 @@
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
 #define LJ_ARCH_NAME		"ppc"
+#if _LP64
+#define LJ_ARCH_BITS		64
+#else
 #define LJ_ARCH_BITS		32
+#endif
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
 #define LJ_ARCH_HASFPU		1
 #define LJ_TARGET_PPC		1
@@ -200,6 +204,7 @@
 #endif
 #if __PPC64__ || __powerpc64__ || LJ_TARGET_XBOX360
 #define LJ_ARCH_PPC64		1
+#define LJ_ARCH_NOFFI		1
 #endif
 #if _ARCH_PPCSQ
 #define LJ_ARCH_SQRT		1

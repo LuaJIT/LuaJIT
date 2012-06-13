@@ -108,11 +108,16 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
     exit(1);
   }
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#if LJ_TARGET_PS3
+#define TOCPREFIX "."
+#else
+#define TOCPREFIX ""
+#endif
   if ((ins >> 26) == 16) {
-    fprintf(ctx->fp, "\t%s %d, %d, %s\n",
+    fprintf(ctx->fp, "\t%s %d, %d, " TOCPREFIX "%s\n",
 	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
   } else if ((ins >> 26) == 18) {
-    fprintf(ctx->fp, "\t%s %s\n", (ins & 1) ? "bl" : "b", sym);
+    fprintf(ctx->fp, "\t%s " TOCPREFIX "%s\n", (ins & 1) ? "bl" : "b", sym);
   } else {
     fprintf(stderr,
 	    "Error: unsupported opcode %08x for %s symbol relocation.\n",
