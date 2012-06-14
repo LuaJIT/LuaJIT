@@ -48,6 +48,7 @@ typedef struct CPState {
   SBuf sb;		/* String buffer for tokens. */
   lua_State *L;		/* Lua state. */
   CTState *cts;		/* C type state. */
+  TValue *param;	/* C type parameters. */
   const char *srcname;	/* Current source name. */
   BCLine linenumber;	/* Input line counter. */
   int depth;		/* Recursive declaration depth. */

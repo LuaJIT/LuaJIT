@@ -121,6 +121,7 @@ LJ_NORET static void cp_errmsg(CPState *cp, CPToken tok, ErrMsg em, ...)
     tokstr = NULL;
   } else if (tok == CTOK_IDENT || tok == CTOK_INTEGER || tok == CTOK_STRING ||
 	     tok >= CTOK_FIRSTDECL) {
+    if (cp->sb.n == 0) cp_save(cp, '$');
     cp_save(cp, '\0');
     tokstr = cp->sb.buf;
   } else {
@@ -201,6 +202,38 @@ static CPToken cp_ident(CPState *cp)
   if (ctype_type(cp->ct->info) == CT_KW)
     return ctype_cid(cp->ct->info);
   return CTOK_IDENT;
+}
+
+/* Parse parameter. */
+static CPToken cp_param(CPState *cp)
+{
+  CPChar c = cp_get(cp);
+  TValue *o = cp->param;
+  if (lj_char_isident(c) || c == '$')  /* Reserve $xyz for future extensions. */
+    cp_errmsg(cp, c, LJ_ERR_XSYNTAX);
+  if (!o || o >= cp->L->top)
+    cp_err(cp, LJ_ERR_FFI_NUMPARAM);
+  cp->param = o+1;
+  if (tvisstr(o)) {
+    cp->str = strV(o);
+    cp->val.id = lj_ctype_getname(cp->cts, &cp->ct, cp->str, cp->tmask);
+    if (ctype_type(cp->ct->info) == CT_KW)
+      return ctype_cid(cp->ct->info);
+    return CTOK_IDENT;
+  } else if (tvisnumber(o)) {
+    cp->val.i32 = numberVint(o);
+    cp->val.id = CTID_INT32;
+    return CTOK_INTEGER;
+  } else {
+    GCcdata *cd;
+    if (!tviscdata(o)) lj_err_argtype(cp->L, o-cp->L->base+1, "type parameter");
+    cd = cdataV(o);
+    if (cd->typeid == CTID_CTYPEID)
+      cp->val.id = *(CTypeID *)cdataptr(cd);
+    else
+      cp->val.id = cd->typeid;
+    return '$';
+  }
 }
 
 /* Parse string or character constant. */
@@ -317,6 +350,8 @@ static CPToken cp_next_(CPState *cp)
       return '>';
     case '-':
       cp_get(cp); if (cp->c != '>') return '-'; cp_get(cp); return CTOK_DEREF;
+    case '$':
+      return cp_param(cp);
     case '\0': return CTOK_EOF;
     default: { CPToken c = cp->c; cp_get(cp); return c; }
     }
@@ -403,6 +438,7 @@ static int cp_istypedecl(CPState *cp)
 {
   if (cp->tok >= CTOK_FIRSTDECL && cp->tok <= CTOK_LASTDECL) return 1;
   if (cp->tok == CTOK_IDENT && ctype_istypedef(cp->ct->info)) return 1;
+  if (cp->tok == '$') return 1;
   return 0;
 }
 
@@ -1441,7 +1477,7 @@ static CTypeID cp_decl_enum(CPState *cp, CPDecl *sdecl)
 static CPscl cp_decl_spec(CPState *cp, CPDecl *decl, CPscl scl)
 {
   uint32_t cds = 0, sz = 0;
-  CTInfo tdef = 0;
+  CTypeID tdef = 0;
 
   decl->cp = cp;
   decl->mode = cp->mode;
@@ -1469,6 +1505,10 @@ static CPscl cp_decl_spec(CPState *cp, CPDecl *decl, CPscl scl)
 	  (cds & (CDF_SHORT|CDF_LONG|CDF_SIGNED|CDF_UNSIGNED|CDF_COMPLEX)))
 	goto end_decl;
       tdef = ctype_cid(cp->ct->info);  /* Get typedef. */
+      cp_next(cp);
+      break;
+    case '$':
+      tdef = cp->val.id;
       cp_next(cp);
       break;
     default:
@@ -1826,6 +1866,8 @@ static TValue *cpcparser(lua_State *L, lua_CFunction dummy, void *ud)
     cp_decl_multi(cp);
   else
     cp_decl_single(cp);
+  if (cp->param && cp->param != cp->L->top)
+    cp_err(cp, LJ_ERR_FFI_NUMPARAM);
   lua_assert(cp->depth == 0);
   return NULL;
 }

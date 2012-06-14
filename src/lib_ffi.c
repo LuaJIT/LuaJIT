@@ -35,7 +35,7 @@
 /* -- C type checks ------------------------------------------------------- */
 
 /* Check first argument for a C type and returns its ID. */
-static CTypeID ffi_checkctype(lua_State *L, CTState *cts)
+static CTypeID ffi_checkctype(lua_State *L, CTState *cts, TValue *param)
 {
   TValue *o = L->base;
   if (!(o < L->top)) {
@@ -50,6 +50,7 @@ static CTypeID ffi_checkctype(lua_State *L, CTState *cts)
     cp.cts = cts;
     cp.srcname = strdata(s);
     cp.p = strdata(s);
+    cp.param = param;
     cp.mode = CPARSE_MODE_ABSTRACT|CPARSE_MODE_NOIMPLICIT;
     errcode = lj_cparse(&cp);
     if (errcode) lj_err_throw(L, errcode);  /* Propagate errors. */
@@ -57,6 +58,7 @@ static CTypeID ffi_checkctype(lua_State *L, CTState *cts)
   } else {
     GCcdata *cd;
     if (!tviscdata(o)) goto err_argtype;
+    if (param && param < L->top) lj_err_arg(L, 1, LJ_ERR_FFI_NUMPARAM);
     cd = cdataV(o);
     return cd->typeid == CTID_CTYPEID ? *(CTypeID *)cdataptr(cd) : cd->typeid;
   }
@@ -442,6 +444,7 @@ LJLIB_CF(ffi_cdef)
   cp.cts = ctype_cts(L);
   cp.srcname = strdata(s);
   cp.p = strdata(s);
+  cp.param = L->base+1;
   cp.mode = CPARSE_MODE_MULTI|CPARSE_MODE_DIRECT;
   errcode = lj_cparse(&cp);
   if (errcode) lj_err_throw(L, errcode);  /* Propagate errors. */
@@ -452,7 +455,7 @@ LJLIB_CF(ffi_cdef)
 LJLIB_CF(ffi_new)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   CType *ct = ctype_raw(cts, id);
   CTSize sz;
   CTInfo info = lj_ctype_info(cts, id, &sz);
@@ -492,7 +495,7 @@ LJLIB_CF(ffi_new)	LJLIB_REC(.)
 LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   CType *d = ctype_raw(cts, id);
   TValue *o = lj_lib_checkany(L, 2);
   L->top = o+1;  /* Make sure this is the last item on the stack. */
@@ -510,7 +513,7 @@ LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
 LJLIB_CF(ffi_typeof)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, L->base+1);
   GCcdata *cd = lj_cdata_new(cts, CTID_CTYPEID, 4);
   *(CTypeID *)cdataptr(cd) = id;
   setcdataV(L, L->top-1, cd);
@@ -521,7 +524,7 @@ LJLIB_CF(ffi_typeof)
 LJLIB_CF(ffi_istype)	LJLIB_REC(ffi_istype)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id1 = ffi_checkctype(L, cts);
+  CTypeID id1 = ffi_checkctype(L, cts, NULL);
   TValue *o = lj_lib_checkany(L, 2);
   int b = 0;
   if (tviscdata(o)) {
@@ -551,7 +554,7 @@ LJLIB_CF(ffi_istype)	LJLIB_REC(ffi_istype)
 LJLIB_CF(ffi_sizeof)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   CTSize sz;
   if (LJ_UNLIKELY(tviscdata(L->base) && cdataisv(cdataV(L->base)))) {
     sz = cdatavlen(cdataV(L->base));
@@ -573,7 +576,7 @@ LJLIB_CF(ffi_sizeof)
 LJLIB_CF(ffi_alignof)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   CTSize sz = 0;
   CTInfo info = lj_ctype_info(cts, id, &sz);
   setintV(L->top-1, 1 << ctype_align(info));
@@ -583,7 +586,7 @@ LJLIB_CF(ffi_alignof)
 LJLIB_CF(ffi_offsetof)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   GCstr *name = lj_lib_checkstr(L, 2);
   CType *ct = lj_ctype_rawref(cts, id);
   CTSize ofs;
@@ -700,7 +703,7 @@ LJLIB_PUSH(top-8) LJLIB_SET(!)  /* Store reference to miscmap table. */
 LJLIB_CF(ffi_metatype)
 {
   CTState *cts = ctype_cts(L);
-  CTypeID id = ffi_checkctype(L, cts);
+  CTypeID id = ffi_checkctype(L, cts, NULL);
   GCtab *mt = lj_lib_checktab(L, 2);
   GCtab *t = cts->miscmap;
   CType *ct = ctype_get(cts, id);  /* Only allow raw types. */
