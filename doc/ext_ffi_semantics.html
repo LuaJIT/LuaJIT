@@ -590,8 +590,7 @@ ffi.new("struct nested", {x=1,y={2,3}}) --> x = 1, y.a = 2, y.b = 3
 <p>
 All of the standard Lua operators can be applied to cdata objects or a
 mix of a cdata object and another Lua object. The following list shows
-the valid combinations. All other combinations currently raise an
-error.
+the pre-defined operations.
 </p>
 <p>
 Reference types are dereferenced <em>before</em> performing each of
@@ -600,7 +599,8 @@ C&nbsp;type pointed to by the reference.
 </p>
 <p>
 The pre-defined operations are always tried first before deferring to a
-metamethod for a ctype (if defined).
+metamethod or index table (if any) for the corresponding ctype. An error
+is raised if the metamethod lookup or index table lookup fails.
 </p>
 
 <h3 id="cdata_array">Indexing a cdata object</h3>
@@ -625,7 +625,9 @@ field value and <a href="#convert_tolua">converts it to a Lua
 object</a>. A write access <a href="#convert_fromlua">converts a Lua
 object to the field type</a> and stores the converted value to the
 field. An error is raised if a write access to a constant
-<tt>struct</tt>/<tt>union</tt> or a constant field is attempted.</li>
+<tt>struct</tt>/<tt>union</tt> or a constant field is attempted.
+Scoped enum constants or static constants are treated like a constant
+field.</li>
 
 <li><b>Indexing a complex number</b>: a complex number can be indexed
 either by a cdata number or a Lua number with the values 0 or 1, or by
@@ -643,6 +645,12 @@ indexing purposes, except the vector elements are immutable &mdash;
 assigning to an index of a vector raises an error.</li>
 
 </ul>
+<p>
+A ctype object can be indexed with a string key, too. The only
+pre-defined operation is reading scoped constants of
+<tt>struct</tt>/<tt>union</tt> types. All other accesses defer
+to the corresponding metamethods or index tables (if any).
+</p>
 <p>
 Note: since there's (deliberately) no address-of operator, a cdata
 object holding a value type is effectively immutable after

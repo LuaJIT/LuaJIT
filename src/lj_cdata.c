@@ -178,6 +178,7 @@ collect_attrib:
 	if (fct && ctype_isconstval(fct->info))
 	  return fct;
       }
+      ct = sct;  /* Allow resolving metamethods for constructors, too. */
     }
   }
   if (ctype_isptr(ct->info)) {  /* Automatically perform '->'. */
