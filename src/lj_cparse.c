@@ -216,9 +216,8 @@ static CPToken cp_param(CPState *cp)
   cp->param = o+1;
   if (tvisstr(o)) {
     cp->str = strV(o);
-    cp->val.id = lj_ctype_getname(cp->cts, &cp->ct, cp->str, cp->tmask);
-    if (ctype_type(cp->ct->info) == CT_KW)
-      return ctype_cid(cp->ct->info);
+    cp->val.id = 0;
+    cp->ct = &cp->cts->tab[0];
     return CTOK_IDENT;
   } else if (tvisnumber(o)) {
     cp->val.i32 = numberVint(o);
