@@ -206,31 +206,34 @@ LJLIB_CF(ffi_meta___concat)	LJLIB_REC(cdata_arith MM_concat)
   return ffi_arith(L);
 }
 
-/* Handle ctype __call metamethod. */
-static int ffi_call_meta(lua_State *L, CTypeID id)
-{
-  CTState *cts = ctype_cts(L);
-  CType *ct = ctype_raw(cts, id);
-  cTValue *tv;
-  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
-  tv = lj_ctype_meta(cts, id, MM_call);
-  if (!tv)
-    lj_err_callerv(L, LJ_ERR_FFI_BADCALL, strdata(lj_ctype_repr(L, id, NULL)));
-  return lj_meta_tailcall(L, tv);
-}
-
 /* Forward declaration. */
 static int lj_cf_ffi_new(lua_State *L);
 
 LJLIB_CF(ffi_meta___call)	LJLIB_REC(cdata_call)
 {
+  CTState *cts = ctype_cts(L);
   GCcdata *cd = ffi_checkcdata(L, 1);
-  int ret;
-  if (cd->typeid == CTID_CTYPEID)
-    return lj_cf_ffi_new(L);
-  if ((ret = lj_ccall_func(L, cd)) < 0)
-    return ffi_call_meta(L, cd->typeid);
-  return ret;
+  CTypeID id = cd->typeid;
+  CType *ct;
+  cTValue *tv;
+  MMS mm = MM_call;
+  if (cd->typeid == CTID_CTYPEID) {
+    id = *(CTypeID *)cdataptr(cd);
+    mm = MM_new;
+  } else {
+    int ret = lj_ccall_func(L, cd);
+    if (ret >= 0)
+      return ret;
+  }
+  /* Handle ctype __call/__new metamethod. */
+  ct = ctype_raw(cts, id);
+  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+  tv = lj_ctype_meta(cts, id, mm);
+  if (tv)
+    return lj_meta_tailcall(L, tv);
+  else if (mm == MM_call)
+    lj_err_callerv(L, LJ_ERR_FFI_BADCALL, strdata(lj_ctype_repr(L, id, NULL)));
+  return lj_cf_ffi_new(L);
 }
 
 LJLIB_CF(ffi_meta___add)	LJLIB_REC(cdata_arith MM_add)
