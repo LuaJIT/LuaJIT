@@ -453,6 +453,10 @@ static void ctype_repr(CTRepr *ctr, CTypeID id)
       ctype_preptype(ctr, ct, qual, (info & CTF_UNION) ? "union" : "struct");
       return;
     case CT_ENUM:
+      if (id == CTID_CTYPEID) {
+	ctype_preplit(ctr, "ctype");
+	return;
+      }
       ctype_preptype(ctr, ct, qual, "enum");
       return;
     case CT_ATTRIB:
