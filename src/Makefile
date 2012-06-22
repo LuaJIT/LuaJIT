@@ -259,16 +259,19 @@ endif
 # System detection.
 ##############################################################################
 
-ifneq (,$(findstring Windows,$(OS)))
+ifeq (Windows,$(findstring Windows,$(OS))$(MSYSTEM)$(TERM))
   HOST_SYS= Windows
+  HOST_RM= del
 else
   HOST_SYS:= $(shell uname -s)
-  ifneq (,$(findstring CYGWIN,$(TARGET_SYS)))
+  ifneq (,$(findstring MINGW,$(HOST_SYS)))
     HOST_SYS= Windows
+    HOST_MSYS= mingw
   endif
-endif
-ifeq (Windows,$(HOST_SYS))
-  HOST_RM= del
+  ifneq (,$(findstring CYGWIN,$(HOST_SYS)))
+    HOST_SYS= Windows
+    HOST_MSYS= cygwin
+  endif
 endif
 
 TARGET_SYS?= $(HOST_SYS)
@@ -475,18 +478,15 @@ TARGET_O= $(LUAJIT_A)
 TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
 TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
 
-ifeq (Windows,$(HOST_SYS))
-  MINILUA_T= host/minilua.exe
-  MINILUA_X= host\minilua
-  BUILDVM_T= host/buildvm.exe
-  BUILDVM_X= host\buildvm
-  ALL_RM:= $(subst /,\,$(ALL_RM))
-endif
 ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
   LJVM_MODE= coffasm
-  LUAJIT_SO= $(TARGET_DLLNAME)
   LUAJIT_T= luajit.exe
+  ifeq (cygwin,$(HOST_MSYS))
+    LUAJIT_SO= cyg$(TARGET_DLLNAME)
+  else
+    LUAJIT_SO= $(TARGET_DLLNAME)
+  endif
   # Mixed mode is not supported on Windows. And static mode doesn't work well.
   # C modules cannot be loaded, because they bind to lua51.dll.
   ifneq (static,$(BUILDMODE))
@@ -505,6 +505,16 @@ ifeq (SunOS,$(TARGET_SYS))
 endif
 ifeq (PS3,$(TARGET_SYS))
   BUILDMODE= static
+endif
+
+ifeq (Windows,$(HOST_SYS))
+  MINILUA_T= host/minilua.exe
+  BUILDVM_T= host/buildvm.exe
+  ifeq (,$(HOST_MSYS))
+    MINILUA_X= host\minilua
+    BUILDVM_X= host\buildvm
+    ALL_RM:= $(subst /,\,$(ALL_RM))
+  endif
 endif
 
 ifeq (static,$(BUILDMODE))

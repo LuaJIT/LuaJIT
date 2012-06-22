@@ -122,7 +122,11 @@
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
 #define LJ_ARCH_HASFPU		1
-#define LJ_ABI_WIN		LJ_TARGET_WINDOWS
+#if LJ_TARGET_WINDOWS || __CYGWIN__
+#define LJ_ABI_WIN		1
+#else
+#define LJ_ABI_WIN		0
+#endif
 #define LJ_TARGET_X86		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
