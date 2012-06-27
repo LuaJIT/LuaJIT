@@ -1529,7 +1529,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
   FuncState *fs = ls->fs;
   BCLine line = ls->linenumber;
   GCtab *t = NULL;
-  int vcall = 0, needarr = 0;
+  int vcall = 0, needarr = 0, fixt = 0;
   int32_t narr = 1;  /* First array index. */
   uint32_t nhash = 0;  /* Number of hash entries. */
   BCReg freg = fs->freereg;
@@ -1557,8 +1557,9 @@ static void expr_table(LexState *ls, ExpDesc *e)
       needarr = vcall = 1;
     }
     expr(ls, &val);
-    if (expr_isk_nojump(&val) && expr_isk(&key) && key.k != VKNIL) {
-      TValue k;
+    if (expr_isk(&key) && key.k != VKNIL &&
+	(key.k == VKSTR || expr_isk_nojump(&val))) {
+      TValue k, *v;
       if (!t) {  /* Create template table on demand. */
 	BCReg kidx;
 	t = lj_tab_new(fs->L, 0, 0);
@@ -1567,9 +1568,17 @@ static void expr_table(LexState *ls, ExpDesc *e)
       }
       vcall = 0;
       expr_kvalue(&k, &key);
-      expr_kvalue(lj_tab_set(fs->L, t, &k), &val);
+      v = lj_tab_set(fs->L, t, &k);
       lj_gc_anybarriert(fs->L, t);
+      if (expr_isk_nojump(&val)) {  /* Add const key/value to template table. */
+	expr_kvalue(v, &val);
+      } else {  /* Otherwise create dummy string key (avoids lj_tab_newkey). */
+	settabV(fs->L, v, t);  /* Preserve key with table itself as value. */
+	fixt = 1;   /* Fix this later, after all resizes. */
+	goto nonconst;
+      }
     } else {
+    nonconst:
       if (val.k != VCALL) { expr_toanyreg(fs, &val); vcall = 0; }
       if (expr_isk(&key)) expr_index(fs, e, &key);
       bcemit_store(fs, e, &val);
@@ -1603,6 +1612,16 @@ static void expr_table(LexState *ls, ExpDesc *e)
     else if (narr < 3) narr = 3;
     else if (narr > 0x7ff) narr = 0x7ff;
     setbc_d(ip, (uint32_t)narr|(hsize2hbits(nhash)<<11));
+  } else if (fixt) {  /* Fix value for dummy keys in template table. */
+    Node *node = noderef(t->node);
+    uint32_t i, hmask = t->hmask;
+    for (i = 0; i <= hmask; i++) {
+      Node *n = &node[i];
+      if (tvistab(&n->val)) {
+	lua_assert(tabV(&n->val) == t);
+	setnilV(&n->val);  /* Turn value into nil. */
+      }
+    }
   }
 }
 
