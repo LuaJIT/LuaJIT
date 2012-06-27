@@ -181,7 +181,8 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
       lua_assert(ir->o != IR_TNEW || irt_isnil(fins->t));
       if (irt_ispri(fins->t)) {
 	return TREF_PRI(irt_type(fins->t));
-      } else if (irt_isnum(fins->t) || irt_isstr(fins->t)) {
+      } else if (irt_isnum(fins->t) || (LJ_DUALNUM && irt_isint(fins->t)) ||
+		 irt_isstr(fins->t)) {
 	TValue keyv;
 	cTValue *tv;
 	IRIns *key = IR(xr->op2);
@@ -191,6 +192,8 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	lua_assert(itype2irt(tv) == irt_type(fins->t));
 	if (irt_isnum(fins->t))
 	  return lj_ir_knum_u64(J, tv->u64);
+	else if (LJ_DUALNUM && irt_isint(fins->t))
+	  return lj_ir_kint(J, intV(tv));
 	else
 	  return lj_ir_kstr(J, strV(tv));
       }
