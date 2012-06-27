@@ -32,9 +32,14 @@ if exist minilua.exe.manifest^
 @set DASMFLAGS=-D WIN -D JIT -D FFI
 @set DASMX64=-D P64
 @if "%TARGET_CPU%"=="AMD64" goto :X64
+@if "%TARGET_CPU%"=="X64" goto :X64
 @if "%TARGET_CPU%"=="x64" goto :X64
 @if "%CPU%"=="AMD64" goto :X64
+@if "%CPU%"=="X64" goto :X64
 @if "%CPU%"=="x64" goto :X64
+@if "%Platform%"=="AMD64" goto :X64
+@if "%Platform%"=="X64" goto :X64
+@if "%Platform%"=="x64" goto :X64
 @set DASMX64=
 :X64
 minilua %DASM% -LN %DASMFLAGS% %DASMX64% -o host\buildvm_arch.h vm_x86.dasc
