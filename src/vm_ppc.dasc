@@ -34,15 +34,15 @@
 |.macro lp, a, b; ld a, b; .endmacro
 |.macro stp, a, b; std a, b; .endmacro
 |.define decode_OPP, decode_OP8
+|.if FFI
+|// Missing: Calling conventions, 64 bit regs, TOC.
+|.error lib_ffi not yet implemented for PPC64
+|.endif
 |.else
 |.macro lpx, a, b, c; lwzx a, b, c; .endmacro
 |.macro lp, a, b; lwz a, b; .endmacro
 |.macro stp, a, b; stw a, b; .endmacro
 |.define decode_OPP, decode_OP4
-|.if FFI
-|// Missing: Calling conventions, 64 bit regs, TOC.
-|.error lib_ffi not yet implemented for PPC64
-|.endif
 |.endif
 |
 |// Convenience macros for TOC handling.
@@ -4898,7 +4898,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   cmplw TMP1, TMP2
     |    stp RC, L->top
     |     li_vmstate C
+    |.if TOC
     |  mtctr TMP3
+    |.else
+    |  mtctr RD
+    |.endif
     if (op == BC_FUNCCW) {
       |  lp CARG2, CFUNC:RB->f
     }
