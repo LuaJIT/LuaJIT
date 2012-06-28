@@ -1846,6 +1846,9 @@ LJFOLDF(cse_uref)
   return EMITFOLD;
 }
 
+LJFOLD(HREFK any any)
+LJFOLDX(lj_opt_fwd_hrefk)
+
 LJFOLD(HREF TNEW any)
 LJFOLDF(fwd_href_tnew)
 {
