@@ -178,6 +178,7 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
     } else {
       lua_assert(o->gch.gct == ~LJ_TTAB);
       tp = BCDUMP_KGC_TAB;
+      need = 1+2*5;
     }
     /* Write constant type. */
     bcwrite_need(ctx, need);
