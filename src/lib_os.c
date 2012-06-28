@@ -167,13 +167,24 @@ LJLIB_CF(os_date)
   const char *s = luaL_optstring(L, 1, "%c");
   time_t t = luaL_opt(L, (time_t)luaL_checknumber, 2, time(NULL));
   struct tm *stm;
+#if LJ_TARGET_POSIX
+  struct tm rtm;
+#endif
   if (*s == '!') {  /* UTC? */
+    s++;  /* Skip '!' */
+#if LJ_TARGET_POSIX
+    stm = gmtime_r(&t, &rtm);
+#else
     stm = gmtime(&t);
-    s++;  /* skip `!' */
+#endif
   } else {
+#if LJ_TARGET_POSIX
+    stm = localtime_r(&t, &rtm);
+#else
     stm = localtime(&t);
+#endif
   }
-  if (stm == NULL) {  /* invalid date? */
+  if (stm == NULL) {  /* Invalid date? */
     setnilV(L->top-1);
   } else if (strcmp(s, "*t") == 0) {
     lua_createtable(L, 0, 9);  /* 9 = number of fields */
@@ -192,11 +203,11 @@ LJLIB_CF(os_date)
     cc[0] = '%'; cc[2] = '\0';
     luaL_buffinit(L, &b);
     for (; *s; s++) {
-      if (*s != '%' || *(s + 1) == '\0') {  /* no conversion specifier? */
+      if (*s != '%' || *(s + 1) == '\0') {  /* No conversion specifier? */
 	luaL_addchar(&b, *s);
       } else {
 	size_t reslen;
-	char buff[200];  /* should be big enough for any conversion result */
+	char buff[200];  /* Should be big enough for any conversion result. */
 	cc[1] = *(++s);
 	reslen = strftime(buff, sizeof(buff), cc, stm);
 	luaL_addlstring(&b, buff, reslen);
