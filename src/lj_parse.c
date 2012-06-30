@@ -1530,7 +1530,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
   BCLine line = ls->linenumber;
   GCtab *t = NULL;
   int vcall = 0, needarr = 0, fixt = 0;
-  int32_t narr = 1;  /* First array index. */
+  uint32_t narr = 1;  /* First array index. */
   uint32_t nhash = 0;  /* Number of hash entries. */
   BCReg freg = fs->freereg;
   BCPos pc = bcemit_AD(fs, BC_TNEW, freg, 0);
@@ -1552,7 +1552,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
       nhash++;
     } else {
       expr_init(&key, VKNUM, 0);
-      setintV(&key.u.nval, narr);
+      setintV(&key.u.nval, (int)narr);
       narr++;
       needarr = vcall = 1;
     }
@@ -1562,7 +1562,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
       TValue k, *v;
       if (!t) {  /* Create template table on demand. */
 	BCReg kidx;
-	t = lj_tab_new(fs->L, 0, 0);
+	t = lj_tab_new(fs->L, narr, hsize2hbits(nhash));
 	kidx = const_gc(fs, obj2gco(t), LJ_TTAB);
 	fs->bcbase[pc].ins = BCINS_AD(BC_TDUP, freg-1, kidx);
       }
@@ -1611,15 +1611,19 @@ static void expr_table(LexState *ls, ExpDesc *e)
     if (!needarr) narr = 0;
     else if (narr < 3) narr = 3;
     else if (narr > 0x7ff) narr = 0x7ff;
-    setbc_d(ip, (uint32_t)narr|(hsize2hbits(nhash)<<11));
-  } else if (fixt) {  /* Fix value for dummy keys in template table. */
-    Node *node = noderef(t->node);
-    uint32_t i, hmask = t->hmask;
-    for (i = 0; i <= hmask; i++) {
-      Node *n = &node[i];
-      if (tvistab(&n->val)) {
-	lua_assert(tabV(&n->val) == t);
-	setnilV(&n->val);  /* Turn value into nil. */
+    setbc_d(ip, narr|(hsize2hbits(nhash)<<11));
+  } else {
+    if (needarr && t->asize < narr)
+      lj_tab_reasize(fs->L, t, narr-1);
+    if (fixt) {  /* Fix value for dummy keys in template table. */
+      Node *node = noderef(t->node);
+      uint32_t i, hmask = t->hmask;
+      for (i = 0; i <= hmask; i++) {
+	Node *n = &node[i];
+	if (tvistab(&n->val)) {
+	  lua_assert(tabV(&n->val) == t);
+	  setnilV(&n->val);  /* Turn value into nil. */
+	}
       }
     }
   }
