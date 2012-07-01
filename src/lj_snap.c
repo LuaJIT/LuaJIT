@@ -318,27 +318,37 @@ static RegSP snap_renameref(GCtrace *T, SnapNo lim, IRRef ref, RegSP rs)
   return rs;
 }
 
-/* Convert a snapshot into a linear slot -> RegSP map.
-** Note: unused slots are not initialized!
-*/
-void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno, int hi)
+/* Copy RegSP from parent snapshot to the parent links of the IR. */
+IRIns *lj_snap_regspmap(GCtrace *T, SnapNo snapno, IRIns *ir)
 {
   SnapShot *snap = &T->snap[snapno];
-  MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
   BloomFilter rfilt = snap_renamefilter(T, snapno);
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    IRRef ref = snap_ref(sn);
-    if (!irref_isk(ref) &&
-	((LJ_SOFTFP && hi) ? (ref++, (sn & SNAP_SOFTFPNUM)) : 1)) {
-      IRIns *ir = &T->ir[ref];
-      uint32_t rs = ir->prev;
-      if (bloomtest(rfilt, ref))
-	rs = snap_renameref(T, snapno, ref, rs);
-      rsmap[snap_slot(sn)] = (uint16_t)rs;
+  MSize n = 0;
+  IRRef ref = 0;
+  for ( ; ; ir++) {
+    uint32_t rs;
+    if (ir->o == IR_SLOAD) {
+      if (!(ir->op2 & IRSLOAD_PARENT)) break;
+      for ( ; ; n++) {
+	lua_assert(n < snap->nent);
+	if (snap_slot(map[n]) == ir->op1) {
+	  ref = snap_ref(map[n++]);
+	  break;
+	}
+      }
+    } else if (LJ_SOFTFP && ir->o == IR_HIOP) {
+      ref++;
+    } else {
+      break;
     }
+    rs = T->ir[ref].prev;
+    if (bloomtest(rfilt, ref))
+      rs = snap_renameref(T, snapno, ref, rs);
+    ir->prev = (uint16_t)rs;
+    lua_assert(regsp_used(rs));
   }
+  return ir;
 }
 
 /* Restore a value from the trace exit state. */

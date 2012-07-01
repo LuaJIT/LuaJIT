@@ -13,8 +13,7 @@
 LJ_FUNC void lj_snap_add(jit_State *J);
 LJ_FUNC void lj_snap_purge(jit_State *J);
 LJ_FUNC void lj_snap_shrink(jit_State *J);
-LJ_FUNC void lj_snap_regspmap(uint16_t *rsmap, GCtrace *T, SnapNo snapno,
-			      int hi);
+LJ_FUNC IRIns *lj_snap_regspmap(GCtrace *T, SnapNo snapno, IRIns *ir);
 LJ_FUNC const BCIns *lj_snap_restore(jit_State *J, void *exptr);
 LJ_FUNC void lj_snap_grow_buf_(jit_State *J, MSize need);
 LJ_FUNC void lj_snap_grow_map_(jit_State *J, MSize need);
