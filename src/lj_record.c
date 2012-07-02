@@ -2122,7 +2122,6 @@ void lj_record_setup(jit_State *J)
       J->startpc = NULL;  /* Prevent forming an extra loop. */
     }
     lj_snap_replay(J, T);
-    lj_snap_add(J);
   sidecheck:
     if (traceref(J, J->cur.root)->nchild >= J->param[JIT_P_maxside] ||
 	T->snap[J->exitno].count >= J->param[JIT_P_hotexit] +

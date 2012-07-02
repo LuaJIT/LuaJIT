@@ -413,6 +413,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
   }
   J->base = J->slot + J->baseslot;
   J->maxslot = snap->nslots - J->baseslot;
+  lj_snap_add(J);
 }
 
 /* -- Snapshot restore ---------------------------------------------------- */
