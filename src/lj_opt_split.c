@@ -365,6 +365,11 @@ static void split_ir(jit_State *J)
 	  split_emit(J, IRT(IR_PHI, IRT_SOFTFP),
 		     hisubst[ir->op1], hisubst[ir->op2]);
 	break;
+      case IR_HIOP:
+	J->cur.nins--;  /* Drop joining HIOP. */
+	ir->prev = nir->op1;
+	hi = nir->op2;
+	break;
       default:
 	lua_assert(ir->o <= IR_NE || ir->o == IR_MIN || ir->o == IR_MAX);
 	hi = split_emit(J, IRTG(IR_HIOP, IRT_SOFTFP),
@@ -469,6 +474,11 @@ static void split_ir(jit_State *J)
 	  split_emit(J, IRTI(IR_PHI), hiref, hiref2);
 	break;
 	}
+      case IR_HIOP:
+	J->cur.nins--;  /* Drop joining HIOP. */
+	ir->prev = nir->op1;
+	hi = nir->op2;
+	break;
       default:
 	lua_assert(ir->o <= IR_NE);  /* Comparisons. */
 	split_emit(J, IRTGI(IR_HIOP), hiref, hisubst[ir->op2]);
