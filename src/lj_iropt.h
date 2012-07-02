@@ -154,6 +154,7 @@ LJ_FUNC void lj_opt_split(jit_State *J);
 #else
 #define lj_opt_split(J)		UNUSED(J)
 #endif
+LJ_FUNC void lj_opt_sink(jit_State *J);
 
 #endif
 

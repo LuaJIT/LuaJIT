@@ -16,17 +16,19 @@ typedef uint32_t Reg;
 
 /* The hi-bit is NOT set for an allocated register. This means the value
 ** can be directly used without masking. The hi-bit is set for a register
-** allocation hint or for RID_INIT.
+** allocation hint or for RID_INIT, RID_SINK or RID_SUNK.
 */
 #define RID_NONE		0x80
 #define RID_MASK		0x7f
 #define RID_INIT		(RID_NONE|RID_MASK)
+#define RID_SINK		(RID_INIT-1)
+#define RID_SUNK		(RID_INIT-2)
 
 #define ra_noreg(r)		((r) & RID_NONE)
 #define ra_hasreg(r)		(!((r) & RID_NONE))
 
 /* The ra_hashint() macro assumes a previous test for ra_noreg(). */
-#define ra_hashint(r)		((r) != RID_INIT)
+#define ra_hashint(r)		((r) < RID_SUNK)
 #define ra_gethint(r)		((Reg)((r) & RID_MASK))
 #define ra_sethint(rr, r)	rr = (uint8_t)((r)|RID_NONE)
 #define ra_samehint(r1, r2)	(ra_gethint((r1)^(r2)) == 0)

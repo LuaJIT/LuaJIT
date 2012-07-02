@@ -63,19 +63,20 @@
 #define JIT_F_OPT_NARROW	0x00200000
 #define JIT_F_OPT_LOOP		0x00400000
 #define JIT_F_OPT_ABC		0x00800000
-#define JIT_F_OPT_FUSE		0x01000000
+#define JIT_F_OPT_SINK		0x01000000
+#define JIT_F_OPT_FUSE		0x02000000
 
 /* Optimizations names for -O. Must match the order above. */
 #define JIT_F_OPT_FIRST		JIT_F_OPT_FOLD
 #define JIT_F_OPTSTRING	\
-  "\4fold\3cse\3dce\3fwd\3dse\6narrow\4loop\3abc\4fuse"
+  "\4fold\3cse\3dce\3fwd\3dse\6narrow\4loop\3abc\4sink\4fuse"
 
 /* Optimization levels set a fixed combination of flags. */
 #define JIT_F_OPT_0	0
 #define JIT_F_OPT_1	(JIT_F_OPT_FOLD|JIT_F_OPT_CSE|JIT_F_OPT_DCE)
 #define JIT_F_OPT_2	(JIT_F_OPT_1|JIT_F_OPT_NARROW|JIT_F_OPT_LOOP)
-#define JIT_F_OPT_3 \
-  (JIT_F_OPT_2|JIT_F_OPT_FWD|JIT_F_OPT_DSE|JIT_F_OPT_ABC|JIT_F_OPT_FUSE)
+#define JIT_F_OPT_3	(JIT_F_OPT_2|\
+  JIT_F_OPT_FWD|JIT_F_OPT_DSE|JIT_F_OPT_ABC|JIT_F_OPT_SINK|JIT_F_OPT_FUSE)
 #define JIT_F_OPT_DEFAULT	JIT_F_OPT_3
 
 #if LJ_TARGET_WINDOWS || LJ_64

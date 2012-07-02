@@ -782,19 +782,44 @@ static int asm_snap_canremat(ASMState *as)
 static void asm_snap_alloc1(ASMState *as, IRRef ref)
 {
   IRIns *ir = IR(ref);
-  if (!ra_used(ir)) {
-    RegSet allow = (!LJ_SOFTFP && irt_isnum(ir->t)) ? RSET_FPR : RSET_GPR;
-    /* Get a weak register if we have a free one or can rematerialize. */
-    if ((as->freeset & allow) ||
-	(allow == RSET_FPR && asm_snap_canremat(as))) {
-      Reg r = ra_allocref(as, ref, allow);  /* Allocate a register. */
-      if (!irt_isphi(ir->t))
-	ra_weak(as, r);  /* But mark it as weakly referenced. */
-      checkmclim(as);
-      RA_DBGX((as, "snapreg   $f $r", ref, ir->r));
+  if (!(ra_used(ir) || ir->r == RID_SUNK)) {
+    if (ir->r == RID_SINK) {
+      ir->r = RID_SUNK;
+#if LJ_HASFFI
+      if (ir->o == IR_CNEWI) {  /* Allocate CNEWI value. */
+	asm_snap_alloc1(as, ir->op2);
+	if (LJ_32 && (ir+1)->o == IR_HIOP)
+	  asm_snap_alloc1(as, (ir+1)->op2);
+      }
+#endif
+      else {  /* Allocate stored values for TNEW, TDUP and CNEW. */
+	IRIns *irs;
+	lua_assert(ir->o == IR_TNEW || ir->o == IR_TDUP || ir->o == IR_CNEW);
+	for (irs = IR(as->curins); irs > ir; irs--)
+	  if (irs->r == RID_SINK && ir + irs->s == irs) {
+	    lua_assert(irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
+		       irs->o == IR_FSTORE || irs->o == IR_XSTORE);
+	    asm_snap_alloc1(as, irs->op2);
+	    if (LJ_32 && (irs+1)->o == IR_HIOP)
+	      asm_snap_alloc1(as, (irs+1)->op2);
+	  }
+      }
+    } else if (ir->o == IR_CONV && ir->op2 == IRCONV_NUM_INT) {
+      asm_snap_alloc1(as, ir->op1);
     } else {
-      ra_spill(as, ir);  /* Otherwise force a spill slot. */
-      RA_DBGX((as, "snapspill $f $s", ref, ir->s));
+      RegSet allow = (!LJ_SOFTFP && irt_isfp(ir->t)) ? RSET_FPR : RSET_GPR;
+      if ((as->freeset & allow) ||
+	       (allow == RSET_FPR && asm_snap_canremat(as))) {
+	/* Get a weak register if we have a free one or can rematerialize. */
+	Reg r = ra_allocref(as, ref, allow);  /* Allocate a register. */
+	if (!irt_isphi(ir->t))
+	  ra_weak(as, r);  /* But mark it as weakly referenced. */
+	checkmclim(as);
+	RA_DBGX((as, "snapreg   $f $r", ref, ir->r));
+      } else {
+	ra_spill(as, ir);  /* Otherwise force a spill slot. */
+	RA_DBGX((as, "snapspill $f $s", ref, ir->s));
+      }
     }
   }
 }
@@ -848,7 +873,7 @@ static void asm_snap_prep(ASMState *as)
 {
   if (as->curins < as->snapref) {
     do {
-      lua_assert(as->snapno != 0);
+      if (as->snapno == 0) return;  /* Called by sunk stores before snap #0. */
       as->snapno--;
       as->snapref = as->T->snap[as->snapno].ref;
     } while (as->curins < as->snapref);
@@ -1180,6 +1205,8 @@ static void asm_phi(ASMState *as, IRIns *ir)
   RegSet afree = (as->freeset & allow);
   IRIns *irl = IR(ir->op1);
   IRIns *irr = IR(ir->op2);
+  if (ir->r == RID_SINK)  /* Sink PHI. */
+    return;
   /* Spill slot shuffling is not implemented yet (but rarely needed). */
   if (ra_hasspill(irl->s) || ra_hasspill(irr->s))
     lj_trace_err(as->J, LJ_TRERR_NYIPHI);
@@ -1494,7 +1521,7 @@ static void asm_tail_link(ASMState *as)
 /* -- Trace setup --------------------------------------------------------- */
 
 /* Clear reg/sp for all instructions and add register hints. */
-static void asm_setup_regsp(ASMState *as)
+static void asm_setup_regsp(ASMState *as, int sink)
 {
   GCtrace *T = as->T;
   IRRef nins = T->nins;
@@ -1545,6 +1572,14 @@ static void asm_setup_regsp(ASMState *as)
   inloop = 0;
   as->evenspill = SPS_FIRST;
   for (lastir = IR(nins); ir < lastir; ir++) {
+    if (sink) {
+      if (ir->r == RID_SINK)
+	continue;
+      if (ir->r == RID_SUNK) {  /* Revert after ASM restart. */
+	ir->r = RID_SINK;
+	continue;
+      }
+    }
     switch (ir->o) {
     case IR_LOOP:
       inloop = 1;
@@ -1716,6 +1751,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   ASMState as_;
   ASMState *as = &as_;
   MCode *origtop;
+  int sink;
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
   J->cur.nins = lj_ir_nextins(J);
@@ -1736,6 +1772,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->mcp = as->mctop;
   as->mclim = as->mcbot + MCLIM_REDZONE;
   asm_setup_target(as);
+  sink = (IR(REF_BASE)->prev == 1);
 
   do {
     as->mcp = as->mctop;
@@ -1751,7 +1788,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
     as->gcsteps = 0;
     as->sectref = as->loopref;
     as->fuseref = (as->flags & JIT_F_OPT_FUSE) ? as->loopref : FUSE_DISABLED;
-    asm_setup_regsp(as);
+    asm_setup_regsp(as, sink);
     if (!as->loopref)
       asm_tail_link(as);
 

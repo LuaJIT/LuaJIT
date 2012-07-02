@@ -1155,6 +1155,8 @@ static void asm_newref(ASMState *as, IRIns *ir)
   IRRef args[3];
   IRIns *irkey;
   Reg tmp;
+  if (ir->r == RID_SINK)  /* Sink newref. */
+    return;
   args[0] = ASMREF_L;     /* lua_State *L */
   args[1] = ir->op1;      /* GCtab *t     */
   args[2] = ASMREF_TMP1;  /* cTValue *key */
@@ -1259,6 +1261,10 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
   RegSet allow = RSET_GPR;
   Reg src = RID_NONE, osrc = RID_NONE;
   int32_t k = 0;
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+    return;
+  }
   /* The IRT_I16/IRT_U16 stores should never be simplified for constant
   ** values since mov word [mem], imm16 has a length-changing prefix.
   */
@@ -1372,6 +1378,10 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
 
 static void asm_ahustore(ASMState *as, IRIns *ir)
 {
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+    return;
+  }
   if (irt_isnum(ir->t)) {
     Reg src = ra_alloc1(as, ir->op2, RSET_FPR);
     asm_fuseahuref(as, ir->op1, RSET_GPR);
@@ -2251,7 +2261,10 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     asm_comp_int64(as, ir);
     return;
   } else if ((ir-1)->o == IR_XSTORE) {
-    asm_fxstore(as, ir);
+    if ((ir-1)->r == RID_SINK)
+      asm_snap_prep(as);
+    else
+      asm_fxstore(as, ir);
     return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */

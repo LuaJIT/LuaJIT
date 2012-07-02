@@ -606,6 +606,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
 	J->loopref = J->chain[IR_LOOP];  /* Needed by assembler. */
       }
       lj_opt_split(J);
+      lj_opt_sink(J);
       J->state = LJ_TRACE_ASM;
       break;
 

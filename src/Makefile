@@ -443,7 +443,7 @@ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o \
 	  lj_state.o lj_dispatch.o lj_vmevent.o lj_vmmath.o lj_api.o \
 	  lj_lex.o lj_parse.o lj_bcread.o lj_bcwrite.o \
 	  lj_ir.o lj_opt_mem.o lj_opt_fold.o lj_opt_narrow.o \
-	  lj_opt_dce.o lj_opt_loop.o lj_opt_split.o \
+	  lj_opt_dce.o lj_opt_loop.o lj_opt_split.o lj_opt_sink.o \
 	  lj_mcode.o lj_snap.o lj_record.o lj_crecord.o lj_ffrecord.o \
 	  lj_asm.o lj_trace.o lj_gdbjit.o \
 	  lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o \

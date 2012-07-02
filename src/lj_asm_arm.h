@@ -693,6 +693,8 @@ static void asm_newref(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
   IRRef args[3];
+  if (ir->r == RID_SINK)  /* Sink newref. */
+    return;
   args[0] = ASMREF_L;     /* lua_State *L */
   args[1] = ir->op1;      /* GCtab *t     */
   args[2] = ASMREF_TMP1;  /* cTValue *key */
@@ -836,9 +838,13 @@ static void asm_xload(ASMState *as, IRIns *ir)
 
 static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 {
-  Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
-  asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
-	       rset_exclude(RSET_GPR, src), ofs);
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+  } else {
+    Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
+    asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
+		 rset_exclude(RSET_GPR, src), ofs);
+  }
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -876,21 +882,25 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
 
 static void asm_ahustore(ASMState *as, IRIns *ir)
 {
-  RegSet allow = RSET_GPR;
-  Reg idx, src = RID_NONE, type = RID_NONE;
-  int32_t ofs = 0;
-  int hiop = ((ir+1)->o == IR_HIOP);
-  if (!irt_ispri(ir->t)) {
-    src = ra_alloc1(as, ir->op2, allow);
-    rset_clear(allow, src);
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+  } else {
+    RegSet allow = RSET_GPR;
+    Reg idx, src = RID_NONE, type = RID_NONE;
+    int32_t ofs = 0;
+    int hiop = ((ir+1)->o == IR_HIOP);
+    if (!irt_ispri(ir->t)) {
+      src = ra_alloc1(as, ir->op2, allow);
+      rset_clear(allow, src);
+    }
+    if (hiop)
+      type = ra_alloc1(as, (ir+1)->op2, allow);
+    else
+      type = ra_allock(as, (int32_t)irt_toitype(ir->t), allow);
+    idx = asm_fuseahuref(as, ir->op1, &ofs, rset_exclude(allow, type));
+    if (ra_hasreg(src)) emit_lso(as, ARMI_STR, src, idx, ofs);
+    emit_lso(as, ARMI_STR, type, idx, ofs+4);
   }
-  if (hiop)
-    type = ra_alloc1(as, (ir+1)->op2, allow);
-  else
-    type = ra_allock(as, (int32_t)irt_toitype(ir->t), allow);
-  idx = asm_fuseahuref(as, ir->op1, &ofs, rset_exclude(allow, type));
-  if (ra_hasreg(src)) emit_lso(as, ARMI_STR, src, idx, ofs);
-  emit_lso(as, ARMI_STR, type, idx, ofs+4);
 }
 
 static void asm_sload(ASMState *as, IRIns *ir)
@@ -1382,7 +1392,10 @@ static void asm_hiop(ASMState *as, IRIns *ir)
       asm_fpmin_max(as, ir-1, (ir-1)->o == IR_MIN ? CC_HI : CC_LO);
     return;
   } else if ((ir-1)->o == IR_XSTORE) {
-    asm_xstore(as, ir, 4);
+    if ((ir-1)->r == RID_SINK)
+      asm_snap_prep(as);
+    else
+      asm_xstore(as, ir, 4);
     return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */

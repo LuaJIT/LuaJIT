@@ -769,14 +769,18 @@ nolo:
 
 static void asm_newref(ASMState *as, IRIns *ir)
 {
-  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
-  IRRef args[3];
-  args[0] = ASMREF_L;     /* lua_State *L */
-  args[1] = ir->op1;      /* GCtab *t     */
-  args[2] = ASMREF_TMP1;  /* cTValue *key */
-  asm_setupresult(as, ir, ci);  /* TValue * */
-  asm_gencall(as, ci, args);
-  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+  if (ir->r == RID_SINK) {  /* Sink newref. */
+    return;
+  } else {
+    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
+    IRRef args[3];
+    args[0] = ASMREF_L;     /* lua_State *L */
+    args[1] = ir->op1;      /* GCtab *t     */
+    args[2] = ASMREF_TMP1;  /* cTValue *key */
+    asm_setupresult(as, ir, ci);  /* TValue * */
+    asm_gencall(as, ci, args);
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+  }
 }
 
 static void asm_uref(ASMState *as, IRIns *ir)
@@ -912,9 +916,14 @@ static void asm_xload(ASMState *as, IRIns *ir)
 
 static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 {
-  Reg src = ra_alloc1z(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
-  asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
-	       rset_exclude(RSET_GPR, src), ofs);
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+    return;
+  } else {
+    Reg src = ra_alloc1z(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
+    asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
+		 rset_exclude(RSET_GPR, src), ofs);
+  }
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -947,6 +956,10 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
   RegSet allow = RSET_GPR;
   Reg idx, src = RID_NONE, type = RID_NONE;
   int32_t ofs = 0;
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+    return;
+  }
   if (irt_isnum(ir->t)) {
     src = ra_alloc1(as, ir->op2, RSET_FPR);
   } else {
@@ -1561,8 +1574,12 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     return;
   } else if ((ir-1)->o == IR_XSTORE) {
     as->curins--;  /* Handle both stores here. */
-    asm_xstore(as, ir, LJ_LE ? 4 : 0);
-    asm_xstore(as, ir-1, LJ_LE ? 0 : 4);
+    if ((ir-1)->r == RID_SINK) {
+      asm_snap_prep(as);
+    } else {
+      asm_xstore(as, ir, LJ_LE ? 4 : 0);
+      asm_xstore(as, ir-1, LJ_LE ? 0 : 4);
+    }
     return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
