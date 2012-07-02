@@ -183,20 +183,20 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow)
 
 /* Fuse XLOAD/XSTORE reference into load/store operand. */
 static void asm_fusexref(ASMState *as, MIPSIns mi, Reg rt, IRRef ref,
-			 RegSet allow)
+			 RegSet allow, int32_t ofs)
 {
   IRIns *ir = IR(ref);
-  int32_t ofs = 0;
   Reg base;
   if (ra_noreg(ir->r) && mayfuse(as, ref)) {
     if (ir->o == IR_ADD) {
       int32_t ofs2;
-      if (irref_isk(ir->op2) && (ofs2 = IR(ir->op2)->i, checki16(ofs2))) {
+      if (irref_isk(ir->op2) && (ofs2 = ofs + IR(ir->op2)->i, checki16(ofs2))) {
 	ref = ir->op1;
 	ofs = ofs2;
       }
     } else if (ir->o == IR_STRREF) {
       int32_t ofs2 = 65536;
+      lua_assert(ofs == 0);
       ofs = (int32_t)sizeof(GCstr);
       if (irref_isk(ir->op2)) {
 	ofs2 = ofs + IR(ir->op2)->i;
@@ -889,27 +889,32 @@ static void asm_fload(ASMState *as, IRIns *ir)
 
 static void asm_fstore(ASMState *as, IRIns *ir)
 {
-  Reg src = ra_alloc1z(as, ir->op2, RSET_GPR);
-  IRIns *irf = IR(ir->op1);
-  Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
-  int32_t ofs = field_ofs[irf->op2];
-  MIPSIns mi = asm_fxstoreins(ir);
-  lua_assert(!irt_isfp(ir->t));
-  emit_tsi(as, mi, src, idx, ofs);
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+    return;
+  } else {
+    Reg src = ra_alloc1z(as, ir->op2, RSET_GPR);
+    IRIns *irf = IR(ir->op1);
+    Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
+    int32_t ofs = field_ofs[irf->op2];
+    MIPSIns mi = asm_fxstoreins(ir);
+    lua_assert(!irt_isfp(ir->t));
+    emit_tsi(as, mi, src, idx, ofs);
+  }
 }
 
 static void asm_xload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
   lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
-  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
+  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR, 0);
 }
 
-static void asm_xstore(ASMState *as, IRIns *ir)
+static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 {
   Reg src = ra_alloc1z(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
   asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
-	       rset_exclude(RSET_GPR, src));
+	       rset_exclude(RSET_GPR, src), ofs);
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -1554,6 +1559,11 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     as->curins--;  /* Always skip the loword comparison. */
     asm_comp64eq(as, ir);
     return;
+  } else if ((ir-1)->o == IR_XSTORE) {
+    as->curins--;  /* Handle both stores here. */
+    asm_xstore(as, ir, LJ_LE ? 4 : 0);
+    asm_xstore(as, ir-1, LJ_LE ? 0 : 4);
+    return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
@@ -1832,7 +1842,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
   case IR_FSTORE: asm_fstore(as, ir); break;
-  case IR_XSTORE: asm_xstore(as, ir); break;
+  case IR_XSTORE: asm_xstore(as, ir, 0); break;
 
   /* Allocations. */
   case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;

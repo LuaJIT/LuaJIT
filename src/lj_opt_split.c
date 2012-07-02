@@ -78,8 +78,7 @@
 ** 0105    int HIOP   0103  +0
 ** 0106    p32 ADD    base  +16
 ** 0107    int XSTORE 0106  0104
-** 0108    p32 ADD    base  +20
-** 0109    int XSTORE 0108  0105
+** 0108    int HIOP   0106  0105
 **
 **         mov eax, [esi+0x8]
 **         mov ecx, [esi+0xc]
@@ -328,19 +327,9 @@ static void split_ir(jit_State *J)
 #endif
 	break;
 	}
-      case IR_ASTORE: case IR_HSTORE: case IR_USTORE:
+      case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_XSTORE:
 	split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), nir->op1, hisubst[ir->op2]);
 	break;
-      case IR_XSTORE: {
-#if LJ_LE
-	IRRef hiref = hisubst[ir->op2];
-#else
-	IRRef hiref = nir->op2; nir->op2 = hisubst[ir->op2];
-#endif
-	split_emit(J, IRT(IR_XSTORE, IRT_SOFTFP),
-		   split_ptr(J, oir, ir->op1), hiref);
-	break;
-	}
       case IR_CONV: {  /* Conversion to number. Others handled below. */
 	IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);
 	UNUSED(st);
@@ -434,12 +423,7 @@ static void split_ir(jit_State *J)
 #endif
 	break;
       case IR_XSTORE:
-#if LJ_LE
-	hiref = hisubst[ir->op2];
-#else
-	hiref = nir->op2; nir->op2 = hisubst[ir->op2];
-#endif
-	split_emit(J, IRTI(IR_XSTORE), split_ptr(J, oir, ir->op1), hiref);
+	split_emit(J, IRTI(IR_HIOP), nir->op1, hisubst[ir->op2]);
 	break;
       case IR_CONV: {  /* Conversion to 64 bit integer. Others handled below. */
 	IRType st = (IRType)(ir->op2 & IRCONV_SRCMASK);

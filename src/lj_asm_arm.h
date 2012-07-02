@@ -206,17 +206,19 @@ static IRRef asm_fuselsl2(ASMState *as, IRRef ref)
 
 /* Fuse XLOAD/XSTORE reference into load/store operand. */
 static void asm_fusexref(ASMState *as, ARMIns ai, Reg rd, IRRef ref,
-			 RegSet allow)
+			 RegSet allow, int32_t ofs)
 {
   IRIns *ir = IR(ref);
-  int32_t ofs = 0;
   Reg base;
   if (ra_noreg(ir->r) && mayfuse(as, ref)) {
     int32_t lim = (ai & 0x04000000) ? 4096 : 256;
     if (ir->o == IR_ADD) {
-      if (irref_isk(ir->op2) && (ofs = IR(ir->op2)->i) > -lim && ofs < lim) {
+      int32_t ofs2;
+      if (irref_isk(ir->op2) &&
+	  (ofs2 = ofs + IR(ir->op2)->i) > -lim && ofs2 < lim) {
+	ofs = ofs2;
 	ref = ir->op1;
-      } else {
+      } else if (ofs == 0) {
 	IRRef lref = ir->op1, rref = ir->op2;
 	Reg rn, rm;
 	if ((ai & 0x04000000)) {
@@ -237,6 +239,7 @@ static void asm_fusexref(ASMState *as, ARMIns ai, Reg rd, IRRef ref,
 	return;
       }
     } else if (ir->o == IR_STRREF) {
+      lua_assert(ofs == 0);
       ofs = (int32_t)sizeof(GCstr);
       if (irref_isk(ir->op2)) {
 	ofs += IR(ir->op2)->i;
@@ -809,29 +812,33 @@ static void asm_fload(ASMState *as, IRIns *ir)
 
 static void asm_fstore(ASMState *as, IRIns *ir)
 {
-  Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
-  IRIns *irf = IR(ir->op1);
-  Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
-  int32_t ofs = field_ofs[irf->op2];
-  ARMIns ai = asm_fxstoreins(ir);
-  if ((ai & 0x04000000))
-    emit_lso(as, ai, src, idx, ofs);
-  else
-    emit_lsox(as, ai, src, idx, ofs);
+  if (ir->r == RID_SINK) {  /* Sink store. */
+    asm_snap_prep(as);
+  } else {
+    Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
+    IRIns *irf = IR(ir->op1);
+    Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
+    int32_t ofs = field_ofs[irf->op2];
+    ARMIns ai = asm_fxstoreins(ir);
+    if ((ai & 0x04000000))
+      emit_lso(as, ai, src, idx, ofs);
+    else
+      emit_lsox(as, ai, src, idx, ofs);
+  }
 }
 
 static void asm_xload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
   lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
-  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
+  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR, 0);
 }
 
-static void asm_xstore(ASMState *as, IRIns *ir)
+static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 {
   Reg src = ra_alloc1(as, ir->op2, RSET_GPR);
   asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
-	       rset_exclude(RSET_GPR, src));
+	       rset_exclude(RSET_GPR, src), ofs);
 }
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
@@ -1374,6 +1381,9 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     if (uselo || usehi)
       asm_fpmin_max(as, ir-1, (ir-1)->o == IR_MIN ? CC_HI : CC_LO);
     return;
+  } else if ((ir-1)->o == IR_XSTORE) {
+    asm_xstore(as, ir, 4);
+    return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
@@ -1702,7 +1712,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
   case IR_FSTORE: asm_fstore(as, ir); break;
-  case IR_XSTORE: asm_xstore(as, ir); break;
+  case IR_XSTORE: asm_xstore(as, ir, 0); break;
 
   /* Allocations. */
   case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;

@@ -1273,11 +1273,12 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
     }
     rset_clear(allow, src);
   }
-  if (ir->o == IR_FSTORE)
+  if (ir->o == IR_FSTORE) {
     asm_fusefref(as, IR(ir->op1), allow);
-  else
+  } else {
     asm_fusexref(as, ir->op1, allow);
-    /* ir->op2 is ignored -- unaligned stores are ok on x86. */
+    if (LJ_32 && ir->o == IR_HIOP) as->mrm.ofs += 4;
+  }
   if (ra_hasreg(src)) {
     x86Op xo;
     switch (irt_type(ir->t)) {
@@ -2248,6 +2249,9 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     return;
   } else if ((ir-1)->o <= IR_NE) {  /* 64 bit integer comparisons. ORDER IR. */
     asm_comp_int64(as, ir);
+    return;
+  } else if ((ir-1)->o == IR_XSTORE) {
+    asm_fxstore(as, ir);
     return;
   }
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
