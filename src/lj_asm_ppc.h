@@ -1856,7 +1856,7 @@ static void asm_gc_check(ASMState *as)
   asm_gencall(as, ci, args);
   emit_tai(as, PPCI_ADDI, ra_releasetmp(as, ASMREF_TMP1), RID_JGL, -32768);
   tmp = ra_releasetmp(as, ASMREF_TMP2);
-  emit_loadi(as, tmp, (int32_t)as->gcsteps);
+  emit_loadi(as, tmp, as->gcsteps);
   /* Jump around GC step if GC total < GC threshold. */
   emit_condbranch(as, PPCI_BC|PPCF_Y, CC_LT, l_end);
   emit_ab(as, PPCI_CMPLW, RID_TMP, tmp);
@@ -1966,6 +1966,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
     ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
   case IR_PHI: asm_phi(as, ir); break;
   case IR_HIOP: asm_hiop(as, ir); break;
+  case IR_GCSTEP: asm_gcstep(as, ir); break;
 
   /* Guarded assertions. */
   case IR_EQ: case IR_NE:

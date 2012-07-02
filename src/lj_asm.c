@@ -71,7 +71,7 @@ typedef struct ASMState {
   IRRef loopref;	/* Reference of LOOP instruction (or 0). */
 
   BCReg topslot;	/* Number of slots for stack check (unless 0). */
-  MSize gcsteps;	/* Accumulated number of GC steps (per section). */
+  int32_t gcsteps;	/* Accumulated number of GC steps (per section). */
 
   GCtrace *T;		/* Trace to assemble. */
   GCtrace *parent;	/* Parent trace (or NULL). */
@@ -972,6 +972,22 @@ static void asm_tdup(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
 }
 
+static void asm_gc_check(ASMState *as);
+
+/* Explicit GC step. */
+static void asm_gcstep(ASMState *as, IRIns *ir)
+{
+  IRIns *ira;
+  for (ira = IR(as->stopins+1); ira < ir; ira++)
+    if ((ira->o == IR_TNEW || ira->o == IR_TDUP ||
+	 (LJ_HASFFI && (ira->o == IR_CNEW || ira->o == IR_CNEWI))) &&
+	ra_used(ira))
+      as->gcsteps++;
+  if (as->gcsteps)
+    asm_gc_check(as);
+  as->gcsteps = 0x80000000;  /* Prevent implicit GC check further up. */
+}
+
 /* -- PHI and loop handling ----------------------------------------------- */
 
 /* Break a PHI cycle by renaming to a free register (evict if needed). */
@@ -1191,7 +1207,6 @@ static void asm_phi(ASMState *as, IRIns *ir)
   }
 }
 
-static void asm_gc_check(ASMState *as);
 static void asm_loop_fixup(ASMState *as);
 
 /* Middle part of a loop. */
@@ -1757,7 +1772,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   /* Emit head of trace. */
   RA_DBG_REF();
   checkmclim(as);
-  if (as->gcsteps) {
+  if (as->gcsteps > 0) {
     as->curins = as->T->snap[0].ref;
     asm_snap_prep(as);  /* The GC check is a guard. */
     asm_gc_check(as);

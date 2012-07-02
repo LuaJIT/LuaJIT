@@ -33,6 +33,7 @@
   /* Miscellaneous ops. */ \
   _(NOP,	N , ___, ___) \
   _(BASE,	N , lit, lit) \
+  _(GCSTEP,	S , ___, ___) \
   _(HIOP,	S , ref, ref) \
   _(LOOP,	S , ___, ___) \
   _(USE,	S , ref, ___) \

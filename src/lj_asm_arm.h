@@ -1532,7 +1532,7 @@ static void asm_gc_check(ASMState *as)
   asm_gencall(as, ci, args);
   tmp1 = ra_releasetmp(as, ASMREF_TMP1);
   tmp2 = ra_releasetmp(as, ASMREF_TMP2);
-  emit_loadi(as, tmp2, (int32_t)as->gcsteps);
+  emit_loadi(as, tmp2, as->gcsteps);
   /* Jump around GC step if GC total < GC threshold. */
   emit_branch(as, ARMF_CC(ARMI_B, CC_LS), l_end);
   emit_nm(as, ARMI_CMP, RID_TMP, tmp2);
@@ -1646,6 +1646,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_USE: ra_alloc1(as, ir->op1, RSET_GPR); break;
   case IR_PHI: asm_phi(as, ir); break;
   case IR_HIOP: asm_hiop(as, ir); break;
+  case IR_GCSTEP: asm_gcstep(as, ir); break;
 
   /* Guarded assertions. */
   case IR_EQ: case IR_NE:
