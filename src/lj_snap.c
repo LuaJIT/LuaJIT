@@ -625,13 +625,13 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
   IRIns *ir = &T->ir[ref];
   RegSP rs = ir->prev;
   int32_t *src;
-  union { uint64_t u64; float f; } tmp;
+  uint64_t tmp;
   if (irref_isk(ref)) {
     if (ir->o == IR_KNUM || ir->o == IR_KINT64) {
       src = mref(ir->ptr, int32_t);
     } else if (sz == 8) {
-      tmp.u64 = (uint64_t)(uint32_t)ir->i;
-      src = (int32_t *)&tmp.u64;
+      tmp = (uint64_t)(uint32_t)ir->i;
+      src = (int32_t *)&tmp;
     } else {
       src = &ir->i;
     }
@@ -655,8 +655,8 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
 	src = (int32_t *)&ex->fpr[r-RID_MIN_FPR];
 #if LJ_TARGET_PPC
 	if (sz == 4) {  /* PPC FPRs are always doubles. */
-	  tmp.f = (float)*(double *)src;
-	  src = (int32_t *)&tmp.f;
+	  *(float *)dst = (float)*(double *)src;
+	  return;
 	}
 #else
 	if (LJ_BE && sz == 4) src++;
