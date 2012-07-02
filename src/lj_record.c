@@ -2066,63 +2066,6 @@ static const BCIns *rec_setup_root(jit_State *J)
   return pc;
 }
 
-/* Setup recording for a side trace. */
-static void rec_setup_side(jit_State *J, GCtrace *T)
-{
-  SnapShot *snap = &T->snap[J->exitno];
-  SnapEntry *map = &T->snapmap[snap->mapofs];
-  MSize n, nent = snap->nent;
-  BloomFilter seen = 0;
-  J->framedepth = 0;
-  /* Emit IR for slots inherited from parent snapshot. */
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    IRRef ref = snap_ref(sn);
-    BCReg s = snap_slot(sn);
-    IRIns *ir = &T->ir[ref];
-    IRType t = irt_type(ir->t);
-    TRef tr;
-    /* The bloom filter avoids O(nent^2) overhead for de-duping slots. */
-    if (bloomtest(seen, ref)) {
-      MSize j;
-      for (j = 0; j < n; j++)
-	if (snap_ref(map[j]) == ref) {
-	  tr = J->slot[snap_slot(map[j])];
-	  goto setslot;
-	}
-    }
-    bloomset(seen, ref);
-    switch ((IROp)ir->o) {
-    /* Only have to deal with constants that can occur in stack slots. */
-    case IR_KPRI: tr = TREF_PRI(t); break;
-    case IR_KINT: tr = lj_ir_kint(J, ir->i); break;
-    case IR_KGC:  tr = lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t)); break;
-    case IR_KNUM: tr = lj_ir_k64(J, IR_KNUM, ir_knum(ir)); break;
-    case IR_KINT64: tr = lj_ir_k64(J, IR_KINT64, ir_kint64(ir)); break;
-    case IR_KPTR:  tr = lj_ir_kptr(J, ir_kptr(ir)); break;  /* Continuation. */
-    /* Inherited SLOADs don't need a guard or type check. */
-    case IR_SLOAD:
-      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) t = IRT_NUM;
-      tr = emitir_raw(IRT(IR_SLOAD, t), s,
-	     (ir->op2&IRSLOAD_READONLY) | IRSLOAD_INHERIT|IRSLOAD_PARENT);
-      break;
-    /* Parent refs are already typed and don't need a guard. */
-    default:
-      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) t = IRT_NUM;
-      tr = emitir_raw(IRT(IR_SLOAD, t), s, IRSLOAD_INHERIT|IRSLOAD_PARENT);
-      break;
-    }
-  setslot:
-    J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
-    J->framedepth += ((sn & (SNAP_CONT|SNAP_FRAME)) && s);
-    if ((sn & SNAP_FRAME))
-      J->baseslot = s+1;
-  }
-  J->base = J->slot + J->baseslot;
-  J->maxslot = snap->nslots - J->baseslot;
-  lj_snap_add(J);
-}
-
 /* Setup for recording a new trace. */
 void lj_record_setup(jit_State *J)
 {
@@ -2178,7 +2121,8 @@ void lj_record_setup(jit_State *J)
     } else {
       J->startpc = NULL;  /* Prevent forming an extra loop. */
     }
-    rec_setup_side(J, T);
+    lj_snap_replay(J, T);
+    lj_snap_add(J);
   sidecheck:
     if (traceref(J, J->cur.root)->nchild >= J->param[JIT_P_maxside] ||
 	T->snap[J->exitno].count >= J->param[JIT_P_hotexit] +

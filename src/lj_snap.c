@@ -351,6 +351,70 @@ IRIns *lj_snap_regspmap(GCtrace *T, SnapNo snapno, IRIns *ir)
   return ir;
 }
 
+/* -- Snapshot replay ----------------------------------------------------- */
+
+/* Replay constant from parent trace. */
+static TRef snap_replay_const(jit_State *J, IRIns *ir)
+{
+  /* Only have to deal with constants that can occur in stack slots. */
+  switch ((IROp)ir->o) {
+  case IR_KPRI: return TREF_PRI(irt_type(ir->t));
+  case IR_KINT: return lj_ir_kint(J, ir->i);
+  case IR_KGC: return lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t));
+  case IR_KNUM: return lj_ir_k64(J, IR_KNUM, ir_knum(ir));
+  case IR_KINT64: return lj_ir_k64(J, IR_KINT64, ir_kint64(ir));
+  case IR_KPTR: return lj_ir_kptr(J, ir_kptr(ir));  /* Continuation. */
+  default: lua_assert(0); return TREF_NIL; break;
+  }
+}
+
+/* Replay snapshot state to setup side trace. */
+void lj_snap_replay(jit_State *J, GCtrace *T)
+{
+  SnapShot *snap = &T->snap[J->exitno];
+  SnapEntry *map = &T->snapmap[snap->mapofs];
+  MSize n, nent = snap->nent;
+  BloomFilter seen = 0;
+  J->framedepth = 0;
+  /* Emit IR for slots inherited from parent snapshot. */
+  for (n = 0; n < nent; n++) {
+    SnapEntry sn = map[n];
+    BCReg s = snap_slot(sn);
+    IRRef ref = snap_ref(sn);
+    IRIns *ir = &T->ir[ref];
+    TRef tr;
+    /* The bloom filter avoids O(nent^2) overhead for de-duping slots. */
+    if (bloomtest(seen, ref)) {
+      MSize j;
+      for (j = 0; j < n; j++)
+	if (snap_ref(map[j]) == ref) {
+	  tr = J->slot[snap_slot(map[j])];
+	  goto setslot;
+	}
+    }
+    bloomset(seen, ref);
+    if (irref_isk(ref)) {
+      tr = snap_replay_const(J, ir);
+    } else {
+      IRType t = irt_type(ir->t);
+      uint32_t mode = IRSLOAD_INHERIT|IRSLOAD_PARENT;
+      lua_assert(regsp_used(ir->prev));
+      if (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM)) t = IRT_NUM;
+      if (ir->o == IR_SLOAD) mode |= (ir->op2 & IRSLOAD_READONLY);
+      tr = emitir_raw(IRT(IR_SLOAD, t), s, mode);
+    }
+  setslot:
+    J->slot[s] = tr | (sn&(SNAP_CONT|SNAP_FRAME));  /* Same as TREF_* flags. */
+    J->framedepth += ((sn & (SNAP_CONT|SNAP_FRAME)) && s);
+    if ((sn & SNAP_FRAME))
+      J->baseslot = s+1;
+  }
+  J->base = J->slot + J->baseslot;
+  J->maxslot = snap->nslots - J->baseslot;
+}
+
+/* -- Snapshot restore ---------------------------------------------------- */
+
 /* Restore a value from the trace exit state. */
 static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
 			    SnapNo snapno, BloomFilter rfilt,
