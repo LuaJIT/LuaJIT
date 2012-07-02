@@ -339,6 +339,8 @@ IRIns *lj_snap_regspmap(GCtrace *T, SnapNo snapno, IRIns *ir)
       }
     } else if (LJ_SOFTFP && ir->o == IR_HIOP) {
       ref++;
+    } else if (ir->o == IR_PVAL) {
+      ref = ir->op1 + REF_BIAS;
     } else {
       break;
     }

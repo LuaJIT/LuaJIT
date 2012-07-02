@@ -1287,7 +1287,7 @@ static void asm_head_side(ASMState *as)
     IRIns *ir = IR(i);
     RegSP rs;
     lua_assert((ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_PARENT)) ||
-	       (LJ_SOFTFP && ir->o == IR_HIOP));
+	       (LJ_SOFTFP && ir->o == IR_HIOP) || ir->o == IR_PVAL);
     rs = as->parentmap[i - REF_FIRST];
     if (ra_hasreg(ir->r)) {
       rset_clear(allow, ir->r);
