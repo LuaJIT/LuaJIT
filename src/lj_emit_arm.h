@@ -141,16 +141,19 @@ static int emit_kdelta2(ASMState *as, Reg d, int32_t i)
     IRRef ref = regcost_ref(as->cost[r]);
     lua_assert(r != d);
     if (emit_canremat(ref)) {
-      int32_t delta = i - (ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i);
-      uint32_t sh, inv = 0, k2, k;
-      if (delta < 0) { delta = -delta; inv = ARMI_ADD^ARMI_SUB; }
-      sh = lj_ffs(delta) & ~1;
-      k2 = emit_isk12(0, delta & (255 << sh));
-      k = emit_isk12(0, delta & ~(255 << sh));
-      if (k) {
-	emit_dn(as, ARMI_ADD^k2^inv, d, d);
-	emit_dn(as, ARMI_ADD^k^inv, d, r);
-	return 1;
+      int32_t other = ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i;
+      if (other) {
+	int32_t delta = i - other;
+	uint32_t sh, inv = 0, k2, k;
+	if (delta < 0) { delta = -delta; inv = ARMI_ADD^ARMI_SUB; }
+	sh = lj_ffs(delta) & ~1;
+	k2 = emit_isk12(0, delta & (255 << sh));
+	k = emit_isk12(0, delta & ~(255 << sh));
+	if (k) {
+	  emit_dn(as, ARMI_ADD^k2^inv, d, d);
+	  emit_dn(as, ARMI_ADD^k^inv, d, r);
+	  return 1;
+	}
       }
     }
     rset_clear(work, r);
