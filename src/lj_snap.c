@@ -531,6 +531,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 		IRType t = IRT_I64;
 		if (LJ_SOFTFP && irt_type((irs+1)->t) == IRT_SOFTFP)
 		  t = IRT_NUM;
+		lj_needsplit(J);
 		if (irref_isk(irs->op2) && irref_isk((irs+1)->op2)) {
 		  uint64_t k = (uint32_t)T->ir[irs->op2].i +
 			       ((uint64_t)T->ir[(irs+1)->op2].i << 32);
