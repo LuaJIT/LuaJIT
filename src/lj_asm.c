@@ -1558,7 +1558,7 @@ static void asm_setup_regsp(ASMState *as, int sink)
   if (as->parent) {
     uint16_t *p;
     lastir = lj_snap_regspmap(as->parent, as->J->exitno, ir);
-    as->stopins = (lastir-1) - as->ir;
+    as->stopins = (IRRef)((lastir-1) - as->ir);
     for (p = as->parentmap; ir < lastir; ir++) {
       RegSP rs = ir->prev;
       *p++ = (uint16_t)rs;  /* Copy original parent RegSP to parentmap. */

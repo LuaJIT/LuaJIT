@@ -225,7 +225,8 @@ static CPToken cp_param(CPState *cp)
     return CTOK_INTEGER;
   } else {
     GCcdata *cd;
-    if (!tviscdata(o)) lj_err_argtype(cp->L, o-cp->L->base+1, "type parameter");
+    if (!tviscdata(o))
+      lj_err_argtype(cp->L, (int)(o-cp->L->base)+1, "type parameter");
     cd = cdataV(o);
     if (cd->ctypeid == CTID_CTYPEID)
       cp->val.id = *(CTypeID *)cdataptr(cd);
