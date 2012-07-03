@@ -769,9 +769,7 @@ nolo:
 
 static void asm_newref(ASMState *as, IRIns *ir)
 {
-  if (ir->r == RID_SINK) {  /* Sink newref. */
-    return;
-  } else {
+  if (ir->r != RID_SINK) {
     const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
     IRRef args[3];
     args[0] = ASMREF_L;     /* lua_State *L */
@@ -893,10 +891,7 @@ static void asm_fload(ASMState *as, IRIns *ir)
 
 static void asm_fstore(ASMState *as, IRIns *ir)
 {
-  if (ir->r == RID_SINK) {  /* Sink store. */
-    asm_snap_prep(as);
-    return;
-  } else {
+  if (ir->r != RID_SINK) {
     Reg src = ra_alloc1z(as, ir->op2, RSET_GPR);
     IRIns *irf = IR(ir->op1);
     Reg idx = ra_alloc1(as, irf->op1, rset_exclude(RSET_GPR, src));
@@ -916,10 +911,7 @@ static void asm_xload(ASMState *as, IRIns *ir)
 
 static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 {
-  if (ir->r == RID_SINK) {  /* Sink store. */
-    asm_snap_prep(as);
-    return;
-  } else {
+  if (ir->r != RID_SINK) {
     Reg src = ra_alloc1z(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
     asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
 		 rset_exclude(RSET_GPR, src), ofs);
@@ -956,10 +948,8 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
   RegSet allow = RSET_GPR;
   Reg idx, src = RID_NONE, type = RID_NONE;
   int32_t ofs = 0;
-  if (ir->r == RID_SINK) {  /* Sink store. */
-    asm_snap_prep(as);
+  if (ir->r == RID_SINK)
     return;
-  }
   if (irt_isnum(ir->t)) {
     src = ra_alloc1(as, ir->op2, RSET_FPR);
   } else {
@@ -1574,9 +1564,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     return;
   } else if ((ir-1)->o == IR_XSTORE) {
     as->curins--;  /* Handle both stores here. */
-    if ((ir-1)->r == RID_SINK) {
-      asm_snap_prep(as);
-    } else {
+    if ((ir-1)->r != RID_SINK) {
       asm_xstore(as, ir, LJ_LE ? 4 : 0);
       asm_xstore(as, ir-1, LJ_LE ? 0 : 4);
     }
