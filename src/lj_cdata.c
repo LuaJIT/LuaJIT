@@ -46,7 +46,7 @@ GCcdata *lj_cdata_newv(CTState *cts, CTypeID id, CTSize sz, CTSize align)
   newwhite(g, obj2gco(cd));
   cd->marked |= 0x80;
   cd->gct = ~LJ_TCDATA;
-  cd->typeid = id;
+  cd->ctypeid = id;
   return cd;
 }
 
@@ -66,7 +66,7 @@ void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
       setgcref(g->gc.mmudata, obj2gco(cd));
     }
   } else if (LJ_LIKELY(!cdataisv(cd))) {
-    CType *ct = ctype_raw(ctype_ctsG(g), cd->typeid);
+    CType *ct = ctype_raw(ctype_ctsG(g), cd->ctypeid);
     CTSize sz = ctype_hassize(ct->info) ? ct->size : CTSIZE_PTR;
     lua_assert(ctype_hassize(ct->info) || ctype_isfunc(ct->info) ||
 	       ctype_isextern(ct->info));
@@ -101,7 +101,7 @@ CType *lj_cdata_index(CTState *cts, GCcdata *cd, cTValue *key, uint8_t **pp,
 		      CTInfo *qual)
 {
   uint8_t *p = (uint8_t *)cdataptr(cd);
-  CType *ct = ctype_get(cts, cd->typeid);
+  CType *ct = ctype_get(cts, cd->ctypeid);
   ptrdiff_t idx;
 
   /* Resolve reference for cdata object. */
@@ -140,7 +140,7 @@ collect_attrib:
     }
   } else if (tviscdata(key)) {  /* Integer cdata key. */
     GCcdata *cdk = cdataV(key);
-    CType *ctk = ctype_raw(cts, cdk->typeid);
+    CType *ctk = ctype_raw(cts, cdk->ctypeid);
     if (ctype_isenum(ctk->info)) ctk = ctype_child(cts, ctk);
     if (ctype_isinteger(ctk->info)) {
       lj_cconv_ct_ct(cts, ctype_get(cts, CTID_INT_PSZ), ctk,
@@ -167,7 +167,7 @@ collect_attrib:
 	  return ct;
 	}
       }
-    } else if (cd->typeid == CTID_CTYPEID) {
+    } else if (cd->ctypeid == CTID_CTYPEID) {
       /* Allow indexing a (pointer to) struct constructor to get constants. */
       CType *sct = ctype_raw(cts, *(CTypeID *)p);
       if (ctype_isptr(sct->info))

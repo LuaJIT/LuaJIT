@@ -1043,9 +1043,9 @@ dotypecheck:
 static void asm_cnew(ASMState *as, IRIns *ir)
 {
   CTState *cts = ctype_ctsG(J2G(as->J));
-  CTypeID typeid = (CTypeID)IR(ir->op1)->i;
+  CTypeID ctypeid = (CTypeID)IR(ir->op1)->i;
   CTSize sz = (ir->o == IR_CNEWI || ir->op2 == REF_NIL) ?
-	      lj_ctype_size(cts, typeid) : (CTSize)IR(ir->op2)->i;
+	      lj_ctype_size(cts, ctypeid) : (CTSize)IR(ir->op2)->i;
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[2];
   RegSet allow = (RSET_GPR & ~RSET_SCRATCH);
@@ -1079,11 +1079,11 @@ static void asm_cnew(ASMState *as, IRIns *ir)
       ofs -= 4; if (LJ_BE) ir++; else ir--;
     }
   }
-  /* Initialize gct and typeid. lj_mem_newgco() already sets marked. */
+  /* Initialize gct and ctypeid. lj_mem_newgco() already sets marked. */
   emit_tsi(as, MIPSI_SB, RID_RET+1, RID_RET, offsetof(GCcdata, gct));
-  emit_tsi(as, MIPSI_SH, RID_TMP, RID_RET, offsetof(GCcdata, typeid));
+  emit_tsi(as, MIPSI_SH, RID_TMP, RID_RET, offsetof(GCcdata, ctypeid));
   emit_ti(as, MIPSI_LI, RID_RET+1, ~LJ_TCDATA);
-  emit_ti(as, MIPSI_LI, RID_TMP, typeid);  /* Lower 16 bit used. Sign-ext ok. */
+  emit_ti(as, MIPSI_LI, RID_TMP, ctypeid); /* Lower 16 bit used. Sign-ext ok. */
   asm_gencall(as, ci, args);
   ra_allockreg(as, (int32_t)(sz+sizeof(GCcdata)),
 	       ra_releasetmp(as, ASMREF_TMP1));

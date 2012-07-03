@@ -198,7 +198,7 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
 #if LJ_HASFFI
     if (tviscdata(o)) {
       CTState *cts = ctype_cts(L);
-      CType *ct = lj_ctype_rawref(cts, cdataV(o)->typeid);
+      CType *ct = lj_ctype_rawref(cts, cdataV(o)->ctypeid);
       if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
       if (ctype_isnum(ct->info) || ctype_iscomplex(ct->info)) {
 	if (LJ_DUALNUM && ctype_isinteger_or_bool(ct->info) &&

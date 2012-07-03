@@ -947,9 +947,9 @@ static void asm_sload(ASMState *as, IRIns *ir)
 static void asm_cnew(ASMState *as, IRIns *ir)
 {
   CTState *cts = ctype_ctsG(J2G(as->J));
-  CTypeID typeid = (CTypeID)IR(ir->op1)->i;
+  CTypeID ctypeid = (CTypeID)IR(ir->op1)->i;
   CTSize sz = (ir->o == IR_CNEWI || ir->op2 == REF_NIL) ?
-	      lj_ctype_size(cts, typeid) : (CTSize)IR(ir->op2)->i;
+	      lj_ctype_size(cts, ctypeid) : (CTSize)IR(ir->op2)->i;
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[2];
   RegSet allow = (RSET_GPR & ~RSET_SCRATCH);
@@ -982,12 +982,12 @@ static void asm_cnew(ASMState *as, IRIns *ir)
       ofs -= 4; ir--;
     }
   }
-  /* Initialize gct and typeid. lj_mem_newgco() already sets marked. */
+  /* Initialize gct and ctypeid. lj_mem_newgco() already sets marked. */
   {
-    uint32_t k = emit_isk12(ARMI_MOV, typeid);
-    Reg r = k ? RID_R1 : ra_allock(as, typeid, allow);
+    uint32_t k = emit_isk12(ARMI_MOV, ctypeid);
+    Reg r = k ? RID_R1 : ra_allock(as, ctypeid, allow);
     emit_lso(as, ARMI_STRB, RID_TMP, RID_RET, offsetof(GCcdata, gct));
-    emit_lsox(as, ARMI_STRH, r, RID_RET, offsetof(GCcdata, typeid));
+    emit_lsox(as, ARMI_STRH, r, RID_RET, offsetof(GCcdata, ctypeid));
     emit_d(as, ARMI_MOV|ARMI_K12|~LJ_TCDATA, RID_TMP);
     if (k) emit_d(as, ARMI_MOV^k, RID_R1);
   }

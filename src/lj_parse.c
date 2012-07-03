@@ -938,7 +938,7 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
       if (e->k == VKCDATA) {  /* Fold in-place since cdata is not interned. */
 	GCcdata *cd = cdataV(&e->u.nval);
 	int64_t *p = (int64_t *)cdataptr(cd);
-	if (cd->typeid == CTID_COMPLEX_DOUBLE)
+	if (cd->ctypeid == CTID_COMPLEX_DOUBLE)
 	  p[1] ^= (int64_t)U64x(80000000,00000000);
 	else
 	  *p = -*p;

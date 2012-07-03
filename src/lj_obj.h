@@ -264,7 +264,7 @@ enum {
 /* C data object. Payload follows. */
 typedef struct GCcdata {
   GCHeader;
-  uint16_t typeid;	/* C type ID. */
+  uint16_t ctypeid;	/* C type ID. */
 } GCcdata;
 
 /* Prepended to variable-sized or realigned C data objects. */

@@ -164,7 +164,7 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
       tp = BCDUMP_KGC_CHILD;
 #if LJ_HASFFI
     } else if (o->gch.gct == ~LJ_TCDATA) {
-      CTypeID id = gco2cd(o)->typeid;
+      CTypeID id = gco2cd(o)->ctypeid;
       need = 1+4*5;
       if (id == CTID_INT64) {
 	tp = BCDUMP_KGC_I64;

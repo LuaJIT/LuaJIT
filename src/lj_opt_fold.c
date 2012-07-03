@@ -1939,11 +1939,11 @@ LJFOLDF(fload_str_len_snew)
 }
 
 /* The C type ID of cdata objects is immutable. */
-LJFOLD(FLOAD KGC IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD KGC IRFL_CDATA_CTYPEID)
 LJFOLDF(fload_cdata_typeid_kgc)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
-    return INTFOLD((int32_t)ir_kcdata(fleft)->typeid);
+    return INTFOLD((int32_t)ir_kcdata(fleft)->ctypeid);
   return NEXTFOLD;
 }
 
@@ -1962,8 +1962,8 @@ LJFOLDF(fload_cdata_int64_kgc)
   return NEXTFOLD;
 }
 
-LJFOLD(FLOAD CNEW IRFL_CDATA_TYPEID)
-LJFOLD(FLOAD CNEWI IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD CNEW IRFL_CDATA_CTYPEID)
+LJFOLD(FLOAD CNEWI IRFL_CDATA_CTYPEID)
 LJFOLDF(fload_cdata_typeid_cnew)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
@@ -1983,7 +1983,7 @@ LJFOLDF(fload_cdata_ptr_int64_cnew)
 }
 
 LJFOLD(FLOAD any IRFL_STR_LEN)
-LJFOLD(FLOAD any IRFL_CDATA_TYPEID)
+LJFOLD(FLOAD any IRFL_CDATA_CTYPEID)
 LJFOLD(FLOAD any IRFL_CDATA_PTR)
 LJFOLD(FLOAD any IRFL_CDATA_INT)
 LJFOLD(FLOAD any IRFL_CDATA_INT64)
