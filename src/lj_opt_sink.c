@@ -179,7 +179,7 @@ static void sink_sweep_ins(jit_State *J)
       break;
       }
     case IR_NEWREF:
-      if (!irt_ismarked(ir->t)) {
+      if (!irt_ismarked(IR(ir->op1)->t)) {
 	ir->prev = REGSP(RID_SINK, 0);
       } else {
 	irt_clearmark(ir->t);
