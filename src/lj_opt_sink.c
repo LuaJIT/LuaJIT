@@ -47,7 +47,7 @@ static int sink_phidep(jit_State *J, IRRef ref)
   return 0;
 }
 
-/* Check whether a value is a sinkable PHI or a non-PHI. */
+/* Check whether a value is a sinkable PHI or loop-invariant. */
 static int sink_checkphi(jit_State *J, IRIns *ira, IRRef ref)
 {
   if (ref >= REF_FIRST) {
@@ -57,7 +57,8 @@ static int sink_checkphi(jit_State *J, IRIns *ira, IRRef ref)
       ira->prev++;
       return 1;  /* Sinkable PHI. */
     }
-    return !sink_phidep(J, ref);  /* Must be a non-PHI then. */
+    /* Otherwise the value must be loop-invariant. */
+    return ref < J->loopref && !sink_phidep(J, ref);
   }
   return 1;  /* Constant (non-PHI). */
 }
