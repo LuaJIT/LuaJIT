@@ -32,8 +32,6 @@ static IRIns *sink_checkalloc(jit_State *J, IRIns *irs)
   ir = IR(ir->op1);
   if (!(ir->o == IR_TNEW || ir->o == IR_TDUP || ir->o == IR_CNEW))
     return NULL;  /* Not an allocation. */
-  if (ir + 255 < irs)
-    return NULL;  /* Out of range. */
   return ir;  /* Return allocation. */
 }
 
@@ -173,10 +171,12 @@ static void sink_sweep_ins(jit_State *J)
     switch (ir->o) {
     case IR_ASTORE: case IR_HSTORE: case IR_FSTORE: case IR_XSTORE: {
       IRIns *ira = sink_checkalloc(J, ir);
-      if (ira && !irt_ismarked(ira->t))
-	ir->prev = REGSP(RID_SINK, (int)(ir - ira));
-      else
+      if (ira && !irt_ismarked(ira->t)) {
+	int delta = (int)(ir - ira);
+	ir->prev = REGSP(RID_SINK, delta > 255 ? 255 : delta);
+      } else {
 	ir->prev = REGSP_INIT;
+      }
       break;
       }
     case IR_NEWREF:

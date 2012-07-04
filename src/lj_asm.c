@@ -778,6 +778,23 @@ static int asm_snap_canremat(ASMState *as)
   return 0;
 }
 
+/* Check whether a sunk store corresponds to an allocation. */
+static int asm_sunk_store(ASMState *as, IRIns *ira, IRIns *irs)
+{
+  if (irs->s == 255) {
+    if (irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
+	irs->o == IR_FSTORE || irs->o == IR_XSTORE) {
+      IRIns *irk = IR(irs->op1);
+      if (irk->o == IR_AREF || irk->o == IR_HREFK)
+	irk = IR(irk->op1);
+      return (IR(irk->op1) == ira);
+    }
+    return 0;
+  } else {
+    return (ira + irs->s == irs);  /* Quick check. */
+  }
+}
+
 /* Allocate register or spill slot for a ref that escapes to a snapshot. */
 static void asm_snap_alloc1(ASMState *as, IRRef ref)
 {
@@ -795,8 +812,8 @@ static void asm_snap_alloc1(ASMState *as, IRRef ref)
       else {  /* Allocate stored values for TNEW, TDUP and CNEW. */
 	IRIns *irs;
 	lua_assert(ir->o == IR_TNEW || ir->o == IR_TDUP || ir->o == IR_CNEW);
-	for (irs = IR(as->curins); irs > ir; irs--)
-	  if (irs->r == RID_SINK && ir + irs->s == irs) {
+	for (irs = IR(as->snapref-1); irs > ir; irs--)
+	  if (irs->r == RID_SINK && asm_sunk_store(as, ir, irs)) {
 	    lua_assert(irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
 		       irs->o == IR_FSTORE || irs->o == IR_XSTORE);
 	    asm_snap_alloc1(as, irs->op2);

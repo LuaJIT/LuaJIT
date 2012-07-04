@@ -403,6 +403,27 @@ static TRef snap_pref(jit_State *J, GCtrace *T, SnapEntry *map, MSize nmax,
   return tr;
 }
 
+/* Check whether a sunk store corresponds to an allocation. Slow path. */
+static int snap_sunk_store2(jit_State *J, IRIns *ira, IRIns *irs)
+{
+  if (irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
+      irs->o == IR_FSTORE || irs->o == IR_XSTORE) {
+    IRIns *irk = IR(irs->op1);
+    if (irk->o == IR_AREF || irk->o == IR_HREFK)
+      irk = IR(irk->op1);
+    return (IR(irk->op1) == ira);
+  }
+  return 0;
+}
+
+/* Check whether a sunk store corresponds to an allocation. Fast path. */
+static LJ_AINLINE int snap_sunk_store(jit_State *J, IRIns *ira, IRIns *irs)
+{
+  if (irs->s != 255)
+    return (ira + irs->s == irs);  /* Fast check. */
+  return snap_sunk_store2(J, ira, irs);
+}
+
 /* Replay snapshot state to setup side trace. */
 void lj_snap_replay(jit_State *J, GCtrace *T)
 {
@@ -464,7 +485,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 	} else {
 	  IRIns *irs;
 	  for (irs = ir+1; irs < irlast; irs++)
-	    if (irs->r == RID_SINK && ir + irs->s == irs) {
+	    if (irs->r == RID_SINK && snap_sunk_store(J, ir, irs)) {
 	      if (snap_pref(J, T, map, nent, seen, irs->op2) == 0)
 		snap_pref(J, T, map, nent, seen, T->ir[irs->op2].op1);
 	      else if ((LJ_SOFTFP || (LJ_32 && LJ_HASFFI)) &&
@@ -504,7 +525,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 	  TRef tr = emitir(ir->ot, op1, op2);
 	  J->slot[snap_slot(sn)] = tr;
 	  for (irs = ir+1; irs < irlast; irs++)
-	    if (irs->r == RID_SINK && ir + irs->s == irs) {
+	    if (irs->r == RID_SINK && snap_sunk_store(J, ir, irs)) {
 	      IRIns *irr = &T->ir[irs->op1];
 	      TRef val, key = irr->op2, tmp = tr;
 	      if (irr->o != IR_FREF) {
@@ -700,7 +721,7 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
     } else {
       IRIns *irs, *irlast = &T->ir[T->snap[snapno].ref];
       for (irs = ir+1; irs < irlast; irs++)
-	if (irs->r == RID_SINK && ir + irs->s == irs) {
+	if (irs->r == RID_SINK && snap_sunk_store(J, ir, irs)) {
 	  IRIns *iro = &T->ir[T->ir[irs->op1].op2];
 	  uint8_t *p = (uint8_t *)cd;
 	  CTSize szs;
@@ -733,7 +754,7 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
     settabV(J->L, o, t);
     irlast = &T->ir[T->snap[snapno].ref];
     for (irs = ir+1; irs < irlast; irs++)
-      if (irs->r == RID_SINK && ir + irs->s == irs) {
+      if (irs->r == RID_SINK && snap_sunk_store(J, ir, irs)) {
 	IRIns *irk = &T->ir[irs->op1];
 	TValue tmp, *val;
 	lua_assert(irs->o == IR_ASTORE || irs->o == IR_HSTORE ||

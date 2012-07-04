@@ -378,7 +378,7 @@ local function ridsp_name(ridsp, ins)
   if not disass then disass = require("jit.dis_"..jit.arch) end
   local rid, slot = band(ridsp, 0xff), shr(ridsp, 8)
   if rid == 253 or rid == 254 then
-    return slot == 0 and " {sink" or format(" {%04d", ins-slot)
+    return (slot == 0 or slot == 255) and " {sink" or format(" {%04d", ins-slot)
   end
   if ridsp > 255 then return format("[%x]", slot*4) end
   if rid < 128 then return disass.regname(rid) end
