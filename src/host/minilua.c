@@ -1198,56 +1198,6 @@ luaV_execute(L,1);
 L->nCcalls--;
 luaC_checkGC(L);
 }
-static void resume(lua_State*L,void*ud){
-StkId firstArg=cast(StkId,ud);
-CallInfo*ci=L->ci;
-if(L->status==0){
-if(luaD_precall(L,firstArg-1,(-1))!=0)
-return;
-}
-else{
-L->status=0;
-if(!f_isLua(ci)){
-if(luaD_poscall(L,firstArg))
-L->top=L->ci->top;
-}
-else
-L->base=L->ci->base;
-}
-luaV_execute(L,cast_int(L->ci-L->base_ci));
-}
-static int resume_error(lua_State*L,const char*msg){
-L->top=L->ci->base;
-setsvalue(L,L->top,luaS_new(L,msg));
-incr_top(L);
-return 2;
-}
-static int lua_resume(lua_State*L,int nargs){
-int status;
-if(L->status!=1&&(L->status!=0||L->ci!=L->base_ci))
-return resume_error(L,"cannot resume non-suspended coroutine");
-if(L->nCcalls>=200)
-return resume_error(L,"C stack overflow");
-L->baseCcalls=++L->nCcalls;
-status=luaD_rawrunprotected(L,resume,L->top-nargs);
-if(status!=0){
-L->status=cast_byte(status);
-luaD_seterrorobj(L,status,L->top);
-L->ci->top=L->top;
-}
-else{
-status=L->status;
-}
---L->nCcalls;
-return status;
-}
-static int lua_yield(lua_State*L,int nresults){
-if(L->nCcalls>L->baseCcalls)
-luaG_runerror(L,"attempt to yield across metamethod/C-call boundary");
-L->base=L->top-nresults;
-L->status=1;
-return-1;
-}
 static int luaD_pcall(lua_State*L,Pfunc func,void*u,
 ptrdiff_t old_top,ptrdiff_t ef){
 int status;
@@ -2361,18 +2311,6 @@ luaM_freearray(L,G(L)->strt.hash,G(L)->strt.size,TString*);
 luaZ_freebuffer(L,&g->buff);
 freestack(L,L);
 (*g->frealloc)(g->ud,fromstate(L),state_size(LG),0);
-}
-static lua_State*luaE_newthread(lua_State*L){
-lua_State*L1=tostate(luaM_malloc(L,state_size(lua_State)));
-luaC_link(L,obj2gco(L1),8);
-preinit_state(L1,G(L));
-stack_init(L1,L);
-setobj(L,gt(L1),gt(L));
-L1->hookmask=L->hookmask;
-L1->basehookcount=L->basehookcount;
-L1->hook=L->hook;
-resethookcount(L1);
-return L1;
 }
 static void luaE_freethread(lua_State*L,lua_State*L1){
 luaF_close(L1,L1->stack);
@@ -5413,33 +5351,11 @@ L->ci->top=L->top+size;
 }
 return res;
 }
-static void lua_xmove(lua_State*from,lua_State*to,int n){
-int i;
-if(from==to)return;
-api_checknelems(from,n);
-luai_apicheck(from,G(from)==G(to));
-luai_apicheck(from,to->ci->top-to->top>=n);
-from->top-=n;
-for(i=0;i<n;i++){
-setobj(to,to->top++,from->top+i);
-}
-}
-static void lua_setlevel(lua_State*from,lua_State*to){
-to->nCcalls=from->nCcalls;
-}
 static lua_CFunction lua_atpanic(lua_State*L,lua_CFunction panicf){
 lua_CFunction old;
 old=G(L)->panic;
 G(L)->panic=panicf;
 return old;
-}
-static lua_State*lua_newthread(lua_State*L){
-lua_State*L1;
-luaC_checkGC(L);
-L1=luaE_newthread(L);
-setthvalue(L,L->top,L1);
-api_incr_top(L);
-return L1;
 }
 static int lua_gettop(lua_State*L){
 return cast_int(L->top-L->base);
@@ -5593,10 +5509,6 @@ case 7:return(rawuvalue(o)+1);
 case 2:return pvalue(o);
 default:return NULL;
 }
-}
-static lua_State*lua_tothread(lua_State*L,int idx){
-StkId o=index2adr(L,idx);
-return(!ttisthread(o))?NULL:thvalue(o);
 }
 static void lua_pushnil(lua_State*L){
 setnilvalue(L->top);
@@ -5875,9 +5787,6 @@ if(!chunkname)chunkname="?";
 luaZ_init(L,&z,reader,data);
 status=luaD_protectedparser(L,&z,chunkname);
 return status;
-}
-static int lua_status(lua_State*L){
-return L->status;
 }
 static int lua_error(lua_State*L){
 api_checknelems(L,1);
@@ -6508,114 +6417,6 @@ static const luaL_Reg base_funcs[]={
 {"unpack",luaB_unpack},
 {NULL,NULL}
 };
-static const char*const statnames[]=
-{"running","suspended","normal","dead"};
-static int costatus(lua_State*L,lua_State*co){
-if(L==co)return 0;
-switch(lua_status(co)){
-case 1:
-return 1;
-case 0:{
-lua_Debug ar;
-if(lua_getstack(co,0,&ar)>0)
-return 2;
-else if(lua_gettop(co)==0)
-return 3;
-else
-return 1;
-}
-default:
-return 3;
-}
-}
-static int luaB_costatus(lua_State*L){
-lua_State*co=lua_tothread(L,1);
-luaL_argcheck(L,co,1,"coroutine expected");
-lua_pushstring(L,statnames[costatus(L,co)]);
-return 1;
-}
-static int auxresume(lua_State*L,lua_State*co,int narg){
-int status=costatus(L,co);
-if(!lua_checkstack(co,narg))
-luaL_error(L,"too many arguments to resume");
-if(status!=1){
-lua_pushfstring(L,"cannot resume %s coroutine",statnames[status]);
-return-1;
-}
-lua_xmove(L,co,narg);
-lua_setlevel(L,co);
-status=lua_resume(co,narg);
-if(status==0||status==1){
-int nres=lua_gettop(co);
-if(!lua_checkstack(L,nres+1))
-luaL_error(L,"too many results to resume");
-lua_xmove(co,L,nres);
-return nres;
-}
-else{
-lua_xmove(co,L,1);
-return-1;
-}
-}
-static int luaB_coresume(lua_State*L){
-lua_State*co=lua_tothread(L,1);
-int r;
-luaL_argcheck(L,co,1,"coroutine expected");
-r=auxresume(L,co,lua_gettop(L)-1);
-if(r<0){
-lua_pushboolean(L,0);
-lua_insert(L,-2);
-return 2;
-}
-else{
-lua_pushboolean(L,1);
-lua_insert(L,-(r+1));
-return r+1;
-}
-}
-static int luaB_auxwrap(lua_State*L){
-lua_State*co=lua_tothread(L,lua_upvalueindex(1));
-int r=auxresume(L,co,lua_gettop(L));
-if(r<0){
-if(lua_isstring(L,-1)){
-luaL_where(L,1);
-lua_insert(L,-2);
-lua_concat(L,2);
-}
-lua_error(L);
-}
-return r;
-}
-static int luaB_cocreate(lua_State*L){
-lua_State*NL=lua_newthread(L);
-luaL_argcheck(L,lua_isfunction(L,1)&&!lua_iscfunction(L,1),1,
-"Lua function expected");
-lua_pushvalue(L,1);
-lua_xmove(L,NL,1);
-return 1;
-}
-static int luaB_cowrap(lua_State*L){
-luaB_cocreate(L);
-lua_pushcclosure(L,luaB_auxwrap,1);
-return 1;
-}
-static int luaB_yield(lua_State*L){
-return lua_yield(L,lua_gettop(L));
-}
-static int luaB_corunning(lua_State*L){
-if(lua_pushthread(L))
-lua_pushnil(L);
-return 1;
-}
-static const luaL_Reg co_funcs[]={
-{"create",luaB_cocreate},
-{"resume",luaB_coresume},
-{"running",luaB_corunning},
-{"status",luaB_costatus},
-{"wrap",luaB_cowrap},
-{"yield",luaB_yield},
-{NULL,NULL}
-};
 static void auxopen(lua_State*L,const char*name,
 lua_CFunction f,lua_CFunction u){
 lua_pushcfunction(L,u);
@@ -6640,8 +6441,7 @@ lua_setglobal(L,"newproxy");
 }
 static int luaopen_base(lua_State*L){
 base_open(L);
-luaL_register(L,"coroutine",co_funcs);
-return 2;
+return 1;
 }
 #define aux_getn(L,n)(luaL_checktype(L,n,5),luaL_getn(L,n))
 static int tinsert(lua_State*L){
@@ -7887,7 +7687,7 @@ int main(int argc,char**argv){
 lua_State*L=luaL_newstate();
 int i;
 luaL_openlibs(L);
-if(argc<2)return 1;
+if(argc<2)return sizeof(void*);
 lua_createtable(L,0,1);
 lua_pushstring(L,argv[1]);
 lua_rawseti(L,-2,0);

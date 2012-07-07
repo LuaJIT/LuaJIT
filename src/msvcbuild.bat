@@ -29,20 +29,14 @@
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
+@set DASMFLAGS=-D WIN -D JIT -D FFI -D P64
+@set LJARCH=x64
+@minilua
+@if errorlevel 8 goto :X64
 @set DASMFLAGS=-D WIN -D JIT -D FFI
-@set DASMX64=-D P64
-@if "%TARGET_CPU%"=="AMD64" goto :X64
-@if "%TARGET_CPU%"=="X64" goto :X64
-@if "%TARGET_CPU%"=="x64" goto :X64
-@if "%CPU%"=="AMD64" goto :X64
-@if "%CPU%"=="X64" goto :X64
-@if "%CPU%"=="x64" goto :X64
-@if "%Platform%"=="AMD64" goto :X64
-@if "%Platform%"=="X64" goto :X64
-@if "%Platform%"=="x64" goto :X64
-@set DASMX64=
+@set LJARCH=x86
 :X64
-minilua %DASM% -LN %DASMFLAGS% %DASMX64% -o host\buildvm_arch.h vm_x86.dasc
+minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
 @if errorlevel 1 goto :BAD
 
 %LJCOMPILE% /I "." /I %DASMDIR% host\buildvm*.c
@@ -103,7 +97,7 @@ if exist luajit.exe.manifest^
 
 @del *.obj *.manifest minilua.exe buildvm.exe
 @echo.
-@echo === Successfully built LuaJIT ===
+@echo === Successfully built LuaJIT for Windows/%LJARCH% ===
 
 @goto :END
 :BAD
