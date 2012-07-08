@@ -590,27 +590,23 @@ static uint32_t jit_cpudetect(lua_State *L)
 #endif
 #elif LJ_TARGET_ARM
 #if LJ_HASJIT
-  /* Compile-time ARM CPU detection. */
-#if LJ_ARCH_VERSION >= 70
-  flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
-#elif LJ_ARCH_VERSION >= 61
-  flags |= JIT_F_ARMV6|JIT_F_ARMV6T2;
-#elif LJ_ARCH_VERSION >= 60
-  flags |= JIT_F_ARMV6;
-#endif
-  /* Runtime ARM CPU detection. */
+  int ver = LJ_ARCH_VERSION;  /* Compile-time ARM CPU detection. */
 #if LJ_TARGET_LINUX
-  if (!(flags & JIT_F_ARMV7)) {
+  if (ver < 70) {  /* Runtime ARM CPU detection. */
     struct utsname ut;
     uname(&ut);
     if (strncmp(ut.machine, "armv", 4) == 0) {
       if (ut.machine[4] >= '7')
-	flags |= JIT_F_ARMV6|JIT_F_ARMV6T2|JIT_F_ARMV7;
+	ver = 70;
       else if (ut.machine[4] == '6')
-	flags |= JIT_F_ARMV6;
+	ver = 60;
     }
   }
 #endif
+  flags |= ver >= 70 ? JIT_F_ARMV7 :
+	   ver >= 61 ? JIT_F_ARMV6T2_ :
+	   ver >= 60 ? JIT_F_ARMV6_ : 0;
+  flags |= LJ_ARCH_HASFPU == 0 ? 0 : ver >= 70 ? JIT_F_VFPV3 : JIT_F_VFPV2;
 #endif
 #elif LJ_TARGET_PPC
 #if LJ_HASJIT
