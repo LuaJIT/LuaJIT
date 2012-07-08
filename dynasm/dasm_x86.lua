@@ -28,6 +28,8 @@ local _s = string
 local sub, format, byte, char = _s.sub, _s.format, _s.byte, _s.char
 local find, match, gmatch, gsub = _s.find, _s.match, _s.gmatch, _s.gsub
 local concat, sort = table.concat, table.sort
+local bit = bit or require("bit")
+local band, shl, shr = bit.band, bit.lshift, bit.rshift
 
 -- Inherited tables and callbacks.
 local g_opt, g_arch
@@ -426,10 +428,10 @@ end
 -- Put unsigned word or arg.
 local function wputwarg(n)
   if type(n) == "number" then
-    if n < 0 or n > 65535 then
+    if shr(n, 16) ~= 0 then
       werror("unsigned immediate word out of range")
     end
-    local r = n%256; n = (n-r)/256; wputb(r); wputb(n);
+    wputb(band(n, 255)); wputb(shr(n, 8));
   else waction("IMM_W", n) end
 end
 
@@ -437,10 +439,10 @@ end
 local function wputdarg(n)
   local tn = type(n)
   if tn == "number" then
-    if n < 0 then n = n + 4294967296 end
-    local r = n%256; n = (n-r)/256; wputb(r);
-    r = n%256; n = (n-r)/256; wputb(r);
-    r = n%256; n = (n-r)/256; wputb(r); wputb(n);
+    wputb(band(n, 255))
+    wputb(band(shr(n, 8), 255))
+    wputb(band(shr(n, 16), 255))
+    wputb(shr(n, 24))
   elseif tn == "table" then
     wputlabel("IMM_", n[1], 1)
   else
@@ -464,24 +466,23 @@ local function wputop(sz, op, rex)
   if sz == "w" then wputb(102) end
   -- Needs >32 bit numbers, but only for crc32 eax, word [ebx]
   if op >= 4294967296 then r = op%4294967296 wputb((op-r)/4294967296) op = r end
-  if op >= 16777216 then r = op % 16777216 wputb((op-r) / 16777216) op = r end
+  if op >= 16777216 then wputb(shr(op, 24)); op = band(op, 0xffffff) end
   if op >= 65536 then
     if rex ~= 0 then
-      local opc3 = op - op % 256
+      local opc3 = band(op, 0xffff00)
       if opc3 == 0x0f3a00 or opc3 == 0x0f3800 then
-	wputb(64 + rex % 16); rex = 0
+	wputb(64 + band(rex, 15)); rex = 0
       end
     end
-    r = op % 65536 wputb((op-r) / 65536) op = r
+    wputb(shr(op, 16)); op = band(op, 0xffff)
   end
   if op >= 256 then
-    r = op % 256
-    local b = (op-r) / 256
-    if b == 15 and rex ~= 0 then wputb(64 + rex % 16); rex = 0 end
+    local b = shr(op, 8)
+    if b == 15 and rex ~= 0 then wputb(64 + band(rex, 15)); rex = 0 end
     wputb(b)
-    op = r
+    op = band(op, 255)
   end
-  if rex ~= 0 then wputb(64 + rex % 16) end
+  if rex ~= 0 then wputb(64 + band(rex, 15)) end
   if sz == "b" then op = op - 1 end
   wputb(op)
 end
@@ -489,7 +490,7 @@ end
 -- Put ModRM or SIB formatted byte.
 local function wputmodrm(m, s, rm, vs, vrm)
   assert(m < 4 and s < 16 and rm < 16, "bad modrm operands")
-  wputb(64*m + 8*(s%8) + (rm%8))
+  wputb(shl(m, 6) + shl(band(s, 7), 3) + band(rm, 7))
 end
 
 -- Put ModRM/SIB plus optional displacement.
@@ -548,7 +549,7 @@ local function wputmrmsib(t, imark, s, vsreg)
 
   local m
   if tdisp == "number" then -- Check displacement size at assembly time.
-    if disp == 0 and (reg%8) ~= 5 then -- [ebp] -> [ebp+0] (in SIB, too)
+    if disp == 0 and band(reg, 7) ~= 5 then -- [ebp] -> [ebp+0] (in SIB, too)
       if not vreg then m = 0 end -- Force DISP to allow [Rd(5)] -> [ebp+0]
     elseif disp >= -128 and disp <= 127 then m = 1
     else m = 2 end
@@ -557,7 +558,7 @@ local function wputmrmsib(t, imark, s, vsreg)
   end
 
   -- Index register present or esp as base register: need SIB encoding.
-  if xreg or (reg%8) == 4 then
+  if xreg or band(reg, 7) == 4 then
     wputmodrm(m or 2, s, 4) -- ModRM.
     if m == nil or imark == "I" then waction("MARK") end
     if vsreg then waction("VREG", vsreg); wputxb(2) end
@@ -1410,7 +1411,7 @@ local map_op = {
 -- Arithmetic ops.
 for name,n in pairs{ add = 0, ["or"] = 1, adc = 2, sbb = 3,
 		     ["and"] = 4, sub = 5, xor = 6, cmp = 7 } do
-  local n8 = n * 8
+  local n8 = shl(n, 3)
   map_op[name.."_2"] = format(
     "mr:%02XRm|rm:%02XrM|mI1qdw:81%XmI|mS1qdw:83%XmS|Ri1qdwb:%02Xri|mi1qdwb:81%Xmi",
     1+n8, 3+n8, n, n, 5+n8, n)
@@ -1432,7 +1433,7 @@ end
 -- FP arithmetic ops.
 for name,n in pairs{ add = 0, mul = 1, com = 2, comp = 3,
 		     sub = 4, subr = 5, div = 6, divr = 7 } do
-  local nc = 192 + n * 8
+  local nc = 0xc0 + shl(n, 3)
   local nr = nc + (n < 4 and 0 or (n % 2 == 0 and 8 or -8))
   local fn = "f"..name
   map_op[fn.."_1"] = format("ff:D8%02Xr|xd:D8%Xm|xq:nDC%Xm", nc, n, n)
@@ -1448,8 +1449,7 @@ end
 
 -- FP conditional moves.
 for cc,n in pairs{ b=0, e=1, be=2, u=3, nb=4, ne=5, nbe=6, nu=7 } do
-  local n4 = n % 4
-  local nc = 56000 + n4 * 8 + (n-n4) * 64
+  local nc = 0xdac0 + shl(band(n, 3), 3) + shl(band(n, 4), 6)
   map_op["fcmov"..cc.."_1"] = format("ff:%04Xr", nc) -- P6+
   map_op["fcmov"..cc.."_2"] = format("Fff:%04XR", nc) -- P6+
 end
@@ -1499,10 +1499,10 @@ local function dopattern(pat, args, sz, op, needrex)
       local s
       if addin then
 	s = addin.reg
-	opcode = opcode - (s%8)	-- Undo regno opcode merge.
+	opcode = opcode - band(s, 7)	-- Undo regno opcode merge.
       else
-	s = opcode % 16		-- Undo last digit.
-	opcode = (opcode - s) / 16
+	s = band(opcode, 15)	-- Undo last digit.
+	opcode = shr(opcode, 4)
       end
       local nn = c == "m" and 1 or 2
       local t = args[nn]
@@ -1699,7 +1699,7 @@ if x64 then
 	  werror("bad operand mode")
 	end
 	op64 = params[2]
-	opcode = 0xb8 + (a.reg%8) -- !x64: no VREG support.
+	opcode = 0xb8 + band(a.reg, 7) -- !x64: no VREG support.
 	rex = a.reg > 7 and 9 or 8
       end
     end

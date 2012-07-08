@@ -26,6 +26,9 @@ local _s = string
 local sub, format, byte, char = _s.sub, _s.format, _s.byte, _s.char
 local match, gmatch, gsub = _s.match, _s.gmatch, _s.gsub
 local concat, sort, insert = table.concat, table.sort, table.insert
+local bit = bit or require("bit")
+local band, shl, shr, sar = bit.band, bit.lshift, bit.rshift, bit.arshift
+local ror, tohex = bit.ror, bit.tohex
 
 -- Inherited tables and callbacks.
 local g_opt, g_arch
@@ -59,11 +62,6 @@ local actargs = { 0 }
 local secpos = 1
 
 ------------------------------------------------------------------------------
-
--- Return 8 digit hex number.
-local function tohex(x)
-  return sub(format("%08x", x), -8) -- Avoid 64 bit portability problem in Lua.
-end
 
 -- Dump action names and numbers.
 local function dumpactions(out)
@@ -483,8 +481,8 @@ local function parse_reglist(reglist)
   if not reglist then werror("register list expected") end
   local rr = 0
   for p in gmatch(reglist..",", "%s*([^,]*),") do
-    local rbit = 2^parse_gpr(gsub(p, "%s+$", ""))
-    if ((rr - (rr % rbit)) / rbit) % 2 ~= 0 then
+    local rbit = shl(1, parse_gpr(gsub(p, "%s+$", "")))
+    if band(rr, rbit) ~= 0 then
       werror("duplicate register `"..p.."'")
     end
     rr = rr + rbit
@@ -497,16 +495,14 @@ local function parse_imm(imm, bits, shift, scale, signed)
   if not imm then werror("expected immediate operand") end
   local n = tonumber(imm)
   if n then
-    if n % 2^scale == 0 then
-      n = n / 2^scale
+    local m = sar(n, scale)
+    if shl(m, scale) == n then
       if signed then
-	if n >= 0 then
-	  if n < 2^(bits-1) then return n*2^shift end
-	else
-	  if n >= -(2^(bits-1))-1 then return (n+2^bits)*2^shift end
-	end
+	local s = sar(m, bits-1)
+	if s == 0 then return shl(m, shift)
+	elseif s == -1 then return shl(m + shl(1, bits), shift) end
       else
-	if n >= 0 and n <= 2^bits-1 then return n*2^shift end
+	if sar(m, bits) == 0 then return shl(m, shift) end
       end
     end
     werror("out of range immediate `"..imm.."'")
@@ -519,11 +515,10 @@ end
 local function parse_imm12(imm)
   local n = tonumber(imm)
   if n then
-    local m = n
+    local m = band(n)
     for i=0,-15,-1 do
-      if m >= 0 and m <= 255 and n % 1 == 0 then return m + (i%16) * 256 end
-      local t = m % 4
-      m = (m - t) / 4 + t * 2^30
+      if shr(m, 8) == 0 then return m + shl(band(i, 15), 8) end
+      m = ror(m, 2)
     end
     werror("out of range immediate `"..imm.."'")
   else
@@ -537,10 +532,7 @@ local function parse_imm16(imm)
   if not imm then werror("expected immediate operand") end
   local n = tonumber(imm)
   if n then
-    if n >= 0 and n <= 65535 and n % 1 == 0 then
-      local t = n % 4096
-      return (n - t) * 16 + t
-    end
+    if shr(n, 16) == 0 then return band(n, 0x0fff) + shl(band(n, 0xf000), 4) end
     werror("out of range immediate `"..imm.."'")
   else
     waction("IMM16", 32*16, imm)
@@ -555,7 +547,7 @@ local function parse_imm_load(imm, ext)
       if n >= -255 and n <= 255 then
 	local up = 0x00800000
 	if n < 0 then n = -n; up = 0 end
-	return (n-(n%16))*16+(n%16) + up
+	return shl(band(n, 0xf0), 4) + band(n, 0x0f) + up
       end
     else
       if n >= -4095 and n <= 4095 then
@@ -565,7 +557,7 @@ local function parse_imm_load(imm, ext)
     end
     werror("out of range immediate `"..imm.."'")
   else
-    waction(ext and "IMML8" or "IMML12", 32768 + 32*(ext and 8 or 12), imm)
+    waction(ext and "IMML8" or "IMML12", 32768 + shl(ext and 8 or 12, 5), imm)
     return 0
   end
 end
@@ -578,10 +570,10 @@ local function parse_shift(shift, gprok)
     s = map_shift[s]
     if not s then werror("expected shift operand") end
     if sub(s2, 1, 1) == "#" then
-      return parse_imm(s2, 5, 7, 0, false) + s * 32
+      return parse_imm(s2, 5, 7, 0, false) + shl(s, 5)
     else
       if not gprok then werror("expected immediate shift operand") end
-      return parse_gpr(s2) * 256 + s * 32 + 16
+      return shl(parse_gpr(s2), 8) + shl(s, 5) + 16
     end
   end
 end
@@ -617,12 +609,12 @@ local function parse_label(label, def)
 end
 
 local function parse_load(params, nparams, n, op)
-  local oplo = op % 256
+  local oplo = band(op, 255)
   local ext, ldrd = (oplo ~= 0), (oplo == 208)
   local d
   if (ldrd or oplo == 240) then
-    d = ((op - (op % 4096)) / 4096) % 16
-    if d % 2 ~= 0 then werror("odd destination register") end
+    d = band(shr(op, 12), 15)
+    if band(d, 1) ~= 0 then werror("odd destination register") end
   end
   local pn = params[n]
   local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
@@ -640,7 +632,7 @@ local function parse_load(params, nparams, n, op)
 	if tp then
 	  waction(ext and "IMML8" or "IMML12", 32768 + 32*(ext and 8 or 12),
 		  format(tp.ctypefmt, tailr))
-	  return op + d * 65536 + 0x01000000 + (ext and 0x00400000 or 0)
+	  return op + shl(d, 16) + 0x01000000 + (ext and 0x00400000 or 0)
 	end
       end
     end
@@ -650,7 +642,7 @@ local function parse_load(params, nparams, n, op)
   if p2 then
     if wb == "!" then werror("bad use of '!'") end
     local p3 = params[n+2]
-    op = op + parse_gpr(p1) * 65536
+    op = op + shl(parse_gpr(p1), 16)
     local imm = match(p2, "^#(.*)$")
     if imm then
       local m = parse_imm_load(imm, ext)
@@ -664,7 +656,7 @@ local function parse_load(params, nparams, n, op)
     end
   else
     local p1a, p2 = match(p1, "^([^,%s]*)%s*(.*)$")
-    op = op + parse_gpr(p1a) * 65536 + 0x01000000
+    op = op + shl(parse_gpr(p1a), 16) + 0x01000000
     if p2 ~= "" then
       local imm = match(p2, "^,%s*#(.*)$")
       if imm then
@@ -704,11 +696,11 @@ map_op[".template__"] = function(params, template, nparams)
   -- Process each character.
   for p in gmatch(sub(template, 9), ".") do
     if p == "D" then
-      op = op + parse_gpr(params[n]) * 4096; n = n + 1
+      op = op + shl(parse_gpr(params[n]), 12); n = n + 1
     elseif p == "N" then
-      op = op + parse_gpr(params[n]) * 65536; n = n + 1
+      op = op + shl(parse_gpr(params[n]), 16); n = n + 1
     elseif p == "S" then
-      op = op + parse_gpr(params[n]) * 256; n = n + 1
+      op = op + shl(parse_gpr(params[n]), 8); n = n + 1
     elseif p == "M" then
       op = op + parse_gpr(params[n]); n = n + 1
     elseif p == "P" then
@@ -738,7 +730,7 @@ map_op[".template__"] = function(params, template, nparams)
       end
     elseif p == "n" then
       local r, wb = match(params[n], "^([^!]*)(!?)$")
-      op = op + parse_gpr(r) * 65536 + (wb == "!" and 0x00200000 or 0)
+      op = op + shl(parse_gpr(r), 16) + (wb == "!" and 0x00200000 or 0)
       n = n + 1
     elseif p == "R" then
       op = op + parse_reglist(params[n]); n = n + 1
@@ -751,17 +743,16 @@ map_op[".template__"] = function(params, template, nparams)
       if imm then
 	op = op + parse_imm(params[n], 5, 7, 0, false); n = n + 1
       else
-	op = op + parse_gpr(params[n]) * 256 + 16
+	op = op + shl(parse_gpr(params[n]), 8) + 16
       end
     elseif p == "X" then
       op = op + parse_imm(params[n], 5, 16, 0, false); n = n + 1
     elseif p == "K" then
       local imm = tonumber(match(params[n], "^#(.*)$")); n = n + 1
-      if not imm or imm % 1 ~= 0 or imm < 0 or imm > 0xffff then
+      if not imm or shr(imm, 16) ~= 0 then
 	werror("bad immediate operand")
       end
-      local t = imm % 16
-      op = op + (imm - t) * 16 + t
+      op = op + shl(band(imm, 0xfff0), 4) + band(imm, 0x000f)
     elseif p == "T" then
       op = op + parse_imm(params[n], 24, 0, 0, false); n = n + 1
     elseif p == "s" then
