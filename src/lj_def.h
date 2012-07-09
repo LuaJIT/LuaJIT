@@ -242,6 +242,11 @@ static LJ_AINLINE uint32_t lj_getu32(const void *p)
 #define LJ_FASTCALL	__fastcall
 #endif
 
+unsigned char _BitScanForward(uint32_t *, unsigned long);
+unsigned char _BitScanReverse(uint32_t *, unsigned long);
+unsigned long _byteswap_ulong(unsigned long);
+uint64_t _byteswap_uint64(uint64_t);
+
 static LJ_AINLINE uint32_t lj_ffs(uint32_t x)
 {
   uint32_t r; _BitScanForward(&r, x); return r;
