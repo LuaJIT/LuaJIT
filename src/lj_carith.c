@@ -213,7 +213,7 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
       if (ca->ct[i])
 	repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, ca->ct[i]), NULL));
       else
-	repr[i] = typename(&L->base[i]);
+	repr[i] = lj_typename(&L->base[i]);
     }
     lj_err_callerv(L, mm == MM_len ? LJ_ERR_FFI_BADLEN :
 		      mm == MM_concat ? LJ_ERR_FFI_BADCONCAT :

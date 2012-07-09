@@ -598,7 +598,7 @@ LJ_NOINLINE void lj_err_lex(lua_State *L, GCstr *src, const char *tok,
 /* Typecheck error for operands. */
 LJ_NOINLINE void lj_err_optype(lua_State *L, cTValue *o, ErrMsg opm)
 {
-  const char *tname = typename(o);
+  const char *tname = lj_typename(o);
   const char *opname = err2msg(opm);
   if (curr_funcisL(L)) {
     GCproto *pt = curr_proto(L);
@@ -614,8 +614,8 @@ LJ_NOINLINE void lj_err_optype(lua_State *L, cTValue *o, ErrMsg opm)
 /* Typecheck error for ordered comparisons. */
 LJ_NOINLINE void lj_err_comp(lua_State *L, cTValue *o1, cTValue *o2)
 {
-  const char *t1 = typename(o1);
-  const char *t2 = typename(o2);
+  const char *t1 = lj_typename(o1);
+  const char *t2 = lj_typename(o2);
   err_msgv(L, t1 == t2 ? LJ_ERR_BADCMPV : LJ_ERR_BADCMPT, t1, t2);
   /* This assumes the two "boolean" entries are commoned by the C compiler. */
 }
@@ -629,7 +629,7 @@ LJ_NOINLINE void lj_err_optype_call(lua_State *L, TValue *o)
   */
   const BCIns *pc = cframe_Lpc(L);
   if (((ptrdiff_t)pc & FRAME_TYPE) != FRAME_LUA) {
-    const char *tname = typename(o);
+    const char *tname = lj_typename(o);
     setframe_pc(o, pc);
     setframe_gc(o, obj2gco(L));
     L->top = L->base = o+1;
@@ -722,7 +722,7 @@ LJ_NOINLINE void lj_err_arg(lua_State *L, int narg, ErrMsg em)
 LJ_NOINLINE void lj_err_argtype(lua_State *L, int narg, const char *xname)
 {
   TValue *o = narg < 0 ? L->top + narg : L->base + narg-1;
-  const char *tname = o < L->top ? typename(o) : lj_obj_typename[0];
+  const char *tname = o < L->top ? lj_typename(o) : lj_obj_typename[0];
   const char *msg = lj_str_pushf(L, err2msg(LJ_ERR_BADTYPE), xname, tname);
   err_argmsg(L, narg, msg);
 }

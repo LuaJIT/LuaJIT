@@ -38,7 +38,7 @@ LJ_NORET static void cconv_err_convtv(CTState *cts, CType *d, TValue *o,
 				      CTInfo flags)
 {
   const char *dst = strdata(lj_ctype_repr(cts->L, ctype_typeid(cts, d), NULL));
-  const char *src = typename(o);
+  const char *src = lj_typename(o);
   if (CCF_GETARG(flags))
     lj_err_argv(cts->L, CCF_GETARG(flags), LJ_ERR_FFI_BADCONV, src, dst);
   else

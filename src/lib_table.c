@@ -157,7 +157,7 @@ LJLIB_CF(table_concat)
       lua_rawgeti(L, 1, i);
       o = L->top-1;
       if (!(tvisstr(o) || tvisnumber(o)))
-	lj_err_callerv(L, LJ_ERR_TABCAT, typename(o), i);
+	lj_err_callerv(L, LJ_ERR_TABCAT, lj_typename(o), i);
       luaL_addvalue(&b);
       if (i++ == e) break;
       if (seplen)
