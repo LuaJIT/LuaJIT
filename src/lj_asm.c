@@ -799,7 +799,7 @@ static int asm_sunk_store(ASMState *as, IRIns *ira, IRIns *irs)
 static void asm_snap_alloc1(ASMState *as, IRRef ref)
 {
   IRIns *ir = IR(ref);
-  if (!(ra_used(ir) || ir->r == RID_SUNK)) {
+  if (!irref_isk(ref) && (!(ra_used(ir) || ir->r == RID_SUNK))) {
     if (ir->r == RID_SINK) {
       ir->r = RID_SUNK;
 #if LJ_HASFFI
