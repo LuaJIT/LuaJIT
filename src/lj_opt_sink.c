@@ -163,7 +163,7 @@ static void sink_remark_phi(jit_State *J)
   } while (remark);
 }
 
-/* Sweep instructions and mark sunken allocations and stores. */
+/* Sweep instructions and tag sunken allocations and stores. */
 static void sink_sweep_ins(jit_State *J)
 {
   IRIns *ir, *irfirst = IR(J->cur.nk);
@@ -194,6 +194,7 @@ static void sink_sweep_ins(jit_State *J)
       if (!irt_ismarked(ir->t)) {
 	ir->t.irt &= ~IRT_GUARD;
 	ir->prev = REGSP(RID_SINK, 0);
+	J->cur.sinktags = 1;  /* Signal present SINK tags to assembler. */
       } else {
 	irt_clearmark(ir->t);
 	ir->prev = REGSP_INIT;
@@ -216,7 +217,6 @@ static void sink_sweep_ins(jit_State *J)
       break;
     }
   }
-  IR(REF_BASE)->prev = 1;  /* Signal SINK flags to assembler. */
 }
 
 /* Allocation sinking and store sinking.

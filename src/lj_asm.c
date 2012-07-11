@@ -1538,9 +1538,10 @@ static void asm_tail_link(ASMState *as)
 /* -- Trace setup --------------------------------------------------------- */
 
 /* Clear reg/sp for all instructions and add register hints. */
-static void asm_setup_regsp(ASMState *as, int sink)
+static void asm_setup_regsp(ASMState *as)
 {
   GCtrace *T = as->T;
+  int sink = T->sinktags;
   IRRef nins = T->nins;
   IRIns *ir, *lastir;
   int inloop;
@@ -1768,7 +1769,6 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   ASMState as_;
   ASMState *as = &as_;
   MCode *origtop;
-  int sink;
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
   J->cur.nins = lj_ir_nextins(J);
@@ -1789,7 +1789,6 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->mcp = as->mctop;
   as->mclim = as->mcbot + MCLIM_REDZONE;
   asm_setup_target(as);
-  sink = (IR(REF_BASE)->prev == 1);
 
   do {
     as->mcp = as->mctop;
@@ -1805,7 +1804,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
     as->gcsteps = 0;
     as->sectref = as->loopref;
     as->fuseref = (as->flags & JIT_F_OPT_FUSE) ? as->loopref : FUSE_DISABLED;
-    asm_setup_regsp(as, sink);
+    asm_setup_regsp(as);
     if (!as->loopref)
       asm_tail_link(as);
 

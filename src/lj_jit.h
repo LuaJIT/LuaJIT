@@ -233,7 +233,8 @@ typedef struct GCtrace {
   TraceNo1 root;	/* Root trace of side trace (or 0 for root traces). */
   TraceNo1 nextroot;	/* Next root trace for same prototype. */
   TraceNo1 nextside;	/* Next side trace of same root trace. */
-  uint16_t unused2;
+  uint8_t sinktags;	/* Trace has SINK tags. */
+  uint8_t unused1;
 #ifdef LUAJIT_USE_GDBJIT
   void *gdbjit_entry;	/* GDB JIT entry. */
 #endif
