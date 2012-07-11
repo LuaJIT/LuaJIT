@@ -1576,6 +1576,8 @@ static void asm_setup_regsp(ASMState *as)
   if (as->parent) {
     uint16_t *p;
     lastir = lj_snap_regspmap(as->parent, as->J->exitno, ir);
+    if (lastir - ir > LJ_MAX_JSLOTS)
+      lj_trace_err(as->J, LJ_TRERR_NYICOAL);
     as->stopins = (IRRef)((lastir-1) - as->ir);
     for (p = as->parentmap; ir < lastir; ir++) {
       RegSP rs = ir->prev;
