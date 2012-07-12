@@ -284,7 +284,10 @@ LJLIB_CF(ffi_meta___tostring)
   } else {
     CTState *cts = ctype_cts(L);
     CType *ct = ctype_raw(cts, id);
-    if (ctype_isref(ct->info)) ct = ctype_rawchild(cts, ct);
+    if (ctype_isref(ct->info)) {
+      p = *(void **)p;
+      ct = ctype_rawchild(cts, ct);
+    }
     if (ctype_iscomplex(ct->info)) {
       setstrV(L, L->top-1, lj_ctype_repr_complex(L, cdataptr(cd), ct->size));
       goto checkgc;
