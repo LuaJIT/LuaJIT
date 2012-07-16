@@ -683,6 +683,8 @@ static int split_needsplit(jit_State *J)
     for (ref = J->chain[IR_SLOAD]; ref; ref = IR(ref)->prev)
       if ((IR(ref)->op2 & IRSLOAD_CONVERT))
 	return 1;
+    if (J->chain[IR_TOBIT])
+      return 1;
   }
   for (ref = J->chain[IR_CONV]; ref; ref = IR(ref)->prev) {
     IRType st = (IR(ref)->op2 & IRCONV_SRCMASK);
