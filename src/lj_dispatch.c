@@ -86,7 +86,7 @@ void lj_dispatch_init_hotcount(global_State *g)
 #define DISPMODE_REC	0x02	/* Recording active. */
 #define DISPMODE_INS	0x04	/* Override instruction dispatch. */
 #define DISPMODE_CALL	0x08	/* Override call dispatch. */
-#define DISPMODE_RET	0x08	/* Override return dispatch. */
+#define DISPMODE_RET	0x10	/* Override return dispatch. */
 
 /* Update dispatch table depending on various flags. */
 void lj_dispatch_update(global_State *g)
@@ -167,7 +167,7 @@ void lj_dispatch_update(global_State *g)
     /* Set dynamic call dispatch. */
     if ((oldmode ^ mode) & DISPMODE_CALL) {  /* Update the whole table? */
       uint32_t i;
-      if ((mode & 8) == 0) {  /* No call hooks? */
+      if ((mode & DISPMODE_CALL) == 0) {  /* No call hooks? */
 	for (i = GG_LEN_SDISP; i < GG_LEN_DDISP; i++)
 	  disp[i] = makeasmfunc(lj_bc_ofs[i]);
       } else {
