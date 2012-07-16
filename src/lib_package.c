@@ -517,7 +517,7 @@ static int lj_cf_package_seeall(lua_State *L)
 #define AUXMARK		"\1"
 
 static void setpath(lua_State *L, const char *fieldname, const char *envname,
-		    const char *def)
+		    const char *def, int noenv)
 {
 #if LJ_TARGET_CONSOLE
   const char *path = NULL;
@@ -525,7 +525,7 @@ static void setpath(lua_State *L, const char *fieldname, const char *envname,
 #else
   const char *path = getenv(envname);
 #endif
-  if (path == NULL) {
+  if (path == NULL || noenv) {
     lua_pushstring(L, def);
   } else {
     path = luaL_gsub(L, path, LUA_PATHSEP LUA_PATHSEP,
@@ -562,6 +562,7 @@ static const lua_CFunction package_loaders[] =
 LUALIB_API int luaopen_package(lua_State *L)
 {
   int i;
+  int noenv;
   luaL_newmetatable(L, "_LOADLIB");
   lj_lib_pushcf(L, lj_cf_package_unloadlib, 1);
   lua_setfield(L, -2, "__gc");
@@ -574,8 +575,11 @@ LUALIB_API int luaopen_package(lua_State *L)
     lua_rawseti(L, -2, i+1);
   }
   lua_setfield(L, -2, "loaders");
-  setpath(L, "path", LUA_PATH, LUA_PATH_DEFAULT);
-  setpath(L, "cpath", LUA_CPATH, LUA_CPATH_DEFAULT);
+  lua_getfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
+  noenv = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  setpath(L, "path", LUA_PATH, LUA_PATH_DEFAULT, noenv);
+  setpath(L, "cpath", LUA_CPATH, LUA_CPATH_DEFAULT, noenv);
   lua_pushliteral(L, LUA_PATH_CONFIG);
   lua_setfield(L, -2, "config");
   luaL_findtable(L, LUA_REGISTRYINDEX, "_LOADED", 16);
