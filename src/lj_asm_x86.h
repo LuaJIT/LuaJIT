@@ -2067,8 +2067,8 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
     lua_assert(irt_is64(ir->t) || irt_isint(ir->t) || irt_isaddr(ir->t));
     /* Swap constants (only for ABC) and fusable loads to the right. */
     if (irref_isk(lref) || (!irref_isk(rref) && opisfusableload(leftop))) {
-      if ((cc & 0xc) == 0xc) cc ^= 3;  /* L <-> G, LE <-> GE */
-      else if ((cc & 0xa) == 0x2) cc ^= 5;  /* A <-> B, AE <-> BE */
+      if ((cc & 0xc) == 0xc) cc ^= 0x53;  /* L <-> G, LE <-> GE */
+      else if ((cc & 0xa) == 0x2) cc ^= 0x55;  /* A <-> B, AE <-> BE */
       lref = ir->op2; rref = ir->op1;
     }
     if (asm_isk32(as, rref, &imm)) {
