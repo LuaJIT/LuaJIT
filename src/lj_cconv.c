@@ -374,7 +374,6 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
 		   TValue *o, uint8_t *sp)
 {
   CTInfo sinfo = s->info;
-  lua_assert(!ctype_isenum(sinfo));
   if (ctype_isnum(sinfo)) {
     if (!ctype_isbool(sinfo)) {
       if (ctype_isinteger(sinfo) && s->size > 4) goto copyval;

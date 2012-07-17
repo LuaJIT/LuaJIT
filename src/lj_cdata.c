@@ -231,8 +231,8 @@ int lj_cdata_get(CTState *cts, CType *s, TValue *o, uint8_t *sp)
     s = ctype_get(cts, sid);
   }
 
-  /* Skip attributes and enums. */
-  while (ctype_isattrib(s->info) || ctype_isenum(s->info))
+  /* Skip attributes. */
+  while (ctype_isattrib(s->info))
     s = ctype_child(cts, s);
 
   return lj_cconv_tv_ct(cts, s, sid, o, sp);

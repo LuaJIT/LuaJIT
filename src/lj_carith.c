@@ -46,6 +46,7 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 	ct = ctype_get(cts,
 	  lj_ctype_intern(cts, CTINFO(CT_PTR, CTALIGN_PTR|id), CTSIZE_PTR));
       }
+      if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
       ca->ct[i] = ct;
       ca->p[i] = p;
     } else if (tvisint(o)) {
@@ -57,6 +58,25 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
     } else if (tvisnil(o)) {
       ca->ct[i] = ctype_get(cts, CTID_P_VOID);
       ca->p[i] = (uint8_t *)0;
+    } else if (tvisstr(o)) {
+      TValue *o2 = i == 0 ? o+1 : o-1;
+      CType *ct = ctype_raw(cts, cdataV(o2)->ctypeid);
+      ca->ct[i] = NULL;
+      ca->p[i] = NULL;
+      ok = 0;
+      if (ctype_isenum(ct->info)) {
+	CTSize ofs;
+	CType *cct = lj_ctype_getfield(cts, ct, strV(o), &ofs);
+	if (cct && ctype_isconstval(cct->info)) {
+	  ca->ct[i] = ctype_child(cts, cct);
+	  ca->p[i] = (uint8_t *)&cct->size;  /* Assumes ct does not grow. */
+	  ok = 1;
+	} else {
+	  ca->ct[1-i] = ct;  /* Use enum to improve error message. */
+	  ca->p[1-i] = NULL;
+	  break;
+	}
+      }
     } else {
       ca->ct[i] = NULL;
       ca->p[i] = NULL;
@@ -204,17 +224,22 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
     tv = lj_ctype_meta(cts, cdataV(L->base+1)->ctypeid, mm);
   if (!tv) {
     const char *repr[2];
-    int i;
+    int i, isenum = -1, isstr = -1;
     if (mm == MM_eq) {  /* Equality checks never raise an error. */
       setboolV(L->top-1, 0);
       return 1;
     }
     for (i = 0; i < 2; i++) {
-      if (ca->ct[i])
+      if (ca->ct[i]) {
+	if (ctype_isenum(ca->ct[i]->info)) isenum = i;
 	repr[i] = strdata(lj_ctype_repr(L, ctype_typeid(cts, ca->ct[i]), NULL));
-      else
+      } else {
+	if (tvisstr(&L->base[i])) isstr = i;
 	repr[i] = lj_typename(&L->base[i]);
+      }
     }
+    if ((isenum ^ isstr) == 1)
+      lj_err_callerv(L, LJ_ERR_FFI_BADCONV, repr[isstr], repr[isenum]);
     lj_err_callerv(L, mm == MM_len ? LJ_ERR_FFI_BADLEN :
 		      mm == MM_concat ? LJ_ERR_FFI_BADCONCAT :
 		      mm < MM_add ? LJ_ERR_FFI_BADCOMP : LJ_ERR_FFI_BADARITH,

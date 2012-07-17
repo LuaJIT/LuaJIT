@@ -337,7 +337,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       }
     } else if (ir->o == IR_FLOAD) {
       /* Generic fusion is only ok for 32 bit operand (but see asm_comp). */
-      if ((irt_isint(ir->t) || irt_isaddr(ir->t)) &&
+      if ((irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t)) &&
 	  noconflict(as, ref, IR_FSTORE, 0)) {
 	asm_fusefref(as, ir, xallow);
 	return RID_MRM;
@@ -2064,7 +2064,8 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
     IROp leftop = (IROp)(IR(lref)->o);
     Reg r64 = REX_64IR(ir, 0);
     int32_t imm = 0;
-    lua_assert(irt_is64(ir->t) || irt_isint(ir->t) || irt_isaddr(ir->t));
+    lua_assert(irt_is64(ir->t) || irt_isint(ir->t) ||
+	       irt_isu32(ir->t) || irt_isaddr(ir->t));
     /* Swap constants (only for ABC) and fusable loads to the right. */
     if (irref_isk(lref) || (!irref_isk(rref) && opisfusableload(leftop))) {
       if ((cc & 0xc) == 0xc) cc ^= 0x53;  /* L <-> G, LE <-> GE */

@@ -1287,7 +1287,7 @@ static void asm_intcomp(ASMState *as, IRIns *ir)
   Reg left;
   uint32_t m;
   int cmpprev0 = 0;
-  lua_assert(irt_isint(ir->t) || irt_isaddr(ir->t));
+  lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
   if (asm_swapops(as, lref, rref)) {
     Reg tmp = lref; lref = rref; rref = tmp;
     if (cc >= CC_GE) cc ^= 7;  /* LT <-> GT, LE <-> GE */

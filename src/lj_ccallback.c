@@ -426,7 +426,6 @@ static void callback_conv_args(CTState *cts, lua_State *L)
       MSize n;
       lua_assert(ctype_isfield(ctf->info));
       cta = ctype_rawchild(cts, ctf);
-      if (ctype_isenum(cta->info)) cta = ctype_child(cts, cta);
       isfp = ctype_isfp(cta->info);
       sz = (cta->size + CTSIZE_PTR-1) & ~(CTSIZE_PTR-1);
       n = sz / CTSIZE_PTR;  /* Number of GPRs or stack slots needed. */

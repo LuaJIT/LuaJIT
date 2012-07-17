@@ -297,6 +297,9 @@ LJLIB_CF(ffi_meta___tostring)
       goto checkgc;
     } else if (ctype_isfunc(ct->info)) {
       p = *(void **)p;
+    } else if (ctype_isenum(ct->info)) {
+      msg = "cdata<%s>: %d";
+      p = (void *)(uintptr_t)*(uint32_t **)p;
     } else {
       if (ctype_isptr(ct->info)) {
 	p = cdata_getptr(p, ct->size);
@@ -348,7 +351,6 @@ LJLIB_CF(ffi_clib___index)	LJLIB_REC(clib_index 1)
       CTypeID sid = ctype_cid(s->info);
       void *sp = *(void **)cdataptr(cd);
       CType *ct = ctype_raw(cts, sid);
-      if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
       if (lj_cconv_tv_ct(cts, ct, sid, L->top-1, sp))
 	lj_gc_check(L);
       return 1;

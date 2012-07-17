@@ -250,19 +250,20 @@ constant values; retrieving return values from C&nbsp;calls:
 <tr class="even separate">
 <td class="convin"><tt>bool</tt></td><td class="convop">0 &rarr; <tt>false</tt>, otherwise <tt>true</tt></td><td class="convout">boolean</td></tr>
 <tr class="odd separate">
-<td class="convin">Complex number</td><td class="convop">boxed value</td><td class="convout">complex cdata</td></tr>
+<td class="convin"><tt>enum</tt></td><td class="convop">boxed value</td><td class="convout">enum cdata</td></tr>
 <tr class="even">
+<td class="convin">Complex number</td><td class="convop">boxed value</td><td class="convout">complex cdata</td></tr>
+<tr class="odd">
 <td class="convin">Vector</td><td class="convop">boxed value</td><td class="convout">vector cdata</td></tr>
-<tr class="odd">
+<tr class="even">
 <td class="convin">Pointer</td><td class="convop">boxed value</td><td class="convout">pointer cdata</td></tr>
-<tr class="even separate">
+<tr class="odd separate">
 <td class="convin">Array</td><td class="convop">boxed reference</td><td class="convout">reference cdata</td></tr>
-<tr class="odd">
+<tr class="even">
 <td class="convin"><tt>struct</tt>/<tt>union</tt></td><td class="convop">boxed reference</td><td class="convout">reference cdata</td></tr>
 </table>
 <p>
-Bitfields or <tt>enum</tt> types are treated like their underlying
-type.
+Bitfields are treated like their underlying type.
 </p>
 <p>
 Reference types are dereferenced <em>before</em> a conversion can take
@@ -715,6 +716,10 @@ is performed. Otherwise both sides are converted to an
 <tt>int64_t</tt> and a signed arithmetic operation is performed. The
 result is a boxed 64&nbsp;bit cdata object.<br>
 
+If one of the operands is an <tt>enum</tt> and the other operand is a
+string, the string is converted to the value of a matching <tt>enum</tt>
+constant before the above conversion.<br>
+
 These rules ensure that 64&nbsp;bit integers are "sticky". Any
 expression involving at least one 64&nbsp;bit integer operand results
 in another one. The undefined cases for the division, modulo and power
@@ -740,7 +745,11 @@ cdata number and a Lua number can be compared with each other. If one
 of them is an <tt>uint64_t</tt>, the other side is converted to an
 <tt>uint64_t</tt> and an unsigned comparison is performed. Otherwise
 both sides are converted to an <tt>int64_t</tt> and a signed
-comparison is performed.</li>
+comparison is performed.<br>
+
+If one of the operands is an <tt>enum</tt> and the other operand is a
+string, the string is converted to the value of a matching <tt>enum</tt>
+constant before the above conversion.<br>
 
 <li><b>Comparisons for equality/inequality</b> never raise an error.
 Even incompatible pointers can be compared for equality by address. Any
