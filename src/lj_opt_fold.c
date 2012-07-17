@@ -1219,7 +1219,7 @@ LJFOLDF(simplify_intsubsub_leftcancel)
 {
   if (!irt_isnum(fins->t)) {
     PHIBARRIER(fleft);
-    if (fins->op1 == fleft->op1) {  /* (i - j) - i ==> 0 - j */
+    if (fins->op2 == fleft->op1) {  /* (i - j) - i ==> 0 - j */
       fins->op1 = (IRRef1)lj_ir_kint(J, 0);
       fins->op2 = fleft->op2;
       return RETRYFOLD;
