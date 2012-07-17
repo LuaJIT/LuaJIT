@@ -627,7 +627,14 @@ LJFOLD(CONV KNUM IRCONV_U32_NUM)
 LJFOLDF(kfold_conv_knum_u32_num)
 {
   lua_assert((fins->op2 & IRCONV_TRUNC));
+#ifdef _MSC_VER
+  {  /* Workaround for MSVC bug. */
+    volatile uint32_t u = (uint32_t)knumleft;
+    return INTFOLD((int32_t)u);
+  }
+#else
   return INTFOLD((int32_t)(uint32_t)knumleft);
+#endif
 }
 
 LJFOLD(CONV KNUM IRCONV_I64_NUM)
