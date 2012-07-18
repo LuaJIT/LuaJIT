@@ -662,6 +662,10 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
       rs = snap_renameref(T, snapno, ref, rs);
     if (ra_hasspill(regsp_spill(rs))) {
       src = &ex->spill[regsp_spill(rs)];
+      if (sz == 8 && !irt_is64(ir->t)) {
+	tmp = (uint64_t)(uint32_t)*src;
+	src = (int32_t *)&tmp;
+      }
     } else {
       Reg r = regsp_reg(rs);
       if (ra_noreg(r)) {
