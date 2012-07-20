@@ -384,7 +384,7 @@ static TRef snap_dedup(jit_State *J, SnapEntry *map, MSize nmax, IRRef ref)
   MSize j;
   for (j = 0; j < nmax; j++)
     if (snap_ref(map[j]) == ref)
-      return J->slot[snap_slot(map[j])];
+      return J->slot[snap_slot(map[j])] & ~(SNAP_CONT|SNAP_FRAME);
   return 0;
 }
 
