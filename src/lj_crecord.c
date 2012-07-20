@@ -483,16 +483,8 @@ static void crec_index_meta(jit_State *J, CTState *cts, CType *ct,
   } else if (rd->data == 0 && tvistab(tv) && tref_isstr(J->base[1])) {
     /* Specialize to result of __index lookup. */
     cTValue *o = lj_tab_get(J->L, tabV(tv), &rd->argv[1]);
-    IRType t = itype2irt(o);
-    if (tvisgcv(o))
-      J->base[0] = lj_ir_kgc(J, gcV(o), t);
-    else if (tvisint(o))
-      J->base[0] = lj_ir_kint(J, intV(o));
-    else if (tvisnum(o))
-      J->base[0] = lj_ir_knumint(J, numV(o));
-    else if (tvisbool(o))
-      J->base[0] = TREF_PRI(t);
-    else
+    J->base[0] = lj_record_constify(J, o);
+    if (!J->base[0])
       lj_trace_err(J, LJ_TRERR_BADTYPE);
     /* Always specialize to the key. */
     emitir(IRTG(IR_EQ, IRT_STR), J->base[1], lj_ir_kstr(J, strV(&rd->argv[1])));

@@ -187,6 +187,21 @@ int lj_record_objcmp(jit_State *J, TRef a, TRef b, cTValue *av, cTValue *bv)
   return diff;
 }
 
+/* Constify a value. Returns 0 for non-representable object types. */
+TRef lj_record_constify(jit_State *J, cTValue *o)
+{
+  if (tvisgcv(o))
+    return lj_ir_kgc(J, gcV(o), itype2irt(o));
+  else if (tvisint(o))
+    return lj_ir_kint(J, intV(o));
+  else if (tvisnum(o))
+    return lj_ir_knumint(J, numV(o));
+  else if (tvisbool(o))
+    return TREF_PRI(itype2irt(o));
+  else
+    return 0;  /* Can't represent lightuserdata (pointless). */
+}
+
 /* -- Record loop ops ----------------------------------------------------- */
 
 /* Loop event. */
@@ -569,8 +584,8 @@ static TRef rec_call_specialize(jit_State *J, GCfunc *fn, TRef tr)
   TRef kfunc;
   if (isluafunc(fn)) {
     GCproto *pt = funcproto(fn);
-    /* 3 or more closures created? Probably not a monomorphic function. */
-    if (pt->flags >= 3*PROTO_CLCOUNT) {  /* Specialize to prototype instead. */
+    /* Too many closures created? Probably not a monomorphic function. */
+    if (pt->flags >= PROTO_CLC_POLY) {  /* Specialize to prototype instead. */
       TRef trpt = emitir(IRT(IR_FLOAD, IRT_P32), tr, IRFL_FUNC_PC);
       emitir(IRTG(IR_EQ, IRT_P32), trpt, lj_ir_kptr(J, proto_bc(pt)));
       (void)lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);  /* Prevent GC of proto. */
@@ -1267,6 +1282,22 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   TRef fn = getcurrf(J);
   IRRef uref;
   int needbarrier = 0;
+  if (uvp->immutable) {  /* Try to constify immutable upvalue. */
+    TRef tr, kfunc;
+    lua_assert(val == 0);
+    if (!tref_isk(fn)) {  /* Late specialization of current function. */
+      if (J->pt->flags >= PROTO_CLC_POLY)
+	goto noconstify;
+      kfunc = lj_ir_kfunc(J, J->fn);
+      emitir(IRTG(IR_EQ, IRT_FUNC), fn, kfunc);
+      J->base[-1] = TREF_FRAME | kfunc;
+      fn = kfunc;
+    }
+    tr = lj_record_constify(J, uvval(uvp));
+    if (tr)
+      return tr;
+  }
+noconstify:
   /* Note: this effectively limits LJ_MAX_UPVAL to 127. */
   uv = (uv << 8) | (hashrot(uvp->dhash, uvp->dhash + HASH_BIAS) & 0xff);
   if (!uvp->closed) {

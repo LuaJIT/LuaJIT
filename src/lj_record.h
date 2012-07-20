@@ -28,6 +28,7 @@ typedef struct RecordIndex {
 
 LJ_FUNC int lj_record_objcmp(jit_State *J, TRef a, TRef b,
 			     cTValue *av, cTValue *bv);
+LJ_FUNC TRef lj_record_constify(jit_State *J, cTValue *o);
 
 LJ_FUNC void lj_record_call(jit_State *J, BCReg func, ptrdiff_t nargs);
 LJ_FUNC void lj_record_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs);

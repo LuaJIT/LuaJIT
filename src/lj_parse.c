@@ -39,8 +39,8 @@ typedef enum {
   VKLAST = VKNUM,
   VKCDATA,	/* nval = cdata value, not treated as a constant expression */
   /* Non-constant expressions follow: */
-  VLOCAL,	/* info = local register */
-  VUPVAL,	/* info = upvalue index */
+  VLOCAL,	/* info = local register, aux = vstack index */
+  VUPVAL,	/* info = upvalue index, aux = vstack index */
   VGLOBAL,	/* sval = string value */
   VINDEXED,	/* info = table register, aux = index reg/byte/string const */
   VJMP,		/* info = instruction PC */
@@ -104,6 +104,8 @@ typedef struct FuncScope {
 /* Index into variable stack. */
 typedef uint16_t VarIndex;
 #define LJ_MAX_VSTACK		65536
+
+#define VSTACK_VAR_RW		0x80000000	/* In endpc: R/W variable. */
 
 /* Upvalue map. */
 typedef struct UVMap {
@@ -608,10 +610,12 @@ static void bcemit_store(FuncState *fs, ExpDesc *var, ExpDesc *e)
 {
   BCIns ins;
   if (var->k == VLOCAL) {
+    fs->ls->vstack[var->u.s.aux].endpc |= VSTACK_VAR_RW;
     expr_free(fs, e);
     expr_toreg(fs, e, var->u.s.info);
     return;
   } else if (var->k == VUPVAL) {
+    fs->ls->vstack[var->u.s.aux].endpc |= VSTACK_VAR_RW;
     expr_toval(fs, e);
     if (e->k <= VKTRUE)
       ins = BCINS_AD(BC_USETP, var->u.s.info, const_pri(e));
@@ -1046,8 +1050,11 @@ static void var_add(LexState *ls, BCReg nvars)
 {
   FuncState *fs = ls->fs;
   fs->nactvar = (uint8_t)(fs->nactvar + nvars);
-  for (; nvars; nvars--)
-    var_get(ls, fs, fs->nactvar - nvars).startpc = fs->pc;
+  for (; nvars; nvars--) {
+    VarInfo *v = &var_get(ls, fs, fs->nactvar - nvars);
+    v->startpc = fs->pc;
+    v->endpc = 0;
+  }
 }
 
 /* Remove local variables. */
@@ -1055,7 +1062,7 @@ static void var_remove(LexState *ls, BCReg tolevel)
 {
   FuncState *fs = ls->fs;
   while (fs->nactvar > tolevel)
-    var_get(ls, fs, --fs->nactvar).endpc = fs->pc;
+    var_get(ls, fs, --fs->nactvar).endpc |= fs->pc;
 }
 
 /* Lookup local variable name. */
@@ -1080,7 +1087,8 @@ static MSize var_lookup_uv(FuncState *fs, MSize vidx, ExpDesc *e)
   checklimit(fs, fs->nuv, LJ_MAX_UPVAL, "upvalues");
   lua_assert(e->k == VLOCAL || e->k == VUPVAL);
   fs->uvloc[n].vidx = (uint16_t)vidx;
-  fs->uvloc[n].slot = (uint16_t)(e->u.s.info | (e->k == VLOCAL ? 0x8000 : 0));
+  fs->uvloc[n].slot = (uint16_t)(e->u.s.info |
+				 (e->k == VLOCAL ? PROTO_UV_LOCAL : 0));
   fs->nuv = n+1;
   return n;
 }
@@ -1097,7 +1105,7 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
       expr_init(e, VLOCAL, reg);
       if (!first)
 	scope_uvmark(fs, reg);  /* Scope now has an upvalue. */
-      return (MSize)fs->varmap[reg];
+      return (MSize)(e->u.s.aux = (uint32_t)fs->varmap[reg]);
     } else {
       MSize vidx = var_lookup_(fs->prev, name, e, 0);  /* Var in outer func? */
       if ((int32_t)vidx >= 0) {  /* Yes, make it an upvalue here. */
@@ -1185,11 +1193,20 @@ static void fs_fixup_k(FuncState *fs, GCproto *pt, void *kptr)
 /* Fixup upvalues for prototype. */
 static void fs_fixup_uv(FuncState *fs, GCproto *pt, uint16_t *uv)
 {
+  VarInfo *vstack;
+  UVMap *uvloc;
   MSize i, n = fs->nuv;
   setmref(pt->uv, uv);
   pt->sizeuv = n;
-  for (i = 0; i < n; i++)
-    uv[i] = fs->uvloc[i].slot;
+  vstack = fs->ls->vstack;
+  uvloc = fs->uvloc;
+  for (i = 0; i < n; i++) {
+    uint16_t slot = uvloc[i].slot;
+    uint16_t vidx = uvloc[i].vidx;
+    if ((slot & PROTO_UV_LOCAL) && !(vstack[vidx].endpc & VSTACK_VAR_RW))
+      slot |= PROTO_UV_IMMUTABLE;
+    uv[i] = slot;
+  }
 }
 
 #ifndef LUAJIT_DISABLE_DEBUGINFO
@@ -1287,7 +1304,8 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
   /* Store local variable names and compressed ranges. */
   for (i = 0, n = ls->vtop - fs->vbase; i < n; i++) {
     GCstr *s = strref(vstack[i].name);
-    BCPos startpc = vstack[i].startpc, endpc = vstack[i].endpc;
+    BCPos startpc = vstack[i].startpc;
+    BCPos endpc = vstack[i].endpc & ~VSTACK_VAR_RW;
     if ((uintptr_t)s < VARNAME__MAX) {
       fs_buf_need(ls, 1 + 2*5);
       ls->sb.buf[ls->sb.n++] = (uint8_t)(uintptr_t)s;
@@ -2180,6 +2198,7 @@ static void parse_local(LexState *ls)
     FuncState *fs = ls->fs;
     var_new(ls, 0, lex_str(ls));
     expr_init(&v, VLOCAL, fs->freereg);
+    v.u.s.aux = fs->varmap[fs->freereg];
     bcreg_reserve(fs, 1);
     var_add(ls, 1);
     parse_body(ls, &b, 0, ls->linenumber);

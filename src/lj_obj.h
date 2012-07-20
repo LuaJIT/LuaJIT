@@ -321,6 +321,10 @@ typedef struct GCproto {
 /* Top bits used for counting created closures. */
 #define PROTO_CLCOUNT		0x20	/* Base of saturating 3 bit counter. */
 #define PROTO_CLC_BITS		3
+#define PROTO_CLC_POLY		(3*PROTO_CLCOUNT)  /* Polymorphic threshold. */
+
+#define PROTO_UV_LOCAL		0x8000	/* Upvalue for local slot. */
+#define PROTO_UV_IMMUTABLE	0x4000	/* Immutable upvalue. */
 
 #define proto_kgc(pt, idx) \
   check_exp((uintptr_t)(intptr_t)(idx) >= (uintptr_t)-(intptr_t)(pt)->sizekgc, \
@@ -342,7 +346,7 @@ typedef struct GCproto {
 typedef struct GCupval {
   GCHeader;
   uint8_t closed;	/* Set if closed (i.e. uv->v == &uv->u.value). */
-  uint8_t unused;
+  uint8_t immutable;	/* Immutable value. */
   union {
     TValue tv;		/* If closed: the value itself. */
     struct {		/* If open: double linked list, anchored at thread. */
