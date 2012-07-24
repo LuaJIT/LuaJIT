@@ -20,6 +20,9 @@
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#endif
 #include "lj_carith.h"
 #include "lj_vm.h"
 
@@ -535,7 +538,16 @@ LJFOLDF(kfold_add_kgc)
 #else
   ptrdiff_t ofs = fright->i;
 #endif
-  return lj_ir_kkptr(J, (char *)o + ofs);
+#if LJ_HASFFI
+  if (irt_iscdata(fleft->t)) {
+    CType *ct = ctype_raw(ctype_ctsG(J2G(J)), gco2cd(o)->ctypeid);
+    if (ctype_isnum(ct->info) || ctype_isenum(ct->info) ||
+	ctype_isptr(ct->info) || ctype_isfunc(ct->info) ||
+	ctype_iscomplex(ct->info) || ctype_isvector(ct->info))
+      return lj_ir_kkptr(J, (char *)o + ofs);
+  }
+#endif
+  return lj_ir_kptr(J, (char *)o + ofs);
 }
 
 LJFOLD(ADD KPTR KINT)
