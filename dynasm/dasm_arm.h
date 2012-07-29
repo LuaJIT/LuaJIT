@@ -22,7 +22,7 @@ enum {
   DASM_ALIGN, DASM_REL_LG, DASM_LABEL_LG,
   /* The following actions also have an argument. */
   DASM_REL_PC, DASM_LABEL_PC,
-  DASM_IMM, DASM_IMM12, DASM_IMM16, DASM_IMML8, DASM_IMML12,
+  DASM_IMM, DASM_IMM12, DASM_IMM16, DASM_IMML8, DASM_IMML12, DASM_IMMV8,
   DASM__MAX
 };
 
@@ -250,6 +250,9 @@ void dasm_put(Dst_DECL, int start, ...)
 #endif
 	b[pos++] = n;
 	break;
+      case DASM_IMMV8:
+	CK((n & 3) == 0, RANGE_I);
+	n >>= 2;
       case DASM_IMML8:
       case DASM_IMML12:
 	CK(n >= 0 ? ((n>>((ins>>5)&31)) == 0) :
@@ -316,7 +319,7 @@ int dasm_link(Dst_DECL, size_t *szp)
 	case DASM_REL_LG: case DASM_REL_PC: pos++; break;
 	case DASM_LABEL_LG: case DASM_LABEL_PC: b[pos++] += ofs; break;
 	case DASM_IMM: case DASM_IMM12: case DASM_IMM16:
-	case DASM_IMML8: case DASM_IMML12: pos++; break;
+	case DASM_IMML8: case DASM_IMML12: case DASM_IMMV8: pos++; break;
 	}
       }
       stop: (void)0;
@@ -377,9 +380,13 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  } else if ((ins & 0x1000)) {
 	    CK((n & 3) == 0 && -256 <= n && n <= 256, RANGE_REL);
 	    goto patchimml8;
-	  } else {
+	  } else if ((ins & 0x2000) == 0) {
 	    CK((n & 3) == 0 && -4096 <= n && n <= 4096, RANGE_REL);
-	    goto patchimml12;
+	    goto patchimml;
+	  } else {
+	    CK((n & 3) == 0 && -1020 <= n && n <= 1020, RANGE_REL);
+	    n >>= 2;
+	    goto patchimml;
 	  }
 	  break;
 	case DASM_LABEL_LG:
@@ -399,7 +406,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  cp[-1] |= n >= 0 ? (0x00800000 | (n & 0x0f) | ((n & 0xf0) << 4)) :
 			     ((-n & 0x0f) | ((-n & 0xf0) << 4));
 	  break;
-	case DASM_IMML12: patchimml12:
+	case DASM_IMML12: case DASM_IMMV8: patchimml:
 	  cp[-1] |= n >= 0 ? (0x00800000 | n) : (-n);
 	  break;
 	default: *cp++ = ins; break;

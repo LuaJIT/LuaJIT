@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "IMM", "IMM12", "IMM16", "IMML8", "IMML12",
+  "REL_PC", "LABEL_PC", "IMM", "IMM12", "IMM16", "IMML8", "IMML12", "IMMV8",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -405,14 +405,14 @@ local map_op = {
   strd_2 = "e00000f0DL", strd_3 = "e00000f0DL", -- v5TE
   ldrsh_2 = "e01000f0DL", ldrsh_3 = "e01000f0DL",
 
-  ldm_2 = "e8900000nR", ldmia_2 = "e8900000nR", ldmfd_2 = "e8900000nR",
-  ldmda_2 = "e8100000nR", ldmfa_2 = "e8100000nR",
-  ldmdb_2 = "e9100000nR", ldmea_2 = "e9100000nR",
-  ldmib_2 = "e9900000nR", ldmed_2 = "e9900000nR",
-  stm_2 = "e8800000nR", stmia_2 = "e8800000nR", stmfd_2 = "e8800000nR",
-  stmda_2 = "e8000000nR", stmfa_2 = "e8000000nR",
-  stmdb_2 = "e9000000nR", stmea_2 = "e9000000nR",
-  stmib_2 = "e9800000nR", stmed_2 = "e9800000nR",
+  ldm_2 = "e8900000oR", ldmia_2 = "e8900000oR", ldmfd_2 = "e8900000oR",
+  ldmda_2 = "e8100000oR", ldmfa_2 = "e8100000oR",
+  ldmdb_2 = "e9100000oR", ldmea_2 = "e9100000oR",
+  ldmib_2 = "e9900000oR", ldmed_2 = "e9900000oR",
+  stm_2 = "e8800000oR", stmia_2 = "e8800000oR", stmfd_2 = "e8800000oR",
+  stmda_2 = "e8000000oR", stmfa_2 = "e8000000oR",
+  stmdb_2 = "e9000000oR", stmea_2 = "e9000000oR",
+  stmib_2 = "e9800000oR", stmed_2 = "e9800000oR",
   pop_1 = "e8bd0000R", push_1 = "e92d0000R",
 
   -- Branch instructions.
@@ -428,9 +428,89 @@ local map_op = {
   svc_1 = "ef000000T", swi_1 = "ef000000T",
   ud_0 = "e7f001f0",
 
-  -- NYI: Advanced SIMD and VFP instructions.
+  -- VFP instructions.
+  ["vadd.f32_3"] = "ee300a00dnm",
+  ["vadd.f64_3"] = "ee300b00Gdnm",
+  ["vsub.f32_3"] = "ee300a40dnm",
+  ["vsub.f64_3"] = "ee300b40Gdnm",
+  ["vmul.f32_3"] = "ee200a00dnm",
+  ["vmul.f64_3"] = "ee200b00Gdnm",
+  ["vnmul.f32_3"] = "ee200a40dnm",
+  ["vnmul.f64_3"] = "ee200b40Gdnm",
+  ["vmla.f32_3"] = "ee000a00dnm",
+  ["vmla.f64_3"] = "ee000b00Gdnm",
+  ["vmls.f32_3"] = "ee000a40dnm",
+  ["vmls.f64_3"] = "ee000b40Gdnm",
+  ["vnmla.f32_3"] = "ee100a40dnm",
+  ["vnmla.f64_3"] = "ee100b40Gdnm",
+  ["vnmls.f32_3"] = "ee100a00dnm",
+  ["vnmls.f64_3"] = "ee100b00Gdnm",
+  ["vdiv.f32_3"] = "ee800a00dnm",
+  ["vdiv.f64_3"] = "ee800b00Gdnm",
 
-  -- NYI instructions, since I have no need for them right now:
+  ["vabs.f32_2"] = "eeb00ac0dm",
+  ["vabs.f64_2"] = "eeb00bc0Gdm",
+  ["vneg.f32_2"] = "eeb10a40dm",
+  ["vneg.f64_2"] = "eeb10b40Gdm",
+  ["vsqrt.f32_2"] = "eeb10ac0dm",
+  ["vsqrt.f64_2"] = "eeb10bc0Gdm",
+  ["vcmp.f32_2"] = "eeb40a40dm",
+  ["vcmp.f64_2"] = "eeb40b40Gdm",
+  ["vcmpe.f32_2"] = "eeb40ac0dm",
+  ["vcmpe.f64_2"] = "eeb40bc0Gdm",
+  ["vcmpz.f32_1"] = "eeb50a40d",
+  ["vcmpz.f64_1"] = "eeb50b40Gd",
+  ["vcmpze.f32_1"] = "eeb50ac0d",
+  ["vcmpze.f64_1"] = "eeb50bc0Gd",
+
+  vldr_2 = "ed100a00dl|ed100b00Gdl",
+  vstr_2 = "ed000a00dl|ed000b00Gdl",
+  vldm_2 = "ec900a00or",
+  vldmia_2 = "ec900a00or",
+  vldmdb_2 = "ed100a00or",
+  vpop_1 = "ecbd0a00r",
+  vstm_2 = "ec800a00or",
+  vstmia_2 = "ec800a00or",
+  vstmdb_2 = "ed000a00or",
+  vpush_1 = "ed2d0a00r",
+
+  ["vmov.f32_2"] = "eeb00a40dm|eeb00a00dY",	-- #imm is VFPv3 only
+  ["vmov.f64_2"] = "eeb00b40Gdm|eeb00b00GdY",	-- #imm is VFPv3 only
+  vmov_2 = "ee100a10Dn|ee000a10nD",
+  vmov_3 = "ec500a10DNm|ec400a10mDN|ec500b10GDNm|ec400b10GmDN",
+
+  vmrs_0 = "eef1fa10",
+  vmrs_1 = "eef10a10D",
+  vmsr_1 = "eee10a10D",
+
+  ["vcvt.s32.f32_2"] = "eebd0ac0dm",
+  ["vcvt.s32.f64_2"] = "eebd0bc0dGm",
+  ["vcvt.u32.f32_2"] = "eebc0ac0dm",
+  ["vcvt.u32.f64_2"] = "eebc0bc0dGm",
+  ["vcvtr.s32.f32_2"] = "eebd0a40dm",
+  ["vcvtr.s32.f64_2"] = "eebd0b40dGm",
+  ["vcvtr.u32.f32_2"] = "eebc0a40dm",
+  ["vcvtr.u32.f64_2"] = "eebc0b40dGm",
+  ["vcvt.f32.s32_2"] = "eeb80ac0dm",
+  ["vcvt.f64.s32_2"] = "eeb80bc0GdFm",
+  ["vcvt.f32.u32_2"] = "eeb80a40dm",
+  ["vcvt.f64.u32_2"] = "eeb80b40GdFm",
+  ["vcvt.f32.f64_2"] = "eeb70bc0dGm",
+  ["vcvt.f64.f32_2"] = "eeb70ac0GdFm",
+
+  -- VFPv4 only:
+  ["vfma.f32_3"] = "eea00a00dnm",
+  ["vfma.f64_3"] = "eea00b00Gdnm",
+  ["vfms.f32_3"] = "eea00a40dnm",
+  ["vfms.f64_3"] = "eea00b40Gdnm",
+  ["vfnma.f32_3"] = "ee900a40dnm",
+  ["vfnma.f64_3"] = "ee900b40Gdnm",
+  ["vfnms.f32_3"] = "ee900a00dnm",
+  ["vfnms.f64_3"] = "ee900b00Gdnm",
+
+  -- NYI: Advanced SIMD instructions.
+
+  -- NYI: I have no need for these instructions right now:
   -- swp, swpb, strex, ldrex, strexd, ldrexd, strexb, ldrexb, strexh, ldrexh
   -- msr, nopv6, yield, wfe, wfi, sev, dbg, bxj, smc, srs, rfe
   -- cps, setend, pli, pld, pldw, clrex, dsb, dmb, isb
@@ -476,6 +556,18 @@ local function parse_gpr_pm(expr)
   return parse_gpr(expr2), (pm == "-")
 end
 
+local function parse_vr(expr, tp)
+  local t, r = match(expr, "^([sd])([0-9]+)$")
+  if t == tp then
+    r = tonumber(r)
+    if r <= 31 then
+      if t == "s" then return shr(r, 1), band(r, 1) end
+      return band(r, 15), shr(r, 4)
+    end
+  end
+  werror("bad register name `"..expr.."'")
+end
+
 local function parse_reglist(reglist)
   reglist = match(reglist, "^{%s*([^}]*)}$")
   if not reglist then werror("register list expected") end
@@ -488,6 +580,21 @@ local function parse_reglist(reglist)
     rr = rr + rbit
   end
   return rr
+end
+
+local function parse_vrlist(reglist)
+  local ta, ra, tb, rb = match(reglist,
+			   "^{%s*([sd])([0-9]+)%s*%-%s*([sd])([0-9]+)%s*}$")
+  ra, rb = tonumber(ra), tonumber(rb)
+  if ta and ta == tb and ra and rb and ra <= 31 and rb <= 31 and ra <= rb then
+    local nr = rb+1 - ra
+    if ta == "s" then
+      return shl(shr(ra,1),12)+shl(band(ra,1),22) + nr
+    else
+      return shl(band(ra,15),12)+shl(shr(ra,4),22) + nr*2 + 0x100
+    end
+  end
+  werror("register list expected")
 end
 
 local function parse_imm(imm, bits, shift, scale, signed)
@@ -680,81 +787,132 @@ local function parse_load(params, nparams, n, op)
   return op
 end
 
+local function parse_vload(q)
+  local reg, imm = match(q, "^%[%s*([^,%s]*)%s*(.*)%]$")
+  if reg then
+    local d = shl(parse_gpr(reg), 16)
+    if imm == "" then return d end
+    imm = match(imm, "^,%s*#(.*)$")
+    if imm then
+      local n = tonumber(imm)
+      if n then
+	if n >= -1020 and n <= 1020 and n%4 == 0 then
+	  return d + (n >= 0 and n/4+0x00800000 or -n/4)
+	end
+	werror("out of range immediate `"..imm.."'")
+      else
+	waction("IMMV8", 32768 + 32*8, imm)
+	return d
+      end
+    end
+  else
+    if match(q, "^[<>=%-]") or match(q, "^extern%s+") then
+      local mode, n, s = parse_label(q, false)
+      waction("REL_"..mode, n + 0x2800, s, 1)
+      return 15 * 65536
+    end
+    local reg, tailr = match(q, "^([%w_:]+)%s*(.*)$")
+    if reg and tailr ~= "" then
+      local d, tp = parse_gpr(reg)
+      if tp then
+	waction("IMMV8", 32768 + 32*8, format(tp.ctypefmt, tailr))
+	return shl(d, 16)
+      end
+    end
+  end
+  werror("expected address operand")
+end
+
 ------------------------------------------------------------------------------
 
 -- Handle opcodes defined with template strings.
-map_op[".template__"] = function(params, template, nparams)
-  if not params then return sub(template, 9) end
+local function parse_template(params, template, nparams, pos)
   local op = tonumber(sub(template, 1, 8), 16)
   local n = 1
-
-  -- Limit number of section buffer positions used by a single dasm_put().
-  -- A single opcode needs a maximum of 3 positions.
-  if secpos+3 > maxsecpos then wflush() end
-  local pos = wpos()
+  local vr = "s"
 
   -- Process each character.
   for p in gmatch(sub(template, 9), ".") do
+    local q = params[n]
     if p == "D" then
-      op = op + shl(parse_gpr(params[n]), 12); n = n + 1
+      op = op + shl(parse_gpr(q), 12); n = n + 1
     elseif p == "N" then
-      op = op + shl(parse_gpr(params[n]), 16); n = n + 1
+      op = op + shl(parse_gpr(q), 16); n = n + 1
     elseif p == "S" then
-      op = op + shl(parse_gpr(params[n]), 8); n = n + 1
+      op = op + shl(parse_gpr(q), 8); n = n + 1
     elseif p == "M" then
-      op = op + parse_gpr(params[n]); n = n + 1
+      op = op + parse_gpr(q); n = n + 1
+    elseif p == "d" then
+      local r,h = parse_vr(q, vr); op = op+shl(r,12)+shl(h,22); n = n + 1
+    elseif p == "n" then
+      local r,h = parse_vr(q, vr); op = op+shl(r,16)+shl(h,7); n = n + 1
+    elseif p == "m" then
+      local r,h = parse_vr(q, vr); op = op+r+shl(h,5); n = n + 1
     elseif p == "P" then
-      local imm = match(params[n], "^#(.*)$")
+      local imm = match(q, "^#(.*)$")
       if imm then
 	op = op + parse_imm12(imm) + 0x02000000
       else
-	op = op + parse_gpr(params[n])
+	op = op + parse_gpr(q)
       end
       n = n + 1
     elseif p == "p" then
-      op = op + parse_shift(params[n], true); n = n + 1
+      op = op + parse_shift(q, true); n = n + 1
     elseif p == "L" then
       op = parse_load(params, nparams, n, op)
+    elseif p == "l" then
+      op = op + parse_vload(q)
     elseif p == "B" then
-      local mode, n, s = parse_label(params[n], false)
+      local mode, n, s = parse_label(q, false)
       waction("REL_"..mode, n, s, 1)
     elseif p == "C" then -- blx gpr vs. blx label.
-      local p = params[n]
-      if match(p, "^([%w_]+):(r1?[0-9])$") or match(p, "^r(1?[0-9])$") then
-	op = op + parse_gpr(p)
+      if match(q, "^([%w_]+):(r1?[0-9])$") or match(q, "^r(1?[0-9])$") then
+	op = op + parse_gpr(q)
       else
 	if op < 0xe0000000 then werror("unconditional instruction") end
-	local mode, n, s = parse_label(p, false)
+	local mode, n, s = parse_label(q, false)
 	waction("REL_"..mode, n, s, 1)
 	op = 0xfa000000
       end
-    elseif p == "n" then
-      local r, wb = match(params[n], "^([^!]*)(!?)$")
+    elseif p == "F" then
+      vr = "s"
+    elseif p == "G" then
+      vr = "d"
+    elseif p == "o" then
+      local r, wb = match(q, "^([^!]*)(!?)$")
       op = op + shl(parse_gpr(r), 16) + (wb == "!" and 0x00200000 or 0)
       n = n + 1
     elseif p == "R" then
-      op = op + parse_reglist(params[n]); n = n + 1
+      op = op + parse_reglist(q); n = n + 1
+    elseif p == "r" then
+      op = op + parse_vrlist(q); n = n + 1
     elseif p == "W" then
-      op = op + parse_imm16(params[n]); n = n + 1
+      op = op + parse_imm16(q); n = n + 1
     elseif p == "v" then
-      op = op + parse_imm(params[n], 5, 7, 0, false); n = n + 1
+      op = op + parse_imm(q, 5, 7, 0, false); n = n + 1
     elseif p == "w" then
-      local imm = match(params[n], "^#(.*)$")
+      local imm = match(q, "^#(.*)$")
       if imm then
-	op = op + parse_imm(params[n], 5, 7, 0, false); n = n + 1
+	op = op + parse_imm(q, 5, 7, 0, false); n = n + 1
       else
-	op = op + shl(parse_gpr(params[n]), 8) + 16
+	op = op + shl(parse_gpr(q), 8) + 16
       end
     elseif p == "X" then
-      op = op + parse_imm(params[n], 5, 16, 0, false); n = n + 1
+      op = op + parse_imm(q, 5, 16, 0, false); n = n + 1
+    elseif p == "Y" then
+      local imm = tonumber(match(q, "^#(.*)$")); n = n + 1
+      if not imm or shr(imm, 8) ~= 0 then
+	werror("bad immediate operand")
+      end
+      op = op + shl(band(imm, 0xf0), 12) + band(imm, 0x0f)
     elseif p == "K" then
-      local imm = tonumber(match(params[n], "^#(.*)$")); n = n + 1
+      local imm = tonumber(match(q, "^#(.*)$")); n = n + 1
       if not imm or shr(imm, 16) ~= 0 then
 	werror("bad immediate operand")
       end
       op = op + shl(band(imm, 0xfff0), 4) + band(imm, 0x000f)
     elseif p == "T" then
-      op = op + parse_imm(params[n], 24, 0, 0, false); n = n + 1
+      op = op + parse_imm(q, 24, 0, 0, false); n = n + 1
     elseif p == "s" then
       -- Ignored.
     else
@@ -762,6 +920,27 @@ map_op[".template__"] = function(params, template, nparams)
     end
   end
   wputpos(pos, op)
+end
+
+map_op[".template__"] = function(params, template, nparams)
+  if not params then return sub(template, 9) end
+
+  -- Limit number of section buffer positions used by a single dasm_put().
+  -- A single opcode needs a maximum of 3 positions.
+  if secpos+3 > maxsecpos then wflush() end
+  local pos = wpos()
+  local apos, spos = #actargs, secpos
+
+  local ok, err
+  for t in gmatch(template, "[^|]+") do
+    ok, err = pcall(parse_template, params, t, nparams, pos)
+    if ok then return end
+    secpos = spos
+    actargs[apos+1] = nil
+    actargs[apos+2] = nil
+    actargs[apos+3] = nil
+  end
+  error(err, 0)
 end
 
 ------------------------------------------------------------------------------
@@ -923,10 +1102,10 @@ function _M.mergemaps(map_coreop, map_def)
   setmetatable(map_op, { __index = function(t, k)
     local v = map_coreop[k]
     if v then return v end
-    local cc = sub(k, -4, -3)
+    local k1, cc, k2 = match(k, "^(.-)(..)([._].*)$")
     local cv = map_cond[cc]
     if cv then
-      local v = rawget(t, sub(k, 1, -5)..sub(k, -2))
+      local v = rawget(t, k1..k2)
       if type(v) == "string" then return format("%x%s", cv, sub(v, 2)) end
     end
   end })
