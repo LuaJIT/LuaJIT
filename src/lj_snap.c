@@ -464,8 +464,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
       J->baseslot = s+1;
   }
   if (pass23) {
-    IRIns *irlast = &T->ir[(snap+1)->ref];
-    lua_assert(J->exitno+1 < T->nsnap);
+    IRIns *irlast = &T->ir[snap->ref];
     pass23 = 0;
     /* Emit dependent PVALs. */
     for (n = 0; n < nent; n++) {
