@@ -23,24 +23,118 @@ local lshift, rshift, arshift = bit.lshift, bit.rshift, bit.arshift
 ------------------------------------------------------------------------------
 
 local map_loadc = {
-  shift = 9, mask = 7,
-  [5] = {
-    shift = 0, mask = 0 -- NYI VFP load/store.
+  shift = 8, mask = 15,
+  [10] = {
+    shift = 20, mask = 1,
+    [0] = {
+      shift = 23, mask = 3,
+      [0] = "vmovFmDN", "vstmFNdr",
+      _ = {
+	shift = 21, mask = 1,
+	[0] = "vstrFdl",
+	{ shift = 16, mask = 15, [13] = "vpushFdr", _ = "vstmdbFNdr", }
+      },
+    },
+    {
+      shift = 23, mask = 3,
+      [0] = "vmovFDNm",
+      { shift = 16, mask = 15, [13] = "vpopFdr", _ = "vldmFNdr", },
+      _ = {
+	shift = 21, mask = 1,
+	[0] = "vldrFdl", "vldmdbFNdr",
+      },
+    },
+  },
+  [11] = {
+    shift = 20, mask = 1,
+    [0] = {
+      shift = 23, mask = 3,
+      [0] = "vmovGmDN", "vstmGNdr",
+      _ = {
+	shift = 21, mask = 1,
+	[0] = "vstrGdl",
+	{ shift = 16, mask = 15, [13] = "vpushGdr", _ = "vstmdbGNdr", }
+      },
+    },
+    {
+      shift = 23, mask = 3,
+      [0] = "vmovGDNm",
+      { shift = 16, mask = 15, [13] = "vpopGdr", _ = "vldmGNdr", },
+      _ = {
+	shift = 21, mask = 1,
+	[0] = "vldrGdl", "vldmdbGNdr",
+      },
+    },
   },
   _ = {
     shift = 0, mask = 0 -- NYI ldc, mcrr, mrrc.
   },
 }
 
+local map_vfps = {
+  shift = 6, mask = 0x2c001,
+  [0] = "vmlaF.dnm", "vmlsF.dnm",
+  [0x04000] = "vnmlsF.dnm", [0x04001] = "vnmlaF.dnm",
+  [0x08000] = "vmulF.dnm", [0x08001] = "vnmulF.dnm",
+  [0x0c000] = "vaddF.dnm", [0x0c001] = "vsubF.dnm",
+  [0x20000] = "vdivF.dnm",
+  [0x24000] = "vfnmsF.dnm", [0x24001] = "vfnmaF.dnm",
+  [0x28000] = "vfmaF.dnm", [0x28001] = "vfmsF.dnm",
+  [0x2c000] = "vmovF.dY",
+  [0x2c001] = {
+    shift = 7, mask = 0x1e01,
+    [0] = "vmovF.dm", "vabsF.dm",
+    [0x0200] = "vnegF.dm", [0x0201] = "vsqrtF.dm",
+    [0x0800] = "vcmpF.dm", [0x0801] = "vcmpeF.dm",
+    [0x0a00] = "vcmpzF.d", [0x0a01] = "vcmpzeF.d",
+    [0x0e01] = "vcvtG.dF.m",
+    [0x1000] = "vcvt.f32.u32Fdm", [0x1001] = "vcvt.f32.s32Fdm",
+    [0x1800] = "vcvtr.u32F.dm", [0x1801] = "vcvt.u32F.dm",
+    [0x1a00] = "vcvtr.s32F.dm", [0x1a01] = "vcvt.s32F.dm",
+  },
+}
+
+local map_vfpd = {
+  shift = 6, mask = 0x2c001,
+  [0] = "vmlaG.dnm", "vmlsG.dnm",
+  [0x04000] = "vnmlsG.dnm", [0x04001] = "vnmlaG.dnm",
+  [0x08000] = "vmulG.dnm", [0x08001] = "vnmulG.dnm",
+  [0x0c000] = "vaddG.dnm", [0x0c001] = "vsubG.dnm",
+  [0x20000] = "vdivG.dnm",
+  [0x24000] = "vfnmsG.dnm", [0x24001] = "vfnmaG.dnm",
+  [0x28000] = "vfmaG.dnm", [0x28001] = "vfmsG.dnm",
+  [0x2c000] = "vmovG.dY",
+  [0x2c001] = {
+    shift = 7, mask = 0x1e01,
+    [0] = "vmovG.dm", "vabsG.dm",
+    [0x0200] = "vnegG.dm", [0x0201] = "vsqrtG.dm",
+    [0x0800] = "vcmpG.dm", [0x0801] = "vcmpeG.dm",
+    [0x0a00] = "vcmpzG.d", [0x0a01] = "vcmpzeG.d",
+    [0x0e01] = "vcvtF.dG.m",
+    [0x1000] = "vcvt.f64.u32GdFm", [0x1001] = "vcvt.f64.s32GdFm",
+    [0x1800] = "vcvtr.u32FdG.m", [0x1801] = "vcvt.u32FdG.m",
+    [0x1a00] = "vcvtr.s32FdG.m", [0x1a01] = "vcvt.s32FdG.m",
+  },
+}
+
 local map_datac = {
   shift = 24, mask = 1,
   [0] = {
-    shift = 9, mask = 7,
-    [5] = {
-      shift = 0, mask = 0 -- NYI VFP data.
+    shift = 4, mask = 1,
+    [0] = {
+      shift = 8, mask = 15,
+      [10] = map_vfps,
+      [11] = map_vfpd,
+      -- NYI cdp, mcr, mrc.
     },
-    _ = {
-      shift = 0, mask = 0 -- NYI cdp, mcr, mrc.
+    {
+      shift = 8, mask = 15,
+      [10] = {
+	shift = 20, mask = 15,
+	[0] = "vmovFnD", "vmovFDn",
+	[14] = "vmsrD",
+	[15] = { shift = 12, mask = 15, [15] = "vmrs", _ = "vmrsD", },
+      },
     },
   },
   "svcT",
@@ -390,6 +484,27 @@ local function fmtload(ctx, op, pos)
   return x
 end
 
+-- Format operand 2 of vector load/store opcodes.
+local function fmtvload(ctx, op, pos)
+  local base = map_gpr[band(rshift(op, 16), 15)]
+  local ofs = band(op, 255)*4
+  if band(op, 0x00800000) == 0 then ofs = -ofs end
+  if base == "pc" then ctx.rel = ctx.addr + pos + 8 + ofs end
+  if ofs == 0 then
+    return format("[%s]", base)
+  else
+    return format("[%s, #%d]", base, ofs)
+  end
+end
+
+local function fmtvr(op, vr, sh0, sh1)
+  if vr == "s" then
+    return format("s%d", 2*band(rshift(op, sh0), 15)+band(rshift(op, sh1), 1))
+  else
+    return format("d%d", band(rshift(op, sh0), 15)+band(rshift(op, sh1-4), 16))
+  end
+end
+
 -- Disassemble a single instruction.
 local function disass_ins(ctx)
   local pos = ctx.pos
@@ -398,6 +513,7 @@ local function disass_ins(ctx)
   local operands = {}
   local suffix = ""
   local last, name, pat
+  local vr
   ctx.op = op
   ctx.rel = nil
 
@@ -414,6 +530,11 @@ local function disass_ins(ctx)
     opat = opat[band(rshift(op, opat.shift), opat.mask)] or opat._
   end
   name, pat = match(opat, "^([a-z0-9]*)(.*)")
+  if sub(pat, 1, 1) == "." then
+    local s2, p2 = match(pat, "^([a-z0-9.]*)(.*)")
+    suffix = suffix..s2
+    pat = p2
+  end
 
   for p in gmatch(pat, ".") do
     local x = nil
@@ -425,6 +546,12 @@ local function disass_ins(ctx)
       x = map_gpr[band(rshift(op, 8), 15)]
     elseif p == "M" then
       x = map_gpr[band(op, 15)]
+    elseif p == "d" then
+      x = fmtvr(op, vr, 12, 22)
+    elseif p == "n" then
+      x = fmtvr(op, vr, 16, 7)
+    elseif p == "m" then
+      x = fmtvr(op, vr, 0, 5)
     elseif p == "P" then
       if band(op, 0x02000000) ~= 0 then
 	x = ror(band(op, 255), 2*band(rshift(op, 8), 15))
@@ -447,12 +574,20 @@ local function disass_ins(ctx)
 	end
       end
     elseif p == "L" then
-      x = fmtload(ctx, op, pos, false)
+      x = fmtload(ctx, op, pos)
+    elseif p == "l" then
+      x = fmtvload(ctx, op, pos)
     elseif p == "B" then
       local addr = ctx.addr + pos + 8 + arshift(lshift(op, 8), 6)
       if cond == 15 then addr = addr + band(rshift(op, 23), 2) end
       ctx.rel = addr
       x = "0x"..tohex(addr)
+    elseif p == "F" then
+      vr = "s"
+    elseif p == "G" then
+      vr = "d"
+    elseif p == "." then
+      suffix = suffix..(vr == "s" and ".f32" or ".f64")
     elseif p == "R" then
       if band(op, 0x00200000) ~= 0 and #operands == 1 then
 	operands[1] = operands[1].."!"
@@ -462,6 +597,14 @@ local function disass_ins(ctx)
 	if band(rshift(op, i), 1) == 1 then t[#t+1] = map_gpr[i] end
       end
       x = "{"..concat(t, ", ").."}"
+    elseif p == "r" then
+      if band(op, 0x00200000) ~= 0 and #operands == 2 then
+	operands[1] = operands[1].."!"
+      end
+      local s = tonumber(sub(last, 2))
+      local n = band(op, 255)
+      if vr == "d" then n = rshift(n, 1) end
+      operands[#operands] = format("{%s-%s%d}", last, vr, s+n-1)
     elseif p == "W" then
       x = band(op, 0x0fff) + band(rshift(op, 4), 0xf000)
     elseif p == "T" then
@@ -484,6 +627,8 @@ local function disass_ins(ctx)
       x = band(rshift(op, 16), 31) + 1
     elseif p == "X" then
       x = band(rshift(op, 16), 31) - last + 1
+    elseif p == "Y" then
+      x = band(rshift(op, 12), 0xf0) + band(op, 0x0f)
     elseif p == "K" then
       x = "#0x"..tohex(band(rshift(op, 4), 0x0000fff0) + band(op, 15), 4)
     elseif p == "s" then
