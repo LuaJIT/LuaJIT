@@ -2414,8 +2414,19 @@ static void build_subroutines(BuildCtx *ctx)
   |.type CTSTATE, CTState, PC
   |  ldr CTSTATE, GL:r12->ctype_state
   |   add DISPATCH, r12, #GG_G2DISP
-  |  strd CARG12, CTSTATE->cb.gpr[0]
+  |.if FPU
+  |  str r4, SAVE_R4
+  |  add r4, sp, CFRAME_SPACE+4+8*8
+  |  vstmdb r4!, {d8-d15}
+  |.endif
+  |.if HFABI
+  |  add r12, CTSTATE, #offsetof(CTState, cb.fpr[8])
+  |.endif
   |  strd CARG34, CTSTATE->cb.gpr[2]
+  |  strd CARG12, CTSTATE->cb.gpr[0]
+  |.if HFABI
+  |  vstmdb r12!, {d0-d7}
+  |.endif
   |  ldr CARG4, [sp]
   |   add CARG3, sp, #CFRAME_SIZE
   |    mov CARG1, CTSTATE
@@ -2448,6 +2459,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov CARG2, RA
   |  bl extern lj_ccallback_leave	// (CTState *cts, TValue *o)
   |  ldrd CARG12, CTSTATE->cb.gpr[0]
+  |.if HFABI
+  |  vldr d0, CTSTATE->cb.fpr[0]
+  |.endif
   |  b ->vm_leave_unw
   |.endif
   |
@@ -2460,9 +2474,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr CARG1, CCSTATE:CARG1->spadj
   |   ldrb CARG2, CCSTATE->nsp
   |    add CARG3, CCSTATE, #offsetof(CCallState, stack)
+  |.if HFABI
+  |  add RB, CCSTATE, #offsetof(CCallState, fpr[0])
+  |.endif
   |  mov r11, sp
   |  sub sp, sp, CARG1			// Readjust stack.
   |   subs CARG2, CARG2, #1
+  |.if HFABI
+  |  vldm RB, {d0-d7}
+  |.endif
   |    ldr RB, CCSTATE->func
   |   bmi >2
   |1:  // Copy stack slots.
@@ -2471,14 +2491,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  subs CARG2, CARG2, #1
   |  bpl <1
   |2:
-  |  ldr CARG1, CCSTATE->gpr[0]
-  |  ldr CARG2, CCSTATE->gpr[1]
-  |  ldr CARG3, CCSTATE->gpr[2]
-  |  ldr CARG4, CCSTATE->gpr[3]
+  |  ldrd CARG12, CCSTATE->gpr[0]
+  |  ldrd CARG34, CCSTATE->gpr[2]
   |  blx RB
   |  mov sp, r11
-  |  str CRET1, CCSTATE->gpr[0]
-  |  str CRET2, CCSTATE->gpr[1]
+  |.if HFABI
+  |  add r12, CCSTATE, #offsetof(CCallState, fpr[4])
+  |.endif
+  |  strd CRET1, CCSTATE->gpr[0]
+  |.if HFABI
+  |  vstmdb r12!, {d0-d3}
+  |.endif
   |  pop {CCSTATE, r5, r11, pc}
   |.endif
   |// Note: vm_ffi_call must be the last function in this object file!

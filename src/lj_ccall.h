@@ -51,12 +51,21 @@ typedef intptr_t GPRArg;
 #elif LJ_TARGET_ARM
 
 #define CCALL_NARG_GPR		4
-#define CCALL_NARG_FPR		0
 #define CCALL_NRET_GPR		2	/* For softfp double. */
+#if LJ_ABI_SOFTFP
+#define CCALL_NARG_FPR		0
 #define CCALL_NRET_FPR		0
+#else
+#define CCALL_NARG_FPR		8
+#define CCALL_NRET_FPR		4
+#endif
 #define CCALL_SPS_FREE		0
 
 typedef intptr_t GPRArg;
+typedef union FPRArg {
+  double d;
+  float f[2];
+} FPRArg;
 
 #elif LJ_TARGET_PPC
 
@@ -122,7 +131,7 @@ LJ_STATIC_ASSERT(CCALL_NUM_FPR <= CCALL_MAX_FPR);
 
 /* -- C call state -------------------------------------------------------- */
 
-typedef struct CCallState {
+typedef LJ_ALIGN(8) struct CCallState {
   void (*func)(void);		/* Pointer to called function. */
   uint32_t spadj;		/* Stack pointer adjustment. */
   uint8_t nsp;			/* Number of stack slots. */
@@ -135,10 +144,10 @@ typedef struct CCallState {
 #elif LJ_TARGET_PPC
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #endif
-#if CCALL_NUM_FPR
 #if LJ_32
   int32_t align1;
 #endif
+#if CCALL_NUM_FPR
   FPRArg fpr[CCALL_NUM_FPR];	/* Arguments/results in FPRs. */
 #endif
   GPRArg gpr[CCALL_NUM_GPR];	/* Arguments/results in GPRs. */

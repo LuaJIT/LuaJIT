@@ -155,7 +155,7 @@ typedef struct CType {
 #define CCALL_MAX_GPR		8
 #define CCALL_MAX_FPR		8
 
-typedef LJ_ALIGN(8) union FPRCBArg { double d; float f; } FPRCBArg;
+typedef LJ_ALIGN(8) union FPRCBArg { double d; float f[2]; } FPRCBArg;
 
 /* C callback state. Defined here, to avoid dragging in lj_ccall.h. */
 
