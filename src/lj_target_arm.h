@@ -14,7 +14,9 @@
 #if LJ_SOFTFP
 #define FPRDEF(_)
 #else
-#error "NYI: hard-float support for ARM"
+#define FPRDEF(_) \
+  _(D0) _(D1) _(D2) _(D3) _(D4) _(D5) _(D6) _(D7) \
+  _(D8) _(D9) _(D10) _(D11) _(D12) _(D13) _(D14) _(D15)
 #endif
 #define VRIDDEF(_)
 
@@ -45,7 +47,7 @@ enum {
 #if LJ_SOFTFP
   RID_MAX_FPR = RID_MIN_FPR,
 #else
-#error "NYI: VFP support for ARM"
+  RID_MAX_FPR = RID_D15+1,
 #endif
   RID_NUM_GPR = RID_MAX_GPR - RID_MIN_GPR,
   RID_NUM_FPR = RID_MAX_FPR - RID_MIN_FPR
@@ -68,7 +70,8 @@ enum {
 #define RSET_FPR		0
 #define RSET_ALL		RSET_GPR
 #else
-#error "NYI: VFP support for ARM"
+#define RSET_FPR		(RSET_RANGE(RID_MIN_FPR, RID_MAX_FPR))
+#define RSET_ALL		(RSET_GPR|RSET_FPR)
 #endif
 #define RSET_INIT		RSET_ALL
 
@@ -82,7 +85,7 @@ enum {
 #if LJ_SOFTFP
 #define RSET_SCRATCH_FPR	0
 #else
-#error "NYI: VFP support for ARM"
+#define RSET_SCRATCH_FPR	(RSET_RANGE(RID_D0, RID_D7+1))
 #endif
 #define RSET_SCRATCH		(RSET_SCRATCH_GPR|RSET_SCRATCH_FPR)
 #define REGARG_FIRSTGPR		RID_R0

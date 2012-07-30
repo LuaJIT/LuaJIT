@@ -97,7 +97,11 @@ enum {
 #define CFRAME_OFS_L		12
 #define CFRAME_OFS_PC		8
 #define CFRAME_OFS_MULTRES	4
+#if LJ_ARCH_HASFPU
+#define CFRAME_SIZE		128
+#else
 #define CFRAME_SIZE		64
+#endif
 #define CFRAME_SHIFT_MULTRES	3
 #elif LJ_TARGET_PPC
 #if LJ_ARCH_PPC64
