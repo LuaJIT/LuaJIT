@@ -36,6 +36,7 @@
 #endif
 
 #define CCALL_SPS_FREE		1
+#define CCALL_ALIGN_CALLSTATE	16
 
 typedef LJ_ALIGN(16) union FPRArg {
   double d[2];
@@ -117,6 +118,9 @@ typedef union FPRArg {
 #ifndef CCALL_ALIGN_STACKARG
 #define CCALL_ALIGN_STACKARG	1
 #endif
+#ifndef CCALL_ALIGN_CALLSTATE
+#define CCALL_ALIGN_CALLSTATE	8
+#endif
 
 #define CCALL_NUM_GPR \
   (CCALL_NARG_GPR > CCALL_NRET_GPR ? CCALL_NARG_GPR : CCALL_NRET_GPR)
@@ -131,7 +135,7 @@ LJ_STATIC_ASSERT(CCALL_NUM_FPR <= CCALL_MAX_FPR);
 
 /* -- C call state -------------------------------------------------------- */
 
-typedef LJ_ALIGN(8) struct CCallState {
+typedef LJ_ALIGN(CCALL_ALIGN_CALLSTATE) struct CCallState {
   void (*func)(void);		/* Pointer to called function. */
   uint32_t spadj;		/* Stack pointer adjustment. */
   uint8_t nsp;			/* Number of stack slots. */
