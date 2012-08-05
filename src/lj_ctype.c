@@ -581,6 +581,7 @@ CTState *lj_ctype_init(lua_State *L)
     CTInfo info = lj_ctype_typeinfo[id];
     ct->size = (CTSize)((int32_t)(info << 16) >> 26);
     ct->info = info & 0xffff03ffu;
+    ct->sib = 0;
     if (ctype_type(info) == CT_KW || ctype_istypedef(info)) {
       size_t len = strlen(name);
       GCstr *str = lj_str_new(L, name, len);
@@ -589,6 +590,7 @@ CTState *lj_ctype_init(lua_State *L)
       lj_ctype_addname(cts, ct, id);
     } else {
       setgcrefnull(ct->name);
+      ct->next = 0;
       if (!ctype_isenum(info)) ctype_addtype(cts, ct, id);
     }
   }
