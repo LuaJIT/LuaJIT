@@ -112,10 +112,14 @@ static int ffi_index_meta(lua_State *L, CTState *cts, CType *ct, MMS mm)
     const char *s;
   err_index:
     s = strdata(lj_ctype_repr(L, id, NULL));
-    if (tvisstr(L->base+1))
+    if (tvisstr(L->base+1)) {
       lj_err_callerv(L, LJ_ERR_FFI_BADMEMBER, s, strVdata(L->base+1));
-    else
-      lj_err_callerv(L, LJ_ERR_FFI_BADIDX, s);
+    } else {
+      const char *key = tviscdata(L->base+1) ?
+	strdata(lj_ctype_repr(L, cdataV(L->base+1)->ctypeid, NULL)) :
+	lj_typename(L->base+1);
+      lj_err_callerv(L, LJ_ERR_FFI_BADIDXW, s, key);
+    }
   }
   if (!tvisfunc(tv)) {
     if (mm == MM_index) {
