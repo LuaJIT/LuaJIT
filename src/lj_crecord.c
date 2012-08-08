@@ -422,6 +422,7 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
       if (ctype_isref(s->info)) {
 	svisnz = *(void **)svisnz;
 	s = ctype_rawchild(cts, s);
+	if (ctype_isenum(s->info)) s = ctype_child(cts, s);
 	t = crec_ct2irt(cts, s);
       } else {
 	goto doconv;
@@ -431,6 +432,7 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
       lj_needsplit(J);
       goto doconv;
     } else if (t == IRT_INT || t == IRT_U32) {
+      if (ctype_isenum(s->info)) s = ctype_child(cts, s);
       sp = emitir(IRT(IR_FLOAD, t), sp, IRFL_CDATA_INT);
       goto doconv;
     } else {
@@ -691,14 +693,15 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	  setintV(&tv, 0);
 	  if (!gcref(df->name)) continue;  /* Ignore unnamed fields. */
 	  dc = ctype_rawchild(cts, df);  /* Field type. */
-	  if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info)))
+	  if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info) ||
+		ctype_isenum(dc->info)))
 	    lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: init aggregates. */
 	  if (J->base[i]) {
 	    sp = J->base[i];
 	    sval = &rd->argv[i];
 	    i++;
 	  } else {
-	    sp = ctype_isnum(dc->info) ? lj_ir_kint(J, 0) : TREF_NIL;
+	    sp = ctype_isptr(dc->info) ? TREF_NIL : lj_ir_kint(J, 0);
 	  }
 	  dp = emitir(IRT(IR_ADD, IRT_PTR), trcd,
 		      lj_ir_kintp(J, df->size + sizeof(GCcdata)));
