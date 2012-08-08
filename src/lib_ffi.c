@@ -522,7 +522,7 @@ LJLIB_CF(ffi_cast)	LJLIB_REC(ffi_new)
   return 1;
 }
 
-LJLIB_CF(ffi_typeof)
+LJLIB_CF(ffi_typeof)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);
   CTypeID id = ffi_checkctype(L, cts, L->base+1);
@@ -533,7 +533,7 @@ LJLIB_CF(ffi_typeof)
   return 1;
 }
 
-LJLIB_CF(ffi_istype)	LJLIB_REC(ffi_istype)
+LJLIB_CF(ffi_istype)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);
   CTypeID id1 = ffi_checkctype(L, cts, NULL);

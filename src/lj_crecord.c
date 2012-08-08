@@ -1316,6 +1316,18 @@ void LJ_FASTCALL recff_ffi_fill(jit_State *J, RecordFFData *rd)
   }  /* else: interpreter will throw. */
 }
 
+void LJ_FASTCALL recff_ffi_typeof(jit_State *J, RecordFFData *rd)
+{
+  if (tref_iscdata(J->base[0])) {
+    TRef trid = lj_ir_kint(J, argv2ctype(J, J->base[0], &rd->argv[0]));
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA),
+			lj_ir_kint(J, CTID_CTYPEID), trid);
+  } else {
+    setfuncV(J->L, &J->errinfo, J->fn);
+    lj_trace_err_info(J, LJ_TRERR_NYIFFU);
+  }
+}
+
 void LJ_FASTCALL recff_ffi_istype(jit_State *J, RecordFFData *rd)
 {
   argv2ctype(J, J->base[0], &rd->argv[0]);
