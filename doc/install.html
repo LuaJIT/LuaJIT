@@ -126,28 +126,28 @@ operating systems, CPUs and compilers:
 <td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
 </tr>
 <tr class="odd">
-<td class="compatcpu"><a href="#android">ARMv5+<br>ARM9E+</a></td>
+<td class="compatcpu"><a href="#cross2">ARMv5+<br>ARM9E+</a></td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
-<td class="compatcpu"><a href="#ppc">PPC</a></td>
+<td class="compatcpu"><a href="#cross2">PPC</a></td>
 <td class="compatos">GCC 4.3+</td>
-<td class="compatos">GCC 4.3+</td>
+<td class="compatos">GCC 4.3+<br>GCC 4.1 (<a href="#cross2">PS3</a>)</td>
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="odd">
-<td class="compatcpu"><a href="#ppc">PPC/e500v2</a></td>
+<td class="compatcpu"><a href="#cross2">PPC/e500v2</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
-<td class="compatcpu"><a href="#mips">MIPS</a></td>
+<td class="compatcpu"><a href="#cross2">MIPS</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos compatno">&nbsp;</td>
@@ -341,32 +341,69 @@ directory where <tt>luajit.exe</tt> is installed
 
 <h2 id="cross">Cross-compiling LuaJIT</h2>
 <p>
-The build system has limited support for cross-compilation. For details
-check the comments in <tt>src/Makefile</tt>. Here are some popular examples:
+The GNU Makefile-based build system allows cross-compiling on any host
+for any supported target, as long as both architectures have the same
+pointer size. If you want to cross-compile to any 32 bit target on an
+x64 OS, you need to install the multilib development package (e.g.
+<tt>libc6-dev-i386</tt> on Debian/Ubuntu) and build a 32 bit host part
+(<tt>HOST_CC="gcc -m32"</tt>).
 </p>
 <p>
-You can cross-compile to a <b>32 bit binary on a multilib x64 OS</b> by
-installing the multilib development packages (e.g. <tt>libc6-dev-i386</tt>
-on Debian/Ubuntu) and running:
+You need to specify <tt>TARGET_SYS</tt> whenever the host OS and the
+target OS differ, or you'll get assembler or linker errors. E.g. if
+you're compiling on a Windows or OSX host for embedded Linux or Android,
+you need to add <tt>TARGET_SYS=Linux</tt> to the examples below. For a
+minimal target OS, you may need to disable the built-in allocator in
+<tt>src/Makefile</tt> and use <tt>TARGET_SYS=Other</tt>. The examples
+below only show some popular targets &mdash; please check the comments
+in <tt>src/Makefile</tt> for more details.
 </p>
 <pre class="code">
+# Cross-compile to a 32 bit binary on a multilib x64 OS
 make CC="gcc -m32"
-</pre>
-<p>
-You can cross-compile for a <b>Windows target on Debian/Ubuntu</b> by
-installing the <tt>mingw32</tt> package and running:
-</p>
-<pre class="code">
+
+# Cross-compile on Debian/Ubuntu for Windows (mingw32 package)
 make HOST_CC="gcc -m32" CROSS=i586-mingw32msvc- TARGET_SYS=Windows
 </pre>
+<p id="cross2">
+The <tt>CROSS</tt> prefix allows specifying a standard GNU cross-compile
+toolchain (Binutils, GCC and a matching libc). The prefix may vary
+depending on the <tt>--target</tt> the toolchain was built for (note the
+<tt>CROSS</tt> prefix has a trailing <tt>"-"</tt>). The examples below
+use the canonical toolchain triplets for Linux.
+</p>
 <p>
-You can cross-compile for an <b>ARM target</b> on an x86 or x64 host
-system using a standard GNU cross-compile toolchain (Binutils, GCC,
-EGLIBC). The <tt>CROSS</tt> prefix may vary depending on the
-<tt>--target</tt> of the toolchain:
+Since there's often no easy way to detect CPU features at runtime, it's
+important to compile with the proper CPU or architecture settings. You
+can specify these when building the toolchain yourself. Or add
+<tt>-mcpu=...</tt> or <tt>-march=...</tt> to <tt>TARGET_CFLAGS</tt>. For
+ARM it's important to have the correct <tt>-mfloat-abi=...</tt> setting,
+too. Otherwise LuaJIT may not run at the full performance of your target
+CPU.
 </p>
 <pre class="code">
-make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi-
+# ARM soft-float
+make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
+     TARGET_CFLAGS="-mfloat-abi=soft"
+
+# ARM soft-float ABI with VFP (example for Cortex-a8)
+make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
+     TARGET_CFLAGS="-mcpu=cortex-a8 -mfloat-abi=softfp"
+
+# ARM hard-float ABI with VFP (armhf, requires recent toolchain)
+make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabihf-
+
+# PPC
+make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
+# PPC/e500v2 (fast interpreter only)
+make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
+# PS3 (fast interpreter only)
+make HOST_CC="gcc -m32" CROSS=ppu-lv2-
+
+# MIPS big-endian
+make HOST_CC="gcc -m32" CROSS=mips-linux-
+# MIPS little-endian
+make HOST_CC="gcc -m32" CROSS=mipsel-linux-
 </pre>
 <p>
 You can cross-compile for <b id="android">Android (ARM)</b> using the <a href="http://developer.android.com/sdk/ndk/index.html"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
@@ -393,51 +430,14 @@ much slower than the JIT compiler. Please complain to Apple, not me.
 Or use Android. :-p
 </p>
 <pre class="code">
-ISDK=/Developer/Platforms/iPhoneOS.platform/Developer
-ISDKVER=iPhoneOS4.3.sdk
+IXCODE=/Applications/Xcode45-DP4.app/Contents
+ISDK=$IXCODE/Developer/Platforms/iPhoneOS.platform/Developer
+ISDKVER=iPhoneOS6.0.sdk
 ISDKP=$ISDK/usr/bin/
-ISDKF="-arch armv6 -isysroot $ISDK/SDKs/$ISDKVER"
+ISDKF="-arch armv7 -isysroot $ISDK/SDKs/$ISDKVER"
 make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
      TARGET_SYS=iOS
 </pre>
-<p>
-You can cross-compile for a <b id="ppc">PPC target</b> or a
-<b>PPC/e500v2 target</b> on x86 or x64 host systems using a standard
-GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
-The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
-of the toolchain:
-</p>
-<pre class="code">
-# PPC
-make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
-</pre>
-<pre class="code">
-# PPC/e500v2
-make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
-</pre>
-<p>
-You can cross-compile for a big-endian or little-endian
-<b id="mips">MIPS target</b> on x86 or x64 host systems using a standard
-GNU cross-compile toolchain (Binutils, GCC, EGLIBC).
-The <tt>CROSS</tt> prefix may vary depending on the <tt>--target</tt>
-of the toolchain:
-</p>
-<pre class="code">
-# MIPS big-endian
-make HOST_CC="gcc -m32" CROSS=mips-linux-
-</pre>
-<pre class="code">
-# MIPS little-endian
-make HOST_CC="gcc -m32" CROSS=mipsel-linux-
-</pre>
-<p>
-Whenever the <b>host OS and the target OS differ</b>, you need to specify
-<tt>TARGET_SYS</tt> or you'll get assembler or linker errors. E.g. if
-you're compiling on a Windows or OSX host for embedded Linux or Android,
-you need to add <tt>TARGET_SYS=Linux</tt> to the examples above. For a
-minimal target OS, you may need to disable the built-in allocator in
-<tt>src/Makefile</tt> and use <tt>TARGET_SYS=Other</tt>.
-</p>
 
 <h2 id="embed">Embedding LuaJIT</h2>
 <p>
