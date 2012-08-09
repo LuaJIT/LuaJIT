@@ -152,10 +152,10 @@
 #define LJ_ARCH_NAME		"arm"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#ifndef LJ_ARCH_HASFPU
+#if !defined(LJ_ARCH_HASFPU) && __SOFTFP__
 #define LJ_ARCH_HASFPU		0
 #endif
-#ifndef LJ_ABI_SOFTFP
+#if !defined(LJ_ABI_SOFTFP) && !__ARM_PCS_VFP
 #define LJ_ABI_SOFTFP		1
 #endif
 #define LJ_ABI_EABI		1
@@ -301,9 +301,6 @@
 #if LJ_TARGET_ARM
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
-#endif
-#if defined(__ARM_PCS_VFP)
-#error "No support for ARM hard-float ABI (yet)"
 #endif
 #if __ARM_ARCH_6M__ || __ARM_ARCH_7M__ || __ARM_ARCH_7EM__
 #error "No support for Cortex-M CPUs"
