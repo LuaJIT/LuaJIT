@@ -103,6 +103,15 @@ static void emit_lso(ASMState *as, ARMIns ai, Reg rd, Reg rn, int32_t ofs)
   *--as->mcp = ai | ARMI_LS_P | ARMF_D(rd) | ARMF_N(rn) | ofs;
 }
 
+#if !LJ_SOFTFP
+static void emit_vlso(ASMState *as, ARMIns ai, Reg rd, Reg rn, int32_t ofs)
+{
+  lua_assert(ofs >= -1020 && ofs <= 1020 && (ofs&3) == 0);
+  if (ofs < 0) ofs = -ofs; else ai |= ARMI_LS_U;
+  *--as->mcp = ai | ARMI_LS_P | ARMF_D(rd & 15) | ARMF_N(rn) | (ofs >> 2);
+}
+#endif
+
 /* -- Emit loads/stores --------------------------------------------------- */
 
 /* Prefer spills of BASE/L. */
@@ -208,6 +217,28 @@ static void emit_lsptr(ASMState *as, ARMIns ai, Reg r, void *p)
 	   (i & 4095));
 }
 
+#if !LJ_SOFTFP
+/* Load a number constant into an FPR. */
+static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
+{
+  int32_t i;
+  if ((as->flags & JIT_F_VFPV3) && !tv->u32.lo) {
+    uint32_t hi = tv->u32.hi;
+    uint32_t b = ((hi >> 22) & 0x1ff);
+    if (!(hi & 0xffff) && (b == 0x100 || b == 0x0ff)) {
+      *--as->mcp = ARMI_VMOVI_D | ARMF_D(r & 15) |
+		   ((tv->u32.hi >> 12) & 0x00080000) |
+		   ((tv->u32.hi >> 4) & 0x00070000) |
+		   ((tv->u32.hi >> 16) & 0x0000000f);
+      return;
+    }
+  }
+  i = i32ptr(tv);
+  emit_vlso(as, ARMI_VLDR_D, r,
+	    ra_allock(as, (i & ~1020), RSET_GPR), (i & 1020));
+}
+#endif
+
 /* Get/set global_State fields. */
 #define emit_getgl(as, r, field) \
   emit_lsptr(as, ARMI_LDR, (r), (void *)&J2G(as->J)->field)
@@ -256,7 +287,15 @@ static void emit_call(ASMState *as, void *target)
 /* Generic move between two regs. */
 static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
 {
+#if LJ_SOFTFP
   lua_assert(!irt_isnum(ir->t)); UNUSED(ir);
+#else
+  if (dst >= RID_MAX_GPR) {
+    emit_dm(as, irt_isnum(ir->t) ? ARMI_VMOV_D : ARMI_VMOV_S,
+	    (dst & 15), (src & 15));
+    return;
+  }
+#endif
   if (as->mcp != as->mcloop) {  /* Swap early registers for loads/stores. */
     MCode ins = *as->mcp, swp = (src^dst);
     if ((ins & 0x0c000000) == 0x04000000 && (ins & 0x02000010) != 0x02000010) {
@@ -272,15 +311,27 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
 /* Generic load of register from stack slot. */
 static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
 {
+#if LJ_SOFTFP
   lua_assert(!irt_isnum(ir->t)); UNUSED(ir);
-  emit_lso(as, ARMI_LDR, r, RID_SP, ofs);
+#else
+  if (r >= RID_MAX_GPR)
+    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VLDR_D : ARMI_VLDR_S, r, RID_SP, ofs);
+  else
+#endif
+    emit_lso(as, ARMI_LDR, r, RID_SP, ofs);
 }
 
 /* Generic store of register to stack slot. */
 static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
 {
+#if LJ_SOFTFP
   lua_assert(!irt_isnum(ir->t)); UNUSED(ir);
-  emit_lso(as, ARMI_STR, r, RID_SP, ofs);
+#else
+  if (r >= RID_MAX_GPR)
+    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VSTR_D : ARMI_VSTR_S, r, RID_SP, ofs);
+  else
+#endif
+    emit_lso(as, ARMI_STR, r, RID_SP, ofs);
 }
 
 /* Emit an arithmetic/logic operation with a constant operand. */

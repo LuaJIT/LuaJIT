@@ -1610,6 +1610,7 @@ static void asm_setup_regsp(ASMState *as)
 	break;
       /* fallthrough */
     case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+      if (!LJ_SOFTFP && irt_isnum(ir->t)) break;
       ir->prev = (uint16_t)REGSP_HINT((rload & 15));
       rload = lj_ror(rload, 4);
       continue;
@@ -1641,7 +1642,7 @@ static void asm_setup_regsp(ASMState *as)
 	}
 	break;
 #endif
-#if LJ_NEED_FP64
+#if !LJ_SOFTFP && LJ_NEED_FP64
       case IR_CONV:
 	if (irt_isfp((ir-1)->t)) {
 	  ir->prev = REGSP_HINT(RID_FPRET);

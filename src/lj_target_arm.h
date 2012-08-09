@@ -32,7 +32,11 @@ enum {
   RID_RET = RID_R0,
   RID_RETLO = RID_R0,
   RID_RETHI = RID_R1,
+#if LJ_SOFTFP
   RID_FPRET = RID_R0,
+#else
+  RID_FPRET = RID_D0,
+#endif
 
   /* These definitions must match with the *.dasc file(s): */
   RID_BASE = RID_R9,		/* Interpreter BASE. */
@@ -68,11 +72,10 @@ enum {
    RID2RSET(RID_R9)|RID2RSET(RID_R11))
 #if LJ_SOFTFP
 #define RSET_FPR		0
-#define RSET_ALL		RSET_GPR
 #else
 #define RSET_FPR		(RSET_RANGE(RID_MIN_FPR, RID_MAX_FPR))
-#define RSET_ALL		(RSET_GPR|RSET_FPR)
 #endif
+#define RSET_ALL		(RSET_GPR|RSET_FPR)
 #define RSET_INIT		RSET_ALL
 
 /* ABI-specific register sets. lr is an implicit scratch register. */
@@ -91,6 +94,15 @@ enum {
 #define REGARG_FIRSTGPR		RID_R0
 #define REGARG_LASTGPR		RID_R3
 #define REGARG_NUMGPR		4
+#if LJ_ABI_SOFTFP
+#define REGARG_FIRSTFPR		0
+#define REGARG_LASTFPR		0
+#define REGARG_NUMFPR		0
+#else
+#define REGARG_FIRSTFPR		RID_D0
+#define REGARG_LASTFPR		RID_D7
+#define REGARG_NUMFPR		8
+#endif
 
 /* -- Spill slots --------------------------------------------------------- */
 
@@ -199,6 +211,53 @@ typedef enum ARMIns {
   /* ARMv6T2 */
   ARMI_MOVW = 0xe3000000,
   ARMI_MOVT = 0xe3400000,
+
+  /* VFP */
+  ARMI_VMOV_D = 0xeeb00b40,
+  ARMI_VMOV_S = 0xeeb00a40,
+  ARMI_VMOVI_D = 0xeeb00b00,
+
+  ARMI_VMOV_R_S = 0xee100a10,
+  ARMI_VMOV_S_R = 0xee000a10,
+  ARMI_VMOV_RR_D = 0xec500b10,
+  ARMI_VMOV_D_RR = 0xec400b10,
+
+  ARMI_VADD_D = 0xee300b00,
+  ARMI_VSUB_D = 0xee300b40,
+  ARMI_VMUL_D = 0xee200b00,
+  ARMI_VMLA_D = 0xee000b00,
+  ARMI_VMLS_D = 0xee000b40,
+  ARMI_VNMLS_D = 0xee100b00,
+  ARMI_VDIV_D = 0xee800b00,
+
+  ARMI_VABS_D = 0xeeb00bc0,
+  ARMI_VNEG_D = 0xeeb10b40,
+  ARMI_VSQRT_D = 0xeeb10bc0,
+
+  ARMI_VCMP_D = 0xeeb40b40,
+  ARMI_VCMPZ_D = 0xeeb50b40,
+
+  ARMI_VMRS = 0xeef1fa10,
+
+  ARMI_VCVT_S32_F32 = 0xeebd0ac0,
+  ARMI_VCVT_S32_F64 = 0xeebd0bc0,
+  ARMI_VCVT_U32_F32 = 0xeebc0ac0,
+  ARMI_VCVT_U32_F64 = 0xeebc0bc0,
+  ARMI_VCVTR_S32_F32 = 0xeebd0a40,
+  ARMI_VCVTR_S32_F64 = 0xeebd0b40,
+  ARMI_VCVTR_U32_F32 = 0xeebc0a40,
+  ARMI_VCVTR_U32_F64 = 0xeebc0b40,
+  ARMI_VCVT_F32_S32 = 0xeeb80ac0,
+  ARMI_VCVT_F64_S32 = 0xeeb80bc0,
+  ARMI_VCVT_F32_U32 = 0xeeb80a40,
+  ARMI_VCVT_F64_U32 = 0xeeb80b40,
+  ARMI_VCVT_F32_F64 = 0xeeb70bc0,
+  ARMI_VCVT_F64_F32 = 0xeeb70ac0,
+
+  ARMI_VLDR_S = 0xed100a00,
+  ARMI_VLDR_D = 0xed100b00,
+  ARMI_VSTR_S = 0xed000a00,
+  ARMI_VSTR_D = 0xed000b00,
 } ARMIns;
 
 typedef enum ARMShift {

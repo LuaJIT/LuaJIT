@@ -66,7 +66,7 @@ typedef struct CCallInfo {
 #define IRCALLCOND_SOFTFP_FFI(x)	NULL
 #endif
 
-#define LJ_NEED_FP64			(LJ_TARGET_PPC || LJ_TARGET_MIPS)
+#define LJ_NEED_FP64	(LJ_TARGET_ARM || LJ_TARGET_PPC || LJ_TARGET_MIPS)
 
 #if LJ_HASFFI && (LJ_SOFTFP || LJ_NEED_FP64)
 #define IRCALLCOND_FP64_FFI(x)		x
@@ -242,7 +242,7 @@ extern uint32_t softfp_f2ui(float a);
 #endif
 #endif
 
-#if LJ_HASFFI && LJ_NEED_FP64
+#if LJ_HASFFI && LJ_NEED_FP64 && !(LJ_TARGET_ARM && LJ_SOFTFP)
 #ifdef __GNUC__
 #define fp64_l2d __floatdidf
 #define fp64_ul2d __floatundidf

@@ -362,6 +362,9 @@
 #ifndef LJ_ARCH_HASFPU
 #define LJ_ARCH_HASFPU		1
 #endif
+#ifndef LJ_ABI_SOFTFP
+#define LJ_ABI_SOFTFP		0
+#endif
 #define LJ_SOFTFP		(!LJ_ARCH_HASFPU)
 
 #if LJ_ARCH_ENDIAN == LUAJIT_BE

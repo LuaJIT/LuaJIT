@@ -676,7 +676,8 @@ end
 
 -- Return register name for RID.
 local function regname_(r)
-  return map_gpr[r]
+  if r < 16 then return map_gpr[r] end
+  return "d"..(r-16)
 end
 
 -- Public module functions.
