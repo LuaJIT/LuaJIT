@@ -185,7 +185,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__) && !LJ_NO_UNWIND
+#if defined(__GNUC__) && !LJ_NO_UNWIND && !LJ_TARGET_WINDOWS
 
 /*
 ** We have to use our own definitions instead of the mandatory (!) unwind.h,
