@@ -581,7 +581,7 @@ static uint32_t jit_cpudetect(lua_State *L)
 #if LJ_TARGET_X86
 #if !defined(LUAJIT_CPU_NOCMOV)
   if (!(flags & JIT_F_CMOV))
-    luaL_error(L, "Ancient CPU lacks CMOV support (recompile with -DLUAJIT_CPU_NOCMOV)");
+    luaL_error(L, "CPU not supported");
 #endif
 #if defined(LUAJIT_CPU_SSE2)
   if (!(flags & JIT_F_SSE2))
