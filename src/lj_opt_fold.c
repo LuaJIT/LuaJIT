@@ -818,9 +818,9 @@ LJFOLDF(simplify_nummuldiv_k)
     return RETRYFOLD;
   } else if (fins->o == IR_DIV) {  /* x / 2^k ==> x * 2^-k */
     uint64_t u = ir_knum(fright)->u64;
-    if ((u & U64x(000fffff,ffffffff)) == 0 &&
-	(uint32_t)(u = ((u >> 52) & 0x7ff)) - 1 < 0x7fd) {
-      u = (u & (uint64_t)1 << 63) | ((uint64_t)(0x7fe - (uint32_t)u) << 52);
+    uint32_t ex = ((uint32_t)(u >> 52) & 0x7ff);
+    if ((u & U64x(000fffff,ffffffff)) == 0 && ex - 1 < 0x7fd) {
+      u = (u & ((uint64_t)1 << 63)) | ((uint64_t)(0x7fe - ex) << 52);
       fins->o = IR_MUL;  /* Multiply by exact reciprocal. */
       fins->op2 = lj_ir_knum_u64(J, u);
       return RETRYFOLD;
