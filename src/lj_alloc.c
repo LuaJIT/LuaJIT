@@ -752,7 +752,7 @@ static mchunkptr direct_resize(mchunkptr oldp, size_t nb)
     return NULL;
   /* Keep old chunk if big enough but not too big */
   if (oldsize >= nb + SIZE_T_SIZE &&
-      (oldsize - nb) <= (DEFAULT_GRANULARITY << 1)) {
+      (oldsize - nb) <= (DEFAULT_GRANULARITY >> 1)) {
     return oldp;
   } else {
     size_t offset = oldp->prev_foot & ~IS_DIRECT_BIT;
