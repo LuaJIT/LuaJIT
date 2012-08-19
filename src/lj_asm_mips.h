@@ -227,9 +227,12 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
   uint32_t n, nargs = CCI_NARGS(ci);
   int32_t ofs = 16;
-  Reg gpr = REGARG_FIRSTGPR, fpr = REGARG_FIRSTFPR;
+  Reg gpr, fpr = REGARG_FIRSTFPR;
   if ((void *)ci->func)
     emit_call(as, (void *)ci->func);
+  for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
+    as->cost[gpr] = REGCOST(~0u, 0u);
+  gpr = REGARG_FIRSTGPR;
   for (n = 0; n < nargs; n++) {  /* Setup args. */
     IRRef ref = args[n];
     if (ref) {
@@ -245,16 +248,22 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	if (irt_isnum(ir->t)) gpr = (gpr+1) & ~1;
 	if (gpr <= REGARG_LASTGPR) {
 	  lua_assert(rset_test(as->freeset, gpr));  /* Already evicted. */
-	  if (irt_isnum(ir->t)) {
-	    Reg r = ra_alloc1(as, ref, RSET_FPR);
-	    emit_tg(as, MIPSI_MFC1, gpr+(LJ_BE?0:1), r+1);
-	    emit_tg(as, MIPSI_MFC1, gpr+(LJ_BE?1:0), r);
-	    lua_assert(rset_test(as->freeset, gpr+1));  /* Already evicted. */
-	    gpr += 2;
-	  } else if (irt_isfloat(ir->t)) {
-	    Reg r = ra_alloc1(as, ref, RSET_FPR);
-	    emit_tg(as, MIPSI_MFC1, gpr, r);
-	    gpr++;
+	  if (irt_isfp(ir->t)) {
+	    RegSet of = as->freeset;
+	    Reg r;
+	    /* Workaround to protect argument GPRs from being used for remat. */
+	    as->freeset &= ~RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1);
+	    r = ra_alloc1(as, ref, RSET_FPR);
+	    as->freeset |= (of & RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1));
+	    if (irt_isnum(ir->t)) {
+	      emit_tg(as, MIPSI_MFC1, gpr+(LJ_BE?0:1), r+1);
+	      emit_tg(as, MIPSI_MFC1, gpr+(LJ_BE?1:0), r);
+	      lua_assert(rset_test(as->freeset, gpr+1));  /* Already evicted. */
+	      gpr += 2;
+	    } else if (irt_isfloat(ir->t)) {
+	      emit_tg(as, MIPSI_MFC1, gpr, r);
+	      gpr++;
+	    }
 	  } else {
 	    ra_leftov(as, gpr, ref);
 	    gpr++;
