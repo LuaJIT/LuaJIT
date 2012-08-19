@@ -2154,7 +2154,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Math helper functions ----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |// Modifies AT, TMP0, FRET1, FRET2, f4. Keeps all others incl. FARG1, FARG2.
+  |// Modifies AT, TMP0, FRET1, FRET2, f4. Keeps all others incl. FARG1.
   |.macro vm_round, func
   |  lui TMP0, 0x4330			// Hiword of 2^52 (double).
   |  mtc1 r0, f4

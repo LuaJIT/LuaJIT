@@ -364,15 +364,13 @@ static void asm_callid(ASMState *as, IRIns *ir, IRCallID id)
 static void asm_callround(ASMState *as, IRIns *ir, IRCallID id)
 {
   /* The modified regs must match with the *.dasc implementation. */
-  RegSet drop = RID2RSET(RID_R1)|RID2RSET(RID_R12)|RID2RSET(RID_F2)|
-		RID2RSET(RID_F4)|RID2RSET(RID_F12)|RID2RSET(RID_F14);
-  const CCallInfo *ci = &lj_ir_callinfo[id];
-  IRRef args[2];
-  args[0] = ir->op1;
-  args[1] = ir->op2;
+  RegSet drop = RID2RSET(RID_R1)|RID2RSET(RID_R12)|RID2RSET(RID_FPRET)|
+		RID2RSET(RID_F2)|RID2RSET(RID_F4)|RID2RSET(REGARG_FIRSTFPR);
+  if (ra_hasreg(ir->r)) rset_clear(drop, ir->r);
   ra_evictset(as, drop);
   ra_destreg(as, ir, RID_FPRET);
-  asm_gencall(as, ci, args);
+  emit_call(as, (void *)lj_ir_callinfo[id].func);
+  ra_leftov(as, REGARG_FIRSTFPR, ir->op1);
 }
 
 /* -- Returns ------------------------------------------------------------- */
