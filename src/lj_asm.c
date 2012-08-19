@@ -451,7 +451,7 @@ static void ra_evictset(ASMState *as, RegSet drop)
     checkmclim(as);
   }
 #endif
-  work = (drop & ~as->freeset) & RSET_GPR;
+  work = (drop & ~as->freeset);
   while (work) {
     Reg r = rset_pickbot(work);
     ra_restore(as, regcost_ref(as->cost[r]));
@@ -644,7 +644,7 @@ static void ra_destreg(ASMState *as, IRIns *ir, Reg r)
 {
   Reg dest = ra_dest(as, ir, RID2RSET(r));
   if (dest != r) {
-    ra_scratch(as, RID2RSET(r));
+    ra_modified(as, r);
     emit_movrr(as, ir, dest, r);
   }
 }
@@ -1110,6 +1110,15 @@ static void asm_phi_shuffle(ASMState *as)
   }
 
   /* Restore/remat invariants whose registers are modified inside the loop. */
+#if !LJ_SOFTFP
+  work = as->modset & ~(as->freeset | as->phiset) & RSET_FPR;
+  while (work) {
+    Reg r = rset_pickbot(work);
+    ra_restore(as, regcost_ref(as->cost[r]));
+    rset_clear(work, r);
+    checkmclim(as);
+  }
+#endif
   work = as->modset & ~(as->freeset | as->phiset);
   while (work) {
     Reg r = rset_pickbot(work);
