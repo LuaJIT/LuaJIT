@@ -2210,13 +2210,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  vcmp.f64 d1, d2			// |x| >= 2^52 or NaN?
   |  vmrs
   |.if "func" == "trunc"
-  |  vadd.f64 d0, d1, d2
   |  bxpl lr				// Return argument unchanged.
+  |  vadd.f64 d0, d1, d2
   |  vsub.f64 d0, d0, d2		// (|x| + 2^52) - 2^52
   |  vldr d2, <9			// +1.0
   |  vcmp.f64 d1, d0			// |x| < result: subtract +1.0
   |  vmrs
-  |  vsubmi.f64 d0, d1, d2
+  |  vsubmi.f64 d0, d0, d2
   |  cmp CARG2, #0
   |  vnegmi.f64 d0, d0			// Merge sign bit back in.
   |.else
