@@ -430,14 +430,14 @@ LJFOLDF(kfold_bswap64)
 #endif
 }
 
-LJFOLD(LT KINT64 KINT)
-LJFOLD(GE KINT64 KINT)
-LJFOLD(LE KINT64 KINT)
-LJFOLD(GT KINT64 KINT)
-LJFOLD(ULT KINT64 KINT)
-LJFOLD(UGE KINT64 KINT)
-LJFOLD(ULE KINT64 KINT)
-LJFOLD(UGT KINT64 KINT)
+LJFOLD(LT KINT64 KINT64)
+LJFOLD(GE KINT64 KINT64)
+LJFOLD(LE KINT64 KINT64)
+LJFOLD(GT KINT64 KINT64)
+LJFOLD(ULT KINT64 KINT64)
+LJFOLD(UGE KINT64 KINT64)
+LJFOLD(ULE KINT64 KINT64)
+LJFOLD(UGT KINT64 KINT64)
 LJFOLDF(kfold_int64comp)
 {
 #if LJ_HASFFI
@@ -563,6 +563,18 @@ LJFOLDF(kfold_add_kptr)
   ptrdiff_t ofs = fright->i;
 #endif
   return lj_ir_kptr_(J, fleft->o, (char *)p + ofs);
+}
+
+LJFOLD(ADD any KGC)
+LJFOLD(ADD any KPTR)
+LJFOLD(ADD any KKPTR)
+LJFOLDF(kfold_add_kright)
+{
+  if (fleft->o == IR_KINT || fleft->o == IR_KINT64) {
+    IRRef1 tmp = fins->op1; fins->op1 = fins->op2; fins->op2 = tmp;
+    return RETRYFOLD;
+  }
+  return NEXTFOLD;
 }
 
 /* -- Constant folding of conversions ------------------------------------- */
