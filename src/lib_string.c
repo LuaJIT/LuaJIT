@@ -780,20 +780,20 @@ LJLIB_CF(string_format)
 	addintlen(form);
 	sprintf(buff, form, num2uintfrm(L, arg));
 	break;
-      case 'e':  case 'E': case 'f': case 'g': case 'G': {
+      case 'e':  case 'E': case 'f': case 'g': case 'G': case 'a': case 'A': {
 	TValue tv;
 	tv.n = lj_lib_checknum(L, arg);
 	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
 	  /* Canonicalize output of non-finite values. */
 	  char *p, nbuf[LJ_STR_NUMBUF];
 	  size_t len = lj_str_bufnum(nbuf, &tv);
-	  if (strfrmt[-1] == 'E' || strfrmt[-1] == 'G') {
+	  if (strfrmt[-1] < 'a') {
 	    nbuf[len-3] = nbuf[len-3] - 0x20;
 	    nbuf[len-2] = nbuf[len-2] - 0x20;
 	    nbuf[len-1] = nbuf[len-1] - 0x20;
 	  }
 	  nbuf[len] = '\0';
-	  for (p = form; *p < 'e' && *p != '.'; p++) ;
+	  for (p = form; *p < 'A' && *p != '.'; p++) ;
 	  *p++ = 's'; *p = '\0';
 	  sprintf(buff, form, nbuf);
 	  break;
