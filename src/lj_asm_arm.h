@@ -2102,9 +2102,12 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
   if (ra_hasspill(irp->s)) {
     rset_clear(allow, ra_dest(as, ir, allow));
   } else {
-    lua_assert(ra_hasreg(irp->r));
-    rset_clear(allow, irp->r);
-    ra_destreg(as, ir, irp->r);
+    Reg r = irp->r;
+    lua_assert(ra_hasreg(r));
+    rset_clear(allow, r);
+    if (r != ir->r && !rset_test(as->freeset, r))
+      ra_restore(as, regcost_ref(as->cost[r]));
+    ra_destreg(as, ir, r);
   }
   return allow;
 }

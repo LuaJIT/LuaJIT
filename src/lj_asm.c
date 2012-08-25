@@ -644,6 +644,7 @@ static void ra_destreg(ASMState *as, IRIns *ir, Reg r)
 {
   Reg dest = ra_dest(as, ir, RID2RSET(r));
   if (dest != r) {
+    lua_assert(rset_test(as->freeset, r));
     ra_modified(as, r);
     emit_movrr(as, ir, dest, r);
   }
