@@ -358,8 +358,6 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     if (irt_isfp(ir->t)) {
       RegSet of = as->freeset;
       Reg src;
-      /* Workaround to protect argument GPRs from being used for remat. */
-      as->freeset &= ~RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1);
       if (!LJ_ABI_SOFTFP && !(ci->flags & CCI_VARARG)) {
 	if (irt_isnum(ir->t)) {
 	  if (fpr <= REGARG_LASTFPR) {
@@ -377,10 +375,15 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	  fprodd = fpr++;
 	  continue;
 	}
+	/* Workaround to protect argument GPRs from being used for remat. */
+	as->freeset &= ~RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1);
 	src = ra_alloc1(as, ref, RSET_FPR);  /* May alloc GPR to remat FPR. */
+	as->freeset |= (of & RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1));
 	fprodd = 0;
 	goto stackfp;
       }
+      /* Workaround to protect argument GPRs from being used for remat. */
+      as->freeset &= ~RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1);
       src = ra_alloc1(as, ref, RSET_FPR);  /* May alloc GPR to remat FPR. */
       as->freeset |= (of & RSET_RANGE(REGARG_FIRSTGPR, REGARG_LASTGPR+1));
       if (irt_isnum(ir->t)) gpr = (gpr+1) & ~1u;
