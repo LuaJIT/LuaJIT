@@ -31,6 +31,7 @@
 #include "lj_ff.h"
 #include "lj_dispatch.h"
 #include "lj_char.h"
+#include "lj_strscan.h"
 #include "lj_lib.h"
 
 /* -- Base library: checks ------------------------------------------------ */
@@ -191,7 +192,7 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
   int32_t base = lj_lib_optint(L, 2, 10);
   if (base == 10) {
     TValue *o = lj_lib_checkany(L, 1);
-    if (tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o))) {
+    if (lj_strscan_numberobj(o)) {
       copyTV(L, L->base-1, o);
       return FFH_RES(1);
     }

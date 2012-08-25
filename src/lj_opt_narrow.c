@@ -11,13 +11,13 @@
 
 #if LJ_HASJIT
 
-#include "lj_str.h"
 #include "lj_bc.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
+#include "lj_strscan.h"
 
 /* Rationale for narrowing optimizations:
 **
@@ -519,11 +519,11 @@ TRef lj_opt_narrow_arith(jit_State *J, TRef rb, TRef rc,
 {
   if (tref_isstr(rb)) {
     rb = emitir(IRTG(IR_STRTO, IRT_NUM), rb, 0);
-    lj_str_tonum(strV(vb), vb);
+    lj_strscan_num(strV(vb), vb);
   }
   if (tref_isstr(rc)) {
     rc = emitir(IRTG(IR_STRTO, IRT_NUM), rc, 0);
-    lj_str_tonum(strV(vc), vc);
+    lj_strscan_num(strV(vc), vc);
   }
   /* Must not narrow MUL in non-DUALNUM variant, because it loses -0. */
   if ((op >= IR_ADD && op <= (LJ_DUALNUM ? IR_MUL : IR_SUB)) &&
@@ -541,7 +541,7 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
 {
   if (tref_isstr(rc)) {
     rc = emitir(IRTG(IR_STRTO, IRT_NUM), rc, 0);
-    lj_str_tonum(strV(vc), vc);
+    lj_strscan_num(strV(vc), vc);
   }
   if (tref_isinteger(rc)) {
     if ((uint32_t)numberVint(vc) != 0x80000000u)
@@ -555,7 +555,7 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
 TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vc)
 {
   TRef tmp;
-  if (tvisstr(vc) && !lj_str_tonum(strV(vc), vc))
+  if (tvisstr(vc) && !lj_strscan_num(strV(vc), vc))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   if ((LJ_DUALNUM || (J->flags & JIT_F_OPT_NARROW)) &&
       tref_isinteger(rb) && tref_isinteger(rc) &&
@@ -575,7 +575,7 @@ TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vc)
 /* Narrowing of power operator or math.pow. */
 TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vc)
 {
-  if (tvisstr(vc) && !lj_str_tonum(strV(vc), vc))
+  if (tvisstr(vc) && !lj_strscan_num(strV(vc), vc))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   /* Narrowing must be unconditional to preserve (-x)^i semantics. */
   if (tvisint(vc) || numisint(numV(vc))) {

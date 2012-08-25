@@ -21,7 +21,7 @@
 #define LJ_CHAR_GRAPH	(LJ_CHAR_ALNUM|LJ_CHAR_PUNCT)
 
 /* Only pass -1 or 0..255 to these macros. Never pass a signed char! */
-#define lj_char_isa(c, t)	(lj_char_bits[(c)+1] & t)
+#define lj_char_isa(c, t)	((lj_char_bits+1)[(c)] & t)
 #define lj_char_iscntrl(c)	lj_char_isa((c), LJ_CHAR_CNTRL)
 #define lj_char_isspace(c)	lj_char_isa((c), LJ_CHAR_SPACE)
 #define lj_char_ispunct(c)	lj_char_isa((c), LJ_CHAR_PUNCT)

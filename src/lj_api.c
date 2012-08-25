@@ -26,6 +26,7 @@
 #include "lj_lex.h"
 #include "lj_bcdump.h"
 #include "lj_parse.h"
+#include "lj_strscan.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -236,7 +237,7 @@ LUA_API int lua_isnumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
   TValue tmp;
-  return (tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), &tmp)));
+  return (tvisnumber(o) || (tvisstr(o) && lj_strscan_number(strV(o), &tmp)));
 }
 
 LUA_API int lua_isstring(lua_State *L, int idx)
@@ -320,7 +321,7 @@ LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o)))
     return numberVnum(o);
-  else if (tvisstr(o) && lj_str_tonum(strV(o), &tmp))
+  else if (tvisstr(o) && lj_strscan_num(strV(o), &tmp))
     return numV(&tmp);
   else
     return 0;
@@ -332,7 +333,7 @@ LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
   TValue tmp;
   if (LJ_LIKELY(tvisnumber(o)))
     return numberVnum(o);
-  else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
+  else if (!(tvisstr(o) && lj_strscan_num(strV(o), &tmp)))
     lj_err_argt(L, idx, LUA_TNUMBER);
   return numV(&tmp);
 }
@@ -345,7 +346,7 @@ LUALIB_API lua_Number luaL_optnumber(lua_State *L, int idx, lua_Number def)
     return numberVnum(o);
   else if (tvisnil(o))
     return def;
-  else if (!(tvisstr(o) && lj_str_tonum(strV(o), &tmp)))
+  else if (!(tvisstr(o) && lj_strscan_num(strV(o), &tmp)))
     lj_err_argt(L, idx, LUA_TNUMBER);
   return numV(&tmp);
 }
@@ -360,7 +361,7 @@ LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
   } else if (LJ_LIKELY(tvisnum(o))) {
     n = numV(o);
   } else {
-    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+    if (!(tvisstr(o) && lj_strscan_number(strV(o), &tmp)))
       return 0;
     if (tvisint(&tmp))
       return (lua_Integer)intV(&tmp);
@@ -383,7 +384,7 @@ LUALIB_API lua_Integer luaL_checkinteger(lua_State *L, int idx)
   } else if (LJ_LIKELY(tvisnum(o))) {
     n = numV(o);
   } else {
-    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+    if (!(tvisstr(o) && lj_strscan_number(strV(o), &tmp)))
       lj_err_argt(L, idx, LUA_TNUMBER);
     if (tvisint(&tmp))
       return (lua_Integer)intV(&tmp);
@@ -408,7 +409,7 @@ LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
   } else if (tvisnil(o)) {
     return def;
   } else {
-    if (!(tvisstr(o) && lj_str_tonumber(strV(o), &tmp)))
+    if (!(tvisstr(o) && lj_strscan_number(strV(o), &tmp)))
       lj_err_argt(L, idx, LUA_TNUMBER);
     if (tvisint(&tmp))
       return (lua_Integer)intV(&tmp);

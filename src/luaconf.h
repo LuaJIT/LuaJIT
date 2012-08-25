@@ -98,7 +98,6 @@
 #define LUA_NUMBER_FMT		"%.14g"
 #define lua_number2str(s, n)	sprintf((s), LUA_NUMBER_FMT, (n))
 #define LUAI_MAXNUMBER2STR	32
-#define lua_str2number(s, p)	strtod((s), (p))
 #define LUA_INTFRMLEN		"l"
 #define LUA_INTFRM_T		long
 

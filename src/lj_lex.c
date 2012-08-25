@@ -23,6 +23,7 @@
 #include "lj_lex.h"
 #include "lj_parse.h"
 #include "lj_char.h"
+#include "lj_strscan.h"
 
 /* Lua lexer token names. */
 static const char *const tokennames[] = {
@@ -84,100 +85,51 @@ static void inclinenumber(LexState *ls)
 
 /* -- Scanner for terminals ----------------------------------------------- */
 
-#if LJ_HASFFI
-/* Load FFI library on-demand. Needed if we create cdata objects. */
-static void lex_loadffi(lua_State *L)
-{
-  ptrdiff_t oldtop = savestack(L, L->top);
-  luaopen_ffi(L);
-  L->top = restorestack(L, oldtop);
-}
-
-/* Parse 64 bit integer. */
-static int lex_number64(LexState *ls, TValue *tv)
-{
-  uint64_t n = 0;
-  uint8_t *p = (uint8_t *)ls->sb.buf;
-  CTypeID id = CTID_INT64;
-  GCcdata *cd;
-  int numl = 0;
-  if (p[0] == '0' && (p[1] & ~0x20) == 'X') {  /* Hexadecimal. */
-    p += 2;
-    if (!lj_char_isxdigit(*p)) return 0;
-    do {
-      n = n*16 + (*p & 15);
-      if (!lj_char_isdigit(*p)) n += 9;
-      p++;
-    } while (lj_char_isxdigit(*p));
-  } else {  /* Decimal. */
-    if (!lj_char_isdigit(*p)) return 0;
-    do {
-      n = n*10 + (*p - '0');
-      p++;
-    } while (lj_char_isdigit(*p));
-  }
-  for (;;) {  /* Parse suffixes. */
-    if ((*p & ~0x20) == 'U')
-      id = CTID_UINT64;
-    else if ((*p & ~0x20) == 'L')
-      numl++;
-    else
-      break;
-    p++;
-  }
-  if (numl != 2 || *p != '\0') return 0;
-  /* Return cdata holding a 64 bit integer. */
-  cd = lj_cdata_new_(ls->L, id, 8);
-  *(uint64_t *)cdataptr(cd) = n;
-  lj_parse_keepcdata(ls, tv, cd);
-  return 1;  /* Ok. */
-}
-#endif
-
 /* Parse a number literal. */
 static void lex_number(LexState *ls, TValue *tv)
 {
-  int c, xp = 'E';
+  StrScanFmt fmt;
+  int c, xp = 'e';
   lua_assert(lj_char_isdigit(ls->current));
   if ((c = ls->current) == '0') {
     save_and_next(ls);
-    if ((ls->current & ~0x20) == 'X') xp = 'P';
+    if ((ls->current | 0x20) == 'x') xp = 'p';
   }
   while (lj_char_isident(ls->current) || ls->current == '.' ||
-	 ((ls->current == '-' || ls->current == '+') && (c & ~0x20) == xp)) {
+	 ((ls->current == '-' || ls->current == '+') && (c | 0x20) == xp)) {
     c = ls->current;
     save_and_next(ls);
   }
-#if LJ_HASFFI
-  c &= ~0x20;
-  if ((c == 'I' || c == 'L' || c == 'U') && !ctype_ctsG(G(ls->L)))
-    lex_loadffi(ls->L);
-  if (c == 'I')  /* Parse imaginary part of complex number. */
-    ls->sb.n--;
-#endif
   save(ls, '\0');
-#if LJ_HASFFI
-  if ((c == 'L' || c == 'U') && lex_number64(ls, tv)) {  /* Parse 64 bit int. */
-    return;
-  } else
-#endif
-  if (lj_str_numconv(ls->sb.buf, tv)) {
-#if LJ_HASFFI
-    if (c == 'I') {  /* Return cdata holding a complex number. */
-      GCcdata *cd = lj_cdata_new_(ls->L, CTID_COMPLEX_DOUBLE, 2*sizeof(double));
+  fmt = lj_strscan_scan((const uint8_t *)ls->sb.buf, tv,
+	  (LJ_DUALNUM ? STRSCAN_OPT_TOINT : STRSCAN_OPT_TONUM) |
+	  (LJ_HASFFI ? (STRSCAN_OPT_LL|STRSCAN_OPT_IMAG) : 0));
+  if (LJ_DUALNUM && fmt == STRSCAN_INT) {
+    setitype(tv, LJ_TISNUM);
+  } else if (fmt == STRSCAN_NUM) {
+    /* Already in correct format. */
+  } else if (LJ_HASFFI && fmt != STRSCAN_ERROR) {
+    lua_State *L = ls->L;
+    GCcdata *cd;
+    lua_assert(fmt == STRSCAN_I64 || fmt == STRSCAN_U64 || fmt == STRSCAN_IMAG);
+    if (!ctype_ctsG(G(L))) {
+      ptrdiff_t oldtop = savestack(L, L->top);
+      luaopen_ffi(L);  /* Load FFI library on-demand. */
+      L->top = restorestack(L, oldtop);
+    }
+    if (fmt == STRSCAN_IMAG) {
+      cd = lj_cdata_new_(L, CTID_COMPLEX_DOUBLE, 2*sizeof(double));
       ((double *)cdataptr(cd))[0] = 0;
-      ((double *)cdataptr(cd))[1] = numberVnum(tv);
-      lj_parse_keepcdata(ls, tv, cd);
+      ((double *)cdataptr(cd))[1] = numV(tv);
+    } else {
+      cd = lj_cdata_new_(L, fmt==STRSCAN_I64 ? CTID_INT64 : CTID_UINT64, 8);
+      *(uint64_t *)cdataptr(cd) = tv->u64;
     }
-#endif
-    if (LJ_DUALNUM && tvisnum(tv)) {
-      int32_t k = lj_num2int(numV(tv));
-      if ((lua_Number)k == numV(tv))  /* -0 cannot end up here. */
-	setintV(tv, k);
-    }
-    return;
+    lj_parse_keepcdata(ls, tv, cd);
+  } else {
+    lua_assert(fmt == STRSCAN_ERROR);
+    lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
   }
-  lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
 }
 
 static int skip_sep(LexState *ls)

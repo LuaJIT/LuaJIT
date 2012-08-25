@@ -17,6 +17,7 @@
 #include "lj_bc.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
+#include "lj_strscan.h"
 #include "lj_lib.h"
 
 /* -- Library initialization ---------------------------------------------- */
@@ -155,8 +156,7 @@ GCstr *lj_lib_optstr(lua_State *L, int narg)
 void lj_lib_checknumber(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;
-  if (!(o < L->top &&
-	(tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o)))))
+  if (!(o < L->top && lj_strscan_numberobj(o)))
     lj_err_argt(L, narg, LUA_TNUMBER);
 }
 #endif
@@ -165,7 +165,7 @@ lua_Number lj_lib_checknum(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;
   if (!(o < L->top &&
-	(tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o)))))
+	(tvisnumber(o) || (tvisstr(o) && lj_strscan_num(strV(o), o)))))
     lj_err_argt(L, narg, LUA_TNUMBER);
   if (LJ_UNLIKELY(tvisint(o))) {
     lua_Number n = (lua_Number)intV(o);
@@ -179,8 +179,7 @@ lua_Number lj_lib_checknum(lua_State *L, int narg)
 int32_t lj_lib_checkint(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;
-  if (!(o < L->top &&
-	(tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o)))))
+  if (!(o < L->top && lj_strscan_numberobj(o)))
     lj_err_argt(L, narg, LUA_TNUMBER);
   if (LJ_LIKELY(tvisint(o))) {
     return intV(o);
@@ -200,8 +199,7 @@ int32_t lj_lib_optint(lua_State *L, int narg, int32_t def)
 int32_t lj_lib_checkbit(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;
-  if (!(o < L->top &&
-	(tvisnumber(o) || (tvisstr(o) && lj_str_tonumber(strV(o), o)))))
+  if (!(o < L->top && lj_strscan_numberobj(o)))
     lj_err_argt(L, narg, LUA_TNUMBER);
   if (LJ_LIKELY(tvisint(o))) {
     return intV(o);

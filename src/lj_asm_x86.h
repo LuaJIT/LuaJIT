@@ -882,7 +882,7 @@ static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
 static void asm_strto(ASMState *as, IRIns *ir)
 {
   /* Force a spill slot for the destination register (if any). */
-  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_tonum];
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_strscan_num];
   IRRef args[2];
   RegSet drop = RSET_SCRATCH;
   if ((drop & RSET_FPR) != RSET_FPR && ra_hasreg(ir->r))

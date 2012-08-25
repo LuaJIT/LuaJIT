@@ -26,6 +26,7 @@
 #include "lj_crecord.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
+#include "lj_strscan.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -64,7 +65,7 @@ typedef void (LJ_FASTCALL *RecordFunc)(jit_State *J, RecordFFData *rd);
 /* Get runtime value of int argument. */
 static int32_t argv2int(jit_State *J, TValue *o)
 {
-  if (!tvisnumber(o) && !(tvisstr(o) && lj_str_tonumber(strV(o), o)))
+  if (!lj_strscan_numberobj(o))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   return tvisint(o) ? intV(o) : lj_num2int(numV(o));
 }
@@ -266,7 +267,7 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
   if (tref_isnumber_str(tr)) {
     if (tref_isstr(tr)) {
       TValue tmp;
-      if (!lj_str_tonum(strV(&rd->argv[0]), &tmp))
+      if (!lj_strscan_num(strV(&rd->argv[0]), &tmp))
 	recff_nyiu(J);  /* Would need an inverted STRTO for this case. */
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
     }

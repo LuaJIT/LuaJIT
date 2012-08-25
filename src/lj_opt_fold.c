@@ -25,6 +25,7 @@
 #endif
 #include "lj_carith.h"
 #include "lj_vm.h"
+#include "lj_strscan.h"
 
 /* Here's a short description how the FOLD engine processes instructions:
 **
@@ -693,7 +694,7 @@ LJFOLD(STRTO KGC)
 LJFOLDF(kfold_strto)
 {
   TValue n;
-  if (lj_str_tonum(ir_kstr(fleft), &n))
+  if (lj_strscan_num(ir_kstr(fleft), &n))
     return lj_ir_knum(J, numV(&n));
   return FAILFOLD;
 }

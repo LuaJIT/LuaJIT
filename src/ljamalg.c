@@ -43,6 +43,7 @@
 #include "lj_dispatch.c"
 #include "lj_vmevent.c"
 #include "lj_vmmath.c"
+#include "lj_strscan.c"
 #include "lj_api.c"
 #include "lj_lex.c"
 #include "lj_parse.c"
