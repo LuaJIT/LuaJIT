@@ -668,19 +668,22 @@ static void addquoted(lua_State *L, luaL_Buffer *b, int arg)
   const char *s = strdata(str);
   luaL_addchar(b, '"');
   while (len--) {
-    if (*s == '"' || *s == '\\' || *s == '\n') {
+    uint32_t c = uchar(*s);
+    if (c == '"' || c == '\\' || c == '\n') {
       luaL_addchar(b, '\\');
-      luaL_addchar(b, *s);
-    } else if (lj_char_iscntrl(uchar(*s))) {
-      uint32_t c1, c2, c3;
+    } else if (lj_char_iscntrl(c)) {  /* This can only be 0-31 or 127. */
+      uint32_t d;
       luaL_addchar(b, '\\');
-      c1 = uchar(*s); c3 = c1 % 10; c1 /= 10; c2 = c1 % 10; c1 /= 10;
-      if (c1 + lj_char_isdigit(uchar(s[1]))) luaL_addchar(b, '0' + c1);
-      if (c2 + (c1 + lj_char_isdigit(uchar(s[1])))) luaL_addchar(b, '0' + c2);
-      luaL_addchar(b, '0' + c3);
-    } else {
-      luaL_addchar(b, *s);
+      if (c >= 100 || lj_char_isdigit(uchar(s[1]))) {
+	luaL_addchar(b, '0'+(c >= 100)); if (c >= 100) c -= 100;
+	goto tens;
+      } else if (c >= 10) {
+      tens:
+	d = (c * 205) >> 11; c -= d * 10; luaL_addchar(b, '0'+d);
+      }
+      c += '0';
     }
+    luaL_addchar(b, c);
     s++;
   }
   luaL_addchar(b, '"');

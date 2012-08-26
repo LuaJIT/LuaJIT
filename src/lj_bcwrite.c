@@ -324,7 +324,7 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
   /* Pass buffer to writer function. */
   if (ctx->status == 0) {
     MSize n = ctx->sb.n - 5;
-    MSize nn = 1 + lj_fls(n)/7;
+    MSize nn = (lj_fls(n)+8)*9 >> 6;
     ctx->sb.n = 5 - nn;
     bcwrite_uleb128(ctx, n);  /* Fill in final size. */
     lua_assert(ctx->sb.n == 5);
