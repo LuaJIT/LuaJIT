@@ -566,10 +566,6 @@ amalg:
 clean:
 	$(HOST_RM) $(ALL_RM)
 
-# Temporary rule for migration from old file layout.
-cleaner:	clean
-	$(HOST_RM) buildvm*
-
 depend:
 	@for file in $(ALL_HDRGEN); do \
 	  test -f $$file || touch $$file; \
@@ -584,7 +580,7 @@ depend:
 	  test -s $$file || $(HOST_RM) $$file; \
 	  done
 
-.PHONY: default all amalg clean cleaner depend
+.PHONY: default all amalg clean depend
 
 ##############################################################################
 # Rules for generated files.
