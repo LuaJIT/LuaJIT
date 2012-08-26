@@ -314,8 +314,11 @@ LUALIB_API int luaL_loadstring(lua_State *L, const char *s)
 
 static int panic(lua_State *L)
 {
-  fprintf(stderr, "PANIC: unprotected error in call to Lua API (%s)\n",
-	  lua_tostring(L, -1));
+  const char *s = lua_tostring(L, -1);
+  fputs("PANIC: unprotected error in call to Lua API (", stderr);
+  fputs(s ? s : "?", stderr);
+  fputc(')', stderr); fputc('\n', stderr);
+  fflush(stderr);
   return 0;
 }
 
@@ -366,7 +369,7 @@ LUALIB_API lua_State *luaL_newstate(void)
 LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
 {
   UNUSED(f); UNUSED(ud);
-  fprintf(stderr, "Must use luaL_newstate() for 64 bit target\n");
+  fputs("Must use luaL_newstate() for 64 bit target\n", stderr);
   return NULL;
 }
 #endif
