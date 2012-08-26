@@ -108,7 +108,8 @@ static void lex_number(LexState *ls, TValue *tv)
     setitype(tv, LJ_TISNUM);
   } else if (fmt == STRSCAN_NUM) {
     /* Already in correct format. */
-  } else if (LJ_HASFFI && fmt != STRSCAN_ERROR) {
+#if LJ_HASFFI
+  } else if (fmt != STRSCAN_ERROR) {
     lua_State *L = ls->L;
     GCcdata *cd;
     lua_assert(fmt == STRSCAN_I64 || fmt == STRSCAN_U64 || fmt == STRSCAN_IMAG);
@@ -126,6 +127,7 @@ static void lex_number(LexState *ls, TValue *tv)
       *(uint64_t *)cdataptr(cd) = tv->u64;
     }
     lj_parse_keepcdata(ls, tv, cd);
+#endif
   } else {
     lua_assert(fmt == STRSCAN_ERROR);
     lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);

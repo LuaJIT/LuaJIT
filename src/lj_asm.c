@@ -808,9 +808,9 @@ static void asm_snap_alloc1(ASMState *as, IRRef ref)
 	asm_snap_alloc1(as, ir->op2);
 	if (LJ_32 && (ir+1)->o == IR_HIOP)
 	  asm_snap_alloc1(as, (ir+1)->op2);
-      }
+      } else
 #endif
-      else {  /* Allocate stored values for TNEW, TDUP and CNEW. */
+      {  /* Allocate stored values for TNEW, TDUP and CNEW. */
 	IRIns *irs;
 	lua_assert(ir->o == IR_TNEW || ir->o == IR_TDUP || ir->o == IR_CNEW);
 	for (irs = IR(as->snapref-1); irs > ir; irs--)
