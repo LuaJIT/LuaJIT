@@ -266,7 +266,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
 
     /* Handle simple overflow/underflow. */
     if (idig > 310/2) { if (neg) setminfV(o); else setpinfV(o); return fmt; }
-    else if (idig < -326/2) { o->n = 0.0; return fmt; }
+    else if (idig < -326/2) { o->n = neg ? -0.0 : 0.0; return fmt; }
 
     /* Scale up until we have at least 17 or 18 integer part digits. */
     while (idig < 9 && idig < DLEN(lo, hi)) {
