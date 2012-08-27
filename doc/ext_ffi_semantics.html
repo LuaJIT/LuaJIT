@@ -192,8 +192,8 @@ a <tt>typedef</tt>, except re-declarations will be ignored):
 
 </ul>
 <p>
-You're encouraged to use these types in preference to the
-compiler-specific extensions or the target-dependent standard types.
+You're encouraged to use these types in preference to
+compiler-specific extensions or target-dependent standard types.
 E.g. <tt>char</tt> differs in signedness and <tt>long</tt> differs in
 size, depending on the target architecture and platform ABI.
 </p>
@@ -660,11 +660,17 @@ initialization. The JIT compiler benefits from this fact when applying
 certain optimizations.
 </p>
 <p>
-As a consequence of this, the <em>elements</em> of complex numbers and
+As a consequence, the <em>elements</em> of complex numbers and
 vectors are immutable. But the elements of an aggregate holding these
 types <em>may</em> be modified of course. I.e. you cannot assign to
 <tt>foo.c.im</tt>, but you can assign a (newly created) complex number
 to <tt>foo.c</tt>.
+</p>
+<p>
+The JIT compiler implements strict aliasing rules: accesses to different
+types do <b>not</b> alias, except for differences in signedness (this
+applies even to <tt>char</tt> pointers, unlike C99). Type punning
+through unions is explicitly detected and allowed.
 </p>
 
 <h3 id="cdata_call">Calling a cdata object</h3>

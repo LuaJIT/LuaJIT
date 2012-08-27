@@ -601,17 +601,8 @@ static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
   ptrdiff_t ofsa = 0, ofsb = 0;
   IRIns *refb = IR(xb->op1);
   IRIns *basea = refa, *baseb = refb;
-  /* This implements (very) strict aliasing rules.
-  ** Different types do NOT alias, except for differences in signedness.
-  ** NYI: this also prevents type punning through unions.
-  */
-  if (irt_sametype(xa->t, xb->t)) {
-    if (refa == refb)
-      return ALIAS_MUST;  /* Shortcut for same refs with identical type. */
-  } else if (!(irt_typerange(xa->t, IRT_I8, IRT_U64) &&
-	       ((xa->t.irt - IRT_I8) ^ (xb->t.irt - IRT_I8)) == 1)) {
-    return ALIAS_NO;
-  }
+  if (refa == refb && irt_sametype(xa->t, xb->t))
+    return ALIAS_MUST;  /* Shortcut for same refs with identical type. */
   /* Offset-based disambiguation. */
   if (refa->o == IR_ADD && irref_isk(refa->op2)) {
     IRIns *irk = IR(refa->op2);
@@ -629,12 +620,25 @@ static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
     if (refa == baseb && ofsb != 0)
       return ALIAS_NO;  /* base vs. base+-ofs. */
   }
+  /* This implements (very) strict aliasing rules.
+  ** Different types do NOT alias, except for differences in signedness.
+  ** Type punning through unions is allowed (but forces a reload).
+  */
   if (basea == baseb) {
-    /* This assumes strictly-typed, non-overlapping accesses. */
-    if (ofsa != ofsb)
-      return ALIAS_NO;  /* base+-o1 vs. base+-o2 and o1 != o2. */
-    return ALIAS_MUST;  /* Unsigned vs. signed access to the same address. */
+    ptrdiff_t sza = irt_size(xa->t), szb = irt_size(xb->t);
+    if (ofsa == ofsb) {
+      if (sza == szb && irt_isfp(xa->t) == irt_isfp(xb->t))
+	return ALIAS_MUST;  /* Same-sized, same-kind. May need to convert. */
+    } else if (ofsa + sza <= ofsb || ofsb + szb <= ofsa) {
+      return ALIAS_NO;  /* Non-overlapping base+-o1 vs. base+-o2. */
+    }
+    /* NYI: extract, extend or reinterpret bits (int <-> fp). */
+    return ALIAS_MAY;  /* Overlapping or type punning: force reload. */
   }
+  if (!irt_sametype(xa->t, xb->t) &&
+      !(irt_typerange(xa->t, IRT_I8, IRT_U64) &&
+	((xa->t.irt - IRT_I8) ^ (xb->t.irt - IRT_I8)) == 1))
+    return ALIAS_NO;
   /* NYI: structural disambiguation. */
   return aa_cnew(J, basea, baseb);  /* Try to disambiguate allocations. */
 }
@@ -730,7 +734,7 @@ retry:
 	if (st == IRT_I8 || st == IRT_I16) {  /* Trunc + sign-extend. */
 	  st |= IRCONV_SEXT;
 	} else if (st == IRT_U8 || st == IRT_U16) {  /* Trunc + zero-extend. */
-	} else if (st == IRT_INT && !irt_isint(IR(store->op2)->t)) {
+	} else if (st == IRT_INT) {
 	  st = irt_type(IR(store->op2)->t);  /* Needs dummy CONV.int.*. */
 	} else {  /* I64/U64 are boxed, U32 is hidden behind a CONV.num.u32. */
 	  goto store_fwd;
