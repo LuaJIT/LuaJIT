@@ -46,6 +46,14 @@ IRDEF(IRMODE)
   0
 };
 
+/* IR type sizes. */
+LJ_DATADEF const uint8_t lj_ir_type_size[IRT__MAX+1] = {
+#define IRTSIZE(name, size)	size,
+IRTDEF(IRTSIZE)
+#undef IRTSIZE
+  0
+};
+
 /* C call info for CALL* instructions. */
 LJ_DATADEF const CCallInfo lj_ir_callinfo[] = {
 #define IRCALLCI(cond, name, nargs, kind, type, flags) \

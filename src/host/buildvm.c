@@ -245,7 +245,7 @@ IRDEF(IRNAME)
 };
 
 const char *const irt_names[] = {
-#define IRTNAME(name)	#name,
+#define IRTNAME(name, size)	#name,
 IRTDEF(IRTNAME)
 #undef IRTNAME
   NULL

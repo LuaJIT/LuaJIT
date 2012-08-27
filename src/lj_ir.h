@@ -284,16 +284,19 @@ LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
 ** contiguous and next to IRT_NUM (see the typerange macros below).
 */
 #define IRTDEF(_) \
-  _(NIL) _(FALSE) _(TRUE) _(LIGHTUD) _(STR) _(P32) _(THREAD) \
-  _(PROTO) _(FUNC) _(P64) _(CDATA) _(TAB) _(UDATA) \
-  _(FLOAT) _(NUM) _(I8) _(U8) _(I16) _(U16) _(INT) _(U32) _(I64) _(U64) \
-  _(SOFTFP)  /* There is room for 9 more types. */
+  _(NIL, 4) _(FALSE, 4) _(TRUE, 4) _(LIGHTUD, LJ_64 ? 8 : 4) _(STR, 4) \
+  _(P32, 4) _(THREAD, 4) _(PROTO, 4) _(FUNC, 4) _(P64, 8) _(CDATA, 4) \
+  _(TAB, 4) _(UDATA, 4) \
+  _(FLOAT, 4) _(NUM, 8) _(I8, 1) _(U8, 1) _(I16, 2) _(U16, 2) \
+  _(INT, 4) _(U32, 4) _(I64, 8) _(U64, 8) \
+  _(SOFTFP, 4)  /* There is room for 9 more types. */
 
 /* IR result type and flags (8 bit). */
 typedef enum {
-#define IRTENUM(name)	IRT_##name,
+#define IRTENUM(name, size)	IRT_##name,
 IRTDEF(IRTENUM)
 #undef IRTENUM
+  IRT__MAX,
 
   /* Native pointer type and the corresponding integer type. */
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
@@ -360,6 +363,10 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 
 #define irt_is64(t)		((IRT_IS64 >> irt_type(t)) & 1)
 #define irt_is64orfp(t)		(((IRT_IS64|(1u<<IRT_FLOAT))>>irt_type(t)) & 1)
+
+#define irt_size(t)		(lj_ir_type_size[irt_t((t))])
+
+LJ_DATA const uint8_t lj_ir_type_size[];
 
 static LJ_AINLINE IRType itype2irt(const TValue *tv)
 {
