@@ -237,7 +237,7 @@ static void asm_fusexref(ASMState *as, ARMIns ai, Reg rd, IRRef ref,
 {
   IRIns *ir = IR(ref);
   Reg base;
-  if (ra_noreg(ir->r) && mayfuse(as, ref)) {
+  if (ra_noreg(ir->r) && canfuse(as, ir)) {
     int32_t lim = (!LJ_SOFTFP && (ai & 0x08000000)) ? 1024 :
 		   (ai & 0x04000000) ? 4096 : 256;
     if (ir->o == IR_ADD) {

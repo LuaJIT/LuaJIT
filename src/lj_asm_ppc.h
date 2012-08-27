@@ -166,7 +166,7 @@ static void asm_fusexref(ASMState *as, PPCIns pi, Reg rt, IRRef ref,
 {
   IRIns *ir = IR(ref);
   Reg base;
-  if (ra_noreg(ir->r) && mayfuse(as, ref)) {
+  if (ra_noreg(ir->r) && canfuse(as, ir)) {
     if (ir->o == IR_ADD) {
       int32_t ofs2;
       if (irref_isk(ir->op2) && (ofs2 = ofs + IR(ir->op2)->i, checki16(ofs2))) {
@@ -214,7 +214,7 @@ static void asm_fusexrefx(ASMState *as, PPCIns pi, Reg rt, IRRef ref,
 {
   IRIns *ira = IR(ref);
   Reg right, left;
-  if (mayfuse(as, ref) && ira->o == IR_ADD && ra_noreg(ira->r)) {
+  if (canfuse(as, ira) && ira->o == IR_ADD && ra_noreg(ira->r)) {
     left = ra_alloc2(as, ira, allow);
     right = (left >> 8); left &= 255;
   } else {

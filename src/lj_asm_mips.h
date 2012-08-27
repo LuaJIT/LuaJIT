@@ -187,7 +187,7 @@ static void asm_fusexref(ASMState *as, MIPSIns mi, Reg rt, IRRef ref,
 {
   IRIns *ir = IR(ref);
   Reg base;
-  if (ra_noreg(ir->r) && mayfuse(as, ref)) {
+  if (ra_noreg(ir->r) && canfuse(as, ir)) {
     if (ir->o == IR_ADD) {
       int32_t ofs2;
       if (irref_isk(ir->op2) && (ofs2 = ofs + IR(ir->op2)->i, checki16(ofs2))) {

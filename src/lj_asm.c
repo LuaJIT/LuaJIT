@@ -1749,8 +1749,12 @@ static void asm_setup_regsp(ASMState *as)
       }
       break;
 #endif
-    /* Do not propagate hints across type conversions. */
+    /* Do not propagate hints across type conversions or loads. */
     case IR_TOBIT:
+    case IR_XLOAD:
+#if !LJ_TARGET_ARM
+    case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+#endif
       break;
     case IR_CONV:
       if (irt_isfp(ir->t) || (ir->op2 & IRCONV_SRCMASK) == IRT_NUM ||
