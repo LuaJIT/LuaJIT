@@ -15,6 +15,9 @@
 #include "lj_tab.h"
 #include "lj_meta.h"
 #include "lj_frame.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#endif
 #include "lj_bc.h"
 #include "lj_ff.h"
 #include "lj_ir.h"
@@ -1275,6 +1278,29 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 
 /* -- Upvalue access ------------------------------------------------------ */
 
+/* Check whether upvalue is immutable and ok to constify. */
+static int rec_upvalue_constify(jit_State *J, GCupval *uvp)
+{
+  if (uvp->immutable) {
+    cTValue *o = uvval(uvp);
+    /* Don't constify objects that may retain large amounts of memory. */
+#if LJ_HASFFI
+    if (tviscdata(o)) {
+      GCcdata *cd = cdataV(o);
+      if (!cdataisv(cd) && !(cd->marked & LJ_GC_CDATA_FIN)) {
+	CType *ct = ctype_raw(ctype_ctsG(J2G(J)), cd->ctypeid);
+	if (!ctype_hassize(ct->info) || ct->size <= 16)
+	  return 1;
+      }
+      return 0;
+    }
+#endif
+    if (!(tvistab(o) || tvisudata(o) || tvisthread(o)))
+      return 1;
+  }
+  return 0;
+}
+
 /* Record upvalue load/store. */
 static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
 {
@@ -1282,7 +1308,7 @@ static TRef rec_upvalue(jit_State *J, uint32_t uv, TRef val)
   TRef fn = getcurrf(J);
   IRRef uref;
   int needbarrier = 0;
-  if (uvp->immutable) {  /* Try to constify immutable upvalue. */
+  if (rec_upvalue_constify(J, uvp)) {  /* Try to constify immutable upvalue. */
     TRef tr, kfunc;
     lua_assert(val == 0);
     if (!tref_isk(fn)) {  /* Late specialization of current function. */
