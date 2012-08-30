@@ -318,6 +318,10 @@
 #if defined(_LP64)
 #error "No support for PowerPC 64 bit mode"
 #endif
+#elif LJ_TARGET_MIPS
+#if defined(__mips_soft_float)
+#error "No support for MIPS CPUs without FPU"
+#endif
 #endif
 #endif
 
