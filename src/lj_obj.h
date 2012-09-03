@@ -447,10 +447,12 @@ enum {
 #define MMDEF_FFI(_)
 #endif
 
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
-#define MMDEF_52(_) _(pairs) _(ipairs)
+#if defined(LUAJIT_ENABLE_LUA52COMPAT) || LJ_HASFFI
+#define MMDEF_PAIRS(_) _(pairs) _(ipairs)
 #else
-#define MMDEF_52(_)
+#define MMDEF_PAIRS(_)
+#define MM_pairs	255
+#define MM_ipairs	255
 #endif
 
 #define MMDEF(_) \
@@ -460,7 +462,7 @@ enum {
   /* The following must be in ORDER ARITH. */ \
   _(add) _(sub) _(mul) _(div) _(mod) _(pow) _(unm) \
   /* The following are used in the standard libraries. */ \
-  _(metatable) _(tostring) MMDEF_FFI(_) MMDEF_52(_)
+  _(metatable) _(tostring) MMDEF_FFI(_) MMDEF_PAIRS(_)
 
 typedef enum {
 #define MMENUM(name)	MM_##name,

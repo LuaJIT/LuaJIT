@@ -323,6 +323,30 @@ checkgc:
   return 1;
 }
 
+static int ffi_pairs(lua_State *L, MMS mm)
+{
+  CTState *cts = ctype_cts(L);
+  CTypeID id = ffi_checkcdata(L, 1)->ctypeid;
+  CType *ct = ctype_raw(cts, id);
+  cTValue *tv;
+  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+  tv = lj_ctype_meta(cts, id, mm);
+  if (!tv)
+    lj_err_callerv(L, LJ_ERR_FFI_BADMM, strdata(lj_ctype_repr(L, id, NULL)),
+		   strdata(mmname_str(G(L), mm)));
+  return lj_meta_tailcall(L, tv);
+}
+
+LJLIB_CF(ffi_meta___pairs)
+{
+  return ffi_pairs(L, MM_pairs);
+}
+
+LJLIB_CF(ffi_meta___ipairs)
+{
+  return ffi_pairs(L, MM_ipairs);
+}
+
 LJLIB_PUSH("ffi") LJLIB_SET(__metatable)
 
 #include "lj_libdef.h"

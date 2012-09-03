@@ -525,7 +525,16 @@ Returns a string representation of the value of 64&nbsp;bit integers
 complex numbers (<tt><b>"</b>re&plusmn;im<b>i"</b></tt>). Otherwise
 returns a string representation of the C&nbsp;type of a ctype object
 (<tt><b>"ctype&lt;</b>type<b>&gt;"</b></tt>) or a cdata object
-(<tt><b>"cdata&lt;</b>type<b>&gt;:&nbsp;</b>address"</tt>).
+(<tt><b>"cdata&lt;</b>type<b>&gt;:&nbsp;</b>address"</tt>), unless you
+override it with a <tt>__tostring</tt> metamethod (see
+<a href="#ffi_metatype"><tt>ffi.metatype()</tt></a>).
+</p>
+
+<h3 id="pairs"><tt>iter, obj, start = pairs(cdata)<br>
+iter, obj, start = ipairs(cdata)<br></tt></h3>
+<p>
+Calls the <tt>__pairs</tt> or <tt>__ipairs</tt> metamethod of the
+corresponding ctype.
 </p>
 
 <h2 id="literals">Extensions to the Lua Parser</h2>
