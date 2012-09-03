@@ -944,8 +944,7 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
   }
   /* Record ctype __call/__new metamethod. */
   ct = ctype_raw(cts, id);
-  if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
-  tv = lj_ctype_meta(cts, id, mm);
+  tv = lj_ctype_meta(cts, ctype_isptr(ct->info) ? ctype_cid(ct->info) : id, mm);
   if (tv) {
     if (tvisfunc(tv)) {
       J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
