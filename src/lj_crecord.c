@@ -1081,12 +1081,18 @@ static void crec_arith_meta(jit_State *J, CTState *cts, RecordFFData *rd)
 {
   cTValue *tv = NULL;
   if (J->base[0]) {
-    if (tviscdata(&rd->argv[0]))
-      tv = lj_ctype_meta(cts, argv2cdata(J, J->base[0], &rd->argv[0])->ctypeid,
-			 (MMS)rd->data);
-    if (!tv && J->base[1] && tviscdata(&rd->argv[1]))
-      tv = lj_ctype_meta(cts, argv2cdata(J, J->base[1], &rd->argv[1])->ctypeid,
-			 (MMS)rd->data);
+    if (tviscdata(&rd->argv[0])) {
+      CTypeID id = argv2cdata(J, J->base[0], &rd->argv[0])->ctypeid;
+      CType *ct = ctype_raw(cts, id);
+      if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+      tv = lj_ctype_meta(cts, id, (MMS)rd->data);
+    }
+    if (!tv && J->base[1] && tviscdata(&rd->argv[1])) {
+      CTypeID id = argv2cdata(J, J->base[1], &rd->argv[1])->ctypeid;
+      CType *ct = ctype_raw(cts, id);
+      if (ctype_isptr(ct->info)) id = ctype_cid(ct->info);
+      tv = lj_ctype_meta(cts, id, (MMS)rd->data);
+    }
   }
   if (tv) {
     if (tvisfunc(tv)) {
