@@ -918,7 +918,9 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
 	    size = (CTSize)xsz;
 	  }
 	}
-	info |= (cinfo & (CTF_QUAL|CTF_ALIGN));  /* Inherit qual and align. */
+	if ((cinfo & CTF_ALIGN) > (info & CTF_ALIGN))  /* Find max. align. */
+	  info = (info & ~CTF_ALIGN) | (cinfo & CTF_ALIGN);
+	info |= (cinfo & CTF_QUAL);  /* Inherit qual. */
       } else {
 	lua_assert(ctype_isvoid(info));
       }
