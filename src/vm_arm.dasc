@@ -3897,7 +3897,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next1
     |   ins_next2
     |  mov CARG1, #0
-    |  str CARG1, [RA, #-8]		// Initialize control var.
+    |  mvn CARG2, #0x00018000
+    |  strd CARG1, [RA, #-8]		// Initialize control var.
     |1:
     |   ins_next3
     |5:  // Despecialize bytecode if any of the checks fail.

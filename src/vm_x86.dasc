@@ -1566,7 +1566,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  add BASE, 8
   |  mov ARG3, BASE
   |.endif
-  |  mov SAVE_PC, PC			// Redundant (but a defined value).
+  |  mov SAVE_PC, PC			// Needed for ITERN fallback.
   |  call extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
   |  // Flag returned in eax (RD).
   |  mov BASE, L:RB->base
@@ -5433,6 +5433,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp byte CFUNC:RB->ffid, FF_next_N; jne >5
     |  branchPC RD
     |  mov dword [BASE+RA*8-8], 0	// Initialize control var.
+    |  mov dword [BASE+RA*8-4], 0xfffe7fff
     |1:
     |  ins_next
     |5:  // Despecialize bytecode if any of the checks fail.

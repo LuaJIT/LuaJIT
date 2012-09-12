@@ -3617,7 +3617,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bnez TMP1, >5
     |.  lui TMP2, (-(BCBIAS_J*4 >> 16) & 65535)
     |  addu PC, TMP0, TMP2
+    |  lui TMP1, 0xfffe
+    |  ori TMP1, TMP1, 0x7fff
     |  sw r0, -8+LO(RA)			// Initialize control var.
+    |  sw TMP1, -8+HI(RA)
     |1:
     |  ins_next
     |5:  // Despecialize bytecode if any of the checks fail.

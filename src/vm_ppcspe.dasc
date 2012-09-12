@@ -3188,7 +3188,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  crand 4*cr0+eq, 4*cr0+eq, 4*cr7+eq
     |    add TMP3, PC, TMP0
     |  bne cr0, >5
+    |  lus TMP1, 0xfffe
+    |  ori TMP1, TMP1, 0x7fff
     |  stw ZERO, -4(RA)			// Initialize control var.
+    |  stw TMP1, -8(RA)
     |    addis PC, TMP3, -(BCBIAS_J*4 >> 16)
     |1:
     |  ins_next
