@@ -353,10 +353,7 @@ static void LJ_FASTCALL recff_ipairs_aux(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_ipairs(jit_State *J, RecordFFData *rd)
 {
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
-  if (!recff_metacall(J, rd, MM_ipairs))
-#endif
-  {
+  if (!(LJ_52 && recff_metacall(J, rd, MM_ipairs))) {
     TRef tab = J->base[0];
     if (tref_istab(tab)) {
       J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));

@@ -447,7 +447,7 @@ enum {
 #define MMDEF_FFI(_)
 #endif
 
-#if defined(LUAJIT_ENABLE_LUA52COMPAT) || LJ_HASFFI
+#if LJ_52 || LJ_HASFFI
 #define MMDEF_PAIRS(_) _(pairs) _(ipairs)
 #else
 #define MMDEF_PAIRS(_)

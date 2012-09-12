@@ -1184,7 +1184,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  call extern lj_meta_len@8		// (lua_State *L, TValue *o)
   |  // NULL (retry) or TValue * (metamethod) returned in eax (RC).
   |  mov BASE, L:RB->base
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  test RC, RC
   |  jne ->vmeta_binop			// Binop call for compatibility.
   |  movzx RD, PC_RD
@@ -1600,7 +1600,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_1 pairs
   |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
 #endif
   |  mov CFUNC:RB, [BASE-8]
@@ -1674,7 +1674,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_1 ipairs
   |  mov TAB:RB, [BASE]
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  cmp dword TAB:RB->metatable, 0; jne ->fff_fallback
 #endif
   |  mov CFUNC:RB, [BASE-8]
@@ -4315,7 +4315,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  checktab RD, ->vmeta_len
     |  mov TAB:FCARG1, [BASE+RD*8]
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
     |  mov TAB:RB, TAB:FCARG1->metatable
     |  cmp TAB:RB, 0
     |  jnz >9
@@ -4336,7 +4336,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov BASE, RB			// Restore BASE.
     |  movzx RA, PC_RA
     |  jmp <1
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
     |9:  // Check for __len.
     |  test byte TAB:RB->nomm, 1<<MM_len
     |  jnz <3

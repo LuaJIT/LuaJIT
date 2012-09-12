@@ -842,7 +842,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_len:
   |  // CARG2 already set by BC_LEN.
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  move MULTRES, CARG1
 #endif
   |  load_got lj_meta_len
@@ -851,7 +851,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  call_intern lj_meta_len		// (lua_State *L, TValue *o)
   |.  move CARG1, L
   |  // Returns NULL (retry) or TValue * (metamethod base).
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  bnez CRET1, ->vmeta_binop		// Binop call for compatibility.
   |.  nop
   |  b ->BC_LEN_Z
@@ -1159,7 +1159,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  li AT, LJ_TTAB
   |  bne CARG3, AT, ->fff_fallback
   |.  lw PC, FRAME_PC(BASE)
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  lw TAB:TMP2, TAB:CARG1->metatable
   |   ldc1 f0, CFUNC:RB->upvalue[0]
   |  bnez TAB:TMP2, ->fff_fallback
@@ -1225,7 +1225,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  li AT, LJ_TTAB
   |  bne CARG3, AT, ->fff_fallback
   |.  lw PC, FRAME_PC(BASE)
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   |  lw TAB:TMP2, TAB:CARG1->metatable
   |   ldc1 f0, CFUNC:RB->upvalue[0]
   |  bnez TAB:TMP2, ->fff_fallback
@@ -2613,7 +2613,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  bne TMP0, AT, ->vmeta_len
     |.  nop
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
     |  lw TAB:TMP2, TAB:CARG1->metatable
     |  bnez TAB:TMP2, >9
     |.  nop
@@ -2626,7 +2626,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Returns uint32_t (but less than 2^31).
     |  b <1
     |.  nop
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
     |9:
     |  lbu TMP0, TAB:TMP2->nomm
     |  andi TMP0, TMP0, 1<<MM_len

@@ -906,17 +906,15 @@ static TRef rec_mm_len(jit_State *J, TRef tr, TValue *tv)
     TValue *basev = J->L->base + func;
     base[0] = ix.mobj; copyTV(J->L, basev+0, &ix.mobjv);
     base[1] = tr; copyTV(J->L, basev+1, tv);
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
     base[2] = tr; copyTV(J->L, basev+2, tv);
 #else
     base[2] = TREF_NIL; setnilV(basev+2);
 #endif
     lj_record_call(J, func, 2);
   } else {
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
-    if (tref_istab(tr))
+    if (LJ_52 && tref_istab(tr))
       return lj_ir_call(J, IRCALL_lj_tab_len, tr);
-#endif
     lj_trace_err(J, LJ_TRERR_NOMM);
   }
   return 0;  /* No result yet. */
@@ -1815,10 +1813,8 @@ void lj_record_ins(jit_State *J)
   case BC_LEN:
     if (tref_isstr(rc))
       rc = emitir(IRTI(IR_FLOAD), rc, IRFL_STR_LEN);
-#ifndef LUAJIT_ENABLE_LUA52COMPAT
-    else if (tref_istab(rc))
+    else if (!LJ_52 && tref_istab(rc))
       rc = lj_ir_call(J, IRCALL_lj_tab_len, rc);
-#endif
     else
       rc = rec_mm_len(J, rc, rcv);
     break;

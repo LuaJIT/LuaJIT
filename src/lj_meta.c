@@ -315,19 +315,13 @@ TValue * LJ_FASTCALL lj_meta_len(lua_State *L, cTValue *o)
 {
   cTValue *mo = lj_meta_lookup(L, o, MM_len);
   if (tvisnil(mo)) {
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
-    if (tvistab(o))
+    if (LJ_52 && tvistab(o))
       tabref(tabV(o)->metatable)->nomm |= (uint8_t)(1u<<MM_len);
     else
-#endif
       lj_err_optype(L, o, LJ_ERR_OPLEN);
     return NULL;
   }
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
-  return mmcall(L, lj_cont_ra, mo, o, o);
-#else
-  return mmcall(L, lj_cont_ra, mo, o, niltv(L));
-#endif
+  return mmcall(L, lj_cont_ra, mo, o, LJ_52 ? o : niltv(L));
 }
 
 /* Helper for equality comparisons. __eq metamethod. */

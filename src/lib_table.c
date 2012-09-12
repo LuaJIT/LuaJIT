@@ -273,7 +273,7 @@ LJLIB_CF(table_sort)
 LUALIB_API int luaopen_table(lua_State *L)
 {
   LJ_LIB_REG(L, LUA_TABLIBNAME, table);
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   lua_getglobal(L, "unpack");
   lua_setfield(L, -2, "unpack");
 #endif

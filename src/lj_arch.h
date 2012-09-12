@@ -400,4 +400,11 @@
 #define LJ_NO_UNWIND		1
 #endif
 
+/* Compatibility with Lua 5.1 vs. 5.2. */
+#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#define LJ_52			1
+#else
+#define LJ_52			0
+#endif
+
 #endif

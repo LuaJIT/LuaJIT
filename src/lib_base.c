@@ -278,16 +278,12 @@ LJLIB_ASM(next)
   return FFH_UNREACHABLE;
 }
 
-#if defined(LUAJIT_ENABLE_LUA52COMPAT) || LJ_HASFFI
+#if LJ_52 || LJ_HASFFI
 static int ffh_pairs(lua_State *L, MMS mm)
 {
   TValue *o = lj_lib_checkany(L, 1);
   cTValue *mo = lj_meta_lookup(L, o, mm);
-  if (
-#if !defined(LUAJIT_ENABLE_LUA52COMPAT)
-      tviscdata(o) &&
-#endif
-      !tvisnil(mo)) {
+  if ((LJ_52 || tviscdata(o)) && !tvisnil(mo)) {
     L->top = o+1;  /* Only keep one argument. */
     copyTV(L, L->base-1, mo);  /* Replace callable. */
     return FFH_TAILCALL;
@@ -542,7 +538,7 @@ LJLIB_CF(coroutine_status)
 
 LJLIB_CF(coroutine_running)
 {
-#ifdef LUAJIT_ENABLE_LUA52COMPAT
+#if LJ_52
   int ismain = lua_pushthread(L);
   setboolV(L->top++, ismain);
   return 2;
