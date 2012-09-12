@@ -392,8 +392,12 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
   {
     jit_State *J = G2J(g);
     if (J->state != LJ_TRACE_IDLE) {
+#ifdef LUA_USE_ASSERT
+      ptrdiff_t delta = L->top - L->base;
+#endif
       J->L = L;
       lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
+      lua_assert(L->top - L->base == delta);
     }
   }
 #endif
@@ -448,8 +452,12 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #if LJ_HASJIT
   J->L = L;
   if ((uintptr_t)pc & 1) {  /* Marker for hot call. */
+#ifdef LUA_USE_ASSERT
+    ptrdiff_t delta = L->top - L->base;
+#endif
     pc = (const BCIns *)((uintptr_t)pc & ~(uintptr_t)1);
     lj_trace_hot(J, pc);
+    lua_assert(L->top - L->base == delta);
     goto out;
   } else if (J->state != LJ_TRACE_IDLE &&
 	     !(g->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
