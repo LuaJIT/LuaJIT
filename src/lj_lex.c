@@ -272,9 +272,9 @@ static int llex(LexState *ls, TValue *tv)
 	save_and_next(ls);
       } while (lj_char_isident(ls->current));
       s = lj_parse_keepstr(ls, ls->sb.buf, ls->sb.n);
+      setstrV(ls->L, tv, s);
       if (s->reserved > 0)  /* Reserved word? */
 	return TK_OFS + s->reserved;
-      setstrV(ls->L, tv, s);
       return TK_name;
     }
     switch (ls->current) {
@@ -330,6 +330,9 @@ static int llex(LexState *ls, TValue *tv)
     case '~':
       next(ls);
       if (ls->current != '=') return '~'; else { next(ls); return TK_ne; }
+    case ':':
+      next(ls);
+      if (ls->current != ':') return ':'; else { next(ls); return TK_label; }
     case '"':
     case '\'':
       read_string(ls, ls->current, tv);

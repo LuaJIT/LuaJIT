@@ -550,7 +550,7 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
       ** an inner loop even in a root trace. But it's better to be a bit
       ** more conservative here and only do it for very short loops.
       */
-      if (!innerloopleft(J, pc))
+      if (bc_j(*pc) != -1 && !innerloopleft(J, pc))
 	lj_trace_err(J, LJ_TRERR_LINNER);  /* Root trace hit an inner loop. */
       if ((ev != LOOPEV_ENTERLO &&
 	   J->loopref && J->cur.nins - J->loopref > 24) || --J->loopunroll < 0)

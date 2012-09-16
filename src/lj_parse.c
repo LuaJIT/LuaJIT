@@ -95,17 +95,28 @@ static int expr_numiszero(ExpDesc *e)
 /* Per-function linked list of scope blocks. */
 typedef struct FuncScope {
   struct FuncScope *prev;	/* Link to outer scope. */
-  BCPos breaklist;		/* Jump list for loop breaks. */
+  MSize vstart;			/* Start of block-local variables. */
   uint8_t nactvar;		/* Number of active vars outside the scope. */
-  uint8_t upval;		/* Some variable in the scope is an upvalue. */
-  uint8_t isbreakable;		/* Scope is a loop and allows a break. */
+  uint8_t flags;		/* Scope flags. */
 } FuncScope;
+
+#define FSCOPE_LOOP		0x01	/* Scope is a (breakable) loop. */
+#define FSCOPE_BREAK		0x02	/* Break used in scope. */
+#define FSCOPE_GOLA		0x04	/* Goto or label used in scope. */
+#define FSCOPE_UPVAL		0x08	/* Upvalue in scope. */
+#define FSCOPE_NOCLOSE		0x10	/* Do not close upvalues. */
+
+#define NAME_BREAK		((GCstr *)(uintptr_t)1)
 
 /* Index into variable stack. */
 typedef uint16_t VarIndex;
 #define LJ_MAX_VSTACK		65536
 
-#define VSTACK_VAR_RW		0x80000000	/* In endpc: R/W variable. */
+/* Flags stored in upper bits of endpc. */
+#define VSTACK_MASK		0x1fffffff	/* Mask for actual endpc. */
+#define VSTACK_VAR_RW		0x80000000	/* R/W variable. */
+#define VSTACK_GOTO		0x40000000	/* Pending goto. */
+#define VSTACK_LABEL		0x20000000	/* Label. */
 
 /* Upvalue map. */
 typedef struct UVMap {
@@ -680,8 +691,7 @@ static BCPos bcemit_jmp(FuncState *fs)
   BCPos j = fs->pc - 1;
   BCIns *ip = &fs->bcbase[j].ins;
   fs->jpc = NO_JMP;
-  if ((int32_t)j >= (int32_t)fs->lasttarget &&
-      bc_op(*ip) == BC_UCLO)
+  if ((int32_t)j >= (int32_t)fs->lasttarget && bc_op(*ip) == BC_UCLO)
     setbc_j(ip, NO_JMP);
   else
     j = bcemit_AJ(fs, BC_JMP, fs->freereg, NO_JMP);
@@ -1009,7 +1019,7 @@ static void lex_match(LexState *ls, LexToken what, LexToken who, BCLine line)
 static GCstr *lex_str(LexState *ls)
 {
   GCstr *s;
-  if (ls->token != TK_name)
+  if (ls->token != TK_name && (LJ_52 || ls->token != TK_goto))
     err_token(ls, TK_name);
   s = strV(&ls->tokenval);
   lj_lex_next(ls);
@@ -1094,7 +1104,7 @@ static MSize var_lookup_uv(FuncState *fs, MSize vidx, ExpDesc *e)
 }
 
 /* Forward declaration. */
-static void scope_uvmark(FuncState *fs, BCReg level);
+static void fscope_uvmark(FuncState *fs, BCReg level);
 
 /* Recursively lookup variables in enclosing functions. */
 static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
@@ -1104,7 +1114,7 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
     if ((int32_t)reg >= 0) {  /* Local in this function? */
       expr_init(e, VLOCAL, reg);
       if (!first)
-	scope_uvmark(fs, reg);  /* Scope now has an upvalue. */
+	fscope_uvmark(fs, reg);  /* Scope now has an upvalue. */
       return (MSize)(e->u.s.aux = (uint32_t)fs->varmap[reg]);
     } else {
       MSize vidx = var_lookup_(fs->prev, name, e, 0);  /* Var in outer func? */
@@ -1124,6 +1134,170 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
 /* Lookup variable name. */
 #define var_lookup(ls, e) \
   var_lookup_((ls)->fs, lex_str(ls), (e), 1)
+
+/* -- Goto an label handling ---------------------------------------------- */
+
+/* Add a new goto or label. */
+static MSize gola_new(LexState *ls, GCstr *name, uint32_t type, BCPos pc)
+{
+  FuncState *fs = ls->fs;
+  MSize vtop = ls->vtop;
+  if (LJ_UNLIKELY(vtop >= ls->sizevstack)) {
+    if (ls->sizevstack >= LJ_MAX_VSTACK)
+      lj_lex_error(ls, 0, LJ_ERR_XLIMC, LJ_MAX_VSTACK);
+    lj_mem_growvec(ls->L, ls->vstack, ls->sizevstack, LJ_MAX_VSTACK, VarInfo);
+  }
+  lua_assert(name == NAME_BREAK || lj_tab_getstr(fs->kt, name) != NULL);
+  /* NOBARRIER: name is anchored in fs->kt and ls->vstack is not a GCobj. */
+  setgcref(ls->vstack[vtop].name, obj2gco(name));
+  ls->vstack[vtop].startpc = pc;
+  ls->vstack[vtop].endpc = fs->nactvar | type;
+  ls->vtop = vtop+1;
+  return vtop;
+}
+
+#define gola_nactvar(v)		((uint8_t)((v)->endpc))
+#define gola_isgoto(v)		((v)->endpc & VSTACK_GOTO)
+#define gola_islabel(v)		((v)->endpc & VSTACK_LABEL)
+#define gola_isgotolabel(v)	((v)->endpc & (VSTACK_GOTO|VSTACK_LABEL))
+
+/* Patch goto to jump to label. */
+static void gola_patch(LexState *ls, VarInfo *vg, VarInfo *vl)
+{
+  FuncState *fs = ls->fs;
+  BCPos pc = vg->startpc;
+  setgcrefnull(vg->name);  /* Invalidate pending goto. */
+  setbc_a(&fs->bcbase[pc].ins, gola_nactvar(vl));
+  jmp_patch(fs, pc, vl->startpc);
+}
+
+/* Patch goto to close upvalues. */
+static void gola_close(LexState *ls, VarInfo *vg)
+{
+  FuncState *fs = ls->fs;
+  BCPos pc = vg->startpc;
+  BCIns *ip = &fs->bcbase[pc].ins;
+  lua_assert(gola_isgoto(vg));
+  lua_assert(bc_op(*ip) == BC_JMP || bc_op(*ip) == BC_UCLO);
+  setbc_a(ip, gola_nactvar(vg));
+  if (bc_op(*ip) == BC_JMP) {
+    BCPos next = jmp_next(fs, pc);
+    if (next != NO_JMP) jmp_patch(fs, next, pc);  /* Jump to UCLO. */
+    setbc_op(ip, BC_UCLO);  /* Turn into UCLO. */
+    setbc_j(ip, NO_JMP);
+  }
+}
+
+/* Resolve pending forward gotos for label. */
+static void gola_resolve(LexState *ls, MSize idx)
+{
+  VarInfo *vg = ls->vstack + ls->fs->bl->vstart;
+  VarInfo *vl = ls->vstack + idx;
+  for (; vg < vl; vg++)
+    if (gcrefeq(vg->name, vl->name) && gola_isgoto(vg)) {
+      if (gola_nactvar(vg) < gola_nactvar(vl)) {
+	GCstr *name = strref(var_get(ls, ls->fs, gola_nactvar(vg)).name);
+	lua_assert((uintptr_t)name >= VARNAME__MAX);
+	ls->linenumber = ls->fs->bcbase[vg->startpc].line;
+	lj_lex_error(ls, 0, LJ_ERR_XGSCOPE,
+		     strdata(strref(vg->name)), strdata(name));
+      }
+      gola_patch(ls, vg, vl);
+    }
+}
+
+/* Fixup remaining gotos and labels for scope. */
+static void gola_fixup(LexState *ls, FuncScope *bl)
+{
+  VarInfo *v = ls->vstack + bl->vstart;
+  VarInfo *ve = ls->vstack + ls->vtop;
+  for (; v < ve; v++) {
+    GCstr *name = strref(v->name);
+    if (name != NULL) {  /* Only consider remaining valid gotos/labels. */
+      if (gola_islabel(v)) {
+	VarInfo *vg;
+	setgcrefnull(v->name);  /* Invalidate label that goes out of scope. */
+	for (vg = v+1; vg < ve; vg++)  /* Resolve pending backward gotos. */
+	  if (strref(vg->name) == name && gola_isgoto(vg)) {
+	    if ((bl->flags&FSCOPE_UPVAL) && gola_nactvar(vg) > gola_nactvar(v))
+	      gola_close(ls, vg);
+	    gola_patch(ls, vg, v);
+	  }
+      } else if (gola_isgoto(v)) {
+	if (bl->prev) {  /* Propagate goto or break to outer scope. */
+	  bl->prev->flags |= name == NAME_BREAK ? FSCOPE_BREAK : FSCOPE_GOLA;
+	  v->endpc = bl->nactvar | VSTACK_GOTO;
+	  if ((bl->flags & FSCOPE_UPVAL))
+	    gola_close(ls, v);
+	} else {  /* No outer scope: undefined goto label or no loop. */
+	  ls->linenumber = ls->fs->bcbase[v->startpc].line;
+	  if (name == NAME_BREAK)
+	    lj_lex_error(ls, 0, LJ_ERR_XBREAK);
+	  else
+	    lj_lex_error(ls, 0, LJ_ERR_XLUNDEF, strdata(name));
+	}
+      }
+    }
+  }
+}
+
+/* Find existing label. */
+static VarInfo *gola_findlabel(LexState *ls, GCstr *name)
+{
+  VarInfo *v = ls->vstack + ls->fs->bl->vstart;
+  VarInfo *ve = ls->vstack + ls->vtop;
+  for (; v < ve; v++)
+    if (strref(v->name) == name && gola_islabel(v))
+      return v;
+  return NULL;
+}
+
+/* -- Scope handling ------------------------------------------------------ */
+
+/* Begin a scope. */
+static void fscope_begin(FuncState *fs, FuncScope *bl, int flags)
+{
+  bl->nactvar = (uint8_t)fs->nactvar;
+  bl->flags = flags;
+  bl->vstart = fs->ls->vtop;
+  bl->prev = fs->bl;
+  fs->bl = bl;
+  lua_assert(fs->freereg == fs->nactvar);
+}
+
+/* End a scope. */
+static void fscope_end(FuncState *fs)
+{
+  FuncScope *bl = fs->bl;
+  LexState *ls = fs->ls;
+  fs->bl = bl->prev;
+  var_remove(ls, bl->nactvar);
+  fs->freereg = fs->nactvar;
+  lua_assert(bl->nactvar == fs->nactvar);
+  if ((bl->flags & (FSCOPE_UPVAL|FSCOPE_NOCLOSE)) == FSCOPE_UPVAL)
+    bcemit_AJ(fs, BC_UCLO, bl->nactvar, 0);
+  if ((bl->flags & FSCOPE_BREAK)) {
+    if ((bl->flags & FSCOPE_LOOP)) {
+      MSize idx = gola_new(ls, NAME_BREAK, VSTACK_LABEL, fs->pc);
+      ls->vtop = idx;  /* Drop break label immediately. */
+      gola_resolve(ls, idx);
+      return;
+    }  /* else: need the fixup step to propagate the breaks. */
+  } else if (!(bl->flags & FSCOPE_GOLA)) {
+    return;
+  }
+  gola_fixup(ls, bl);
+}
+
+/* Mark scope as having an upvalue. */
+static void fscope_uvmark(FuncState *fs, BCReg level)
+{
+  FuncScope *bl;
+  for (bl = fs->bl; bl && bl->nactvar > level; bl = bl->prev)
+    ;
+  if (bl)
+    bl->flags |= FSCOPE_UPVAL;
+}
 
 /* -- Function state management ------------------------------------------- */
 
@@ -1287,36 +1461,37 @@ static void fs_buf_uleb128(LexState *ls, uint32_t v)
 /* Prepare variable info for prototype. */
 static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
 {
-  VarInfo *vstack = fs->ls->vstack;
+  VarInfo *vs = fs->ls->vstack, *ve;
   MSize i, n;
   BCPos lastpc;
   lj_str_resetbuf(&ls->sb);  /* Copy to temp. string buffer. */
   /* Store upvalue names. */
   for (i = 0, n = fs->nuv; i < n; i++) {
-    GCstr *s = strref(vstack[fs->uvloc[i].vidx].name);
+    GCstr *s = strref(vs[fs->uvloc[i].vidx].name);
     MSize len = s->len+1;
     fs_buf_need(ls, len);
     fs_buf_str(ls, strdata(s), len);
   }
   *ofsvar = ls->sb.n;
-  vstack += fs->vbase;
   lastpc = 0;
   /* Store local variable names and compressed ranges. */
-  for (i = 0, n = ls->vtop - fs->vbase; i < n; i++) {
-    GCstr *s = strref(vstack[i].name);
-    BCPos startpc = vstack[i].startpc;
-    BCPos endpc = vstack[i].endpc & ~VSTACK_VAR_RW;
-    if ((uintptr_t)s < VARNAME__MAX) {
-      fs_buf_need(ls, 1 + 2*5);
-      ls->sb.buf[ls->sb.n++] = (uint8_t)(uintptr_t)s;
-    } else {
-      MSize len = s->len+1;
-      fs_buf_need(ls, len + 2*5);
-      fs_buf_str(ls, strdata(s), len);
+  for (ve = vs + ls->vtop, vs += fs->vbase; vs < ve; vs++) {
+    if (!gola_isgotolabel(vs)) {
+      GCstr *s = strref(vs->name);
+      BCPos startpc;
+      if ((uintptr_t)s < VARNAME__MAX) {
+	fs_buf_need(ls, 1 + 2*5);
+	ls->sb.buf[ls->sb.n++] = (uint8_t)(uintptr_t)s;
+      } else {
+	MSize len = s->len+1;
+	fs_buf_need(ls, len + 2*5);
+	fs_buf_str(ls, strdata(s), len);
+      }
+      startpc = vs->startpc;
+      fs_buf_uleb128(ls, startpc-lastpc);
+      fs_buf_uleb128(ls, (vs->endpc & VSTACK_MASK)-startpc);
+      lastpc = startpc;
     }
-    fs_buf_uleb128(ls, startpc-lastpc);
-    fs_buf_uleb128(ls, endpc-startpc);
-    lastpc = startpc;
   }
   fs_buf_need(ls, 1);
   ls->sb.buf[ls->sb.n++] = '\0';  /* Terminator for varinfo. */
@@ -1359,14 +1534,17 @@ static void fs_fixup_ret(FuncState *fs)
 {
   BCPos lastpc = fs->pc;
   if (lastpc <= fs->lasttarget || !bcopisret(bc_op(fs->bcbase[lastpc-1].ins))) {
-    if (fs->flags & PROTO_CHILD)
+    if ((fs->bl->flags & FSCOPE_UPVAL))
       bcemit_AJ(fs, BC_UCLO, 0, 0);
     bcemit_AD(fs, BC_RET0, 0, 1);  /* Need final return. */
   }
+  fs->bl->flags |= FSCOPE_NOCLOSE;  /* Handled above. */
+  fscope_end(fs);
+  lua_assert(fs->bl == NULL);
   /* May need to fixup returns encoded before first function was created. */
   if (fs->flags & PROTO_FIXUP_RETURN) {
     BCPos pc;
-    for (pc = 0; pc < lastpc; pc++) {
+    for (pc = 1; pc < lastpc; pc++) {
       BCIns ins = fs->bcbase[pc].ins;
       BCPos offset;
       switch (bc_op(ins)) {
@@ -1397,9 +1575,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   GCproto *pt;
 
   /* Apply final fixups. */
-  lua_assert(fs->bl == NULL);
   fs_fixup_ret(fs);
-  var_remove(ls, 0);
 
   /* Calculate total size of prototype including all colocated arrays. */
   sizept = sizeof(GCproto) + fs->pc*sizeof(BCIns) + fs->nkgc*sizeof(GCRef);
@@ -1564,7 +1740,8 @@ static void expr_table(LexState *ls, ExpDesc *e)
       if (!expr_isk(&key)) expr_index(fs, e, &key);
       if (expr_isnumk(&key) && expr_numiszero(&key)) needarr = 1; else nhash++;
       lex_check(ls, '=');
-    } else if (ls->token == TK_name && lj_lex_lookahead(ls) == '=') {
+    } else if ((ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) &&
+	       lj_lex_lookahead(ls) == '=') {
       expr_str(ls, &key);
       lex_check(ls, '=');
       nhash++;
@@ -1657,7 +1834,7 @@ static BCReg parse_params(LexState *ls, int needself)
     var_new_lit(ls, nparams++, "self");
   if (ls->token != ')') {
     do {
-      if (ls->token == TK_name) {
+      if (ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) {
 	var_new(ls, nparams++, lex_str(ls));
       } else if (ls->token == TK_dots) {
 	lj_lex_next(ls);
@@ -1682,9 +1859,11 @@ static void parse_chunk(LexState *ls);
 static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
 {
   FuncState fs, *pfs = ls->fs;
+  FuncScope bl;
   GCproto *pt;
   ptrdiff_t oldbase = pfs->bcbase - ls->bcstack;
   fs_init(ls, &fs);
+  fscope_begin(&fs, &bl, 0);
   fs.linedefined = line;
   fs.numparams = (uint8_t)parse_params(ls, needself);
   fs.bcbase = pfs->bcbase + pfs->pc;
@@ -1778,7 +1957,7 @@ static void expr_primary(LexState *ls, ExpDesc *v)
     expr(ls, v);
     lex_match(ls, ')', '(', line);
     expr_discharge(ls->fs, v);
-  } else if (ls->token == TK_name) {
+  } else if (ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) {
     var_lookup(ls, v);
   } else {
     err_syntax(ls, LJ_ERR_XSYMBOL);
@@ -1964,125 +2143,6 @@ static BCPos expr_cond(LexState *ls)
   return v.f;
 }
 
-/* -- Scope handling ------------------------------------------------------ */
-
-/* Begin a scope. */
-static void scope_begin(FuncState *fs, FuncScope *bl, int isbreakable)
-{
-  bl->breaklist = NO_JMP;
-  bl->isbreakable = (uint8_t)isbreakable;
-  bl->nactvar = (uint8_t)fs->nactvar;
-  bl->upval = 0;
-  bl->prev = fs->bl;
-  fs->bl = bl;
-  lua_assert(fs->freereg == fs->nactvar);
-}
-
-/* End a scope. */
-static void scope_end(FuncState *fs)
-{
-  FuncScope *bl = fs->bl;
-  fs->bl = bl->prev;
-  var_remove(fs->ls, bl->nactvar);
-  fs->freereg = fs->nactvar;
-  lua_assert(bl->nactvar == fs->nactvar);
-  /* A scope is either breakable or has upvalues. */
-  lua_assert(!bl->isbreakable || !bl->upval);
-  if (bl->upval)
-    bcemit_AJ(fs, BC_UCLO, bl->nactvar, 0);
-  else  /* Avoid in upval case, it clears lasttarget and kills UCLO+JMP join. */
-    jmp_tohere(fs, bl->breaklist);
-}
-
-/* Mark scope as having an upvalue. */
-static void scope_uvmark(FuncState *fs, BCReg level)
-{
-  FuncScope *bl;
-  for (bl = fs->bl; bl && bl->nactvar > level; bl = bl->prev)
-    ;
-  if (bl)
-    bl->upval = 1;
-}
-
-/* Parse 'break' statement. */
-static void parse_break(LexState *ls)
-{
-  FuncState *fs = ls->fs;
-  FuncScope *bl;
-  BCReg savefr;
-  int upval = 0;
-  for (bl = fs->bl; bl && !bl->isbreakable; bl = bl->prev)
-    upval |= bl->upval;  /* Collect upvalues in intervening scopes. */
-  if (!bl)  /* Error if no breakable scope found. */
-    err_syntax(ls, LJ_ERR_XBREAK);
-  savefr = fs->freereg;
-  fs->freereg = bl->nactvar;  /* Shrink slots to help data-flow analysis. */
-  if (upval)
-    bcemit_AJ(fs, BC_UCLO, bl->nactvar, 0);  /* Close upvalues. */
-  jmp_append(fs, &bl->breaklist, bcemit_jmp(fs));
-  fs->freereg = savefr;
-}
-
-/* Check for end of block. */
-static int endofblock(LexToken token)
-{
-  switch (token) {
-  case TK_else: case TK_elseif: case TK_end: case TK_until: case TK_eof:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-/* Parse 'return' statement. */
-static void parse_return(LexState *ls)
-{
-  BCIns ins;
-  FuncState *fs = ls->fs;
-  lj_lex_next(ls);  /* Skip 'return'. */
-  fs->flags |= PROTO_HAS_RETURN;
-  if (endofblock(ls->token) || ls->token == ';') {  /* Bare return. */
-    ins = BCINS_AD(BC_RET0, 0, 1);
-  } else {  /* Return with one or more values. */
-    ExpDesc e;  /* Receives the _last_ expression in the list. */
-    BCReg nret = expr_list(ls, &e);
-    if (nret == 1) {  /* Return one result. */
-      if (e.k == VCALL) {  /* Check for tail call. */
-	BCIns *ip = bcptr(fs, &e);
-	/* It doesn't pay off to add BC_VARGT just for 'return ...'. */
-	if (bc_op(*ip) == BC_VARG) goto notailcall;
-	fs->pc--;
-	ins = BCINS_AD(bc_op(*ip)-BC_CALL+BC_CALLT, bc_a(*ip), bc_c(*ip));
-      } else {  /* Can return the result from any register. */
-	ins = BCINS_AD(BC_RET1, expr_toanyreg(fs, &e), 2);
-      }
-    } else {
-      if (e.k == VCALL) {  /* Append all results from a call. */
-      notailcall:
-	setbc_b(bcptr(fs, &e), 0);
-	ins = BCINS_AD(BC_RETM, fs->nactvar, e.u.s.aux - fs->nactvar);
-      } else {
-	expr_tonextreg(fs, &e);  /* Force contiguous registers. */
-	ins = BCINS_AD(BC_RET, fs->nactvar, nret+1);
-      }
-    }
-  }
-  if (fs->flags & PROTO_CHILD)
-    bcemit_AJ(fs, BC_UCLO, 0, 0);  /* May need to close upvalues first. */
-  bcemit_INS(fs, ins);
-}
-
-/* Parse a block. */
-static void parse_block(LexState *ls)
-{
-  FuncState *fs = ls->fs;
-  FuncScope bl;
-  scope_begin(fs, &bl, 0);
-  parse_chunk(ls);
-  lua_assert(bl.breaklist == NO_JMP);
-  scope_end(fs);
-}
-
 /* -- Assignments --------------------------------------------------------- */
 
 /* List of LHS variables. */
@@ -2243,7 +2303,119 @@ static void parse_func(LexState *ls, BCLine line)
   fs->bcbase[fs->pc - 1].line = line;  /* Set line for the store. */
 }
 
-/* -- Loop and conditional statements ------------------------------------- */
+/* -- Control transfer statements ----------------------------------------- */
+
+/* Check for end of block. */
+static int endofblock(LexToken token)
+{
+  switch (token) {
+  case TK_else: case TK_elseif: case TK_end: case TK_until: case TK_eof:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+/* Parse 'return' statement. */
+static void parse_return(LexState *ls)
+{
+  BCIns ins;
+  FuncState *fs = ls->fs;
+  lj_lex_next(ls);  /* Skip 'return'. */
+  fs->flags |= PROTO_HAS_RETURN;
+  if (endofblock(ls->token) || ls->token == ';') {  /* Bare return. */
+    ins = BCINS_AD(BC_RET0, 0, 1);
+  } else {  /* Return with one or more values. */
+    ExpDesc e;  /* Receives the _last_ expression in the list. */
+    BCReg nret = expr_list(ls, &e);
+    if (nret == 1) {  /* Return one result. */
+      if (e.k == VCALL) {  /* Check for tail call. */
+	BCIns *ip = bcptr(fs, &e);
+	/* It doesn't pay off to add BC_VARGT just for 'return ...'. */
+	if (bc_op(*ip) == BC_VARG) goto notailcall;
+	fs->pc--;
+	ins = BCINS_AD(bc_op(*ip)-BC_CALL+BC_CALLT, bc_a(*ip), bc_c(*ip));
+      } else {  /* Can return the result from any register. */
+	ins = BCINS_AD(BC_RET1, expr_toanyreg(fs, &e), 2);
+      }
+    } else {
+      if (e.k == VCALL) {  /* Append all results from a call. */
+      notailcall:
+	setbc_b(bcptr(fs, &e), 0);
+	ins = BCINS_AD(BC_RETM, fs->nactvar, e.u.s.aux - fs->nactvar);
+      } else {
+	expr_tonextreg(fs, &e);  /* Force contiguous registers. */
+	ins = BCINS_AD(BC_RET, fs->nactvar, nret+1);
+      }
+    }
+  }
+  if (fs->flags & PROTO_CHILD)
+    bcemit_AJ(fs, BC_UCLO, 0, 0);  /* May need to close upvalues first. */
+  bcemit_INS(fs, ins);
+}
+
+/* Parse 'break' statement. */
+static void parse_break(LexState *ls)
+{
+  ls->fs->bl->flags |= FSCOPE_BREAK;
+  gola_new(ls, NAME_BREAK, VSTACK_GOTO, bcemit_jmp(ls->fs));
+}
+
+/* Parse 'goto' statement. */
+static void parse_goto(LexState *ls)
+{
+  FuncState *fs = ls->fs;
+  GCstr *name = lex_str(ls);
+  VarInfo *vl = gola_findlabel(ls, name);
+  if (vl)  /* Treat backwards goto within same scope like a loop. */
+    bcemit_AJ(fs, BC_LOOP, gola_nactvar(vl), -1);  /* No BC range check. */
+  fs->bl->flags |= FSCOPE_GOLA;
+  gola_new(ls, name, VSTACK_GOTO, bcemit_jmp(fs));
+}
+
+/* Parse label. */
+static void parse_label(LexState *ls)
+{
+  FuncState *fs = ls->fs;
+  GCstr *name;
+  MSize idx;
+  fs->lasttarget = fs->pc;
+  fs->bl->flags |= FSCOPE_GOLA;
+  lj_lex_next(ls);  /* Skip '::'. */
+  name = lex_str(ls);
+  if (gola_findlabel(ls, name))
+    lj_lex_error(ls, 0, LJ_ERR_XLDUP, strdata(name));
+  idx = gola_new(ls, name, VSTACK_LABEL, fs->pc);
+  lex_check(ls, TK_label);
+  /* Recursively parse trailing statements: labels and ';' (Lua 5.2 only). */
+  for (;;) {
+    if (ls->token == TK_label) {
+      synlevel_begin(ls);
+      parse_label(ls);
+      synlevel_end(ls);
+    } else if (LJ_52 && ls->token == ';') {
+      lj_lex_next(ls);
+    } else {
+      break;
+    }
+  }
+  /* Trailing label is considered to be outside of scope. */
+  if (endofblock(ls->token) && ls->token != TK_until)
+    ls->vstack[idx].endpc = fs->bl->nactvar | VSTACK_LABEL;
+  gola_resolve(ls, idx);
+}
+
+/* -- Blocks, loops and conditional statements ---------------------------- */
+
+/* Parse a block. */
+static void parse_block(LexState *ls)
+{
+  FuncState *fs = ls->fs;
+  FuncScope bl;
+  fscope_begin(fs, &bl, 0);
+  parse_chunk(ls);
+  fscope_end(fs);
+}
 
 /* Parse 'while' statement. */
 static void parse_while(LexState *ls, BCLine line)
@@ -2254,13 +2426,13 @@ static void parse_while(LexState *ls, BCLine line)
   lj_lex_next(ls);  /* Skip 'while'. */
   start = fs->lasttarget = fs->pc;
   condexit = expr_cond(ls);
-  scope_begin(fs, &bl, 1);
+  fscope_begin(fs, &bl, FSCOPE_LOOP);
   lex_check(ls, TK_do);
   loop = bcemit_AD(fs, BC_LOOP, fs->nactvar, 0);
   parse_block(ls);
   jmp_patch(fs, bcemit_jmp(fs), start);
   lex_match(ls, TK_end, TK_while, line);
-  scope_end(fs);
+  fscope_end(fs);
   jmp_tohere(fs, condexit);
   jmp_patchins(fs, loop, fs->pc);
 }
@@ -2272,24 +2444,24 @@ static void parse_repeat(LexState *ls, BCLine line)
   BCPos loop = fs->lasttarget = fs->pc;
   BCPos condexit;
   FuncScope bl1, bl2;
-  scope_begin(fs, &bl1, 1);  /* Breakable loop scope. */
-  scope_begin(fs, &bl2, 0);  /* Inner scope. */
+  fscope_begin(fs, &bl1, FSCOPE_LOOP);  /* Breakable loop scope. */
+  fscope_begin(fs, &bl2, 0);  /* Inner scope. */
   lj_lex_next(ls);  /* Skip 'repeat'. */
   bcemit_AD(fs, BC_LOOP, fs->nactvar, 0);
   parse_chunk(ls);
   lex_match(ls, TK_until, TK_repeat, line);
   condexit = expr_cond(ls);  /* Parse condition (still inside inner scope). */
-  if (!bl2.upval) {  /* No upvalues? Just end inner scope. */
-    scope_end(fs);
+  if (!(bl2.flags & FSCOPE_UPVAL)) {  /* No upvalues? Just end inner scope. */
+    fscope_end(fs);
   } else {  /* Otherwise generate: cond: UCLO+JMP out, !cond: UCLO+JMP loop. */
     parse_break(ls);  /* Break from loop and close upvalues. */
     jmp_tohere(fs, condexit);
-    scope_end(fs);  /* End inner scope and close upvalues. */
+    fscope_end(fs);  /* End inner scope and close upvalues. */
     condexit = bcemit_jmp(fs);
   }
   jmp_patch(fs, condexit, loop);  /* Jump backwards if !cond. */
   jmp_patchins(fs, loop, fs->pc);
-  scope_end(fs);  /* End loop scope. */
+  fscope_end(fs);  /* End loop scope. */
 }
 
 /* Parse numeric 'for'. */
@@ -2318,11 +2490,11 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
   var_add(ls, 3);  /* Hidden control variables. */
   lex_check(ls, TK_do);
   loop = bcemit_AJ(fs, BC_FORI, base, NO_JMP);
-  scope_begin(fs, &bl, 0);  /* Scope for visible variables. */
+  fscope_begin(fs, &bl, 0);  /* Scope for visible variables. */
   var_add(ls, 1);
   bcreg_reserve(fs, 1);
   parse_block(ls);
-  scope_end(fs);
+  fscope_end(fs);
   /* Perform loop inversion. Loop control instructions are at the end. */
   loopend = bcemit_AJ(fs, BC_FORL, base, NO_JMP);
   fs->bcbase[loopend].line = line;  /* Fix line for control ins. */
@@ -2389,11 +2561,11 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   var_add(ls, 3);  /* Hidden control variables. */
   lex_check(ls, TK_do);
   loop = bcemit_AJ(fs, isnext ? BC_ISNEXT : BC_JMP, base, NO_JMP);
-  scope_begin(fs, &bl, 0);  /* Scope for visible variables. */
+  fscope_begin(fs, &bl, 0);  /* Scope for visible variables. */
   var_add(ls, nvars-3);
   bcreg_reserve(fs, nvars-3);
   parse_block(ls);
-  scope_end(fs);
+  fscope_end(fs);
   /* Perform loop inversion. Loop control instructions are at the end. */
   jmp_patchins(fs, loop, fs->pc);
   bcemit_ABC(fs, isnext ? BC_ITERN : BC_ITERC, base, nvars-3+1, 2+1);
@@ -2409,7 +2581,7 @@ static void parse_for(LexState *ls, BCLine line)
   FuncState *fs = ls->fs;
   GCstr *varname;
   FuncScope bl;
-  scope_begin(fs, &bl, 1);  /* Breakable loop scope. */
+  fscope_begin(fs, &bl, FSCOPE_LOOP);
   lj_lex_next(ls);  /* Skip 'for'. */
   varname = lex_str(ls);  /* Get first variable name. */
   if (ls->token == '=')
@@ -2419,7 +2591,7 @@ static void parse_for(LexState *ls, BCLine line)
   else
     err_syntax(ls, LJ_ERR_XFOR);
   lex_match(ls, TK_end, TK_for, line);
-  scope_end(fs);  /* Resolve break list. */
+  fscope_end(fs);  /* Resolve break list. */
 }
 
 /* Parse condition and 'then' block. */
@@ -2500,6 +2672,15 @@ static int parse_stmt(LexState *ls)
     lj_lex_next(ls);
     break;
 #endif
+  case TK_label:
+    parse_label(ls);
+    break;
+  case TK_goto:
+    if (LJ_52 || lj_lex_lookahead(ls) == TK_name) {
+      lj_lex_next(ls);
+      parse_goto(ls);
+      break;
+    }  /* else: fallthrough */
   default:
     parse_call_assign(ls);
     break;
@@ -2526,6 +2707,7 @@ static void parse_chunk(LexState *ls)
 GCproto *lj_parse(LexState *ls)
 {
   FuncState fs;
+  FuncScope bl;
   GCproto *pt;
   lua_State *L = ls->L;
 #ifdef LUAJIT_DISABLE_DEBUGINFO
@@ -2542,6 +2724,7 @@ GCproto *lj_parse(LexState *ls)
   fs.bcbase = NULL;
   fs.bclim = 0;
   fs.flags |= PROTO_VARARG;  /* Main chunk is always a vararg func. */
+  fscope_begin(&fs, &bl, 0);
   bcemit_AD(&fs, BC_FUNCV, 0, 0);  /* Placeholder. */
   lj_lex_next(ls);  /* Read-ahead first token. */
   parse_chunk(ls);

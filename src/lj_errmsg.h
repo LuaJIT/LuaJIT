@@ -134,8 +134,11 @@ ERRDEF(XFUNARG,	"function arguments expected")
 ERRDEF(XSYMBOL,	"unexpected symbol")
 ERRDEF(XDOTS,	"cannot use " LUA_QL("...") " outside a vararg function")
 ERRDEF(XSYNTAX,	"syntax error")
-ERRDEF(XBREAK,	"no loop to break")
 ERRDEF(XFOR,	LUA_QL("=") " or " LUA_QL("in") " expected")
+ERRDEF(XBREAK,	"no loop to break")
+ERRDEF(XLUNDEF,	"undefined label " LUA_QS)
+ERRDEF(XLDUP,	"duplicate label " LUA_QS)
+ERRDEF(XGSCOPE,	"<goto %s> jumps into the scope of local " LUA_QS)
 
 /* Bytecode reader errors. */
 ERRDEF(BCFMT,	"cannot load incompatible bytecode")
