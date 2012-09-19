@@ -176,15 +176,15 @@ LJLIB_CF(debug_setlocal)
 static int debug_getupvalue(lua_State *L, int get)
 {
   int32_t n = lj_lib_checkint(L, 2);
-  if (isluafunc(lj_lib_checkfunc(L, 1))) {
-    const char *name = get ? lua_getupvalue(L, 1, n) : lua_setupvalue(L, 1, n);
-    if (name) {
-      lua_pushstring(L, name);
-      if (!get) return 1;
-      copyTV(L, L->top, L->top-2);
-      L->top++;
-      return 2;
-    }
+  const char *name;
+  lj_lib_checkfunc(L, 1);
+  name = get ? lua_getupvalue(L, 1, n) : lua_setupvalue(L, 1, n);
+  if (name) {
+    lua_pushstring(L, name);
+    if (!get) return 1;
+    copyTV(L, L->top, L->top-2);
+    L->top++;
+    return 2;
   }
   return 0;
 }
