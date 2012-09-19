@@ -2666,7 +2666,7 @@ static int parse_stmt(LexState *ls)
   case TK_break:
     lj_lex_next(ls);
     parse_break(ls);
-    return 1;  /* Must be last. */
+    return !LJ_52;  /* Must be last in Lua 5.1. */
 #if LJ_52
   case ';':
     lj_lex_next(ls);
