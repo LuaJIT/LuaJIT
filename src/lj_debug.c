@@ -189,13 +189,29 @@ static TValue *debug_localname(lua_State *L, const lua_Debug *ar,
   TValue *nextframe = size ? frame + size : NULL;
   GCfunc *fn = frame_func(frame);
   BCPos pc = debug_framepc(L, fn, nextframe);
+  if (!nextframe) nextframe = L->top;
+  if ((int)slot1 < 0) {  /* Negative slot number is for varargs. */
+    if (pc != NO_BCPOS) {
+      GCproto *pt = funcproto(fn);
+      if ((pt->flags & PROTO_VARARG)) {
+	slot1 = pt->numparams + (BCReg)(-(int)slot1);
+	if (frame_isvarg(frame)) {  /* Vararg frame has been set up? (pc!=0) */
+	  nextframe = frame;
+	  frame = frame_prevd(frame);
+	}
+	if (frame + slot1 < nextframe) {
+	  *name = "(*vararg)";
+	  return frame+slot1;
+	}
+      }
+    }
+    return NULL;
+  }
   if (pc != NO_BCPOS &&
       (*name = debug_varname(funcproto(fn), pc, slot1-1)) != NULL)
     ;
-  else if (slot1 > 0 && frame + slot1 < (nextframe ? nextframe : L->top))
+  else if (slot1 > 0 && frame + slot1 < nextframe)
     *name = "(*temporary)";
-  else
-    *name = NULL;
   return frame+slot1;
 }
 
@@ -384,7 +400,7 @@ void lj_debug_pushloc(lua_State *L, GCproto *pt, BCPos pc)
 
 LUA_API const char *lua_getlocal(lua_State *L, const lua_Debug *ar, int n)
 {
-  const char *name;
+  const char *name = NULL;
   TValue *o = debug_localname(L, ar, &name, (BCReg)n);
   if (name) {
     copyTV(L, L->top, o);
@@ -395,7 +411,7 @@ LUA_API const char *lua_getlocal(lua_State *L, const lua_Debug *ar, int n)
 
 LUA_API const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n)
 {
-  const char *name;
+  const char *name = NULL;
   TValue *o = debug_localname(L, ar, &name, (BCReg)n);
   if (name)
     copyTV(L, o, L->top-1);
