@@ -145,9 +145,15 @@ LJLIB_CF(debug_getlocal)
   lua_State *L1 = getthread(L, &arg);
   lua_Debug ar;
   const char *name;
+  int slot = lj_lib_checkint(L, arg+2);
+  if (tvisfunc(L->base+arg)) {
+    L->top = L->base+arg+1;
+    lua_pushstring(L, lua_getlocal(L, NULL, slot));
+    return 1;
+  }
   if (!lua_getstack(L1, lj_lib_checkint(L, arg+1), &ar))
     lj_err_arg(L, arg+1, LJ_ERR_LVLRNG);
-  name = lua_getlocal(L1, &ar, lj_lib_checkint(L, arg+2));
+  name = lua_getlocal(L1, &ar, slot);
   if (name) {
     lua_xmove(L1, L, 1);
     lua_pushstring(L, name);
