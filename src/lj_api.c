@@ -852,6 +852,26 @@ LUA_API const char *lua_getupvalue(lua_State *L, int idx, int n)
   return name;
 }
 
+LUA_API void *lua_upvalueid(lua_State *L, int idx, int n)
+{
+  GCfunc *fn = funcV(index2adr(L, idx));
+  n--;
+  api_check(L, (uint32_t)n < fn->l.nupvalues);
+  return isluafunc(fn) ? (void *)gcref(fn->l.uvptr[n]) :
+			 (void *)&fn->c.upvalue[n];
+}
+
+LUA_API void lua_upvaluejoin(lua_State *L, int idx1, int n1, int idx2, int n2)
+{
+  GCfunc *fn1 = funcV(index2adr(L, idx1));
+  GCfunc *fn2 = funcV(index2adr(L, idx2));
+  n1--; n2--;
+  api_check(L, isluafunc(fn1) && (uint32_t)n1 < fn1->l.nupvalues);
+  api_check(L, isluafunc(fn2) && (uint32_t)n2 < fn2->l.nupvalues);
+  setgcrefr(fn1->l.uvptr[n1], fn2->l.uvptr[n2]);
+  lj_gc_objbarrier(L, fn1, gcref(fn1->l.uvptr[n1]));
+}
+
 LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
 {
   cTValue *o = index2adr(L, idx);

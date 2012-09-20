@@ -224,6 +224,37 @@ LJLIB_CF(debug_setupvalue)
   return debug_getupvalue(L, 0);
 }
 
+LJLIB_CF(debug_upvalueid)
+{
+  GCfunc *fn = lj_lib_checkfunc(L, 1);
+  int32_t n = lj_lib_checkint(L, 2) - 1;
+  if ((uint32_t)n >= fn->l.nupvalues)
+    lj_err_arg(L, 2, LJ_ERR_IDXRNG);
+  setlightudV(L->top-1, isluafunc(fn) ? (void *)gcref(fn->l.uvptr[n]) :
+					(void *)&fn->c.upvalue[n]);
+  return 1;
+}
+
+LJLIB_CF(debug_upvaluejoin)
+{
+  GCfunc *fn[2];
+  GCRef *p[2];
+  int i;
+  for (i = 0; i < 2; i++) {
+    int32_t n;
+    fn[i] = lj_lib_checkfunc(L, 2*i+1);
+    if (!isluafunc(fn[i]))
+      lj_err_arg(L, 2*i+1, LJ_ERR_NOLFUNC);
+    n = lj_lib_checkint(L, 2*i+2) - 1;
+    if ((uint32_t)n >= fn[i]->l.nupvalues)
+      lj_err_arg(L, 2*i+2, LJ_ERR_IDXRNG);
+    p[i] = &fn[i]->l.uvptr[n];
+  }
+  setgcrefr(*p[0], *p[1]);
+  lj_gc_objbarrier(L, fn[0], gcref(*p[1]));
+  return 0;
+}
+
 /* ------------------------------------------------------------------------ */
 
 static const char KEY_HOOK = 'h';
