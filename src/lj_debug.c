@@ -423,7 +423,7 @@ LUA_API const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n)
   return name;
 }
 
-LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
+int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
 {
   int opt_f = 0, opt_L = 0;
   TValue *frame = NULL;
@@ -471,6 +471,16 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
       ar->currentline = frame ? debug_frameline(L, fn, nextframe) : -1;
     } else if (*what == 'u') {
       ar->nups = fn->c.nupvalues;
+      if (ext) {
+	if (isluafunc(fn)) {
+	  GCproto *pt = funcproto(fn);
+	  ar->nparams = pt->numparams;
+	  ar->isvararg = !!(pt->flags & PROTO_VARARG);
+	} else {
+	  ar->nparams = 0;
+	  ar->isvararg = 1;
+	}
+      }
     } else if (*what == 'n') {
       ar->namewhat = frame ? lj_debug_funcname(L, frame, &ar->name) : NULL;
       if (ar->namewhat == NULL) {
@@ -513,6 +523,11 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
     incr_top(L);
   }
   return 1;  /* Ok. */
+}
+
+LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
+{
+  return lj_debug_getinfo(L, what, (lj_Debug *)ar, 0);
 }
 
 LUA_API int lua_getstack(lua_State *L, int level, lua_Debug *ar)

@@ -15,6 +15,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_debug.h"
 #include "lj_lib.h"
 
 /* ------------------------------------------------------------------------ */
@@ -77,6 +78,12 @@ static void settabsi(lua_State *L, const char *i, int v)
   lua_setfield(L, -2, i);
 }
 
+static void settabsb(lua_State *L, const char *i, int v)
+{
+  lua_pushboolean(L, v);
+  lua_setfield(L, -2, i);
+}
+
 static lua_State *getthread(lua_State *L, int *arg)
 {
   if (L->base < L->top && tvisthread(L->base)) {
@@ -101,12 +108,12 @@ static void treatstackoption(lua_State *L, lua_State *L1, const char *fname)
 
 LJLIB_CF(debug_getinfo)
 {
-  lua_Debug ar;
+  lj_Debug ar;
   int arg, opt_f = 0, opt_L = 0;
   lua_State *L1 = getthread(L, &arg);
   const char *options = luaL_optstring(L, arg+2, "flnSu");
   if (lua_isnumber(L, arg+1)) {
-    if (!lua_getstack(L1, (int)lua_tointeger(L, arg+1), &ar)) {
+    if (!lua_getstack(L1, (int)lua_tointeger(L, arg+1), (lua_Debug *)&ar)) {
       setnilV(L->top-1);
       return 1;
     }
@@ -116,7 +123,7 @@ LJLIB_CF(debug_getinfo)
   } else {
     lj_err_arg(L, arg+1, LJ_ERR_NOFUNCL);
   }
-  if (!lua_getinfo(L1, options, &ar))
+  if (!lj_debug_getinfo(L1, options, &ar, 1))
     lj_err_arg(L, arg+2, LJ_ERR_INVOPT);
   lua_createtable(L, 0, 16);  /* Create result table. */
   for (; *options; options++) {
@@ -133,6 +140,8 @@ LJLIB_CF(debug_getinfo)
       break;
     case 'u':
       settabsi(L, "nups", ar.nups);
+      settabsi(L, "nparams", ar.nparams);
+      settabsb(L, "isvararg", ar.isvararg);
       break;
     case 'n':
       settabss(L, "name", ar.name);
