@@ -102,7 +102,7 @@ static void treatstackoption(lua_State *L, lua_State *L1, const char *fname)
 LJLIB_CF(debug_getinfo)
 {
   lua_Debug ar;
-  int arg;
+  int arg, opt_f = 0, opt_L = 0;
   lua_State *L1 = getthread(L, &arg);
   const char *options = luaL_optstring(L, arg+2, "flnSu");
   if (lua_isnumber(L, arg+1)) {
@@ -118,27 +118,34 @@ LJLIB_CF(debug_getinfo)
   }
   if (!lua_getinfo(L1, options, &ar))
     lj_err_arg(L, arg+2, LJ_ERR_INVOPT);
-  lua_createtable(L, 0, 16);
-  if (strchr(options, 'S')) {
-    settabss(L, "source", ar.source);
-    settabss(L, "short_src", ar.short_src);
-    settabsi(L, "linedefined", ar.linedefined);
-    settabsi(L, "lastlinedefined", ar.lastlinedefined);
-    settabss(L, "what", ar.what);
+  lua_createtable(L, 0, 16);  /* Create result table. */
+  for (; *options; options++) {
+    switch (*options) {
+    case 'S':
+      settabss(L, "source", ar.source);
+      settabss(L, "short_src", ar.short_src);
+      settabsi(L, "linedefined", ar.linedefined);
+      settabsi(L, "lastlinedefined", ar.lastlinedefined);
+      settabss(L, "what", ar.what);
+      break;
+    case 'l':
+      settabsi(L, "currentline", ar.currentline);
+      break;
+    case 'u':
+      settabsi(L, "nups", ar.nups);
+      break;
+    case 'n':
+      settabss(L, "name", ar.name);
+      settabss(L, "namewhat", ar.namewhat);
+      break;
+    case 'f': opt_f = 1; break;
+    case 'L': opt_L = 1; break;
+    default: break;
+    }
   }
-  if (strchr(options, 'l'))
-    settabsi(L, "currentline", ar.currentline);
-  if (strchr(options, 'u'))
-    settabsi(L, "nups", ar.nups);
-  if (strchr(options, 'n')) {
-    settabss(L, "name", ar.name);
-    settabss(L, "namewhat", ar.namewhat);
-  }
-  if (strchr(options, 'L'))
-    treatstackoption(L, L1, "activelines");
-  if (strchr(options, 'f'))
-    treatstackoption(L, L1, "func");
-  return 1;  /* return table */
+  if (opt_L) treatstackoption(L, L1, "activelines");
+  if (opt_f) treatstackoption(L, L1, "func");
+  return 1;  /* Return result table. */
 }
 
 LJLIB_CF(debug_getlocal)

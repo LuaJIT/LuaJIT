@@ -425,7 +425,7 @@ LUA_API const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n)
 
 LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
 {
-  int status = 1;
+  int opt_f = 0, opt_L = 0;
   TValue *frame = NULL;
   TValue *nextframe = NULL;
   GCfunc *fn;
@@ -478,35 +478,41 @@ LUA_API int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)
 	ar->name = NULL;
       }
     } else if (*what == 'f') {
-      setfuncV(L, L->top, fn);
-      incr_top(L);
+      opt_f = 1;
     } else if (*what == 'L') {
-      if (isluafunc(fn)) {
-	GCtab *t = lj_tab_new(L, 0, 0);
-	GCproto *pt = funcproto(fn);
-	const void *lineinfo = proto_lineinfo(pt);
-	if (lineinfo) {
-	  BCLine first = pt->firstline;
-	  int sz = pt->numline < 256 ? 1 : pt->numline < 65536 ? 2 : 4;
-	  MSize i, szl = pt->sizebc-1;
-	  for (i = 0; i < szl; i++) {
-	    BCLine line = first +
-	      (sz == 1 ? (BCLine)((const uint8_t *)lineinfo)[i] :
-	       sz == 2 ? (BCLine)((const uint16_t *)lineinfo)[i] :
-	       (BCLine)((const uint32_t *)lineinfo)[i]);
-	    setboolV(lj_tab_setint(L, t, line), 1);
-	  }
-	}
-	settabV(L, L->top, t);
-      } else {
-	setnilV(L->top);
-      }
-      incr_top(L);
+      opt_L = 1;
     } else {
-      status = 0;  /* Bad option. */
+      return 0;  /* Bad option. */
     }
   }
-  return status;
+  if (opt_f) {
+    setfuncV(L, L->top, fn);
+    incr_top(L);
+  }
+  if (opt_L) {
+    if (isluafunc(fn)) {
+      GCtab *t = lj_tab_new(L, 0, 0);
+      GCproto *pt = funcproto(fn);
+      const void *lineinfo = proto_lineinfo(pt);
+      if (lineinfo) {
+	BCLine first = pt->firstline;
+	int sz = pt->numline < 256 ? 1 : pt->numline < 65536 ? 2 : 4;
+	MSize i, szl = pt->sizebc-1;
+	for (i = 0; i < szl; i++) {
+	  BCLine line = first +
+	    (sz == 1 ? (BCLine)((const uint8_t *)lineinfo)[i] :
+	     sz == 2 ? (BCLine)((const uint16_t *)lineinfo)[i] :
+	     (BCLine)((const uint32_t *)lineinfo)[i]);
+	  setboolV(lj_tab_setint(L, t, line), 1);
+	}
+      }
+      settabV(L, L->top, t);
+    } else {
+      setnilV(L->top);
+    }
+    incr_top(L);
+  }
+  return 1;  /* Ok. */
 }
 
 LUA_API int lua_getstack(lua_State *L, int level, lua_Debug *ar)
