@@ -279,10 +279,13 @@ static const char *pushnexttemplate(lua_State *L, const char *path)
 }
 
 static const char *searchpath (lua_State *L, const char *name,
-			       const char *path)
+			       const char *path, const char *sep,
+			       const char *dirsep)
 {
-  name = luaL_gsub(L, name, ".", LUA_DIRSEP);
-  lua_pushliteral(L, "");  /* error accumulator */
+  luaL_Buffer msg;  /* to build error message */
+  luaL_buffinit(L, &msg);
+  if (*sep != '\0')  /* non-empty separator? */
+    name = luaL_gsub(L, name, sep, dirsep);  /* replace it by 'dirsep' */
   while ((path = pushnexttemplate(L, path)) != NULL) {
     const char *filename = luaL_gsub(L, lua_tostring(L, -1),
 				     LUA_PATH_MARK, name);
@@ -291,14 +294,18 @@ static const char *searchpath (lua_State *L, const char *name,
       return filename;  /* return that file name */
     lua_pushfstring(L, "\n\tno file " LUA_QS, filename);
     lua_remove(L, -2);  /* remove file name */
-    lua_concat(L, 2);  /* add entry to possible error message */
+    luaL_addvalue(&msg);  /* concatenate error msg. entry */
   }
+  luaL_pushresult(&msg);  /* create error message */
   return NULL;  /* not found */
 }
 
 static int lj_cf_package_searchpath(lua_State *L)
 {
-  const char *f = searchpath(L, luaL_checkstring(L, 1), luaL_checkstring(L, 2));
+  const char *f = searchpath(L, luaL_checkstring(L, 1),
+				luaL_checkstring(L, 2),
+				luaL_optstring(L, 3, "."),
+				luaL_optstring(L, 4, LUA_DIRSEP));
   if (f != NULL) {
     return 1;
   } else {  /* error message is on top of the stack */
@@ -316,7 +323,7 @@ static const char *findfile(lua_State *L, const char *name,
   path = lua_tostring(L, -1);
   if (path == NULL)
     luaL_error(L, LUA_QL("package.%s") " must be a string", pname);
-  return searchpath(L, name, path);
+  return searchpath(L, name, path, ".", LUA_DIRSEP);
 }
 
 static void loaderror(lua_State *L, const char *filename)
