@@ -111,6 +111,7 @@ ERRDEF(NOJIT,	"JIT compiler permanently disabled by build option")
 ERRDEF(JITOPT,	"unknown or malformed optimization flag " LUA_QS)
 
 /* Lexer/parser errors. */
+ERRDEF(XMODE,	"attempt to load chunk with wrong mode")
 ERRDEF(XNEAR,	"%s near " LUA_QS)
 ERRDEF(XELEM,	"lexical element too long")
 ERRDEF(XLINES,	"chunk has too many lines")
@@ -144,7 +145,6 @@ ERRDEF(XGSCOPE,	"<goto %s> jumps into the scope of local " LUA_QS)
 /* Bytecode reader errors. */
 ERRDEF(BCFMT,	"cannot load incompatible bytecode")
 ERRDEF(BCBAD,	"cannot load malformed bytecode")
-ERRDEF(BCHEAD,	"attempt to load bytecode with extra header")
 
 #if LJ_HASFFI
 /* FFI errors. */

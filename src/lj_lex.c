@@ -406,7 +406,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
       ** Lua code by looking at the first char. Since this is a potential
       ** security violation no attempt is made to echo the chunkname either.
       */
-      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_BCHEAD));
+      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_BCBAD));
       lj_err_throw(L, LUA_ERRSYNTAX);
     }
     return 1;

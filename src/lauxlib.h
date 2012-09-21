@@ -75,7 +75,11 @@ LUALIB_API const char *(luaL_gsub) (lua_State *L, const char *s, const char *p,
 LUALIB_API const char *(luaL_findtable) (lua_State *L, int idx,
                                          const char *fname, int szhint);
 
-
+/* From Lua 5.2. */
+LUALIB_API int (luaL_loadfilex) (lua_State *L, const char *filename,
+				 const char *mode);
+LUALIB_API int (luaL_loadbufferx) (lua_State *L, const char *buff, size_t sz,
+				   const char *name, const char *mode);
 
 
 /*

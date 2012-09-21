@@ -64,6 +64,7 @@ typedef struct LexState {
   BCLine lastline;	/* Line of last token. */
   GCstr *chunkname;	/* Current chunk name (interned string). */
   const char *chunkarg;	/* Chunk name argument. */
+  const char *mode;	/* Allow loading bytecode (b) and/or source text (t). */
   VarInfo *vstack;	/* Stack for names and extents of local variables. */
   MSize sizevstack;	/* Size of variable stack. */
   MSize vtop;		/* Top of variable stack. */
