@@ -341,28 +341,31 @@ LJLIB_ASM_(xpcall)		LJLIB_REC(.)
 
 /* -- Base library: load Lua code ----------------------------------------- */
 
-static int load_aux(lua_State *L, int status)
+static int load_aux(lua_State *L, int status, int envarg)
 {
-  if (status == 0)
+  if (status == 0) {
+    if (tvistab(L->base+envarg-1)) {
+      GCfunc *fn = funcV(L->top-1);
+      GCtab *t = tabV(L->base+envarg-1);
+      setgcref(fn->c.env, obj2gco(t));
+      lj_gc_objbarrier(L, fn, t);
+    }
     return 1;
-  copyTV(L, L->top, L->top-1);
-  setnilV(L->top-1);
-  L->top++;
-  return 2;
-}
-
-LJLIB_CF(loadstring)
-{
-  GCstr *s = lj_lib_checkstr(L, 1);
-  GCstr *name = lj_lib_optstr(L, 2);
-  return load_aux(L,
-	   luaL_loadbuffer(L, strdata(s), s->len, strdata(name ? name : s)));
+  } else {
+    setnilV(L->top-2);
+    return 2;
+  }
 }
 
 LJLIB_CF(loadfile)
 {
   GCstr *fname = lj_lib_optstr(L, 1);
-  return load_aux(L, luaL_loadfile(L, fname ? strdata(fname) : NULL));
+  GCstr *mode = lj_lib_optstr(L, 2);
+  int status;
+  lua_settop(L, 3);  /* Ensure env arg exists. */
+  status = luaL_loadfilex(L, fname ? strdata(fname) : NULL,
+			  mode ? strdata(mode) : NULL);
+  return load_aux(L, status, 3);
 }
 
 static const char *reader_func(lua_State *L, void *ud, size_t *size)
@@ -376,8 +379,8 @@ static const char *reader_func(lua_State *L, void *ud, size_t *size)
     *size = 0;
     return NULL;
   } else if (tvisstr(L->top) || tvisnumber(L->top)) {
-    copyTV(L, L->base+2, L->top);  /* Anchor string in reserved stack slot. */
-    return lua_tolstring(L, 3, size);
+    copyTV(L, L->base+4, L->top);  /* Anchor string in reserved stack slot. */
+    return lua_tolstring(L, 5, size);
   } else {
     lj_err_caller(L, LJ_ERR_RDRSTR);
     return NULL;
@@ -386,14 +389,26 @@ static const char *reader_func(lua_State *L, void *ud, size_t *size)
 
 LJLIB_CF(load)
 {
-  GCstr *name;
-  if (L->base < L->top && (tvisstr(L->base) || tvisnumber(L->base)))
-    return lj_cf_loadstring(L);
-  lj_lib_checkfunc(L, 1);
-  name = lj_lib_optstr(L, 2);
-  lua_settop(L, 3);  /* Reserve a slot for the string from the reader. */
-  return load_aux(L,
-	   lua_load(L, reader_func, NULL, name ? strdata(name) : "=(load)"));
+  GCstr *name = lj_lib_optstr(L, 2);
+  GCstr *mode = lj_lib_optstr(L, 3);
+  int status;
+  if (L->base < L->top && (tvisstr(L->base) || tvisnumber(L->base))) {
+    GCstr *s = lj_lib_checkstr(L, 1);
+    lua_settop(L, 4);  /* Ensure env arg exists. */
+    status = luaL_loadbufferx(L, strdata(s), s->len, strdata(name ? name : s),
+			      mode ? strdata(mode) : NULL);
+  } else {
+    lj_lib_checkfunc(L, 1);
+    lua_settop(L, 5);  /* Reserve a slot for the string from the reader. */
+    status = lua_loadx(L, reader_func, NULL, name ? strdata(name) : "=(load)",
+		       mode ? strdata(mode) : NULL);
+  }
+  return load_aux(L, status, 4);
+}
+
+LJLIB_CF(loadstring)
+{
+  return lj_cf_load(L);
 }
 
 LJLIB_CF(dofile)
