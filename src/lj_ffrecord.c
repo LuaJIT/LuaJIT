@@ -213,6 +213,19 @@ static void LJ_FASTCALL recff_rawequal(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
+#if LJ_52
+static void LJ_FASTCALL recff_rawlen(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (tref_isstr(tr))
+    J->base[0] = emitir(IRTI(IR_FLOAD), tr, IRFL_STR_LEN);
+  else if (tref_istab(tr))
+    J->base[0] = lj_ir_call(J, IRCALL_lj_tab_len, tr);
+  /* else: Interpreter will throw. */
+  UNUSED(rd);
+}
+#endif
+
 /* Determine mode of select() call. */
 int32_t lj_ffrecord_select_mode(jit_State *J, TRef tr, TValue *tv)
 {

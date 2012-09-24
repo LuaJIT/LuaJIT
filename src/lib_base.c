@@ -199,6 +199,20 @@ LJLIB_CF(rawequal)		LJLIB_REC(.)
   return 1;
 }
 
+#if LJ_52
+LJLIB_CF(rawlen)		LJLIB_REC(.)
+{
+  cTValue *o = L->base;
+  int32_t len;
+  if (L->top > o && tvisstr(o))
+    len = (int32_t)strV(o)->len;
+  else
+    len = (int32_t)lj_tab_len(lj_lib_checktab(L, 1));
+  setintV(L->top-1, len);
+  return 1;
+}
+#endif
+
 LJLIB_CF(unpack)
 {
   GCtab *t = lj_lib_checktab(L, 1);
