@@ -224,7 +224,7 @@ LJ_STATIC_ASSERT((int)BC_FUNCV + 1 == (int)BC_IFUNCV);
 LJ_STATIC_ASSERT((int)BC_FUNCV + 2 == (int)BC_JFUNCV);
 
 /* This solves a circular dependency problem, change as needed. */
-#define FF_next_N	15
+#define FF_next_N	4
 
 /* Stack slots used by FORI/FORL, relative to operand A. */
 enum {
