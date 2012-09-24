@@ -31,41 +31,41 @@
 
 #define LJLIB_MODULE_os
 
-static int os_pushresult(lua_State *L, int i, const char *filename)
-{
-  int en = errno;  /* calls to Lua API may change this value */
-  if (i) {
-    setboolV(L->top-1, 1);
-    return 1;
-  } else {
-    setnilV(L->top-1);
-    lua_pushfstring(L, "%s: %s", filename, strerror(en));
-    lua_pushinteger(L, en);
-    return 3;
-  }
-}
-
 LJLIB_CF(os_execute)
 {
 #if LJ_TARGET_CONSOLE
-  lua_pushinteger(L, -1);
+#if LJ_52
+  errno = ENOSYS;
+  return luaL_fileresult(L, 0, NULL);
 #else
-  lua_pushinteger(L, system(luaL_optstring(L, 1, NULL)));
+  lua_pushinteger(L, -1);
+  return 1;
+#endif
+#else
+  const char *cmd = luaL_optstring(L, 1, NULL);
+  int stat = system(cmd);
+#if LJ_52
+  if (cmd)
+    return luaL_execresult(L, stat);
+  setboolV(L->top++, 1);
+#else
+  setintV(L->top++, stat);
 #endif
   return 1;
+#endif
 }
 
 LJLIB_CF(os_remove)
 {
   const char *filename = luaL_checkstring(L, 1);
-  return os_pushresult(L, remove(filename) == 0, filename);
+  return luaL_fileresult(L, remove(filename) == 0, filename);
 }
 
 LJLIB_CF(os_rename)
 {
   const char *fromname = luaL_checkstring(L, 1);
   const char *toname = luaL_checkstring(L, 2);
-  return os_pushresult(L, rename(fromname, toname) == 0, fromname);
+  return luaL_fileresult(L, rename(fromname, toname) == 0, fromname);
 }
 
 LJLIB_CF(os_tmpname)

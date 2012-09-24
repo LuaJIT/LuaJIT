@@ -19,7 +19,62 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_state.h"
+#include "lj_trace.h"
 #include "lj_lib.h"
+
+#if LJ_TARGET_POSIX
+#include <sys/wait.h>
+#endif
+
+/* -- I/O error handling -------------------------------------------------- */
+
+LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
+{
+  if (stat) {
+    setboolV(L->top++, 1);
+    return 1;
+  } else {
+    int en = errno;  /* Lua API calls may change this value. */
+    setnilV(L->top++);
+    if (fname)
+      lua_pushfstring(L, "%s: %s", fname, strerror(en));
+    else
+      lua_pushfstring(L, "%s", strerror(en));
+    setintV(L->top++, en);
+    lj_trace_abort(G(L));
+    return 3;
+  }
+}
+
+LUALIB_API int luaL_execresult(lua_State *L, int stat)
+{
+  if (stat != -1) {
+#if LJ_TARGET_POSIX
+    if (WIFSIGNALED(stat)) {
+      stat = WTERMSIG(stat);
+      setnilV(L->top++);
+      lua_pushliteral(L, "signal");
+    } else {
+      if (WIFEXITED(stat))
+	stat = WEXITSTATUS(stat);
+      if (stat == 0)
+	setboolV(L->top++, 1);
+      else
+	setnilV(L->top++);
+      lua_pushliteral(L, "exit");
+    }
+#else
+    if (stat == 0)
+      setboolV(L->top++, 1);
+    else
+      setnilV(L->top++);
+    lua_pushliteral(L, "exit");
+#endif
+    setintV(L->top++, stat);
+    return 3;
+  }
+  return luaL_fileresult(L, 0, NULL);
+}
 
 /* -- Module registration ------------------------------------------------- */
 

@@ -17,11 +17,9 @@
 #include "lualib.h"
 
 #include "lj_obj.h"
-#include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_ff.h"
-#include "lj_trace.h"
 #include "lj_lib.h"
 
 /* Userdata payload for I/O file. */
@@ -39,26 +37,6 @@ typedef struct IOFileUD {
 
 #define IOSTDF_UD(L, id)	(&gcref(G(L)->gcroot[(id)])->ud)
 #define IOSTDF_IOF(L, id)	((IOFileUD *)uddata(IOSTDF_UD(L, (id))))
-
-/* -- Error handling ------------------------------------------------------ */
-
-static int io_pushresult(lua_State *L, int ok, const char *fname)
-{
-  if (ok) {
-    setboolV(L->top++, 1);
-    return 1;
-  } else {
-    int en = errno;  /* Lua API calls may change this value. */
-    setnilV(L->top++);
-    if (fname)
-      lua_pushfstring(L, "%s: %s", fname, strerror(en));
-    else
-      lua_pushfstring(L, "%s", strerror(en));
-    setintV(L->top++, en);
-    lj_trace_abort(G(L));
-    return 3;
-  }
-}
 
 /* -- Open/close helpers -------------------------------------------------- */
 
@@ -114,12 +92,20 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
   if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_FILE) {
     ok = (fclose(iof->fp) == 0);
   } else if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_PIPE) {
+    int stat = -1;
 #if LJ_TARGET_POSIX
-    ok = (pclose(iof->fp) != -1);
+    stat = pclose(iof->fp);
 #elif LJ_TARGET_WINDOWS
-    ok = (_pclose(iof->fp) != -1);
+    stat = _pclose(iof->fp);
 #else
-    ok = 0;
+    lua_assert(0);
+    return 0;
+#endif
+#if LJ_52
+    iof->fp = NULL;
+    return luaL_execresult(L, stat);
+#else
+    ok = (stat != -1);
 #endif
   } else {
     lua_assert((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_STDF);
@@ -128,7 +114,7 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
     return 2;
   }
   iof->fp = NULL;
-  return io_pushresult(L, ok, NULL);
+  return luaL_fileresult(L, ok, NULL);
 }
 
 /* -- Read/write helpers -------------------------------------------------- */
@@ -233,7 +219,7 @@ static int io_file_read(lua_State *L, FILE *fp, int start)
     }
   }
   if (ferror(fp))
-    return io_pushresult(L, 0, NULL);
+    return luaL_fileresult(L, 0, NULL);
   if (!ok)
     setnilV(L->top-1);  /* Replace last result with nil. */
   return n - start;
@@ -258,7 +244,7 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
     }
   }
-  return io_pushresult(L, status, NULL);
+  return luaL_fileresult(L, status, NULL);
 }
 
 /* -- I/O file methods ---------------------------------------------------- */
@@ -284,7 +270,7 @@ LJLIB_CF(io_method_write)		LJLIB_REC(io_write 0)
 
 LJLIB_CF(io_method_flush)		LJLIB_REC(io_flush 0)
 {
-  return io_pushresult(L, fflush(io_tofile(L)->fp) == 0, NULL);
+  return luaL_fileresult(L, fflush(io_tofile(L)->fp) == 0, NULL);
 }
 
 LJLIB_CF(io_method_seek)
@@ -316,7 +302,7 @@ LJLIB_CF(io_method_seek)
   res = fseek(fp, (long)ofs, opt);
 #endif
   if (res)
-    return io_pushresult(L, 0, NULL);
+    return luaL_fileresult(L, 0, NULL);
 #if LJ_TARGET_POSIX
   ofs = ftello(fp);
 #elif _MSC_VER >= 1400
@@ -338,7 +324,7 @@ LJLIB_CF(io_method_setvbuf)
   if (opt == 0) opt = _IOFBF;
   else if (opt == 1) opt = _IOLBF;
   else if (opt == 2) opt = _IONBF;
-  return io_pushresult(L, setvbuf(fp, NULL, opt, sz) == 0, NULL);
+  return luaL_fileresult(L, setvbuf(fp, NULL, opt, sz) == 0, NULL);
 }
 
 LJLIB_PUSH(top-2)  /* io_lines_iter */
@@ -386,7 +372,7 @@ LJLIB_CF(io_open)
   const char *mode = s ? strdata(s) : "r";
   IOFileUD *iof = io_file_new(L);
   iof->fp = fopen(fname, mode);
-  return iof->fp != NULL ? 1 : io_pushresult(L, 0, fname);
+  return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 }
 
 LJLIB_CF(io_popen)
@@ -403,7 +389,7 @@ LJLIB_CF(io_popen)
 #else
   iof->fp = _popen(fname, mode);
 #endif
-  return iof->fp != NULL ? 1 : io_pushresult(L, 0, fname);
+  return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 #else
   return luaL_error(L, LUA_QL("popen") " not supported");
 #endif
@@ -417,7 +403,7 @@ LJLIB_CF(io_tmpfile)
 #else
   iof->fp = tmpfile();
 #endif
-  return iof->fp != NULL ? 1 : io_pushresult(L, 0, NULL);
+  return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, NULL);
 }
 
 LJLIB_CF(io_close)
@@ -437,7 +423,7 @@ LJLIB_CF(io_write)		LJLIB_REC(io_write GCROOT_IO_OUTPUT)
 
 LJLIB_CF(io_flush)		LJLIB_REC(io_flush GCROOT_IO_OUTPUT)
 {
-  return io_pushresult(L, fflush(io_stdfile(L, GCROOT_IO_OUTPUT)) == 0, NULL);
+  return luaL_fileresult(L, fflush(io_stdfile(L, GCROOT_IO_OUTPUT)) == 0, NULL);
 }
 
 static int io_std_getset(lua_State *L, ptrdiff_t id, const char *mode)
