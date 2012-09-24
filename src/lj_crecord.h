@@ -24,19 +24,6 @@ LJ_FUNC void LJ_FASTCALL recff_ffi_typeof(jit_State *J, RecordFFData *rd);
 LJ_FUNC void LJ_FASTCALL recff_ffi_istype(jit_State *J, RecordFFData *rd);
 LJ_FUNC void LJ_FASTCALL recff_ffi_abi(jit_State *J, RecordFFData *rd);
 LJ_FUNC void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd);
-#else
-#define recff_cdata_index	recff_nyi
-#define recff_cdata_call	recff_nyi
-#define recff_cdata_arith	recff_nyi
-#define recff_clib_index	recff_nyi
-#define recff_ffi_new		recff_nyi
-#define recff_ffi_errno		recff_nyi
-#define recff_ffi_string	recff_nyi
-#define recff_ffi_copy		recff_nyi
-#define recff_ffi_fill		recff_nyi
-#define recff_ffi_typeof	recff_nyi
-#define recff_ffi_istype	recff_nyi
-#define recff_ffi_abi		recff_nyi
 #endif
 
 #endif

@@ -1292,6 +1292,8 @@ static int rec_upvalue_constify(jit_State *J, GCupval *uvp)
       }
       return 0;
     }
+#else
+    UNUSED(J);
 #endif
     if (!(tvistab(o) || tvisudata(o) || tvisthread(o)))
       return 1;
