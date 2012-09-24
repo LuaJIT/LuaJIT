@@ -256,6 +256,31 @@ LJLIB_CF(debug_upvaluejoin)
   return 0;
 }
 
+#if LJ_52
+LJLIB_CF(debug_getuservalue)
+{
+  TValue *o = L->base;
+  if (o < L->top && tvisudata(o))
+    settabV(L, o, tabref(udataV(o)->env));
+  else
+    setnilV(o);
+  L->top = o+1;
+  return 1;
+}
+
+LJLIB_CF(debug_setuservalue)
+{
+  TValue *o = L->base;
+  if (!(o < L->top && tvisudata(o)))
+    lj_err_argt(L, 1, LUA_TUSERDATA);
+  if (!(o+1 < L->top && tvistab(o+1)))
+    lj_err_argt(L, 2, LUA_TTABLE);
+  L->top = o+2;
+  lua_setfenv(L, 1);
+  return 1;
+}
+#endif
+
 /* ------------------------------------------------------------------------ */
 
 static const char KEY_HOOK = 'h';
