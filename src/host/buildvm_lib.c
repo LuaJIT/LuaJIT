@@ -317,6 +317,27 @@ void emit_lib(BuildCtx *ctx)
     regfunc = REGFUNC_OK;
     while (fgets(buf, sizeof(buf), fp) != NULL) {
       char *p;
+      /* Simplistic pre-processor. Only handles top-level #if/#endif. */
+      if (buf[0] == '#' && buf[1] == 'i' && buf[2] == 'f') {
+	int ok = 1;
+	if (!strcmp(buf, "#if LJ_52\n"))
+	  ok = LJ_52;
+	else if (!strcmp(buf, "#if LJ_HASJIT\n"))
+	  ok = LJ_HASJIT;
+	else if (!strcmp(buf, "#if LJ_HASFFI\n"))
+	  ok = LJ_HASFFI;
+	if (!ok) {
+	  int lvl = 1;
+	  while (fgets(buf, sizeof(buf), fp) != NULL) {
+	    if (buf[0] == '#' && buf[1] == 'e' && buf[2] == 'n') {
+	      if (--lvl == 0) break;
+	    } else if (buf[0] == '#' && buf[1] == 'i' && buf[2] == 'f') {
+	      lvl++;
+	    }
+	  }
+	  continue;
+	}
+      }
       for (p = buf; (p = strstr(p, LIBDEF_PREFIX)) != NULL; ) {
 	const LibDefHandler *ldh;
 	p += sizeof(LIBDEF_PREFIX)-1;
