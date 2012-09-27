@@ -1992,6 +1992,7 @@ LJFOLDF(fload_cdata_typeid_kgc)
 
 /* Get the contents of immutable cdata objects. */
 LJFOLD(FLOAD KGC IRFL_CDATA_PTR)
+LJFOLD(FLOAD KGC IRFL_CDATA_INT)
 LJFOLD(FLOAD KGC IRFL_CDATA_INT64)
 LJFOLDF(fload_cdata_int64_kgc)
 {

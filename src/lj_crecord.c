@@ -61,8 +61,7 @@ static CTypeID crec_constructor(jit_State *J, GCcdata *cd, TRef tr)
   CTypeID id;
   lua_assert(tref_iscdata(tr) && cd->ctypeid == CTID_CTYPEID);
   id = *(CTypeID *)cdataptr(cd);
-  tr = emitir(IRT(IR_ADD, IRT_PTR), tr, lj_ir_kintp(J, sizeof(GCcdata)));
-  tr = emitir(IRT(IR_XLOAD, IRT_INT), tr, 0);
+  tr = emitir(IRT(IR_FLOAD, IRT_INT), tr, IRFL_CDATA_INT);
   emitir(IRTG(IR_EQ, IRT_INT), tr, lj_ir_kint(J, (int32_t)id));
   return id;
 }
