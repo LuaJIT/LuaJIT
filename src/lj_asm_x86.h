@@ -510,10 +510,13 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 {
   RegSet drop = RSET_SCRATCH;
+  int hiop = (LJ_32 && (ir+1)->o == IR_HIOP);
   if ((ci->flags & CCI_NOFPRCLOBBER))
     drop &= ~RSET_FPR;
   if (ra_hasreg(ir->r))
     rset_clear(drop, ir->r);  /* Dest reg handled below. */
+  if (hiop && ra_hasreg((ir+1)->r))
+    rset_clear(drop, (ir+1)->r);  /* Dest reg handled below. */
   ra_evictset(as, drop);  /* Evictions must be performed first. */
   if (ra_used(ir)) {
     if (irt_isfp(ir->t)) {
@@ -547,6 +550,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 		  irt_isnum(ir->t) ? XOg_FSTPq : XOg_FSTPd, RID_ESP, ofs);
       }
 #endif
+    } else if (hiop) {
+      ra_destpair(as, ir);
     } else {
       lua_assert(!irt_ispri(ir->t));
       ra_destreg(as, ir, RID_RET);
@@ -2288,9 +2293,8 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     }
   case IR_CALLN:
   case IR_CALLXS:
-    ra_destreg(as, ir, RID_RETHI);
     if (!uselo)
-      ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark call as used. */
+      ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
   case IR_CNEWI:
     /* Nothing to do here. Handled by CNEWI itself. */

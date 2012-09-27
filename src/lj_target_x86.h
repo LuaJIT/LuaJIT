@@ -191,6 +191,7 @@ typedef struct {
 typedef enum {
   /* Fixed length opcodes. XI_* prefix. */
   XI_NOP =	0x90,
+  XI_XCHGa =	0x90,
   XI_CALL =	0xe8,
   XI_JMP =	0xe9,
   XI_JMPs =	0xeb,

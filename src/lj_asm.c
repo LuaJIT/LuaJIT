@@ -719,7 +719,7 @@ static void ra_leftov(ASMState *as, Reg dest, IRRef lref)
 }
 #endif
 
-#if !LJ_TARGET_X86ORX64
+#if !LJ_64
 /* Force a RID_RETLO/RID_RETHI destination register pair (marked as free). */
 static void ra_destpair(ASMState *as, IRIns *ir)
 {
@@ -747,9 +747,13 @@ static void ra_destpair(ASMState *as, IRIns *ir)
   /* Check for conflicts and shuffle the registers as needed. */
   if (destlo == RID_RETHI) {
     if (desthi == RID_RETLO) {
+#if LJ_TARGET_X86
+      *--as->mcp = XI_XCHGa + RID_RETHI;
+#else
       emit_movrr(as, ir, RID_RETHI, RID_TMP);
       emit_movrr(as, ir, RID_RETLO, RID_RETHI);
       emit_movrr(as, ir, RID_TMP, RID_RETLO);
+#endif
     } else {
       emit_movrr(as, ir, RID_RETHI, RID_RETLO);
       if (desthi != RID_RETHI) emit_movrr(as, ir, desthi, RID_RETHI);
