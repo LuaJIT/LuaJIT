@@ -1910,8 +1910,10 @@ static void parse_args(LexState *ls, ExpDesc *e)
   BCReg base;
   BCLine line = ls->linenumber;
   if (ls->token == '(') {
+#if !LJ_52
     if (line != ls->lastline)
       err_syntax(ls, LJ_ERR_XAMBIG);
+#endif
     lj_lex_next(ls);
     if (ls->token == ')') {  /* f(). */
       args.k = VVOID;

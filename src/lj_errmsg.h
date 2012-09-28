@@ -135,7 +135,9 @@ ERRDEF(XLIMF,	"function at line %d has more than %d %s")
 ERRDEF(XMATCH,	LUA_QS " expected (to close " LUA_QS " at line %d)")
 ERRDEF(XFIXUP,	"function too long for return fixup")
 ERRDEF(XPARAM,	"<name> or " LUA_QL("...") " expected")
+#if !LJ_52
 ERRDEF(XAMBIG,	"ambiguous syntax (function call x new statement)")
+#endif
 ERRDEF(XFUNARG,	"function arguments expected")
 ERRDEF(XSYMBOL,	"unexpected symbol")
 ERRDEF(XDOTS,	"cannot use " LUA_QL("...") " outside a vararg function")
