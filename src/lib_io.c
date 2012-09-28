@@ -244,6 +244,12 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
     }
   }
+  if (LJ_52 && status) {
+    L->top = L->base+1;
+    if (start == 0)
+      setudataV(L, L->base, IOSTDF_UD(L, GCROOT_IO_OUTPUT));
+    return 1;
+  }
   return luaL_fileresult(L, status, NULL);
 }
 

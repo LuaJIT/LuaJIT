@@ -781,7 +781,7 @@ static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
 /* Get FILE* for I/O function. Any I/O error aborts recording, so there's
 ** no need to encode the alternate cases for any of the guards.
 */
-static TRef recff_io_fp(jit_State *J, uint32_t id)
+static TRef recff_io_fp(jit_State *J, TRef *udp, int32_t id)
 {
   TRef tr, ud, fp;
   if (id) {  /* io.func() */
@@ -794,6 +794,7 @@ static TRef recff_io_fp(jit_State *J, uint32_t id)
     tr = emitir(IRT(IR_FLOAD, IRT_U8), ud, IRFL_UDATA_UDTYPE);
     emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
   }
+  *udp = ud;
   fp = emitir(IRT(IR_FLOAD, IRT_PTR), ud, IRFL_UDATA_FILE);
   emitir(IRTG(IR_NE, IRT_PTR), fp, lj_ir_knull(J, IRT_PTR));
   return fp;
@@ -801,7 +802,7 @@ static TRef recff_io_fp(jit_State *J, uint32_t id)
 
 static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
 {
-  TRef fp = recff_io_fp(J, rd->data);
+  TRef ud, fp = recff_io_fp(J, &ud, rd->data);
   TRef zero = lj_ir_kint(J, 0);
   TRef one = lj_ir_kint(J, 1);
   ptrdiff_t i = rd->data == 0 ? 1 : 0;
@@ -820,12 +821,12 @@ static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
 	emitir(IRTGI(IR_EQ), tr, len);
     }
   }
-  J->base[0] = TREF_TRUE;
+  J->base[0] = LJ_52 ? ud : TREF_TRUE;
 }
 
 static void LJ_FASTCALL recff_io_flush(jit_State *J, RecordFFData *rd)
 {
-  TRef fp = recff_io_fp(J, rd->data);
+  TRef ud, fp = recff_io_fp(J, &ud, rd->data);
   TRef tr = lj_ir_call(J, IRCALL_fflush, fp);
   if (results_wanted(J) != 0)  /* Check result only if not ignored. */
     emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, 0));
