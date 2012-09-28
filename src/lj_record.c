@@ -969,6 +969,16 @@ static void rec_mm_comp(jit_State *J, RecordIndex *ix, int op)
   copyTV(J->L, &ix->tabv, &ix->valv);
   while (1) {
     MMS mm = (op & 2) ? MM_le : MM_lt;  /* Try __le + __lt or only __lt. */
+#if LJ_52
+    if (!lj_record_mm_lookup(J, ix, mm)) {  /* Lookup mm on 1st operand. */
+      ix->tab = ix->key;
+      copyTV(J->L, &ix->tabv, &ix->keyv);
+      if (!lj_record_mm_lookup(J, ix, mm))  /* Lookup mm on 2nd operand. */
+	goto nomatch;
+    }
+    rec_mm_callcomp(J, ix, op);
+    return;
+#else
     if (lj_record_mm_lookup(J, ix, mm)) {  /* Lookup mm on 1st operand. */
       cTValue *bv;
       TRef mo1 = ix->mobj;
@@ -992,8 +1002,9 @@ static void rec_mm_comp(jit_State *J, RecordIndex *ix, int op)
       rec_mm_callcomp(J, ix, op);
       return;
     }
+#endif
   nomatch:
-    /* First lookup failed. Retry with  __lt and swapped operands. */
+    /* Lookup failed. Retry with  __lt and swapped operands. */
     if (!(op & 2)) break;  /* Already at __lt. Interpreter will throw. */
     ix->tab = ix->key; ix->key = ix->val; ix->val = ix->tab;
     copyTV(J->L, &ix->tabv, &ix->keyv);
@@ -1742,6 +1753,8 @@ void lj_record_ins(jit_State *J)
 	  ta = IRT_NUM;
 	} else if (ta == IRT_NUM && tc == IRT_INT) {
 	  rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
+	} else if (LJ_52) {
+	  ta = IRT_NIL;  /* Force metamethod for different types. */
 	} else if (!((ta == IRT_FALSE || ta == IRT_TRUE) &&
 		     (tc == IRT_FALSE || tc == IRT_TRUE))) {
 	  break;  /* Interpreter will throw for two different types. */
