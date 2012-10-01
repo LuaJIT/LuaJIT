@@ -320,7 +320,7 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
       s = strV(lj_lib_upvalue(L, -(int32_t)itype(o)));
     } else {
       if (tvisfunc(o) && isffunc(funcV(o)))
-	lua_pushfstring(L, "function: fast#%d", funcV(o)->c.ffid);
+	lua_pushfstring(L, "function: builtin#%d", funcV(o)->c.ffid);
       else
 	lua_pushfstring(L, "%s: %p", lj_typename(o), lua_topointer(L, 1));
       /* Note: lua_pushfstring calls the GC which may invalidate o. */

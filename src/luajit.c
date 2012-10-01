@@ -106,19 +106,7 @@ static int traceback(lua_State *L)
       return 1;  /* Return non-string error object. */
     lua_remove(L, 1);  /* Replace object by result of __tostring metamethod. */
   }
-  lua_getfield(L, LUA_GLOBALSINDEX, "debug");
-  if (!lua_istable(L, -1)) {
-    lua_pop(L, 1);
-    return 1;
-  }
-  lua_getfield(L, -1, "traceback");
-  if (!lua_isfunction(L, -1)) {
-    lua_pop(L, 2);
-    return 1;
-  }
-  lua_pushvalue(L, 1);  /* Push error message. */
-  lua_pushinteger(L, 2);  /* Skip this function and debug.traceback(). */
-  lua_call(L, 2, 1);  /* Call debug.traceback(). */
+  luaL_traceback(L, L, lua_tostring(L, 1), 1);
   return 1;
 }
 
