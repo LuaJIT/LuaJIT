@@ -20,6 +20,7 @@
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_tab.h"
+#include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_ff.h"
 #include "lj_bcdump.h"
@@ -772,6 +773,41 @@ static unsigned LUA_INTFRM_T num2uintfrm(lua_State *L, int arg)
   }
 }
 
+static GCstr *meta_tostring(lua_State *L, int arg)
+{
+  TValue *o = L->base+arg-1;
+  cTValue *mo;
+  lua_assert(o < L->top);  /* Caller already checks for existence. */
+  if (LJ_LIKELY(tvisstr(o)))
+    return strV(o);
+  if (!tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
+    copyTV(L, L->top++, mo);
+    copyTV(L, L->top++, o);
+    lua_call(L, 1, 1);
+    L->top--;
+    if (tvisstr(L->top))
+      return strV(L->top);
+    o = L->base+arg-1;
+    copyTV(L, o, L->top);
+  }
+  if (tvisnumber(o)) {
+    return lj_str_fromnumber(L, o);
+  } else if (tvisnil(o)) {
+    return lj_str_newlit(L, "nil");
+  } else if (tvisfalse(o)) {
+    return lj_str_newlit(L, "false");
+  } else if (tvistrue(o)) {
+    return lj_str_newlit(L, "true");
+  } else {
+    if (tvisfunc(o) && isffunc(funcV(o)))
+      lj_str_pushf(L, "function: builtin#%d", funcV(o)->c.ffid);
+    else
+      lj_str_pushf(L, "%s: %p", lj_typename(o), lua_topointer(L, arg));
+    L->top--;
+    return strV(L->top);
+  }
+}
+
 LJLIB_CF(string_format)
 {
   int arg = 1, top = (int)(L->top - L->base);
@@ -832,7 +868,7 @@ LJLIB_CF(string_format)
 	luaL_addvalue(&b);
 	continue;
       case 's': {
-	GCstr *str = lj_lib_checkstr(L, arg);
+	GCstr *str = meta_tostring(L, arg);
 	if (!strchr(form, '.') && str->len >= 100) {
 	  /* no precision and string is too long to be formatted;
 	     keep original string */
