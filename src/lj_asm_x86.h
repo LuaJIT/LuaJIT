@@ -550,8 +550,10 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 		  irt_isnum(ir->t) ? XOg_FSTPq : XOg_FSTPd, RID_ESP, ofs);
       }
 #endif
+#if LJ_32
     } else if (hiop) {
       ra_destpair(as, ir);
+#endif
     } else {
       lua_assert(!irt_ispri(ir->t));
       ra_destreg(as, ir, RID_RET);
