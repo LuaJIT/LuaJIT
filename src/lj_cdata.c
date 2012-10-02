@@ -56,7 +56,7 @@ void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
   if (LJ_UNLIKELY(cd->marked & LJ_GC_CDATA_FIN)) {
     GCobj *root;
     makewhite(g, obj2gco(cd));
-    obj2gco(cd)->gch.marked |= LJ_GC_FINALIZED;
+    markfinalized(obj2gco(cd));
     if ((root = gcref(g->gc.mmudata)) != NULL) {
       setgcrefr(cd->nextgc, root->gch.nextgc);
       setgcref(root->gch.nextgc, obj2gco(cd));

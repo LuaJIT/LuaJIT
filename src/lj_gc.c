@@ -35,7 +35,6 @@
 #define white2gray(x)		((x)->gch.marked &= (uint8_t)~LJ_GC_WHITES)
 #define gray2black(x)		((x)->gch.marked |= LJ_GC_BLACK)
 #define isfinalized(u)		((u)->marked & LJ_GC_FINALIZED)
-#define markfinalized(u)	((u)->marked |= LJ_GC_FINALIZED)
 
 /* -- Mark phase ---------------------------------------------------------- */
 
@@ -122,7 +121,7 @@ static void gc_mark_mmudata(global_State *g)
   }
 }
 
-/* Separate userdata which which needs finalization to mmudata list. */
+/* Separate userdata objects to be finalized to mmudata list. */
 size_t lj_gc_separateudata(global_State *g, int all)
 {
   size_t m = 0;
@@ -132,11 +131,11 @@ size_t lj_gc_separateudata(global_State *g, int all)
     if (!(iswhite(o) || all) || isfinalized(gco2ud(o))) {
       p = &o->gch.nextgc;  /* Nothing to do. */
     } else if (!lj_meta_fastg(g, tabref(gco2ud(o)->metatable), MM_gc)) {
-      markfinalized(gco2ud(o));  /* Done, as there's no __gc metamethod. */
+      markfinalized(o);  /* Done, as there's no __gc metamethod. */
       p = &o->gch.nextgc;
     } else {  /* Otherwise move userdata to be finalized to mmudata list. */
       m += sizeudata(gco2ud(o));
-      markfinalized(gco2ud(o));
+      markfinalized(o);
       *p = o->gch.nextgc;
       if (gcref(g->gc.mmudata)) {  /* Link to end of mmudata list. */
 	GCobj *root = gcref(g->gc.mmudata);
