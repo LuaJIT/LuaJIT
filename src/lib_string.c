@@ -487,10 +487,16 @@ static int str_find_aux(lua_State *L, int find)
   const char *s = luaL_checklstring(L, 1, &l1);
   const char *p = luaL_checklstring(L, 2, &l2);
   ptrdiff_t init = posrelat(luaL_optinteger(L, 3, 1), l1) - 1;
-  if (init < 0)
+  if (init < 0) {
     init = 0;
-  else if ((size_t)(init) > l1)
+  } else if ((size_t)(init) > l1) {
+#if LJ_52
+    setnilV(L->top-1);
+    return 1;
+#else
     init = (ptrdiff_t)l1;
+#endif
+  }
   if (find && (lua_toboolean(L, 4) ||  /* explicit request? */
       strpbrk(p, SPECIALS) == NULL)) {  /* or no special characters? */
     /* do a plain search */
