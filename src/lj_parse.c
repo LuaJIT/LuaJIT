@@ -1189,9 +1189,9 @@ static void gola_close(LexState *ls, VarInfo *vg)
 }
 
 /* Resolve pending forward gotos for label. */
-static void gola_resolve(LexState *ls, MSize idx)
+static void gola_resolve(LexState *ls, FuncScope *bl, MSize idx)
 {
-  VarInfo *vg = ls->vstack + ls->fs->bl->vstart;
+  VarInfo *vg = ls->vstack + bl->vstart;
   VarInfo *vl = ls->vstack + idx;
   for (; vg < vl; vg++)
     if (gcrefeq(vg->name, vl->name) && gola_isgoto(vg)) {
@@ -1199,6 +1199,7 @@ static void gola_resolve(LexState *ls, MSize idx)
 	GCstr *name = strref(var_get(ls, ls->fs, gola_nactvar(vg)).name);
 	lua_assert((uintptr_t)name >= VARNAME__MAX);
 	ls->linenumber = ls->fs->bcbase[vg->startpc].line;
+	lua_assert(strref(vg->name) != NAME_BREAK);
 	lj_lex_error(ls, 0, LJ_ERR_XGSCOPE,
 		     strdata(strref(vg->name)), strdata(name));
       }
@@ -1280,7 +1281,7 @@ static void fscope_end(FuncState *fs)
     if ((bl->flags & FSCOPE_LOOP)) {
       MSize idx = gola_new(ls, NAME_BREAK, VSTACK_LABEL, fs->pc);
       ls->vtop = idx;  /* Drop break label immediately. */
-      gola_resolve(ls, idx);
+      gola_resolve(ls, bl, idx);
       return;
     }  /* else: need the fixup step to propagate the breaks. */
   } else if (!(bl->flags & FSCOPE_GOLA)) {
@@ -2404,7 +2405,7 @@ static void parse_label(LexState *ls)
   /* Trailing label is considered to be outside of scope. */
   if (endofblock(ls->token) && ls->token != TK_until)
     ls->vstack[idx].endpc = fs->bl->nactvar | VSTACK_LABEL;
-  gola_resolve(ls, idx);
+  gola_resolve(ls, fs->bl, idx);
 }
 
 /* -- Blocks, loops and conditional statements ---------------------------- */
