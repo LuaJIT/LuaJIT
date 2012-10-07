@@ -1630,7 +1630,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmplwi NARGS8:RC, 16
   |   evldd CARG1, 0(BASE)
   |   evldd CARG2, 8(BASE)
-  |  blt ->fff_fallback
+  |  bne ->fff_fallback			// Exactly 2 arguments.
   |  checknum CARG2
   |  checkfail ->fff_fallback
   |  checkstr STR:CARG1

@@ -1696,7 +1696,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc string_rep			// Only handle the 1-char case inline.
   |  ffgccheck
   |  lw TMP0, HI(BASE)
-  |   sltiu AT, NARGS8:RC, 16
+  |   addiu AT, NARGS8:RC, -16		// Exactly 2 arguments.
   |  lw CARG4, 8+HI(BASE)
   |   lw STR:CARG1, LO(BASE)
   |  addiu TMP0, TMP0, -LJ_TSTR

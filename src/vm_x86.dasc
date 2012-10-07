@@ -2437,8 +2437,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  xor RC, RC				// Zero length. Any ptr in RB is ok.
   |  jmp <4
   |
-  |.ffunc_2 string_rep			// Only handle the 1-char case inline.
+  |.ffunc string_rep			// Only handle the 1-char case inline.
   |  ffgccheck
+  |  cmp NARGS:RD, 2+1; jne ->fff_fallback	// Exactly 2 arguments.
   |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
   |  cmp dword [BASE+12], LJ_TISNUM
   |  mov STR:RB, [BASE]

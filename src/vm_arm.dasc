@@ -1778,7 +1778,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldrd CARG12, [BASE]
   |   ldrd CARG34, [BASE, #8]
   |    cmp NARGS8:RC, #16
-  |    blo ->fff_fallback
+  |    bne ->fff_fallback		// Exactly 2 arguments
   |  checktp CARG2, LJ_TSTR
   |   checktpeq CARG4, LJ_TISNUM
   |   bne ->fff_fallback

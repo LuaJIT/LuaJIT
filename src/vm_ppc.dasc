@@ -2127,7 +2127,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |    lfd FARG2, 8(BASE)
   |.endif
-  |  blt ->fff_fallback
+  |  bne ->fff_fallback			// Exactly 2 arguments.
   |  checkstr TMP0; bne ->fff_fallback
   |.if DUALNUM
   |  checknum CARG4; bne ->fff_fallback

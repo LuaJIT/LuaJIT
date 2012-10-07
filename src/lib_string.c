@@ -86,22 +86,48 @@ LJLIB_ASM(string_sub)		LJLIB_REC(string_range 1)
 LJLIB_ASM(string_rep)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
-  int32_t len = (int32_t)s->len;
   int32_t k = lj_lib_checkint(L, 2);
-  int64_t tlen = (int64_t)k * len;
+  GCstr *sep = lj_lib_optstr(L, 3);
+  int32_t len = (int32_t)s->len;
+  global_State *g = G(L);
+  int64_t tlen;
   const char *src;
   char *buf;
-  if (k <= 0) return FFH_RETRY;
-  if (tlen > LJ_MAX_STR)
-    lj_err_caller(L, LJ_ERR_STROV);
-  buf = lj_str_needbuf(L, &G(L)->tmpbuf, (MSize)tlen);
-  if (len <= 1) return FFH_RETRY;  /* ASM code only needed buffer resize. */
+  if (k <= 0) {
+  empty:
+    setstrV(L, L->base-1, &g->strempty);
+    return FFH_RES(1);
+  }
+  if (sep) {
+    tlen = (int64_t)len + sep->len;
+    if (tlen > LJ_MAX_STR)
+      lj_err_caller(L, LJ_ERR_STROV);
+    tlen *= k;
+    if (tlen > LJ_MAX_STR)
+      lj_err_caller(L, LJ_ERR_STROV);
+  } else {
+    tlen = (int64_t)k * len;
+    if (tlen > LJ_MAX_STR)
+      lj_err_caller(L, LJ_ERR_STROV);
+  }
+  if (tlen == 0) goto empty;
+  buf = lj_str_needbuf(L, &g->tmpbuf, (MSize)tlen);
   src = strdata(s);
+  if (sep) {
+    tlen -= sep->len;  /* Ignore trailing separator. */
+    if (k > 1) {  /* Paste one string and one separator. */
+      int32_t i;
+      i = 0; while (i < len) *buf++ = src[i++];
+      src = strdata(sep); len = sep->len;
+      i = 0; while (i < len) *buf++ = src[i++];
+      src = g->tmpbuf.buf; len += s->len; k--;  /* Now copy that k-1 times. */
+    }
+  }
   do {
     int32_t i = 0;
     do { *buf++ = src[i++]; } while (i < len);
   } while (--k > 0);
-  setstrV(L, L->base-1, lj_str_new(L, G(L)->tmpbuf.buf, (size_t)tlen));
+  setstrV(L, L->base-1, lj_str_new(L, g->tmpbuf.buf, (size_t)tlen));
   return FFH_RES(1);
 }
 
