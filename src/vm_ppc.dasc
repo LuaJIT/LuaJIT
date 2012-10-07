@@ -2100,10 +2100,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_newstr
   |
   |5:  // Negative end or overflow.
-  |  sub CARG2, TMP0, TMP2
-  |  srawi CARG2, CARG2, 31
-  |  andc TMP3, TMP3, CARG2		// end = end > len ? len : end+len+1
-  |  add TMP2, TMP0, TMP3
+  |  cmpw TMP0, TMP2			// len >= end? (signed compare)
+  |   add TMP2, TMP0, TMP3		// Negative end: end = end+len+1.
+  |  bge <2
+  |   mr TMP2, TMP0			// Overflow: end = len.
   |  b <2
   |
   |7:  // Negative start or underflow.
