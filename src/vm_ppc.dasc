@@ -1804,7 +1804,16 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |  math_extern sqrt
   |.endif
-  |  math_extern log
+  |
+  |.ffunc math_log
+  |  cmplwi NARGS8:RC, 8
+  |   lwz CARG3, 0(BASE)
+  |    lfd FARG1, 0(BASE)
+  |  bne ->fff_fallback			// Need exactly 1 argument.
+  |  checknum CARG3; bge ->fff_fallback
+  |  blex log
+  |  b ->fff_resn
+  |
   |  math_extern log10
   |  math_extern exp
   |  math_extern sin

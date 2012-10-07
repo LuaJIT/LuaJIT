@@ -1468,7 +1468,28 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sqrt
   |.endif
   |
-  |  math_extern log
+  |.ffunc math_log
+  |.if HFABI
+  |  ldr CARG2, [BASE, #4]
+  |   cmp NARGS8:RC, #8			// Need exactly 1 argument.
+  |  vldr d0, [BASE]
+  |   bne ->fff_fallback
+  |.else
+  |  ldrd CARG12, [BASE]
+  |   cmp NARGS8:RC, #8			// Need exactly 1 argument.
+  |   bne ->fff_fallback
+  |.endif
+  |  checktp CARG2, LJ_TISNUM
+  |  bhs ->fff_fallback
+  |  .IOS mov RA, BASE
+  |  bl extern log
+  |  .IOS mov BASE, RA
+  |.if HFABI
+  |  b ->fff_resd
+  |.else
+  |  b ->fff_restv
+  |.endif
+  |
   |  math_extern log10
   |  math_extern exp
   |  math_extern sin

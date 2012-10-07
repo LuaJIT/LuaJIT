@@ -2045,7 +2045,12 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |.ffunc_n math_sqrt; fsqrt; jmp ->fff_resn
   |.endif
-  |.ffunc_n math_log, fldln2;	fyl2x;		jmp ->fff_resn
+  |
+  |.ffunc math_log
+  |  cmp NARGS:RD, 1+1; jne ->fff_fallback	// Exactly one argument.
+  |  cmp dword [BASE+4], LJ_TISNUM; jae ->fff_fallback
+  |  fldln2; fld qword [BASE]; fyl2x; jmp ->fff_resn
+  |
   |.ffunc_n math_log10, fldlg2;	fyl2x;		jmp ->fff_resn
   |.ffunc_n math_exp;	call ->vm_exp_x87;	jmp ->fff_resn
   |
@@ -3156,6 +3161,29 @@ static void build_subroutines(BuildCtx *ctx)
   |  fsubp st1
   |  ret
   |.endif
+  |
+  |// FP log2(x). Called by math.log(x, base).
+  |->vm_log2:
+  |.if X64WIN
+  |  movsd qword [rsp+8], xmm0		// Use scratch area.
+  |  fld1
+  |  fld qword [rsp+8]
+  |  fyl2x
+  |  fstp qword [rsp+8]
+  |  movsd xmm0, qword [rsp+8]
+  |.elif X64
+  |  movsd qword [rsp-8], xmm0		// Use red zone.
+  |  fld1
+  |  fld qword [rsp-8]
+  |  fyl2x
+  |  fstp qword [rsp-8]
+  |  movsd xmm0, qword [rsp-8]
+  |.else
+  |  fld1
+  |  fld qword [esp+4]
+  |  fyl2x
+  |.endif
+  |  ret
   |
   |// FP exponentiation e^x and 2^x. Called by math.exp fast function and
   |// from JIT code. Arg/ret on x87 stack. No int/xmm regs modified.

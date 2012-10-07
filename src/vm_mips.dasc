@@ -1486,7 +1486,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_round floor
   |  math_round ceil
   |
-  |  math_extern log
+  |.ffunc math_log
+  |  lw CARG3, HI(BASE)
+  |  li AT, 8
+  |  bne NARGS8:RC, AT, ->fff_fallback	// Exactly 1 argument.
+  |.  load_got log
+  |  sltiu AT, CARG3, LJ_TISNUM
+  |  beqz AT, ->fff_fallback
+  |.  nop
+  |  call_extern
+  |.  ldc1 FARG1, 0(BASE)
+  |  b ->fff_resn
+  |.  nop
+  |
   |  math_extern log10
   |  math_extern exp
   |  math_extern sin

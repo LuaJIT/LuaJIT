@@ -33,7 +33,6 @@ LJLIB_ASM(math_sqrt)		LJLIB_REC(math_unary IRFPM_SQRT)
   lj_lib_checknum(L, 1);
   return FFH_RETRY;
 }
-LJLIB_ASM_(math_log)		LJLIB_REC(math_unary IRFPM_LOG)
 LJLIB_ASM_(math_log10)		LJLIB_REC(math_unary IRFPM_LOG10)
 LJLIB_ASM_(math_exp)		LJLIB_REC(math_unary IRFPM_EXP)
 LJLIB_ASM_(math_sin)		LJLIB_REC(math_unary IRFPM_SIN)
@@ -47,6 +46,22 @@ LJLIB_ASM_(math_cosh)		LJLIB_REC(math_htrig IRCALL_cosh)
 LJLIB_ASM_(math_tanh)		LJLIB_REC(math_htrig IRCALL_tanh)
 LJLIB_ASM_(math_frexp)
 LJLIB_ASM_(math_modf)		LJLIB_REC(.)
+
+LJLIB_ASM(math_log)		LJLIB_REC(math_log)
+{
+  double x = lj_lib_checknum(L, 1);
+  if (L->base+1 < L->top) {
+    double y = lj_lib_checknum(L, 2);
+#ifdef LUAJIT_NO_LOG2
+    x = log(x); y = 1.0 / log(y);
+#else
+    x = lj_vm_log2(x); y = 1.0 / lj_vm_log2(y);
+#endif
+    setnumV(L->base-1, x*y);  /* Do NOT join the expression to x / y. */
+    return FFH_RES(1);
+  }
+  return FFH_RETRY;
+}
 
 LJLIB_PUSH(57.29577951308232)
 LJLIB_ASM_(math_deg)		LJLIB_REC(math_degrad)

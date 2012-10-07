@@ -447,6 +447,28 @@ static void LJ_FASTCALL recff_math_unary(jit_State *J, RecordFFData *rd)
   J->base[0] = emitir(IRTN(IR_FPMATH), lj_ir_tonum(J, J->base[0]), rd->data);
 }
 
+/* Record math.log. */
+static void LJ_FASTCALL recff_math_log(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = lj_ir_tonum(J, J->base[0]);
+  if (J->base[1]) {
+#ifdef LUAJIT_NO_LOG2
+    uint32_t fpm = IRFPM_LOG;
+#else
+    uint32_t fpm = IRFPM_LOG2;
+#endif
+    TRef trb = lj_ir_tonum(J, J->base[1]);
+    tr = emitir(IRTN(IR_FPMATH), tr, fpm);
+    trb = emitir(IRTN(IR_FPMATH), trb, fpm);
+    trb = emitir(IRTN(IR_DIV), lj_ir_knum_one(J), trb);
+    tr = emitir(IRTN(IR_MUL), tr, trb);
+  } else {
+    tr = emitir(IRTN(IR_FPMATH), tr, IRFPM_LOG);
+  }
+  J->base[0] = tr;
+  UNUSED(rd);
+}
+
 /* Record math.atan2. */
 static void LJ_FASTCALL recff_math_atan2(jit_State *J, RecordFFData *rd)
 {

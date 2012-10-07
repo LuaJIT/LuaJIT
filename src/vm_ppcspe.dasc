@@ -1426,7 +1426,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_round ceil
   |
   |  math_extern sqrt
-  |  math_extern log
+  |
+  |.ffunc math_log
+  |  cmplwi NARGS8:RC, 8
+  |   evldd CARG2, 0(BASE)
+  |  bne ->fff_fallback                 // Need exactly 1 argument.
+  |  checknum CARG2
+  |   evmergehi CARG1, CARG2, CARG2
+  |  checkfail ->fff_fallback
+  |  bl extern log
+  |  evmergelo CRET1, CRET1, CRET2
+  |  b ->fff_restv
+  |
   |  math_extern log10
   |  math_extern exp
   |  math_extern sin

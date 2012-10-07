@@ -60,6 +60,11 @@ LJ_ASMF double lj_vm_floor_hf(double);
 LJ_ASMF double lj_vm_ceil_hf(double);
 #endif
 #endif
+#if defined(LUAJIT_NO_LOG2) || LJ_TARGET_X86ORX64
+LJ_ASMF double lj_vm_log2(double);
+#else
+#define lj_vm_log2	log2
+#endif
 
 #if LJ_HASJIT
 #if LJ_TARGET_X86ORX64
@@ -80,11 +85,6 @@ LJ_ASMF double lj_vm_trunc_hf(double);
 #endif
 #endif
 LJ_ASMF double lj_vm_powi(double, int32_t);
-#ifdef LUAJIT_NO_LOG2
-LJ_ASMF double lj_vm_log2(double);
-#else
-#define lj_vm_log2	log2
-#endif
 #ifdef LUAJIT_NO_EXP2
 LJ_ASMF double lj_vm_exp2(double);
 #else
