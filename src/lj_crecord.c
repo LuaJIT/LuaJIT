@@ -654,7 +654,8 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
     TRef trcd = emitir(IRTG(IR_CNEW, IRT_CDATA), trid, TREF_NIL);
     cTValue *fin;
     J->base[0] = trcd;
-    if (J->base[1] && !J->base[2] && !lj_cconv_multi_init(d, &rd->argv[1])) {
+    if (J->base[1] && !J->base[2] &&
+	!lj_cconv_multi_init(cts, d, &rd->argv[1])) {
       goto single_init;
     } else if (ctype_isarray(d->info)) {
       CType *dc = ctype_rawchild(cts, d);  /* Array element type. */

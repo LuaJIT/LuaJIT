@@ -469,8 +469,9 @@ C&nbsp;type</a>.</li>
 when a single initializer is given. Otherwise they are treated like
 regular arrays.</li>
 
-<li>Aggregate types (arrays and structs) accept either a single
-<a href="#init_table">table initializer</a> or a flat list of
+<li>Aggregate types (arrays and structs) accept either a single cdata
+initializer of the same type (copy constructor), a single
+<a href="#init_table">table initializer</a>, or a flat list of
 initializers.</li>
 
 <li>The elements of an array are initialized, starting at index zero.
