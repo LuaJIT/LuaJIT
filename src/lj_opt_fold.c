@@ -598,6 +598,20 @@ LJFOLDF(kfold_conv_kintu32_num)
   return lj_ir_knum(J, (lua_Number)(uint32_t)fleft->i);
 }
 
+LJFOLD(CONV KINT IRCONV_INT_I8)
+LJFOLD(CONV KINT IRCONV_INT_U8)
+LJFOLD(CONV KINT IRCONV_INT_I16)
+LJFOLD(CONV KINT IRCONV_INT_U16)
+LJFOLDF(kfold_conv_kint_ext)
+{
+  int32_t k = fleft->i;
+  if ((fins->op2 & IRCONV_SRCMASK) == IRT_I8) k = (int8_t)k;
+  else if ((fins->op2 & IRCONV_SRCMASK) == IRT_U8) k = (uint8_t)k;
+  else if ((fins->op2 & IRCONV_SRCMASK) == IRT_I16) k = (int16_t)k;
+  else k = (uint16_t)k;
+  return INTFOLD(k);
+}
+
 LJFOLD(CONV KINT IRCONV_I64_INT)
 LJFOLD(CONV KINT IRCONV_U64_INT)
 LJFOLD(CONV KINT IRCONV_I64_U32)
