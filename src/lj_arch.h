@@ -131,6 +131,7 @@
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNALIGNED	1
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_X64
@@ -145,6 +146,7 @@
 #define LJ_TARGET_JUMPRANGE	31	/* +-2^31 = +-2GB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNALIGNED	1
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
@@ -386,6 +388,10 @@
 #else
 #define LJ_32			0
 #define LJ_64			1
+#endif
+
+#ifndef LJ_TARGET_UNALIGNED
+#define LJ_TARGET_UNALIGNED	0
 #endif
 
 /* Various workarounds for embedded operating systems. */

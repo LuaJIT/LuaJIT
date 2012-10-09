@@ -1800,7 +1800,7 @@ LJFOLDF(merge_eqne_snew_kgc)
   int32_t len = (int32_t)kstr->len;
   lua_assert(irt_isstr(fins->t));
 
-#if LJ_TARGET_X86ORX64
+#if LJ_TARGET_UNALIGNED
 #define FOLD_SNEW_MAX_LEN	4  /* Handle string lengths 0, 1, 2, 3, 4. */
 #define FOLD_SNEW_TYPE8		IRT_I8	/* Creates shorter immediates. */
 #else
