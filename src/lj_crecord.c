@@ -526,11 +526,11 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
 
   /* Destination is an array. */
   case CCX(A, A):
-    goto err_nyi;
-
   /* Destination is a struct/union. */
   case CCX(S, S):
-    goto err_nyi;
+    if (dp == 0) goto err_conv;
+    crec_copy(J, dp, sp, lj_ir_kint(J, dsize), d);
+    break;
 
   default:
   err_conv:
