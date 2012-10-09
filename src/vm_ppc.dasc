@@ -452,10 +452,13 @@ static void build_subroutines(BuildCtx *ctx)
   |   stwu TMP1, FRAME_PC(RA)		// Prepend true to results.
   |
   |->vm_returnc:
-  |  andix. TMP0, PC, FRAME_TYPE
-  |   addi RD, RD, 8			// RD = (nresults+1)*8.
-  |   mr MULTRES, RD
-  |  beq ->BC_RET_Z			// Handle regular return to Lua.
+  |  addi RD, RD, 8			// RD = (nresults+1)*8.
+  |   andix. TMP0, PC, FRAME_TYPE
+  |  cmpwi cr1, RD, 0
+  |  li CRET1, LUA_YIELD
+  |  beq cr1, ->vm_unwind_c_eh
+  |  mr MULTRES, RD
+  |   beq ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
   |  // BASE = base, RA = resultptr, RD/MULTRES = (nresults+1)*8, PC = return

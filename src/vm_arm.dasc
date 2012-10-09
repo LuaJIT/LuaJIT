@@ -269,10 +269,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  sub RA, RA, #8
   |
   |->vm_returnc:
-  |  add RC, RC, #8			// RC = (nresults+1)*8.
-  |   ands CARG1, PC, #FRAME_TYPE
+  |  adds RC, RC, #8			// RC = (nresults+1)*8.
+  |  mov CRET1, #LUA_YIELD
+  |  beq ->vm_unwind_c_eh
   |  str RC, SAVE_MULTRES
-  |   beq ->BC_RET_Z			// Handle regular return to Lua.
+  |  ands CARG1, PC, #FRAME_TYPE
+  |  beq ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
   |  // BASE = base, RA = resultptr, RC/MULTRES = (nresults+1)*8, PC = return

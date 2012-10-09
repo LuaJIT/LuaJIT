@@ -1103,6 +1103,9 @@ LUA_API int lua_yield(lua_State *L, int nresults)
 	while (--nresults >= 0) copyTV(L, t++, f++);
 	L->top = t;
       }
+      L->cframe = NULL;
+      L->status = LUA_YIELD;
+      return -1;
     } else {  /* Yield from hook: add a pseudo-frame. */
       TValue *top = L->top;
       hook_leave(g);
@@ -1112,14 +1115,14 @@ LUA_API int lua_yield(lua_State *L, int nresults)
       setframe_gc(top+2, obj2gco(L));
       setframe_ftsz(top+2, (int)((char *)(top+3)-(char *)L->base)+FRAME_CONT);
       L->top = L->base = top+3;
-    }
 #if LJ_TARGET_X64
-    lj_err_throw(L, LUA_YIELD);
+      lj_err_throw(L, LUA_YIELD);
 #else
-    L->cframe = NULL;
-    L->status = LUA_YIELD;
-    lj_vm_unwind_c(cf, LUA_YIELD);
+      L->cframe = NULL;
+      L->status = LUA_YIELD;
+      lj_vm_unwind_c(cf, LUA_YIELD);
 #endif
+    }
   }
   lj_err_msg(L, LJ_ERR_CYIELD);
   return 0;  /* unreachable */

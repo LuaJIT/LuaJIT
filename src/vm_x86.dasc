@@ -443,6 +443,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_returnc:
   |  add RD, 1				// RD = nresults+1
+  |  jz ->vm_unwind_yield
   |  mov MULTRES, RD
   |  test PC, FRAME_TYPE
   |  jz ->BC_RET_Z			// Handle regular return to Lua.
@@ -525,6 +526,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  call extern lj_state_growstack@8	// (lua_State *L, int n)
   |  mov BASE, L:RB->top		// Need the (realloced) L->top in BASE.
   |  jmp <3
+  |
+  |->vm_unwind_yield:
+  |  mov al, LUA_YIELD
+  |  jmp ->vm_unwind_c_eh
   |
   |->vm_unwind_c@8:			// Unwind C stack, return from vm_pcall.
   |  // (void *cframe, int errcode)

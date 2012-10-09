@@ -327,8 +327,10 @@ static void build_subroutines(BuildCtx *ctx)
   |   addiu RA, RA, -8
   |
   |->vm_returnc:
-  |  andi TMP0, PC, FRAME_TYPE
   |   addiu RD, RD, 8			// RD = (nresults+1)*8.
+  |  andi TMP0, PC, FRAME_TYPE
+  |   beqz RD, ->vm_unwind_c_eh
+  |.   li CRET1, LUA_YIELD
   |  beqz TMP0, ->BC_RET_Z		// Handle regular return to Lua.
   |.  move MULTRES, RD
   |
