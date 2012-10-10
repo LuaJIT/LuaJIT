@@ -762,7 +762,7 @@ LJLIB_CF(ffi_metatype)
 
 LJLIB_PUSH(top-7) LJLIB_SET(!)  /* Store reference to finalizer table. */
 
-LJLIB_CF(ffi_gc)
+LJLIB_CF(ffi_gc)	LJLIB_REC(.)
 {
   GCcdata *cd = ffi_checkcdata(L, 1);
   TValue *fin = lj_lib_checkany(L, 2);
