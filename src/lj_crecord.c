@@ -20,6 +20,7 @@
 #include "lj_cconv.h"
 #include "lj_clib.h"
 #include "lj_ccall.h"
+#include "lj_ff.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_ircall.h"
@@ -1587,7 +1588,27 @@ void LJ_FASTCALL recff_ffi_abi(jit_State *J, RecordFFData *rd)
     emitir(IRTG(IR_EQ, IRT_STR), J->base[0], lj_ir_kstr(J, strV(&rd->argv[0])));
     J->postproc = LJ_POST_FIXBOOL;
     J->base[0] = TREF_TRUE;
-  }  /* else: interpreter will throw. */
+  } else {
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+}
+
+/* Record ffi.sizeof(), ffi.alignof(), ffi.offsetof(). */
+void LJ_FASTCALL recff_ffi_xof(jit_State *J, RecordFFData *rd)
+{
+  CTypeID id = argv2ctype(J, J->base[0], &rd->argv[0]);
+  if (rd->data == FF_ffi_sizeof) {
+    CType *ct = lj_ctype_rawref(ctype_ctsG(J2G(J)), id);
+    if (ctype_isvltype(ct->info))
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+  } else if (rd->data == FF_ffi_offsetof) {  /* Specialize to the field name. */
+    if (!tref_isstr(J->base[1]))
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+    emitir(IRTG(IR_EQ, IRT_STR), J->base[1], lj_ir_kstr(J, strV(&rd->argv[1])));
+    rd->nres = 3;  /* Just in case. */
+  }
+  J->postproc = LJ_POST_FIXCONST;
+  J->base[0] = J->base[1] = J->base[2] = TREF_NIL;
 }
 
 /* -- Miscellaneous library functions ------------------------------------- */

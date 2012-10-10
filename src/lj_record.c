@@ -1654,11 +1654,21 @@ void lj_record_ins(jit_State *J)
     case LJ_POST_FIXBOOL:
       if (!tvistruecond(&J2G(J)->tmptv2)) {
 	BCReg s;
+	TValue *tv = J->L->base;
 	for (s = 0; s < J->maxslot; s++)  /* Fixup stack slot (if any). */
-	  if (J->base[s] == TREF_TRUE && tvisfalse(&J->L->base[s])) {
+	  if (J->base[s] == TREF_TRUE && tvisfalse(&tv[s])) {
 	    J->base[s] = TREF_FALSE;
 	    break;
 	  }
+      }
+      break;
+    case LJ_POST_FIXCONST:
+      {
+	BCReg s;
+	TValue *tv = J->L->base;
+	for (s = 0; s < J->maxslot; s++)  /* Constify stack slots (if any). */
+	  if (J->base[s] == TREF_NIL && !tvisnil(&tv[s]))
+	    J->base[s] = lj_record_constify(J, &tv[s]);
       }
       break;
     case LJ_POST_FFRETRY:  /* Suppress recording of retried fast function. */

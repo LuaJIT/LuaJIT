@@ -144,6 +144,7 @@ typedef enum {
   LJ_POST_FIXGUARD,	/* Fixup and emit pending guard. */
   LJ_POST_FIXGUARDSNAP,	/* Fixup and emit pending guard and snapshot. */
   LJ_POST_FIXBOOL,	/* Fixup boolean result. */
+  LJ_POST_FIXCONST,	/* Fixup constant results. */
   LJ_POST_FFRETRY	/* Suppress recording of retried fast functions. */
 } PostProc;
 
