@@ -83,12 +83,6 @@ expect them to work. It should be straightforward to write
 applications using the LuaJIT FFI for developers with a C or C++
 background.
 </p>
-<p class="indent" style="color: #c00000;">
-Please note: this doesn't comprise the final specification for the FFI
-semantics, yet. Some semantics may need to be changed, based on your
-feedback. Please <a href="contact.html">report</a> any problems you may
-encounter or any improvements you'd like to see &mdash; thank you!
-</p>
 
 <h2 id="clang">C Language Support</h2>
 <p>
@@ -813,6 +807,55 @@ possibly provide.</li>
 
 </ul>
 
+<h2 id="param">Parameterized Types</h2>
+<p>
+To facilitate some abstractions, the two functions
+<a href="ext_ffi_api.html#ffi_typeof"><tt>ffi.typeof</tt></a> and
+<a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a> support
+parameterized types in C&nbsp;declarations. Note: none of the other API
+functions taking a cdecl allow this.
+</p>
+<p>
+Any place you can write a <b><tt>typedef</tt> name</b>, an
+<b>identifier</b> or a <b>number</b> in a declaration, you can write
+<tt>$</tt> (the dollar sign) instead. These placeholders are replaced in
+order of appearance with the arguments following the cdecl string:
+</p>
+<pre class="code">
+-- Declare a struct with a parameterized field type and name:
+ffi.cdef([[
+typedef struct { $ $; } foo_t;
+]], type1, name1)
+
+-- Anonymous struct with dynamic names:
+local bar_t = ffi.typeof("struct { int $, $; }", name1, name2)
+-- Derived pointer type:
+local bar_ptr_t = ffi.typeof("$ *", bar_t)
+
+-- Parameterized dimensions work even where a VLA won't work:
+local matrix_t = ffi.typeof("uint8_t[$][$]", width, height)
+</pre>
+<p>
+Caveat: this is <em>not</em> simple text substitution! A passed ctype or
+cdata object is treated like the underlying type, a passed string is
+considered an identifier and a number is considered a number. You must
+not mix this up: e.g. passing <tt>"int"</tt> as a string doesn't work in
+place of a type, you'd need to use <tt>ffi.typeof("int")</tt> instead.
+</p>
+<p>
+The main use for parameterized types are libraries implementing abstract
+data types
+(<a href="http://www.freelists.org/post/luajit/ffi-type-of-pointer-to,8"><span class="ext">&raquo;</span>&nbsp;example</a>),
+similar to what can be achieved with C++ template metaprogramming.
+Another use case are derived types of anonymous structs, which avoids
+pollution of the global struct namespace.
+</p>
+<p>
+Please note that parameterized types are a nice tool and indispensable
+for certain use cases. But you'll want to use them sparingly in regular
+code, e.g. when all types are actually fixed.
+</p>
+
 <h2 id="gc">Garbage Collection of cdata Objects</h2>
 <p>
 All explicitly (<tt>ffi.new()</tt>, <tt>ffi.cast()</tt> etc.) or
@@ -1156,10 +1199,8 @@ value.</li>
 <li>ctype <tt>__newindex</tt> tables and non-string lookups in ctype
 <tt>__index</tt> tables.</li>
 <li><tt>tostring()</tt> for cdata types.</li>
-<li>Calls to the following <a href="ext_ffi_api.html">ffi.* API</a>
-functions: <tt>cdef</tt>, <tt>load</tt>, <tt>typeof</tt>,
-<tt>metatype</tt>, <tt>gc</tt>, <tt>sizeof</tt>, <tt>alignof</tt>,
-<tt>offsetof</tt>.</li>
+<li>Calls to <tt>ffi.cdef()</tt>, <tt>ffi.load()</tt> and
+<tt>ffi.metatype()</tt>.</li>
 </ul>
 <p>
 Other missing features:
