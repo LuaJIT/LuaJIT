@@ -492,7 +492,7 @@ LJFOLD(STRREF KGC KINT)
 LJFOLDF(kfold_strref)
 {
   GCstr *str = ir_kstr(fleft);
-  lua_assert((MSize)fright->i < str->len);
+  lua_assert((MSize)fright->i <= str->len);
   return lj_ir_kkptr(J, (char *)strdata(str) + fright->i);
 }
 
