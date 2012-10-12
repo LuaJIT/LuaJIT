@@ -17,8 +17,8 @@ lib_ffi.o: lib_ffi.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
  lj_ccallback.h lj_clib.h lj_ff.h lj_ffdef.h lj_lib.h lj_libdef.h
 lib_init.o: lib_init.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h
 lib_io.o: lib_io.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
- lj_arch.h lj_err.h lj_errmsg.h lj_str.h lj_ff.h lj_ffdef.h lj_lib.h \
- lj_libdef.h
+ lj_arch.h lj_err.h lj_errmsg.h lj_str.h lj_state.h lj_ff.h lj_ffdef.h \
+ lj_lib.h lj_libdef.h
 lib_jit.o: lib_jit.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h \
  lj_obj.h lj_def.h lj_err.h lj_errmsg.h lj_debug.h lj_str.h lj_tab.h \
  lj_bc.h lj_ir.h lj_jit.h lj_ircall.h lj_iropt.h lj_target.h \

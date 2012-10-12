@@ -19,6 +19,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#include "lj_state.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -253,6 +254,31 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
   return luaL_fileresult(L, status, NULL);
 }
 
+static int io_file_iter(lua_State *L)
+{
+  GCfunc *fn = curr_func(L);
+  IOFileUD *iof = uddata(udataV(&fn->c.upvalue[0]));
+  int n = fn->c.nupvalues - 1;
+  if (iof->fp == NULL)
+    lj_err_caller(L, LJ_ERR_IOCLFL);
+  L->top = L->base;
+  if (n) {  /* Copy upvalues with options to stack. */
+    if (n > LUAI_MAXCSTACK)
+      lj_err_caller(L, LJ_ERR_STKOV);
+    lj_state_checkstack(L, (MSize)n);
+    memcpy(L->top, &fn->c.upvalue[1], n*sizeof(TValue));
+    L->top += n;
+  }
+  n = io_file_read(L, iof->fp, 0);
+  if (ferror(iof->fp))
+    lj_err_callermsg(L, strVdata(L->top-2));
+  if (tvisnil(L->base) && (iof->type & IOFILE_FLAG_CLOSE)) {
+    io_file_close(L, iof);  /* Return values are ignored. */
+    return 0;
+  }
+  return n;
+}
+
 /* -- I/O file methods ---------------------------------------------------- */
 
 #define LJLIB_MODULE_io_method
@@ -333,14 +359,11 @@ LJLIB_CF(io_method_setvbuf)
   return luaL_fileresult(L, setvbuf(fp, NULL, opt, sz) == 0, NULL);
 }
 
-LJLIB_PUSH(top-2)  /* io_lines_iter */
 LJLIB_CF(io_method_lines)
 {
   io_tofile(L);
-  setfuncV(L, L->top, funcV(lj_lib_upvalue(L, 1)));
-  setudataV(L, L->top+1, udataV(L->base));
-  L->top += 2;
-  return 2;
+  lua_pushcclosure(L, io_file_iter, (int)(L->top - L->base));
+  return 1;
 }
 
 LJLIB_CF(io_method___gc)
@@ -459,30 +482,19 @@ LJLIB_CF(io_output)
   return io_std_getset(L, GCROOT_IO_OUTPUT, "w");
 }
 
-LJLIB_NOREG LJLIB_CF(io_lines_iter)
-{
-  IOFileUD *iof = io_tofile(L);
-  int ok = io_file_readline(L, iof->fp, 1);
-  if (ferror(iof->fp))
-    lj_err_callermsg(L, strerror(errno));
-  if (!ok && (iof->type & IOFILE_FLAG_CLOSE))
-    io_file_close(L, iof);  /* Return values are ignored (ok is 0). */
-  return ok;
-}
-
-LJLIB_PUSH(top-3)  /* io_lines_iter */
 LJLIB_CF(io_lines)
 {
-  if (L->base < L->top && !tvisnil(L->base)) {  /* io.lines(fname) */
+  if (L->base == L->top) setnilV(L->top++);
+  if (!tvisnil(L->base)) {  /* io.lines(fname) */
     IOFileUD *iof = io_file_open(L, "r");
     iof->type = IOFILE_TYPE_FILE|IOFILE_FLAG_CLOSE;
-    setfuncV(L, L->top-2, funcV(lj_lib_upvalue(L, 1)));
+    L->top--;
+    setudataV(L, L->base, udataV(L->top));
   } else {  /* io.lines() iterates over stdin. */
-    setfuncV(L, L->top, funcV(lj_lib_upvalue(L, 1)));
-    setudataV(L, L->top+1, IOSTDF_UD(L, GCROOT_IO_INPUT));
-    L->top += 2;
+    setudataV(L, L->base, IOSTDF_UD(L, GCROOT_IO_INPUT));
   }
-  return 2;
+  lua_pushcclosure(L, io_file_iter, (int)(L->top - L->base));
+  return 1;
 }
 
 LJLIB_CF(io_type)
@@ -516,7 +528,6 @@ static GCobj *io_std_new(lua_State *L, FILE *fp, const char *name)
 
 LUALIB_API int luaopen_io(lua_State *L)
 {
-  lj_lib_pushcf(L, lj_cf_io_lines_iter, FF_io_lines_iter);
   LJ_LIB_REG(L, NULL, io_method);
   copyTV(L, L->top, L->top-1); L->top++;
   lua_setfield(L, LUA_REGISTRYINDEX, LUA_FILEHANDLE);
