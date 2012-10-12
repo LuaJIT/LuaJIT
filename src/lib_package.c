@@ -3,7 +3,7 @@
 ** Copyright (C) 2005-2012 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
-** Copyright (C) 1994-2011 Lua.org, PUC-Rio. See Copyright Notice in lua.h
+** Copyright (C) 1994-2012 Lua.org, PUC-Rio. See Copyright Notice in lua.h
 */
 
 #define lib_package_c
@@ -41,9 +41,9 @@ static void ll_unloadlib(void *lib)
   dlclose(lib);
 }
 
-static void *ll_load(lua_State *L, const char *path)
+static void *ll_load(lua_State *L, const char *path, int gl)
 {
-  void *lib = dlopen(path, RTLD_NOW);
+  void *lib = dlopen(path, RTLD_NOW | (gl ? RTLD_GLOBAL : RTLD_LOCAL));
   if (lib == NULL) lua_pushstring(L, dlerror());
   return lib;
 }
@@ -112,10 +112,11 @@ static void ll_unloadlib(void *lib)
   FreeLibrary((HINSTANCE)lib);
 }
 
-static void *ll_load(lua_State *L, const char *path)
+static void *ll_load(lua_State *L, const char *path, int gl)
 {
   HINSTANCE lib = LoadLibraryA(path);
   if (lib == NULL) pusherror(L);
+  UNUSED(gl);
   return lib;
 }
 
@@ -149,26 +150,26 @@ static const char *ll_bcsym(void *lib, const char *sym)
 
 static void ll_unloadlib(void *lib)
 {
-  (void)lib;
+  UNUSED(lib);
 }
 
-static void *ll_load(lua_State *L, const char *path)
+static void *ll_load(lua_State *L, const char *path, int gl)
 {
-  (void)path;
+  UNUSED(path); UNUSED(gl);
   lua_pushliteral(L, DLMSG);
   return NULL;
 }
 
 static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
 {
-  (void)lib; (void)sym;
+  UNUSED(lib); UNUSED(sym);
   lua_pushliteral(L, DLMSG);
   return NULL;
 }
 
 static const char *ll_bcsym(void *lib, const char *sym)
 {
-  (void)lib; (void)sym;
+  UNUSED(lib); UNUSED(sym);
   return NULL;
 }
 
@@ -211,9 +212,12 @@ static const char *mksymname(lua_State *L, const char *modname,
 static int ll_loadfunc(lua_State *L, const char *path, const char *name, int r)
 {
   void **reg = ll_register(L, path);
-  if (*reg == NULL) *reg = ll_load(L, path);
+  if (*reg == NULL) *reg = ll_load(L, path, (*name == '*'));
   if (*reg == NULL) {
-    return PACKAGE_ERR_LIB;  /* unable to load library */
+    return PACKAGE_ERR_LIB;  /* Unable to load library. */
+  } else if (*name == '*') {  /* Only load library into global namespace. */
+    lua_pushboolean(L, 1);
+    return 0;
   } else {
     const char *sym = r ? name : mksymname(L, name, SYMPREFIX_CF);
     lua_CFunction f = ll_sym(L, *reg, sym);
@@ -230,7 +234,7 @@ static int ll_loadfunc(lua_State *L, const char *path, const char *name, int r)
 	return 0;
       }
     }
-    return PACKAGE_ERR_FUNC;  /* unable to find function */
+    return PACKAGE_ERR_FUNC;  /* Unable to find function. */
   }
 }
 
