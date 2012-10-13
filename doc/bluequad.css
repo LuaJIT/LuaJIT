@@ -166,6 +166,19 @@ pre.code {
   border: 1px solid #bfcfff;
   background: #f0f4ff;
 }
+pre.mark {
+  padding-left: 2em;
+}
+span.codemark {
+  position:absolute;
+  left: 16em;
+  color: #4040c0;
+}
+span.mark {
+  color: #4040c0;
+  font-family: Courier New, Courier, monospace;
+  line-height: 1.1;
+}
 img {
   border: none;
   vertical-align: baseline;
