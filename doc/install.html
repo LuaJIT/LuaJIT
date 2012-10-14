@@ -407,15 +407,18 @@ make HOST_CC="gcc -m32" CROSS=mipsel-linux-
 <p>
 You can cross-compile for <b id="android">Android (ARM)</b> using the <a href="http://developer.android.com/sdk/ndk/index.html"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
 The environment variables need to match the install locations and the
-desired target platform. E.g. Android&nbsp;2.2 corresponds to ABI level&nbsp;8:
+desired target platform. E.g. Android&nbsp;4.0 corresponds to ABI level&nbsp;14.
+For details check the files <tt>docs/STANDALONE-TOOLCHAIN.html</tt> and
+<tt>docs/STABLE-APIS.html</tt> in the NDK directory.
 </p>
 <pre class="code">
 NDK=/opt/android/ndk
-NDKABI=8
-NDKVER=$NDK/toolchains/arm-linux-androideabi-4.4.3
+NDKABI=14
+NDKVER=$NDK/toolchains/arm-linux-androideabi-4.6
 NDKP=$NDKVER/prebuilt/linux-x86/bin/arm-linux-androideabi-
+NDKARCH="-march=armv7-a -mfloat-abi=softfp -Wl,--fix-cortex-a8"
 NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-arm"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF"
+make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF $NDKARCH"
 </pre>
 <p>
 You can cross-compile for <b id="ios">iOS 3.0+</b> (iPhone/iPad) using the <a href="http://developer.apple.com/devcenter/ios/index.action"><span class="ext">&raquo;</span>&nbsp;iOS SDK</a>.
