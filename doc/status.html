@@ -23,6 +23,8 @@ ul li { padding-bottom: 0.3em; }
 <ul><li>
 <a href="luajit.html">LuaJIT</a>
 <ul><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li><li>
 <a href="install.html">Installation</a>
 </li><li>
 <a href="running.html">Running</a>
@@ -53,8 +55,6 @@ ul li { padding-bottom: 0.3em; }
 </li><li>
 <a href="http://luajit.org/performance.html">Performance <span class="ext">&raquo;</span></a>
 </li><li>
-<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
-</li><li>
 <a href="http://wiki.luajit.org/">Wiki <span class="ext">&raquo;</span></a>
 </li><li>
 <a href="http://luajit.org/list.html">Mailing List <span class="ext">&raquo;</span></a>
@@ -62,7 +62,7 @@ ul li { padding-bottom: 0.3em; }
 </div>
 <div id="main">
 <p>
-The <span style="color: #0000c0;">LuaJIT 1.x</span> series represents
+The <span style="color: #0000c0;">LuaJIT&nbsp;1.x</span> series represents
 the current <span style="color: #0000c0;">stable branch</span>.
 Only a single bug has been discovered in the last three years. So, if
 you need a rock-solid VM, you are encouraged to fetch the latest
@@ -70,85 +70,34 @@ release of LuaJIT 1.x from the <a href="http://luajit.org/download.html"><span c
 page.
 </p>
 <p>
-<span style="color: #c00000;">LuaJIT 2.0</span> is the currently active
-<span style="color: #c00000;">development branch</span>.
-It still has <b>Beta Test</b> status, but it's not undergoing substantial
-changes anymore.
-It has <a href="http://luajit.org/performance.html"><span class="ext">&raquo;</span>&nbsp;much better performance</a> than LuaJIT 1.x.
-It's nearly feature-complete, so you should definitely
+<span style="color: #c00000;">LuaJIT&nbsp;2.0</span> is the currently active
+<span style="color: #c00000;">development branch</span> in beta test.
+It has <a href="http://luajit.org/performance.html"><span class="ext">&raquo;</span>&nbsp;much better performance</a> than
+LuaJIT&nbsp;1.x and runs on many more platforms and architectures.
+It's nearing a stable release, so you should definitely
 start to evaluate it for new projects right now.
 </p>
 
 <h2>Current Status</h2>
 <p>
-This is a list of the things you should know about the LuaJIT 2.0 beta test:
+LuaJIT ought to run all Lua&nbsp;5.1-compatible source code just fine.
+It's considered a serious bug if the VM crashes or produces unexpected
+results &mdash; please report this.
+</p>
+<p>
+Known incompatibilities and issues in LuaJIT&nbsp;2.0:
 </p>
 <ul>
 <li>
-Obviously there will be some <b>bugs</b> in a VM which has been
-rewritten from the ground up. Please report your findings together with
-the circumstances needed to reproduce the bug. If possible, reduce the
-problem down to a simple test case.<br>
-There is no formal bug tracker at the moment. The best place for
-discussion is the <a href="http://luajit.org/list.html"><span class="ext">&raquo;</span>&nbsp;LuaJIT mailing list</a>. Of course
-you may also send your bug reports <a href="contact.html">directly to me</a>,
-especially when they contain lengthy debug output or if you require
-confidentiality.
-</li>
-<li>
-The x86 JIT compiler only generates code for CPUs with support for
-<b>SSE2</b> instructions. I.e. you need at least a P4, Core 2/i3/i5/i7,
-Atom or K8/K10 to get the full benefit.<br>
-If you run LuaJIT on older CPUs without SSE2 support, the JIT compiler
-is disabled and the VM falls back to the LuaJIT interpreter. This is faster
-than the Lua interpreter, but not nearly as fast as the JIT compiler of course.
-Run the command line executable without arguments to show the current status
-(<tt>JIT: ON</tt> or <tt>JIT: OFF</tt>).
-</li>
-<li>
-The VM is complete in the sense that it <b>should</b> run all Lua code
-just fine. It's considered a serious bug if the VM crashes or produces
-unexpected results &mdash; please report this. There are only very few
-known incompatibilities with standard Lua:
-<ul>
-<li>
-The Lua <b>debug API</b> is missing a couple of features (return
-hooks for non-Lua functions) and shows slightly different behavior
-(no per-coroutine hooks, no tail call counting).
-</li>
-<li>
-Some of the <b>configuration options</b> of Lua&nbsp;5.1 are not supported:
-<ul>
-<li>The <b>number type</b> cannot be changed (it's always a <tt>double</tt>).</li>
-<li>The stand-alone executable cannot be linked with <b>readline</b>
-to enable line editing. It's planned to add support for loading it
-on-demand.</li>
-</ul>
-</li>
-<li>
-Most other issues you're likely to find (e.g. with the existing test
-suites) are differences in the <b>implementation-defined</b> behavior.
-These either have a good reason (like early tail call resolving which
-may cause differences in error reporting), are arbitrary design choices
+There are some differences in <b>implementation-defined</b> behavior.
+These either have a good reason, are arbitrary design choices
 or are due to quirks in the VM. The latter cases may get fixed if a
 demonstrable need is shown.
 </li>
-</ul>
-</li>
 <li>
-The <b>JIT compiler</b> falls back to the
-interpreter in some cases. All of this works transparently, so unless
-you use <tt>-jv</tt>, you'll probably never notice (the interpreter is
-<a href="http://luajit.org/performance.html"><span class="ext">&raquo;</span>&nbsp;quite fast</a>, too). Here are the known issues:
-<ul>
-<li>
-Most known issues cause a <b>NYI</b> (not yet implemented) trace abort
-message. E.g. for calls to some internal library
-functions. Reporting these is only mildly useful, except if you have good
-example code that shows the problem. Obviously, reports accompanied with
-a patch to fix the issue are more than welcome. But please check back
-with me, before writing major improvements, to avoid duplication of
-effort.
+The Lua <b>debug API</b> is missing a couple of features (return
+hooks for non-Lua functions) and shows slightly different behavior
+in LuaJIT (no per-coroutine hooks, no tail call counting).
 </li>
 <li>
 Some checks are missing in the JIT-compiled code for obscure situations
@@ -159,10 +108,8 @@ this.
 <li>
 Currently some <b>out-of-memory</b> errors from <b>on-trace code</b> are not
 handled correctly. The error may fall through an on-trace
-<tt>pcall</tt> (x86) or it may be passed on to the function set with
-<tt>lua_atpanic</tt> (x64).
-</li>
-</ul>
+<tt>pcall</tt> or it may be passed on to the function set with
+<tt>lua_atpanic</tt> on x64. This issue will be fixed in LuaJIT&nbsp;2.1.
 </li>
 </ul>
 
@@ -170,65 +117,10 @@ handled correctly. The error may fall through an on-trace
 <p>
 Please refer to the
 <a href="http://www.freelists.org/post/luajit/LuaJIT-Roadmap-20122013"><span class="ext">&raquo;</span>&nbsp;LuaJIT
-Roadmap 2012/2013</a> for the latest release plan. Here's the general
-project plan for LuaJIT 2.0:
+Roadmap 2012/2013</a> for details.
 </p>
-<ul>
-<li>
-The main goal right now is to stabilize LuaJIT 2.0 and get it out of
-beta test. <b>Correctness</b> has priority over completeness. This
-implies the first stable release will certainly NOT compile every
-library function call and will fall back to the interpreter from time
-to time. This is perfectly ok, since it still executes all Lua code,
-just not at the highest possible speed.
-</li>
-<li>
-The next step is to get it to compile more library functions and handle
-more cases where the compiler currently bails out. This doesn't mean it
-will compile every corner case. It's much more important that it
-performs well in a majority of use cases. Every compiler has to make
-these trade-offs &mdash; <b>completeness</b> just cannot be the
-overriding goal for a low-footprint, low-overhead JIT compiler.
-</li>
-<li>
-More <b>optimizations</b> will be added in parallel to the last step on
-an as-needed basis. Sinking of stores
-to aggregates and sinking of allocations are high on the list.
-More complex optimizations with less pay-off, such as value-range-propagation
-(VRP) will have to wait.
-</li>
-<li>
-LuaJIT 2.0 has been designed with <b>portability</b> in mind.
-Nonetheless, it compiles to native code and needs to be adapted to each
-architecture. The two major work items are porting the the fast interpreter,
-which is written in assembler, and porting the compiler backend.
-Most other portability issues like endianess or 32 vs. 64&nbsp;bit CPUs
-have already been taken care of.<br>
-Several ports are already available, thanks to the
-<a href="http://luajit.org/sponsors.html"><span class="ext">&raquo;</span>&nbsp;LuaJIT sponsorship program</a>.
-More ports will follow in the future &mdash; companies which are
-interested in sponsoring a port to a particular architecture, please
-use the given contact address.
-</li>
-<li>
-<b>Documentation</b> about the <b>internals</b> of LuaJIT is still sorely
-missing. Although the source code is included and is IMHO well
-commented, many basic design decisions are in need of an explanation.
-The rather un-traditional compiler architecture and the many highly
-optimized data structures are a barrier for outside participation in
-the development. Alas, as I've repeatedly stated, I'm better at
-writing code than papers and I'm not in need of any academic merits.
-Someday I will find the time for it. :-)
-</li>
-<li>
-Producing good code for unbiased branches is a key problem for trace
-compilers. This is the main cause for "trace explosion".
-<b>Hyperblock scheduling</b> promises to solve this nicely at the
-price of a major redesign of the compiler. This would also pave the
-way for emitting predicated instructions, which is a prerequisite
-for efficient <b>vectorization</b>.
-</li>
-</ul>
+<p>
+</p>
 <br class="flush">
 </div>
 <div id="foot">

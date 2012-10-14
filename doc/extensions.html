@@ -37,6 +37,8 @@ td.excinterop {
 <ul><li>
 <a href="luajit.html">LuaJIT</a>
 <ul><li>
+<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li><li>
 <a href="install.html">Installation</a>
 </li><li>
 <a href="running.html">Running</a>
@@ -67,8 +69,6 @@ td.excinterop {
 </li><li>
 <a href="http://luajit.org/performance.html">Performance <span class="ext">&raquo;</span></a>
 </li><li>
-<a href="http://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
-</li><li>
 <a href="http://wiki.luajit.org/">Wiki <span class="ext">&raquo;</span></a>
 </li><li>
 <a href="http://luajit.org/list.html">Mailing List <span class="ext">&raquo;</span></a>
@@ -90,7 +90,7 @@ or LuaJIT.
 </p>
 <p>
 LuaJIT extends the standard Lua VM with new functionality and adds
-several extension modules. Please note that this page is only about
+several extension modules. Please note this page is only about
 <em>functional</em> enhancements and not about performance enhancements,
 such as the optimized VM, the faster interpreter or the JIT compiler.
 </p>
@@ -234,6 +234,70 @@ overhead for creating coroutines is much smaller and no extra
 C&nbsp;stacks need to be allocated. OTOH you can no longer yield
 across arbitrary C&nbsp;functions. Keep this in mind when
 upgrading from LuaJIT 1.x.
+</p>
+
+<h2 id="lua52">Extensions from Lua 5.2</h2>
+<p>
+LuaJIT supports some language and library extensions from Lua&nbsp;5.2.
+Features that are unlikely to break existing code are unconditionally
+enabled:
+</p>
+<ul>
+<li><tt>goto</tt> and <tt>::labels::</tt>.</li>
+<li>Hex escapes <tt>'\x3F'</tt> and <tt>'\*'</tt> escape in strings.</li>
+<li><tt>load(string|reader, chunkname [,mode [,env]])</tt>.
+<tt>loadstring()</tt> is an alias.</li>
+<li><tt>math.log(x [,base])</tt>.
+<li><tt>string.rep(s, n [,sep])</tt>.
+<li><tt>string.format()</tt>: <tt>%q</tt> reversible.
+<tt>%s</tt> checks <tt>__tostring</tt>.
+<tt>%a</tt> and <tt>"%A</tt> added.</li>
+<li>String matching pattern <tt>%g</tt> added.</li>
+<li><tt>io.read("*L")</tt>.</li>
+<li><tt>io.lines()</tt> and <tt>file:lines()</tt> process
+<tt>io.read()</tt> options.</li>
+<li><tt>os.exit(status|true|false [,close])</tt>.</li>
+<li><tt>package.searchpath(name, path [, sep [, rep]])</tt>.</li>
+<li><tt>package.loadlib(name, "*")</tt>.</li>
+<li><tt>debug.getinfo()</tt> returns <tt>nparams</tt> and <tt>isvararg</tt>
+for option <tt>"u"</tt>.</li>
+<li><tt>debug.getlocal()</tt> accepts function instead of level.</li>
+<li><tt>debug.getlocal()</tt> and <tt>debug.setlocal()</tt> accept negative
+indexes for varargs.</li>
+<li><tt>debug.getupvalue()</tt> and <tt>debug.setupvalue()</tt> handle
+C&nbsp;functions.</li>
+<li><tt>debug.upvalueid()</tt> and <tt>debug.upvaluejoin()</tt>.</li>
+<li>Command line option <tt>-E</tt>.</li>
+<li>Command line checks <tt>__tostring</tt> for errors.</li>
+</ul>
+<p>
+Other features are only enabled, if LuaJIT is built with
+<tt>-DLUAJIT_ENABLE_LUA52COMPAT</tt>:
+</p>
+<ul>
+<li><tt>goto</tt> is a keyword and not a valid variable name anymore.</li>
+<li><tt>break</tt> can be placed anywhere. Empty statements (<tt>;;</tt>)
+are allowed.</li>
+<li><tt>__lt</tt>, <tt>__le</tt> are invoked for mixed types.</li>
+<li><tt>__len</tt> for tables. <tt>rawlen()</tt> library function.</li>
+<li><tt>pairs()</tt> and <tt>ipairs()</tt> check for <tt>__pairs</tt> and
+<tt>__ipairs</tt>.</li>
+<li><tt>coroutine.running()</tt> returns two results.</li>
+<li><tt>table.pack()</tt> and <tt>table.unpack()</tt>
+(same as <tt>unpack()</tt>).</li>
+<li><tt>io.write()</tt> and <tt>file:write()</tt> return file handle
+instead of <tt>true</tt>.</li>
+<li><tt>os.execute()</tt> and <tt>pipe:close()</tt> return detailed
+exit status.</li>
+<li><tt>debug.setmetatable()</tt> returns object.</li>
+<li><tt>debug.getuservalue()</tt> and <tt>debug.setuservalue()</tt>.</li>
+<li>Remove <tt>math.mod()</tt>, <tt>string.gfind()</tt>.
+</ul>
+<p>
+Note: this provides only partial compatibility with Lua 5.2 at the
+language and Lua library level. LuaJIT is API+ABI-compatible with
+Lua&nbsp;5.1, which prevents implementing features that would otherwise
+break the Lua/C API and ABI (e.g. <tt>_ENV</tt>).
 </p>
 
 <h2 id="exceptions">C++ Exception Interoperability</h2>
