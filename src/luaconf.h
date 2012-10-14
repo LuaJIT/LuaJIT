@@ -22,6 +22,10 @@
 #define LUA_CPATH_DEFAULT \
   ".\\?.dll;" LUA_CDIR"?.dll;" LUA_CDIR"loadall.dll"
 #else
+/*
+** Note to distribution maintainers: do NOT patch the following line!
+** Please read ../doc/install.html#distro and pass PREFIX=/usr instead.
+*/
 #define LUA_ROOT	"/usr/local/"
 #define LUA_LDIR	LUA_ROOT "share/lua/5.1/"
 #define LUA_CDIR	LUA_ROOT "lib/lua/5.1/"
