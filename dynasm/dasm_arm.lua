@@ -1106,7 +1106,10 @@ function _M.mergemaps(map_coreop, map_def)
     local cv = map_cond[cc]
     if cv then
       local v = rawget(t, k1..k2)
-      if type(v) == "string" then return format("%x%s", cv, sub(v, 2)) end
+      if type(v) == "string" then
+	local scv = format("%x", cv)
+	return gsub(scv..sub(v, 2), "|e", "|"..scv)
+      end
     end
   end })
   setmetatable(map_def, { __index = map_archdef })
