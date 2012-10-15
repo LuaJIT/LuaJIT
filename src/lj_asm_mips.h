@@ -231,7 +231,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   if ((void *)ci->func)
     emit_call(as, (void *)ci->func);
   for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
-    as->cost[gpr] = REGCOST(~0u, 0u);
+    as->cost[gpr] = REGCOST(~0u, ASMREF_L);
   gpr = REGARG_FIRSTGPR;
   for (n = 0; n < nargs; n++) {  /* Setup args. */
     IRRef ref = args[n];

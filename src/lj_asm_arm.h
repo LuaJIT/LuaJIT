@@ -348,7 +348,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     emit_call(as, (void *)ci->func);
 #if !LJ_SOFTFP
   for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
-    as->cost[gpr] = REGCOST(~0u, 0u);
+    as->cost[gpr] = REGCOST(~0u, ASMREF_L);
   gpr = REGARG_FIRSTGPR;
 #endif
   for (n = 0; n < nargs; n++) {  /* Setup args. */
