@@ -263,6 +263,7 @@ typedef enum PPCIns {
   PPCI_FSUB = 0xfc000028,
   PPCI_FMUL = 0xfc000032,
   PPCI_FDIV = 0xfc000024,
+  PPCI_FSQRT = 0xfc00002c,
 
   PPCI_FMADD = 0xfc00003a,
   PPCI_FMSUB = 0xfc000038,

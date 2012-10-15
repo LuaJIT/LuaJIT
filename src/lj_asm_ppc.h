@@ -2026,7 +2026,10 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_FPMATH:
     if (ir->op2 == IRFPM_EXP2 && asm_fpjoin_pow(as, ir))
       break;
-    asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
+    if (ir->op2 == IRFPM_SQRT && (as->flags & JIT_F_SQRT))
+      asm_fpunary(as, ir, PPCI_FSQRT);
+    else
+      asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
     break;
 
   /* Overflow-checking arithmetic ops. */
