@@ -1368,14 +1368,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  movmi CARG1, #0x80000000
   |  bmi <1
   |4:
-  |.if HFABI
-  |  vmov d0, CARG1, CARG2
-  |  bl ->vm_..func.._hf
-  |  b ->fff_resd
-  |.else
-  |  bl ->vm_..func
+  |  bl ->vm_..func.._sf
   |  b ->fff_restv
-  |.endif
   |.endmacro
   |
   |  math_round floor
@@ -2221,52 +2215,9 @@ static void build_subroutines(BuildCtx *ctx)
   |//
   |// double lj_vm_floor/ceil/trunc(double x);
   |.macro vm_round, func, hf
-  |.if FPU
-  |.if hf == 0
-  |  vmov d0, CARG1, CARG2
-  |  vldr d2, <8			// 2^52
-  |.else
-  |  vldr d2, <8			// 2^52
+  |.if hf == 1
   |  vmov CARG1, CARG2, d0
   |.endif
-  |  vabs.f64 d1, d0
-  |  vcmp.f64 d1, d2			// |x| >= 2^52 or NaN?
-  |  vmrs
-  |.if "func" == "trunc"
-  |  bxpl lr				// Return argument unchanged.
-  |  vadd.f64 d0, d1, d2
-  |  vsub.f64 d0, d0, d2		// (|x| + 2^52) - 2^52
-  |  vldr d2, <9			// +1.0
-  |  vcmp.f64 d1, d0			// |x| < result: subtract +1.0
-  |  vmrs
-  |  vsubmi.f64 d0, d0, d2
-  |  cmp CARG2, #0
-  |  vnegmi.f64 d0, d0			// Merge sign bit back in.
-  |.else
-  |  vadd.f64 d1, d1, d2
-  |  bxpl lr				// Return argument unchanged.
-  |  cmp CARG2, #0
-  |  vsub.f64 d1, d1, d2		// (|x| + 2^52) - 2^52
-  |  vldr d2, <9			// +1.0
-  |  vnegmi.f64 d1, d1			// Merge sign bit back in.
-  |.if "func" == "floor"
-  |  vcmp.f64 d0, d1			// x < result: subtract +1.0.
-  |  vmrs
-  |  vsubmi.f64 d0, d1, d2
-  |.else
-  |  vcmp.f64 d1, d0			// x > result: add +1.0.
-  |  vmrs
-  |  vaddmi.f64 d0, d1, d2
-  |.endif
-  |  vmovpl.f64 d0, d1
-  |.endif
-  |.if hf == 0
-  |  vmov CARG1, CARG2, d0
-  |.endif
-  |  bx lr
-  |
-  |.else
-  |
   |  lsl CARG3, CARG2, #1
   |  adds RB, CARG3, #0x00200000
   |  bpl >2				// |x| < 1?
@@ -2286,6 +2237,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |   bics CARG3, CARG3, CARG2, asr #31	// iszero = ((ztest & ~signmask) == 0)
   |.endif
+  |.if hf == 1
+  |  vmoveq d0, CARG1, CARG2
+  |.endif
   |  bxeq lr				// iszero: done.
   |  mvn CARG4, #1
   |  cmp RB, #0
@@ -2294,6 +2248,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  add RB, RB, #32
   |  subs CARG1, CARG1, CARG4, lsl RB	// lo = lo-lomask
   |  sbc CARG2, CARG2, CARG3		// hi = hi-himask+carry
+  |.if hf == 1
+  |  vmov d0, CARG1, CARG2
+  |.endif
   |  bx lr
   |
   |2:  // |x| < 1:
@@ -2308,45 +2265,41 @@ static void build_subroutines(BuildCtx *ctx)
   |  and CARG2, CARG2, #0x80000000
   |  ldrne CARG4, <9			// hi = sign(x) | (iszero ? 0.0 : 1.0)
   |  orrne CARG2, CARG2, CARG4
-  |  bx lr
+  |.if hf == 1
+  |  vmov d0, CARG1, CARG2
   |.endif
+  |  bx lr
   |.endmacro
   |
-  |.if FPU
-  |.align 8
-  |9:
-  |  .long 0, 0x3ff00000		// +1.0
-  |8:
-  |  .long 0, 0x43300000		// 2^52
-  |.else
   |9:
   |  .long 0x3ff00000			// hiword(+1.0)
-  |.endif
   |
   |->vm_floor:
-  |.if not HFABI
-  |  vm_round floor, 0
-  |.endif
-  |->vm_floor_hf:
-  |.if FPU
+  |.if HFABI
   |  vm_round floor, 1
   |.endif
+  |->vm_floor_sf:
+  |  vm_round floor, 0
   |
   |->vm_ceil:
-  |.if not HFABI
-  |  vm_round ceil, 0
-  |.endif
-  |->vm_ceil_hf:
-  |.if FPU
+  |.if HFABI
   |  vm_round ceil, 1
   |.endif
+  |->vm_ceil_sf:
+  |  vm_round ceil, 0
   |
-  |->vm_trunc:
-  |.if JIT and not HFABI
+  |.macro vm_trunc, hf
+  |.if JIT
+  |.if hf == 1
+  |  vmov CARG1, CARG2, d0
+  |.endif
   |  lsl CARG3, CARG2, #1
   |  adds RB, CARG3, #0x00200000
   |  andpl CARG2, CARG2, #0x80000000	// |x| < 1? hi = sign(x), lo = 0.
   |  movpl CARG1, #0
+  |.if hf == 1
+  |  vmovpl d0, CARG1, CARG2
+  |.endif
   |  bxpl lr
   |  mvn CARG4, #0x3cc
   |  subs RB, CARG4, RB, asr #21	// 2^0: RB = 51, 2^51: RB = 0.
@@ -2355,13 +2308,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  and CARG1, CARG1, CARG4, lsl RB	// lo &= lomask
   |  subs RB, RB, #32
   |  andpl CARG2, CARG2, CARG4, lsl RB	// |x| <= 2^20: hi &= himask
+  |.if hf == 1
+  |  vmov d0, CARG1, CARG2
+  |.endif
   |  bx lr
   |.endif
+  |.endmacro
   |
-  |->vm_trunc_hf:
-  |.if JIT and FPU
-  |  vm_round trunc, 1
+  |->vm_trunc:
+  |.if HFABI
+  |  vm_trunc 1
   |.endif
+  |->vm_trunc_sf:
+  |  vm_trunc 0
   |
   |  // double lj_vm_mod(double dividend, double divisor);
   |->vm_mod:
@@ -2369,7 +2328,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Special calling convention. Also, RC (r11) is not preserved.
   |  vdiv.f64 d0, d6, d7
   |   mov RC, lr
-  |  bl ->vm_floor_hf
+  |  vmov CARG1, CARG2, d0
+  |  bl ->vm_floor_sf
+  |  vmov d0, CARG1, CARG2
   |  vmul.f64 d0, d0, d7
   |   mov lr, RC
   |  vsub.f64 d6, d6, d0
@@ -2377,7 +2338,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |  push {r0, r1, r2, r3, r4, lr}
   |  bl extern __aeabi_ddiv
-  |  bl ->vm_floor
+  |  bl ->vm_floor_sf
   |  ldrd CARG34, [sp, #8]
   |  bl extern __aeabi_dmul
   |  ldrd CARG34, [sp]

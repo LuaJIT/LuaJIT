@@ -56,8 +56,8 @@ LJ_ASMF void lj_vm_exit_interp(void);
 LJ_ASMF double lj_vm_floor(double);
 LJ_ASMF double lj_vm_ceil(double);
 #if LJ_TARGET_ARM
-LJ_ASMF double lj_vm_floor_hf(double);
-LJ_ASMF double lj_vm_ceil_hf(double);
+LJ_ASMF double lj_vm_floor_sf(double);
+LJ_ASMF double lj_vm_ceil_sf(double);
 #endif
 #endif
 #if defined(LUAJIT_NO_LOG2) || LJ_TARGET_X86ORX64
@@ -81,7 +81,7 @@ LJ_ASMF void lj_vm_powi_sse(void);
 #else
 LJ_ASMF double lj_vm_trunc(double);
 #if LJ_TARGET_ARM
-LJ_ASMF double lj_vm_trunc_hf(double);
+LJ_ASMF double lj_vm_trunc_sf(double);
 #endif
 #endif
 LJ_ASMF double lj_vm_powi(double, int32_t);
