@@ -1827,6 +1827,8 @@ static void asm_ir(ASMState *as, IRIns *ir)
       break;
     if (ir->op2 <= IRFPM_TRUNC)
       asm_callround(as, ir, IRCALL_lj_vm_floor + ir->op2);
+    else if (ir->op2 == IRFPM_SQRT)
+      asm_fpunary(as, ir, MIPSI_SQRT_D);
     else
       asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
     break;
