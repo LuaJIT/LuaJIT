@@ -1808,12 +1808,10 @@ void lj_record_ins(jit_State *J)
       int diff;
       rec_comp_prep(J);
       diff = lj_record_objcmp(J, ra, rc, rav, rcv);
-      if (diff == 1 && (tref_istab(ra) || tref_isudata(ra))) {
-	/* Only check __eq if different, but the same type (table or udata). */
+      if (diff == 2 || !(tref_istab(ra) || tref_isudata(ra)))
+	rec_comp_fixup(J, J->pc, ((int)op & 1) == !diff);
+      else if (diff == 1)  /* Only check __eq if different, but same type. */
 	rec_mm_equal(J, &ix, (int)op);
-	break;
-      }
-      rec_comp_fixup(J, J->pc, ((int)op & 1) == !diff);
     }
     break;
 
