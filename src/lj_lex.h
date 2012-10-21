@@ -41,9 +41,11 @@ typedef struct BCInsLine {
 
 /* Info for local variables. Only used during bytecode generation. */
 typedef struct VarInfo {
-  GCRef name;		/* Local variable name. */
+  GCRef name;		/* Local variable name or goto/label name. */
   BCPos startpc;	/* First point where the local variable is active. */
   BCPos endpc;		/* First point where the local variable is dead. */
+  uint8_t slot;		/* Variable slot. */
+  uint8_t info;		/* Variable/goto/label info. */
 } VarInfo;
 
 /* Lua lexer state. */
