@@ -527,10 +527,14 @@ static void callback_conv_result(CTState *cts, lua_State *L, TValue *o)
 lua_State * LJ_FASTCALL lj_ccallback_enter(CTState *cts, void *cf)
 {
   lua_State *L = cts->L;
+  global_State *g = cts->g;
   lua_assert(L != NULL);
-  if (gcref(cts->g->jit_L))
-    lj_err_caller(gco2th(gcref(cts->g->jit_L)), LJ_ERR_FFI_BADCBACK);
-  lj_trace_abort(cts->g);  /* Never record across callback. */
+  if (gcref(g->jit_L)) {
+    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_FFI_BADCBACK));
+    if (g->panic) g->panic(L);
+    exit(EXIT_FAILURE);
+  }
+  lj_trace_abort(g);  /* Never record across callback. */
   /* Setup C frame. */
   cframe_prev(cf) = L->cframe;
   setcframe_L(cf, L);
