@@ -122,14 +122,14 @@ static StrScanFmt strscan_hex(const uint8_t *p, TValue *o,
   switch (fmt) {
   case STRSCAN_INT:
     if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
-      o->i = neg ? -(int)x : (int)x;
+      o->i = neg ? -(int32_t)x : (int32_t)x;
       return STRSCAN_INT;  /* Fast path for 32 bit integers. */
     }
     if (!(opt & STRSCAN_OPT_C)) { fmt = STRSCAN_NUM; break; }
     /* fallthrough */
   case STRSCAN_U32:
     if (dig > 8) return STRSCAN_ERROR;
-    o->i = neg ? -(int)x : (int)x;
+    o->i = neg ? -(int32_t)x : (int32_t)x;
     return STRSCAN_U32;
   case STRSCAN_I64:
   case STRSCAN_U64:
@@ -166,7 +166,7 @@ static StrScanFmt strscan_oct(const uint8_t *p, TValue *o,
     /* fallthrough */
   case STRSCAN_U32:
     if ((x >> 32)) return STRSCAN_ERROR;
-    o->i = neg ? -(int)x : (int)x;
+    o->i = neg ? -(int32_t)x : (int32_t)x;
     break;
   default:
   case STRSCAN_I64:
@@ -227,14 +227,14 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       switch (fmt) {
       case STRSCAN_INT:
 	if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
-	  o->i = neg ? -(int)x : (int)x;
+	  o->i = neg ? -(int32_t)x : (int32_t)x;
 	  return STRSCAN_INT;  /* Fast path for 32 bit integers. */
 	}
 	if (!(opt & STRSCAN_OPT_C)) { fmt = STRSCAN_NUM; goto plainnumber; }
 	/* fallthrough */
       case STRSCAN_U32:
 	if ((x >> 32) != 0) return STRSCAN_ERROR;
-	o->i = neg ? -(int)x : (int)x;
+	o->i = neg ? -(int32_t)x : (int32_t)x;
 	return STRSCAN_U32;
       case STRSCAN_I64:
       case STRSCAN_U64:
@@ -394,7 +394,7 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     if (dp) {
       fmt = STRSCAN_NUM;
       if (dig) {
-	ex = (int)(dp-(p-1)); dp = p-1;
+	ex = (int32_t)(dp-(p-1)); dp = p-1;
 	while (ex < 0 && *dp-- == '0') ex++, dig--;  /* Skip trailing zeros. */
 	if (base == 16) ex *= 4;
       }
@@ -412,7 +412,7 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
 	if (xx < 65536) xx = xx * 10 + (*p & 15);
 	p++;
       }
-      ex += negx ? -(int)xx : (int)xx;
+      ex += negx ? -(int32_t)xx : (int32_t)xx;
     }
 
     /* Parse suffix. */
@@ -443,13 +443,12 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     /* Fast path for decimal 32 bit integers. */
     if (fmt == STRSCAN_INT && base == 10 &&
 	(dig < 10 || (dig == 10 && *sp <= '2' && x < 0x80000000u+neg))) {
+      int32_t y = neg ? -(int32_t)x : (int32_t)x;
       if ((opt & STRSCAN_OPT_TONUM)) {
-	double n = (double)(int32_t)x;
-	if (neg) n = -n;
-	o->n = n;
+	o->n = (double)y;
 	return STRSCAN_NUM;
       } else {
-	o->i = neg ? -(int)x : (int)x;
+	o->i = y;
 	return STRSCAN_INT;
       }
     }
