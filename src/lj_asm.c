@@ -1391,7 +1391,7 @@ static void asm_head_side(ASMState *as)
 	  ra_sethint(ir->r, rs);  /* Hint may be gone, set it again. */
 	else if (sps_scale(regsp_spill(rs))+spdelta == sps_scale(ir->s))
 	  continue;  /* Same spill slot, do nothing. */
-	mask = ((!LJ_SOFTFP && irt_isnum(ir->t)) ? RSET_FPR : RSET_GPR) & allow;
+	mask = ((!LJ_SOFTFP && irt_isfp(ir->t)) ? RSET_FPR : RSET_GPR) & allow;
 	if (mask == RSET_EMPTY)
 	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
 	r = ra_allocref(as, i, mask);
