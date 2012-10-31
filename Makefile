@@ -16,8 +16,7 @@
 MAJVER=  2
 MINVER=  0
 RELVER=  0
-PREREL=  -beta11
-VERSION= $(MAJVER).$(MINVER).$(RELVER)$(PREREL)
+VERSION= $(MAJVER).$(MINVER).$(RELVER)
 ABIVER=  5.1
 
 ##############################################################################
