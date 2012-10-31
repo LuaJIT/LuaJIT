@@ -63,8 +63,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #c00000;">development version</span> is <strong>LuaJIT&nbsp;2.0.0-beta11</strong>.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;1.1.8</strong>.
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.0</strong>.<br>
 </p>
 <p>
 Please check the
@@ -72,7 +71,20 @@ Please check the
 to see whether newer versions are available.
 </p>
 
-<div class="major" style="background: #ffd0d0;">
+<div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.0.0">LuaJIT 2.0.0 &mdash; 2012-10-31</h2>
+<ul>
+<li>Correctness and completeness:
+<ul>
+  <li>Fix Android/x86 build.</li>
+  <li>Fix recording of equality comparisons with __eq metamethods.</li>
+  <li>Fix detection of immutable upvalues.</li>
+  <li>Replace error with PANIC for callbacks from JIT-compiled code.</li>
+  <li>Fix builtin string to number conversion for INT_MIN.</li>
+  <li>FFI: Fix code generation for replay of sunk float fields.</li>
+</ul></li>
+</ul>
+
 <h2 id="LuaJIT-2.0.0-beta11">LuaJIT 2.0.0-beta11 &mdash; 2012-10-16</h2>
 <ul>
 <li>New features:
@@ -580,7 +592,7 @@ no point in listing differences over earlier versions.</li>
 </ul>
 </div>
 
-<div class="major" style="background: #d0d0ff;">
+<div class="major" style="background: #ffff80;">
 <h2 id="LuaJIT-1.1.8">LuaJIT 1.1.8 &mdash; 2012-04-16</h2>
 <ul>
 <li>Merged with Lua 5.1.5. Also integrated fixes for all
