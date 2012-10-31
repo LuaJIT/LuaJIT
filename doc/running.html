@@ -86,15 +86,6 @@ POSIX systems or <tt>luajit.exe</tt> on Windows. It can be used to run simple
 Lua statements or whole Lua applications from the command line. It has an
 interactive mode, too.
 </p>
-<p class="indent" style="color: #c00000;">
-Note: the beta test releases only install under the versioned name on
-POSIX systems (to avoid overwriting a previous version). You either need
-to type <tt>luajit-2.0.0-beta11</tt> to start it or create a symlink
-with a command like this:
-</p>
-<pre class="code" style="color: #c00000;">
-sudo ln -sf luajit-2.0.0-beta11&nbsp;/usr/local/bin/luajit
-</pre>
 
 <h2 id="options">Command Line Options</h2>
 <p>
@@ -195,7 +186,7 @@ itself. For a description of their options and output format, please
 read the comment block at the start of their source.
 They can be found in the <tt>lib</tt> directory of the source
 distribution or installed under the <tt>jit</tt> directory. By default
-this is <tt>/usr/local/share/luajit-2.0.0-beta11/jit</tt> on POSIX
+this is <tt>/usr/local/share/luajit-2.0.0/jit</tt> on POSIX
 systems.
 </p>
 
@@ -216,10 +207,6 @@ specific mix of optimization flags. <tt>-O0</tt> turns off all
 optimizations and higher numbers enable more optimizations. Omitting
 the level (i.e. just <tt>-O</tt>) sets the default optimization level,
 which is <tt>-O3</tt> in the current version.
-</p>
-<p style="font-size: 8pt;">
-Note: Unlike previous versions, <b>optimization is turned on by default</b> in
-LuaJIT 2.0!<br>It's no longer necessary to use <tt>luajit&nbsp;-O</tt>.
 </p>
 <p>
 The second form adds or removes individual optimization flags.

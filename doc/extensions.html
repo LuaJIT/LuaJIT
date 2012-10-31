@@ -233,18 +233,10 @@ the corresponding metamethod (e.g. <tt>"__index"</tt>).
 
 <h2 id="resumable">Fully Resumable VM</h2>
 <p>
-The LuaJIT 2.x VM is fully resumable. This means you can yield from a
+The LuaJIT VM is fully resumable. This means you can yield from a
 coroutine even across contexts, where this would not possible with
 the standard Lua&nbsp;5.1 VM: e.g. you can yield across <tt>pcall()</tt>
 and <tt>xpcall()</tt>, across iterators and across metamethods.
-</p>
-<p>
-Note however that LuaJIT 2.x doesn't use
-<a href="http://coco.luajit.org/"><span class="ext">&raquo;</span>&nbsp;Coco</a> anymore. This means the
-overhead for creating coroutines is much smaller and no extra
-C&nbsp;stacks need to be allocated. OTOH you can no longer yield
-across arbitrary C&nbsp;functions. Keep this in mind when
-upgrading from LuaJIT 1.x.
 </p>
 
 <h2 id="lua52">Extensions from Lua 5.2</h2>
