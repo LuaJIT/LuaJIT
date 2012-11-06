@@ -1524,8 +1524,8 @@ end_decl:
       if ((cds & ~(CDF_SCL|CDF_BOOL|CDF_INT|CDF_SIGNED|CDF_UNSIGNED)))
 	cp_errmsg(cp, 0, LJ_ERR_FFI_INVTYPE);
       info |= CTF_BOOL;
+      if (!(cds & CDF_SIGNED)) info |= CTF_UNSIGNED;
       if (!sz) {
-	if (!(cds & CDF_SIGNED)) info |= CTF_UNSIGNED;
 	sz = 1;
       }
     } else if ((cds & CDF_FP)) {
