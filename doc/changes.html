@@ -72,7 +72,7 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
-<h2 id="LuaJIT-2.0.0">LuaJIT 2.0.0 &mdash; 2012-10-31</h2>
+<h2 id="LuaJIT-2.0.0">LuaJIT 2.0.0 &mdash; 2012-11-06</h2>
 <ul>
 <li>Correctness and completeness:
 <ul>
@@ -81,7 +81,12 @@ to see whether newer versions are available.
   <li>Fix detection of immutable upvalues.</li>
   <li>Replace error with PANIC for callbacks from JIT-compiled code.</li>
   <li>Fix builtin string to number conversion for INT_MIN.</li>
+  <li>Don't create unneeded array part for template tables.</li>
+  <li>Fix CONV.num.int sinking.</li>
+  <li>Don't propagate implicitly widened number to index metamethods.</li>
   <li>FFI: Fix code generation for replay of sunk float fields.</li>
+  <li>FFI: Fix signedness of bool.</li>
+  <li>FFI: Fix recording of bool call result check on x86/x64.</li>
 </ul></li>
 </ul>
 
