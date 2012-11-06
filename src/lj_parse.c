@@ -1761,7 +1761,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
       TValue k, *v;
       if (!t) {  /* Create template table on demand. */
 	BCReg kidx;
-	t = lj_tab_new(fs->L, narr, hsize2hbits(nhash));
+	t = lj_tab_new(fs->L, needarr ? narr : 0, hsize2hbits(nhash));
 	kidx = const_gc(fs, obj2gco(t), LJ_TTAB);
 	fs->bcbase[pc].ins = BCINS_AD(BC_TDUP, freg-1, kidx);
       }
