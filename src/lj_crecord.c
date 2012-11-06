@@ -1140,7 +1140,12 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
 	tr = TREF_NIL;
       } else {
 	crec_snap_caller(J);
+#if LJ_TARGET_X86ORX64
+	/* Note: only the x86/x64 backend supports U8 and only for EQ(tr, 0). */
+	lj_ir_set(J, IRTG(IR_NE, IRT_U8), tr, lj_ir_kint(J, 0));
+#else
 	lj_ir_set(J, IRTGI(IR_NE), tr, lj_ir_kint(J, 0));
+#endif
 	J->postproc = LJ_POST_FIXGUARDSNAP;
 	tr = TREF_TRUE;
       }

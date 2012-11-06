@@ -1815,7 +1815,7 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   int32_t k = 0;
   if (as->flagmcp == as->mcp) {  /* Drop test r,r instruction. */
     as->flagmcp = NULL;
-    as->mcp += (LJ_64 && *as->mcp != XI_TEST) ? 3 : 2;
+    as->mcp += (LJ_64 && *as->mcp < XI_TESTb) ? 3 : 2;
   }
   right = IR(rref)->r;
   if (ra_hasreg(right)) {
@@ -2151,7 +2151,7 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
-	  emit_rr(as, XO_TEST, r64 + left, left);
+	  emit_rr(as, irt_isu8(ir->t) ? XO_TESTb : XO_TEST, r64 + left, left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->flagmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
