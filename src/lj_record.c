@@ -1121,7 +1121,7 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
     return lj_ir_kkptr(J, niltvg(J2G(J)));
   }
   if (tref_isinteger(key))  /* Hash keys are based on numbers, not ints. */
-    ix->key = key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
+    key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
   if (tref_isk(key)) {
     /* Optimize lookup of constant hash keys. */
     MSize hslot = (MSize)((char *)ix->oldv - (char *)&noderef(t->node)[0].val);
