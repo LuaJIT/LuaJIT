@@ -481,12 +481,9 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   }
   L->top = o;
 #if LJ_TARGET_X86
-  /* Store stack adjustment for returns from fastcall/stdcall callbacks. */
-  switch (ctype_cconv(ct->info)) {
-  case CTCC_FASTCALL: case CTCC_STDCALL:
+  /* Store stack adjustment for returns from non-cdecl callbacks. */
+  if (ctype_cconv(ct->info) != CTCC_CDECL)
     (L->base-2)->u32.hi |= (nsp << (16+2));
-    break;
-  }
 #endif
 }
 
