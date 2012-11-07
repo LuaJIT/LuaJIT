@@ -943,9 +943,10 @@ C&nbsp;function is blacklisted for compilation.
 <p>
 However, this heuristic may fail under specific circumstances: e.g. a
 message polling function might not run Lua callbacks right away and the call
-gets JIT-compiled. If it later happens to call back into Lua, you'll get a
-VM PANIC with the message <tt>"bad callback"</tt>. Then you'll need to
-manually turn off JIT-compilation with
+gets JIT-compiled. If it later happens to call back into Lua (e.g. a rarely
+invoked error callback), you'll get a VM PANIC with the message
+<tt>"bad callback"</tt>. Then you'll need to manually turn off
+JIT-compilation with
 <a href="ext_jit.html#jit_onoff_func"><tt>jit.off()</tt></a> for the
 surrounding Lua function that invokes such a message polling function (or
 similar).
@@ -1038,9 +1039,9 @@ of existing C&nbsp;APIs. E.g. callback performance is irrelevant for a
 GUI application, which waits for user input most of the time, anyway.
 </p>
 <p>
-For new designs <b>avoid push-style APIs</b> (C&nbsp;function repeatedly
-calling a callback for each result). Instead <b>use pull-style APIs</b>
-(call a C&nbsp;function repeatedly to get a new result). Calls from Lua
+For new designs <b>avoid push-style APIs</b>: a C&nbsp;function repeatedly
+calling a callback for each result. Instead <b>use pull-style APIs</b>:
+call a C&nbsp;function repeatedly to get a new result. Calls from Lua
 to C via the FFI are much faster than the other way round. Most well-designed
 libraries already use pull-style APIs (read/write, get/put).
 </p>
