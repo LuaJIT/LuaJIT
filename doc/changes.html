@@ -72,21 +72,23 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
-<h2 id="LuaJIT-2.0.0">LuaJIT 2.0.0 &mdash; 2012-11-06</h2>
+<h2 id="LuaJIT-2.0.0">LuaJIT 2.0.0 &mdash; 2012-11-08</h2>
 <ul>
 <li>Correctness and completeness:
 <ul>
   <li>Fix Android/x86 build.</li>
-  <li>Fix recording of equality comparisons with __eq metamethods.</li>
+  <li>Fix recording of equality comparisons with <tt>__eq</tt> metamethods.</li>
   <li>Fix detection of immutable upvalues.</li>
   <li>Replace error with PANIC for callbacks from JIT-compiled code.</li>
-  <li>Fix builtin string to number conversion for INT_MIN.</li>
+  <li>Fix builtin string to number conversion for <tt>INT_MIN</tt>.</li>
   <li>Don't create unneeded array part for template tables.</li>
-  <li>Fix CONV.num.int sinking.</li>
+  <li>Fix <tt>CONV.num.int</tt> sinking.</li>
   <li>Don't propagate implicitly widened number to index metamethods.</li>
+  <li>ARM: Fix ordered comparisons of number vs. non-number.</li>
   <li>FFI: Fix code generation for replay of sunk float fields.</li>
   <li>FFI: Fix signedness of bool.</li>
   <li>FFI: Fix recording of bool call result check on x86/x64.</li>
+  <li>FFI: Fix stack-adjustment for <tt>__thiscall</tt> callbacks.</li>
 </ul></li>
 </ul>
 
