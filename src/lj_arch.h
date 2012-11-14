@@ -300,7 +300,11 @@
 
 /* Check target-specific constraints. */
 #ifndef _BUILDVM_H
-#if LJ_TARGET_ARM
+#if LJ_TARGET_X64
+#if __USING_SJLJ_EXCEPTIONS__
+#error "Need a C compiler with native exception handling on x64"
+#endif
+#elif LJ_TARGET_ARM
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
 #endif
