@@ -1825,6 +1825,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
 	}
       }
     }
+    lj_gc_check(fs->L);
   }
 }
 
