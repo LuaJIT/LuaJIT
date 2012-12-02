@@ -1642,13 +1642,13 @@ static void asm_intmin_max(ASMState *as, IRIns *ir, int cc)
     kcmp = 0;
     right = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, left));
   }
-  if (dest != right) {
+  if (kmov || dest != right) {
     emit_dm(as, ARMF_CC(ARMI_MOV, cc)^kmov, dest, right);
     cc ^= 1;  /* Must use opposite conditions for paired moves. */
   } else {
     cc ^= (CC_LT^CC_GT);  /* Otherwise may swap CC_LT <-> CC_GT. */
   }
-  if (dest != left) emit_dm(as, ARMF_CC(ARMI_MOV, cc)^kmov, dest, left);
+  if (dest != left) emit_dm(as, ARMF_CC(ARMI_MOV, cc), dest, left);
   emit_nm(as, ARMI_CMP^kcmp, left, right);
 }
 
