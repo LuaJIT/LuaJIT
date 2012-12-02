@@ -355,7 +355,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     IRRef ref = args[n];
     IRIns *ir = IR(ref);
 #if !LJ_SOFTFP
-    if (irt_isfp(ir->t)) {
+    if (ref && irt_isfp(ir->t)) {
       RegSet of = as->freeset;
       Reg src;
       if (!LJ_ABI_SOFTFP && !(ci->flags & CCI_VARARG)) {
