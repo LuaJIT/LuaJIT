@@ -136,6 +136,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
     case FRAME_CP:  /* Protected C frame. */
       if (cframe_canyield(cf)) {  /* Resume? */
 	if (errcode) {
+	  hook_leave(G(L));  /* Assumes nobody uses coroutines inside hooks. */
 	  L->cframe = NULL;
 	  L->status = (uint8_t)errcode;
 	}
