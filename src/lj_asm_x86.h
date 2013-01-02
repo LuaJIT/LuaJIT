@@ -2158,12 +2158,27 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
 	    return;
 	  }  /* Otherwise handle register case as usual. */
 	} else {
-	  left = asm_fuseloadm(as, lref, RSET_GPR, r64);
+	  left = asm_fuseloadm(as, lref,
+			       irt_isu8(ir->t) ? RSET_GPR8 : RSET_GPR, r64);
 	}
 	asm_guardcc(as, cc);
 	if (usetest && left != RID_MRM) {
 	  /* Use test r,r instead of cmp r,0. */
-	  emit_rr(as, irt_isu8(ir->t) ? XO_TESTb : XO_TEST, r64 + left, left);
+	  x86Op xo = XO_TEST;
+	  if (irt_isu8(ir->t)) {
+	    lua_assert(ir->o == IR_EQ || ir->o == IR_NE);
+	    xo = XO_TESTb;
+	    if (!rset_test(RSET_RANGE(RID_EAX, RID_EBX+1), left)) {
+	      if (LJ_64) {
+		left |= FORCE_REX;
+	      } else {
+		emit_i32(as, 0xff);
+		emit_mrm(as, XO_GROUP3, XOg_TEST, left);
+		return;
+	      }
+	    }
+	  }
+	  emit_rr(as, xo, r64 + left, left);
 	  if (irl+1 == ir)  /* Referencing previous ins? */
 	    as->flagmcp = as->mcp;  /* Set flag to drop test r,r if possible. */
 	} else {
