@@ -209,7 +209,7 @@
 #else
 #define LJ_ARCH_VERSION		0
 #endif
-#if __PPC64__ || __powerpc64__ || LJ_TARGET_XBOX360
+#if __PPC64__ || __powerpc64__ || LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC64		1
 #define LJ_ARCH_NOFFI		1
 #endif
