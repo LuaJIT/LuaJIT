@@ -6151,7 +6151,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align " SZPTR "\n"
 	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
 #endif
-#if (defined(__sun__) && defined(__svr4__)) || defined(__solaris_)
+#if (defined(__sun__) && defined(__svr4__))
     fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
 #else
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");

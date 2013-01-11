@@ -356,7 +356,7 @@ static const ELFheader elfhdr_template = {
   .eosabi = 2,
 #elif defined(__OpenBSD__)
   .eosabi = 12,
-#elif (defined(__sun__) && defined(__svr4__)) || defined(__solaris__)
+#elif (defined(__sun__) && defined(__svr4__))
   .eosabi = 6,
 #else
   .eosabi = 0,
