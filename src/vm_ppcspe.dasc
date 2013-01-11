@@ -2052,38 +2052,6 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_trunc_hilo:
   |.endif
   |
-  |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
-  |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
-  |// and basic math functions. ORDER ARITH
-  |->vm_foldarith:
-  |  evmergelo CARG2, CARG1, CARG2
-  |   cmplwi CARG5, 1
-  |  evmergelo CARG4, CARG3, CARG4
-  |   beq >1; bgt >2
-  |  efdadd CRET2, CARG2, CARG4; evmergehi CRET1, CRET2, CRET2; blr
-  |1:
-  |  efdsub CRET2, CARG2, CARG4; evmergehi CRET1, CRET2, CRET2; blr
-  |2:
-  |   cmplwi CARG5, 3; beq >1; bgt >2
-  |  efdmul CRET2, CARG2, CARG4; evmergehi CRET1, CRET2, CRET2; blr
-  |1:
-  |  efddiv CRET2, CARG2, CARG4; evmergehi CRET1, CRET2, CRET2; blr
-  |2:
-  |   cmplwi CARG5, 5; beq >1; bgt >2
-  |  evmr CARG3, CARG2; efddiv CRET2, CARG2, CARG4; evmr RB, CARG4
-  |  mflr RC; bl ->vm_floor_efd; mtlr RC
-  |  efdmul CRET2, CRET2, RB; efdsub CRET2, CARG3, CRET2
-  |  evmergehi CRET1, CRET2, CRET2; blr
-  |1:
-  |  b extern pow
-  |2:
-  |   cmplwi CARG5, 7; beq >1; bgt >2
-  |  xoris CARG1, CARG1, 0x8000; blr
-  |1:
-  |  rlwinm CARG1, CARG1, 0, 1, 31; blr
-  |2:
-  |  NYI  // Other operations only needed by JIT compiler.
-  |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------
