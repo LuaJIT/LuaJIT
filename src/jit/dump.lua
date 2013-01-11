@@ -285,7 +285,6 @@ local function ctlsub(c)
   if c == "\n" then return "\\n"
   elseif c == "\r" then return "\\r"
   elseif c == "\t" then return "\\t"
-  elseif c == "\r" then return "\\r"
   else return format("\\%03d", byte(c))
   end
 end
