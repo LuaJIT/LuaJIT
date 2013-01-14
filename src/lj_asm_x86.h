@@ -1999,10 +1999,9 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
     else if (right != RID_ECX)
       ra_scratch(as, RID2RSET(RID_ECX));
     emit_rr(as, XO_SHIFTcl, REX_64IR(ir, xs), dest);
-    if (right != RID_ECX) {
-      ra_noweak(as, right);
+    ra_noweak(as, right);
+    if (right != RID_ECX)
       emit_rr(as, XO_MOV, RID_ECX, right);
-    }
   }
   ra_left(as, dest, ir->op1);
   /*
