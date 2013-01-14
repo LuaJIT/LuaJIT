@@ -90,7 +90,12 @@
 /* Note: changing the following defines breaks the Lua 5.1 ABI. */
 #define LUA_INTEGER	ptrdiff_t
 #define LUA_IDSIZE	60	/* Size of lua_Debug.short_src. */
-#define LUAL_BUFFERSIZE	BUFSIZ	/* Size of lauxlib and io.* buffers. */
+/*
+** Size of lauxlib and io.* on-stack buffers. Weird workaround to avoid using
+** unreasonable amounts of stack space, but still retain ABI compatibility.
+** Blame Lua for depending on BUFSIZ in the ABI, blame **** for wrecking it.
+*/
+#define LUAL_BUFFERSIZE	(BUFSIZ > 16384 ? 8192 : BUFSIZ)
 
 /* The following defines are here only for compatibility with luaconf.h
 ** from the standard Lua distribution. They must not be changed for LuaJIT.
