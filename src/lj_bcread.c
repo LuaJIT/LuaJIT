@@ -15,6 +15,7 @@
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_cdata.h"
+#include "lualib.h"
 #endif
 #include "lj_lex.h"
 #include "lj_bcdump.h"
@@ -428,9 +429,18 @@ static int bcread_header(LexState *ls)
       bcread_byte(ls) != BCDUMP_VERSION) return 0;
   bcread_flags(ls) = flags = bcread_uleb128(ls);
   if ((flags & ~(BCDUMP_F_KNOWN)) != 0) return 0;
-#if !LJ_HASFFI
-  if ((flags & BCDUMP_F_FFI)) return 0;
+  if ((flags & BCDUMP_F_FFI)) {
+#if LJ_HASFFI
+    lua_State *L = ls->L;
+    if (!ctype_ctsG(G(L))) {
+      ptrdiff_t oldtop = savestack(L, L->top);
+      luaopen_ffi(L);  /* Load FFI library on-demand. */
+      L->top = restorestack(L, oldtop);
+    }
+#else
+    return 0;
 #endif
+  }
   if ((flags & BCDUMP_F_STRIP)) {
     ls->chunkname = lj_str_newz(ls->L, ls->chunkarg);
   } else {
