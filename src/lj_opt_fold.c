@@ -938,25 +938,18 @@ LJFOLDF(shortcut_conv_num_int)
 }
 
 LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
+LJFOLD(CONV CONV IRCONV_U32_NUM)  /* _U32*/
 LJFOLDF(simplify_conv_int_num)
 {
   /* Fold even across PHI to avoid expensive num->int conversions in loop. */
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT)
+  if ((fleft->op2 & IRCONV_SRCMASK) ==
+      ((fins->op2 & IRCONV_DSTMASK) >> IRCONV_DSH))
     return fleft->op1;
   return NEXTFOLD;
 }
 
-LJFOLD(CONV CONV IRCONV_U32_NUM)  /* _U32*/
-LJFOLDF(simplify_conv_u32_num)
-{
-  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32)
-    return fleft->op1;
-  return NEXTFOLD;
-}
-
-LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32*/
-LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32*/
+LJFOLD(CONV CONV IRCONV_I64_NUM)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_U64_NUM)  /* _INT or _U32 */
 LJFOLDF(simplify_conv_i64_num)
 {
   PHIBARRIER(fleft);
@@ -978,13 +971,24 @@ LJFOLDF(simplify_conv_i64_num)
   return NEXTFOLD;
 }
 
-LJFOLD(CONV CONV IRCONV_INT_I64)  /* _INT */
-LJFOLD(CONV CONV IRCONV_INT_U64)  /* _INT */
+LJFOLD(CONV CONV IRCONV_INT_I64)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_INT_U64)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_U32_I64)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_U32_U64)  /* _INT or _U32 */
 LJFOLDF(simplify_conv_int_i64)
 {
+  int src;
   PHIBARRIER(fleft);
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT)
-    return fleft->op1;
+  src = (fleft->op2 & IRCONV_SRCMASK);
+  if (src == IRT_INT || src == IRT_U32) {
+    if (src == ((fins->op2 & IRCONV_DSTMASK) >> IRCONV_DSH)) {
+      return fleft->op1;
+    } else {
+      fins->op2 = ((fins->op2 & IRCONV_DSTMASK) | src);
+      fins->op1 = fleft->op1;
+      return RETRYFOLD;
+    }
+  }
   return NEXTFOLD;
 }
 
@@ -1064,14 +1068,21 @@ LJFOLD(CONV MUL IRCONV_INT_I64)
 LJFOLD(CONV ADD IRCONV_INT_U64)
 LJFOLD(CONV SUB IRCONV_INT_U64)
 LJFOLD(CONV MUL IRCONV_INT_U64)
+LJFOLD(CONV ADD IRCONV_U32_I64)
+LJFOLD(CONV SUB IRCONV_U32_I64)
+LJFOLD(CONV MUL IRCONV_U32_I64)
+LJFOLD(CONV ADD IRCONV_U32_U64)
+LJFOLD(CONV SUB IRCONV_U32_U64)
+LJFOLD(CONV MUL IRCONV_U32_U64)
 LJFOLDF(simplify_conv_narrow)
 {
   IROp op = (IROp)fleft->o;
+  IRType t = irt_type(fins->t);
   IRRef op1 = fleft->op1, op2 = fleft->op2, mode = fins->op2;
   PHIBARRIER(fleft);
   op1 = emitir(IRTI(IR_CONV), op1, mode);
   op2 = emitir(IRTI(IR_CONV), op2, mode);
-  fins->ot = IRTI(op);
+  fins->ot = IRT(op, t);
   fins->op1 = op1;
   fins->op2 = op2;
   return RETRYFOLD;
