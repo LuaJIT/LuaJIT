@@ -242,12 +242,18 @@ static LJ_AINLINE uint32_t lj_getu32(const void *p)
 #define LJ_FASTCALL	__fastcall
 #endif
 
+#ifdef _M_PPC
+#pragma intrinsic(_CountLeadingZeros)
+unsigned int _CountLeadingZeros(long);
+static LJ_AINLINE uint32_t lj_fls(uint32_t x)
+{
+  return _CountLeadingZeros(x) ^ 31;
+}
+#else
 #pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_BitScanReverse)
 unsigned char _BitScanForward(uint32_t *, unsigned long);
 unsigned char _BitScanReverse(uint32_t *, unsigned long);
-unsigned long _byteswap_ulong(unsigned long);
-uint64_t _byteswap_uint64(uint64_t);
 
 static LJ_AINLINE uint32_t lj_ffs(uint32_t x)
 {
@@ -258,13 +264,33 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 {
   uint32_t r; _BitScanReverse(&r, x); return r;
 }
+#endif
 
+unsigned long _byteswap_ulong(unsigned long);
+uint64_t _byteswap_uint64(uint64_t);
 #define lj_bswap(x)	(_byteswap_ulong((x)))
 #define lj_bswap64(x)	(_byteswap_uint64((x)))
 
-/* MSVC is only supported on x86/x64, where unaligned loads are always ok. */
+#if defined(_M_PPC) && defined(LUAJIT_NO_UNALIGNED)
+/*
+** Replacement for unaligned loads on XBox 360. Disabled by default since it's
+** usually more costly than the occasional stall when crossing a cache-line.
+*/
+static LJ_AINLINE uint16_t lj_getu16(const void *v)
+{
+  const uint8_t *p = (const uint8_t *)v;
+  return (uint16_t)((p[0]<<8) | p[1]);
+}
+static LJ_AINLINE uint32_t lj_getu32(const void *v)
+{
+  const uint8_t *p = (const uint8_t *)v;
+  return (uint32_t)((p[0]<<24) | (p[1]<<16) | (p[2]<<8) | p[3]);
+}
+#else
+/* Unaligned loads are generally ok on x86/x64. */
 #define lj_getu16(p)	(*(uint16_t *)(p))
 #define lj_getu32(p)	(*(uint32_t *)(p))
+#endif
 
 #else
 #error "missing defines for your compiler"

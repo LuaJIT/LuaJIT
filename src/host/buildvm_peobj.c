@@ -9,7 +9,7 @@
 #include "buildvm.h"
 #include "lj_bc.h"
 
-#if LJ_TARGET_X86ORX64
+#if LJ_TARGET_X86ORX64 || LJ_TARGET_PPC
 
 /* Context for PE object emitter. */
 static char *strtab;
@@ -84,11 +84,21 @@ typedef struct PEsymaux {
 #define PEOBJ_ARCH_TARGET	0x014c
 #define PEOBJ_RELOC_REL32	0x14  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x06
+#define PEOBJ_RELOC_OFS		0
+#define PEOBJ_TEXT_FLAGS	0x60500020  /* 60=r+x, 50=align16, 20=code. */
 #elif LJ_TARGET_X64
 #define PEOBJ_ARCH_TARGET	0x8664
 #define PEOBJ_RELOC_REL32	0x04  /* MS: REL32, GNU: DISP32. */
 #define PEOBJ_RELOC_DIR32	0x02
 #define PEOBJ_RELOC_ADDR32NB	0x03
+#define PEOBJ_RELOC_OFS		0
+#define PEOBJ_TEXT_FLAGS	0x60500020  /* 60=r+x, 50=align16, 20=code. */
+#elif LJ_TARGET_PPC
+#define PEOBJ_ARCH_TARGET	0x01f2
+#define PEOBJ_RELOC_REL32	0x06
+#define PEOBJ_RELOC_DIR32	0x02
+#define PEOBJ_RELOC_OFS		(-4)
+#define PEOBJ_TEXT_FLAGS	0x60400020  /* 60=r+x, 40=align8, 20=code. */
 #endif
 
 /* Section numbers (0-based). */
@@ -170,12 +180,6 @@ void emit_peobj(BuildCtx *ctx)
   int i, nrsym;
   union { uint8_t b; uint32_t u; } host_endian;
 
-  host_endian.u = 1;
-  if (host_endian.b != LJ_ENDIAN_SELECT(1, 0)) {
-    fprintf(stderr, "Error: different byte order for host and target\n");
-    exit(1);
-  }
-
   sofs = sizeof(PEheader) + PEOBJ_NSECTIONS*sizeof(PEsection);
 
   /* Fill in PE sections. */
@@ -186,7 +190,7 @@ void emit_peobj(BuildCtx *ctx)
   pesect[PEOBJ_SECT_TEXT].relocofs = sofs;
   sofs += (pesect[PEOBJ_SECT_TEXT].nreloc = (uint16_t)ctx->nreloc) * PEOBJ_RELOC_SIZE;
   /* Flags: 60 = read+execute, 50 = align16, 20 = code. */
-  pesect[PEOBJ_SECT_TEXT].flags = 0x60500020;
+  pesect[PEOBJ_SECT_TEXT].flags = PEOBJ_TEXT_FLAGS;
 
 #if LJ_TARGET_X64
   memcpy(pesect[PEOBJ_SECT_PDATA].name, ".pdata", sizeof(".pdata")-1);
@@ -236,10 +240,22 @@ void emit_peobj(BuildCtx *ctx)
   owrite(ctx, &pesect, sizeof(PEsection)*PEOBJ_NSECTIONS);
 
   /* Write .text section. */
+  host_endian.u = 1;
+  if (host_endian.b != LJ_ENDIAN_SELECT(1, 0)) {
+#if LJ_TARGET_PPC
+    uint32_t *p = (uint32_t *)ctx->code;
+    int n = (int)(ctx->codesz >> 2);
+    for (i = 0; i < n; i++, p++)
+      *p = lj_bswap(*p);  /* Byteswap .text section. */
+#else
+    fprintf(stderr, "Error: different byte order for host and target\n");
+    exit(1);
+#endif
+  }
   owrite(ctx, ctx->code, ctx->codesz);
   for (i = 0; i < ctx->nreloc; i++) {
     PEreloc reloc;
-    reloc.vaddr = (uint32_t)ctx->reloc[i].ofs;
+    reloc.vaddr = (uint32_t)ctx->reloc[i].ofs + PEOBJ_RELOC_OFS;
     reloc.symidx = 1+2+ctx->reloc[i].sym;  /* Reloc syms are after .text sym. */
     reloc.type = ctx->reloc[i].type ? PEOBJ_RELOC_REL32 : PEOBJ_RELOC_DIR32;
     owrite(ctx, &reloc, PEOBJ_RELOC_SIZE);

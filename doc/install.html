@@ -134,9 +134,9 @@ operating systems, CPUs and compilers:
 <tr class="even">
 <td class="compatcpu"><a href="#cross2">PPC</a></td>
 <td class="compatos">GCC 4.3+</td>
-<td class="compatos">GCC 4.3+<br>GCC 4.1 (<a href="#cross2">PS3</a>)</td>
+<td class="compatos">GCC 4.3+<br>GCC 4.1 (<a href="#ps3">PS3</a>)</td>
 <td class="compatos compatno">&nbsp;</td>
-<td class="compatos compatno">&nbsp;</td>
+<td class="compatos">XEDK (<a href="#xbox360">XBox 360</a>)</td>
 </tr>
 <tr class="odd">
 <td class="compatcpu"><a href="#cross2">PPC/e500v2</a></td>
@@ -376,7 +376,7 @@ CPU.
 make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
      TARGET_CFLAGS="-mfloat-abi=soft"
 
-# ARM soft-float ABI with VFP (example for Cortex-a8)
+# ARM soft-float ABI with VFP (example for Cortex-A8)
 make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
      TARGET_CFLAGS="-mcpu=cortex-a8 -mfloat-abi=softfp"
 
@@ -387,8 +387,6 @@ make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabihf-
 make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
 # PPC/e500v2 (fast interpreter only)
 make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
-# PS3 (fast interpreter only)
-make HOST_CC="gcc -m32" CROSS=ppu-lv2-
 
 # MIPS big-endian
 make HOST_CC="gcc -m32" CROSS=mips-linux-
@@ -459,6 +457,30 @@ ISDKP=$ISDK/usr/bin/
 ISDKF="-arch armv7 -isysroot $ISDK/SDKs/$ISDKVER"
 make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
      TARGET_SYS=iOS
+</pre>
+<p>
+You can cross-compile for <b id="ps3">PS3</b> using the PS3&nbsp;SDK from
+a Linux host or a Windows host (requires 32 bit MinGW (GCC) on the host,
+too). Due to restrictions on consoles, the JIT compiler is disabled and
+only the fast interpreter is built:
+</p>
+<pre class="code">
+make HOST_CC="gcc -m32" CROSS=ppu-lv2-
+</pre>
+<p>
+You can cross-compile for <b id="xbox360">XBox 360</b> using the
+XBox&nbsp;360 SDK (MSVC + XEDK). Due to restrictions on consoles, the
+JIT compiler is disabled and only the fast interpreter is built.
+</p>
+<p>
+Open a "Visual Studio .NET Command Prompt" (32&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and run
+the following commands. This builds a static library <tt>luajit20.lib</tt>,
+which can be linked against your game, just like the Lua library.
+</p>
+<pre class="code">
+cd src
+xedkbuild
 </pre>
 
 <h2 id="embed">Embedding LuaJIT</h2>

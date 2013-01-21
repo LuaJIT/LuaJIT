@@ -21,6 +21,7 @@
 |//         Note: a full PPC64 _LP64 port is not planned.
 |// GPR64   64 bit registers (but possibly 32 bit pointers, e.g. PS3).
 |//         Affects reg saves, stack layout, carry/overflow/dot flags etc.
+|// FRAME32 Use 32 bit frame layout, even with GPR64 (XBox 360).
 |// TOC     Need table of contents (64 bit or 32 bit variant, e.g. PS3).
 |//         Function pointers are really a struct: code, TOC, env (optional).
 |// TOCENV  Function pointers have an environment pointer, too (not on PS3).
@@ -128,6 +129,37 @@
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.if GPR64
+|.if FRAME32
+|
+|//			456(sp) // \ 32/64 bit C frame info
+|.define TONUM_LO,	452(sp) // |
+|.define TONUM_HI,	448(sp) // |
+|.define TMPD_LO,	444(sp) // |
+|.define TMPD_HI,	440(sp) // |
+|.define SAVE_CR,	432(sp) // | 64 bit CR save.
+|.define SAVE_ERRF,	424(sp) //  > Parameter save area.
+|.define SAVE_NRES,	420(sp) // |
+|.define SAVE_L,	416(sp) // |
+|.define SAVE_PC,	412(sp) // |
+|.define SAVE_MULTRES,	408(sp) // |
+|.define SAVE_CFRAME,	400(sp) // / 64 bit C frame chain.
+|//			392(sp) // Reserved.
+|.define CFRAME_SPACE,	384     // Delta for sp.
+|// Back chain for sp:	384(sp) <-- sp entering interpreter
+|.define SAVE_LR,	376(sp) // 32 bit LR stored in hi-part.
+|.define SAVE_GPR_,	232     // .. 232+18*8: 64 bit GPR saves.
+|.define SAVE_FPR_,	88      // .. 88+18*8: 64 bit FPR saves.
+|//			80(sp) // Needed for 16 byte stack frame alignment.
+|//			16(sp)  // Callee parameter save area (ABI mandated).
+|//			8(sp)   // Reserved
+|// Back chain for sp:	0(sp)   <-- sp while in interpreter
+|// 32 bit sp stored in hi-part of 0(sp).
+|
+|.define TMPD_BLO,	447(sp)
+|.define TMPD,		TMPD_HI
+|.define TONUM_D,	TONUM_HI
+|
+|.else
 |
 |//			508(sp) // \ 32 bit C frame info.
 |.define SAVE_ERRF,	472(sp) // |
@@ -155,6 +187,7 @@
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
 |
+|.endif
 |.else
 |
 |.define SAVE_LR,	276(sp)
@@ -201,7 +234,7 @@
 |.endmacro
 |
 |.macro saveregs
-|.if GPR64
+|.if GPR64 and not FRAME32
 |  stdu sp, -CFRAME_SPACE(sp)
 |.else
 |  stwu sp, -CFRAME_SPACE(sp)
@@ -209,7 +242,7 @@
 |  save_ 14; save_ 15; save_ 16
 |  mflr r0
 |  save_ 17; save_ 18; save_ 19; save_ 20; save_ 21; save_ 22
-|.if GPR64
+|.if GPR64 and not FRAME32
 |  std r0, SAVE_LR
 |.else
 |  stw r0, SAVE_LR
@@ -226,10 +259,15 @@
 |.endmacro
 |
 |.macro restoreregs
-|.if GPR64
-|  ld r0, SAVE_LR; ld r12, SAVE_CR
+|.if GPR64 and not FRAME32
+|  ld r0, SAVE_LR
 |.else
-|  lwz r0, SAVE_LR; lwz r12, SAVE_CR
+|  lwz r0, SAVE_LR
+|.endif
+|.if GPR64
+|  ld r12, SAVE_CR
+|.else
+|  lwz r12, SAVE_CR
 |.endif
 |  rest_ 14; rest_ 15; rest_ 16; rest_ 17; rest_ 18; rest_ 19
 |  mtlr r0;
