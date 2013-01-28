@@ -99,8 +99,10 @@ static void mcode_setprot(void *p, size_t sz, DWORD prot)
 static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 {
   void *p = mmap((void *)hint, sz, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-  if (p == MAP_FAILED && !hint)
-    lj_trace_err(J, LJ_TRERR_MCODEAL);
+  if (p == MAP_FAILED) {
+    if (!hint) lj_trace_err(J, LJ_TRERR_MCODEAL);
+    p = NULL;
+  }
   return p;
 }
 
@@ -220,11 +222,10 @@ static void *mcode_alloc(jit_State *J, size_t sz)
     if (mcode_validptr(hint)) {
       void *p = mcode_alloc_at(J, hint, sz, MCPROT_GEN);
 
-      if (mcode_validptr(p)) {
-	if ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range)
-	  return p;
-	mcode_free(J, p, sz);  /* Free badly placed area. */
-      }
+      if (mcode_validptr(p) &&
+	  ((uintptr_t)p + sz - target < range || target - (uintptr_t)p < range))
+	return p;
+      if (p) mcode_free(J, p, sz);  /* Free badly placed area. */
     }
     /* Next try probing pseudo-random addresses. */
     do {
