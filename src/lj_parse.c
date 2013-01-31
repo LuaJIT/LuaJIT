@@ -481,8 +481,8 @@ static void bcemit_nil(FuncState *fs, BCReg from, BCReg n)
       } else {
 	break;
       }
-      fs->pc--;  /* Drop KPRI. */
-      break;
+      *ip = BCINS_AD(BC_KNIL, from, from+n-1);  /* Replace KPRI. */
+      return;
     case BC_KNIL:
       pto = bc_d(*ip);
       if (pfrom <= from && from <= pto+1) {  /* Can we connect both ranges? */
