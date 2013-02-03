@@ -515,7 +515,8 @@ static void cconv_substruct_tab(CTState *cts, CType *d, uint8_t *dp,
 	lj_cconv_bf_tv(cts, df, dp+df->size, tv);
       if ((d->info & CTF_UNION)) break;
     } else if (ctype_isxattrib(df->info, CTA_SUBTYPE)) {
-      cconv_substruct_tab(cts, ctype_child(cts, df), dp+df->size, t, ip, flags);
+      cconv_substruct_tab(cts, ctype_rawchild(cts, df),
+			  dp+df->size, t, ip, flags);
     }  /* Ignore all other entries in the chain. */
   }
 }
@@ -699,7 +700,8 @@ static void cconv_substruct_init(CTState *cts, CType *d, uint8_t *dp,
 	lj_cconv_bf_tv(cts, df, dp+df->size, o + i);
       if ((d->info & CTF_UNION)) break;
     } else if (ctype_isxattrib(df->info, CTA_SUBTYPE)) {
-      cconv_substruct_init(cts, ctype_child(cts, df), dp+df->size, o, len, ip);
+      cconv_substruct_init(cts, ctype_rawchild(cts, df),
+			   dp+df->size, o, len, ip);
     }  /* Ignore all other entries in the chain. */
   }
 }

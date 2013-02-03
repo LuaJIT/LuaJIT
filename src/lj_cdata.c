@@ -151,7 +151,7 @@ collect_attrib:
     GCstr *name = strV(key);
     if (ctype_isstruct(ct->info)) {
       CTSize ofs;
-      CType *fct = lj_ctype_getfield(cts, ct, name, &ofs);
+      CType *fct = lj_ctype_getfieldq(cts, ct, name, &ofs, qual);
       if (fct) {
 	*pp = p + ofs;
 	return fct;

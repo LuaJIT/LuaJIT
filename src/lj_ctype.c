@@ -234,7 +234,8 @@ CTypeID lj_ctype_getname(CTState *cts, CType **ctp, GCstr *name, uint32_t tmask)
 }
 
 /* Get a struct/union/enum/function field by name. */
-CType *lj_ctype_getfield(CTState *cts, CType *ct, GCstr *name, CTSize *ofs)
+CType *lj_ctype_getfieldq(CTState *cts, CType *ct, GCstr *name, CTSize *ofs,
+			  CTInfo *qual)
 {
   while (ct->sib) {
     ct = ctype_get(cts, ct->sib);
@@ -243,8 +244,15 @@ CType *lj_ctype_getfield(CTState *cts, CType *ct, GCstr *name, CTSize *ofs)
       return ct;
     }
     if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
-      CType *fct = lj_ctype_getfield(cts, ctype_child(cts, ct), name, ofs);
+      CType *fct, *cct = ctype_child(cts, ct);
+      CTInfo q = 0;
+      while (ctype_isattrib(cct->info)) {
+	if (ctype_attrib(cct->info) == CTA_QUAL) q |= cct->size;
+	cct = ctype_child(cts, cct);
+      }
+      fct = lj_ctype_getfieldq(cts, cct, name, ofs, qual);
       if (fct) {
+	if (qual) *qual |= q;
 	*ofs += ct->size;
 	return fct;
       }

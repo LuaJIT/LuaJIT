@@ -457,7 +457,7 @@ static int ccall_classify_struct(CTState *cts, CType *ct, int *rcl, CTSize ofs)
     else if (ctype_isbitfield(ct->info))
       rcl[(fofs >= 8)] |= CCALL_RCL_INT;  /* NYI: unaligned bitfields? */
     else if (ctype_isxattrib(ct->info, CTA_SUBTYPE))
-      ccall_classify_struct(cts, ctype_child(cts, ct), rcl, fofs);
+      ccall_classify_struct(cts, ctype_rawchild(cts, ct), rcl, fofs);
   }
   return ((rcl[0]|rcl[1]) & CCALL_RCL_MEM);  /* Memory class? */
 }
@@ -541,7 +541,7 @@ static unsigned int ccall_classify_struct(CTState *cts, CType *ct, CType *ctf)
     } else if (ctype_isbitfield(ct->info)) {
       goto noth;
     } else if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
-      CType *sct = ctype_child(cts, ct);
+      CType *sct = ctype_rawchild(cts, ct);
       if (sct->size > 0) {
 	unsigned int s = ccall_classify_struct(cts, sct, ctf);
 	if (s <= 1) goto noth;
