@@ -1469,43 +1469,50 @@ static CPscl cp_decl_spec(CPState *cp, CPDecl *decl, CPscl scl)
 
   for (;;) {  /* Parse basic types. */
     cp_decl_attributes(cp, decl);
+    if (cp->tok >= CTOK_FIRSTDECL && cp->tok <= CTOK_LASTDECLFLAG) {
+      uint32_t cbit;
+      if (cp->ct->size) {
+	if (sz) goto end_decl;
+	sz = cp->ct->size;
+      }
+      cbit = (1u << (cp->tok - CTOK_FIRSTDECL));
+      cds = cds | cbit | ((cbit & cds & CDF_LONG) << 1);
+      if (cp->tok >= CTOK_FIRSTSCL) {
+	if (!(scl & cbit)) cp_errmsg(cp, cp->tok, LJ_ERR_FFI_BADSCL);
+      } else if (tdef) {
+	goto end_decl;
+      }
+      cp_next(cp);
+      continue;
+    }
+    if (sz || tdef ||
+	(cds & (CDF_SHORT|CDF_LONG|CDF_SIGNED|CDF_UNSIGNED|CDF_COMPLEX)))
+      break;
     switch (cp->tok) {
     case CTOK_STRUCT:
       tdef = cp_decl_struct(cp, decl, CTINFO(CT_STRUCT, 0));
-      break;
+      continue;
     case CTOK_UNION:
       tdef = cp_decl_struct(cp, decl, CTINFO(CT_STRUCT, CTF_UNION));
-      break;
+      continue;
     case CTOK_ENUM:
       tdef = cp_decl_enum(cp, decl);
-      break;
+      continue;
     case CTOK_IDENT:
-      if (!ctype_istypedef(cp->ct->info) || sz || tdef ||
-	  (cds & (CDF_SHORT|CDF_LONG|CDF_SIGNED|CDF_UNSIGNED|CDF_COMPLEX)))
-	goto end_decl;
-      tdef = ctype_cid(cp->ct->info);  /* Get typedef. */
-      cp_next(cp);
+      if (ctype_istypedef(cp->ct->info)) {
+	tdef = ctype_cid(cp->ct->info);  /* Get typedef. */
+	cp_next(cp);
+	continue;
+      }
       break;
     case '$':
       tdef = cp->val.id;
       cp_next(cp);
-      break;
+      continue;
     default:
-      if (cp->tok >= CTOK_FIRSTDECL && cp->tok <= CTOK_LASTDECLFLAG) {
-	uint32_t cbit;
-	if (cp->ct->size) {
-	  if (sz) goto end_decl;
-	  sz = cp->ct->size;
-	}
-	cbit = (1u << (cp->tok - CTOK_FIRSTDECL));
-	cds = cds | cbit | ((cbit & cds & CDF_LONG) << 1);
-	if (cp->tok >= CTOK_FIRSTSCL && !(scl & cbit))
-	  cp_errmsg(cp, cp->tok, LJ_ERR_FFI_BADSCL);
-	cp_next(cp);
-	break;
-      }
-      goto end_decl;
+      break;
     }
+    break;
   }
 end_decl:
 
