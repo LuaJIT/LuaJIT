@@ -12,6 +12,7 @@
 
 local jit = require("jit")
 assert(jit.version_num == 20000, "LuaJIT core/library version mismatch")
+local bit = require("bit")
 
 -- Symbol name prefix for LuaJIT bytecode.
 local LJBC_PREFIX = "luaJIT_BC_"
@@ -398,7 +399,164 @@ typedef struct {
 end
 
 local function bcsave_machobj(ctx, output, s, ffi)
-  check(false, "NYI: no support for writing OSX object files")
+  ffi.cdef[[
+typedef struct
+{
+  uint32_t magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags;
+} mach_header;
+typedef struct
+{
+  mach_header; uint32_t reserved;
+} mach_header_64;
+typedef struct {
+  uint32_t cmd, cmdsize;
+  char segname[16];
+  uint32_t vmaddr, vmsize, fileoff, filesize;
+  uint32_t maxprot, initprot, nsects, flags;
+} mach_segment_command;
+typedef struct {
+  uint32_t cmd, cmdsize;
+  char segname[16];
+  uint64_t vmaddr, vmsize, fileoff, filesize;
+  uint32_t maxprot, initprot, nsects, flags;
+} mach_segment_command_64;
+typedef struct {
+  char sectname[16], segname[16];
+  uint32_t addr, size;
+  uint32_t offset, align, reloff, nreloc, flags;
+  uint32_t reserved1, reserved2;
+} mach_section;
+typedef struct {
+  char sectname[16], segname[16];
+  uint64_t addr, size;
+  uint32_t offset, align, reloff, nreloc, flags;
+  uint32_t reserved1, reserved2, reserved3;
+} mach_section_64;
+typedef struct {
+  uint32_t cmd, cmdsize, symoff, nsyms, stroff, strsize;
+} mach_symtab_command;
+typedef struct {
+  int32_t strx;
+  uint8_t type, sect;
+  int16_t desc;
+  uint32_t value;
+} mach_nlist;
+typedef struct {
+  uint32_t strx;
+  uint8_t type, sect;
+  uint16_t desc;
+  uint64_t value;
+} mach_nlist_64;
+typedef struct
+{
+  uint32_t magic, nfat_arch;
+} mach_fat_header;
+typedef struct
+{
+  uint32_t cputype, cpusubtype, offset, size, align;
+} mach_fat_arch;
+typedef struct {
+  struct {
+    mach_header hdr;
+    mach_segment_command seg;
+    mach_section sec;
+    mach_symtab_command sym;
+  } arch[1];
+  mach_nlist sym_entry;
+  uint8_t space[4096];
+} mach_obj;
+typedef struct {
+  struct {
+    mach_header_64 hdr;
+    mach_segment_command_64 seg;
+    mach_section_64 sec;
+    mach_symtab_command sym;
+  } arch[1];
+  mach_nlist_64 sym_entry;
+  uint8_t space[4096];
+} mach_obj_64;
+typedef struct {
+  mach_fat_header fat;
+  mach_fat_arch fat_arch[4];
+  struct {
+    mach_header hdr;
+    mach_segment_command seg;
+    mach_section sec;
+    mach_symtab_command sym;
+  } arch[4];
+  mach_nlist sym_entry;
+  uint8_t space[4096];
+} mach_fat_obj;
+]]
+  local symname = '_'..LJBC_PREFIX..ctx.modname
+  local isfat, is64, align, mobj = false, false, 4, "mach_obj"
+  if ctx.arch == "x64" then
+    is64, align, mobj = true, 8, "mach_obj_64"
+  elseif ctx.arch == "arm" then
+    isfat, mobj = true, "mach_fat_obj"
+  else
+    check(ctx.arch == "x86", "unsupported architecture for OSX")
+  end
+  local function aligned(v, a) return bit.band(v+a-1, -a) end
+  local be32 = bit.bswap -- Mach-O FAT is BE, supported archs are LE.
+
+  -- Create Mach-O object and fill in header.
+  local o = ffi.new(mobj)
+  local mach_size = aligned(ffi.offsetof(o, "space")+#symname+2, align)
+  local cputype = ({ x86={7}, x64={0x01000007}, arm={7,12,12,12} })[ctx.arch]
+  local cpusubtype = ({ x86={3}, x64={3}, arm={3,6,9,11} })[ctx.arch]
+  if isfat then
+    o.fat.magic = be32(0xcafebabe)
+    o.fat.nfat_arch = be32(#cpusubtype)
+  end
+
+  -- Fill in sections and symbols.
+  for i=0,#cpusubtype-1 do
+    local ofs = 0
+    if isfat then
+      local a = o.fat_arch[i]
+      a.cputype = be32(cputype[i+1])
+      a.cpusubtype = be32(cpusubtype[i+1])
+      -- Subsequent slices overlap each other to share data.
+      ofs = ffi.offsetof(o, "arch") + i*ffi.sizeof(o.arch[0])
+      a.offset = be32(ofs)
+      a.size = be32(mach_size-ofs+#s)
+    end
+    local a = o.arch[i]
+    a.hdr.magic = is64 and 0xfeedfacf or 0xfeedface
+    a.hdr.cputype = cputype[i+1]
+    a.hdr.cpusubtype = cpusubtype[i+1]
+    a.hdr.filetype = 1
+    a.hdr.ncmds = 2
+    a.hdr.sizeofcmds = ffi.sizeof(a.seg)+ffi.sizeof(a.sec)+ffi.sizeof(a.sym)
+    a.seg.cmd = is64 and 0x19 or 0x1
+    a.seg.cmdsize = ffi.sizeof(a.seg)+ffi.sizeof(a.sec)
+    a.seg.vmsize = #s
+    a.seg.fileoff = mach_size-ofs
+    a.seg.filesize = #s
+    a.seg.maxprot = 1
+    a.seg.initprot = 1
+    a.seg.nsects = 1
+    ffi.copy(a.sec.sectname, "__data")
+    ffi.copy(a.sec.segname, "__DATA")
+    a.sec.size = #s
+    a.sec.offset = mach_size-ofs
+    a.sym.cmd = 2
+    a.sym.cmdsize = ffi.sizeof(a.sym)
+    a.sym.symoff = ffi.offsetof(o, "sym_entry")-ofs
+    a.sym.nsyms = 1
+    a.sym.stroff = ffi.offsetof(o, "sym_entry")+ffi.sizeof(o.sym_entry)-ofs
+    a.sym.strsize = aligned(#symname+2, align)
+  end
+  o.sym_entry.type = 0xf
+  o.sym_entry.sect = 1
+  o.sym_entry.strx = 1
+  ffi.copy(o.space+1, symname)
+
+  -- Write Macho-O object file.
+  local fp = savefile(output, "wb")
+  fp:write(ffi.string(o, mach_size))
+  bcsave_tail(fp, output, s)
 end
 
 local function bcsave_obj(ctx, output, s)
