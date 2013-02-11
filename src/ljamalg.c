@@ -1,6 +1,6 @@
 /*
 ** LuaJIT core and libraries amalgamation.
-** Copyright (C) 2005-2012 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /*
