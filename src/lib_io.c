@@ -139,52 +139,48 @@ static int io_file_readnum(lua_State *L, FILE *fp)
   }
 }
 
-static int io_file_testeof(lua_State *L, FILE *fp)
+static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
 {
-  int c = getc(fp);
-  ungetc(c, fp);
-  lua_pushlstring(L, NULL, 0);
-  return (c != EOF);
+  MSize m = LUAL_BUFFERSIZE, n = 0, ok = 0;
+  char *buf;
+  for (;;) {
+    buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    if (fgets(buf+n, m-n, fp) == NULL) break;
+    n += (MSize)strlen(buf+n);
+    ok |= n;
+    if (n && buf[n-1] == '\n') { n -= chop; break; }
+    if (n >= m - 64) m += m;
+  }
+  setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+  return (int)ok;
 }
 
-static int io_file_readline(lua_State *L, FILE *fp, size_t chop)
+static void io_file_readall(lua_State *L, FILE *fp)
 {
-  luaL_Buffer b;
-  luaL_buffinit(L, &b);
-  for (;;) {
-    size_t len;
-    char *p = luaL_prepbuffer(&b);
-    if (fgets(p, LUAL_BUFFERSIZE, fp) == NULL) {  /* EOF? */
-      luaL_pushresult(&b);
-      return (strV(L->top-1)->len > 0);  /* Anything read? */
-    }
-    len = strlen(p);
-    if (len == 0 || p[len-1] != '\n') {  /* Partial line? */
-      luaL_addsize(&b, len);
-    } else {
-      luaL_addsize(&b, len - chop);  /* Keep or remove EOL. */
-      luaL_pushresult(&b);
-      return 1;  /* Got at least an EOL. */
+  MSize m, n;
+  for (m = LUAL_BUFFERSIZE, n = 0; ; m += m) {
+    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    n += (MSize)fread(buf+n, 1, m-n, fp);
+    if (n != m) {
+      setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+      return;
     }
   }
 }
 
-static int io_file_readchars(lua_State *L, FILE *fp, size_t n)
+static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
 {
-  size_t rlen;  /* how much to read */
-  size_t nr;  /* number of chars actually read */
-  luaL_Buffer b;
-  luaL_buffinit(L, &b);
-  rlen = LUAL_BUFFERSIZE;  /* try to read that much each time */
-  do {
-    char *p = luaL_prepbuffer(&b);
-    if (rlen > n) rlen = n;  /* cannot read more than asked */
-    nr = fread(p, 1, rlen, fp);
-    luaL_addsize(&b, nr);
-    n -= nr;  /* still have to read `n' chars */
-  } while (n > 0 && nr == rlen);  /* until end of count or eof */
-  luaL_pushresult(&b);  /* close buffer */
-  return (n == 0 || strV(L->top-1)->len > 0);
+  if (m) {
+    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    MSize n = (MSize)fread(buf, 1, m, fp);
+    setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+    return (n > 0 || m == 0);
+  } else {
+    int c = getc(fp);
+    ungetc(c, fp);
+    setstrV(L, L->top++, &G(L)->strempty);
+    return (c != EOF);
+  }
 }
 
 static int io_file_read(lua_State *L, FILE *fp, int start)
@@ -208,12 +204,11 @@ static int io_file_read(lua_State *L, FILE *fp, int start)
 	else if ((p[1] & ~0x20) == 'L')
 	  ok = io_file_readline(L, fp, (p[1] == 'l'));
 	else if (p[1] == 'a')
-	  io_file_readchars(L, fp, ~((size_t)0));
+	  io_file_readall(L, fp);
 	else
 	  lj_err_arg(L, n+1, LJ_ERR_INVFMT);
       } else if (tvisnumber(L->base+n)) {
-	size_t len = (size_t)lj_lib_checkint(L, n+1);
-	ok = len ? io_file_readchars(L, fp, len) : io_file_testeof(L, fp);
+	ok = io_file_readlen(L, fp, (MSize)lj_lib_checkint(L, n+1));
       } else {
 	lj_err_arg(L, n+1, LJ_ERR_INVOPT);
       }
