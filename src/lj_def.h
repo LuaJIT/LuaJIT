@@ -273,7 +273,7 @@ uint64_t _byteswap_uint64(uint64_t);
 
 #if defined(_M_PPC) && defined(LUAJIT_NO_UNALIGNED)
 /*
-** Replacement for unaligned loads on XBox 360. Disabled by default since it's
+** Replacement for unaligned loads on Xbox 360. Disabled by default since it's
 ** usually more costly than the occasional stall when crossing a cache-line.
 */
 static LJ_AINLINE uint16_t lj_getu16(const void *v)

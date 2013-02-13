@@ -21,11 +21,11 @@
 |//         Note: a full PPC64 _LP64 port is not planned.
 |// GPR64   64 bit registers (but possibly 32 bit pointers, e.g. PS3).
 |//         Affects reg saves, stack layout, carry/overflow/dot flags etc.
-|// FRAME32 Use 32 bit frame layout, even with GPR64 (XBox 360).
+|// FRAME32 Use 32 bit frame layout, even with GPR64 (Xbox 360).
 |// TOC     Need table of contents (64 bit or 32 bit variant, e.g. PS3).
 |//         Function pointers are really a struct: code, TOC, env (optional).
 |// TOCENV  Function pointers have an environment pointer, too (not on PS3).
-|// PPE     Power Processor Element of Cell (PS3) or Xenon (XBox 360).
+|// PPE     Power Processor Element of Cell (PS3) or Xenon (Xbox 360).
 |//         Must avoid (slow) micro-coded instructions.
 |
 |.if P64

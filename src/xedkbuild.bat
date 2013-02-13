@@ -1,4 +1,4 @@
-@rem Script to build LuaJIT with the XBox 360 SDK.
+@rem Script to build LuaJIT with the Xbox 360 SDK.
 @rem Donated to the public domain.
 @rem
 @rem Open a "Visual Studio .NET Command Prompt" (32 bit host compiler)
@@ -77,7 +77,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 
 @del *.obj *.manifest minilua.exe buildvm.exe
 @echo.
-@echo === Successfully built LuaJIT for XBox 360 ===
+@echo === Successfully built LuaJIT for Xbox 360 ===
 
 @goto :END
 :BAD
@@ -88,5 +88,5 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @goto :END
 :FAIL
 @echo To run this script you must open a "Visual Studio .NET Command Prompt"
-@echo (32 bit host compiler). The XBox 360 SDK must be installed, too.
+@echo (32 bit host compiler). The Xbox 360 SDK must be installed, too.
 :END
