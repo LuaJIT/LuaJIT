@@ -551,7 +551,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       if (ra_hasreg(dest)) {
 	ra_free(as, dest);
 	ra_modified(as, dest);
-	emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
+	emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSD : XO_MOVSS,
 		  dest, RID_ESP, ofs);
       }
       if ((ci->flags & CCI_CASTU64)) {
@@ -662,8 +662,7 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
   asm_guardcc(as, CC_NE);
   emit_rr(as, XO_UCOMISD, left, tmp);
   emit_rr(as, XO_CVTSI2SD, tmp, dest);
-  if (!(as->flags & JIT_F_SPLIT_XMM))
-    emit_rr(as, XO_XORPS, tmp, tmp);  /* Avoid partial register stall. */
+  emit_rr(as, XO_XORPS, tmp, tmp);  /* Avoid partial register stall. */
   emit_rr(as, XO_CVTTSD2SI, dest, left);
   /* Can't fuse since left is needed twice. */
 }
@@ -719,8 +718,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       emit_mrm(as, irt_isnum(ir->t) ? XO_CVTSI2SD : XO_CVTSI2SS,
 	       dest|((LJ_64 && (st64 || st == IRT_U32)) ? REX_64 : 0), left);
     }
-    if (!(as->flags & JIT_F_SPLIT_XMM))
-      emit_rr(as, XO_XORPS, dest, dest);  /* Avoid partial register stall. */
+    emit_rr(as, XO_XORPS, dest, dest);  /* Avoid partial register stall. */
   } else if (stfp) {  /* FP to integer conversion. */
     if (irt_isguard(ir->t)) {
       /* Checked conversions are only supported from number to int. */
@@ -824,8 +822,7 @@ static void asm_conv_fp_int64(ASMState *as, IRIns *ir)
   if (ra_hasreg(dest)) {
     ra_free(as, dest);
     ra_modified(as, dest);
-    emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS,
-	      dest, RID_ESP, ofs);
+    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSD : XO_MOVSS, dest, RID_ESP, ofs);
   }
   emit_rmro(as, irt_isnum(ir->t) ? XO_FSTPq : XO_FSTPd,
 	    irt_isnum(ir->t) ? XOg_FSTPq : XOg_FSTPd, RID_ESP, ofs);
@@ -1262,7 +1259,7 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   case IRT_U8: xo = XO_MOVZXb; break;
   case IRT_I16: xo = XO_MOVSXw; break;
   case IRT_U16: xo = XO_MOVZXw; break;
-  case IRT_NUM: xo = XMM_MOVRM(as); break;
+  case IRT_NUM: xo = XO_MOVSD; break;
   case IRT_FLOAT: xo = XO_MOVSS; break;
   default:
     if (LJ_64 && irt_is64(ir->t))
@@ -1376,7 +1373,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
     Reg dest = ra_dest(as, ir, allow);
     asm_fuseahuref(as, ir->op1, RSET_GPR);
-    emit_mrm(as, dest < RID_MAX_GPR ? XO_MOV : XMM_MOVRM(as), dest, RID_MRM);
+    emit_mrm(as, dest < RID_MAX_GPR ? XO_MOV : XO_MOVSD, dest, RID_MRM);
   } else {
     asm_fuseahuref(as, ir->op1, RSET_GPR);
   }
@@ -1442,7 +1439,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
     Reg left = ra_scratch(as, RSET_FPR);
     asm_tointg(as, ir, left);  /* Frees dest reg. Do this before base alloc. */
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
-    emit_rmro(as, XMM_MOVRM(as), left, base, ofs);
+    emit_rmro(as, XO_MOVSD, left, base, ofs);
     t.irt = IRT_NUM;  /* Continue with a regular number type check. */
 #if LJ_64
   } else if (irt_islightud(t)) {
@@ -1461,10 +1458,8 @@ static void asm_sload(ASMState *as, IRIns *ir)
     if ((ir->op2 & IRSLOAD_CONVERT)) {
       t.irt = irt_isint(t) ? IRT_NUM : IRT_INT;  /* Check for original type. */
       emit_rmro(as, irt_isint(t) ? XO_CVTSI2SD : XO_CVTSD2SI, dest, base, ofs);
-    } else if (irt_isnum(t)) {
-      emit_rmro(as, XMM_MOVRM(as), dest, base, ofs);
     } else {
-      emit_rmro(as, XO_MOV, dest, base, ofs);
+      emit_rmro(as, irt_isnum(t) ? XO_MOVSD : XO_MOV, dest, base, ofs);
     }
   } else {
     if (!(ir->op2 & IRSLOAD_TYPECHECK))
@@ -1696,7 +1691,7 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
     if (ra_hasreg(dest)) {
       ra_free(as, dest);
       ra_modified(as, dest);
-      emit_rmro(as, XMM_MOVRM(as), dest, RID_ESP, ofs);
+      emit_rmro(as, XO_MOVSD, dest, RID_ESP, ofs);
     }
     emit_rmro(as, XO_FSTPq, XOg_FSTPq, RID_ESP, ofs);
     switch (fpm) {  /* st0 = lj_vm_*(st0) */

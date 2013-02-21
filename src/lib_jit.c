@@ -549,8 +549,6 @@ static uint32_t jit_cpudetect(lua_State *L)
 	flags |= JIT_F_LEA_AGU;
     } else if (vendor[2] == 0x444d4163) {  /* AMD. */
       uint32_t fam = (features[0] & 0x0ff00f00);
-      if (fam == 0x00000f00)  /* K8. */
-	flags |= JIT_F_SPLIT_XMM;
       if (fam >= 0x00000f00)  /* K8, K10. */
 	flags |= JIT_F_PREFER_IMUL;
     }
