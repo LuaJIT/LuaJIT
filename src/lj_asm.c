@@ -1730,7 +1730,7 @@ static void asm_setup_regsp(ASMState *as)
       break;
     case IR_FPMATH:
 #if LJ_TARGET_X86ORX64
-      if (ir->op2 == IRFPM_EXP2) {  /* May be joined to lj_vm_pow_sse. */
+      if (ir->op2 == IRFPM_EXP2) {  /* May be joined to pow. */
 	ir->prev = REGSP_HINT(RID_XMM0);
 #if !LJ_64
 	if (as->evenspill < 4)  /* Leave room for 16 byte scratch area. */

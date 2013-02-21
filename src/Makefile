@@ -42,13 +42,10 @@ CCOPT= -O2 -fomit-frame-pointer
 #
 # Target-specific compiler options:
 #
-# x86 only: it's recommended to compile at least for i686. Better yet,
-# compile for an architecture that has SSE2, too (-msse -msse2).
-#
 # x86/x64 only: For GCC 4.2 or higher and if you don't intend to distribute
 # the binaries to a different machine you could also use: -march=native
 #
-CCOPT_x86= -march=i686
+CCOPT_x86= -march=i686 -msse -msse2 -mfpmath=sse
 CCOPT_x64=
 CCOPT_arm=
 CCOPT_ppc=
@@ -394,11 +391,6 @@ DASM_AFLAGS+= -D VER=$(subst LJ_ARCH_VERSION_,,$(filter LJ_ARCH_VERSION_%,$(subs
 ifeq (Windows,$(TARGET_SYS))
   DASM_AFLAGS+= -D WIN
 endif
-ifeq (x86,$(TARGET_LJARCH))
-  ifneq (,$(findstring __SSE2__ 1,$(TARGET_TESTARCH)))
-    DASM_AFLAGS+= -D SSE
-  endif
-else
 ifeq (x64,$(TARGET_LJARCH))
   DASM_ARCH= x86
 else
@@ -420,7 +412,6 @@ ifeq (ppc,$(TARGET_LJARCH))
   ifeq (PS3,$(TARGET_SYS))
     DASM_AFLAGS+= -D PPE -D TOC
   endif
-endif
 endif
 endif
 endif
