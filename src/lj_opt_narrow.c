@@ -496,8 +496,7 @@ TRef LJ_FASTCALL lj_opt_narrow_cindex(jit_State *J, TRef tr)
 {
   lua_assert(tref_isnumber(tr));
   if (tref_isnum(tr))
-    return emitir(IRT(IR_CONV, IRT_INTP), tr,
-		  (IRT_INTP<<5)|IRT_NUM|IRCONV_TRUNC|IRCONV_ANY);
+    return emitir(IRT(IR_CONV, IRT_INTP), tr, (IRT_INTP<<5)|IRT_NUM|IRCONV_ANY);
   /* Undefined overflow semantics allow stripping of ADDOV, SUBOV and MULOV. */
   return narrow_stripov(J, tr, IR_MULOV,
 			LJ_64 ? ((IRT_INTP<<5)|IRT_INT|IRCONV_SEXT) :

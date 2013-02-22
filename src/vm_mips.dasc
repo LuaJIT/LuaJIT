@@ -1188,7 +1188,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   mtc1 TMP0, FARG1
   |  beqz AT, ->fff_fallback
   |.  lw PC, FRAME_PC(BASE)
-  |   cvt.w.d FRET1, FARG2
+  |   trunc.w.d FRET1, FARG2
   |  cvt.d.w FARG1, FARG1
   |   lw TMP0, TAB:CARG1->asize
   |   lw TMP1, TAB:CARG1->array
@@ -1522,7 +1522,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  nop
   |
   |.ffunc_nn math_ldexp
-  |  cvt.w.d FARG2, FARG2
+  |  trunc.w.d FARG2, FARG2
   |  load_got ldexp
   |  mfc1 CARG3, FARG2
   |  call_extern
@@ -1622,7 +1622,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  li CARG3, 1
-  |   cvt.w.d FARG1, FARG1
+  |   trunc.w.d FARG1, FARG1
   |  addiu CARG2, sp, ARG5_OFS
   |  sltiu AT, TMP0, 256
   |   mfc1 TMP0, FARG1
@@ -1652,7 +1652,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    ldc1 f2, 8(BASE)
   |  beqz AT, >1
   |.  li CARG4, -1
-  |   cvt.w.d f0, f0
+  |   trunc.w.d f0, f0
   |  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  mfc1 CARG4, f0
@@ -1660,7 +1660,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sltiu AT, CARG2, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  li AT, LJ_TSTR
-  |  cvt.w.d f2, f2
+  |  trunc.w.d f2, f2
   |  bne TMP0, AT, ->fff_fallback
   |.  lw CARG2, STR:CARG1->len
   |  mfc1 CARG3, f2
@@ -1700,7 +1700,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  or AT, AT, TMP0
   |  bnez AT, ->fff_fallback
   |.  sltiu AT, CARG4, LJ_TISNUM
-  |   cvt.w.d f0, f0
+  |   trunc.w.d f0, f0
   |  beqz AT, ->fff_fallback
   |.  lw TMP0, STR:CARG1->len
   |   mfc1 CARG3, f0

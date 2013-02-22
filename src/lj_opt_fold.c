@@ -647,27 +647,22 @@ LJFOLD(CONV KNUM IRCONV_INT_NUM)
 LJFOLDF(kfold_conv_knum_int_num)
 {
   lua_Number n = knumleft;
-  if (!(fins->op2 & IRCONV_TRUNC)) {
-    int32_t k = lj_num2int(n);
-    if (irt_isguard(fins->t) && n != (lua_Number)k) {
-      /* We're about to create a guard which always fails, like CONV +1.5.
-      ** Some pathological loops cause this during LICM, e.g.:
-      **   local x,k,t = 0,1.5,{1,[1.5]=2}
-      **   for i=1,200 do x = x+ t[k]; k = k == 1 and 1.5 or 1 end
-      **   assert(x == 300)
-      */
-      return FAILFOLD;
-    }
-    return INTFOLD(k);
-  } else {
-    return INTFOLD((int32_t)n);
+  int32_t k = lj_num2int(n);
+  if (irt_isguard(fins->t) && n != (lua_Number)k) {
+    /* We're about to create a guard which always fails, like CONV +1.5.
+    ** Some pathological loops cause this during LICM, e.g.:
+    **   local x,k,t = 0,1.5,{1,[1.5]=2}
+    **   for i=1,200 do x = x+ t[k]; k = k == 1 and 1.5 or 1 end
+    **   assert(x == 300)
+    */
+    return FAILFOLD;
   }
+  return INTFOLD(k);
 }
 
 LJFOLD(CONV KNUM IRCONV_U32_NUM)
 LJFOLDF(kfold_conv_knum_u32_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
 #ifdef _MSC_VER
   {  /* Workaround for MSVC bug. */
     volatile uint32_t u = (uint32_t)knumleft;
@@ -681,14 +676,12 @@ LJFOLDF(kfold_conv_knum_u32_num)
 LJFOLD(CONV KNUM IRCONV_I64_NUM)
 LJFOLDF(kfold_conv_knum_i64_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
   return INT64FOLD((uint64_t)(int64_t)knumleft);
 }
 
 LJFOLD(CONV KNUM IRCONV_U64_NUM)
 LJFOLDF(kfold_conv_knum_u64_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
   return INT64FOLD(lj_num2u64(knumleft));
 }
 

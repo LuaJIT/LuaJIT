@@ -726,9 +726,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      x86Op op = st == IRT_NUM ?
-		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSD2SI : XO_CVTSD2SI) :
-		 ((ir->op2 & IRCONV_TRUNC) ? XO_CVTTSS2SI : XO_CVTSS2SI);
+      x86Op op = st == IRT_NUM ? XO_CVTTSD2SI : XO_CVTTSS2SI;
       if (LJ_64 ? irt_isu64(ir->t) : irt_isu32(ir->t)) {
 	/* LJ_64: For inputs >= 2^63 add -2^64, convert again. */
 	/* LJ_32: For inputs >= 2^31 add -2^31, convert again and add 2^31. */
@@ -850,7 +848,6 @@ static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
   Reg lo, hi;
   lua_assert(st == IRT_NUM || st == IRT_FLOAT);
   lua_assert(dt == IRT_I64 || dt == IRT_U64);
-  lua_assert(((ir-1)->op2 & IRCONV_TRUNC));
   hi = ra_dest(as, ir, RSET_GPR);
   lo = ra_dest(as, ir-1, rset_exclude(RSET_GPR, hi));
   if (ra_used(ir-1)) emit_rmro(as, XO_MOV, lo, RID_ESP, 0);
@@ -1457,7 +1454,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
     lua_assert(irt_isnum(t) || irt_isint(t) || irt_isaddr(t));
     if ((ir->op2 & IRSLOAD_CONVERT)) {
       t.irt = irt_isint(t) ? IRT_NUM : IRT_INT;  /* Check for original type. */
-      emit_rmro(as, irt_isint(t) ? XO_CVTSI2SD : XO_CVTSD2SI, dest, base, ofs);
+      emit_rmro(as, irt_isint(t) ? XO_CVTSI2SD : XO_CVTTSD2SI, dest, base, ofs);
     } else {
       emit_rmro(as, irt_isnum(t) ? XO_MOVSD : XO_MOV, dest, base, ofs);
     }

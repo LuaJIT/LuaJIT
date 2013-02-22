@@ -269,8 +269,7 @@ local litname = {
   ["CONV  "] = setmetatable({}, { __index = function(t, mode)
     local s = irtype[band(mode, 31)]
     s = irtype[band(shr(mode, 5), 31)].."."..s
-    if band(mode, 0x400) ~= 0 then s = s.." trunc"
-    elseif band(mode, 0x800) ~= 0 then s = s.." sext" end
+    if band(mode, 0x800) ~= 0 then s = s.." sext" end
     local c = shr(mode, 14)
     if c == 2 then s = s.." index" elseif c == 3 then s = s.." check" end
     t[mode] = s

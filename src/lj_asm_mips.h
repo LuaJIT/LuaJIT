@@ -1000,7 +1000,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
       if (irt_isint(t)) {
 	Reg tmp = ra_scratch(as, RSET_FPR);
 	emit_tg(as, MIPSI_MFC1, dest, tmp);
-	emit_fg(as, MIPSI_CVT_W_D, tmp, tmp);
+	emit_fg(as, MIPSI_TRUNC_W_D, tmp, tmp);
 	dest = tmp;
 	t.irt = IRT_NUM;  /* Check for original type. */
       } else {

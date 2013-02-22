@@ -810,11 +810,7 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 #endif
 }
 
-#if LJ_TARGET_X86 && !defined(__SSE2__)
-#define lj_num2int(n)   lj_num2bit((n))
-#else
 #define lj_num2int(n)   ((int32_t)(n))
-#endif
 
 static LJ_AINLINE uint64_t lj_num2u64(lua_Number n)
 {

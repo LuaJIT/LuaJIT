@@ -227,7 +227,6 @@ IRFLDEF(FLENUM)
 #define IRCONV_DSH		5
 #define IRCONV_NUM_INT		((IRT_NUM<<IRCONV_DSH)|IRT_INT)
 #define IRCONV_INT_NUM		((IRT_INT<<IRCONV_DSH)|IRT_NUM)
-#define IRCONV_TRUNC		0x0400	/* Truncate number to integer. */
 #define IRCONV_SEXT		0x0800	/* Sign-extend integer to integer. */
 #define IRCONV_MODEMASK		0x0fff
 #define IRCONV_CONVMASK		0xf000

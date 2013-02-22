@@ -446,7 +446,7 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
     /* fallthrough */
   case CCX(I, F):
     if (dt == IRT_CDATA || st == IRT_CDATA) goto err_nyi;
-    sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, IRCONV_TRUNC|IRCONV_ANY);
+    sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, st, IRCONV_ANY);
     goto xstore;
   case CCX(I, P):
   case CCX(I, A):
@@ -522,7 +522,7 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
     if (st == IRT_CDATA) goto err_nyi;
     /* The signed conversion is cheaper. x64 really has 47 bit pointers. */
     sp = emitconv(sp, (LJ_64 && dsize == 8) ? IRT_I64 : IRT_U32,
-		  st, IRCONV_TRUNC|IRCONV_ANY);
+		  st, IRCONV_ANY);
     goto xstore;
 
   /* Destination is an array. */
@@ -1229,7 +1229,7 @@ static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
     for (i = 0; i < 2; i++) {
       IRType st = tref_type(sp[i]);
       if (st == IRT_NUM || st == IRT_FLOAT)
-	sp[i] = emitconv(sp[i], dt, st, IRCONV_TRUNC|IRCONV_ANY);
+	sp[i] = emitconv(sp[i], dt, st, IRCONV_ANY);
       else if (!(st == IRT_I64 || st == IRT_U64))
 	sp[i] = emitconv(sp[i], dt, IRT_INT,
 			 (s[i]->info & CTF_UNSIGNED) ? 0 : IRCONV_SEXT);
@@ -1297,15 +1297,14 @@ static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)
     CTypeID id;
 #if LJ_64
     if (t == IRT_NUM || t == IRT_FLOAT)
-      tr = emitconv(tr, IRT_INTP, t, IRCONV_TRUNC|IRCONV_ANY);
+      tr = emitconv(tr, IRT_INTP, t, IRCONV_ANY);
     else if (!(t == IRT_I64 || t == IRT_U64))
       tr = emitconv(tr, IRT_INTP, IRT_INT,
 		    ((t - IRT_I8) & 1) ? 0 : IRCONV_SEXT);
 #else
     if (!tref_typerange(sp[1], IRT_I8, IRT_U32)) {
       tr = emitconv(tr, IRT_INTP, t,
-		    (t == IRT_NUM || t == IRT_FLOAT) ?
-		    IRCONV_TRUNC|IRCONV_ANY : 0);
+		    (t == IRT_NUM || t == IRT_FLOAT) ? IRCONV_ANY : 0);
     }
 #endif
     tr = emitir(IRT(IR_MUL, IRT_INTP), tr, lj_ir_kintp(J, sz));

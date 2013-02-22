@@ -1622,7 +1622,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movsd xmm0, qword [BASE+8]
   |  sseconst_1 xmm1, RBa
   |  addsd xmm0, xmm1
-  |  cvtsd2si RD, xmm0
+  |  cvttsd2si RD, xmm0
   |  movsd qword [BASE-8], xmm0
   |.endif
   |  mov TAB:RB, [BASE]
@@ -1975,7 +1975,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movsd xmm0, qword [BASE]
   |  call ->vm_ .. func .. _sse
   |.if DUALNUM
-  |  cvtsd2si RB, xmm0
+  |  cvttsd2si RB, xmm0
   |  cmp RB, 0x80000000
   |  jne ->fff_resi
   |  cvtsi2sd xmm1, RB
@@ -2968,7 +2968,7 @@ static void build_subroutines(BuildCtx *ctx)
   |// Args in xmm0/xmm1. Ret in xmm0. xmm0-xmm2 and RC (eax) modified.
   |// Needs 16 byte scratch area for x86. Also called from JIT code.
   |->vm_pow_sse:
-  |  cvtsd2si eax, xmm1
+  |  cvttsd2si eax, xmm1
   |  cvtsi2sd xmm2, eax
   |  ucomisd xmm1, xmm2
   |  jnz >8				// Branch for FP exponents.
@@ -4376,7 +4376,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Convert number to int and back and compare.
     |  checknum RC, >5
     |  movsd xmm0, qword [BASE+RC*8]
-    |  cvtsd2si RC, xmm0
+    |  cvttsd2si RC, xmm0
     |  cvtsi2sd xmm1, RC
     |  ucomisd xmm0, xmm1
     |  jne ->vmeta_tgetv		// Generic numeric key? Use fallback.
@@ -4516,7 +4516,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Convert number to int and back and compare.
     |  checknum RC, >5
     |  movsd xmm0, qword [BASE+RC*8]
-    |  cvtsd2si RC, xmm0
+    |  cvttsd2si RC, xmm0
     |  cvtsi2sd xmm1, RC
     |  ucomisd xmm0, xmm1
     |  jne ->vmeta_tsetv		// Generic numeric key? Use fallback.
