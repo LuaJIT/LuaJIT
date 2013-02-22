@@ -558,6 +558,10 @@ amalg:
 clean:
 	$(HOST_RM) $(ALL_RM)
 
+libbc:
+	./$(LUAJIT_T) host/genlibbc.lua $(LJLIB_C) >host/buildvm_libbc.h
+	$(MAKE) all
+
 depend:
 	@for file in $(ALL_HDRGEN); do \
 	  test -f $$file || touch $$file; \
@@ -572,7 +576,7 @@ depend:
 	  test -s $$file || $(HOST_RM) $$file; \
 	  done
 
-.PHONY: default all amalg clean depend
+.PHONY: default all amalg clean libbc depend
 
 ##############################################################################
 # Rules for generated files.

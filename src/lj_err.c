@@ -587,7 +587,7 @@ LJ_NOINLINE void lj_err_lex(lua_State *L, GCstr *src, const char *tok,
 {
   char buff[LUA_IDSIZE];
   const char *msg;
-  lj_debug_shortname(buff, src);
+  lj_debug_shortname(buff, src, line);
   msg = lj_str_pushvf(L, err2msg(em), argp);
   msg = lj_str_pushf(L, "%s:%d: %s", buff, line, msg);
   if (tok)

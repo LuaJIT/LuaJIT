@@ -18,6 +18,8 @@
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_lex.h"
+#include "lj_bcdump.h"
 #include "lj_lib.h"
 
 /* -- Library initialization ---------------------------------------------- */
@@ -41,6 +43,28 @@ static GCtab *lib_create_table(lua_State *L, const char *libname, int hsize)
     lua_createtable(L, 0, hsize);
   }
   return tabV(L->top-1);
+}
+
+static const uint8_t *lib_read_lfunc(lua_State *L, const uint8_t *p, GCtab *tab)
+{
+  int len = *p++;
+  GCstr *name = lj_str_new(L, (const char *)p, len);
+  LexState ls;
+  GCproto *pt;
+  GCfunc *fn;
+  memset(&ls, 0, sizeof(ls));
+  ls.L = L;
+  ls.p = (const char *)(p+len);
+  ls.n = ~(MSize)0;
+  ls.current = -1;
+  ls.level = (BCDUMP_F_STRIP|(LJ_BE*BCDUMP_F_BE));
+  ls.chunkname = name;
+  pt = lj_bcread_proto(&ls);
+  pt->firstline = ~(BCLine)0;
+  fn = lj_func_newL_empty(L, pt, tabref(L->env));
+  /* NOBARRIER: See below for common barrier. */
+  setfuncV(L, lj_tab_setstr(L, tab, name), fn);
+  return (const uint8_t *)ls.p;
 }
 
 void lj_lib_register(lua_State *L, const char *libname,
@@ -87,6 +111,9 @@ void lj_lib_register(lua_State *L, const char *libname,
       ofn = fn;
     } else {
       switch (tag | len) {
+      case LIBINIT_LUA:
+	p = lib_read_lfunc(L, p, tab);
+	break;
       case LIBINIT_SET:
 	L->top -= 2;
 	if (tvisstr(L->top+1) && strV(L->top+1)->len == 0)

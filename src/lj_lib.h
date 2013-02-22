@@ -77,6 +77,7 @@ static LJ_AINLINE void lj_lib_pushcc(lua_State *L, lua_CFunction f,
 #define LJLIB_CF(name)		static int lj_cf_##name(lua_State *L)
 #define LJLIB_ASM(name)		static int lj_ffh_##name(lua_State *L)
 #define LJLIB_ASM_(name)
+#define LJLIB_LUA(name)
 #define LJLIB_SET(name)
 #define LJLIB_PUSH(arg)
 #define LJLIB_REC(handler)
@@ -96,7 +97,8 @@ LJ_FUNC void lj_lib_register(lua_State *L, const char *libname,
 #define LIBINIT_ASM	0x40
 #define LIBINIT_ASM_	0x80
 #define LIBINIT_STRING	0xc0
-#define LIBINIT_MAXSTR	0x39
+#define LIBINIT_MAXSTR	0x38
+#define LIBINIT_LUA	0xf9
 #define LIBINIT_SET	0xfa
 #define LIBINIT_NUMBER	0xfb
 #define LIBINIT_COPY	0xfc

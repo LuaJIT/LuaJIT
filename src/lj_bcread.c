@@ -326,25 +326,13 @@ static void bcread_uv(LexState *ls, GCproto *pt, MSize sizeuv)
 }
 
 /* Read a prototype. */
-static GCproto *bcread_proto(LexState *ls)
+GCproto *lj_bcread_proto(LexState *ls)
 {
   GCproto *pt;
   MSize framesize, numparams, flags, sizeuv, sizekgc, sizekn, sizebc, sizept;
   MSize ofsk, ofsuv, ofsdbg;
   MSize sizedbg = 0;
   BCLine firstline = 0, numline = 0;
-  MSize len, startn;
-
-  /* Read length. */
-  if (ls->n > 0 && ls->p[0] == 0) {  /* Shortcut EOF. */
-    ls->n--; ls->p++;
-    return NULL;
-  }
-  bcread_want(ls, 5);
-  len = bcread_uleb128(ls);
-  if (!len) return NULL;  /* EOF */
-  bcread_need(ls, len);
-  startn = ls->n;
 
   /* Read prototype header. */
   flags = bcread_byte(ls);
@@ -413,9 +401,6 @@ static GCproto *bcread_proto(LexState *ls)
     setmref(pt->uvinfo, NULL);
     setmref(pt->varinfo, NULL);
   }
-
-  if (len != startn - ls->n)
-    bcread_error(ls, LJ_ERR_BCBAD);
   return pt;
 }
 
@@ -462,8 +447,21 @@ GCproto *lj_bcread(LexState *ls)
   if (!bcread_header(ls))
     bcread_error(ls, LJ_ERR_BCFMT);
   for (;;) {  /* Process all prototypes in the bytecode dump. */
-    GCproto *pt = bcread_proto(ls);
-    if (!pt) break;
+    GCproto *pt;
+    MSize len, startn;
+    /* Read length. */
+    if (ls->n > 0 && ls->p[0] == 0) {  /* Shortcut EOF. */
+      ls->n--; ls->p++;
+      break;
+    }
+    bcread_want(ls, 5);
+    len = bcread_uleb128(ls);
+    if (!len) break;  /* EOF */
+    bcread_need(ls, len);
+    startn = ls->n;
+    pt = lj_bcread_proto(ls);
+    if (len != startn - ls->n)
+      bcread_error(ls, LJ_ERR_BCBAD);
     setprotoV(L, L->top, pt);
     incr_top(L);
   }

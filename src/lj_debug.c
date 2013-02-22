@@ -321,7 +321,7 @@ const char *lj_debug_funcname(lua_State *L, TValue *frame, const char **name)
 /* -- Source code locations ----------------------------------------------- */
 
 /* Generate shortened source name. */
-void lj_debug_shortname(char *out, GCstr *str)
+void lj_debug_shortname(char *out, GCstr *str, BCLine line)
 {
   const char *src = strdata(str);
   if (*src == '=') {
@@ -335,11 +335,11 @@ void lj_debug_shortname(char *out, GCstr *str)
       *out++ = '.'; *out++ = '.'; *out++ = '.';
     }
     strcpy(out, src);
-  } else {  /* Output [string "string"]. */
+  } else {  /* Output [string "string"] or [builtin:name]. */
     size_t len;  /* Length, up to first control char. */
     for (len = 0; len < LUA_IDSIZE-12; len++)
       if (((const unsigned char *)src)[len] < ' ') break;
-    strcpy(out, "[string \""); out += 9;
+    strcpy(out, line == ~(BCLine)0 ? "[builtin:" : "[string \""); out += 9;
     if (src[len] != '\0') {  /* Must truncate? */
       if (len > LUA_IDSIZE-15) len = LUA_IDSIZE-15;
       strncpy(out, src, len); out += len;
@@ -347,7 +347,7 @@ void lj_debug_shortname(char *out, GCstr *str)
     } else {
       strcpy(out, src); out += len;
     }
-    strcpy(out, "\"]");
+    strcpy(out, line == ~(BCLine)0 ? "]" : "\"]");
   }
 }
 
@@ -360,8 +360,9 @@ void lj_debug_addloc(lua_State *L, const char *msg,
     if (isluafunc(fn)) {
       BCLine line = debug_frameline(L, fn, nextframe);
       if (line >= 0) {
+	GCproto *pt = funcproto(fn);
 	char buf[LUA_IDSIZE];
-	lj_debug_shortname(buf, proto_chunkname(funcproto(fn)));
+	lj_debug_shortname(buf, proto_chunkname(pt), pt->firstline);
 	lj_str_pushf(L, "%s:%d: %s", buf, line, msg);
 	return;
       }
@@ -377,7 +378,9 @@ void lj_debug_pushloc(lua_State *L, GCproto *pt, BCPos pc)
   const char *s = strdata(name);
   MSize i, len = name->len;
   BCLine line = lj_debug_line(pt, pc);
-  if (*s == '@') {
+  if (pt->firstline == ~(BCLine)0) {
+    lj_str_pushf(L, "builtin:%s", s);
+  } else if (*s == '@') {
     s++; len--;
     for (i = len; i > 0; i--)
       if (s[i] == '/' || s[i] == '\\') {
@@ -453,7 +456,7 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
 	BCLine firstline = pt->firstline;
 	GCstr *name = proto_chunkname(pt);
 	ar->source = strdata(name);
-	lj_debug_shortname(ar->short_src, name);
+	lj_debug_shortname(ar->short_src, name, pt->firstline);
 	ar->linedefined = (int)firstline;
 	ar->lastlinedefined = (int)(firstline + pt->numline);
 	ar->what = firstline ? "Lua" : "main";

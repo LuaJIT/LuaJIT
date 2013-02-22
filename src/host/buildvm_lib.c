@@ -6,6 +6,7 @@
 #include "buildvm.h"
 #include "lj_obj.h"
 #include "lj_lib.h"
+#include "buildvm_libbc.h"
 
 /* Context for library definitions. */
 static uint8_t obuf[8192];
@@ -151,6 +152,55 @@ static void libdef_func(BuildCtx *ctx, char *p, int arg)
   regfunc = REGFUNC_OK;
 }
 
+static uint32_t libdef_uleb128(uint8_t **pp)
+{
+  uint8_t *p = *pp;
+  uint32_t v = *p++;
+  if (v >= 0x80) {
+    int sh = 0; v &= 0x7f;
+    do { v |= ((*p & 0x7f) << (sh += 7)); } while (*p++ >= 0x80);
+  }
+  *pp = p;
+  return v;
+}
+
+static void libdef_swapbc(uint8_t *p)
+{
+  uint32_t i, sizebc;
+  p += 4;
+  libdef_uleb128(&p);
+  libdef_uleb128(&p);
+  sizebc = libdef_uleb128(&p);
+  for (i = 0; i < sizebc; i++, p += 4) {
+    uint8_t t = p[0]; p[0] = p[3]; p[3] = t;
+    t = p[1]; p[1] = p[2]; p[2] = t;
+  }
+}
+
+static void libdef_lua(BuildCtx *ctx, char *p, int arg)
+{
+  UNUSED(arg);
+  if (ctx->mode == BUILD_libdef) {
+    int i;
+    for (i = 0; libbc_map[i].name != NULL; i++) {
+      if (!strcmp(libbc_map[i].name, p)) {
+	int ofs = libbc_map[i].ofs;
+	int len = libbc_map[i+1].ofs - ofs;
+	obuf[2]++;  /* Bump hash table size. */
+	*optr++ = LIBINIT_LUA;
+	libdef_name(p, 0);
+	memcpy(optr, libbc_code + ofs, len);
+	if (libbc_endian != LJ_BE)
+	  libdef_swapbc(optr);
+	optr += len;
+	return;
+      }
+    }
+    fprintf(stderr, "Error: missing libbc definition for %s\n", p);
+    exit(1);
+  }
+}
+
 static uint32_t find_rec(char *name)
 {
   char *p = (char *)obuf;
@@ -277,6 +327,7 @@ static const LibDefHandler libdef_handlers[] = {
   { "CF(",	")",		libdef_func,		LIBINIT_CF },
   { "ASM(",	")",		libdef_func,		LIBINIT_ASM },
   { "ASM_(",	")",		libdef_func,		LIBINIT_ASM_ },
+  { "LUA(",	")",		libdef_lua,		0 },
   { "REC(",	")",		libdef_rec,		0 },
   { "PUSH(",	")",		libdef_push,		0 },
   { "SET(",	")",		libdef_set,		0 },
