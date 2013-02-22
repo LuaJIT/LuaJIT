@@ -559,7 +559,7 @@ clean:
 	$(HOST_RM) $(ALL_RM)
 
 libbc:
-	./$(LUAJIT_T) host/genlibbc.lua $(LJLIB_C) >host/buildvm_libbc.h
+	./$(LUAJIT_T) host/genlibbc.lua -o host/buildvm_libbc.h $(LJLIB_C)
 	$(MAKE) all
 
 depend:
