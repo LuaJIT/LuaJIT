@@ -1501,19 +1501,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
-  |->ff_math_deg:
-  |.if FPU
-  |  .ffunc_d math_rad
-  |  vldr d1, CFUNC:CARG3->upvalue[0]
-  |  vmul.f64 d0, d0, d1
-  |  b ->fff_resd
-  |.else
-  |  .ffunc_n math_rad
-  |  ldrd CARG34, CFUNC:CARG3->upvalue[0]
-  |  bl extern __aeabi_dmul
-  |  b ->fff_restv
-  |.endif
-  |
   |.if HFABI
   |  .ffunc math_ldexp
   |  ldr CARG4, [BASE, #4]

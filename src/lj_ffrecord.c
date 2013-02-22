@@ -528,14 +528,6 @@ static void LJ_FASTCALL recff_math_modf(jit_State *J, RecordFFData *rd)
   rd->nres = 2;
 }
 
-static void LJ_FASTCALL recff_math_degrad(jit_State *J, RecordFFData *rd)
-{
-  TRef tr = lj_ir_tonum(J, J->base[0]);
-  TRef trm = lj_ir_knum(J, numV(&J->fn->c.upvalue[0]));
-  J->base[0] = emitir(IRTN(IR_MUL), tr, trm);
-  UNUSED(rd);
-}
-
 static void LJ_FASTCALL recff_math_pow(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);

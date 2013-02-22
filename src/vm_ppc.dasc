@@ -1870,12 +1870,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
-  |->ff_math_deg:
-  |.ffunc_n math_rad
-  |  lfd FARG2, CFUNC:RB->upvalue[0]
-  |  fmul FARG1, FARG1, FARG2
-  |  b ->fff_resn
-  |
   |.if DUALNUM
   |.ffunc math_ldexp
   |  cmplwi NARGS8:RC, 16

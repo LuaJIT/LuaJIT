@@ -2030,12 +2030,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern cosh
   |  math_extern tanh
   |
-  |->ff_math_deg:
-  |.ffunc_nsse math_rad
-  |  mov CFUNC:RB, [BASE-8]
-  |  mulsd xmm0, qword CFUNC:RB->upvalue[0]
-  |  jmp ->fff_resxmm0
-  |
   |.ffunc_nn math_atan2;	fpatan;		jmp ->fff_resn
   |.ffunc_nnr math_ldexp;	fscale; fpop1;	jmp ->fff_resn
   |

@@ -1456,12 +1456,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
-  |->ff_math_deg:
-  |.ffunc_n math_rad
-  |  evldd CARG2, CFUNC:RB->upvalue[0]
-  |  efdmul CRET1, CARG1, CARG2
-  |  b ->fff_restv
-  |
   |.ffunc math_ldexp
   |  cmplwi NARGS8:RC, 16
   |   evldd CARG2, 0(BASE)

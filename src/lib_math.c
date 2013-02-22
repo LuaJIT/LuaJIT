@@ -63,11 +63,8 @@ LJLIB_ASM(math_log)		LJLIB_REC(math_log)
   return FFH_RETRY;
 }
 
-LJLIB_PUSH(57.29577951308232)
-LJLIB_ASM_(math_deg)		LJLIB_REC(math_degrad)
-
-LJLIB_PUSH(0.017453292519943295)
-LJLIB_ASM_(math_rad)		LJLIB_REC(math_degrad)
+LJLIB_LUA(math_deg) /* function(x) return x * 57.29577951308232 end */
+LJLIB_LUA(math_rad) /* function(x) return x * 0.017453292519943295 end */
 
 LJLIB_ASM(math_atan2)		LJLIB_REC(.)
 {

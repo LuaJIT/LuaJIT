@@ -1521,12 +1521,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_resn
   |.  nop
   |
-  |->ff_math_deg:
-  |.ffunc_n math_rad
-  |.  ldc1 FARG2, CFUNC:RB->upvalue[0]
-  |  b ->fff_resn
-  |.  mul.d FRET1, FARG1, FARG2
-  |
   |.ffunc_nn math_ldexp
   |  cvt.w.d FARG2, FARG2
   |  load_got ldexp
