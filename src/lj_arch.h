@@ -227,6 +227,7 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPCSPE
 
+#error "The PPC/e500 port is broken and will be abandoned with LuaJIT 2.1"
 #define LJ_ARCH_NAME		"ppcspe"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_BE

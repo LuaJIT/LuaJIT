@@ -5,6 +5,7 @@
 
 #include "buildvm.h"
 #include "lj_obj.h"
+#include "lj_bc.h"
 #include "lj_lib.h"
 #include "buildvm_libbc.h"
 
@@ -152,28 +153,36 @@ static void libdef_func(BuildCtx *ctx, char *p, int arg)
   regfunc = REGFUNC_OK;
 }
 
-static uint32_t libdef_uleb128(uint8_t **pp)
+static uint8_t *libdef_uleb128(uint8_t *p, uint32_t *vv)
 {
-  uint8_t *p = *pp;
   uint32_t v = *p++;
   if (v >= 0x80) {
     int sh = 0; v &= 0x7f;
     do { v |= ((*p & 0x7f) << (sh += 7)); } while (*p++ >= 0x80);
   }
-  *pp = p;
-  return v;
+  *vv = v;
+  return p;
 }
 
-static void libdef_swapbc(uint8_t *p)
+static void libdef_fixupbc(uint8_t *p)
 {
   uint32_t i, sizebc;
   p += 4;
-  libdef_uleb128(&p);
-  libdef_uleb128(&p);
-  sizebc = libdef_uleb128(&p);
+  p = libdef_uleb128(p, &sizebc);
+  p = libdef_uleb128(p, &sizebc);
+  p = libdef_uleb128(p, &sizebc);
   for (i = 0; i < sizebc; i++, p += 4) {
-    uint8_t t = p[0]; p[0] = p[3]; p[3] = t;
-    t = p[1]; p[1] = p[2]; p[2] = t;
+    uint8_t op = p[libbc_endian ? 3 : 0];
+    uint8_t ra = p[libbc_endian ? 2 : 1];
+    uint8_t rc = p[libbc_endian ? 1 : 2];
+    uint8_t rb = p[libbc_endian ? 0 : 3];
+    if (!LJ_DUALNUM && op == BC_ISTYPE && rc == ~LJ_TNUMX+1) {
+      op = BC_ISNUM; rc++;
+    }
+    p[LJ_ENDIAN_SELECT(0, 3)] = op;
+    p[LJ_ENDIAN_SELECT(1, 2)] = ra;
+    p[LJ_ENDIAN_SELECT(2, 1)] = rc;
+    p[LJ_ENDIAN_SELECT(3, 0)] = rb;
   }
 }
 
@@ -190,8 +199,7 @@ static void libdef_lua(BuildCtx *ctx, char *p, int arg)
 	*optr++ = LIBINIT_LUA;
 	libdef_name(p, 0);
 	memcpy(optr, libbc_code + ofs, len);
-	if (libbc_endian != LJ_BE)
-	  libdef_swapbc(optr);
+	libdef_fixupbc(optr);
 	optr += len;
 	return;
       }

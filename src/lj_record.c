@@ -1826,6 +1826,18 @@ void lj_record_ins(jit_State *J)
       J->maxslot = bc_a(pc[1]);  /* Shrink used slots. */
     break;
 
+  case BC_ISTYPE: case BC_ISNUM:
+    /* These coercions need to correspond with lj_meta_istype(). */
+    if (LJ_DUALNUM && rc == ~LJ_TNUMX+1)
+      ra = lj_opt_narrow_toint(J, ra);
+    else if (rc == ~LJ_TNUMX+2)
+      ra = lj_ir_tonum(J, ra);
+    else if (rc == ~LJ_TSTR+1)
+      ra = lj_ir_tostr(J, ra);
+    /* else: type specialization suffices. */
+    J->base[bc_a(ins)] = ra;
+    break;
+
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_NOT:
@@ -1935,6 +1947,10 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_TGETV: case BC_TGETS: case BC_TSETV: case BC_TSETS:
     ix.idxchain = LJ_MAX_IDXCHAIN;
+    rc = lj_record_idx(J, &ix);
+    break;
+  case BC_TGETR: case BC_TSETR:
+    ix.idxchain = 0;
     rc = lj_record_idx(J, &ix);
     break;
 

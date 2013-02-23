@@ -615,6 +615,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
   |  b ->vm_call_dispatch_f
   |
+  |->vmeta_tgetr:
+  |  .IOS mov RC, BASE
+  |  bl extern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |  // Returns cTValue * or NULL.
+  |  .IOS mov BASE, RC
+  |  cmp CRET1, #0
+  |  ldrdne CARG12, [CRET1]
+  |  mvneq CARG2, #~LJ_TNIL
+  |  b ->BC_TGETR_Z
+  |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets1:
@@ -671,6 +681,15 @@ static void build_subroutines(BuildCtx *ctx)
   |   add PC, CARG1, BASE
   |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]  // Guaranteed to be a function here.
   |  b ->vm_call_dispatch_f
+  |
+  |->vmeta_tsetr:
+  |  str BASE, L->base
+  |  .IOS mov RC, BASE
+  |  str PC, SAVE_PC
+  |  bl extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
+  |  // Returns TValue *.
+  |  .IOS mov BASE, RC
+  |  b ->BC_TSETR_Z
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -735,6 +754,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns 0/1 or TValue * (metamethod).
   |  b <3
   |.endif
+  |
+  |->vmeta_istype:
+  |  sub PC, PC, #4
+  |   str BASE, L->base
+  |   mov CARG1, L
+  |   lsr CARG2, RA, #3
+  |   mov CARG3, RC
+  |  str PC, SAVE_PC
+  |  bl extern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
+  |  .IOS ldr BASE, L->base
+  |  b ->cont_nop
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -2821,6 +2851,25 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
 
+  case BC_ISTYPE:
+    |  // RA = src*8, RC = -type
+    |  ldrd CARG12, [BASE, RA]
+    |   ins_next1
+    |  cmn CARG2, RC
+    |   ins_next2
+    |  bne ->vmeta_istype
+    |   ins_next3
+    break;
+  case BC_ISNUM:
+    |  // RA = src*8, RC = -(TISNUM-1)
+    |  ldrd CARG12, [BASE, RA]
+    |   ins_next1
+    |  checktp CARG2, LJ_TISNUM
+    |   ins_next2
+    |  bhs ->vmeta_istype
+    |   ins_next3
+    break;
+
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
@@ -3491,6 +3540,24 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bne <1				// 'no __index' flag set: done.
     |  b ->vmeta_tgetb
     break;
+  case BC_TGETR:
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  ldr TAB:CARG1, [BASE, RB]
+    |   ldr CARG2, [BASE, RC]
+    |  ldr CARG4, TAB:CARG1->array
+    |    ldr CARG3, TAB:CARG1->asize
+    |  add CARG4, CARG4, CARG2, lsl #3
+    |    cmp CARG2, CARG3		// In array part?
+    |    bhs ->vmeta_tgetr
+    |  ldrd CARG12, [CARG4]
+    |->BC_TGETR_Z:
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG12, [BASE, RA]
+    |   ins_next3
+    break;
 
   case BC_TSETV:
     |  decode_RB8 RB, INS
@@ -3659,6 +3726,32 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
     |  barrierback TAB:CARG1, INS, CARG3
+    |  b <2
+    break;
+  case BC_TSETR:
+    |  decode_RB8 RB, INS
+    |   decode_RC8 RC, INS
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  ldr TAB:CARG2, [BASE, RB]
+    |   ldr CARG3, [BASE, RC]
+    |     ldrb INS, TAB:CARG2->marked
+    |  ldr CARG1, TAB:CARG2->array
+    |    ldr CARG4, TAB:CARG2->asize
+    |     tst INS, #LJ_GC_BLACK		// isblack(table)
+    |  add CARG1, CARG1, CARG3, lsl #3
+    |     bne >7
+    |2:
+    |    cmp CARG3, CARG4		// In array part?
+    |    bhs ->vmeta_tsetr
+    |->BC_TSETR_Z:
+    |  ldrd CARG34, [BASE, RA]
+    |   ins_next1
+    |   ins_next2
+    |  strd CARG34, [CARG1]
+    |   ins_next3
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:CARG2, INS, RB
     |  b <2
     break;
 

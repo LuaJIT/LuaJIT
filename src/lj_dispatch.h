@@ -33,11 +33,11 @@
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \
   _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) \
   _(lj_meta_call) _(lj_meta_cat) _(lj_meta_comp) _(lj_meta_equal) \
-  _(lj_meta_for) _(lj_meta_len) _(lj_meta_tget) _(lj_meta_tset) \
-  _(lj_state_growstack) _(lj_str_fromnum) _(lj_str_fromnumber) _(lj_str_new) \
-  _(lj_tab_dup) _(lj_tab_get) _(lj_tab_getinth) _(lj_tab_len) _(lj_tab_new) \
-  _(lj_tab_newkey) _(lj_tab_next) _(lj_tab_reasize) \
-  JITGOTDEF(_) FFIGOTDEF(_)
+  _(lj_meta_for) _(lj_meta_istype) _(lj_meta_len) _(lj_meta_tget) \
+  _(lj_meta_tset) _(lj_state_growstack) _(lj_str_fromnum) _(lj_str_fromnumber) \
+  _(lj_str_new) _(lj_tab_dup) _(lj_tab_get) _(lj_tab_getinth) _(lj_tab_len) \
+  _(lj_tab_new) _(lj_tab_newkey) _(lj_tab_next) _(lj_tab_reasize) \
+  _(lj_tab_setinth) JITGOTDEF(_) FFIGOTDEF(_)
 
 enum {
 #define GOTENUM(name) LJ_GOT_##name,

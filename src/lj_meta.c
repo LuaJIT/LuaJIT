@@ -19,6 +19,7 @@
 #include "lj_bc.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_lib.h"
 
 /* -- Metamethod handling ------------------------------------------------- */
 
@@ -421,6 +422,18 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
     lj_err_comp(L, o1, o2);
     return NULL;
   }
+}
+
+/* Helper for ISTYPE and ISNUM. Implicit coercion or error. */
+void lj_meta_istype(lua_State *L, BCReg ra, BCReg tp)
+{
+  L->top = curr_topL(L);
+  ra++; tp--;
+  lua_assert(LJ_DUALNUM || tp != ~LJ_TNUMX);  /* ISTYPE -> ISNUM broken. */
+  if (LJ_DUALNUM && tp == ~LJ_TNUMX) lj_lib_checkint(L, ra);
+  else if (tp == ~LJ_TNUMX+1) lj_lib_checknum(L, ra);
+  else if (tp == ~LJ_TSTR) lj_lib_checkstr(L, ra);
+  else lj_err_argtype(L, ra, lj_obj_itypename[tp]);
 }
 
 /* Helper for calls. __call metamethod. */

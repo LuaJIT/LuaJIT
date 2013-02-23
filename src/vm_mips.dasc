@@ -688,6 +688,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_call_dispatch_f
   |.  li NARGS8:RC, 16			// 2 args for func(t, k).
   |
+  |->vmeta_tgetr:
+  |  load_got lj_tab_getinth
+  |  call_intern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |.  nop
+  |  // Returns cTValue * or NULL.
+  |  beqz CRET1, >1
+  |.  nop
+  |  b ->BC_TGETR_Z
+  |.  ldc1 f0, 0(CRET1)
+  |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets1:
@@ -739,6 +749,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  sdc1 f0, 16(BASE)			// Copy value to third argument.
   |  b ->vm_call_dispatch_f
   |.  li NARGS8:RC, 24			// 3 args for func(t, k, v)
+  |
+  |->vmeta_tsetr:
+  |  load_got lj_tab_setinth
+  |  sw BASE, L->base
+  |  sw PC, SAVE_PC
+  |  call_intern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
+  |.  move CARG1, L
+  |  // Returns TValue *.
+  |  b ->BC_TSETR_Z
+  |.  nop
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -812,6 +832,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <3
   |.  nop
   |.endif
+  |
+  |->vmeta_istype:
+  |  load_got lj_meta_istype
+  |  addiu PC, PC, -4
+  |   sw BASE, L->base
+  |   srl CARG2, RA, 3
+  |   srl CARG3, RD, 3
+  |  sw PC, SAVE_PC
+  |  call_intern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
+  |.  move CARG1, L
+  |  b ->cont_nop
+  |.  nop
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -2566,6 +2598,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
 
+  case BC_ISTYPE:
+    |  // RA = src*8, RD = -type*8
+    |  addu TMP2, BASE, RA
+    |  srl TMP1, RD, 3
+    |  lw TMP0, HI(TMP2)
+    |  ins_next1
+    |  addu AT, TMP0, TMP1
+    |  bnez AT, ->vmeta_istype
+    |.  ins_next2
+    break;
+  case BC_ISNUM:
+    |  // RA = src*8, RD = -(TISNUM-1)*8
+    |  addu TMP2, BASE, RA
+    |  lw TMP0, HI(TMP2)
+    |  ins_next1
+    |  sltiu AT, TMP0, LJ_TISNUM
+    |  beqz AT, ->vmeta_istype
+    |.  ins_next2
+    break;
+
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
@@ -3204,6 +3256,30 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->vmeta_tgetb			// Caveat: preserve TMP0!
     |.  nop
     break;
+  case BC_TGETR:
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  decode_RB8a RB, INS
+    |  decode_RB8b RB
+    |   decode_RDtoRC8 RC, RD
+    |  addu CARG2, BASE, RB
+    |   addu CARG3, BASE, RC
+    |    lw TAB:CARG1, LO(CARG2)
+    |   ldc1 f0, 0(CARG3)
+    |  trunc.w.d f2, f0
+    |   lw TMP0, TAB:CARG1->asize
+    |  mfc1 CARG2, f2
+    |   lw TMP1, TAB:CARG1->array
+    |  sltu AT, CARG2, TMP0
+    |   sll TMP2, CARG2, 3
+    |  beqz AT, ->vmeta_tgetr		// In array part?
+    |.  addu TMP2, TMP1, TMP2
+    |   ldc1 f0, 0(TMP2)
+    |->BC_TGETR_Z:
+    |   addu RA, BASE, RA
+    |  ins_next1
+    |   sdc1 f0, 0(RA)
+    |  ins_next2
+    break;
 
   case BC_TSETV:
     |  // RA = src*8, RB = table*8, RC = key*8
@@ -3392,6 +3468,38 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
     |  barrierback TAB:RB, TMP3, TMP0, <2
     break;
+  case BC_TSETR:
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  decode_RB8a RB, INS
+    |  decode_RB8b RB
+    |   decode_RDtoRC8 RC, RD
+    |  addu CARG1, BASE, RB
+    |   addu CARG3, BASE, RC
+    |    lw TAB:CARG2, LO(CARG1)
+    |   ldc1 f0, 0(CARG3)
+    |  trunc.w.d f2, f0
+    |    lbu TMP3, TAB:CARG2->marked
+    |   lw TMP0, TAB:CARG2->asize
+    |  mfc1 CARG3, f2
+    |   lw TMP1, TAB:CARG2->array
+    |  andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
+    |  bnez AT, >7
+    |.  addu RA, BASE, RA
+    |2:
+    |  sltu AT, CARG3, TMP0
+    |   sll TMP2, CARG3, 3
+    |  beqz AT, ->vmeta_tsetr		// In array part?
+    |.  ldc1 f20, 0(RA)
+    |   addu CRET1, TMP1, TMP2
+    |->BC_TSETR_Z:
+    |  ins_next1
+    |   sdc1 f20, 0(CRET1)
+    |  ins_next2
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMP3, TMP0, <2
+    break;
+
 
   case BC_TSETM:
     |  // RA = base*8 (table at base-1), RD = num_const*8 (start index)

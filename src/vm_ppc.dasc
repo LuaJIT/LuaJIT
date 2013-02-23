@@ -895,6 +895,17 @@ static void build_subroutines(BuildCtx *ctx)
   |   li NARGS8:RC, 16			// 2 args for func(t, k).
   |  b ->vm_call_dispatch_f
   |
+  |->vmeta_tgetr:
+  |  bl extern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |  // Returns cTValue * or NULL.
+  |  cmplwi CRET1, 0
+  |  beq >1
+  |  lfd f14, 0(CRET1)
+  |  b ->BC_TGETR_Z
+  |1:
+  |  stwx TISNIL, BASE, RA
+  |  b ->cont_nop
+  |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets1:
@@ -961,6 +972,14 @@ static void build_subroutines(BuildCtx *ctx)
   |   li NARGS8:RC, 24			// 3 args for func(t, k, v)
   |  stfd f0, 16(BASE)			// Copy value to third argument.
   |  b ->vm_call_dispatch_f
+  |
+  |->vmeta_tsetr:
+  |  stp BASE, L->base
+  |  stw PC, SAVE_PC
+  |  bl extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
+  |  // Returns TValue *.
+  |  stfd f14, 0(CRET1)
+  |  b ->cont_nop
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -1039,6 +1058,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns 0/1 or TValue * (metamethod).
   |  b <3
   |.endif
+  |
+  |->vmeta_istype:
+  |  subi PC, PC, 4
+  |   stp BASE, L->base
+  |   srwi CARG2, RA, 3
+  |   mr CARG1, L
+  |   srwi CARG3, RD, 3
+  |  stw PC, SAVE_PC
+  |  bl extern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
+  |  b ->cont_nop
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -3259,6 +3288,29 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
 
+  case BC_ISTYPE:
+    |  // RA = src*8, RD = -type*8
+    |  lwzx TMP0, BASE, RA
+    |  srwi TMP1, RD, 3
+    |  ins_next1
+    |.if not PPE and not GPR64
+    |  add. TMP0, TMP0, TMP1
+    |.else
+    |  neg TMP1
+    |  cmpw TMP0, TMP1
+    |.endif
+    |  bne ->vmeta_istype
+    |  ins_next2
+    break;
+  case BC_ISNUM:
+    |  // RA = src*8, RD = -(TISNUM-1)*8
+    |  lwzx TMP0, BASE, RA
+    |  ins_next1
+    |  checknum TMP0
+    |  bge ->vmeta_istype
+    |  ins_next2
+    break;
+
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
@@ -4010,6 +4062,30 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bne <1				// 'no __index' flag set: done.
     |  b ->vmeta_tgetb			// Caveat: preserve TMP0!
     break;
+  case BC_TGETR:
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  add RB, BASE, RB
+    |  lwz TAB:CARG1, 4(RB)
+    |.if DUALNUM
+    |  add RC, BASE, RC
+    |  lwz TMP0, TAB:CARG1->asize
+    |  lwz CARG2, 4(RC)
+    |   lwz TMP1, TAB:CARG1->array
+    |.else
+    |  lfdx f0, BASE, RC
+    |  lwz TMP0, TAB:CARG1->asize
+    |  toint CARG2, f0
+    |   lwz TMP1, TAB:CARG1->array
+    |.endif
+    |  cmplw TMP0, CARG2
+    |   slwi TMP2, CARG2, 3
+    |  ble ->vmeta_tgetr		// In array part?
+    |   lfdx f14, TMP1, TMP2
+    |->BC_TGETR_Z:
+    |  ins_next1
+    |   stfdx f14, BASE, RA
+    |  ins_next2
+    break;
 
   case BC_TSETV:
     |  // RA = src*8, RB = table*8, RC = key*8
@@ -4189,6 +4265,39 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  barrierback TAB:RB, TMP3, TMP0
     |  b <2
     break;
+  case BC_TSETR:
+    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  add RB, BASE, RB
+    |  lwz TAB:CARG2, 4(RB)
+    |.if DUALNUM
+    |  add RC, BASE, RC
+    |    lbz TMP3, TAB:RB->marked
+    |  lwz TMP0, TAB:CARG2->asize
+    |  lwz CARG3, 4(RC)
+    |   lwz TMP1, TAB:CARG2->array
+    |.else
+    |  lfdx f0, BASE, RC
+    |    lbz TMP3, TAB:RB->marked
+    |  lwz TMP0, TAB:CARG2->asize
+    |  toint CARG3, f0
+    |   lwz TMP1, TAB:CARG2->array
+    |.endif
+    |  andix. TMP2, TMP3, LJ_GC_BLACK	// isblack(table)
+    |  bne >7
+    |2:
+    |  cmplw TMP0, CARG3
+    |   slwi TMP2, CARG3, 3
+    |   lfdx f14, BASE, RA
+    |  ble ->vmeta_tsetr		// In array part?
+    |  ins_next1
+    |   stfdx f14, TMP1, TMP2
+    |  ins_next2
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:CARG2, TMP3, TMP2
+    |  b <2
+    break;
+
 
   case BC_TSETM:
     |  // RA = base*8 (table at base-1), RD = num_const*8 (start index)

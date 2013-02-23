@@ -911,6 +911,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov NARGS:RD, 2+1			// 2 args for func(t, k).
   |  jmp ->vm_call_dispatch_f
   |
+  |->vmeta_tgetr:
+  |  mov FCARG1, TAB:RB
+  |  mov RB, BASE			// Save BASE.
+  |  mov FCARG2, RC			// Caveat: FCARG2 == BASE
+  |  call extern lj_tab_getinth@8	// (GCtab *t, int32_t key)
+  |  // cTValue * or NULL returned in eax (RC).
+  |  movzx RA, PC_RA
+  |  mov BASE, RB			// Restore BASE.
+  |  test RC, RC
+  |  jnz ->BC_TGETR_Z
+  |  mov dword [BASE+RA*8+4], LJ_TNIL
+  |  jmp ->BC_TGETR2_Z
+  |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets:
@@ -997,6 +1010,33 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov LFUNC:RB, [RA-8]		// Guaranteed to be a function here.
   |  mov NARGS:RD, 3+1			// 3 args for func(t, k, v).
   |  jmp ->vm_call_dispatch_f
+  |
+  |->vmeta_tsetr:
+  |.if X64WIN
+  |  mov L:CARG1d, SAVE_L
+  |  mov CARG3d, RC
+  |  mov L:CARG1d->base, BASE
+  |  xchg CARG2d, TAB:RB		// Caveat: CARG2d == BASE.
+  |.elif X64
+  |  mov L:CARG1d, SAVE_L
+  |  mov CARG2d, TAB:RB
+  |  mov L:CARG1d->base, BASE
+  |  mov RB, BASE			// Save BASE.
+  |  mov CARG3d, RC			// Caveat: CARG3d == BASE.
+  |.else
+  |  mov L:RA, SAVE_L
+  |  mov ARG2, TAB:RB
+  |  mov RB, BASE			// Save BASE.
+  |  mov ARG3, RC
+  |  mov ARG1, L:RA
+  |  mov L:RA->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
+  |  call extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
+  |  // TValue * returned in eax (RC).
+  |  movzx RA, PC_RA
+  |  mov BASE, RB			// Restore BASE.
+  |  jmp ->BC_TSETR_Z
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -1091,6 +1131,26 @@ static void build_subroutines(BuildCtx *ctx)
   |  // 0/1 or TValue * (metamethod) returned in eax (RC).
   |  jmp <3
   |.endif
+  |
+  |->vmeta_istype:
+  |.if X64
+  |  mov L:CARG1d, SAVE_L
+  |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov CARG2d, RA
+  |  movzx CARG3d, PC_RD
+  |  mov L:RB, L:CARG1d
+  |.else
+  |  movzx RD, PC_RD
+  |  mov ARG2, RA
+  |  mov L:RB, SAVE_L
+  |  mov ARG3, RD
+  |  mov ARG1, L:RB
+  |  mov L:RB->base, BASE
+  |.endif
+  |  mov SAVE_PC, PC
+  |  call extern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
+  |  mov BASE, L:RB->base
+  |  jmp <6
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -3827,6 +3887,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
 
+  case BC_ISTYPE:
+    |  ins_AD	// RA = src, RD = -type
+    |  add RD, [BASE+RA*8+4]
+    |  jne ->vmeta_istype
+    |  ins_next
+    break;
+  case BC_ISNUM:
+    |  ins_AD	// RA = src, RD = -(TISNUM-1)
+    |  checknum RA, ->vmeta_istype
+    |  ins_next
+    break;
+
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
@@ -4502,6 +4574,32 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov dword [BASE+RA*8+4], LJ_TNIL
     |  jmp <1
     break;
+  case BC_TGETR:
+    |  ins_ABC	// RA = dst, RB = table, RC = key
+    |  mov TAB:RB, [BASE+RB*8]
+    |.if DUALNUM
+    |  mov RC, dword [BASE+RC*8]
+    |.else
+    |  cvttsd2si RC, qword [BASE+RC*8]
+    |.endif
+    |  cmp RC, TAB:RB->asize
+    |  jae ->vmeta_tgetr		// Not in array part? Use fallback.
+    |  shl RC, 3
+    |  add RC, TAB:RB->array
+    |  // Get array slot.
+    |->BC_TGETR_Z:
+    |.if X64
+    |  mov RBa, [RC]
+    |  mov [BASE+RA*8], RBa
+    |.else
+    |  mov RB, [RC]
+    |  mov RC, [RC+4]
+    |  mov [BASE+RA*8], RB
+    |  mov [BASE+RA*8+4], RC
+    |.endif
+    |->BC_TGETR2_Z:
+    |  ins_next
+    break;
 
   case BC_TSETV:
     |  ins_ABC	// RA = src, RB = table, RC = key
@@ -4682,6 +4780,39 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jz ->vmeta_tsetb			// 'no __newindex' flag NOT set: check.
     |  movzx RA, PC_RA			// Restore RA.
     |  jmp <1
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, RA
+    |  movzx RA, PC_RA			// Restore RA.
+    |  jmp <2
+    break;
+  case BC_TSETR:
+    |  ins_ABC	// RA = src, RB = table, RC = key
+    |  mov TAB:RB, [BASE+RB*8]
+    |.if DUALNUM
+    |  mov RC, dword [BASE+RC*8]
+    |.else
+    |  cvttsd2si RC, qword [BASE+RC*8]
+    |.endif
+    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
+    |  jnz >7
+    |2:
+    |  cmp RC, TAB:RB->asize
+    |  jae ->vmeta_tsetr
+    |  shl RC, 3
+    |  add RC, TAB:RB->array
+    |  // Set array slot.
+    |->BC_TSETR_Z:
+    |.if X64
+    |  mov RBa, [BASE+RA*8]
+    |  mov [RC], RBa
+    |.else
+    |  mov RB, [BASE+RA*8+4]
+    |  mov RA, [BASE+RA*8]
+    |  mov [RC+4], RB
+    |  mov [RC], RA
+    |.endif
+    |  ins_next
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
     |  barrierback TAB:RB, RA
