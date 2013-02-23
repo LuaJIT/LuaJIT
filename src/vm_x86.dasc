@@ -2434,21 +2434,6 @@ static void build_subroutines(BuildCtx *ctx)
   |ffstring_case string_lower, 0x41, 0x5a
   |ffstring_case string_upper, 0x61, 0x7a
   |
-  |//-- Table library ------------------------------------------------------
-  |
-  |.ffunc_1 table_getn
-  |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
-  |  mov RB, BASE			// Save BASE.
-  |  mov TAB:FCARG1, [BASE]
-  |  call extern lj_tab_len@4		// LJ_FASTCALL (GCtab *t)
-  |  // Length of table returned in eax (RD).
-  |  mov BASE, RB			// Restore BASE.
-  |.if DUALNUM
-  |  mov RB, RD; jmp ->fff_resi
-  |.else
-  |  cvtsi2sd xmm0, RD; jmp ->fff_resxmm0
-  |.endif
-  |
   |//-- Bit library --------------------------------------------------------
   |
   |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).

@@ -1812,18 +1812,6 @@ static void build_subroutines(BuildCtx *ctx)
   |ffstring_case string_lower, 65
   |ffstring_case string_upper, 97
   |
-  |//-- Table library ------------------------------------------------------
-  |
-  |.ffunc_1 table_getn
-  |  li AT, LJ_TTAB
-  |  bne CARG3, AT, ->fff_fallback
-  |.  load_got lj_tab_len
-  |  call_intern lj_tab_len		// (GCtab *t)
-  |.  nop
-  |  // Returns uint32_t (but less than 2^31).
-  |  b ->fff_resi
-  |.  nop
-  |
   |//-- Bit library --------------------------------------------------------
   |
   |.macro .ffunc_bit, name

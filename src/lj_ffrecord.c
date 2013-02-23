@@ -729,14 +729,6 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
 
 /* -- Table library fast functions ---------------------------------------- */
 
-static void LJ_FASTCALL recff_table_getn(jit_State *J, RecordFFData *rd)
-{
-  if (tref_istab(J->base[0]))
-    J->base[0] = lj_ir_call(J, IRCALL_lj_tab_len, J->base[0]);
-  /* else: Interpreter will throw. */
-  UNUSED(rd);
-}
-
 static void LJ_FASTCALL recff_table_remove(jit_State *J, RecordFFData *rd)
 {
   TRef tab = J->base[0];

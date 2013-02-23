@@ -23,50 +23,34 @@
 
 #define LJLIB_MODULE_table
 
-LJLIB_CF(table_foreachi)
-{
-  GCtab *t = lj_lib_checktab(L, 1);
-  GCfunc *func = lj_lib_checkfunc(L, 2);
-  MSize i, n = lj_tab_len(t);
-  for (i = 1; i <= n; i++) {
-    cTValue *val;
-    setfuncV(L, L->top, func);
-    setintV(L->top+1, i);
-    val = lj_tab_getint(t, (int32_t)i);
-    if (val) { copyTV(L, L->top+2, val); } else { setnilV(L->top+2); }
-    L->top += 3;
-    lua_call(L, 2, 1);
-    if (!tvisnil(L->top-1))
-      return 1;
-    L->top--;
-  }
-  return 0;
-}
+LJLIB_LUA(table_foreachi) /*
+  function(t, f)
+    CHECK_tab(t)
+    CHECK_func(f)
+    for i=1,#t do
+      local r = f(i, t[i])
+      if r ~= nil then return r end
+    end
+  end
+*/
 
-LJLIB_CF(table_foreach)
-{
-  GCtab *t = lj_lib_checktab(L, 1);
-  GCfunc *func = lj_lib_checkfunc(L, 2);
-  L->top = L->base+3;
-  setnilV(L->top-1);
-  while (lj_tab_next(L, t, L->top-1)) {
-    copyTV(L, L->top+2, L->top);
-    copyTV(L, L->top+1, L->top-1);
-    setfuncV(L, L->top, func);
-    L->top += 3;
-    lua_call(L, 2, 1);
-    if (!tvisnil(L->top-1))
-      return 1;
-    L->top--;
-  }
-  return 0;
-}
+LJLIB_LUA(table_foreach) /*
+  function(t, f)
+    CHECK_tab(t)
+    CHECK_func(f)
+    for k, v in PAIRS(t) do
+      local r = f(k, v)
+      if r ~= nil then return r end
+    end
+  end
+*/
 
-LJLIB_ASM(table_getn)		LJLIB_REC(.)
-{
-  lj_lib_checktab(L, 1);
-  return FFH_UNREACHABLE;
-}
+LJLIB_LUA(table_getn) /*
+  function(t)
+    CHECK_tab(t)
+    return #t
+  end
+*/
 
 LJLIB_CF(table_maxn)
 {
