@@ -243,17 +243,17 @@ static LJ_AINLINE uint32_t lj_getu32(const void *p)
 #endif
 
 #ifdef _M_PPC
-#pragma intrinsic(_CountLeadingZeros)
 unsigned int _CountLeadingZeros(long);
+#pragma intrinsic(_CountLeadingZeros)
 static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 {
   return _CountLeadingZeros(x) ^ 31;
 }
 #else
-#pragma intrinsic(_BitScanForward)
-#pragma intrinsic(_BitScanReverse)
 unsigned char _BitScanForward(uint32_t *, unsigned long);
 unsigned char _BitScanReverse(uint32_t *, unsigned long);
+#pragma intrinsic(_BitScanForward)
+#pragma intrinsic(_BitScanReverse)
 
 static LJ_AINLINE uint32_t lj_ffs(uint32_t x)
 {
