@@ -729,38 +729,6 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
 
 /* -- Table library fast functions ---------------------------------------- */
 
-static void LJ_FASTCALL recff_table_remove(jit_State *J, RecordFFData *rd)
-{
-  TRef tab = J->base[0];
-  rd->nres = 0;
-  if (tref_istab(tab)) {
-    if (!J->base[1] || tref_isnil(J->base[1])) {  /* Simple pop: t[#t] = nil */
-      TRef trlen = lj_ir_call(J, IRCALL_lj_tab_len, tab);
-      GCtab *t = tabV(&rd->argv[0]);
-      MSize len = lj_tab_len(t);
-      emitir(IRTGI(len ? IR_NE : IR_EQ), trlen, lj_ir_kint(J, 0));
-      if (len) {
-	RecordIndex ix;
-	ix.tab = tab;
-	ix.key = trlen;
-	settabV(J->L, &ix.tabv, t);
-	setintV(&ix.keyv, len);
-	ix.idxchain = 0;
-	if (results_wanted(J) != 0) {  /* Specialize load only if needed. */
-	  ix.val = 0;
-	  J->base[0] = lj_record_idx(J, &ix);  /* Load previous value. */
-	  rd->nres = 1;
-	  /* Assumes ix.key/ix.tab is not modified for raw lj_record_idx(). */
-	}
-	ix.val = TREF_NIL;
-	lj_record_idx(J, &ix);  /* Remove value. */
-      }
-    } else {  /* Complex case: remove in the middle. */
-      recff_nyiu(J);
-    }
-  }  /* else: Interpreter will throw. */
-}
-
 static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
 {
   RecordIndex ix;

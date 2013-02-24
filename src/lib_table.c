@@ -103,27 +103,29 @@ LJLIB_CF(table_insert)		LJLIB_REC(.)
   return 0;
 }
 
-LJLIB_CF(table_remove)		LJLIB_REC(.)
-{
-  GCtab *t = lj_lib_checktab(L, 1);
-  int32_t e = (int32_t)lj_tab_len(t);
-  int32_t pos = lj_lib_optint(L, 2, e);
-  if (!(1 <= pos && pos <= e))  /* Nothing to remove? */
-    return 0;
-  lua_rawgeti(L, 1, pos);  /* Get previous value. */
-  /* NOBARRIER: This just moves existing elements around. */
-  for (; pos < e; pos++) {
-    cTValue *src = lj_tab_getint(t, pos+1);
-    TValue *dst = lj_tab_setint(L, t, pos);
-    if (src) {
-      copyTV(L, dst, src);
-    } else {
-      setnilV(dst);
-    }
-  }
-  setnilV(lj_tab_setint(L, t, e));  /* Remove (last) value. */
-  return 1;  /* Return previous value. */
-}
+LJLIB_LUA(table_remove) /*
+  function(t, pos)
+    CHECK_tab(t)
+    local len = #t
+    if pos == nil then
+      if len ~= 0 then
+	local old = t[len]
+	t[len] = nil
+	return old
+      end
+    else
+      CHECK_int(pos)
+      if pos >= 1 and pos <= len then
+	local old = t[pos]
+	for i=pos+1,len do
+	  t[i-1] = t[i]
+	end
+	t[len] = nil
+	return old
+      end
+    end
+  end
+*/
 
 LJLIB_CF(table_concat)
 {
