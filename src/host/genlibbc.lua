@@ -66,7 +66,7 @@ local function read_uleb128(p)
     local sh = 7; v = v - 128
     repeat
       local r = p[0]
-      v = v + bit.lshift(bit.band(r, 128), sh)
+      v = v + bit.lshift(bit.band(r, 127), sh)
       sh = sh + 7
       p = p + 1
     until r < 128
