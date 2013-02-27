@@ -218,20 +218,6 @@ GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o)
 
 /* -- String formatting --------------------------------------------------- */
 
-static void addstr(lua_State *L, SBuf *sb, const char *str, MSize len)
-{
-  MSize i;
-  char *p = lj_buf_need(L, sb, sb->n+len) + sb->n;
-  sb->n += len;
-  for (i = 0; i < len; i++) p[i] = str[i];
-}
-
-static void addchar(lua_State *L, SBuf *sb, int c)
-{
-  char *p = lj_buf_need(L, sb, sb->n+1);
-  p[sb->n++] = (char)c;
-}
-
 /* Push formatted message as a string object to Lua stack. va_list variant. */
 const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
 {
@@ -241,22 +227,22 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
   for (;;) {
     const char *e = strchr(fmt, '%');
     if (e == NULL) break;
-    addstr(L, sb, fmt, (MSize)(e-fmt));
+    lj_buf_putmem(L, sb, fmt, (MSize)(e-fmt));
     /* This function only handles %s, %c, %d, %f and %p formats. */
     switch (e[1]) {
     case 's': {
       const char *s = va_arg(argp, char *);
       if (s == NULL) s = "(null)";
-      addstr(L, sb, s, (MSize)strlen(s));
+      lj_buf_putmem(L, sb, s, (MSize)strlen(s));
       break;
       }
     case 'c':
-      addchar(L, sb, va_arg(argp, int));
+      lj_buf_putb(L, sb, va_arg(argp, int));
       break;
     case 'd': {
       char buf[LJ_STR_INTBUF];
       char *p = lj_str_bufint(buf, va_arg(argp, int32_t));
-      addstr(L, sb, p, (MSize)(buf+LJ_STR_INTBUF-p));
+      lj_buf_putmem(L, sb, p, (MSize)(buf+LJ_STR_INTBUF-p));
       break;
       }
     case 'f': {
@@ -265,7 +251,7 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       MSize len;
       tv.n = (lua_Number)(va_arg(argp, LUAI_UACNUMBER));
       len = (MSize)lj_str_bufnum(buf, &tv);
-      addstr(L, sb, buf, len);
+      lj_buf_putmem(L, sb, buf, len);
       break;
       }
     case 'p': {
@@ -274,7 +260,7 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
       ptrdiff_t i, lasti = 2+FMTP_CHARS;
       if (p == 0) {
-	addstr(L, sb, "NULL", 4);
+	lj_buf_putmem(L, sb, "NULL", 4);
 	break;
       }
 #if LJ_64
@@ -285,21 +271,21 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       buf[1] = 'x';
       for (i = lasti-1; i >= 2; i--, p >>= 4)
 	buf[i] = "0123456789abcdef"[(p & 15)];
-      addstr(L, sb, buf, (MSize)lasti);
+      lj_buf_putmem(L, sb, buf, (MSize)lasti);
       break;
       }
     case '%':
-      addchar(L, sb, '%');
+      lj_buf_putb(L, sb, '%');
       break;
     default:
-      addchar(L, sb, '%');
-      addchar(L, sb, e[1]);
+      lj_buf_putb(L, sb, '%');
+      lj_buf_putb(L, sb, e[1]);
       break;
     }
     fmt = e+2;
   }
-  addstr(L, sb, fmt, (MSize)strlen(fmt));
-  setstrV(L, L->top, lj_str_new(L, sb->buf, sb->n));
+  lj_buf_putmem(L, sb, fmt, (MSize)strlen(fmt));
+  setstrV(L, L->top, lj_buf_str(L, sb));
   incr_top(L);
   return strVdata(L->top - 1);
 }

@@ -12,6 +12,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #if LJ_HASFFI
 #include "lj_tab.h"
@@ -54,20 +55,9 @@ static int fillbuf(LexState *ls)
   return char2int(*(ls->p++));
 }
 
-static LJ_NOINLINE void save_grow(LexState *ls, int c)
-{
-  if (ls->sb.sz >= LJ_MAX_STR/2)
-    lj_lex_error(ls, 0, LJ_ERR_XELEM);
-  lj_buf_grow(ls->L, &ls->sb, 0);
-  ls->sb.buf[ls->sb.n++] = (char)c;
-}
-
 static LJ_AINLINE void save(LexState *ls, int c)
 {
-  if (LJ_UNLIKELY(ls->sb.n + 1 > ls->sb.sz))
-    save_grow(ls, c);
-  else
-    ls->sb.buf[ls->sb.n++] = (char)c;
+  lj_buf_putb(ls->L, &ls->sb, c);
 }
 
 static void inclinenumber(LexState *ls)
@@ -99,7 +89,7 @@ static void lex_number(LexState *ls, TValue *tv)
     save_and_next(ls);
   }
   save(ls, '\0');
-  fmt = lj_strscan_scan((const uint8_t *)ls->sb.buf, tv,
+  fmt = lj_strscan_scan((const uint8_t *)sbufB(&ls->sb), tv,
 	  (LJ_DUALNUM ? STRSCAN_OPT_TOINT : STRSCAN_OPT_TONUM) |
 	  (LJ_HASFFI ? (STRSCAN_OPT_LL|STRSCAN_OPT_IMAG) : 0));
   if (LJ_DUALNUM && fmt == STRSCAN_INT) {
@@ -174,8 +164,8 @@ static void read_long_string(LexState *ls, TValue *tv, int sep)
     }
   } endloop:
   if (tv) {
-    GCstr *str = lj_parse_keepstr(ls, ls->sb.buf + (2 + (MSize)sep),
-				      ls->sb.n - 2*(2 + (MSize)sep));
+    GCstr *str = lj_parse_keepstr(ls, sbufB(&ls->sb) + (2 + (MSize)sep),
+				      sbuflen(&ls->sb) - 2*(2 + (MSize)sep));
     setstrV(ls->L, tv, str);
   }
 }
@@ -250,7 +240,8 @@ static void read_string(LexState *ls, int delim, TValue *tv)
     }
   }
   save_and_next(ls);  /* skip delimiter */
-  setstrV(ls->L, tv, lj_parse_keepstr(ls, ls->sb.buf + 1, ls->sb.n - 2));
+  setstrV(ls->L, tv,
+	  lj_parse_keepstr(ls, sbufB(&ls->sb)+1, sbuflen(&ls->sb)-2));
 }
 
 /* -- Main lexical scanner ------------------------------------------------ */
@@ -269,7 +260,7 @@ static int llex(LexState *ls, TValue *tv)
       do {
 	save_and_next(ls);
       } while (lj_char_isident(ls->current));
-      s = lj_parse_keepstr(ls, ls->sb.buf, ls->sb.n);
+      s = lj_parse_keepstr(ls, sbufB(&ls->sb), sbuflen(&ls->sb));
       setstrV(ls->L, tv, s);
       if (s->reserved > 0)  /* Reserved word? */
 	return TK_OFS + s->reserved;
@@ -457,7 +448,7 @@ void lj_lex_error(LexState *ls, LexToken token, ErrMsg em, ...)
     tok = NULL;
   } else if (token == TK_name || token == TK_string || token == TK_number) {
     save(ls, '\0');
-    tok = ls->sb.buf;
+    tok = sbufB(&ls->sb);
   } else {
     tok = lj_lex_token2str(ls, token);
   }

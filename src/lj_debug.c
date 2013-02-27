@@ -9,6 +9,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_debug.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_state.h"
@@ -133,20 +134,6 @@ static BCLine debug_frameline(lua_State *L, GCfunc *fn, cTValue *nextframe)
 
 /* -- Variable names ------------------------------------------------------ */
 
-/* Read ULEB128 value. */
-static uint32_t debug_read_uleb128(const uint8_t **pp)
-{
-  const uint8_t *p = *pp;
-  uint32_t v = *p++;
-  if (LJ_UNLIKELY(v >= 0x80)) {
-    int sh = 0;
-    v &= 0x7f;
-    do { v |= ((*p & 0x7f) << (sh += 7)); } while (*p++ >= 0x80);
-  }
-  *pp = p;
-  return v;
-}
-
 /* Get name of a local variable from slot number and PC. */
 static const char *debug_varname(const GCproto *pt, BCPos pc, BCReg slot)
 {
@@ -162,9 +149,9 @@ static const char *debug_varname(const GCproto *pt, BCPos pc, BCReg slot)
       } else {
 	while (*p++) ;  /* Skip over variable name string. */
       }
-      lastpc = startpc = lastpc + debug_read_uleb128(&p);
+      lastpc = startpc = lastpc + lj_buf_ruleb128((const char **)&p);
       if (startpc > pc) break;
-      endpc = startpc + debug_read_uleb128(&p);
+      endpc = startpc + lj_buf_ruleb128((const char **)&p);
       if (pc < endpc && slot-- == 0) {
 	if (vn < VARNAME__MAX) {
 #define VARNAMESTR(name, str)	str "\0"

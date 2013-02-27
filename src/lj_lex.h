@@ -10,7 +10,6 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
-#include "lj_buf.h"
 
 /* Lua lexer tokens. */
 #define TKDEF(_, __) \

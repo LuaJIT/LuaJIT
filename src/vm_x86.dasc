@@ -2356,20 +2356,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmp dword STR:RB->len, 1
   |  jb ->fff_emptystr			// Zero length string?
   |  jne ->fff_fallback_2		// Fallback for > 1-char strings.
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_2
   |  movzx RA, byte STR:RB[1]
-  |  mov RB, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
+  |  mov RB, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
+  |  add RB, RC
+  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RB;  jb ->fff_fallback_2
   |.if X64
   |  mov TMP3, RC
   |.else
   |  mov ARG3, RC
   |.endif
-  |1:  // Fill buffer with char. Yes, this is suboptimal code (do you care?).
-  |  mov [RB], RAL
-  |  add RB, 1
+  |1:  // Fill buffer with char.
+  |  sub RB, 1
   |  sub RC, 1
+  |  mov [RB], RAL
   |  jnz <1
-  |  mov RD, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
+  |  mov RD, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
   |  jmp ->fff_newstr
   |
   |.ffunc_1 string_reverse
@@ -2379,15 +2380,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RC, STR:RB->len
   |  test RC, RC
   |  jz ->fff_emptystr			// Zero length string?
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
-  |  add RB, #STR
   |  mov TMP2, PC			// Need another temp register.
+  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
+  |  lea RA, [PC+RC]
+  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RA;  jb ->fff_fallback_1
+  |  add RB, #STR
   |.if X64
   |  mov TMP3, RC
   |.else
   |  mov ARG3, RC
   |.endif
-  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
   |1:
   |  movzx RA, byte [RB]
   |  add RB, 1
@@ -2402,17 +2404,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  .ffunc_1 name
   |  ffgccheck
   |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
+  |  mov TMP2, PC			// Need another temp register.
   |  mov STR:RB, [BASE]
   |  mov RC, STR:RB->len
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.sz)], RC;  jb ->fff_fallback_1
+  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
+  |  lea RA, [PC+RC]
+  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RA;  jb ->fff_fallback_1
   |  add RB, #STR
-  |  mov TMP2, PC			// Need another temp register.
   |.if X64
   |  mov TMP3, RC
   |.else
   |  mov ARG3, RC
   |.endif
-  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.buf)]
   |  jmp >3
   |1:  // ASCII case conversion. Yes, this is suboptimal code (do you care?).
   |  movzx RA, byte [RB+RC]

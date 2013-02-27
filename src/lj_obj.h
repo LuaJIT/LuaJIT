@@ -121,9 +121,9 @@ typedef void (*ASMFunction)(void);
 
 /* Resizable string buffer. Need this here, details in lj_buf.h. */
 typedef struct SBuf {
-  char *buf;		/* String buffer base. */
-  MSize n;		/* String buffer length. */
-  MSize sz;		/* String buffer size. */
+  MRef p;		/* String buffer pointer. */
+  MRef e;		/* String buffer end pointer. */
+  MRef b;		/* String buffer base. */
 } SBuf;
 
 /* -- Tags and values ----------------------------------------------------- */

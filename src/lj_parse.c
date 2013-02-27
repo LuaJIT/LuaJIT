@@ -13,6 +13,7 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_debug.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_func.h"
@@ -1429,31 +1430,6 @@ static void fs_fixup_line(FuncState *fs, GCproto *pt,
   }
 }
 
-static LJ_AINLINE void fs_buf_need(LexState *ls, MSize len)
-{
-  lj_buf_need(ls->L, &ls->sb, ls->sb.n + len);
-}
-
-/* Add string to buffer. */
-static void fs_buf_str(LexState *ls, const char *str, MSize len)
-{
-  char *p = ls->sb.buf + ls->sb.n;
-  MSize i;
-  ls->sb.n += len;
-  for (i = 0; i < len; i++) p[i] = str[i];
-}
-
-/* Add ULEB128 value to buffer. */
-static void fs_buf_uleb128(LexState *ls, uint32_t v)
-{
-  MSize n = ls->sb.n;
-  uint8_t *p = (uint8_t *)ls->sb.buf;
-  for (; v >= 0x80; v >>= 7)
-    p[n++] = (uint8_t)((v & 0x7f) | 0x80);
-  p[n++] = (uint8_t)v;
-  ls->sb.n = n;
-}
-
 /* Prepare variable info for prototype. */
 static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
 {
@@ -1465,33 +1441,35 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
   for (i = 0, n = fs->nuv; i < n; i++) {
     GCstr *s = strref(vs[fs->uvmap[i]].name);
     MSize len = s->len+1;
-    fs_buf_need(ls, len);
-    fs_buf_str(ls, strdata(s), len);
+    char *p = lj_buf_more(ls->L, &ls->sb, len);
+    p = lj_buf_wmem(p, strdata(s), len);
+    setsbufP(&ls->sb, p);
   }
-  *ofsvar = ls->sb.n;
+  *ofsvar = sbuflen(&ls->sb);
   lastpc = 0;
   /* Store local variable names and compressed ranges. */
   for (ve = vs + ls->vtop, vs += fs->vbase; vs < ve; vs++) {
     if (!gola_isgotolabel(vs)) {
       GCstr *s = strref(vs->name);
       BCPos startpc;
+      char *p;
       if ((uintptr_t)s < VARNAME__MAX) {
-	fs_buf_need(ls, 1 + 2*5);
-	ls->sb.buf[ls->sb.n++] = (uint8_t)(uintptr_t)s;
+	p = lj_buf_more(ls->L, &ls->sb, 1 + 2*5);
+	*p++ = (char)(uintptr_t)s;
       } else {
 	MSize len = s->len+1;
-	fs_buf_need(ls, len + 2*5);
-	fs_buf_str(ls, strdata(s), len);
+	p = lj_buf_more(ls->L, &ls->sb, len + 2*5);
+	p = lj_buf_wmem(p, strdata(s), len);
       }
       startpc = vs->startpc;
-      fs_buf_uleb128(ls, startpc-lastpc);
-      fs_buf_uleb128(ls, vs->endpc-startpc);
+      p = lj_buf_wuleb128(p, startpc-lastpc);
+      p = lj_buf_wuleb128(p, vs->endpc-startpc);
+      setsbufP(&ls->sb, p);
       lastpc = startpc;
     }
   }
-  fs_buf_need(ls, 1);
-  ls->sb.buf[ls->sb.n++] = '\0';  /* Terminator for varinfo. */
-  return ls->sb.n;
+  lj_buf_putb(ls->L, &ls->sb, '\0');  /* Terminator for varinfo. */
+  return sbuflen(&ls->sb);
 }
 
 /* Fixup variable info for prototype. */
@@ -1499,7 +1477,7 @@ static void fs_fixup_var(LexState *ls, GCproto *pt, uint8_t *p, size_t ofsvar)
 {
   setmref(pt->uvinfo, p);
   setmref(pt->varinfo, (char *)p + ofsvar);
-  memcpy(p, ls->sb.buf, ls->sb.n);  /* Copy from temp. string buffer. */
+  memcpy(p, sbufB(&ls->sb), sbuflen(&ls->sb));  /* Copy from temp. buffer. */
 }
 #else
 

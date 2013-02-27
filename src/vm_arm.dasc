@@ -1801,10 +1801,11 @@ static void build_subroutines(BuildCtx *ctx)
   |   cmp CARG2, #1
   |   blo ->fff_emptystr		// Zero-length string?
   |   bne ->fff_fallback		// Fallback for > 1-char strings.
-  |  ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
-  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |  ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
+  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
   |   ldr CARG1, STR:CARG1[1]
-  |  cmp RB, CARG3
+  |  add INS, CARG2, CARG3
+  |  cmp RB, INS
   |  blo ->fff_fallback
   |1:  // Fill buffer with char.
   |   strb CARG1, [CARG2, CARG4]
@@ -1819,11 +1820,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   blo ->fff_fallback
   |  checkstr CARG2, ->fff_fallback
   |  ldr CARG3, STR:CARG1->len
-  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
-  |    ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
+  |    ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
   |  mov CARG4, CARG3
   |  add CARG1, STR:CARG1, #sizeof(GCstr)
-  |   cmp RB, CARG3
+  |   add INS, CARG2, CARG3
+  |   cmp RB, INS
   |   blo ->fff_fallback
   |1:  // Reverse string copy.
   |  ldrb RB, [CARG1], #1
@@ -1840,11 +1842,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   blo ->fff_fallback
   |  checkstr CARG2, ->fff_fallback
   |  ldr CARG3, STR:CARG1->len
-  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.sz)]
-  |    ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.buf)]
+  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
+  |    ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
   |  mov CARG4, #0
   |  add CARG1, STR:CARG1, #sizeof(GCstr)
-  |   cmp RB, CARG3
+  |   add INS, CARG2, CARG3
+  |   cmp RB, INS
   |   blo ->fff_fallback
   |1:  // ASCII case conversion.
   |  ldrb RB, [CARG1, CARG4]

@@ -53,27 +53,28 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
     const char *buf;
     size_t size;
     if (ls->n) {  /* Copy remainder to buffer. */
-      if (ls->sb.n) {  /* Move down in buffer. */
-	lua_assert(ls->p + ls->n == ls->sb.buf + ls->sb.n);
-	if (ls->n != ls->sb.n)
-	  memmove(ls->sb.buf, ls->p, ls->n);
+      if (sbuflen(&ls->sb)) {  /* Move down in buffer. */
+	lua_assert(ls->p + ls->n == sbufP(&ls->sb));
+	if (ls->n != sbuflen(&ls->sb))
+	  memmove(sbufB(&ls->sb), ls->p, ls->n);
       } else {  /* Copy from buffer provided by reader. */
 	memcpy(lj_buf_need(ls->L, &ls->sb, len), ls->p, ls->n);
       }
-      ls->p = ls->sb.buf;
+      ls->p = sbufB(&ls->sb);
     }
-    ls->sb.n = ls->n;
+    setsbufP(&ls->sb, sbufB(&ls->sb) + ls->n);
     buf = ls->rfunc(ls->L, ls->rdata, &size);  /* Get more data from reader. */
     if (buf == NULL || size == 0) {  /* EOF? */
       if (need) bcread_error(ls, LJ_ERR_BCBAD);
       ls->current = -1;  /* Only bad if we get called again. */
       break;
     }
-    if (ls->sb.n) {  /* Append to buffer. */
-      MSize n = ls->sb.n + (MSize)size;
+    if (sbuflen(&ls->sb)) {  /* Append to buffer. */
+      MSize n = sbuflen(&ls->sb) + (MSize)size;
       char *p = lj_buf_need(ls->L, &ls->sb, n < len ? len : n);
-      memcpy(p + ls->sb.n, buf, size);
-      ls->n = ls->sb.n = n;
+      memcpy(sbufP(&ls->sb), buf, size);
+      setsbufP(&ls->sb, sbufB(&ls->sb) + n);
+      ls->n = n;
       ls->p = p;
     } else {  /* Return buffer provided by reader. */
       ls->n = (MSize)size;

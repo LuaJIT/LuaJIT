@@ -2201,15 +2201,16 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |   lwz TMP0, STR:CARG1->len
   |  cmpwi CARG3, 0
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
   |  ble >2				// Count <= 0? (or non-int)
   |   cmplwi TMP0, 1
+  |   add TMP3, CARG2, CARG3
   |  subi TMP2, CARG3, 1
   |   blt >2				// Zero length string?
-  |  cmplw cr1, TMP1, CARG3
+  |  cmplw cr1, TMP1, TMP3
   |   bne ->fff_fallback		// Fallback for > 1-char strings.
   |   lbz TMP0, STR:CARG1[1]
-  |   lp CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
   |  blt cr1, ->fff_fallback
   |1:  // Fill buffer with char. Yes, this is suboptimal code (do you care?).
   |  cmplwi TMP2, 0
@@ -2229,13 +2230,14 @@ static void build_subroutines(BuildCtx *ctx)
   |    lwz STR:CARG1, 4(BASE)
   |  blt ->fff_fallback
   |  checkstr CARG3
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
   |  bne ->fff_fallback
   |  lwz CARG3, STR:CARG1->len
   |   la CARG1, #STR(STR:CARG1)
-  |   lp CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
   |   li TMP2, 0
-  |  cmplw TMP1, CARG3
+  |   add TMP3, CARG2, CARG3
+  |  cmplw TMP1, TMP3
   |   subi TMP3, CARG3, 1
   |  blt ->fff_fallback
   |1:  // Reverse string copy.
@@ -2255,13 +2257,14 @@ static void build_subroutines(BuildCtx *ctx)
   |    lwz STR:CARG1, 4(BASE)
   |  blt ->fff_fallback
   |  checkstr CARG3
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
+  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
   |  bne ->fff_fallback
   |  lwz CARG3, STR:CARG1->len
   |   la CARG1, #STR(STR:CARG1)
-  |   lp CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
-  |  cmplw TMP1, CARG3
   |   li TMP2, 0
+  |   add TMP3, CARG2, CARG3
+  |  cmplw TMP1, TMP3
   |  blt ->fff_fallback
   |1:  // ASCII case conversion.
   |  cmplw TMP2, CARG3

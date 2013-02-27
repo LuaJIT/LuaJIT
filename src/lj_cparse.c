@@ -86,22 +86,10 @@ static LJ_AINLINE CPChar cp_get(CPState *cp)
   return cp_get_bs(cp);
 }
 
-/* Grow save buffer. */
-static LJ_NOINLINE void cp_save_grow(CPState *cp, CPChar c)
-{
-  if (cp->sb.sz >= CPARSE_MAX_BUF/2)
-    cp_err(cp, LJ_ERR_XELEM);
-  lj_buf_grow(cp->L, &cp->sb, 0);
-  cp->sb.buf[cp->sb.n++] = (char)c;
-}
-
 /* Save character in buffer. */
 static LJ_AINLINE void cp_save(CPState *cp, CPChar c)
 {
-  if (LJ_UNLIKELY(cp->sb.n + 1 > cp->sb.sz))
-    cp_save_grow(cp, c);
-  else
-    cp->sb.buf[cp->sb.n++] = (char)c;
+  lj_buf_putb(cp->L, &cp->sb, c);
 }
 
 /* Skip line break. Handles "\n", "\r", "\r\n" or "\n\r". */
@@ -121,9 +109,9 @@ LJ_NORET static void cp_errmsg(CPState *cp, CPToken tok, ErrMsg em, ...)
     tokstr = NULL;
   } else if (tok == CTOK_IDENT || tok == CTOK_INTEGER || tok == CTOK_STRING ||
 	     tok >= CTOK_FIRSTDECL) {
-    if (cp->sb.n == 0) cp_save(cp, '$');
+    if (sbufP(&cp->sb) == sbufB(&cp->sb)) cp_save(cp, '$');
     cp_save(cp, '\0');
-    tokstr = cp->sb.buf;
+    tokstr = sbufB(&cp->sb);
   } else {
     tokstr = cp_tok2str(cp, tok);
   }
@@ -163,7 +151,7 @@ static CPToken cp_number(CPState *cp)
   TValue o;
   do { cp_save(cp, cp->c); } while (lj_char_isident(cp_get(cp)));
   cp_save(cp, '\0');
-  fmt = lj_strscan_scan((const uint8_t *)cp->sb.buf, &o, STRSCAN_OPT_C);
+  fmt = lj_strscan_scan((const uint8_t *)sbufB(&cp->sb), &o, STRSCAN_OPT_C);
   if (fmt == STRSCAN_INT) cp->val.id = CTID_INT32;
   else if (fmt == STRSCAN_U32) cp->val.id = CTID_UINT32;
   else if (!(cp->mode & CPARSE_MODE_SKIP))
@@ -176,7 +164,7 @@ static CPToken cp_number(CPState *cp)
 static CPToken cp_ident(CPState *cp)
 {
   do { cp_save(cp, cp->c); } while (lj_char_isident(cp_get(cp)));
-  cp->str = lj_str_new(cp->L, cp->sb.buf, cp->sb.n);
+  cp->str = lj_buf_str(cp->L, &cp->sb);
   cp->val.id = lj_ctype_getname(cp->cts, &cp->ct, cp->str, cp->tmask);
   if (ctype_type(cp->ct->info) == CT_KW)
     return ctype_cid(cp->ct->info);
@@ -262,11 +250,11 @@ static CPToken cp_string(CPState *cp)
   }
   cp_get(cp);
   if (delim == '"') {
-    cp->str = lj_str_new(cp->L, cp->sb.buf, cp->sb.n);
+    cp->str = lj_buf_str(cp->L, &cp->sb);
     return CTOK_STRING;
   } else {
-    if (cp->sb.n != 1) cp_err_token(cp, '\'');
-    cp->val.i32 = (int32_t)(char)cp->sb.buf[0];
+    if (sbuflen(&cp->sb) != 1) cp_err_token(cp, '\'');
+    cp->val.i32 = (int32_t)(char)*sbufB(&cp->sb);
     cp->val.id = CTID_INT32;
     return CTOK_INTEGER;
   }

@@ -1736,14 +1736,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  beqz AT, ->fff_fallback
   |.  lw TMP0, STR:CARG1->len
   |   mfc1 CARG3, f0
-  |  lw TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
+  |  lw CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
+  |   lw TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
   |  li AT, 1
   |   blez CARG3, ->fff_emptystr	// Count <= 0?
   |.   sltu AT, AT, TMP0
   |  beqz TMP0, ->fff_emptystr		// Zero length string?
-  |.  sltu TMP0, TMP1, CARG3
+  |.  addu TMP3, CARG2, CARG3
+  |  sltu TMP0, TMP1, TMP3
   |  or AT, AT, TMP0
-  |   lw CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
   |  bnez AT, ->fff_fallback		// Fallback for > 1-char strings.
   |.  lbu TMP0, STR:CARG1[1]
   |  addu TMP2, CARG2, CARG3
@@ -1762,14 +1763,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  beqz NARGS8:RC, ->fff_fallback
   |.  li AT, LJ_TSTR
   |  bne CARG3, AT, ->fff_fallback
-  |.  lw TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
-  |  lw CARG3, STR:CARG1->len
+  |.  lw CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
+  |   lw CARG3, STR:CARG1->len
+  |  lw TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
   |   addiu CARG1, STR:CARG1, #STR
-  |   lw CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
-  |  sltu AT, TMP1, CARG3
+  |   addu CARG4, CARG2, CARG3
+  |  sltu AT, TMP1, CARG4
   |  bnez AT, ->fff_fallback
   |.  addu TMP3, CARG1, CARG3
-  |  addu CARG4, CARG2, CARG3
   |1:  // Reverse string copy.
   |   lbu TMP1, 0(CARG1)
   |  sltu AT, CARG1, TMP3
@@ -1787,11 +1788,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  beqz NARGS8:RC, ->fff_fallback
   |.  li AT, LJ_TSTR
   |  bne CARG3, AT, ->fff_fallback
-  |.  lw TMP1, DISPATCH_GL(tmpbuf.sz)(DISPATCH)
-  |  lw CARG3, STR:CARG1->len
+  |.  lw CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
+  |   lw CARG3, STR:CARG1->len
+  |  lw TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
   |   addiu CARG1, STR:CARG1, #STR
-  |   lw CARG2, DISPATCH_GL(tmpbuf.buf)(DISPATCH)
-  |  sltu AT, TMP1, CARG3
+  |   addu TMP3, CARG2, CARG3
+  |  sltu AT, TMP1, TMP3
   |  bnez AT, ->fff_fallback
   |.  addu TMP3, CARG1, CARG3
   |  move CARG4, CARG2
