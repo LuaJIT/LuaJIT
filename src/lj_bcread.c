@@ -9,6 +9,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_bc.h"
@@ -42,17 +43,6 @@ static LJ_NOINLINE void bcread_error(LexState *ls, ErrMsg em)
   lj_err_throw(L, LUA_ERRSYNTAX);
 }
 
-/* Resize input buffer. */
-static void bcread_resize(LexState *ls, MSize len)
-{
-  if (ls->sb.sz < len) {
-    MSize sz = ls->sb.sz * 2;
-    while (len > sz) sz = sz * 2;
-    lj_str_resizebuf(ls->L, &ls->sb, sz);
-    /* Caveat: this may change ls->sb.buf which may affect ls->p. */
-  }
-}
-
 /* Refill buffer if needed. */
 static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 {
@@ -68,8 +58,7 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 	if (ls->n != ls->sb.n)
 	  memmove(ls->sb.buf, ls->p, ls->n);
       } else {  /* Copy from buffer provided by reader. */
-	bcread_resize(ls, len);
-	memcpy(ls->sb.buf, ls->p, ls->n);
+	memcpy(lj_buf_need(ls->L, &ls->sb, len), ls->p, ls->n);
       }
       ls->p = ls->sb.buf;
     }
@@ -82,10 +71,10 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
     }
     if (ls->sb.n) {  /* Append to buffer. */
       MSize n = ls->sb.n + (MSize)size;
-      bcread_resize(ls, n < len ? len : n);
-      memcpy(ls->sb.buf + ls->sb.n, buf, size);
+      char *p = lj_buf_need(ls->L, &ls->sb, n < len ? len : n);
+      memcpy(p + ls->sb.n, buf, size);
       ls->n = ls->sb.n = n;
-      ls->p = ls->sb.buf;
+      ls->p = p;
     } else {  /* Return buffer provided by reader. */
       ls->n = (MSize)size;
       ls->p = buf;
@@ -442,7 +431,7 @@ GCproto *lj_bcread(LexState *ls)
   lua_State *L = ls->L;
   lua_assert(ls->current == BCDUMP_HEAD1);
   bcread_savetop(L, ls, L->top);
-  lj_str_resetbuf(&ls->sb);
+  lj_buf_reset(&ls->sb);
   /* Check for a valid bytecode dump header. */
   if (!bcread_header(ls))
     bcread_error(ls, LJ_ERR_BCFMT);

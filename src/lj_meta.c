@@ -12,6 +12,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_meta.h"
@@ -283,7 +284,7 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       ** next step: [...][CAT stack ............]
       */
       MSize tlen = strV(top)->len;
-      char *buffer;
+      char *buf;
       int i;
       for (n = 1; n <= left && tostring(L, top-n); n++) {
 	MSize len = strV(top-n)->len;
@@ -291,15 +292,15 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 	  lj_err_msg(L, LJ_ERR_STROV);
 	tlen += len;
       }
-      buffer = lj_str_needbuf(L, &G(L)->tmpbuf, tlen);
+      buf = lj_buf_tmp(L, tlen);
       n--;
       tlen = 0;
       for (i = n; i >= 0; i--) {
 	MSize len = strV(top-i)->len;
-	memcpy(buffer + tlen, strVdata(top-i), len);
+	memcpy(buf + tlen, strVdata(top-i), len);
 	tlen += len;
       }
-      setstrV(L, top-n, lj_str_new(L, buffer, tlen));
+      setstrV(L, top-n, lj_str_new(L, buf, tlen));
     }
     left -= n;
     top -= n;

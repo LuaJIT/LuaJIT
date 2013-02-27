@@ -64,7 +64,7 @@ LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
 LJLIB_ASM(string_char)
 {
   int i, nargs = (int)(L->top - L->base);
-  char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, (size_t)nargs);
+  char *buf = lj_buf_tmp(L, (size_t)nargs);
   for (i = 1; i <= nargs; i++) {
     int32_t k = lj_lib_checkint(L, i);
     if (!checku8(k))
@@ -91,8 +91,6 @@ LJLIB_ASM(string_rep)
   int32_t len = (int32_t)s->len;
   global_State *g = G(L);
   int64_t tlen;
-  const char *src;
-  char *buf;
   if (k <= 0) {
   empty:
     setstrV(L, L->base-1, &g->strempty);
@@ -110,31 +108,34 @@ LJLIB_ASM(string_rep)
     if (tlen > LJ_MAX_STR)
       lj_err_caller(L, LJ_ERR_STROV);
   }
-  if (tlen == 0) goto empty;
-  buf = lj_str_needbuf(L, &g->tmpbuf, (MSize)tlen);
-  src = strdata(s);
-  if (sep) {
-    tlen -= sep->len;  /* Ignore trailing separator. */
-    if (k > 1) {  /* Paste one string and one separator. */
-      int32_t i;
-      i = 0; while (i < len) *buf++ = src[i++];
-      src = strdata(sep); len = sep->len;
-      i = 0; while (i < len) *buf++ = src[i++];
-      src = g->tmpbuf.buf; len += s->len; k--;  /* Now copy that k-1 times. */
+  if (tlen == 0) {
+    goto empty;
+  } else {
+    char *buf = lj_buf_tmp(L, (MSize)tlen), *p = buf;
+    const char *src = strdata(s);
+    if (sep) {
+      tlen -= sep->len;  /* Ignore trailing separator. */
+      if (k > 1) {  /* Paste one string and one separator. */
+	int32_t i;
+	i = 0; while (i < len) *p++ = src[i++];
+	src = strdata(sep); len = sep->len;
+	i = 0; while (i < len) *p++ = src[i++];
+	src = buf; len += s->len; k--;  /* Now copy that k-1 times. */
+      }
     }
+    do {
+      int32_t i = 0;
+      do { *p++ = src[i++]; } while (i < len);
+    } while (--k > 0);
+    setstrV(L, L->base-1, lj_str_new(L, buf, (size_t)tlen));
   }
-  do {
-    int32_t i = 0;
-    do { *buf++ = src[i++]; } while (i < len);
-  } while (--k > 0);
-  setstrV(L, L->base-1, lj_str_new(L, g->tmpbuf.buf, (size_t)tlen));
   return FFH_RES(1);
 }
 
 LJLIB_ASM(string_reverse)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
-  lj_str_needbuf(L, &G(L)->tmpbuf, s->len);
+  lj_buf_tmp(L, s->len);
   return FFH_RETRY;
 }
 LJLIB_ASM_(string_lower)

@@ -11,6 +11,7 @@
 #if LJ_HASJIT
 
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
@@ -271,8 +272,7 @@ static void loop_unroll(jit_State *J)
   ** Caveat: don't call into the VM or run the GC or the buffer may be gone.
   */
   invar = J->cur.nins;
-  subst = (IRRef1 *)lj_str_needbuf(J->L, &G(J->L)->tmpbuf,
-				   (invar-REF_BIAS)*sizeof(IRRef1)) - REF_BIAS;
+  subst = (IRRef1 *)lj_buf_tmp(J->L, (invar-REF_BIAS)*sizeof(IRRef1))-REF_BIAS;
   subst[REF_BASE] = REF_BASE;
 
   /* LOOP separates the pre-roll from the loop body. */

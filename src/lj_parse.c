@@ -1429,18 +1429,9 @@ static void fs_fixup_line(FuncState *fs, GCproto *pt,
   }
 }
 
-/* Resize buffer if needed. */
-static LJ_NOINLINE void fs_buf_resize(LexState *ls, MSize len)
-{
-  MSize sz = ls->sb.sz * 2;
-  while (ls->sb.n + len > sz) sz = sz * 2;
-  lj_str_resizebuf(ls->L, &ls->sb, sz);
-}
-
 static LJ_AINLINE void fs_buf_need(LexState *ls, MSize len)
 {
-  if (LJ_UNLIKELY(ls->sb.n + len > ls->sb.sz))
-    fs_buf_resize(ls, len);
+  lj_buf_need(ls->L, &ls->sb, ls->sb.n + len);
 }
 
 /* Add string to buffer. */
@@ -1469,7 +1460,7 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
   VarInfo *vs =ls->vstack, *ve;
   MSize i, n;
   BCPos lastpc;
-  lj_str_resetbuf(&ls->sb);  /* Copy to temp. string buffer. */
+  lj_buf_reset(&ls->sb);  /* Copy to temp. string buffer. */
   /* Store upvalue names. */
   for (i = 0, n = fs->nuv; i < n; i++) {
     GCstr *s = strref(vs[fs->uvmap[i]].name);

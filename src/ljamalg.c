@@ -33,6 +33,7 @@
 #include "lj_char.c"
 #include "lj_bc.c"
 #include "lj_obj.c"
+#include "lj_buf.c"
 #include "lj_str.c"
 #include "lj_tab.c"
 #include "lj_func.c"

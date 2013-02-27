@@ -119,7 +119,7 @@ typedef int32_t BCLine;  /* Bytecode line number. */
 /* Internal assembler functions. Never call these directly from C. */
 typedef void (*ASMFunction)(void);
 
-/* Resizable string buffer. Need this here, details in lj_str.h. */
+/* Resizable string buffer. Need this here, details in lj_buf.h. */
 typedef struct SBuf {
   char *buf;		/* String buffer base. */
   MSize n;		/* String buffer length. */

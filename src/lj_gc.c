@@ -12,6 +12,7 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_func.h"
@@ -353,8 +354,7 @@ static void gc_shrink(global_State *g, lua_State *L)
 {
   if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
     lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
-  if (g->tmpbuf.sz > LJ_MIN_SBUF*2)
-    lj_str_resizebuf(L, &g->tmpbuf, g->tmpbuf.sz >> 1);  /* Shrink temp buf. */
+  lj_buf_shrink(L, &g->tmpbuf);  /* Shrink temp buffer. */
 }
 
 /* Type of GC free functions. */

@@ -37,14 +37,4 @@ LJ_FUNC const char *lj_str_pushf(lua_State *L, const char *fmt, ...)
 #endif
   ;
 
-/* Resizable string buffers. Struct definition in lj_obj.h. */
-LJ_FUNC char *lj_str_needbuf(lua_State *L, SBuf *sb, MSize sz);
-
-#define lj_str_initbuf(sb)	((sb)->buf = NULL, (sb)->sz = 0)
-#define lj_str_resetbuf(sb)	((sb)->n = 0)
-#define lj_str_resizebuf(L, sb, size) \
-  ((sb)->buf = (char *)lj_mem_realloc(L, (sb)->buf, (sb)->sz, (size)), \
-   (sb)->sz = (size))
-#define lj_str_freebuf(g, sb)	lj_mem_free(g, (void *)(sb)->buf, (sb)->sz)
-
 #endif

@@ -9,6 +9,7 @@
 
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_ctype.h"
 #include "lj_cparse.h"
@@ -88,11 +89,9 @@ static LJ_AINLINE CPChar cp_get(CPState *cp)
 /* Grow save buffer. */
 static LJ_NOINLINE void cp_save_grow(CPState *cp, CPChar c)
 {
-  MSize newsize;
   if (cp->sb.sz >= CPARSE_MAX_BUF/2)
     cp_err(cp, LJ_ERR_XELEM);
-  newsize = cp->sb.sz * 2;
-  lj_str_resizebuf(cp->L, &cp->sb, newsize);
+  lj_buf_grow(cp->L, &cp->sb, 0);
   cp->sb.buf[cp->sb.n++] = (char)c;
 }
 
@@ -296,7 +295,7 @@ static void cp_comment_cpp(CPState *cp)
 /* Lexical scanner for C. Only a minimal subset is implemented. */
 static CPToken cp_next_(CPState *cp)
 {
-  lj_str_resetbuf(&cp->sb);
+  lj_buf_reset(&cp->sb);
   for (;;) {
     if (lj_char_isident(cp->c))
       return lj_char_isdigit(cp->c) ? cp_number(cp) : cp_ident(cp);
@@ -380,8 +379,7 @@ static void cp_init(CPState *cp)
   cp->depth = 0;
   cp->curpack = 0;
   cp->packstack[0] = 255;
-  lj_str_initbuf(&cp->sb);
-  lj_str_resizebuf(cp->L, &cp->sb, LJ_MIN_SBUF);
+  lj_buf_init(&cp->sb);
   lua_assert(cp->p != NULL);
   cp_get(cp);  /* Read-ahead first char. */
   cp->tok = 0;
@@ -393,7 +391,7 @@ static void cp_init(CPState *cp)
 static void cp_cleanup(CPState *cp)
 {
   global_State *g = G(cp->L);
-  lj_str_freebuf(g, &cp->sb);
+  lj_buf_free(g, &cp->sb);
 }
 
 /* Check and consume optional token. */

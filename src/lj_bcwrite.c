@@ -8,6 +8,7 @@
 
 #include "lj_obj.h"
 #include "lj_gc.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_bc.h"
 #if LJ_HASFFI
@@ -33,19 +34,10 @@ typedef struct BCWriteCtx {
 
 /* -- Output buffer handling ---------------------------------------------- */
 
-/* Resize buffer if needed. */
-static LJ_NOINLINE void bcwrite_resize(BCWriteCtx *ctx, MSize len)
-{
-  MSize sz = ctx->sb.sz * 2;
-  while (ctx->sb.n + len > sz) sz = sz * 2;
-  lj_str_resizebuf(ctx->L, &ctx->sb, sz);
-}
-
-/* Need a certain amount of buffer space. */
+/* Ensure a certain amount of buffer space. */
 static LJ_AINLINE void bcwrite_need(BCWriteCtx *ctx, MSize len)
 {
-  if (LJ_UNLIKELY(ctx->sb.n + len > ctx->sb.sz))
-    bcwrite_resize(ctx, len);
+  lj_buf_need(ctx->L, &ctx->sb, ctx->sb.n + len);
 }
 
 /* Add memory block to buffer. */
@@ -285,7 +277,7 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
   }
 
   /* Start writing the prototype info to a buffer. */
-  lj_str_resetbuf(&ctx->sb);
+  lj_buf_reset(&ctx->sb);
   ctx->sb.n = 5;  /* Leave room for final size. */
   bcwrite_need(ctx, 4+6*5+(pt->sizebc-1)*(MSize)sizeof(BCIns)+pt->sizeuv*2);
 
@@ -338,7 +330,7 @@ static void bcwrite_header(BCWriteCtx *ctx)
   GCstr *chunkname = proto_chunkname(ctx->pt);
   const char *name = strdata(chunkname);
   MSize len = chunkname->len;
-  lj_str_resetbuf(&ctx->sb);
+  lj_buf_reset(&ctx->sb);
   bcwrite_need(ctx, 5+5+len);
   bcwrite_byte(ctx, BCDUMP_HEAD1);
   bcwrite_byte(ctx, BCDUMP_HEAD2);
@@ -368,7 +360,7 @@ static TValue *cpwriter(lua_State *L, lua_CFunction dummy, void *ud)
 {
   BCWriteCtx *ctx = (BCWriteCtx *)ud;
   UNUSED(dummy);
-  lj_str_resizebuf(L, &ctx->sb, 1024);  /* Avoids resize for most prototypes. */
+  lj_buf_grow(L, &ctx->sb, 1024);  /* Avoids resize for most prototypes. */
   bcwrite_header(ctx);
   bcwrite_proto(ctx, ctx->pt);
   bcwrite_footer(ctx);
@@ -387,10 +379,10 @@ int lj_bcwrite(lua_State *L, GCproto *pt, lua_Writer writer, void *data,
   ctx.wdata = data;
   ctx.strip = strip;
   ctx.status = 0;
-  lj_str_initbuf(&ctx.sb);
+  lj_buf_init(&ctx.sb);
   status = lj_vm_cpcall(L, NULL, &ctx, cpwriter);
   if (status == 0) status = ctx.status;
-  lj_str_freebuf(G(ctx.L), &ctx.sb);
+  lj_buf_free(G(ctx.L), &ctx.sb);
   return status;
 }
 

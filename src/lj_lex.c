@@ -56,11 +56,9 @@ static int fillbuf(LexState *ls)
 
 static LJ_NOINLINE void save_grow(LexState *ls, int c)
 {
-  MSize newsize;
   if (ls->sb.sz >= LJ_MAX_STR/2)
     lj_lex_error(ls, 0, LJ_ERR_XELEM);
-  newsize = ls->sb.sz * 2;
-  lj_str_resizebuf(ls->L, &ls->sb, newsize);
+  lj_buf_grow(ls->L, &ls->sb, 0);
   ls->sb.buf[ls->sb.n++] = (char)c;
 }
 
@@ -167,7 +165,7 @@ static void read_long_string(LexState *ls, TValue *tv, int sep)
     case '\r':
       save(ls, '\n');
       inclinenumber(ls);
-      if (!tv) lj_str_resetbuf(&ls->sb);  /* avoid wasting space */
+      if (!tv) lj_buf_reset(&ls->sb);  /* Don't waste space for comments. */
       break;
     default:
       if (tv) save_and_next(ls);
@@ -259,7 +257,7 @@ static void read_string(LexState *ls, int delim, TValue *tv)
 
 static int llex(LexState *ls, TValue *tv)
 {
-  lj_str_resetbuf(&ls->sb);
+  lj_buf_reset(&ls->sb);
   for (;;) {
     if (lj_char_isident(ls->current)) {
       GCstr *s;
@@ -295,10 +293,10 @@ static int llex(LexState *ls, TValue *tv)
       next(ls);
       if (ls->current == '[') {
 	int sep = skip_sep(ls);
-	lj_str_resetbuf(&ls->sb);  /* `skip_sep' may dirty the buffer */
+	lj_buf_reset(&ls->sb);  /* `skip_sep' may dirty the buffer */
 	if (sep >= 0) {
 	  read_long_string(ls, NULL, sep);  /* long comment */
-	  lj_str_resetbuf(&ls->sb);
+	  lj_buf_reset(&ls->sb);
 	  continue;
 	}
       }
@@ -381,7 +379,6 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
-  lj_str_resizebuf(ls->L, &ls->sb, LJ_MIN_SBUF);
   next(ls);  /* Read-ahead first char. */
   if (ls->current == 0xef && ls->n >= 2 && char2int(ls->p[0]) == 0xbb &&
       char2int(ls->p[1]) == 0xbf) {  /* Skip UTF-8 BOM (if buffered). */
@@ -420,7 +417,7 @@ void lj_lex_cleanup(lua_State *L, LexState *ls)
   global_State *g = G(L);
   lj_mem_freevec(g, ls->bcstack, ls->sizebcstack, BCInsLine);
   lj_mem_freevec(g, ls->vstack, ls->sizevstack, VarInfo);
-  lj_str_freebuf(g, &ls->sb);
+  lj_buf_free(g, &ls->sb);
 }
 
 void lj_lex_next(LexState *ls)

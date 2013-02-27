@@ -18,6 +18,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_state.h"
 #include "lj_ff.h"
@@ -144,7 +145,7 @@ static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
   MSize m = LUAL_BUFFERSIZE, n = 0, ok = 0;
   char *buf;
   for (;;) {
-    buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    buf = lj_buf_tmp(L, m);
     if (fgets(buf+n, m-n, fp) == NULL) break;
     n += (MSize)strlen(buf+n);
     ok |= n;
@@ -159,7 +160,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
 {
   MSize m, n;
   for (m = LUAL_BUFFERSIZE, n = 0; ; m += m) {
-    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    char *buf = lj_buf_tmp(L, m);
     n += (MSize)fread(buf+n, 1, m-n, fp);
     if (n != m) {
       setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
@@ -171,7 +172,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
 static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
 {
   if (m) {
-    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    char *buf = lj_buf_tmp(L, m);
     MSize n = (MSize)fread(buf, 1, m, fp);
     setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
     return (n > 0 || m == 0);

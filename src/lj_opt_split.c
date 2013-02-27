@@ -11,6 +11,7 @@
 #if LJ_HASJIT && (LJ_SOFTFP || (LJ_32 && LJ_HASFFI))
 
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
@@ -201,7 +202,7 @@ static void split_ir(jit_State *J)
   IRRef nins = J->cur.nins, nk = J->cur.nk;
   MSize irlen = nins - nk;
   MSize need = (irlen+1)*(sizeof(IRIns) + sizeof(IRRef1));
-  IRIns *oir = (IRIns *)lj_str_needbuf(J->L, &G(J->L)->tmpbuf, need);
+  IRIns *oir = (IRIns *)lj_buf_tmp(J->L, need);
   IRRef1 *hisubst;
   IRRef ref;
 
