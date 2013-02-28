@@ -71,6 +71,7 @@ static void asm_sparejump_setup(ASMState *as)
     memset(mxp+2, 0, MIPS_SPAREJUMP*8);
     mxp += MIPS_SPAREJUMP*2;
     lua_assert(mxp < as->mctop);
+    lj_mcode_sync(as->mcbot, mxp);
     lj_mcode_commitbot(as->J, mxp);
     as->mcbot = mxp;
     as->mclim = as->mcbot + MCLIM_REDZONE;
