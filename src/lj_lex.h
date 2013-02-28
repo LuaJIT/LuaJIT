@@ -54,11 +54,11 @@ typedef struct LexState {
   struct lua_State *L;	/* Lua state. */
   TValue tokval;	/* Current token value. */
   TValue lookaheadval;	/* Lookahead token value. */
+  const char *p;	/* Current position in input buffer. */
+  const char *pe;	/* End of input buffer. */
   LexChar c;		/* Current character. */
   LexToken tok;		/* Current token. */
   LexToken lookahead;	/* Lookahead token. */
-  MSize n;		/* Bytes left in input buffer. */
-  const char *p;	/* Current position in input buffer. */
   SBuf sb;		/* String buffer for tokens. */
   lua_Reader rfunc;	/* Reader callback. */
   void *rdata;		/* Reader callback data. */

@@ -45,17 +45,17 @@ TKDEF(TKSTR1, TKSTR2)
 static LJ_NOINLINE LexChar lex_more(LexState *ls)
 {
   size_t sz;
-  const char *buf = ls->rfunc(ls->L, ls->rdata, &sz);
-  if (buf == NULL || sz == 0) return LEX_EOF;
-  ls->n = (MSize)sz - 1;
-  ls->p = buf;
-  return (LexChar)(uint8_t)*ls->p++;
+  const char *p = ls->rfunc(ls->L, ls->rdata, &sz);
+  if (p == NULL || sz == 0) return LEX_EOF;
+  ls->pe = p + sz;
+  ls->p = p + 1;
+  return (LexChar)(uint8_t)p[0];
 }
 
 /* Get next character. */
 static LJ_AINLINE LexChar lex_next(LexState *ls)
 {
-  return (ls->c = ls->n ? (ls->n--,(LexChar)(uint8_t)*ls->p++) : lex_more(ls));
+  return (ls->c = ls->p < ls->pe ? (LexChar)(uint8_t)*ls->p++ : lex_more(ls));
 }
 
 /* Save character. */
@@ -368,8 +368,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   int header = 0;
   ls->L = L;
   ls->fs = NULL;
-  ls->n = 0;
-  ls->p = NULL;
+  ls->pe = ls->p = NULL;
   ls->vstack = NULL;
   ls->sizevstack = 0;
   ls->vtop = 0;
@@ -379,9 +378,8 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->linenumber = 1;
   ls->lastline = 1;
   lex_next(ls);  /* Read-ahead first char. */
-  if (ls->c == 0xef && ls->n >= 2 && (uint8_t)ls->p[0] == 0xbb &&
+  if (ls->c == 0xef && ls->p + 2 <= ls->pe && (uint8_t)ls->p[0] == 0xbb &&
       (uint8_t)ls->p[1] == 0xbf) {  /* Skip UTF-8 BOM (if buffered). */
-    ls->n -= 2;
     ls->p += 2;
     lex_next(ls);
     header = 1;

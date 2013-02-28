@@ -55,7 +55,7 @@ static const uint8_t *lib_read_lfunc(lua_State *L, const uint8_t *p, GCtab *tab)
   memset(&ls, 0, sizeof(ls));
   ls.L = L;
   ls.p = (const char *)(p+len);
-  ls.n = ~(MSize)0;
+  ls.pe = (const char *)~(uintptr_t)0;
   ls.c = -1;
   ls.level = (BCDUMP_F_STRIP|(LJ_BE*BCDUMP_F_BE));
   ls.chunkname = name;
