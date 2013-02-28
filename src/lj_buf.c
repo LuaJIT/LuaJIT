@@ -13,8 +13,9 @@
 #include "lj_err.h"
 #include "lj_buf.h"
 
-LJ_NOINLINE void lj_buf_grow(lua_State *L, SBuf *sb, char *en)
+LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
 {
+  lua_State *L = sbufL(sb);
   char *b = sbufB(sb);
   MSize sz = (MSize)(en - b);
   MSize osz = (MSize)(sbufE(sb) - b), nsz = osz;
@@ -29,12 +30,14 @@ LJ_NOINLINE void lj_buf_grow(lua_State *L, SBuf *sb, char *en)
   setmref(sb->e, b + nsz);
 }
 
-char *lj_buf_tmp(lua_State *L, MSize sz)
+char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
 {
-  return lj_buf_need(L, &G(L)->tmpbuf, sz);
+  SBuf *sb = &G(L)->tmpbuf;
+  setmref(sb->L, L);
+  return lj_buf_need(sb, sz);
 }
 
-void lj_buf_shrink(lua_State *L, SBuf *sb)
+void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
 {
   char *b = sbufB(sb);
   MSize osz = (MSize)(sbufE(sb) - b);
@@ -54,14 +57,14 @@ char *lj_buf_wmem(char *p, const void *q, MSize len)
   return p;
 }
 
-void lj_buf_putmem(lua_State *L, SBuf *sb, const void *q, MSize len)
+void lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 {
-  char *p = lj_buf_more(L, sb, len);
+  char *p = lj_buf_more(sb, len);
   p = lj_buf_wmem(p, q, len);
   setsbufP(sb, p);
 }
 
-uint32_t lj_buf_ruleb128(const char **pp)
+uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {
   const uint8_t *p = (const uint8_t *)*pp;
   uint32_t v = *p++;
@@ -74,7 +77,7 @@ uint32_t lj_buf_ruleb128(const char **pp)
   return v;
 }
 
-char *lj_buf_wuleb128(char *p, uint32_t v)
+char * LJ_FASTCALL lj_buf_wuleb128(char *p, uint32_t v)
 {
   for (; v >= 0x80; v >>= 7)
     *p++ = (char)((v & 0x7f) | 0x80);

@@ -61,7 +61,7 @@ static LJ_AINLINE LexChar lex_next(LexState *ls)
 /* Save character. */
 static LJ_AINLINE void lex_save(LexState *ls, LexChar c)
 {
-  lj_buf_putb(ls->L, &ls->sb, c);
+  lj_buf_putb(&ls->sb, c);
 }
 
 /* Save previous character and get next character. */

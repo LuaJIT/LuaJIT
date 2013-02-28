@@ -1441,7 +1441,7 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
   for (i = 0, n = fs->nuv; i < n; i++) {
     GCstr *s = strref(vs[fs->uvmap[i]].name);
     MSize len = s->len+1;
-    char *p = lj_buf_more(ls->L, &ls->sb, len);
+    char *p = lj_buf_more(&ls->sb, len);
     p = lj_buf_wmem(p, strdata(s), len);
     setsbufP(&ls->sb, p);
   }
@@ -1454,11 +1454,11 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
       BCPos startpc;
       char *p;
       if ((uintptr_t)s < VARNAME__MAX) {
-	p = lj_buf_more(ls->L, &ls->sb, 1 + 2*5);
+	p = lj_buf_more(&ls->sb, 1 + 2*5);
 	*p++ = (char)(uintptr_t)s;
       } else {
 	MSize len = s->len+1;
-	p = lj_buf_more(ls->L, &ls->sb, len + 2*5);
+	p = lj_buf_more(&ls->sb, len + 2*5);
 	p = lj_buf_wmem(p, strdata(s), len);
       }
       startpc = vs->startpc;
@@ -1468,7 +1468,7 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
       lastpc = startpc;
     }
   }
-  lj_buf_putb(ls->L, &ls->sb, '\0');  /* Terminator for varinfo. */
+  lj_buf_putb(&ls->sb, '\0');  /* Terminator for varinfo. */
   return sbuflen(&ls->sb);
 }
 

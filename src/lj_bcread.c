@@ -59,7 +59,7 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 	lua_assert(ls->pe == sbufP(&ls->sb));
 	if (ls->p != p) memmove(p, ls->p, n);
       } else {  /* Copy from buffer provided by reader. */
-	p = lj_buf_need(ls->L, &ls->sb, len);
+	p = lj_buf_need(&ls->sb, len);
 	memcpy(p, ls->p, n);
       }
       ls->p = p;
@@ -74,7 +74,7 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
     }
     if (n) {  /* Append to buffer. */
       n += (MSize)sz;
-      p = lj_buf_need(ls->L, &ls->sb, n < len ? len : n);
+      p = lj_buf_need(&ls->sb, n < len ? len : n);
       memcpy(sbufP(&ls->sb), buf, sz);
       setsbufP(&ls->sb, p + n);
       ls->p = p;

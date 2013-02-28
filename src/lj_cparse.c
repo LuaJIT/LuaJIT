@@ -89,7 +89,7 @@ static LJ_AINLINE CPChar cp_get(CPState *cp)
 /* Save character in buffer. */
 static LJ_AINLINE void cp_save(CPState *cp, CPChar c)
 {
-  lj_buf_putb(cp->L, &cp->sb, c);
+  lj_buf_putb(&cp->sb, c);
 }
 
 /* Skip line break. Handles "\n", "\r", "\r\n" or "\n\r". */
@@ -367,7 +367,7 @@ static void cp_init(CPState *cp)
   cp->depth = 0;
   cp->curpack = 0;
   cp->packstack[0] = 255;
-  lj_buf_init(&cp->sb);
+  lj_buf_init(cp->L, &cp->sb);
   lua_assert(cp->p != NULL);
   cp_get(cp);  /* Read-ahead first char. */
   cp->tok = 0;

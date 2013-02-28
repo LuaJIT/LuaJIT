@@ -124,6 +124,7 @@ typedef struct SBuf {
   MRef p;		/* String buffer pointer. */
   MRef e;		/* String buffer end pointer. */
   MRef b;		/* String buffer base. */
+  MRef L;		/* lua_State, used for buffer resizing. */
 } SBuf;
 
 /* -- Tags and values ----------------------------------------------------- */
@@ -516,7 +517,7 @@ typedef struct global_State {
   lua_Alloc allocf;	/* Memory allocator. */
   void *allocd;		/* Memory allocator data. */
   GCState gc;		/* Garbage collector. */
-  SBuf tmpbuf;		/* Temporary buffer for string concatenation. */
+  SBuf tmpbuf;		/* Temporary string buffer. */
   Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
   GCstr strempty;	/* Empty string. */
   uint8_t stremptyz;	/* Zero terminator of empty string. */
