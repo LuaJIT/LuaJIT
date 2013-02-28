@@ -47,7 +47,7 @@ static LJ_NOINLINE void bcread_error(LexState *ls, ErrMsg em)
 static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 {
   lua_assert(len != 0);
-  if (len > LJ_MAX_MEM || ls->current < 0)
+  if (len > LJ_MAX_MEM || ls->c < 0)
     bcread_error(ls, LJ_ERR_BCBAD);
   do {
     const char *buf;
@@ -66,7 +66,7 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
     buf = ls->rfunc(ls->L, ls->rdata, &size);  /* Get more data from reader. */
     if (buf == NULL || size == 0) {  /* EOF? */
       if (need) bcread_error(ls, LJ_ERR_BCBAD);
-      ls->current = -1;  /* Only bad if we get called again. */
+      ls->c = -1;  /* Only bad if we get called again. */
       break;
     }
     if (sbuflen(&ls->sb)) {  /* Append to buffer. */
@@ -430,7 +430,7 @@ static int bcread_header(LexState *ls)
 GCproto *lj_bcread(LexState *ls)
 {
   lua_State *L = ls->L;
-  lua_assert(ls->current == BCDUMP_HEAD1);
+  lua_assert(ls->c == BCDUMP_HEAD1);
   bcread_savetop(L, ls, L->top);
   lj_buf_reset(&ls->sb);
   /* Check for a valid bytecode dump header. */

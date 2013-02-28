@@ -56,7 +56,7 @@ static const uint8_t *lib_read_lfunc(lua_State *L, const uint8_t *p, GCtab *tab)
   ls.L = L;
   ls.p = (const char *)(p+len);
   ls.n = ~(MSize)0;
-  ls.current = -1;
+  ls.c = -1;
   ls.level = (BCDUMP_F_STRIP|(LJ_BE*BCDUMP_F_BE));
   ls.chunkname = name;
   pt = lj_bcread_proto(&ls);

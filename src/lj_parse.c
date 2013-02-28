@@ -166,12 +166,12 @@ LJ_STATIC_ASSERT((int)BC_MODVV-(int)BC_ADDVV == (int)OPR_MOD-(int)OPR_ADD);
 
 LJ_NORET LJ_NOINLINE static void err_syntax(LexState *ls, ErrMsg em)
 {
-  lj_lex_error(ls, ls->token, em);
+  lj_lex_error(ls, ls->tok, em);
 }
 
-LJ_NORET LJ_NOINLINE static void err_token(LexState *ls, LexToken token)
+LJ_NORET LJ_NOINLINE static void err_token(LexState *ls, LexToken tok)
 {
-  lj_lex_error(ls, ls->token, LJ_ERR_XTOKEN, lj_lex_token2str(ls, token));
+  lj_lex_error(ls, ls->tok, LJ_ERR_XTOKEN, lj_lex_token2str(ls, tok));
 }
 
 LJ_NORET static void err_limit(FuncState *fs, uint32_t limit, const char *what)
@@ -982,7 +982,7 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
 /* Check and consume optional token. */
 static int lex_opt(LexState *ls, LexToken tok)
 {
-  if (ls->token == tok) {
+  if (ls->tok == tok) {
     lj_lex_next(ls);
     return 1;
   }
@@ -992,7 +992,7 @@ static int lex_opt(LexState *ls, LexToken tok)
 /* Check and consume token. */
 static void lex_check(LexState *ls, LexToken tok)
 {
-  if (ls->token != tok)
+  if (ls->tok != tok)
     err_token(ls, tok);
   lj_lex_next(ls);
 }
@@ -1006,7 +1006,7 @@ static void lex_match(LexState *ls, LexToken what, LexToken who, BCLine line)
     } else {
       const char *swhat = lj_lex_token2str(ls, what);
       const char *swho = lj_lex_token2str(ls, who);
-      lj_lex_error(ls, ls->token, LJ_ERR_XMATCH, swhat, swho, line);
+      lj_lex_error(ls, ls->tok, LJ_ERR_XMATCH, swhat, swho, line);
     }
   }
 }
@@ -1015,9 +1015,9 @@ static void lex_match(LexState *ls, LexToken what, LexToken who, BCLine line)
 static GCstr *lex_str(LexState *ls)
 {
   GCstr *s;
-  if (ls->token != TK_name && (LJ_52 || ls->token != TK_goto))
+  if (ls->tok != TK_name && (LJ_52 || ls->tok != TK_goto))
     err_token(ls, TK_name);
-  s = strV(&ls->tokenval);
+  s = strV(&ls->tokval);
   lj_lex_next(ls);
   return s;
 }
@@ -1584,7 +1584,7 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   L->top--;  /* Pop table of constants. */
   ls->vtop = fs->vbase;  /* Reset variable stack. */
   ls->fs = fs->prev;
-  lua_assert(ls->fs != NULL || ls->token == TK_eof);
+  lua_assert(ls->fs != NULL || ls->tok == TK_eof);
   return pt;
 }
 
@@ -1706,15 +1706,15 @@ static void expr_table(LexState *ls, ExpDesc *e)
   bcreg_reserve(fs, 1);
   freg++;
   lex_check(ls, '{');
-  while (ls->token != '}') {
+  while (ls->tok != '}') {
     ExpDesc key, val;
     vcall = 0;
-    if (ls->token == '[') {
+    if (ls->tok == '[') {
       expr_bracket(ls, &key);  /* Already calls expr_toval. */
       if (!expr_isk(&key)) expr_index(fs, e, &key);
       if (expr_isnumk(&key) && expr_numiszero(&key)) needarr = 1; else nhash++;
       lex_check(ls, '=');
-    } else if ((ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) &&
+    } else if ((ls->tok == TK_name || (!LJ_52 && ls->tok == TK_goto)) &&
 	       lj_lex_lookahead(ls) == '=') {
       expr_str(ls, &key);
       lex_check(ls, '=');
@@ -1807,11 +1807,11 @@ static BCReg parse_params(LexState *ls, int needself)
   lex_check(ls, '(');
   if (needself)
     var_new_lit(ls, nparams++, "self");
-  if (ls->token != ')') {
+  if (ls->tok != ')') {
     do {
-      if (ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) {
+      if (ls->tok == TK_name || (!LJ_52 && ls->tok == TK_goto)) {
 	var_new(ls, nparams++, lex_str(ls));
-      } else if (ls->token == TK_dots) {
+      } else if (ls->tok == TK_dots) {
 	lj_lex_next(ls);
 	fs->flags |= PROTO_VARARG;
 	break;
@@ -1845,7 +1845,7 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
   fs.bclim = pfs->bclim - pfs->pc;
   bcemit_AD(&fs, BC_FUNCF, 0, 0);  /* Placeholder. */
   parse_chunk(ls);
-  if (ls->token != TK_end) lex_match(ls, TK_end, TK_function, line);
+  if (ls->tok != TK_end) lex_match(ls, TK_end, TK_function, line);
   pt = fs_finish(ls, (ls->lastline = ls->linenumber));
   pfs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
   pfs->bclim = (BCPos)(ls->sizebcstack - oldbase);
@@ -1884,13 +1884,13 @@ static void parse_args(LexState *ls, ExpDesc *e)
   BCIns ins;
   BCReg base;
   BCLine line = ls->linenumber;
-  if (ls->token == '(') {
+  if (ls->tok == '(') {
 #if !LJ_52
     if (line != ls->lastline)
       err_syntax(ls, LJ_ERR_XAMBIG);
 #endif
     lj_lex_next(ls);
-    if (ls->token == ')') {  /* f(). */
+    if (ls->tok == ')') {  /* f(). */
       args.k = VVOID;
     } else {
       expr_list(ls, &args);
@@ -1898,11 +1898,11 @@ static void parse_args(LexState *ls, ExpDesc *e)
 	setbc_b(bcptr(fs, &args), 0);  /* Pass on multiple results. */
     }
     lex_match(ls, ')', '(', line);
-  } else if (ls->token == '{') {
+  } else if (ls->tok == '{') {
     expr_table(ls, &args);
-  } else if (ls->token == TK_string) {
+  } else if (ls->tok == TK_string) {
     expr_init(&args, VKSTR, 0);
-    args.u.sval = strV(&ls->tokenval);
+    args.u.sval = strV(&ls->tokval);
     lj_lex_next(ls);
   } else {
     err_syntax(ls, LJ_ERR_XFUNARG);
@@ -1928,32 +1928,32 @@ static void expr_primary(LexState *ls, ExpDesc *v)
 {
   FuncState *fs = ls->fs;
   /* Parse prefix expression. */
-  if (ls->token == '(') {
+  if (ls->tok == '(') {
     BCLine line = ls->linenumber;
     lj_lex_next(ls);
     expr(ls, v);
     lex_match(ls, ')', '(', line);
     expr_discharge(ls->fs, v);
-  } else if (ls->token == TK_name || (!LJ_52 && ls->token == TK_goto)) {
+  } else if (ls->tok == TK_name || (!LJ_52 && ls->tok == TK_goto)) {
     var_lookup(ls, v);
   } else {
     err_syntax(ls, LJ_ERR_XSYMBOL);
   }
   for (;;) {  /* Parse multiple expression suffixes. */
-    if (ls->token == '.') {
+    if (ls->tok == '.') {
       expr_field(ls, v);
-    } else if (ls->token == '[') {
+    } else if (ls->tok == '[') {
       ExpDesc key;
       expr_toanyreg(fs, v);
       expr_bracket(ls, &key);
       expr_index(fs, v, &key);
-    } else if (ls->token == ':') {
+    } else if (ls->tok == ':') {
       ExpDesc key;
       lj_lex_next(ls);
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
       parse_args(ls, v);
-    } else if (ls->token == '(' || ls->token == TK_string || ls->token == '{') {
+    } else if (ls->tok == '(' || ls->tok == TK_string || ls->tok == '{') {
       expr_tonextreg(fs, v);
       parse_args(ls, v);
     } else {
@@ -1965,14 +1965,14 @@ static void expr_primary(LexState *ls, ExpDesc *v)
 /* Parse simple expression. */
 static void expr_simple(LexState *ls, ExpDesc *v)
 {
-  switch (ls->token) {
+  switch (ls->tok) {
   case TK_number:
-    expr_init(v, (LJ_HASFFI && tviscdata(&ls->tokenval)) ? VKCDATA : VKNUM, 0);
-    copyTV(ls->L, &v->u.nval, &ls->tokenval);
+    expr_init(v, (LJ_HASFFI && tviscdata(&ls->tokval)) ? VKCDATA : VKNUM, 0);
+    copyTV(ls->L, &v->u.nval, &ls->tokval);
     break;
   case TK_string:
     expr_init(v, VKSTR, 0);
-    v->u.sval = strV(&ls->tokenval);
+    v->u.sval = strV(&ls->tokval);
     break;
   case TK_nil:
     expr_init(v, VKNIL, 0);
@@ -2060,11 +2060,11 @@ static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit);
 static void expr_unop(LexState *ls, ExpDesc *v)
 {
   BCOp op;
-  if (ls->token == TK_not) {
+  if (ls->tok == TK_not) {
     op = BC_NOT;
-  } else if (ls->token == '-') {
+  } else if (ls->tok == '-') {
     op = BC_UNM;
-  } else if (ls->token == '#') {
+  } else if (ls->tok == '#') {
     op = BC_LEN;
   } else {
     expr_simple(ls, v);
@@ -2081,7 +2081,7 @@ static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit)
   BinOpr op;
   synlevel_begin(ls);
   expr_unop(ls, v);
-  op = token2binop(ls->token);
+  op = token2binop(ls->tok);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     ExpDesc v2;
     BinOpr nextop;
@@ -2270,9 +2270,9 @@ static void parse_func(LexState *ls, BCLine line)
   lj_lex_next(ls);  /* Skip 'function'. */
   /* Parse function name. */
   var_lookup(ls, &v);
-  while (ls->token == '.')  /* Multiple dot-separated fields. */
+  while (ls->tok == '.')  /* Multiple dot-separated fields. */
     expr_field(ls, &v);
-  if (ls->token == ':') {  /* Optional colon to signify method call. */
+  if (ls->tok == ':') {  /* Optional colon to signify method call. */
     needself = 1;
     expr_field(ls, &v);
   }
@@ -2285,9 +2285,9 @@ static void parse_func(LexState *ls, BCLine line)
 /* -- Control transfer statements ----------------------------------------- */
 
 /* Check for end of block. */
-static int endofblock(LexToken token)
+static int parse_isend(LexToken tok)
 {
-  switch (token) {
+  switch (tok) {
   case TK_else: case TK_elseif: case TK_end: case TK_until: case TK_eof:
     return 1;
   default:
@@ -2302,7 +2302,7 @@ static void parse_return(LexState *ls)
   FuncState *fs = ls->fs;
   lj_lex_next(ls);  /* Skip 'return'. */
   fs->flags |= PROTO_HAS_RETURN;
-  if (endofblock(ls->token) || ls->token == ';') {  /* Bare return. */
+  if (parse_isend(ls->tok) || ls->tok == ';') {  /* Bare return. */
     ins = BCINS_AD(BC_RET0, 0, 1);
   } else {  /* Return with one or more values. */
     ExpDesc e;  /* Receives the _last_ expression in the list. */
@@ -2368,18 +2368,18 @@ static void parse_label(LexState *ls)
   lex_check(ls, TK_label);
   /* Recursively parse trailing statements: labels and ';' (Lua 5.2 only). */
   for (;;) {
-    if (ls->token == TK_label) {
+    if (ls->tok == TK_label) {
       synlevel_begin(ls);
       parse_label(ls);
       synlevel_end(ls);
-    } else if (LJ_52 && ls->token == ';') {
+    } else if (LJ_52 && ls->tok == ';') {
       lj_lex_next(ls);
     } else {
       break;
     }
   }
   /* Trailing label is considered to be outside of scope. */
-  if (endofblock(ls->token) && ls->token != TK_until)
+  if (parse_isend(ls->tok) && ls->tok != TK_until)
     ls->vstack[idx].slot = fs->bl->nactvar;
   gola_resolve(ls, fs->bl, idx);
 }
@@ -2563,9 +2563,9 @@ static void parse_for(LexState *ls, BCLine line)
   fscope_begin(fs, &bl, FSCOPE_LOOP);
   lj_lex_next(ls);  /* Skip 'for'. */
   varname = lex_str(ls);  /* Get first variable name. */
-  if (ls->token == '=')
+  if (ls->tok == '=')
     parse_for_num(ls, varname, line);
-  else if (ls->token == ',' || ls->token == TK_in)
+  else if (ls->tok == ',' || ls->tok == TK_in)
     parse_for_iter(ls, varname);
   else
     err_syntax(ls, LJ_ERR_XFOR);
@@ -2591,12 +2591,12 @@ static void parse_if(LexState *ls, BCLine line)
   BCPos flist;
   BCPos escapelist = NO_JMP;
   flist = parse_then(ls);
-  while (ls->token == TK_elseif) {  /* Parse multiple 'elseif' blocks. */
+  while (ls->tok == TK_elseif) {  /* Parse multiple 'elseif' blocks. */
     jmp_append(fs, &escapelist, bcemit_jmp(fs));
     jmp_tohere(fs, flist);
     flist = parse_then(ls);
   }
-  if (ls->token == TK_else) {  /* Parse optional 'else' block. */
+  if (ls->tok == TK_else) {  /* Parse optional 'else' block. */
     jmp_append(fs, &escapelist, bcemit_jmp(fs));
     jmp_tohere(fs, flist);
     lj_lex_next(ls);  /* Skip 'else'. */
@@ -2614,7 +2614,7 @@ static void parse_if(LexState *ls, BCLine line)
 static int parse_stmt(LexState *ls)
 {
   BCLine line = ls->linenumber;
-  switch (ls->token) {
+  switch (ls->tok) {
   case TK_if:
     parse_if(ls, line);
     break;
@@ -2672,7 +2672,7 @@ static void parse_chunk(LexState *ls)
 {
   int islast = 0;
   synlevel_begin(ls);
-  while (!islast && !endofblock(ls->token)) {
+  while (!islast && !parse_isend(ls->tok)) {
     islast = parse_stmt(ls);
     lex_opt(ls, ';');
     lua_assert(ls->fs->framesize >= ls->fs->freereg &&
@@ -2707,7 +2707,7 @@ GCproto *lj_parse(LexState *ls)
   bcemit_AD(&fs, BC_FUNCV, 0, 0);  /* Placeholder. */
   lj_lex_next(ls);  /* Read-ahead first token. */
   parse_chunk(ls);
-  if (ls->token != TK_eof)
+  if (ls->tok != TK_eof)
     err_token(ls, TK_eof);
   pt = fs_finish(ls, ls->linenumber);
   L->top--;  /* Drop chunkname. */
