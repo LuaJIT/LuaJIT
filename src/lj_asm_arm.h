@@ -91,6 +91,7 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
   *mxp++ = group*EXITSTUBS_PER_GROUP;
   for (i = 0; i < EXITSTUBS_PER_GROUP; i++)
     *mxp++ = ARMI_B|((-6-i)&0x00ffffffu);
+  lj_mcode_sync(as->mcbot, mxp);
   lj_mcode_commitbot(as->J, mxp);
   as->mcbot = mxp;
   as->mclim = as->mcbot + MCLIM_REDZONE;
