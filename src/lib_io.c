@@ -17,6 +17,7 @@
 #include "lualib.h"
 
 #include "lj_obj.h"
+#include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_state.h"
@@ -152,6 +153,7 @@ static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
     if (n >= m - 64) m += m;
   }
   setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+  lj_gc_check(L);
   return (int)ok;
 }
 
@@ -163,6 +165,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
     n += (MSize)fread(buf+n, 1, m-n, fp);
     if (n != m) {
       setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+      lj_gc_check(L);
       return;
     }
   }
@@ -174,6 +177,7 @@ static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
     char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
     MSize n = (MSize)fread(buf, 1, m, fp);
     setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+    lj_gc_check(L);
     return (n > 0 || m == 0);
   } else {
     int c = getc(fp);
