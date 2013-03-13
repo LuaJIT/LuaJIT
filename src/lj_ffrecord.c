@@ -584,40 +584,66 @@ static void LJ_FASTCALL recff_math_random(jit_State *J, RecordFFData *rd)
 
 /* -- Bit library fast functions ------------------------------------------ */
 
-/* Record unary bit.tobit, bit.bnot, bit.bswap. */
+/* Record bit.tobit. */
+static void LJ_FASTCALL recff_bit_tobit(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+#if LJ_HASFFI
+  if (tref_iscdata(tr)) { recff_bit64_tobit(J, rd); return; }
+#endif
+  J->base[0] = lj_opt_narrow_tobit(J, tr);
+  UNUSED(rd);
+}
+
+/* Record unary bit.bnot, bit.bswap. */
 static void LJ_FASTCALL recff_bit_unary(jit_State *J, RecordFFData *rd)
 {
-  TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
-  J->base[0] = (rd->data == IR_TOBIT) ? tr : emitir(IRTI(rd->data), tr, 0);
+#if LJ_HASFFI
+  if (recff_bit64_unary(J, rd))
+    return;
+#endif
+  J->base[0] = emitir(IRTI(rd->data), lj_opt_narrow_tobit(J, J->base[0]), 0);
 }
 
 /* Record N-ary bit.band, bit.bor, bit.bxor. */
 static void LJ_FASTCALL recff_bit_nary(jit_State *J, RecordFFData *rd)
 {
-  TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
-  uint32_t op = rd->data;
-  BCReg i;
-  for (i = 1; J->base[i] != 0; i++)
-    tr = emitir(IRTI(op), tr, lj_opt_narrow_tobit(J, J->base[i]));
-  J->base[0] = tr;
+#if LJ_HASFFI
+  if (recff_bit64_nary(J, rd))
+    return;
+#endif
+  {
+    TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
+    uint32_t ot = IRTI(rd->data);
+    BCReg i;
+    for (i = 1; J->base[i] != 0; i++)
+      tr = emitir(ot, tr, lj_opt_narrow_tobit(J, J->base[i]));
+    J->base[0] = tr;
+  }
 }
 
 /* Record bit shifts. */
 static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 {
-  TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
-  TRef tsh = lj_opt_narrow_tobit(J, J->base[1]);
-  IROp op = (IROp)rd->data;
-  if (!(op < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
-      !tref_isk(tsh))
-    tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 31));
-#ifdef LJ_TARGET_UNIFYROT
-  if (op == (LJ_TARGET_UNIFYROT == 1 ? IR_BROR : IR_BROL)) {
-    op = LJ_TARGET_UNIFYROT == 1 ? IR_BROL : IR_BROR;
-    tsh = emitir(IRTI(IR_NEG), tsh, tsh);
-  }
+#if LJ_HASFFI
+  if (recff_bit64_shift(J, rd))
+    return;
 #endif
-  J->base[0] = emitir(IRTI(op), tr, tsh);
+  {
+    TRef tr = lj_opt_narrow_tobit(J, J->base[0]);
+    TRef tsh = lj_opt_narrow_tobit(J, J->base[1]);
+    IROp op = (IROp)rd->data;
+    if (!(op < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
+	!tref_isk(tsh))
+      tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 31));
+#ifdef LJ_TARGET_UNIFYROT
+    if (op == (LJ_TARGET_UNIFYROT == 1 ? IR_BROR : IR_BROL)) {
+      op = LJ_TARGET_UNIFYROT == 1 ? IR_BROL : IR_BROR;
+      tsh = emitir(IRTI(IR_NEG), tsh, tsh);
+    }
+#endif
+    J->base[0] = emitir(IRTI(op), tr, tsh);
+  }
 }
 
 /* -- String library fast functions --------------------------------------- */

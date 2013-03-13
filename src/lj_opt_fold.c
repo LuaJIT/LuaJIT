@@ -22,8 +22,8 @@
 #include "lj_trace.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
-#endif
 #include "lj_carith.h"
+#endif
 #include "lj_vm.h"
 #include "lj_strscan.h"
 
@@ -336,11 +336,9 @@ LJFOLDF(kfold_intcomp0)
 static uint64_t kfold_int64arith(uint64_t k1, uint64_t k2, IROp op)
 {
   switch (op) {
-#if LJ_64 || LJ_HASFFI
+#if LJ_HASFFI
   case IR_ADD: k1 += k2; break;
   case IR_SUB: k1 -= k2; break;
-#endif
-#if LJ_HASFFI
   case IR_MUL: k1 *= k2; break;
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
@@ -392,20 +390,10 @@ LJFOLD(BROL KINT64 KINT)
 LJFOLD(BROR KINT64 KINT)
 LJFOLDF(kfold_int64shift)
 {
-#if LJ_HASFFI || LJ_64
+#if LJ_HASFFI
   uint64_t k = ir_k64(fleft)->u64;
   int32_t sh = (fright->i & 63);
-  switch ((IROp)fins->o) {
-  case IR_BSHL: k <<= sh; break;
-#if LJ_HASFFI
-  case IR_BSHR: k >>= sh; break;
-  case IR_BSAR: k = (uint64_t)((int64_t)k >> sh); break;
-  case IR_BROL: k = lj_rol(k, sh); break;
-  case IR_BROR: k = lj_ror(k, sh); break;
-#endif
-  default: lua_assert(0); break;
-  }
-  return INT64FOLD(k);
+  return INT64FOLD(lj_carith_shift64(k, sh, fins->o - IR_BSHL));
 #else
   UNUSED(J); lua_assert(0); return FAILFOLD;
 #endif
@@ -1192,7 +1180,9 @@ static TRef simplify_intmul_k(jit_State *J, int32_t k)
   ** But this is mainly intended for simple address arithmetic.
   ** Also it's easier for the backend to optimize the original multiplies.
   */
-  if (k == 1) {  /* i * 1 ==> i */
+  if (k == 0) {  /* i * 0 ==> 0 */
+    return RIGHTFOLD;
+  } else if (k == 1) {  /* i * 1 ==> i */
     return LEFTFOLD;
   } else if ((k & (k-1)) == 0) {  /* i * 2^k ==> i << k */
     fins->o = IR_BSHL;
@@ -1205,9 +1195,7 @@ static TRef simplify_intmul_k(jit_State *J, int32_t k)
 LJFOLD(MUL any KINT)
 LJFOLDF(simplify_intmul_k32)
 {
-  if (fright->i == 0)  /* i * 0 ==> 0 */
-    return INTFOLD(0);
-  else if (fright->i > 0)
+  if (fright->i >= 0)
     return simplify_intmul_k(J, fright->i);
   return NEXTFOLD;
 }
@@ -1215,14 +1203,13 @@ LJFOLDF(simplify_intmul_k32)
 LJFOLD(MUL any KINT64)
 LJFOLDF(simplify_intmul_k64)
 {
-  if (ir_kint64(fright)->u64 == 0)  /* i * 0 ==> 0 */
-    return INT64FOLD(0);
-#if LJ_64
-  /* NYI: SPLIT for BSHL and 32 bit backend support. */
-  else if (ir_kint64(fright)->u64 < 0x80000000u)
+#if LJ_HASFFI
+  if (ir_kint64(fright)->u64 < 0x80000000u)
     return simplify_intmul_k(J, (int32_t)ir_kint64(fright)->u64);
-#endif
   return NEXTFOLD;
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 LJFOLD(MOD any KINT)
@@ -1522,7 +1509,7 @@ LJFOLD(BOR BOR KINT64)
 LJFOLD(BXOR BXOR KINT64)
 LJFOLDF(reassoc_intarith_k64)
 {
-#if LJ_HASFFI || LJ_64
+#if LJ_HASFFI
   IRIns *irk = IR(fleft->op2);
   if (irk->o == IR_KINT64) {
     uint64_t k = kfold_int64arith(ir_k64(irk)->u64,

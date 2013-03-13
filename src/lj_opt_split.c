@@ -140,6 +140,7 @@ static IRRef split_call_l(jit_State *J, IRRef1 *hisubst, IRIns *oir,
   ir->prev = tmp = split_emit(J, IRTI(IR_CALLN), tmp, id);
   return split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), tmp, tmp);
 }
+#endif
 
 /* Emit a CALLN with one split 64 bit argument and a 32 bit argument. */
 static IRRef split_call_li(jit_State *J, IRRef1 *hisubst, IRIns *oir,
@@ -156,7 +157,6 @@ static IRRef split_call_li(jit_State *J, IRRef1 *hisubst, IRIns *oir,
   ir->prev = tmp = split_emit(J, IRTI(IR_CALLN), tmp, id);
   return split_emit(J, IRT(IR_HIOP, IRT_SOFTFP), tmp, tmp);
 }
-#endif
 
 /* Emit a CALLN with two split 64 bit arguments. */
 static IRRef split_call_ll(jit_State *J, IRRef1 *hisubst, IRIns *oir,
@@ -195,6 +195,118 @@ static IRRef split_ptr(jit_State *J, IRIns *oir, IRRef ref)
   }
   return split_emit(J, IRTI(IR_ADD), nref, lj_ir_kint(J, ofs));
 }
+
+#if LJ_HASFFI
+static IRRef split_bitshift(jit_State *J, IRRef1 *hisubst,
+			    IRIns *oir, IRIns *nir, IRIns *ir)
+{
+  IROp op = ir->o;
+  IRRef kref = nir->op2;
+  if (irref_isk(kref)) {  /* Optimize constant shifts. */
+    int32_t k = (IR(kref)->i & 63);
+    IRRef lo = nir->op1, hi = hisubst[ir->op1];
+    if (op == IR_BROL || op == IR_BROR) {
+      if (op == IR_BROR) k = (-k & 63);
+      if (k >= 32) { IRRef t = lo; lo = hi; hi = t; k -= 32; }
+      if (k == 0) {
+      passthrough:
+	J->cur.nins--;
+	ir->prev = lo;
+	return hi;
+      } else {
+	TRef k1, k2;
+	IRRef t1, t2, t3, t4;
+	J->cur.nins--;
+	k1 = lj_ir_kint(J, k);
+	k2 = lj_ir_kint(J, (-k & 31));
+	t1 = split_emit(J, IRTI(IR_BSHL), lo, k1);
+	t2 = split_emit(J, IRTI(IR_BSHL), hi, k1);
+	t3 = split_emit(J, IRTI(IR_BSHR), lo, k2);
+	t4 = split_emit(J, IRTI(IR_BSHR), hi, k2);
+	ir->prev = split_emit(J, IRTI(IR_BOR), t1, t4);
+	return split_emit(J, IRTI(IR_BOR), t2, t3);
+      }
+    } else if (k == 0) {
+      goto passthrough;
+    } else if (k < 32) {
+      if (op == IR_BSHL) {
+	IRRef t1 = split_emit(J, IRTI(IR_BSHL), hi, kref);
+	IRRef t2 = split_emit(J, IRTI(IR_BSHR), lo, lj_ir_kint(J, (-k&31)));
+	return split_emit(J, IRTI(IR_BOR), t1, t2);
+      } else {
+	IRRef t1 = ir->prev, t2;
+	lua_assert(op == IR_BSHR || op == IR_BSAR);
+	nir->o = IR_BSHR;
+	t2 = split_emit(J, IRTI(IR_BSHL), hi, lj_ir_kint(J, (-k&31)));
+	ir->prev = split_emit(J, IRTI(IR_BOR), t1, t2);
+	return split_emit(J, IRTI(op), hi, kref);
+      }
+    } else {
+      if (op == IR_BSHL) {
+	if (k == 32)
+	  J->cur.nins--;
+	else
+	  lo = ir->prev;
+	ir->prev = lj_ir_kint(J, 0);
+	return lo;
+      } else {
+	lua_assert(op == IR_BSHR || op == IR_BSAR);
+	if (k == 32) {
+	  J->cur.nins--;
+	  ir->prev = hi;
+	} else {
+	  nir->op1 = hi;
+	}
+	if (op == IR_BSHR)
+	  return lj_ir_kint(J, 0);
+	else
+	  return split_emit(J, IRTI(IR_BSAR), hi, lj_ir_kint(J, 31));
+      }
+    }
+  }
+  return split_call_li(J, hisubst, oir, ir,
+		       op - IR_BSHL + IRCALL_lj_carith_shl64);
+}
+
+static IRRef split_bitop(jit_State *J, IRRef1 *hisubst,
+			 IRIns *nir, IRIns *ir)
+{
+  IROp op = ir->o;
+  IRRef hi, kref = nir->op2;
+  if (irref_isk(kref)) {  /* Optimize bit operations with lo constant. */
+    int32_t k = IR(kref)->i;
+    if (k == 0 || k == -1) {
+      if (op == IR_BAND) k = ~k;
+      if (k == 0) {
+	J->cur.nins--;
+	ir->prev = nir->op1;
+      } else if (op == IR_BXOR) {
+	nir->o = IR_BNOT;
+	nir->op2 = 0;
+      } else {
+	J->cur.nins--;
+	ir->prev = kref;
+      }
+    }
+  }
+  hi = hisubst[ir->op1];
+  kref = hisubst[ir->op2];
+  if (irref_isk(kref)) {  /* Optimize bit operations with hi constant. */
+    int32_t k = IR(kref)->i;
+    if (k == 0 || k == -1) {
+      if (op == IR_BAND) k = ~k;
+      if (k == 0) {
+	return hi;
+      } else if (op == IR_BXOR) {
+	return split_emit(J, IRTI(IR_BNOT), hi, 0);
+      } else {
+	return kref;
+      }
+    }
+  }
+  return split_emit(J, IRTI(op), hi, kref);
+}
+#endif
 
 /* Transform the old IR to the new IR. */
 static void split_ir(jit_State *J)
@@ -416,6 +528,19 @@ static void split_ir(jit_State *J)
 	hi = split_call_ll(J, hisubst, oir, ir,
 			   irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
 					      IRCALL_lj_carith_powu64);
+	break;
+      case IR_BNOT:
+	hi = split_emit(J, IRTI(IR_BNOT), hiref, 0);
+	break;
+      case IR_BSWAP:
+	ir->prev = split_emit(J, IRTI(IR_BSWAP), hiref, 0);
+	hi = nref;
+	break;
+      case IR_BAND: case IR_BOR: case IR_BXOR:
+	hi = split_bitop(J, hisubst, nir, ir);
+	break;
+      case IR_BSHL: case IR_BSHR: case IR_BSAR: case IR_BROL: case IR_BROR:
+	hi = split_bitshift(J, hisubst, oir, nir, ir);
 	break;
       case IR_FLOAD:
 	lua_assert(ir->op2 == IRFL_CDATA_INT64);

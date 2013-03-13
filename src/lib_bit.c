@@ -13,25 +13,82 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_str.h"
+#if LJ_HASFFI
+#include "lj_ctype.h"
+#include "lj_cdata.h"
+#include "lj_cconv.h"
+#include "lj_carith.h"
+#endif
+#include "lj_ff.h"
 #include "lj_lib.h"
 
 /* ------------------------------------------------------------------------ */
 
 #define LJLIB_MODULE_bit
 
-LJLIB_ASM(bit_tobit)		LJLIB_REC(bit_unary IR_TOBIT)
+#if LJ_HASFFI
+static int bit_result64(lua_State *L, CTypeID id, uint64_t x)
 {
+  GCcdata *cd = lj_cdata_new_(L, id, 8);
+  *(uint64_t *)cdataptr(cd) = x;
+  setcdataV(L, L->base-1, cd);
+  return FFH_RES(1);
+}
+#endif
+
+LJLIB_ASM(bit_tobit)		LJLIB_REC(bit_tobit)
+{
+#if LJ_HASFFI
+  CTypeID id = 0;
+  setintV(L->base-1, (int32_t)lj_carith_check64(L, 1, &id));
+  return FFH_RES(1);
+#else
   lj_lib_checknumber(L, 1);
   return FFH_RETRY;
+#endif
 }
-LJLIB_ASM_(bit_bnot)		LJLIB_REC(bit_unary IR_BNOT)
-LJLIB_ASM_(bit_bswap)		LJLIB_REC(bit_unary IR_BSWAP)
+
+LJLIB_ASM(bit_bnot)		LJLIB_REC(bit_unary IR_BNOT)
+{
+#if LJ_HASFFI
+  CTypeID id = 0;
+  uint64_t x = lj_carith_check64(L, 1, &id);
+  return id ? bit_result64(L, id, ~x) : FFH_RETRY;
+#else
+  lj_lib_checknumber(L, 1);
+  return FFH_RETRY;
+#endif
+}
+
+LJLIB_ASM(bit_bswap)		LJLIB_REC(bit_unary IR_BSWAP)
+{
+#if LJ_HASFFI
+  CTypeID id = 0;
+  uint64_t x = lj_carith_check64(L, 1, &id);
+  return id ? bit_result64(L, id, lj_bswap64(x)) : FFH_RETRY;
+#else
+  lj_lib_checknumber(L, 1);
+  return FFH_RETRY;
+#endif
+}
 
 LJLIB_ASM(bit_lshift)		LJLIB_REC(bit_shift IR_BSHL)
 {
+#if LJ_HASFFI
+  CTypeID id = 0, id2 = 0;
+  uint64_t x = lj_carith_check64(L, 1, &id);
+  int32_t sh = (int32_t)lj_carith_check64(L, 2, &id2);
+  if (id) {
+    x = lj_carith_shift64(x, sh, curr_func(L)->c.ffid - (int)FF_bit_lshift);
+    return bit_result64(L, id, x);
+  }
+  if (id2) setintV(L->base+1, sh);
+  return FFH_RETRY;
+#else
   lj_lib_checknumber(L, 1);
   lj_lib_checkbit(L, 2);
   return FFH_RETRY;
+#endif
 }
 LJLIB_ASM_(bit_rshift)		LJLIB_REC(bit_shift IR_BSHR)
 LJLIB_ASM_(bit_arshift)		LJLIB_REC(bit_shift IR_BSAR)
@@ -40,9 +97,29 @@ LJLIB_ASM_(bit_ror)		LJLIB_REC(bit_shift IR_BROR)
 
 LJLIB_ASM(bit_band)		LJLIB_REC(bit_nary IR_BAND)
 {
+#if LJ_HASFFI
+  CTypeID id = 0;
+  TValue *o = L->base, *top = L->top;
+  int i = 0;
+  do { lj_carith_check64(L, ++i, &id); } while (++o < top);
+  if (id) {
+    CTState *cts = ctype_cts(L);
+    CType *ct = ctype_get(cts, id);
+    int op = curr_func(L)->c.ffid - (int)FF_bit_bor;
+    uint64_t x, y = op >= 0 ? 0 : ~(uint64_t)0;
+    o = L->base;
+    do {
+      lj_cconv_ct_tv(cts, ct, (uint8_t *)&x, o, 0);
+      if (op < 0) y &= x; else if (op == 0) y |= x; else y ^= x;
+    } while (++o < top);
+    return bit_result64(L, id, y);
+  }
+  return FFH_RETRY;
+#else
   int i = 0;
   do { lj_lib_checknumber(L, ++i); } while (L->base+i < L->top);
   return FFH_RETRY;
+#endif
 }
 LJLIB_ASM_(bit_bor)		LJLIB_REC(bit_nary IR_BOR)
 LJLIB_ASM_(bit_bxor)		LJLIB_REC(bit_nary IR_BXOR)
@@ -51,12 +128,21 @@ LJLIB_ASM_(bit_bxor)		LJLIB_REC(bit_nary IR_BXOR)
 
 LJLIB_CF(bit_tohex)
 {
+#if LJ_HASFFI
+  CTypeID id = 0, id2 = 0;
+  uint64_t b = lj_carith_check64(L, 1, &id);
+  int32_t i, dig = id ? 16 : 8;
+  int32_t n = L->base+1>=L->top ? dig : (int32_t)lj_carith_check64(L, 2, &id2);
+  char buf[16];
+#else
   uint32_t b = (uint32_t)lj_lib_checkbit(L, 1);
-  int32_t i, n = L->base+1 >= L->top ? 8 : lj_lib_checkbit(L, 2);
-  const char *hexdigits = "0123456789abcdef";
+  int32_t i, dig = 8;
+  int32_t n = L->base+1>=L->top ? dig : lj_lib_checkbit(L, 2);
   char buf[8];
+#endif
+  const char *hexdigits = "0123456789abcdef";
   if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
-  if (n > 8) n = 8;
+  if (n > dig) n = dig;
   for (i = n; --i >= 0; ) { buf[i] = hexdigits[b & 15]; b >>= 4; }
   lua_pushlstring(L, buf, (size_t)n);
   return 1;

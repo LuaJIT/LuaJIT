@@ -1626,6 +1626,101 @@ void LJ_FASTCALL recff_ffi_gc(jit_State *J, RecordFFData *rd)
   crec_finalizer(J, J->base[0], &rd->argv[1]);
 }
 
+/* -- 64 bit bit.* library functions -------------------------------------- */
+
+/* Determine bit operation type from argument type. */
+static CTypeID crec_bit64_type(CTState *cts, cTValue *tv)
+{
+  if (tviscdata(tv)) {
+    CType *ct = lj_ctype_rawref(cts, cdataV(tv)->ctypeid);
+    if (ctype_isenum(ct->info)) ct = ctype_child(cts, ct);
+    if ((ct->info & (CTMASK_NUM|CTF_BOOL|CTF_FP|CTF_UNSIGNED)) ==
+	CTINFO(CT_NUM, CTF_UNSIGNED) && ct->size == 8)
+      return CTID_UINT64;  /* Use uint64_t, since it has the highest rank. */
+    return CTID_INT64;  /* Otherwise use int64_t. */
+  }
+  return 0;  /* Use regular 32 bit ops. */
+}
+
+void LJ_FASTCALL recff_bit64_tobit(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  TRef tr = crec_ct_tv(J, ctype_get(cts, CTID_INT64), 0,
+		       J->base[0], &rd->argv[0]);
+  if (!tref_isinteger(tr))
+    tr = emitconv(tr, IRT_INT, tref_type(tr), 0);
+  J->base[0] = tr;
+}
+
+int LJ_FASTCALL recff_bit64_unary(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  CTypeID id = crec_bit64_type(cts, &rd->argv[0]);
+  if (id) {
+    TRef tr = crec_ct_tv(J, ctype_get(cts, id), 0, J->base[0], &rd->argv[0]);
+    tr = emitir(IRT(rd->data, id-CTID_INT64+IRT_I64), tr, 0);
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
+    return 1;
+  }
+  return 0;
+}
+
+int LJ_FASTCALL recff_bit64_nary(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  CTypeID id = 0;
+  MSize i;
+  for (i = 0; J->base[i] != 0; i++) {
+    CTypeID aid = crec_bit64_type(cts, &rd->argv[i]);
+    if (id < aid) id = aid;  /* Determine highest type rank of all arguments. */
+  }
+  if (id) {
+    CType *ct = ctype_get(cts, id);
+    uint32_t ot = IRT(rd->data, id-CTID_INT64+IRT_I64);
+    TRef tr = crec_ct_tv(J, ct, 0, J->base[0], &rd->argv[0]);
+    for (i = 1; J->base[i] != 0; i++) {
+      TRef tr2 = crec_ct_tv(J, ct, 0, J->base[i], &rd->argv[i]);
+      tr = emitir(ot, tr, tr2);
+    }
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
+    return 1;
+  }
+  return 0;
+}
+
+int LJ_FASTCALL recff_bit64_shift(jit_State *J, RecordFFData *rd)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  CTypeID id;
+  TRef tsh = 0;
+  if (J->base[0] && tref_iscdata(J->base[1])) {
+    tsh = crec_ct_tv(J, ctype_get(cts, CTID_INT64), 0,
+		     J->base[1], &rd->argv[1]);
+    if (!tref_isinteger(tsh))
+      tsh = emitconv(tsh, IRT_INT, tref_type(tsh), 0);
+    J->base[1] = tsh;
+  }
+  id = crec_bit64_type(cts, &rd->argv[0]);
+  if (id) {
+    TRef tr = crec_ct_tv(J, ctype_get(cts, id), 0, J->base[0], &rd->argv[0]);
+    uint32_t op = rd->data;
+    if (!tsh) tsh = lj_opt_narrow_tobit(J, J->base[1]);
+    if (!(op < IR_BROL ? LJ_TARGET_MASKSHIFT : LJ_TARGET_MASKROT) &&
+	!tref_isk(tsh))
+      tsh = emitir(IRTI(IR_BAND), tsh, lj_ir_kint(J, 63));
+#ifdef LJ_TARGET_UNIFYROT
+      if (op == (LJ_TARGET_UNIFYROT == 1 ? IR_BROR : IR_BROL)) {
+	op = LJ_TARGET_UNIFYROT == 1 ? IR_BROL : IR_BROR;
+	tsh = emitir(IRTI(IR_NEG), tsh, tsh);
+      }
+#endif
+    tr = emitir(IRT(op, id-CTID_INT64+IRT_I64), tr, tsh);
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, id), tr);
+    return 1;
+  }
+  return 0;
+}
+
 /* -- Miscellaneous library functions ------------------------------------- */
 
 void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
