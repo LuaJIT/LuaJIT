@@ -202,7 +202,8 @@ void dasm_put(Dst_DECL, int start, ...)
       case DASM_ALIGN: ofs += (ins & 255); b[pos++] = ofs; break;
       case DASM_REL_LG:
 	n = (ins & 2047) - 10; pl = D->lglabels + n;
-	if (n >= 0) { CKPL(lg, LG); goto putrel; }  /* Bkwd rel or global. */
+	/* Bkwd rel or global. */
+	if (n >= 0) { CK(n>=10||*pl<0, RANGE_LG); CKPL(lg, LG); goto putrel; }
 	pl += 10; n = *pl;
 	if (n < 0) n = 0;  /* Start new chain for fwd rel if label exists. */
 	goto linkrel;
