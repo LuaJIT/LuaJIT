@@ -16,6 +16,8 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
+#include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_lib.h"
 
@@ -129,28 +131,33 @@ LJLIB_LUA(table_remove) /*
 
 LJLIB_CF(table_concat)
 {
-  luaL_Buffer b;
   GCtab *t = lj_lib_checktab(L, 1);
   GCstr *sep = lj_lib_optstr(L, 2);
   MSize seplen = sep ? sep->len : 0;
   int32_t i = lj_lib_optint(L, 3, 1);
   int32_t e = L->base+3 < L->top ? lj_lib_checkint(L, 4) :
 				   (int32_t)lj_tab_len(t);
-  luaL_buffinit(L, &b);
   if (i <= e) {
+    char buf[LJ_STR_NUMBERBUF];
+    SBuf *sb = &G(L)->tmpbuf;
+    setsbufL(sb, L);
+    lj_buf_reset(sb);
     for (;;) {
-      cTValue *o;
-      lua_rawgeti(L, 1, i);
-      o = L->top-1;
-      if (!(tvisstr(o) || tvisnumber(o)))
+      cTValue *o = lj_tab_getint(t, i);
+      MSize len;
+      const char *p = lj_str_buftv(buf, o, &len);
+      if (!p)
 	lj_err_callerv(L, LJ_ERR_TABCAT, lj_typename(o), i);
-      luaL_addvalue(&b);
+      lj_buf_putmem(sb, p, len);
       if (i++ == e) break;
       if (seplen)
-	luaL_addlstring(&b, strdata(sep), seplen);
+	lj_buf_putmem(sb, strdata(sep), seplen);
     }
+    setstrV(L, L->top-1, lj_buf_str(L, sb));
+    lj_gc_check(L);
+  } else {
+    setstrV(L, L->top-1, &G(L)->strempty);
   }
-  luaL_pushresult(&b);
   return 1;
 }
 
