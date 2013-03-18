@@ -506,21 +506,13 @@ LJLIB_CF(print)
   }
   shortcut = (tvisfunc(tv) && funcV(tv)->c.ffid == FF_tostring);
   for (i = 0; i < nargs; i++) {
+    cTValue *o = &L->base[i];
+    char buf[LJ_STR_NUMBERBUF];
     const char *str;
     size_t size;
-    cTValue *o = &L->base[i];
-    if (shortcut && tvisstr(o)) {
-      str = strVdata(o);
-      size = strV(o)->len;
-    } else if (shortcut && tvisint(o)) {
-      char buf[LJ_STR_INTBUF];
-      char *p = lj_str_bufint(buf, intV(o));
-      size = (size_t)(buf+LJ_STR_INTBUF-p);
-      str = p;
-    } else if (shortcut && tvisnum(o)) {
-      char buf[LJ_STR_NUMBUF];
-      size = lj_str_bufnum(buf, o);
-      str = buf;
+    MSize len;
+    if (shortcut && (str = lj_str_buftv(buf, o, &len)) != NULL) {
+      size = len;
     } else {
       copyTV(L, L->top+1, o);
       copyTV(L, L->top, L->top-1);

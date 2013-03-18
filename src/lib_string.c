@@ -873,7 +873,7 @@ LJLIB_CF(string_format)
 	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
 	  /* Canonicalize output of non-finite values. */
 	  char *p, nbuf[LJ_STR_NUMBUF];
-	  size_t len = lj_str_bufnum(nbuf, &tv);
+	  MSize len = lj_str_bufnum(nbuf, &tv);
 	  if (strfrmt[-1] < 'a') {
 	    nbuf[len-3] = nbuf[len-3] - 0x20;
 	    nbuf[len-2] = nbuf[len-2] - 0x20;

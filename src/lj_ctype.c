@@ -570,7 +570,7 @@ GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size)
 {
   char buf[2*LJ_STR_NUMBUF+2+1];
   TValue re, im;
-  size_t len;
+  MSize len;
   if (size == 2*sizeof(double)) {
     re.n = *(double *)sp; im.n = ((double *)sp)[1];
   } else {

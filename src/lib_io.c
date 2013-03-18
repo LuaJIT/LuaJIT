@@ -231,19 +231,12 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
   cTValue *tv;
   int status = 1;
   for (tv = L->base+start; tv < L->top; tv++) {
-    if (tvisstr(tv)) {
-      MSize len = strV(tv)->len;
-      status = status && (fwrite(strVdata(tv), 1, len, fp) == len);
-    } else if (tvisint(tv)) {
-      char buf[LJ_STR_INTBUF];
-      char *p = lj_str_bufint(buf, intV(tv));
-      size_t len = (size_t)(buf+LJ_STR_INTBUF-p);
-      status = status && (fwrite(p, 1, len, fp) == len);
-    } else if (tvisnum(tv)) {
-      status = status && (fprintf(fp, LUA_NUMBER_FMT, numV(tv)) > 0);
-    } else {
+    char buf[LJ_STR_NUMBERBUF];
+    MSize len;
+    const char *p = lj_str_buftv(buf, tv, &len);
+    if (!p)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
-    }
+    status = status && (fwrite(p, 1, len, fp) == len);
   }
   if (LJ_52 && status) {
     L->top = L->base+1;
