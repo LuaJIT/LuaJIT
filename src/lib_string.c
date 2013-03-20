@@ -144,9 +144,9 @@ LJLIB_ASM_(string_upper)
 
 /* ------------------------------------------------------------------------ */
 
-static int writer_buf(lua_State *L, const void *p, size_t size, void *b)
+static int writer_buf(lua_State *L, const void *p, size_t size, void *sb)
 {
-  luaL_addlstring((luaL_Buffer *)b, (const char *)p, size);
+  lj_buf_putmem((SBuf *)sb, p, (MSize)size);
   UNUSED(L);
   return 0;
 }
@@ -155,12 +155,14 @@ LJLIB_CF(string_dump)
 {
   GCfunc *fn = lj_lib_checkfunc(L, 1);
   int strip = L->base+1 < L->top && tvistruecond(L->base+1);
-  luaL_Buffer b;
+  SBuf *sb = &G(L)->tmpbuf;  /* Assumes lj_bcwrite() doesn't use tmpbuf. */
+  setmref(sb->L, L);
+  lj_buf_reset(sb);
   L->top = L->base+1;
-  luaL_buffinit(L, &b);
-  if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, &b, strip))
+  if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, sb, strip))
     lj_err_caller(L, LJ_ERR_STRDUMP);
-  luaL_pushresult(&b);
+  setstrV(L, L->top-1, lj_buf_str(L, sb));
+  lj_gc_check(L);
   return 1;
 }
 
