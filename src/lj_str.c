@@ -186,13 +186,33 @@ MSize LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o)
 }
 
 /* Print integer to buffer. Returns pointer to start (!= buffer start). */
-static char * str_bufint(char *p, int32_t k)
+static char *str_bufint(char *p, int32_t k)
 {
   uint32_t u = (uint32_t)(k < 0 ? -k : k);
   p += LJ_STR_INTBUF;
   do { *--p = (char)('0' + u % 10); } while (u /= 10);
   if (k < 0) *--p = '-';
   return p;
+}
+
+/* Print pointer to buffer. */
+MSize LJ_FASTCALL lj_str_bufptr(char *p, const void *v)
+{
+  ptrdiff_t x = (ptrdiff_t)v;
+  MSize i, n = LJ_STR_PTRBUF;
+  if (x == 0) {
+    p[0] = 'N'; p[1] = 'U'; p[2] = 'L'; p[3] = 'L';
+    return 4;
+  }
+#if LJ_64
+  /* Shorten output for 64 bit pointers. */
+  n = 2+2*4+((x >> 32) ? 2+2*(lj_fls((uint32_t)(x >> 32))>>3) : 0);
+#endif
+  p[0] = '0';
+  p[1] = 'x';
+  for (i = n-1; i >= 2; i--, x >>= 4)
+    p[i] = "0123456789abcdef"[(x & 15)];
+  return n;
 }
 
 /* Print TValue to buffer (only for numbers) and return pointer to start. */
@@ -275,22 +295,9 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
       }
     case 'p': {
 #define FMTP_CHARS	(2*sizeof(ptrdiff_t))
-      char buf[2+FMTP_CHARS];
-      ptrdiff_t p = (ptrdiff_t)(va_arg(argp, void *));
-      ptrdiff_t i, lasti = 2+FMTP_CHARS;
-      if (p == 0) {
-	lj_buf_putmem(sb, "NULL", 4);
-	break;
-      }
-#if LJ_64
-      /* Shorten output for 64 bit pointers. */
-      lasti = 2+2*4+((p >> 32) ? 2+2*(lj_fls((uint32_t)(p >> 32))>>3) : 0);
-#endif
-      buf[0] = '0';
-      buf[1] = 'x';
-      for (i = lasti-1; i >= 2; i--, p >>= 4)
-	buf[i] = "0123456789abcdef"[(p & 15)];
-      lj_buf_putmem(sb, buf, (MSize)lasti);
+      char buf[LJ_STR_PTRBUF];
+      MSize len = lj_str_bufptr(buf, va_arg(argp, void *));
+      lj_buf_putmem(sb, buf, len);
       break;
       }
     case '%':

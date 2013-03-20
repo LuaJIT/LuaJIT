@@ -21,6 +21,7 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 
 /* Type conversions. */
 LJ_FUNC MSize LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o);
+LJ_FUNC MSize LJ_FASTCALL lj_str_bufptr(char *p, const void *v);
 LJ_FUNC const char *lj_str_buftv(char *buf, cTValue *o, MSize *lenp);
 LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np);
 LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k);
@@ -29,6 +30,7 @@ LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o);
 #define LJ_STR_INTBUF		(1+10)
 #define LJ_STR_NUMBUF		LUAI_MAXNUMBER2STR
 #define LJ_STR_NUMBERBUF	LUAI_MAXNUMBER2STR
+#define LJ_STR_PTRBUF		(2*sizeof(ptrdiff_t)+2)
 
 /* String formatting. */
 LJ_FUNC const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp);
