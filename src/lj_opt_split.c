@@ -308,6 +308,19 @@ static IRRef split_bitop(jit_State *J, IRRef1 *hisubst,
 }
 #endif
 
+/* Substitute references of a snapshot. */
+static void split_subst_snap(jit_State *J, SnapShot *snap, IRIns *oir)
+{
+  SnapEntry *map = &J->cur.snapmap[snap->mapofs];
+  MSize n, nent = snap->nent;
+  for (n = 0; n < nent; n++) {
+    SnapEntry sn = map[n];
+    IRIns *ir = &oir[snap_ref(sn)];
+    if (!(LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && irref_isk(snap_ref(sn))))
+      map[n] = ((sn & 0xffff0000) | ir->prev);
+  }
+}
+
 /* Transform the old IR to the new IR. */
 static void split_ir(jit_State *J)
 {
@@ -316,7 +329,8 @@ static void split_ir(jit_State *J)
   MSize need = (irlen+1)*(sizeof(IRIns) + sizeof(IRRef1));
   IRIns *oir = (IRIns *)lj_buf_tmp(J->L, need);
   IRRef1 *hisubst;
-  IRRef ref;
+  IRRef ref, snref;
+  SnapShot *snap;
 
   /* Copy old IR to buffer. */
   memcpy(oir, IR(nk), irlen*sizeof(IRIns));
@@ -343,11 +357,19 @@ static void split_ir(jit_State *J)
   }
 
   /* Process old IR instructions. */
+  snap = J->cur.snap;
+  snref = snap->ref;
   for (ref = REF_FIRST; ref < nins; ref++) {
     IRIns *ir = &oir[ref];
     IRRef nref = lj_ir_nextins(J);
     IRIns *nir = IR(nref);
     IRRef hi = 0;
+
+    if (ref >= snref) {
+      snap->ref = nref;
+      split_subst_snap(J, snap++, oir);
+      snref = snap < &J->cur.snap[J->cur.nsnap] ? snap->ref : ~(IRRef)0;
+    }
 
     /* Copy-substitute old instruction to new instruction. */
     nir->op1 = ir->op1 < nk ? ir->op1 : oir[ir->op1].prev;
@@ -761,6 +783,10 @@ static void split_ir(jit_State *J)
     }
     hisubst[ref] = hi;  /* Store hiword substitution. */
   }
+  if (snref == nins) {  /* Substitution for last snapshot. */
+    snap->ref = J->cur.nins;
+    split_subst_snap(J, snap, oir);
+  }
 
   /* Add PHI marks. */
   for (ref = J->cur.nins-1; ref >= REF_FIRST; ref--) {
@@ -768,24 +794,6 @@ static void split_ir(jit_State *J)
     if (ir->o != IR_PHI) break;
     if (!irref_isk(ir->op1)) irt_setphi(IR(ir->op1)->t);
     if (ir->op2 > J->loopref) irt_setphi(IR(ir->op2)->t);
-  }
-
-  /* Substitute snapshot maps. */
-  oir[nins].prev = J->cur.nins;  /* Substitution for last snapshot. */
-  {
-    SnapNo i, nsnap = J->cur.nsnap;
-    for (i = 0; i < nsnap; i++) {
-      SnapShot *snap = &J->cur.snap[i];
-      SnapEntry *map = &J->cur.snapmap[snap->mapofs];
-      MSize n, nent = snap->nent;
-      snap->ref = snap->ref == REF_FIRST ? REF_FIRST : oir[snap->ref].prev;
-      for (n = 0; n < nent; n++) {
-	SnapEntry sn = map[n];
-	IRIns *ir = &oir[snap_ref(sn)];
-	if (!(LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && irref_isk(snap_ref(sn))))
-	  map[n] = ((sn & 0xffff0000) | ir->prev);
-      }
-    }
   }
 }
 
