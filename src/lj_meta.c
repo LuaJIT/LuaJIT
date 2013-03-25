@@ -227,27 +227,14 @@ TValue *lj_meta_arith(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
   }
 }
 
-/* In-place coercion of a number to a string. */
-static LJ_AINLINE int tostring(lua_State *L, TValue *o)
-{
-  if (tvisstr(o)) {
-    return 1;
-  } else if (tvisnumber(o)) {
-    setstrV(L, o, lj_str_fromnumber(L, o));
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
 /* Helper for CAT. Coercion, iterative concat, __concat metamethod. */
 TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 {
   int fromc = 0;
   if (left < 0) { left = -left; fromc = 1; }
   do {
-    int n = 1;
-    if (!(tvisstr(top-1) || tvisnumber(top-1)) || !tostring(L, top)) {
+    if (!(tvisstr(top) || tvisnumber(top)) ||
+	!(tvisstr(top-1) || tvisnumber(top-1))) {
       cTValue *mo = lj_meta_lookup(L, top-1, MM_concat);
       if (tvisnil(mo)) {
 	mo = lj_meta_lookup(L, top, MM_concat);
@@ -273,8 +260,6 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       copyTV(L, top, mo);
       setcont(top-1, lj_cont_cat);
       return top+1;  /* Trigger metamethod call. */
-    } else if (strV(top)->len == 0) {  /* Shortcut. */
-      (void)tostring(L, top-1);
     } else {
       /* Pick as many strings as possible from the top and concatenate them:
       **
@@ -283,27 +268,28 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       ** concat:    [...][CAT stack ...] [result]
       ** next step: [...][CAT stack ............]
       */
-      MSize tlen = strV(top)->len;
-      char *buf;
-      int i;
-      for (n = 1; n <= left && tostring(L, top-n); n++) {
-	MSize len = strV(top-n)->len;
-	if (len >= LJ_MAX_STR - tlen)
-	  lj_err_msg(L, LJ_ERR_STROV);
-	tlen += len;
+      TValue *e, *o = top;
+      uint64_t tlen = tvisstr(o) ? strV(o)->len : LJ_STR_NUMBERBUF;
+      char *p, *buf;
+      do {
+	o--; tlen += tvisstr(o) ? strV(o)->len : LJ_STR_NUMBERBUF;
+      } while (--left > 0 && (tvisstr(o-1) || tvisnumber(o-1)));
+      if (tlen >= LJ_MAX_STR) lj_err_msg(L, LJ_ERR_STROV);
+      p = buf = lj_buf_tmp(L, (MSize)tlen);
+      for (e = top, top = o; o <= e; o++) {
+	if (tvisstr(o)) {
+	  GCstr *s = strV(o);
+	  MSize len = s->len;
+	  p = lj_buf_wmem(p, strdata(s), len);
+	} else if (tvisint(o)) {
+	  p = lj_str_bufint(p, intV(o));
+	} else {
+	  lua_assert(tvisnum(o));
+	  p = lj_str_bufnum(p, o);
+	}
       }
-      buf = lj_buf_tmp(L, tlen);
-      n--;
-      tlen = 0;
-      for (i = n; i >= 0; i--) {
-	MSize len = strV(top-i)->len;
-	memcpy(buf + tlen, strVdata(top-i), len);
-	tlen += len;
-      }
-      setstrV(L, top-n, lj_str_new(L, buf, tlen));
+      setstrV(L, top, lj_str_new(L, buf, (size_t)(p-buf)));
     }
-    left -= n;
-    top -= n;
   } while (left >= 1);
   if (LJ_UNLIKELY(G(L)->gc.total >= G(L)->gc.threshold)) {
     if (!fromc) L->top = curr_topL(L);
