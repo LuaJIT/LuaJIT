@@ -168,41 +168,62 @@ void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s)
 /* -- Type conversions ---------------------------------------------------- */
 
 /* Print number to buffer. Canonicalizes non-finite values. */
-MSize LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o)
+char * LJ_FASTCALL lj_str_bufnum(char *p, cTValue *o)
 {
   if (LJ_LIKELY((o->u32.hi << 1) < 0xffe00000)) {  /* Finite? */
-    lua_Number n = o->n;
 #if __BIONIC__
-    if (tvismzero(o)) { s[0] = '-'; s[1] = '0'; return 2; }
+    if (tvismzero(o)) { *p++ = '-'; *p++ = '0'; return p; }
 #endif
-    return (MSize)lua_number2str(s, n);
+    return p + lua_number2str(p, o->n);
   } else if (((o->u32.hi & 0x000fffff) | o->u32.lo) != 0) {
-    s[0] = 'n'; s[1] = 'a'; s[2] = 'n'; return 3;
+    *p++ = 'n'; *p++ = 'a'; *p++ = 'n';
   } else if ((o->u32.hi & 0x80000000) == 0) {
-    s[0] = 'i'; s[1] = 'n'; s[2] = 'f'; return 3;
+    *p++ = 'i'; *p++ = 'n'; *p++ = 'f';
   } else {
-    s[0] = '-'; s[1] = 'i'; s[2] = 'n'; s[3] = 'f'; return 4;
+    *p++ = '-'; *p++ = 'i'; *p++ = 'n'; *p++ = 'f';
   }
+  return p;
 }
 
-/* Print integer to buffer. Returns pointer to start (!= buffer start). */
-static char *str_bufint(char *p, int32_t k)
+#define STR_BUFINT_R(x, sh, sc) \
+  { uint32_t d = (x*(((1<<sh)+sc-1)/sc))>>sh; x -= d*sc; *p++ = (char)('0'+d); }
+
+/* Print integer to buffer. */
+char * LJ_FASTCALL lj_str_bufint(char *p, int32_t k)
 {
-  uint32_t u = (uint32_t)(k < 0 ? -k : k);
-  p += LJ_STR_INTBUF;
-  do { *--p = (char)('0' + u % 10); } while (u /= 10);
-  if (k < 0) *--p = '-';
+  uint32_t u = (uint32_t)k;
+  if (k < 0) { u = (uint32_t)-k; *p++ = '-'; }
+  if (u < 10000) {
+    if (u < 10) goto dig1; if (u < 100) goto dig2; if (u < 1000) goto dig3;
+  } else {
+    uint32_t v = u / 10000; u -= v * 10000;
+    if (v < 10000) {
+      if (v < 10) goto dig5; if (v < 100) goto dig6; if (v < 1000) goto dig7;
+    } else {
+      uint32_t w = v / 10000; v -= w * 10000;
+      if (w >= 10) STR_BUFINT_R(w, 10, 10)
+      *p++ = (char)('0'+w);
+    }
+    STR_BUFINT_R(v, 23, 1000)
+    dig7: STR_BUFINT_R(v, 12, 100)
+    dig6: STR_BUFINT_R(v, 10, 10)
+    dig5: *p++ = (char)('0'+v);
+  }
+  STR_BUFINT_R(u, 23, 1000)
+  dig3: STR_BUFINT_R(u, 12, 100)
+  dig2: STR_BUFINT_R(u, 10, 10)
+  dig1: *p++ = (char)('0'+u);
   return p;
 }
 
 /* Print pointer to buffer. */
-MSize LJ_FASTCALL lj_str_bufptr(char *p, const void *v)
+char * LJ_FASTCALL lj_str_bufptr(char *p, const void *v)
 {
   ptrdiff_t x = (ptrdiff_t)v;
   MSize i, n = LJ_STR_PTRBUF;
   if (x == 0) {
-    p[0] = 'N'; p[1] = 'U'; p[2] = 'L'; p[3] = 'L';
-    return 4;
+    *p++ = 'N'; *p++ = 'U'; *p++ = 'L'; *p++ = 'L';
+    return p;
   }
 #if LJ_64
   /* Shorten output for 64 bit pointers. */
@@ -212,7 +233,7 @@ MSize LJ_FASTCALL lj_str_bufptr(char *p, const void *v)
   p[1] = 'x';
   for (i = n-1; i >= 2; i--, x >>= 4)
     p[i] = "0123456789abcdef"[(x & 15)];
-  return n;
+  return p+n;
 }
 
 /* Print TValue to buffer (only for numbers) and return pointer to start. */
@@ -222,11 +243,10 @@ const char *lj_str_buftv(char *buf, cTValue *o, MSize *lenp)
     *lenp = strV(o)->len;
     return strVdata(o);
   } else if (tvisint(o)) {
-    char *p = str_bufint(buf, intV(o));
-    *lenp = (MSize)(buf+LJ_STR_INTBUF-p);
-    return p;
+    *lenp = (MSize)(lj_str_bufint(buf, intV(o)) - buf);
+    return buf;
   } else if (tvisnum(o)) {
-    *lenp = lj_str_bufnum(buf, o);
+    *lenp = (MSize)(lj_str_bufnum(buf, o) - buf);
     return buf;
   } else {
     return NULL;
@@ -237,7 +257,7 @@ const char *lj_str_buftv(char *buf, cTValue *o, MSize *lenp)
 GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
 {
   char buf[LJ_STR_NUMBUF];
-  MSize len = lj_str_bufnum(buf, (TValue *)np);
+  MSize len = (MSize)(lj_str_bufnum(buf, (TValue *)np) - buf);
   return lj_str_new(L, buf, len);
 }
 
@@ -245,8 +265,8 @@ GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np)
 GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k)
 {
   char buf[LJ_STR_INTBUF];
-  char *p = str_bufint(buf, k);
-  return lj_str_new(L, p, (size_t)(buf+sizeof(buf)-p));
+  MSize len = (MSize)(lj_str_bufint(buf, k) - buf);
+  return lj_str_new(L, buf, len);
 }
 
 GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o)
@@ -278,28 +298,20 @@ const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
     case 'c':
       lj_buf_putb(sb, va_arg(argp, int));
       break;
-    case 'd': {
-      char buf[LJ_STR_INTBUF];
-      char *p = str_bufint(buf, va_arg(argp, int32_t));
-      lj_buf_putmem(sb, p, (MSize)(buf+LJ_STR_INTBUF-p));
+    case 'd':
+      setsbufP(sb, lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF),
+				 va_arg(argp, int32_t)));
       break;
-      }
     case 'f': {
-      char buf[LJ_STR_NUMBUF];
       TValue tv;
-      MSize len;
-      tv.n = (lua_Number)(va_arg(argp, LUAI_UACNUMBER));
-      len = (MSize)lj_str_bufnum(buf, &tv);
-      lj_buf_putmem(sb, buf, len);
+      tv.n = va_arg(argp, lua_Number);
+      setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), &tv));
       break;
       }
-    case 'p': {
-#define FMTP_CHARS	(2*sizeof(ptrdiff_t))
-      char buf[LJ_STR_PTRBUF];
-      MSize len = lj_str_bufptr(buf, va_arg(argp, void *));
-      lj_buf_putmem(sb, buf, len);
+    case 'p':
+      setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
+				 va_arg(argp, void *)));
       break;
-      }
     case '%':
       lj_buf_putb(sb, '%');
       break;

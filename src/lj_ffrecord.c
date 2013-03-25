@@ -79,10 +79,7 @@ static GCstr *argv2str(jit_State *J, TValue *o)
     GCstr *s;
     if (!tvisnumber(o))
       lj_trace_err(J, LJ_TRERR_BADTYPE);
-    if (tvisint(o))
-      s = lj_str_fromint(J->L, intV(o));
-    else
-      s = lj_str_fromnum(J->L, &o->n);
+    s = lj_str_fromnumber(J->L, o);
     setstrV(J->L, o, s);
     return s;
   }

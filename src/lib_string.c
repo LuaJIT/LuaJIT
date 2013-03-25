@@ -881,14 +881,10 @@ LJLIB_CF(string_format)
 	tv.n = lj_lib_checknum(L, arg);
 	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
 	  /* Canonicalize output of non-finite values. */
-	  char *p, nbuf[LJ_STR_NUMBUF];
-	  MSize n = lj_str_bufnum(nbuf, &tv);
-	  if (fmt[-1] < 'a') {
-	    nbuf[n-3] = nbuf[n-3] - 0x20;
-	    nbuf[n-2] = nbuf[n-2] - 0x20;
-	    nbuf[n-1] = nbuf[n-1] - 0x20;
-	  }
-	  nbuf[n] = '\0';
+	  char nbuf[LJ_STR_NUMBUF];
+	  char *p = lj_str_bufnum(nbuf, &tv);
+	  if (fmt[-1] < 'a') { *(p-3) -= 0x20; *(p-2) -= 0x20; *(p-1) -= 0x20; }
+	  *p = '\0';
 	  for (p = spec; *p < 'A' && *p != '.'; p++) ;
 	  *p++ = 's'; *p = '\0';
 	  len = (MSize)sprintf(buf, spec, nbuf);
@@ -901,8 +897,9 @@ LJLIB_CF(string_format)
 	string_fmt_quoted(sb, lj_lib_checkstr(L, arg));
 	continue;
       case 'p':
-	len = lj_str_bufptr(buf, lua_topointer(L, arg));
-	break;
+	setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
+				   lua_topointer(L, arg)));
+	continue;
       case 's': {
 	GCstr *str = string_fmt_tostring(L, arg);
 	if (!strchr(spec, '.') && str->len >= 100) {  /* Format overflow? */
