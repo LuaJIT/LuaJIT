@@ -2211,6 +2211,7 @@ static void asm_comp_int64(ASMState *as, IRIns *ir)
     lefthi = asm_fuseload(as, ir->op1, allow);
   } else {
     lefthi = ra_alloc1(as, ir->op1, allow);
+    rset_clear(allow, lefthi);
     righthi = asm_fuseload(as, ir->op2, allow);
     if (righthi == RID_MRM) {
       if (as->mrm.base != RID_NONE) rset_clear(allow, as->mrm.base);
@@ -2226,13 +2227,8 @@ static void asm_comp_int64(ASMState *as, IRIns *ir)
     leftlo = asm_fuseload(as, (ir-1)->op1, allow);
   } else {
     leftlo = ra_alloc1(as, (ir-1)->op1, allow);
+    rset_clear(allow, leftlo);
     rightlo = asm_fuseload(as, (ir-1)->op2, allow);
-    if (rightlo == RID_MRM) {
-      if (as->mrm.base != RID_NONE) rset_clear(allow, as->mrm.base);
-      if (as->mrm.idx != RID_NONE) rset_clear(allow, as->mrm.idx);
-    } else {
-      rset_clear(allow, rightlo);
-    }
   }
 
   /* All register allocations must be performed _before_ this point. */
