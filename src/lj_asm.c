@@ -30,6 +30,10 @@
 #include "lj_vm.h"
 #include "lj_target.h"
 
+#ifdef LUA_USE_ASSERT
+#include <stdio.h>
+#endif
+
 /* -- Assembler state and common macros ----------------------------------- */
 
 /* Assembler state. */
@@ -38,6 +42,9 @@ typedef struct ASMState {
 
   MCode *mcp;		/* Current MCode pointer (grows down). */
   MCode *mclim;		/* Lower limit for MCode memory + red zone. */
+#ifdef LUA_USE_ASSERT
+  MCode *mcp_prev;	/* Red zone overflow check. */
+#endif
 
   IRIns *ir;		/* Copy of pointer to IR instructions/constants. */
   jit_State *J;		/* JIT compiler state. */
@@ -110,12 +117,26 @@ typedef struct ASMState {
 
 /* Sparse limit checks using a red zone before the actual limit. */
 #define MCLIM_REDZONE	64
-#define checkmclim(as) \
-  if (LJ_UNLIKELY(as->mcp < as->mclim)) asm_mclimit(as)
 
 static LJ_NORET LJ_NOINLINE void asm_mclimit(ASMState *as)
 {
   lj_mcode_limiterr(as->J, (size_t)(as->mctop - as->mcp + 4*MCLIM_REDZONE));
+}
+
+static LJ_AINLINE void checkmclim(ASMState *as)
+{
+#ifdef LUA_USE_ASSERT
+  if (as->mcp + MCLIM_REDZONE < as->mcp_prev) {
+    IRIns *ir = IR(as->curins+1);
+    fprintf(stderr, "RED ZONE OVERFLOW: %p IR %04d  %02d %04d %04d\n", as->mcp,
+	    as->curins+1-REF_BIAS, ir->o, ir->op1-REF_BIAS, ir->op2-REF_BIAS);
+    lua_assert(0);
+  }
+#endif
+  if (LJ_UNLIKELY(as->mcp < as->mclim)) asm_mclimit(as);
+#ifdef LUA_USE_ASSERT
+  as->mcp_prev = as->mcp;
+#endif
 }
 
 #ifdef RID_NUM_KREF
@@ -1181,6 +1202,7 @@ static void asm_phi_copyspill(ASMState *as)
 	if (ra_hasspill(irl->s) && !irt_isfp(ir->t)) {
 	  emit_spstore(as, irl, r, sps_scale(irl->s));
 	  emit_spload(as, ir, r, sps_scale(ir->s));
+	  checkmclim(as);
 	}
       }
     }
@@ -1206,6 +1228,7 @@ static void asm_phi_copyspill(ASMState *as)
 	if (ra_hasspill(irl->s) && irt_isfp(ir->t)) {
 	  emit_spstore(as, irl, r, sps_scale(irl->s));
 	  emit_spload(as, ir, r, sps_scale(ir->s));
+	  checkmclim(as);
 	}
       }
     }
@@ -1822,6 +1845,9 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 
   do {
     as->mcp = as->mctop;
+#ifdef LUA_USE_ASSERT
+    as->mcp_prev = as->mcp;
+#endif
     as->curins = T->nins;
     RA_DBG_START();
     RA_DBGX((as, "===== STOP ====="));
