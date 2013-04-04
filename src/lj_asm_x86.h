@@ -512,6 +512,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
       }
       ofs += sizeof(intptr_t);
     }
+    checkmclim(as);
   }
 #if LJ_64 && !LJ_ABI_WIN
   if (patchnfpr) *patchnfpr = fpr - REGARG_FIRSTFPR;

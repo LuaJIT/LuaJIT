@@ -283,6 +283,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
       else
 	ofs += 4;
     }
+    checkmclim(as);
   }
 }
 
