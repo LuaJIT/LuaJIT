@@ -248,8 +248,9 @@ enabled:
 <ul>
 <li><tt>goto</tt> and <tt>::labels::</tt>.</li>
 <li>Hex escapes <tt>'\x3F'</tt> and <tt>'\*'</tt> escape in strings.</li>
-<li><tt>load(string|reader, chunkname [,mode [,env]])</tt>.
-<tt>loadstring()</tt> is an alias.</li>
+<li><tt>load(string|reader [, chunkname [,mode [,env]]])</tt>.</li>
+<li><tt>loadstring()</tt> is an alias for <tt>load()</tt>.</li>
+<li><tt>loadfile(filename [,mode [,env]])</tt>.</li>
 <li><tt>math.log(x [,base])</tt>.
 <li><tt>string.rep(s, n [,sep])</tt>.
 <li><tt>string.format()</tt>: <tt>%q</tt> reversible.
