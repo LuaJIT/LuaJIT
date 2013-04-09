@@ -347,7 +347,7 @@ TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J)
 	IRIns *ir;
 	/* Check for any intervening guards (includes conflicting loads). */
 	for (ir = IR(J->cur.nins-1); ir > store; ir--)
-	  if (irt_isguard(ir->t))
+	  if (irt_isguard(ir->t) || ir->o == IR_CALLL)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
