@@ -179,6 +179,12 @@ IRFLDEF(FLOFS)
 #error "Missing instruction emitter for target CPU"
 #endif
 
+/* Generic load/store of register from/to stack slot. */
+#define emit_spload(as, ir, r, ofs) \
+  emit_loadofs(as, ir, (r), RID_SP, (ofs))
+#define emit_spstore(as, ir, r, ofs) \
+  emit_storeofs(as, ir, (r), RID_SP, (ofs))
+
 /* -- Register allocator debugging ---------------------------------------- */
 
 /* #define LUAJIT_DEBUG_RA */

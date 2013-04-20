@@ -186,22 +186,22 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
     emit_fb(as, PPCI_FMR, dst, src);
 }
 
-/* Generic load of register from stack slot. */
-static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic load of register with base and (small) offset address. */
+static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_tai(as, PPCI_LWZ, r, RID_SP, ofs);
+    emit_tai(as, PPCI_LWZ, r, base, ofs);
   else
-    emit_fai(as, irt_isnum(ir->t) ? PPCI_LFD : PPCI_LFS, r, RID_SP, ofs);
+    emit_fai(as, irt_isnum(ir->t) ? PPCI_LFD : PPCI_LFS, r, base, ofs);
 }
 
-/* Generic store of register to stack slot. */
-static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic store of register with base and (small) offset address. */
+static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_tai(as, PPCI_STW, r, RID_SP, ofs);
+    emit_tai(as, PPCI_STW, r, base, ofs);
   else
-    emit_fai(as, irt_isnum(ir->t) ? PPCI_STFD : PPCI_STFS, r, RID_SP, ofs);
+    emit_fai(as, irt_isnum(ir->t) ? PPCI_STFD : PPCI_STFS, r, base, ofs);
 }
 
 /* Emit a compare (for equality) with a constant operand. */

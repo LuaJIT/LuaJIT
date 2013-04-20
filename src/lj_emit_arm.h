@@ -308,30 +308,30 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
   emit_dm(as, ARMI_MOV, dst, src);
 }
 
-/* Generic load of register from stack slot. */
-static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic load of register with base and (small) offset address. */
+static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
 #if LJ_SOFTFP
   lua_assert(!irt_isnum(ir->t)); UNUSED(ir);
 #else
   if (r >= RID_MAX_GPR)
-    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VLDR_D : ARMI_VLDR_S, r, RID_SP, ofs);
+    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VLDR_D : ARMI_VLDR_S, r, base, ofs);
   else
 #endif
-    emit_lso(as, ARMI_LDR, r, RID_SP, ofs);
+    emit_lso(as, ARMI_LDR, r, base, ofs);
 }
 
-/* Generic store of register to stack slot. */
-static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic store of register with base and (small) offset address. */
+static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
 #if LJ_SOFTFP
   lua_assert(!irt_isnum(ir->t)); UNUSED(ir);
 #else
   if (r >= RID_MAX_GPR)
-    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VSTR_D : ARMI_VSTR_S, r, RID_SP, ofs);
+    emit_vlso(as, irt_isnum(ir->t) ? ARMI_VSTR_D : ARMI_VSTR_S, r, base, ofs);
   else
 #endif
-    emit_lso(as, ARMI_STR, r, RID_SP, ofs);
+    emit_lso(as, ARMI_STR, r, base, ofs);
 }
 
 /* Emit an arithmetic/logic operation with a constant operand. */

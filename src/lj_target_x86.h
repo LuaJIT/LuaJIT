@@ -33,6 +33,7 @@ enum {
   RID_MRM = RID_MAX,		/* Pseudo-id for ModRM operand. */
 
   /* Calling conventions. */
+  RID_SP = RID_ESP,
   RID_RET = RID_EAX,
 #if LJ_64
   RID_FPRET = RID_XMM0,
