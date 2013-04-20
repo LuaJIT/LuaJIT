@@ -12,6 +12,7 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_buf.h"
+#include "lj_str.h"
 
 LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
 {
@@ -63,6 +64,34 @@ void lj_buf_putmem(SBuf *sb, const void *q, MSize len)
   p = lj_buf_wmem(p, q, len);
   setsbufP(sb, p);
 }
+
+#if LJ_HASJIT
+SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
+{
+  MSize len = s->len;
+  char *p = lj_buf_more(sb, len);
+  p = lj_buf_wmem(p, strdata(s), len);
+  setsbufP(sb, p);
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putint(SBuf *sb, int32_t k)
+{
+  setsbufP(sb, lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF), k));
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putnum(SBuf *sb, cTValue *o)
+{
+  setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), o));
+  return sb;
+}
+
+GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
+{
+  return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
+}
+#endif
 
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {

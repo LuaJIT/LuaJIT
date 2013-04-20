@@ -278,6 +278,7 @@ local litname = {
   ["FLOAD "] = vmdef.irfield,
   ["FREF  "] = vmdef.irfield,
   ["FPMATH"] = vmdef.irfpm,
+  ["BUFHDR"] = { [0] = "RESET", "APPEND" },
 }
 
 local function ctlsub(c)

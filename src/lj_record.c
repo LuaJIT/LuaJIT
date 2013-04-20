@@ -11,6 +11,7 @@
 #if LJ_HASJIT
 
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_meta.h"
@@ -1599,6 +1600,33 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
   return emitir(IRTG(IR_TNEW, IRT_TAB), asize, hbits);
 }
 
+/* -- Concatenation ------------------------------------------------------- */
+
+static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
+{
+  TRef *top = &J->base[topslot], tr = *top;
+  lua_assert(baseslot < topslot);
+  if (tref_isnumber_str(tr) && tref_isnumber_str(*(top-1))) {
+    TRef hdr, *trp, *xbase, *base = &J->base[baseslot];
+    /* First convert number consts to string consts to simplify FOLD rules. */
+    for (trp = top; trp >= base && tref_isnumber_str(*trp); trp--)
+      if (tref_isk(*trp) && tref_isnumber(*trp))
+	*trp = emitir(IRT(IR_TOSTR, IRT_STR), *trp, 0);
+    xbase = ++trp;
+    tr = hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
+		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+    do {
+      tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, *trp++);
+    } while (trp <= top);
+    tr = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+    J->maxslot = (BCReg)(xbase - J->base);
+    if (xbase == base) return tr;
+  }
+  setintV(&J->errinfo, BC_CAT);
+  lj_trace_err_info(J, LJ_TRERR_NYIBC);  /* __concat metamethod. */
+  return 0;
+}
+
 /* -- Record bytecode ops ------------------------------------------------- */
 
 /* Prepare for comparison. */
@@ -1901,6 +1929,12 @@ void lj_record_ins(jit_State *J)
       rc = rec_mm_arith(J, &ix, MM_pow);
     break;
 
+  /* -- Miscellaneous ops ------------------------------------------------- */
+
+  case BC_CAT:
+    rc = rec_cat(J, rb, rc);
+    break;
+
   /* -- Constant and move ops --------------------------------------------- */
 
   case BC_MOV:
@@ -2082,7 +2116,6 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_ITERN:
   case BC_ISNEXT:
-  case BC_CAT:
   case BC_UCLO:
   case BC_FNEW:
   case BC_TSETM:

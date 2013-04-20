@@ -120,6 +120,11 @@
   _(CNEW,	AW, ref, ref) \
   _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
+  /* Buffer operations. */ \
+  _(BUFHDR,	S , ref, lit) \
+  _(BUFPUT,	S , ref, ref) \
+  _(BUFSTR,	A , ref, ref) \
+  \
   /* Barriers. */ \
   _(TBAR,	S , ref, ___) \
   _(OBAR,	S , ref, ref) \
@@ -220,6 +225,10 @@ IRFLDEF(FLENUM)
 #define IRXLOAD_READONLY	1	/* Load from read-only data. */
 #define IRXLOAD_VOLATILE	2	/* Load from volatile data. */
 #define IRXLOAD_UNALIGNED	4	/* Unaligned load. */
+
+/* BUFHDR mode, stored in op2. */
+#define IRBUFHDR_RESET		0	/* Reset buffer. */
+#define IRBUFHDR_APPEND		1	/* Append to buffer. */
 
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */

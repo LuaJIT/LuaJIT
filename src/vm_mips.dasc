@@ -4051,6 +4051,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   sw BASE, DISPATCH_GL(jit_base)(DISPATCH)
     |   sw L, DISPATCH_GL(jit_L)(DISPATCH)
     |  lw TMP2, TRACE:TMP2->mcode
+    |   sw L, DISPATCH_GL(tmpbuf.L)(DISPATCH)
     |  jr TMP2
     |.  addiu JGL, DISPATCH, GG_DISP2G+32768
     |.endif

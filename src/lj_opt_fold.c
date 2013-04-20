@@ -14,6 +14,7 @@
 
 #if LJ_HASJIT
 
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_ir.h"
@@ -155,13 +156,14 @@ typedef IRRef (LJ_FASTCALL *FoldFunc)(jit_State *J);
 
 /* Barrier to prevent folding across a GC step.
 ** GC steps can only happen at the head of a trace and at LOOP.
-** And the GC is only driven forward if there is at least one allocation.
+** And the GC is only driven forward if there's at least one allocation.
 */
 #define gcstep_barrier(J, ref) \
   ((ref) < J->chain[IR_LOOP] && \
    (J->chain[IR_SNEW] || J->chain[IR_XSNEW] || \
     J->chain[IR_TNEW] || J->chain[IR_TDUP] || \
-    J->chain[IR_CNEW] || J->chain[IR_CNEWI] || J->chain[IR_TOSTR]))
+    J->chain[IR_CNEW] || J->chain[IR_CNEWI] || \
+    J->chain[IR_BUFSTR] || J->chain[IR_TOSTR]))
 
 /* -- Constant folding for FP numbers ------------------------------------- */
 
@@ -513,6 +515,94 @@ LJFOLDF(kfold_strcmp)
     return INTFOLD(lj_str_cmp(a, b));
   }
   return NEXTFOLD;
+}
+
+/* -- Constant folding and forwarding for buffers ------------------------- */
+
+/* Note: buffer ops are not CSEd until the BUFSTR. It's ok to modify them. */
+
+/* BUFHDR is treated like a store, see below. */
+
+LJFOLD(BUFPUT BUFHDR BUFSTR)
+LJFOLDF(bufput_append)
+{
+  /* New buffer, no other buffer op inbetween and same buffer? */
+  if ((J->flags & JIT_F_OPT_FWD) &&
+      !(fleft->op2 & IRBUFHDR_APPEND) &&
+      fleft->prev == fright->op1 &&
+      fleft->op1 == IR(fright->op1)->op1) {
+    IRRef ref = fins->op1;
+    IR(ref)->op2 = (fleft->op2 | IRBUFHDR_APPEND);  /* Modify BUFHDR. */
+    return ref;
+  }
+  return EMITFOLD;  /* This is a store and always emitted. */
+}
+
+LJFOLD(BUFPUT any any)
+LJFOLDF(bufput_kgc)
+{
+  if (fright->o == IR_KGC) {
+    GCstr *s2 = ir_kstr(fright);
+    MSize len2 = s2->len;
+    if (len2 == 0) {  /* Empty string? */
+      return LEFTFOLD;
+    } else {
+      PHIBARRIER(fleft);
+      if (fleft->o == IR_BUFPUT && IR(fleft->op2)->o == IR_KGC) {
+	/* Join two constant string puts in a row. */
+	GCstr *s1 = ir_kstr(IR(fleft->op2));
+	MSize len1 = s1->len;
+	char *buf = lj_buf_tmp(J->L, len1 + len2);
+	IRRef kref;
+	memcpy(buf, strdata(s1), len1);
+	memcpy(buf+len1, strdata(s2), len2);
+	kref = lj_ir_kstr(J, lj_str_new(J->L, buf, len1 + len2));
+	/* lj_ir_kstr() may realloc the IR and invalidates any IRIns *. */
+	IR(fins->op1)->op2 = kref;  /* Modify previous BUFPUT. */
+	return fins->op1;
+      }
+    }
+  }
+  return EMITFOLD;  /* This is a store and always emitted. */
+}
+
+LJFOLD(BUFSTR any any)
+LJFOLDF(bufstr_kfold_cse)
+{
+  lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT);
+  if (fright->o == IR_BUFHDR) {  /* No put operations? */
+    if (!(fright->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      return lj_ir_kstr(J, &J2G(J)->strempty);
+    fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
+    return CSEFOLD;
+  } else {
+    /* Shortcut for a single put operation. */
+    IRIns *irb = IR(fright->op1);
+    if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND)) {
+      IRRef ref = fright->op2;
+      if (irt_isstr(IR(ref)->t))
+	return ref;
+      lua_assert(irt_isinteger(IR(ref)->t) || irt_isnum(IR(ref)->t));
+      return emitir(IRT(IR_TOSTR, IRT_STR), ref, 0);
+    }
+  }
+  /* Try to CSE the whole chain. */
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE) && !(fleft->op2 & IRBUFHDR_APPEND)) {
+    IRRef ref = J->chain[IR_BUFSTR];
+    while (ref) {
+      IRIns *irs = IR(ref), *ira = fright, *irb = IR(irs->op2);
+      while (ira->o == irb->o && ira->op2 == irb->op2) {
+	if (ira->o == IR_BUFHDR) {
+	  lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
+	  return ref;  /* CSE succeeded. */
+	}
+	ira = IR(ira->op1);
+	irb = IR(irb->op1);
+      }
+      ref = irs->prev;
+    }
+  }
+  return EMITFOLD;  /* No CSE possible. */
 }
 
 /* -- Constant folding of pointer arithmetic ------------------------------ */
@@ -2128,6 +2218,7 @@ LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
 LJFOLD(CNEW any any)
 LJFOLD(XSNEW any any)
+LJFOLD(BUFHDR any any)
 LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */

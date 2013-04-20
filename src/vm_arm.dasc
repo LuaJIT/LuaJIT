@@ -4344,6 +4344,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldr RA, TRACE:RC->mcode
     |   str BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
     |   str L, [DISPATCH, #DISPATCH_GL(jit_L)]
+    |   str L, [DISPATCH, #DISPATCH_GL(tmpbuf.L)]
     |  bx RA
     |.endif
     break;

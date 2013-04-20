@@ -105,6 +105,10 @@ typedef struct CCallInfo {
   _(ANY,	lj_strscan_num,		2,  FN, INT, 0) \
   _(ANY,	lj_str_fromint,		2,  FN, STR, CCI_L) \
   _(ANY,	lj_str_fromnum,		2,  FN, STR, CCI_L) \
+  _(ANY,	lj_buf_putstr,		2,  FS, P32, 0) \
+  _(ANY,	lj_buf_putint,		2,  FS, P32, 0) \
+  _(ANY,	lj_buf_putnum,		2,  FS, P32, 0) \
+  _(ANY,	lj_buf_tostr,		1,  FL, STR, 0) \
   _(ANY,	lj_tab_new1,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_dup,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_newkey,		3,   S, P32, CCI_L) \
@@ -114,9 +118,9 @@ typedef struct CCallInfo {
   _(ANY,	lj_mem_newgco,		2,  FS, P32, CCI_L) \
   _(ANY,	lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_NOFPRCLOBBER) \
   _(ANY,	lj_vm_modi,		2,  FN, INT, 0) \
-  _(ANY,	sinh,			ARG1_FP,  N, NUM, 0) \
-  _(ANY,	cosh,			ARG1_FP,  N, NUM, 0) \
-  _(ANY,	tanh,			ARG1_FP,  N, NUM, 0) \
+  _(ANY,	sinh,			ARG1_FP,   N, NUM, 0) \
+  _(ANY,	cosh,			ARG1_FP,   N, NUM, 0) \
+  _(ANY,	tanh,			ARG1_FP,   N, NUM, 0) \
   _(ANY,	fputc,			2,  S, INT, 0) \
   _(ANY,	fwrite,			4,  S, INT, 0) \
   _(ANY,	fflush,			1,  S, INT, 0) \

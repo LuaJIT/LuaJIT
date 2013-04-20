@@ -2707,6 +2707,11 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_TDUP: asm_tdup(as, ir); break;
   case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
 
+  /* Buffer operations. */
+  case IR_BUFHDR: asm_bufhdr(as, ir); break;
+  case IR_BUFPUT: asm_bufput(as, ir); break;
+  case IR_BUFSTR: asm_bufstr(as, ir); break;
+
   /* Write barriers. */
   case IR_TBAR: asm_tbar(as, ir); break;
   case IR_OBAR: asm_obar(as, ir); break;

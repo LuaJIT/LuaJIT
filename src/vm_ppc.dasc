@@ -4936,6 +4936,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mtctr TMP2
     |   stw L, DISPATCH_GL(jit_L)(DISPATCH)
     |   addi JGL, DISPATCH, GG_DISP2G+32768
+    |   stw L, DISPATCH_GL(tmpbuf.L)(DISPATCH)
     |  bctr
     |.endif
     break;

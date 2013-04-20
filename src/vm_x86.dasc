@@ -5465,6 +5465,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov L:RB, SAVE_L
     |  mov [DISPATCH+DISPATCH_GL(jit_base)], BASE
     |  mov [DISPATCH+DISPATCH_GL(jit_L)], L:RB
+    |  mov [DISPATCH+DISPATCH_GL(tmpbuf.L)], L:RB
     |  // Save additional callee-save registers only used in compiled code.
     |.if X64WIN
     |  mov TMPQ, r12

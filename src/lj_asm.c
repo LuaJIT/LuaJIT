@@ -1071,6 +1071,70 @@ static void asm_gcstep(ASMState *as, IRIns *ir)
   as->gcsteps = 0x80000000;  /* Prevent implicit GC check further up. */
 }
 
+/* -- Buffer handling ----------------------------------------------------- */
+
+static void asm_bufhdr(ASMState *as, IRIns *ir)
+{
+  if (ra_used(ir)) {
+    Reg sb = ra_dest(as, ir, RSET_GPR);
+    if (!(ir->op2 & IRBUFHDR_APPEND)) {
+      Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+      /* Passing ir isn't strictly correct, but it's an IRT_P32, too. */
+      emit_storeofs(as, ir, tmp, sb, offsetof(SBuf, p));
+      emit_loadofs(as, ir, tmp, sb, offsetof(SBuf, b));
+    }
+#if LJ_TARGET_X86ORX64
+    ra_left(as, sb, ir->op1);
+#else
+    ra_leftov(as, sb, ir->op1);
+#endif
+  }
+}
+
+#if !LJ_TARGET_X86ORX64
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
+#endif
+
+static void asm_bufput(ASMState *as, IRIns *ir)
+{
+  const CCallInfo *ci;
+  IRRef args[2];
+  IRIns *ir2;
+  if (!ra_used(ir)) return;
+  args[0] = ir->op1;  /* SBuf * */
+  args[1] = ir->op2;  /* int, double, GCstr * */
+  ir2 = IR(ir->op2);
+  if (irt_isstr(ir2->t)) {
+    ci = &lj_ir_callinfo[IRCALL_lj_buf_putstr];
+  } else if (LJ_SOFTFP ? irt_type((ir2+1)->t)==IRT_SOFTFP : irt_isnum(ir2->t)) {
+    ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
+    args[1] = ASMREF_TMP1;
+  } else {
+    lua_assert(irt_isinteger(ir2->t));
+    ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
+  }
+  asm_setupresult(as, ir, ci);  /* SBuf * */
+  asm_gencall(as, ci, args);
+  if (args[1] == ASMREF_TMP1) {
+#if LJ_TARGET_X86ORX64
+    emit_rmro(as, XO_LEA, ra_releasetmp(as, ASMREF_TMP1)|REX_64,
+	      RID_ESP, ra_spill(as, IR(ir->op2)));
+#else
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+#endif
+  }
+}
+
+static void asm_bufstr(ASMState *as, IRIns *ir)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_buf_tostr];
+  IRRef args[1];
+  args[0] = ir->op2;  /* SBuf *sb */
+  as->gcsteps++;
+  asm_setupresult(as, ir, ci);  /* GCstr * */
+  asm_gencall(as, ci, args);
+}
+
 /* -- PHI and loop handling ----------------------------------------------- */
 
 /* Break a PHI cycle by renaming to a free register (evict if needed). */
@@ -1724,6 +1788,7 @@ static void asm_setup_regsp(ASMState *as)
       if (REGARG_NUMGPR < 3 && as->evenspill < 3)
 	as->evenspill = 3;  /* lj_str_new and lj_tab_newkey need 3 args. */
     case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
+    case IR_BUFPUT: case IR_BUFSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)
 	as->modset = RSET_SCRATCH;

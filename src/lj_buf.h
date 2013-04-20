@@ -26,6 +26,12 @@ LJ_FUNC void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb);
 
 LJ_FUNC char *lj_buf_wmem(char *p, const void *q, MSize len);
 LJ_FUNC void lj_buf_putmem(SBuf *sb, const void *q, MSize len);
+#if LJ_HASJIT
+LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s);
+LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putint(SBuf *sb, int32_t k);
+LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putnum(SBuf *sb, cTValue *o);
+LJ_FUNC GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
+#endif
 LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 LJ_FUNC char * LJ_FASTCALL lj_buf_wuleb128(char *p, uint32_t v);
 
