@@ -349,14 +349,6 @@ static size_t gc_propagate_gray(global_State *g)
 
 /* -- Sweep phase --------------------------------------------------------- */
 
-/* Try to shrink some common data structures. */
-static void gc_shrink(global_State *g, lua_State *L)
-{
-  if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
-    lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
-  lj_buf_shrink(L, &g->tmpbuf);  /* Shrink temp buffer. */
-}
-
 /* Type of GC free functions. */
 typedef void (LJ_FASTCALL *GCFreeFunc)(global_State *g, GCobj *o);
 
@@ -591,6 +583,8 @@ static void atomic(global_State *g, lua_State *L)
   /* All marking done, clear weak tables. */
   gc_clearweak(gcref(g->gc.weak));
 
+  lj_buf_shrink(L, &g->tmpbuf);  /* Shrink temp buffer. */
+
   /* Prepare for sweep phase. */
   g->gc.currentwhite = (uint8_t)otherwhite(g);  /* Flip current white. */
   g->strempty.marked = g->gc.currentwhite;
@@ -631,7 +625,8 @@ static size_t gc_onestep(lua_State *L)
     MSize old = g->gc.total;
     setmref(g->gc.sweep, gc_sweep(g, mref(g->gc.sweep, GCRef), GCSWEEPMAX));
     if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
-      gc_shrink(g, L);
+      if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
+	lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
       if (gcref(g->gc.mmudata)) {  /* Need any finalizations? */
 	g->gc.state = GCSfinalize;
       } else {  /* Otherwise skip this phase to help the JIT. */
