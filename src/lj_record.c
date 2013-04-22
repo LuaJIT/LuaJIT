@@ -1608,10 +1608,13 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
   lua_assert(baseslot < topslot);
   if (tref_isnumber_str(tr) && tref_isnumber_str(*(top-1))) {
     TRef hdr, *trp, *xbase, *base = &J->base[baseslot];
-    /* First convert number consts to string consts to simplify FOLD rules. */
-    for (trp = top; trp >= base && tref_isnumber_str(*trp); trp--)
-      if (tref_isk(*trp) && tref_isnumber(*trp))
+    /* First convert numbers to strings. */
+    for (trp = top; trp >= base; trp--) {
+      if (tref_isnumber(*trp))
 	*trp = emitir(IRT(IR_TOSTR, IRT_STR), *trp, 0);
+      else if (!tref_isstr(*trp))
+	break;
+    }
     xbase = ++trp;
     tr = hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
 		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);

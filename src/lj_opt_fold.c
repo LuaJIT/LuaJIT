@@ -541,13 +541,13 @@ LJFOLDF(bufput_append)
 LJFOLD(BUFPUT any any)
 LJFOLDF(bufput_kgc)
 {
-  if (fright->o == IR_KGC) {
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fright->o == IR_KGC) {
     GCstr *s2 = ir_kstr(fright);
     MSize len2 = s2->len;
     if (len2 == 0) {  /* Empty string? */
       return LEFTFOLD;
     } else {
-      if (fleft->o == IR_BUFPUT && IR(fleft->op2)->o == IR_KGC &&
+      if (fleft->o == IR_BUFPUT && irref_isk(fleft->op2) &&
 	  !irt_isphi(fleft->t)) {
 	/* Join two constant string puts in a row. */
 	GCstr *s1 = ir_kstr(IR(fleft->op2));
@@ -570,20 +570,16 @@ LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {
   lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT);
-  if (fright->o == IR_BUFHDR) {  /* No put operations? */
-    if (!(fright->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
-      return lj_ir_kstr(J, &J2G(J)->strempty);
-    fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
-    return CSEFOLD;
-  } else {
-    /* Shortcut for a single put operation. */
-    IRIns *irb = IR(fright->op1);
-    if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND)) {
-      IRRef ref = fright->op2;
-      if (irt_isstr(IR(ref)->t))
-	return ref;
-      lua_assert(irt_isinteger(IR(ref)->t) || irt_isnum(IR(ref)->t));
-      return emitir(IRT(IR_TOSTR, IRT_STR), ref, 0);
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
+    if (fright->o == IR_BUFHDR) {  /* No put operations? */
+      if (!(fright->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+	return lj_ir_kstr(J, &J2G(J)->strempty);
+      fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
+      return CSEFOLD;
+    } else {
+      IRIns *irb = IR(fright->op1);
+      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+	return fright->op2;  /* Shortcut for a single put operation. */
     }
   }
   /* Try to CSE the whole chain. */

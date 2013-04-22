@@ -1057,26 +1057,30 @@ static void asm_bufhdr(ASMState *as, IRIns *ir)
 
 static void asm_bufput(ASMState *as, IRIns *ir)
 {
-  const CCallInfo *ci;
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_buf_putstr];
   IRRef args[2];
-  IRIns *ir2;
+  IRIns *irs;
   if (!ra_used(ir)) return;
   args[0] = ir->op1;  /* SBuf * */
-  args[1] = ir->op2;  /* int, double, GCstr * */
-  ir2 = IR(ir->op2);
-  if (irt_isstr(ir2->t)) {
-    ci = &lj_ir_callinfo[IRCALL_lj_buf_putstr];
-  } else if (LJ_SOFTFP ? irt_type((ir2+1)->t)==IRT_SOFTFP : irt_isnum(ir2->t)) {
-    ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
-    args[1] = ASMREF_TMP1;
-  } else {
-    lua_assert(irt_isinteger(ir2->t));
-    ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
+  args[1] = ir->op2;  /* GCstr * */
+  irs = IR(ir->op2);
+  lua_assert(irt_isstr(irs->t));
+  if (mayfuse(as, ir->op2) && ra_noreg(irs->r)) {
+    if (irs->o == IR_TOSTR) {  /* Fuse number to string conversions. */
+      if (LJ_SOFTFP ? (irs+1)->o == IR_HIOP : irt_isnum(IR(irs->op1)->t)) {
+	ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
+	args[1] = ASMREF_TMP1;  /* TValue * */
+      } else {
+	lua_assert(irt_isinteger(IR(irs->op1)->t));
+	ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
+	args[1] = irs->op1;  /* int */
+      }
+    }
   }
   asm_setupresult(as, ir, ci);  /* SBuf * */
   asm_gencall(as, ci, args);
   if (args[1] == ASMREF_TMP1)
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), irs->op1);
 }
 
 static void asm_bufstr(ASMState *as, IRIns *ir)
