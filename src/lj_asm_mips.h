@@ -570,7 +570,7 @@ static void asm_aref(ASMState *as, IRIns *ir)
 **   } while ((n = nextnode(n)));
 **   return niltv(L);
 */
-static void asm_href(ASMState *as, IRIns *ir)
+static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 {
   RegSet allow = RSET_GPR;
   int destused = ra_used(ir);
@@ -596,37 +596,42 @@ static void asm_href(ASMState *as, IRIns *ir)
   tmp2 = ra_scratch(as, allow);
   rset_clear(allow, tmp2);
 
-  /* Key not found in chain: load niltv. */
+  /* Key not found in chain: jump to exit (if merged) or load niltv. */
   l_end = emit_label(as);
-  if (destused)
+  as->invmcp = NULL;
+  if (merge == IR_NE)
+    asm_guard(as, MIPSI_B, RID_ZERO, RID_ZERO);
+  else if (destused)
     emit_loada(as, dest, niltvg(J2G(as->J)));
-  else
-    *--as->mcp = MIPSI_NOP;
   /* Follow hash chain until the end. */
-  emit_move(as, dest, tmp1);
+  emit_move(as, dest, tmp2);
   l_loop = --as->mcp;
-  emit_tsi(as, MIPSI_LW, tmp1, dest, (int32_t)offsetof(Node, next));
+  emit_tsi(as, MIPSI_LW, tmp2, dest, (int32_t)offsetof(Node, next));
   l_next = emit_label(as);
 
   /* Type and value comparison. */
+  if (merge == IR_EQ) {  /* Must match asm_guard(). */
+    emit_ti(as, MIPSI_LI, RID_TMP, as->snapno);
+    l_end = asm_exitstub_addr(as);
+  }
   if (irt_isnum(kt)) {
     emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
     emit_fgh(as, MIPSI_C_EQ_D, 0, tmpnum, key);
-	emit_tg(as, MIPSI_MFC1, tmp1, key+1);
-    emit_branch(as, MIPSI_BEQ, tmp1, RID_ZERO, l_next);
-    emit_tsi(as, MIPSI_SLTIU, tmp1, tmp1, (int32_t)LJ_TISNUM);
+    *--as->mcp = MIPSI_NOP;  /* Avoid NaN comparison overhead. */
+    emit_branch(as, MIPSI_BEQ, tmp2, RID_ZERO, l_next);
+    emit_tsi(as, MIPSI_SLTIU, tmp2, tmp2, (int32_t)LJ_TISNUM);
     emit_hsi(as, MIPSI_LDC1, tmpnum, dest, (int32_t)offsetof(Node, key.n));
   } else {
     if (irt_ispri(kt)) {
-      emit_branch(as, MIPSI_BEQ, tmp1, type, l_end);
+      emit_branch(as, MIPSI_BEQ, tmp2, type, l_end);
     } else {
-      emit_branch(as, MIPSI_BEQ, tmp2, key, l_end);
-      emit_tsi(as, MIPSI_LW, tmp2, dest, (int32_t)offsetof(Node, key.gcr));
-      emit_branch(as, MIPSI_BNE, tmp1, type, l_next);
+      emit_branch(as, MIPSI_BEQ, tmp1, key, l_end);
+      emit_tsi(as, MIPSI_LW, tmp1, dest, (int32_t)offsetof(Node, key.gcr));
+      emit_branch(as, MIPSI_BNE, tmp2, type, l_next);
     }
   }
-  emit_tsi(as, MIPSI_LW, tmp1, dest, (int32_t)offsetof(Node, key.it));
-  *l_loop = MIPSI_BNE | MIPSF_S(tmp1) | ((as->mcp-l_loop-1) & 0xffffu);
+  emit_tsi(as, MIPSI_LW, tmp2, dest, (int32_t)offsetof(Node, key.it));
+  *l_loop = MIPSI_BNE | MIPSF_S(tmp2) | ((as->mcp-l_loop-1) & 0xffffu);
 
   /* Load main position relative to tab->node into dest. */
   khash = irref_isk(refkey) ? ir_khash(irkey) : 1;
@@ -1694,7 +1699,14 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_GCSTEP: asm_gcstep(as, ir); break;
 
   /* Guarded assertions. */
-  case IR_EQ: case IR_NE: asm_compeq(as, ir); break;
+  case IR_EQ: case IR_NE:
+    if ((ir-1)->o == IR_HREF && ir->op1 == as->curins-1) {
+      as->curins--;
+      asm_href(as, ir-1, (IROp)ir->o);
+      break;
+    }
+    asm_compeq(as, ir);
+    break;
   case IR_LT: case IR_GE: case IR_LE: case IR_GT:
   case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
   case IR_ABC:
@@ -1749,7 +1761,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 
   /* Memory references. */
   case IR_AREF: asm_aref(as, ir); break;
-  case IR_HREF: asm_href(as, ir); break;
+  case IR_HREF: asm_href(as, ir, 0); break;
   case IR_HREFK: asm_hrefk(as, ir); break;
   case IR_NEWREF: asm_newref(as, ir); break;
   case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;

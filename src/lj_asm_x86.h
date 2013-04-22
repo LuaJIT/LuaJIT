@@ -947,23 +947,6 @@ static void asm_aref(ASMState *as, IRIns *ir)
     emit_rr(as, XO_MOV, dest, as->mrm.base);
 }
 
-/* Merge NE(HREF, niltv) check. */
-static MCode *merge_href_niltv(ASMState *as, IRIns *ir)
-{
-  /* Assumes nothing else generates NE of HREF. */
-  if ((ir[1].o == IR_NE || ir[1].o == IR_EQ) && ir[1].op1 == as->curins &&
-      ra_hasreg(ir->r)) {
-    MCode *p = as->mcp;
-    p += (LJ_64 && *p != XI_ARITHi) ? 7+6 : 6+6;
-    /* Ensure no loop branch inversion happened. */
-    if (p[-6] == 0x0f && p[-5] == XI_JCCn+(CC_NE^(ir[1].o & 1))) {
-      as->mcp = p;  /* Kill cmp reg, imm32 + jz exit. */
-      return p + *(int32_t *)(p-4);  /* Return exit address. */
-    }
-  }
-  return NULL;
-}
-
 /* Inlined hash lookup. Specialized for key type and for const keys.
 ** The equivalent C code is:
 **   Node *n = hashkey(t, key);
@@ -972,10 +955,10 @@ static MCode *merge_href_niltv(ASMState *as, IRIns *ir)
 **   } while ((n = nextnode(n)));
 **   return niltv(L);
 */
-static void asm_href(ASMState *as, IRIns *ir)
+static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 {
-  MCode *nilexit = merge_href_niltv(as, ir);  /* Do this before any restores. */
   RegSet allow = RSET_GPR;
+  int destused = ra_used(ir);
   Reg dest = ra_dest(as, ir, allow);
   Reg tab = ra_alloc1(as, ir->op1, rset_clear(allow, dest));
   Reg key = RID_NONE, tmp = RID_NONE;
@@ -992,14 +975,12 @@ static void asm_href(ASMState *as, IRIns *ir)
       tmp = ra_scratch(as, rset_exclude(allow, key));
   }
 
-  /* Key not found in chain: jump to exit (if merged with NE) or load niltv. */
+  /* Key not found in chain: jump to exit (if merged) or load niltv. */
   l_end = emit_label(as);
-  if (nilexit && ir[1].o == IR_NE) {
-    emit_jcc(as, CC_E, nilexit);  /* XI_JMP is not found by lj_asm_patchexit. */
-    nilexit = NULL;
-  } else {
+  if (merge == IR_NE)
+    asm_guardcc(as, CC_E);  /* XI_JMP is not found by lj_asm_patchexit. */
+  else if (destused)
     emit_loada(as, dest, niltvg(J2G(as->J)));
-  }
 
   /* Follow hash chain until the end. */
   l_loop = emit_sjcc_label(as, CC_NZ);
@@ -1008,8 +989,8 @@ static void asm_href(ASMState *as, IRIns *ir)
   l_next = emit_label(as);
 
   /* Type and value comparison. */
-  if (nilexit)
-    emit_jcc(as, CC_E, nilexit);
+  if (merge == IR_EQ)
+    asm_guardcc(as, CC_E);
   else
     emit_sjcc(as, CC_E, l_end);
   if (irt_isnum(kt)) {
@@ -2519,9 +2500,16 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_GCSTEP: asm_gcstep(as, ir); break;
 
   /* Guarded assertions. */
+  case IR_EQ: case IR_NE:
+    if ((ir-1)->o == IR_HREF && ir->op1 == as->curins-1) {
+      as->curins--;
+      asm_href(as, ir-1, (IROp)ir->o);
+      break;
+    }
+    /* fallthrough */
   case IR_LT: case IR_GE: case IR_LE: case IR_GT:
   case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
-  case IR_EQ: case IR_NE: case IR_ABC:
+  case IR_ABC:
     asm_comp(as, ir, asm_compmap[ir->o]);
     break;
 
@@ -2615,7 +2603,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 
   /* Memory references. */
   case IR_AREF: asm_aref(as, ir); break;
-  case IR_HREF: asm_href(as, ir); break;
+  case IR_HREF: asm_href(as, ir, 0); break;
   case IR_HREFK: asm_hrefk(as, ir); break;
   case IR_NEWREF: asm_newref(as, ir); break;
   case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
