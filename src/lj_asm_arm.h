@@ -453,15 +453,6 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
   UNUSED(ci);
 }
 
-static void asm_call(ASMState *as, IRIns *ir)
-{
-  IRRef args[CCI_NARGS_MAX];
-  const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
-  asm_collectargs(as, ir, ci, args);
-  asm_setupresult(as, ir, ci);
-  asm_gencall(as, ci, args);
-}
-
 static void asm_callx(ASMState *as, IRIns *ir)
 {
   IRRef args[CCI_NARGS_MAX];
@@ -600,31 +591,6 @@ static void asm_conv(ASMState *as, IRIns *ir)
   }
 }
 
-#if !LJ_SOFTFP && LJ_HASFFI
-static void asm_conv64(ASMState *as, IRIns *ir)
-{
-  IRType st = (IRType)((ir-1)->op2 & IRCONV_SRCMASK);
-  IRType dt = (((ir-1)->op2 & IRCONV_DSTMASK) >> IRCONV_DSH);
-  IRCallID id;
-  CCallInfo ci;
-  IRRef args[2];
-  args[0] = (ir-1)->op1;
-  args[1] = ir->op1;
-  if (st == IRT_NUM || st == IRT_FLOAT) {
-    id = IRCALL_fp64_d2l + ((st == IRT_FLOAT) ? 2 : 0) + (dt - IRT_I64);
-    ir--;
-  } else {
-    id = IRCALL_fp64_l2d + ((dt == IRT_FLOAT) ? 2 : 0) + (st - IRT_I64);
-  }
-  ci = lj_ir_callinfo[id];
-#if !LJ_ABI_SOFTFP
-  ci.flags |= CCI_VARARG;  /* These calls don't use the hard-float ABI! */
-#endif
-  asm_setupresult(as, ir, &ci);
-  asm_gencall(as, &ci, args);
-}
-#endif
-
 static void asm_strto(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_strscan_num];
@@ -688,6 +654,8 @@ static void asm_strto(ASMState *as, IRIns *ir)
     emit_opk(as, ARMI_ADD, tmp, RID_SP, ofs, RSET_GPR);
 }
 
+/* -- Memory references --------------------------------------------------- */
+
 /* Get pointer to TValue. */
 static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
 {
@@ -713,34 +681,13 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
       Reg src = ra_alloc1(as, ref, allow);
       emit_lso(as, ARMI_STR, src, RID_SP, 0);
     }
-    if ((ir+1)->o == IR_HIOP)
+    if (LJ_SOFTFP && (ir+1)->o == IR_HIOP)
       type = ra_alloc1(as, ref+1, allow);
     else
       type = ra_allock(as, irt_toitype(ir->t), allow);
     emit_lso(as, ARMI_STR, type, RID_SP, 4);
   }
 }
-
-static void asm_tostr(ASMState *as, IRIns *ir)
-{
-  IRRef args[2];
-  args[0] = ASMREF_L;
-  as->gcsteps++;
-  if (irt_isnum(IR(ir->op1)->t) || (ir+1)->o == IR_HIOP) {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
-    args[1] = ASMREF_TMP1;  /* const lua_Number * */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
-  } else {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
-    args[1] = ir->op1;  /* int32_t k */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
-  }
-}
-
-/* -- Memory references --------------------------------------------------- */
 
 static void asm_aref(ASMState *as, IRIns *ir)
 {
@@ -957,20 +904,6 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   if (ra_hasreg(key)) emit_lso(as, ARMI_LDR, key, idx, kofs);
   if (ofs > 4095)
     emit_opk(as, ARMI_ADD, dest, node, ofs, RSET_GPR);
-}
-
-static void asm_newref(ASMState *as, IRIns *ir)
-{
-  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
-  IRRef args[3];
-  if (ir->r == RID_SINK)
-    return;
-  args[0] = ASMREF_L;     /* lua_State *L */
-  args[1] = ir->op1;      /* GCtab *t     */
-  args[2] = ASMREF_TMP1;  /* cTValue *key */
-  asm_setupresult(as, ir, ci);  /* TValue * */
-  asm_gencall(as, ci, args);
-  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
 }
 
 static void asm_uref(ASMState *as, IRIns *ir)
@@ -1391,25 +1324,6 @@ static void asm_fpunary(ASMState *as, IRIns *ir, ARMIns ai)
   Reg left = ra_hintalloc(as, ir->op1, dest, RSET_FPR);
   emit_dm(as, ai, (dest & 15), (left & 15));
 }
-
-static int asm_fpjoin_pow(ASMState *as, IRIns *ir)
-{
-  IRIns *irp = IR(ir->op1);
-  if (irp == ir-1 && irp->o == IR_MUL && !ra_used(irp)) {
-    IRIns *irpp = IR(irp->op1);
-    if (irpp == ir-2 && irpp->o == IR_FPMATH &&
-	irpp->op2 == IRFPM_LOG2 && !ra_used(irpp)) {
-      const CCallInfo *ci = &lj_ir_callinfo[IRCALL_pow];
-      IRRef args[2];
-      args[0] = irpp->op1;
-      args[1] = irp->op2;
-      asm_setupresult(as, ir, ci);
-      asm_gencall(as, ci, args);
-      return 1;
-    }
-  }
-  return 0;
-}
 #endif
 
 static int asm_swapops(ASMState *as, IRRef lref, IRRef rref)
@@ -1559,16 +1473,6 @@ static void asm_neg(ASMState *as, IRIns *ir)
   }
 #endif
   asm_intneg(as, ir, ARMI_RSB);
-}
-
-static void asm_callid(ASMState *as, IRIns *ir, IRCallID id)
-{
-  const CCallInfo *ci = &lj_ir_callinfo[id];
-  IRRef args[2];
-  args[0] = ir->op1;
-  args[1] = ir->op2;
-  asm_setupresult(as, ir, ci);
-  asm_gencall(as, ci, args);
 }
 
 #if !LJ_SOFTFP

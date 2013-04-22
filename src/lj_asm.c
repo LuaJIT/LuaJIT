@@ -949,44 +949,6 @@ static void asm_snap_prep(ASMState *as)
 
 /* -- Miscellaneous helpers ----------------------------------------------- */
 
-/* Collect arguments from CALL* and CARG instructions. */
-static void asm_collectargs(ASMState *as, IRIns *ir,
-			    const CCallInfo *ci, IRRef *args)
-{
-  uint32_t n = CCI_NARGS(ci);
-  lua_assert(n <= CCI_NARGS_MAX);
-  if ((ci->flags & CCI_L)) { *args++ = ASMREF_L; n--; }
-  while (n-- > 1) {
-    ir = IR(ir->op1);
-    lua_assert(ir->o == IR_CARG);
-    args[n] = ir->op2 == REF_NIL ? 0 : ir->op2;
-  }
-  args[0] = ir->op1 == REF_NIL ? 0 : ir->op1;
-  lua_assert(IR(ir->op1)->o != IR_CARG);
-}
-
-/* Reconstruct CCallInfo flags for CALLX*. */
-static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
-{
-  uint32_t nargs = 0;
-  if (ir->op1 != REF_NIL) {  /* Count number of arguments first. */
-    IRIns *ira = IR(ir->op1);
-    nargs++;
-    while (ira->o == IR_CARG) { nargs++; ira = IR(ira->op1); }
-  }
-#if LJ_HASFFI
-  if (IR(ir->op2)->o == IR_CARG) {  /* Copy calling convention info. */
-    CTypeID id = (CTypeID)IR(IR(ir->op2)->op2)->i;
-    CType *ct = ctype_get(ctype_ctsG(J2G(as->J)), id);
-    nargs |= ((ct->info & CTF_VARARG) ? CCI_VARARG : 0);
-#if LJ_TARGET_X86
-    nargs |= (ctype_cconv(ct->info) << CCI_CC_SHIFT);
-#endif
-  }
-#endif
-  return (nargs | (ir->t.irt << CCI_OTSHIFT));
-}
-
 /* Calculate stack adjustment. */
 static int32_t asm_stack_adjust(ASMState *as)
 {
@@ -1071,7 +1033,9 @@ static void asm_gcstep(ASMState *as, IRIns *ir)
   as->gcsteps = 0x80000000;  /* Prevent implicit GC check further up. */
 }
 
-/* -- Buffer handling ----------------------------------------------------- */
+/* -- Buffer operations --------------------------------------------------- */
+
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
 
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
@@ -1090,10 +1054,6 @@ static void asm_bufhdr(ASMState *as, IRIns *ir)
 #endif
   }
 }
-
-#if !LJ_TARGET_X86ORX64
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
-#endif
 
 static void asm_bufput(ASMState *as, IRIns *ir)
 {
@@ -1115,14 +1075,8 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   }
   asm_setupresult(as, ir, ci);  /* SBuf * */
   asm_gencall(as, ci, args);
-  if (args[1] == ASMREF_TMP1) {
-#if LJ_TARGET_X86ORX64
-    emit_rmro(as, XO_LEA, ra_releasetmp(as, ASMREF_TMP1)|REX_64,
-	      RID_ESP, ra_spill(as, IR(ir->op2)));
-#else
+  if (args[1] == ASMREF_TMP1)
     asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
-#endif
-  }
 }
 
 static void asm_bufstr(ASMState *as, IRIns *ir)
@@ -1134,6 +1088,161 @@ static void asm_bufstr(ASMState *as, IRIns *ir)
   asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);
 }
+
+/* -- Type conversions ---------------------------------------------------- */
+
+static void asm_tostr(ASMState *as, IRIns *ir)
+{
+  IRRef args[2];
+  args[0] = ASMREF_L;
+  as->gcsteps++;
+  if (irt_isnum(IR(ir->op1)->t) || (LJ_SOFTFP && (ir+1)->o == IR_HIOP)) {
+    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
+    args[1] = ASMREF_TMP1;  /* const lua_Number * */
+    asm_setupresult(as, ir, ci);  /* GCstr * */
+    asm_gencall(as, ci, args);
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
+  } else {
+    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
+    args[1] = ir->op1;  /* int32_t k */
+    asm_setupresult(as, ir, ci);  /* GCstr * */
+    asm_gencall(as, ci, args);
+  }
+}
+
+#if LJ_32 && LJ_HASFFI && !LJ_SOFTFP && !LJ_TARGET_X86
+static void asm_conv64(ASMState *as, IRIns *ir)
+{
+  IRType st = (IRType)((ir-1)->op2 & IRCONV_SRCMASK);
+  IRType dt = (((ir-1)->op2 & IRCONV_DSTMASK) >> IRCONV_DSH);
+  IRCallID id;
+  IRRef args[2];
+  lua_assert((ir-1)->o == IR_CONV && ir->o == IR_HIOP);
+  args[LJ_BE] = (ir-1)->op1;
+  args[LJ_LE] = ir->op1;
+  if (st == IRT_NUM || st == IRT_FLOAT) {
+    id = IRCALL_fp64_d2l + ((st == IRT_FLOAT) ? 2 : 0) + (dt - IRT_I64);
+    ir--;
+  } else {
+    id = IRCALL_fp64_l2d + ((dt == IRT_FLOAT) ? 2 : 0) + (st - IRT_I64);
+  }
+  {
+#if LJ_TARGET_ARM && !LJ_ABI_SOFTFP
+    CCallInfo cim = lj_ir_callinfo[id], *ci = &cim;
+    cim.flags |= CCI_VARARG;  /* These calls don't use the hard-float ABI! */
+#else
+    const CCallInfo *ci = &lj_ir_callinfo[id];
+#endif
+    asm_setupresult(as, ir, ci);
+    asm_gencall(as, ci, args);
+  }
+}
+#endif
+
+/* -- Memory references --------------------------------------------------- */
+
+static void asm_newref(ASMState *as, IRIns *ir)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
+  IRRef args[3];
+  if (ir->r == RID_SINK)
+    return;
+  args[0] = ASMREF_L;     /* lua_State *L */
+  args[1] = ir->op1;      /* GCtab *t     */
+  args[2] = ASMREF_TMP1;  /* cTValue *key */
+  asm_setupresult(as, ir, ci);  /* TValue * */
+  asm_gencall(as, ci, args);
+  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+}
+
+/* -- Calls --------------------------------------------------------------- */
+
+/* Collect arguments from CALL* and CARG instructions. */
+static void asm_collectargs(ASMState *as, IRIns *ir,
+			    const CCallInfo *ci, IRRef *args)
+{
+  uint32_t n = CCI_NARGS(ci);
+  lua_assert(n <= CCI_NARGS_MAX);
+  if ((ci->flags & CCI_L)) { *args++ = ASMREF_L; n--; }
+  while (n-- > 1) {
+    ir = IR(ir->op1);
+    lua_assert(ir->o == IR_CARG);
+    args[n] = ir->op2 == REF_NIL ? 0 : ir->op2;
+  }
+  args[0] = ir->op1 == REF_NIL ? 0 : ir->op1;
+  lua_assert(IR(ir->op1)->o != IR_CARG);
+}
+
+/* Reconstruct CCallInfo flags for CALLX*. */
+static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
+{
+  uint32_t nargs = 0;
+  if (ir->op1 != REF_NIL) {  /* Count number of arguments first. */
+    IRIns *ira = IR(ir->op1);
+    nargs++;
+    while (ira->o == IR_CARG) { nargs++; ira = IR(ira->op1); }
+  }
+#if LJ_HASFFI
+  if (IR(ir->op2)->o == IR_CARG) {  /* Copy calling convention info. */
+    CTypeID id = (CTypeID)IR(IR(ir->op2)->op2)->i;
+    CType *ct = ctype_get(ctype_ctsG(J2G(as->J)), id);
+    nargs |= ((ct->info & CTF_VARARG) ? CCI_VARARG : 0);
+#if LJ_TARGET_X86
+    nargs |= (ctype_cconv(ct->info) << CCI_CC_SHIFT);
+#endif
+  }
+#endif
+  return (nargs | (ir->t.irt << CCI_OTSHIFT));
+}
+
+static void asm_callid(ASMState *as, IRIns *ir, IRCallID id)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[id];
+  IRRef args[2];
+  args[0] = ir->op1;
+  args[1] = ir->op2;
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+
+static void asm_call(ASMState *as, IRIns *ir)
+{
+  IRRef args[CCI_NARGS_MAX];
+  const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
+  asm_collectargs(as, ir, ci, args);
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+
+#if !LJ_SOFTFP
+static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref);
+
+#if !LJ_TARGET_X86ORX64
+static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_pow];
+  IRRef args[2];
+  args[0] = lref;
+  args[1] = rref;
+  asm_setupresult(as, ir, ci);
+  asm_gencall(as, ci, args);
+}
+#endif
+
+static int asm_fpjoin_pow(ASMState *as, IRIns *ir)
+{
+  IRIns *irp = IR(ir->op1);
+  if (irp == ir-1 && irp->o == IR_MUL && !ra_used(irp)) {
+    IRIns *irpp = IR(irp->op1);
+    if (irpp == ir-2 && irpp->o == IR_FPMATH &&
+	irpp->op2 == IRFPM_LOG2 && !ra_used(irpp)) {
+      asm_fppow(as, ir, irpp->op1, irp->op2);
+      return 1;
+    }
+  }
+  return 0;
+}
+#endif
 
 /* -- PHI and loop handling ----------------------------------------------- */
 

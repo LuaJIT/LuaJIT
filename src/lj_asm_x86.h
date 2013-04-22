@@ -576,15 +576,6 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
   }
 }
 
-static void asm_call(ASMState *as, IRIns *ir)
-{
-  IRRef args[CCI_NARGS_MAX];
-  const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
-  asm_collectargs(as, ir, ci, args);
-  asm_setupresult(as, ir, ci);
-  asm_gencall(as, ci, args);
-}
-
 /* Return a constant function pointer or NULL for indirect calls. */
 static void *asm_callx_func(ASMState *as, IRIns *irf, IRRef func)
 {
@@ -891,6 +882,14 @@ static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
 	   st == IRT_NUM ? XOg_FLDq: XOg_FLDd,
 	   asm_fuseload(as, ir->op1, RSET_EMPTY));
 }
+
+static void asm_conv64(ASMState *as, IRIns *ir)
+{
+  if (irt_isfp(ir->t))
+    asm_conv_fp_int64(as, ir);
+  else
+    asm_conv_int64_fp(as, ir);
+}
 #endif
 
 static void asm_strto(ASMState *as, IRIns *ir)
@@ -912,28 +911,31 @@ static void asm_strto(ASMState *as, IRIns *ir)
 	    RID_ESP, sps_scale(ir->s));
 }
 
-static void asm_tostr(ASMState *as, IRIns *ir)
+/* -- Memory references --------------------------------------------------- */
+
+/* Get pointer to TValue. */
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
 {
-  IRIns *irl = IR(ir->op1);
-  IRRef args[2];
-  args[0] = ASMREF_L;
-  as->gcsteps++;
-  if (irt_isnum(irl->t)) {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
-    args[1] = ASMREF_TMP1;  /* const lua_Number * */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
-    emit_rmro(as, XO_LEA, ra_releasetmp(as, ASMREF_TMP1)|REX_64,
-	      RID_ESP, ra_spill(as, irl));
+  IRIns *ir = IR(ref);
+  if (irt_isnum(ir->t)) {
+    /* For numbers use the constant itself or a spill slot as a TValue. */
+    if (irref_isk(ref))
+      emit_loada(as, dest, ir_knum(ir));
+    else
+      emit_rmro(as, XO_LEA, dest|REX_64, RID_ESP, ra_spill(as, ir));
   } else {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
-    args[1] = ir->op1;  /* int32_t k */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
+    /* Otherwise use g->tmptv to hold the TValue. */
+    if (!irref_isk(ref)) {
+      Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, dest));
+      emit_movtomro(as, REX_64IR(ir, src), dest, 0);
+    } else if (!irt_ispri(ir->t)) {
+      emit_movmroi(as, dest, 0, ir->i);
+    }
+    if (!(LJ_64 && irt_islightud(ir->t)))
+      emit_movmroi(as, dest, 4, irt_toitype(ir->t));
+    emit_loada(as, dest, &J2G(as->J)->tmptv);
   }
 }
-
-/* -- Memory references --------------------------------------------------- */
 
 static void asm_aref(ASMState *as, IRIns *ir)
 {
@@ -1161,41 +1163,6 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 	      ofs + (int32_t)offsetof(Node, key.it));
   }
 #endif
-}
-
-static void asm_newref(ASMState *as, IRIns *ir)
-{
-  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_tab_newkey];
-  IRRef args[3];
-  IRIns *irkey;
-  Reg tmp;
-  if (ir->r == RID_SINK)
-    return;
-  args[0] = ASMREF_L;     /* lua_State *L */
-  args[1] = ir->op1;      /* GCtab *t     */
-  args[2] = ASMREF_TMP1;  /* cTValue *key */
-  asm_setupresult(as, ir, ci);  /* TValue * */
-  asm_gencall(as, ci, args);
-  tmp = ra_releasetmp(as, ASMREF_TMP1);
-  irkey = IR(ir->op2);
-  if (irt_isnum(irkey->t)) {
-    /* For numbers use the constant itself or a spill slot as a TValue. */
-    if (irref_isk(ir->op2))
-      emit_loada(as, tmp, ir_knum(irkey));
-    else
-      emit_rmro(as, XO_LEA, tmp|REX_64, RID_ESP, ra_spill(as, irkey));
-  } else {
-    /* Otherwise use g->tmptv to hold the TValue. */
-    if (!irref_isk(ir->op2)) {
-      Reg src = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, tmp));
-      emit_movtomro(as, REX_64IR(irkey, src), tmp, 0);
-    } else if (!irt_ispri(irkey->t)) {
-      emit_movmroi(as, tmp, 0, irkey->i);
-    }
-    if (!(LJ_64 && irt_islightud(irkey->t)))
-      emit_movmroi(as, tmp, 4, irt_toitype(irkey->t));
-    emit_loada(as, tmp, &J2G(as->J)->tmptv);
-  }
 }
 
 static void asm_uref(ASMState *as, IRIns *ir)
@@ -1621,31 +1588,21 @@ static void asm_x87load(ASMState *as, IRRef ref)
   }
 }
 
-/* Try to rejoin pow from EXP2, MUL and LOG2 (if still unsplit). */
-static int fpmjoin_pow(ASMState *as, IRIns *ir)
+static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
 {
-  IRIns *irp = IR(ir->op1);
-  if (irp == ir-1 && irp->o == IR_MUL && !ra_used(irp)) {
-    IRIns *irpp = IR(irp->op1);
-    if (irpp == ir-2 && irpp->o == IR_FPMATH &&
-	irpp->op2 == IRFPM_LOG2 && !ra_used(irpp)) {
-      /* The modified regs must match with the *.dasc implementation. */
-      RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM2+1)|RID2RSET(RID_EAX);
-      IRIns *irx;
-      if (ra_hasreg(ir->r))
-	rset_clear(drop, ir->r);  /* Dest reg handled below. */
-      ra_evictset(as, drop);
-      ra_destreg(as, ir, RID_XMM0);
-      emit_call(as, lj_vm_pow_sse);
-      irx = IR(irpp->op1);
-      if (ra_noreg(irx->r) && ra_gethint(irx->r) == RID_XMM1)
-	irx->r = RID_INIT;  /* Avoid allocating xmm1 for x. */
-      ra_left(as, RID_XMM0, irpp->op1);
-      ra_left(as, RID_XMM1, irp->op2);
-      return 1;
-    }
-  }
-  return 0;
+  /* The modified regs must match with the *.dasc implementation. */
+  RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM2+1)|RID2RSET(RID_EAX);
+  IRIns *irx;
+  if (ra_hasreg(ir->r))
+    rset_clear(drop, ir->r);  /* Dest reg handled below. */
+  ra_evictset(as, drop);
+  ra_destreg(as, ir, RID_XMM0);
+  emit_call(as, lj_vm_pow_sse);
+  irx = IR(lref);
+  if (ra_noreg(irx->r) && ra_gethint(irx->r) == RID_XMM1)
+    irx->r = RID_INIT;  /* Avoid allocating xmm1 for x. */
+  ra_left(as, RID_XMM0, lref);
+  ra_left(as, RID_XMM1, rref);
 }
 
 static void asm_fpmath(ASMState *as, IRIns *ir)
@@ -1681,7 +1638,7 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
 		    fpm == IRFPM_CEIL ? lj_vm_ceil_sse : lj_vm_trunc_sse);
       ra_left(as, RID_XMM0, ir->op1);
     }
-  } else if (fpm == IRFPM_EXP2 && fpmjoin_pow(as, ir)) {
+  } else if (fpm == IRFPM_EXP2 && asm_fpjoin_pow(as, ir)) {
     /* Rejoined to pow(). */
   } else {  /* Handle x87 ops. */
     int32_t ofs = sps_scale(ir->s);  /* Use spill slot or temp slots. */
@@ -1739,28 +1696,6 @@ static void asm_fppowi(ASMState *as, IRIns *ir)
   emit_call(as, lj_vm_powi_sse);
   ra_left(as, RID_XMM0, ir->op1);
   ra_left(as, RID_EAX, ir->op2);
-}
-
-#if LJ_64 && LJ_HASFFI
-static void asm_arith64(ASMState *as, IRIns *ir, IRCallID id)
-{
-  const CCallInfo *ci = &lj_ir_callinfo[id];
-  IRRef args[2];
-  args[0] = ir->op1;
-  args[1] = ir->op2;
-  asm_setupresult(as, ir, ci);
-  asm_gencall(as, ci, args);
-}
-#endif
-
-static void asm_intmod(ASMState *as, IRIns *ir)
-{
-  const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_vm_modi];
-  IRRef args[2];
-  args[0] = ir->op1;
-  args[1] = ir->op2;
-  asm_setupresult(as, ir, ci);
-  asm_gencall(as, ci, args);
 }
 
 static int asm_swapops(ASMState *as, IRIns *ir)
@@ -2268,13 +2203,9 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   int uselo = ra_used(ir-1), usehi = ra_used(ir);  /* Loword/hiword used? */
   if (LJ_UNLIKELY(!(as->flags & JIT_F_OPT_DCE))) uselo = usehi = 1;
   if ((ir-1)->o == IR_CONV) {  /* Conversions to/from 64 bit. */
-    if (usehi || uselo) {
-      if (irt_isfp(ir->t))
-	asm_conv_fp_int64(as, ir);
-      else
-	asm_conv_int64_fp(as, ir);
-    }
     as->curins--;  /* Always skip the CONV. */
+    if (usehi || uselo)
+      asm_conv64(as, ir);
     return;
   } else if ((ir-1)->o <= IR_NE) {  /* 64 bit integer comparisons. ORDER IR. */
     asm_comp_int64(as, ir);
@@ -2627,8 +2558,8 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_DIV:
 #if LJ_64 && LJ_HASFFI
     if (!irt_isnum(ir->t))
-      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
-					     IRCALL_lj_carith_divu64);
+      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
+					    IRCALL_lj_carith_divu64);
     else
 #endif
       asm_fparith(as, ir, XO_DIVSD);
@@ -2636,11 +2567,11 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_MOD:
 #if LJ_64 && LJ_HASFFI
     if (!irt_isint(ir->t))
-      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
-					     IRCALL_lj_carith_modu64);
+      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
+					    IRCALL_lj_carith_modu64);
     else
 #endif
-      asm_intmod(as, ir);
+      asm_callid(as, ir, IRCALL_lj_vm_modi);
     break;
 
   case IR_NEG:
@@ -2670,8 +2601,8 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_POW:
 #if LJ_64 && LJ_HASFFI
     if (!irt_isnum(ir->t))
-      asm_arith64(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
-					     IRCALL_lj_carith_powu64);
+      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
+					    IRCALL_lj_carith_powu64);
     else
 #endif
       asm_fppowi(as, ir);
