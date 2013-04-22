@@ -1515,6 +1515,124 @@ static void asm_loop(ASMState *as)
 #error "Missing assembler for target CPU"
 #endif
 
+/* -- Instruction dispatch ------------------------------------------------ */
+
+/* Assemble a single instruction. */
+static void asm_ir(ASMState *as, IRIns *ir)
+{
+  switch ((IROp)ir->o) {
+  /* Miscellaneous ops. */
+  case IR_LOOP: asm_loop(as); break;
+  case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
+  case IR_USE:
+    ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
+  case IR_PHI: asm_phi(as, ir); break;
+  case IR_HIOP: asm_hiop(as, ir); break;
+  case IR_GCSTEP: asm_gcstep(as, ir); break;
+
+  /* Guarded assertions. */
+  case IR_LT: case IR_GE: case IR_LE: case IR_GT:
+  case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
+  case IR_ABC:
+    asm_comp(as, ir);
+    break;
+  case IR_EQ: case IR_NE:
+    if ((ir-1)->o == IR_HREF && ir->op1 == as->curins-1) {
+      as->curins--;
+      asm_href(as, ir-1, (IROp)ir->o);
+    } else {
+      asm_equal(as, ir);
+    }
+    break;
+
+  case IR_RETF: asm_retf(as, ir); break;
+
+  /* Bit ops. */
+  case IR_BNOT: asm_bnot(as, ir); break;
+  case IR_BSWAP: asm_bswap(as, ir); break;
+  case IR_BAND: asm_band(as, ir); break;
+  case IR_BOR: asm_bor(as, ir); break;
+  case IR_BXOR: asm_bxor(as, ir); break;
+  case IR_BSHL: asm_bshl(as, ir); break;
+  case IR_BSHR: asm_bshr(as, ir); break;
+  case IR_BSAR: asm_bsar(as, ir); break;
+  case IR_BROL: asm_brol(as, ir); break;
+  case IR_BROR: asm_bror(as, ir); break;
+
+  /* Arithmetic ops. */
+  case IR_ADD: asm_add(as, ir); break;
+  case IR_SUB: asm_sub(as, ir); break;
+  case IR_MUL: asm_mul(as, ir); break;
+  case IR_DIV: asm_div(as, ir); break;
+  case IR_MOD: asm_mod(as, ir); break;
+  case IR_POW: asm_pow(as, ir); break;
+  case IR_NEG: asm_neg(as, ir); break;
+  case IR_ABS: asm_abs(as, ir); break;
+  case IR_ATAN2: asm_atan2(as, ir); break;
+  case IR_LDEXP: asm_ldexp(as, ir); break;
+  case IR_MIN: asm_min(as, ir); break;
+  case IR_MAX: asm_max(as, ir); break;
+  case IR_FPMATH: asm_fpmath(as, ir); break;
+
+  /* Overflow-checking arithmetic ops. */
+  case IR_ADDOV: asm_addov(as, ir); break;
+  case IR_SUBOV: asm_subov(as, ir); break;
+  case IR_MULOV: asm_mulov(as, ir); break;
+
+  /* Memory references. */
+  case IR_AREF: asm_aref(as, ir); break;
+  case IR_HREF: asm_href(as, ir, 0); break;
+  case IR_HREFK: asm_hrefk(as, ir); break;
+  case IR_NEWREF: asm_newref(as, ir); break;
+  case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
+  case IR_FREF: asm_fref(as, ir); break;
+  case IR_STRREF: asm_strref(as, ir); break;
+
+  /* Loads and stores. */
+  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+    asm_ahuvload(as, ir);
+    break;
+  case IR_FLOAD: asm_fload(as, ir); break;
+  case IR_XLOAD: asm_xload(as, ir); break;
+  case IR_SLOAD: asm_sload(as, ir); break;
+
+  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
+  case IR_FSTORE: asm_fstore(as, ir); break;
+  case IR_XSTORE: asm_xstore(as, ir); break;
+
+  /* Allocations. */
+  case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;
+  case IR_TNEW: asm_tnew(as, ir); break;
+  case IR_TDUP: asm_tdup(as, ir); break;
+  case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
+
+  /* Buffer operations. */
+  case IR_BUFHDR: asm_bufhdr(as, ir); break;
+  case IR_BUFPUT: asm_bufput(as, ir); break;
+  case IR_BUFSTR: asm_bufstr(as, ir); break;
+
+  /* Write barriers. */
+  case IR_TBAR: asm_tbar(as, ir); break;
+  case IR_OBAR: asm_obar(as, ir); break;
+
+  /* Type conversions. */
+  case IR_TOBIT: asm_tobit(as, ir); break;
+  case IR_CONV: asm_conv(as, ir); break;
+  case IR_TOSTR: asm_tostr(as, ir); break;
+  case IR_STRTO: asm_strto(as, ir); break;
+
+  /* Calls. */
+  case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
+  case IR_CALLXS: asm_callx(as, ir); break;
+  case IR_CARG: break;
+
+  default:
+    setintV(&as->J->errinfo, ir->o);
+    lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
+    break;
+  }
+}
+
 /* -- Head of trace ------------------------------------------------------- */
 
 /* Head of a root trace. */

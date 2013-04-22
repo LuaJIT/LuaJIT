@@ -1218,6 +1218,9 @@ static void asm_fxload(ASMState *as, IRIns *ir)
   emit_mrm(as, xo, dest, RID_MRM);
 }
 
+#define asm_fload(as, ir)	asm_fxload(as, ir)
+#define asm_xload(as, ir)	asm_fxload(as, ir)
+
 static void asm_fxstore(ASMState *as, IRIns *ir)
 {
   RegSet allow = RSET_GPR;
@@ -1280,6 +1283,9 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
     }
   }
 }
+
+#define asm_fstore(as, ir)	asm_fxstore(as, ir)
+#define asm_xstore(as, ir)	asm_fxstore(as, ir)
 
 #if LJ_64
 static Reg asm_load_lightud64(ASMState *as, IRIns *ir, int typecheck)
@@ -1666,6 +1672,9 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
   }
 }
 
+#define asm_atan2(as, ir)	asm_fpmath(as, ir)
+#define asm_ldexp(as, ir)	asm_fpmath(as, ir)
+
 static void asm_fppowi(ASMState *as, IRIns *ir)
 {
   /* The modified regs must match with the *.dasc implementation. */
@@ -1677,6 +1686,17 @@ static void asm_fppowi(ASMState *as, IRIns *ir)
   emit_call(as, lj_vm_powi_sse);
   ra_left(as, RID_XMM0, ir->op1);
   ra_left(as, RID_EAX, ir->op2);
+}
+
+static void asm_pow(ASMState *as, IRIns *ir)
+{
+#if LJ_64 && LJ_HASFFI
+  if (!irt_isnum(ir->t))
+    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
+					  IRCALL_lj_carith_powu64);
+  else
+#endif
+    asm_fppowi(as, ir);
 }
 
 static int asm_swapops(ASMState *as, IRIns *ir)
@@ -1855,6 +1875,44 @@ static void asm_add(ASMState *as, IRIns *ir)
     asm_intarith(as, ir, XOg_ADD);
 }
 
+static void asm_sub(ASMState *as, IRIns *ir)
+{
+  if (irt_isnum(ir->t))
+    asm_fparith(as, ir, XO_SUBSD);
+  else  /* Note: no need for LEA trick here. i-k is encoded as i+(-k). */
+    asm_intarith(as, ir, XOg_SUB);
+}
+
+static void asm_mul(ASMState *as, IRIns *ir)
+{
+  if (irt_isnum(ir->t))
+    asm_fparith(as, ir, XO_MULSD);
+  else
+    asm_intarith(as, ir, XOg_X_IMUL);
+}
+
+static void asm_div(ASMState *as, IRIns *ir)
+{
+#if LJ_64 && LJ_HASFFI
+  if (!irt_isnum(ir->t))
+    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
+					  IRCALL_lj_carith_divu64);
+  else
+#endif
+    asm_fparith(as, ir, XO_DIVSD);
+}
+
+static void asm_mod(ASMState *as, IRIns *ir)
+{
+#if LJ_64 && LJ_HASFFI
+  if (!irt_isint(ir->t))
+    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
+					  IRCALL_lj_carith_modu64);
+  else
+#endif
+    asm_callid(as, ir, IRCALL_lj_vm_modi);
+}
+
 static void asm_neg_not(ASMState *as, IRIns *ir, x86Group3 xg)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
@@ -1862,7 +1920,17 @@ static void asm_neg_not(ASMState *as, IRIns *ir, x86Group3 xg)
   ra_left(as, dest, ir->op1);
 }
 
-static void asm_min_max(ASMState *as, IRIns *ir, int cc)
+static void asm_neg(ASMState *as, IRIns *ir)
+{
+  if (irt_isnum(ir->t))
+    asm_fparith(as, ir, XO_XORPS);
+  else
+    asm_neg_not(as, ir, XOg_NEG);
+}
+
+#define asm_abs(as, ir)		asm_fparith(as, ir, XO_ANDPS)
+
+static void asm_intmin_max(ASMState *as, IRIns *ir, int cc)
 {
   Reg right, dest = ra_dest(as, ir, RSET_GPR);
   IRRef lref = ir->op1, rref = ir->op2;
@@ -1873,13 +1941,40 @@ static void asm_min_max(ASMState *as, IRIns *ir, int cc)
   ra_left(as, dest, lref);
 }
 
-static void asm_bitswap(ASMState *as, IRIns *ir)
+static void asm_min(ASMState *as, IRIns *ir)
+{
+  if (irt_isnum(ir->t))
+    asm_fparith(as, ir, XO_MINSD);
+  else
+    asm_intmin_max(as, ir, CC_G);
+}
+
+static void asm_max(ASMState *as, IRIns *ir)
+{
+  if (irt_isnum(ir->t))
+    asm_fparith(as, ir, XO_MAXSD);
+  else
+    asm_intmin_max(as, ir, CC_L);
+}
+
+/* Note: don't use LEA for overflow-checking arithmetic! */
+#define asm_addov(as, ir)	asm_intarith(as, ir, XOg_ADD)
+#define asm_subov(as, ir)	asm_intarith(as, ir, XOg_SUB)
+#define asm_mulov(as, ir)	asm_intarith(as, ir, XOg_X_IMUL)
+
+#define asm_bnot(as, ir)	asm_neg_not(as, ir, XOg_NOT)
+
+static void asm_bswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
   as->mcp = emit_op(XO_BSWAP + ((dest&7) << 24),
 		    REX_64IR(ir, 0), dest, 0, as->mcp, 1);
   ra_left(as, dest, ir->op1);
 }
+
+#define asm_band(as, ir)	asm_intarith(as, ir, XOg_AND)
+#define asm_bor(as, ir)		asm_intarith(as, ir, XOg_OR)
+#define asm_bxor(as, ir)	asm_intarith(as, ir, XOg_XOR)
 
 static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
 {
@@ -1920,6 +2015,12 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
   */
 }
 
+#define asm_bshl(as, ir)	asm_bitshift(as, ir, XOg_SHL)
+#define asm_bshr(as, ir)	asm_bitshift(as, ir, XOg_SHR)
+#define asm_bsar(as, ir)	asm_bitshift(as, ir, XOg_SAR)
+#define asm_brol(as, ir)	asm_bitshift(as, ir, XOg_ROL)
+#define asm_bror(as, ir)	asm_bitshift(as, ir, XOg_ROR)
+
 /* -- Comparisons --------------------------------------------------------- */
 
 /* Virtual flags for unordered FP comparisons. */
@@ -1946,8 +2047,9 @@ static const uint16_t asm_compmap[IR_ABC+1] = {
 };
 
 /* FP and integer comparisons. */
-static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
+static void asm_comp(ASMState *as, IRIns *ir)
 {
+  uint32_t cc = asm_compmap[ir->o];
   if (irt_isnum(ir->t)) {
     IRRef lref = ir->op1;
     IRRef rref = ir->op2;
@@ -2101,6 +2203,8 @@ static void asm_comp(ASMState *as, IRIns *ir, uint32_t cc)
     }
   }
 }
+
+#define asm_equal(as, ir)	asm_comp(as, ir)
 
 #if LJ_32 && LJ_HASFFI
 /* 64 bit integer comparisons in 32 bit mode. */
@@ -2481,175 +2585,6 @@ static void asm_tail_prep(ASMState *as)
     /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
     as->mcp = p - (((as->flags & JIT_F_LEA_AGU) ? 7 : 6)  + (LJ_64 ? 1 : 0));
     as->invmcp = NULL;
-  }
-}
-
-/* -- Instruction dispatch ------------------------------------------------ */
-
-/* Assemble a single instruction. */
-static void asm_ir(ASMState *as, IRIns *ir)
-{
-  switch ((IROp)ir->o) {
-  /* Miscellaneous ops. */
-  case IR_LOOP: asm_loop(as); break;
-  case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
-  case IR_USE:
-    ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
-  case IR_PHI: asm_phi(as, ir); break;
-  case IR_HIOP: asm_hiop(as, ir); break;
-  case IR_GCSTEP: asm_gcstep(as, ir); break;
-
-  /* Guarded assertions. */
-  case IR_EQ: case IR_NE:
-    if ((ir-1)->o == IR_HREF && ir->op1 == as->curins-1) {
-      as->curins--;
-      asm_href(as, ir-1, (IROp)ir->o);
-      break;
-    }
-    /* fallthrough */
-  case IR_LT: case IR_GE: case IR_LE: case IR_GT:
-  case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
-  case IR_ABC:
-    asm_comp(as, ir, asm_compmap[ir->o]);
-    break;
-
-  case IR_RETF: asm_retf(as, ir); break;
-
-  /* Bit ops. */
-  case IR_BNOT: asm_neg_not(as, ir, XOg_NOT); break;
-  case IR_BSWAP: asm_bitswap(as, ir); break;
-
-  case IR_BAND: asm_intarith(as, ir, XOg_AND); break;
-  case IR_BOR:  asm_intarith(as, ir, XOg_OR); break;
-  case IR_BXOR: asm_intarith(as, ir, XOg_XOR); break;
-
-  case IR_BSHL: asm_bitshift(as, ir, XOg_SHL); break;
-  case IR_BSHR: asm_bitshift(as, ir, XOg_SHR); break;
-  case IR_BSAR: asm_bitshift(as, ir, XOg_SAR); break;
-  case IR_BROL: asm_bitshift(as, ir, XOg_ROL); break;
-  case IR_BROR: asm_bitshift(as, ir, XOg_ROR); break;
-
-  /* Arithmetic ops. */
-  case IR_ADD: asm_add(as, ir); break;
-  case IR_SUB:
-    if (irt_isnum(ir->t))
-      asm_fparith(as, ir, XO_SUBSD);
-    else  /* Note: no need for LEA trick here. i-k is encoded as i+(-k). */
-      asm_intarith(as, ir, XOg_SUB);
-    break;
-  case IR_MUL:
-    if (irt_isnum(ir->t))
-      asm_fparith(as, ir, XO_MULSD);
-    else
-      asm_intarith(as, ir, XOg_X_IMUL);
-    break;
-  case IR_DIV:
-#if LJ_64 && LJ_HASFFI
-    if (!irt_isnum(ir->t))
-      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
-					    IRCALL_lj_carith_divu64);
-    else
-#endif
-      asm_fparith(as, ir, XO_DIVSD);
-    break;
-  case IR_MOD:
-#if LJ_64 && LJ_HASFFI
-    if (!irt_isint(ir->t))
-      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
-					    IRCALL_lj_carith_modu64);
-    else
-#endif
-      asm_callid(as, ir, IRCALL_lj_vm_modi);
-    break;
-
-  case IR_NEG:
-    if (irt_isnum(ir->t))
-      asm_fparith(as, ir, XO_XORPS);
-    else
-      asm_neg_not(as, ir, XOg_NEG);
-    break;
-  case IR_ABS: asm_fparith(as, ir, XO_ANDPS); break;
-
-  case IR_MIN:
-    if (irt_isnum(ir->t))
-      asm_fparith(as, ir, XO_MINSD);
-    else
-      asm_min_max(as, ir, CC_G);
-    break;
-  case IR_MAX:
-    if (irt_isnum(ir->t))
-      asm_fparith(as, ir, XO_MAXSD);
-    else
-      asm_min_max(as, ir, CC_L);
-    break;
-
-  case IR_FPMATH: case IR_ATAN2: case IR_LDEXP:
-    asm_fpmath(as, ir);
-    break;
-  case IR_POW:
-#if LJ_64 && LJ_HASFFI
-    if (!irt_isnum(ir->t))
-      asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
-					    IRCALL_lj_carith_powu64);
-    else
-#endif
-      asm_fppowi(as, ir);
-    break;
-
-  /* Overflow-checking arithmetic ops. Note: don't use LEA here! */
-  case IR_ADDOV: asm_intarith(as, ir, XOg_ADD); break;
-  case IR_SUBOV: asm_intarith(as, ir, XOg_SUB); break;
-  case IR_MULOV: asm_intarith(as, ir, XOg_X_IMUL); break;
-
-  /* Memory references. */
-  case IR_AREF: asm_aref(as, ir); break;
-  case IR_HREF: asm_href(as, ir, 0); break;
-  case IR_HREFK: asm_hrefk(as, ir); break;
-  case IR_NEWREF: asm_newref(as, ir); break;
-  case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
-  case IR_FREF: asm_fref(as, ir); break;
-  case IR_STRREF: asm_strref(as, ir); break;
-
-  /* Loads and stores. */
-  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
-    asm_ahuvload(as, ir);
-    break;
-  case IR_FLOAD: case IR_XLOAD: asm_fxload(as, ir); break;
-  case IR_SLOAD: asm_sload(as, ir); break;
-
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
-  case IR_FSTORE: case IR_XSTORE: asm_fxstore(as, ir); break;
-
-  /* Allocations. */
-  case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;
-  case IR_TNEW: asm_tnew(as, ir); break;
-  case IR_TDUP: asm_tdup(as, ir); break;
-  case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
-
-  /* Buffer operations. */
-  case IR_BUFHDR: asm_bufhdr(as, ir); break;
-  case IR_BUFPUT: asm_bufput(as, ir); break;
-  case IR_BUFSTR: asm_bufstr(as, ir); break;
-
-  /* Write barriers. */
-  case IR_TBAR: asm_tbar(as, ir); break;
-  case IR_OBAR: asm_obar(as, ir); break;
-
-  /* Type conversions. */
-  case IR_TOBIT: asm_tobit(as, ir); break;
-  case IR_CONV: asm_conv(as, ir); break;
-  case IR_TOSTR: asm_tostr(as, ir); break;
-  case IR_STRTO: asm_strto(as, ir); break;
-
-  /* Calls. */
-  case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
-  case IR_CALLXS: asm_callx(as, ir); break;
-  case IR_CARG: break;
-
-  default:
-    setintV(&as->J->errinfo, ir->o);
-    lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-    break;
   }
 }
 

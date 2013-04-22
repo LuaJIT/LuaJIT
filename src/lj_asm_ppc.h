@@ -840,7 +840,7 @@ static void asm_xload(ASMState *as, IRIns *ir)
   asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR, 0);
 }
 
-static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
+static void asm_xstore_(ASMState *as, IRIns *ir, int32_t ofs)
 {
   IRIns *irb;
   if (ir->r == RID_SINK)
@@ -856,6 +856,8 @@ static void asm_xstore(ASMState *as, IRIns *ir, int32_t ofs)
 		 rset_exclude(RSET_GPR, src), ofs);
   }
 }
+
+#define asm_xstore(as, ir)	asm_xstore_(as, ir, 0)
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
 {
@@ -1120,6 +1122,16 @@ static void asm_fpunary(ASMState *as, IRIns *ir, PPCIns pi)
   emit_fb(as, pi, dest, left);
 }
 
+static void asm_fpmath(ASMState *as, IRIns *ir)
+{
+  if (ir->op2 == IRFPM_EXP2 && asm_fpjoin_pow(as, ir))
+    return;
+  if (ir->op2 == IRFPM_SQRT && (as->flags & JIT_F_SQRT))
+    asm_fpunary(as, ir, PPCI_FSQRT);
+  else
+    asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
+}
+
 static void asm_add(ASMState *as, IRIns *ir)
 {
   if (irt_isnum(ir->t)) {
@@ -1217,6 +1229,10 @@ static void asm_mul(ASMState *as, IRIns *ir)
   }
 }
 
+#define asm_div(as, ir)		asm_fparith(as, ir, PPCI_FDIV)
+#define asm_mod(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_modi)
+#define asm_pow(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_powi)
+
 static void asm_neg(ASMState *as, IRIns *ir)
 {
   if (irt_isnum(ir->t)) {
@@ -1235,6 +1251,10 @@ static void asm_neg(ASMState *as, IRIns *ir)
   }
 }
 
+#define asm_abs(as, ir)		asm_fpunary(as, ir, PPCI_FABS)
+#define asm_atan2(as, ir)	asm_callid(as, ir, IRCALL_atan2)
+#define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
+
 static void asm_arithov(ASMState *as, IRIns *ir, PPCIns pi)
 {
   Reg dest, left, right;
@@ -1249,6 +1269,10 @@ static void asm_arithov(ASMState *as, IRIns *ir, PPCIns pi)
   if (pi == PPCI_SUBFO) { Reg tmp = left; left = right; right = tmp; }
   emit_tab(as, pi|PPCF_DOT, dest, left, right);
 }
+
+#define asm_addov(as, ir)	asm_arithov(as, ir, PPCI_ADDO)
+#define asm_subov(as, ir)	asm_arithov(as, ir, PPCI_SUBFO)
+#define asm_mulov(as, ir)	asm_arithov(as, ir, PPCI_MULLWO)
 
 #if LJ_HASFFI
 static void asm_add64(ASMState *as, IRIns *ir)
@@ -1329,7 +1353,7 @@ static void asm_neg64(ASMState *as, IRIns *ir)
 }
 #endif
 
-static void asm_bitnot(ASMState *as, IRIns *ir)
+static void asm_bnot(ASMState *as, IRIns *ir)
 {
   Reg dest, left, right;
   PPCIns pi = PPCI_NOR;
@@ -1356,7 +1380,7 @@ nofuse:
   emit_asb(as, pi, dest, left, right);
 }
 
-static void asm_bitswap(ASMState *as, IRIns *ir)
+static void asm_bswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
   IRIns *irx;
@@ -1375,32 +1399,6 @@ static void asm_bitswap(ASMState *as, IRIns *ir)
     emit_rot(as, PPCI_RLWIMI, tmp, left, 24, 0, 7);
     emit_rotlwi(as, tmp, left, 8);
   }
-}
-
-static void asm_bitop(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
-{
-  Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg right, left = ra_hintalloc(as, ir->op1, dest, RSET_GPR);
-  if (irref_isk(ir->op2)) {
-    int32_t k = IR(ir->op2)->i;
-    Reg tmp = left;
-    if ((checku16(k) || (k & 0xffff) == 0) || (tmp = dest, !as->sectref)) {
-      if (!checku16(k)) {
-	emit_asi(as, pik ^ (PPCI_ORI ^ PPCI_ORIS), dest, tmp, (k >> 16));
-	if ((k & 0xffff) == 0) return;
-      }
-      emit_asi(as, pik, dest, left, k);
-      return;
-    }
-  }
-  /* May fail due to spills/restores above, but simplifies the logic. */
-  if (as->flagmcp == as->mcp) {
-    as->flagmcp = NULL;
-    as->mcp++;
-    pi |= PPCF_DOT;
-  }
-  right = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, left));
-  emit_asb(as, pi, dest, left, right);
 }
 
 /* Fuse BAND with contiguous bitmask and a shift to rlwinm. */
@@ -1433,7 +1431,7 @@ nofuse:
   *--as->mcp = pi | PPCF_T(left);
 }
 
-static void asm_bitand(ASMState *as, IRIns *ir)
+static void asm_band(ASMState *as, IRIns *ir)
 {
   Reg dest, left, right;
   IRRef lref = ir->op1;
@@ -1488,6 +1486,35 @@ static void asm_bitand(ASMState *as, IRIns *ir)
   emit_asb(as, PPCI_AND ^ dot, dest, left, right);
 }
 
+static void asm_bitop(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
+{
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  Reg right, left = ra_hintalloc(as, ir->op1, dest, RSET_GPR);
+  if (irref_isk(ir->op2)) {
+    int32_t k = IR(ir->op2)->i;
+    Reg tmp = left;
+    if ((checku16(k) || (k & 0xffff) == 0) || (tmp = dest, !as->sectref)) {
+      if (!checku16(k)) {
+	emit_asi(as, pik ^ (PPCI_ORI ^ PPCI_ORIS), dest, tmp, (k >> 16));
+	if ((k & 0xffff) == 0) return;
+      }
+      emit_asi(as, pik, dest, left, k);
+      return;
+    }
+  }
+  /* May fail due to spills/restores above, but simplifies the logic. */
+  if (as->flagmcp == as->mcp) {
+    as->flagmcp = NULL;
+    as->mcp++;
+    pi |= PPCF_DOT;
+  }
+  right = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, left));
+  emit_asb(as, pi, dest, left, right);
+}
+
+#define asm_bor(as, ir)		asm_bitop(as, ir, PPCI_OR, PPCI_ORI)
+#define asm_bxor(as, ir)	asm_bitop(as, ir, PPCI_XOR, PPCI_XORI)
+
 static void asm_bitshift(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
 {
   Reg dest, left;
@@ -1512,6 +1539,14 @@ static void asm_bitshift(ASMState *as, IRIns *ir, PPCIns pi, PPCIns pik)
     emit_asb(as, pi|dot, dest, left, right);
   }
 }
+
+#define asm_bshl(as, ir)	asm_bitshift(as, ir, PPCI_SLW, 0)
+#define asm_bshr(as, ir)	asm_bitshift(as, ir, PPCI_SRW, 1)
+#define asm_bsar(as, ir)	asm_bitshift(as, ir, PPCI_SRAW, PPCI_SRAWI)
+#define asm_brol(as, ir) \
+  asm_bitshift(as, ir, PPCI_RLWNM|PPCF_MB(0)|PPCF_ME(31), \
+		       PPCI_RLWINM|PPCF_MB(0)|PPCF_ME(31))
+#define asm_bror(as, ir)	lua_assert(0)
 
 static void asm_min_max(ASMState *as, IRIns *ir, int ismax)
 {
@@ -1542,6 +1577,9 @@ static void asm_min_max(ASMState *as, IRIns *ir, int ismax)
     emit_asi(as, PPCI_XORIS, tmp1, left, 0x8000);
   }
 }
+
+#define asm_min(as, ir)		asm_min_max(as, ir, 0)
+#define asm_max(as, ir)		asm_min_max(as, ir, 1)
 
 /* -- Comparisons --------------------------------------------------------- */
 
@@ -1619,6 +1657,8 @@ static void asm_comp(ASMState *as, IRIns *ir)
   }
 }
 
+#define asm_equal(as, ir)	asm_comp(as, ir)
+
 #if LJ_HASFFI
 /* 64 bit integer comparisons. */
 static void asm_comp64(ASMState *as, IRIns *ir)
@@ -1664,8 +1704,8 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   } else if ((ir-1)->o == IR_XSTORE) {
     as->curins--;  /* Handle both stores here. */
     if ((ir-1)->r != RID_SINK) {
-      asm_xstore(as, ir, 0);
-      asm_xstore(as, ir-1, 4);
+      asm_xstore_(as, ir, 0);
+      asm_xstore_(as, ir-1, 4);
     }
     return;
   }
@@ -1868,134 +1908,6 @@ static void asm_tail_prep(ASMState *as)
   } else {
     as->mcp = p-2;  /* Leave room for stack pointer adjustment. */
     as->invmcp = NULL;
-  }
-}
-
-/* -- Instruction dispatch ------------------------------------------------ */
-
-/* Assemble a single instruction. */
-static void asm_ir(ASMState *as, IRIns *ir)
-{
-  switch ((IROp)ir->o) {
-  /* Miscellaneous ops. */
-  case IR_LOOP: asm_loop(as); break;
-  case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
-  case IR_USE:
-    ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
-  case IR_PHI: asm_phi(as, ir); break;
-  case IR_HIOP: asm_hiop(as, ir); break;
-  case IR_GCSTEP: asm_gcstep(as, ir); break;
-
-  /* Guarded assertions. */
-  case IR_EQ: case IR_NE:
-    if ((ir-1)->o == IR_HREF && ir->op1 == as->curins-1) {
-      as->curins--;
-      asm_href(as, ir-1, (IROp)ir->o);
-      break;
-    }
-    /* fallthrough */
-  case IR_LT: case IR_GE: case IR_LE: case IR_GT:
-  case IR_ULT: case IR_UGE: case IR_ULE: case IR_UGT:
-  case IR_ABC:
-    asm_comp(as, ir);
-    break;
-
-  case IR_RETF: asm_retf(as, ir); break;
-
-  /* Bit ops. */
-  case IR_BNOT: asm_bitnot(as, ir); break;
-  case IR_BSWAP: asm_bitswap(as, ir); break;
-
-  case IR_BAND: asm_bitand(as, ir); break;
-  case IR_BOR:  asm_bitop(as, ir, PPCI_OR, PPCI_ORI); break;
-  case IR_BXOR: asm_bitop(as, ir, PPCI_XOR, PPCI_XORI); break;
-
-  case IR_BSHL: asm_bitshift(as, ir, PPCI_SLW, 0); break;
-  case IR_BSHR: asm_bitshift(as, ir, PPCI_SRW, 1); break;
-  case IR_BSAR: asm_bitshift(as, ir, PPCI_SRAW, PPCI_SRAWI); break;
-  case IR_BROL: asm_bitshift(as, ir, PPCI_RLWNM|PPCF_MB(0)|PPCF_ME(31),
-			     PPCI_RLWINM|PPCF_MB(0)|PPCF_ME(31)); break;
-  case IR_BROR: lua_assert(0); break;
-
-  /* Arithmetic ops. */
-  case IR_ADD: asm_add(as, ir); break;
-  case IR_SUB: asm_sub(as, ir); break;
-  case IR_MUL: asm_mul(as, ir); break;
-  case IR_DIV: asm_fparith(as, ir, PPCI_FDIV); break;
-  case IR_MOD: asm_callid(as, ir, IRCALL_lj_vm_modi); break;
-  case IR_POW: asm_callid(as, ir, IRCALL_lj_vm_powi); break;
-  case IR_NEG: asm_neg(as, ir); break;
-
-  case IR_ABS: asm_fpunary(as, ir, PPCI_FABS); break;
-  case IR_ATAN2: asm_callid(as, ir, IRCALL_atan2); break;
-  case IR_LDEXP: asm_callid(as, ir, IRCALL_ldexp); break;
-  case IR_MIN: asm_min_max(as, ir, 0); break;
-  case IR_MAX: asm_min_max(as, ir, 1); break;
-  case IR_FPMATH:
-    if (ir->op2 == IRFPM_EXP2 && asm_fpjoin_pow(as, ir))
-      break;
-    if (ir->op2 == IRFPM_SQRT && (as->flags & JIT_F_SQRT))
-      asm_fpunary(as, ir, PPCI_FSQRT);
-    else
-      asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
-    break;
-
-  /* Overflow-checking arithmetic ops. */
-  case IR_ADDOV: asm_arithov(as, ir, PPCI_ADDO); break;
-  case IR_SUBOV: asm_arithov(as, ir, PPCI_SUBFO); break;
-  case IR_MULOV: asm_arithov(as, ir, PPCI_MULLWO); break;
-
-  /* Memory references. */
-  case IR_AREF: asm_aref(as, ir); break;
-  case IR_HREF: asm_href(as, ir, 0); break;
-  case IR_HREFK: asm_hrefk(as, ir); break;
-  case IR_NEWREF: asm_newref(as, ir); break;
-  case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
-  case IR_FREF: asm_fref(as, ir); break;
-  case IR_STRREF: asm_strref(as, ir); break;
-
-  /* Loads and stores. */
-  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
-    asm_ahuvload(as, ir);
-    break;
-  case IR_FLOAD: asm_fload(as, ir); break;
-  case IR_XLOAD: asm_xload(as, ir); break;
-  case IR_SLOAD: asm_sload(as, ir); break;
-
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
-  case IR_FSTORE: asm_fstore(as, ir); break;
-  case IR_XSTORE: asm_xstore(as, ir, 0); break;
-
-  /* Allocations. */
-  case IR_SNEW: case IR_XSNEW: asm_snew(as, ir); break;
-  case IR_TNEW: asm_tnew(as, ir); break;
-  case IR_TDUP: asm_tdup(as, ir); break;
-  case IR_CNEW: case IR_CNEWI: asm_cnew(as, ir); break;
-
-  /* Buffer operations. */
-  case IR_BUFHDR: asm_bufhdr(as, ir); break;
-  case IR_BUFPUT: asm_bufput(as, ir); break;
-  case IR_BUFSTR: asm_bufstr(as, ir); break;
-
-  /* Write barriers. */
-  case IR_TBAR: asm_tbar(as, ir); break;
-  case IR_OBAR: asm_obar(as, ir); break;
-
-  /* Type conversions. */
-  case IR_CONV: asm_conv(as, ir); break;
-  case IR_TOBIT: asm_tobit(as, ir); break;
-  case IR_TOSTR: asm_tostr(as, ir); break;
-  case IR_STRTO: asm_strto(as, ir); break;
-
-  /* Calls. */
-  case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
-  case IR_CALLXS: asm_callx(as, ir); break;
-  case IR_CARG: break;
-
-  default:
-    setintV(&as->J->errinfo, ir->o);
-    lj_trace_err_info(as->J, LJ_TRERR_NYIIR);
-    break;
   }
 }
 
