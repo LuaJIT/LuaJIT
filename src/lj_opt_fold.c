@@ -547,8 +547,8 @@ LJFOLDF(bufput_kgc)
     if (len2 == 0) {  /* Empty string? */
       return LEFTFOLD;
     } else {
-      PHIBARRIER(fleft);
-      if (fleft->o == IR_BUFPUT && IR(fleft->op2)->o == IR_KGC) {
+      if (fleft->o == IR_BUFPUT && IR(fleft->op2)->o == IR_KGC &&
+	  !irt_isphi(fleft->t)) {
 	/* Join two constant string puts in a row. */
 	GCstr *s1 = ir_kstr(IR(fleft->op2));
 	MSize len1 = s1->len;
