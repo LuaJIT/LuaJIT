@@ -1817,6 +1817,7 @@ notst:
     as->flagmcp = as->mcp;  /* Allow elimination of the compare. */
 }
 
+#if LJ_HASFFI
 /* 64 bit integer comparisons. */
 static void asm_int64comp(ASMState *as, IRIns *ir)
 {
@@ -1852,6 +1853,7 @@ static void asm_int64comp(ASMState *as, IRIns *ir)
   }
   emit_n(as, ARMI_CMP^mhi, lefthi);
 }
+#endif
 
 /* -- Support for 64 bit ops in 32 bit mode ------------------------------- */
 
@@ -1865,11 +1867,14 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   if ((ir-1)->o <= IR_NE) {  /* 64 bit integer or FP comparisons. ORDER IR. */
     as->curins--;  /* Always skip the loword comparison. */
 #if LJ_SOFTFP
-    if (!irt_isint(ir->t))
+    if (!irt_isint(ir->t)) {
       asm_sfpcomp(as, ir-1);
-    else
+      return;
+    }
 #endif
-      asm_int64comp(as, ir-1);
+#if LJ_HASFFI
+    asm_int64comp(as, ir-1);
+#endif
     return;
 #if LJ_SOFTFP
   } else if ((ir-1)->o == IR_MIN || (ir-1)->o == IR_MAX) {
