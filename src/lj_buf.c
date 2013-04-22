@@ -58,11 +58,12 @@ char *lj_buf_wmem(char *p, const void *q, MSize len)
   return p;
 }
 
-void lj_buf_putmem(SBuf *sb, const void *q, MSize len)
+SBuf * lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 {
   char *p = lj_buf_more(sb, len);
   p = lj_buf_wmem(p, q, len);
   setsbufP(sb, p);
+  return sb;
 }
 
 #if LJ_HASJIT
@@ -71,6 +72,14 @@ SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
   MSize len = s->len;
   char *p = lj_buf_more(sb, len);
   p = lj_buf_wmem(p, strdata(s), len);
+  setsbufP(sb, p);
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
+{
+  char *p = lj_buf_more(sb, 1);
+  *p++ = (char)c;
   setsbufP(sb, p);
   return sb;
 }

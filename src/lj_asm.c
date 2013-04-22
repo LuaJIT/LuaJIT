@@ -1058,14 +1058,22 @@ static void asm_bufhdr(ASMState *as, IRIns *ir)
 static void asm_bufput(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_buf_putstr];
-  IRRef args[2];
+  IRRef args[3];
   IRIns *irs;
+  int kchar = -1;
   if (!ra_used(ir)) return;
   args[0] = ir->op1;  /* SBuf * */
   args[1] = ir->op2;  /* GCstr * */
   irs = IR(ir->op2);
   lua_assert(irt_isstr(irs->t));
-  if (mayfuse(as, ir->op2) && ra_noreg(irs->r)) {
+  if (irs->o == IR_KGC) {
+    GCstr *s = ir_kstr(irs);
+    if (s->len == 1) {  /* Optimize put of single-char string constant. */
+      kchar = strdata(s)[0];
+      ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
+      args[1] = ASMREF_TMP1;  /* int, truncated to char */
+    }
+  } else if (mayfuse(as, ir->op2) && ra_noreg(irs->r)) {
     if (irs->o == IR_TOSTR) {  /* Fuse number to string conversions. */
       if (LJ_SOFTFP ? (irs+1)->o == IR_HIOP : irt_isnum(IR(irs->op1)->t)) {
 	ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
@@ -1075,12 +1083,21 @@ static void asm_bufput(ASMState *as, IRIns *ir)
 	ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
 	args[1] = irs->op1;  /* int */
       }
+    } else if (irs->o == IR_SNEW) {  /* Fuse string allocation. */
+      ci = &lj_ir_callinfo[IRCALL_lj_buf_putmem];
+      args[1] = irs->op1;  /* const void * */
+      args[2] = irs->op2;  /* MSize */
     }
   }
   asm_setupresult(as, ir, ci);  /* SBuf * */
   asm_gencall(as, ci, args);
-  if (args[1] == ASMREF_TMP1)
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), irs->op1);
+  if (args[1] == ASMREF_TMP1) {
+    Reg tmp = ra_releasetmp(as, ASMREF_TMP1);
+    if (kchar == -1)
+      asm_tvptr(as, tmp, irs->op1);
+    else
+      ra_allockreg(as, kchar, tmp);
+  }
 }
 
 static void asm_bufstr(ASMState *as, IRIns *ir)
@@ -2015,11 +2032,11 @@ static void asm_setup_regsp(ASMState *as)
       /* fallthrough */
 #endif
     /* C calls evict all scratch regs and return results in RID_RET. */
-    case IR_SNEW: case IR_XSNEW: case IR_NEWREF:
+    case IR_SNEW: case IR_XSNEW: case IR_NEWREF: case IR_BUFPUT:
       if (REGARG_NUMGPR < 3 && as->evenspill < 3)
 	as->evenspill = 3;  /* lj_str_new and lj_tab_newkey need 3 args. */
     case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
-    case IR_BUFPUT: case IR_BUFSTR:
+    case IR_BUFSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)
 	as->modset = RSET_SCRATCH;
