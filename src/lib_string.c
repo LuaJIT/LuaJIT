@@ -62,7 +62,7 @@ LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
   return FFH_RES(n);
 }
 
-LJLIB_ASM(string_char)
+LJLIB_ASM(string_char)		LJLIB_REC(.)
 {
   int i, nargs = (int)(L->top - L->base);
   char *buf = lj_buf_tmp(L, (size_t)nargs);

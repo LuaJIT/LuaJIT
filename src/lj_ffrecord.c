@@ -751,6 +751,26 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
   }
 }
 
+static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
+{
+  TRef k255 = lj_ir_kint(J, 255);
+  BCReg i;
+  for (i = 0; J->base[i] != 0; i++) {  /* Convert char values to strings. */
+    TRef tr = lj_opt_narrow_toint(J, J->base[i]);
+    emitir(IRTGI(IR_ULE), tr, k255);
+    J->base[i] = emitir(IRT(IR_TOSTR, IRT_STR), tr, IRTOSTR_CHAR);
+  }
+  if (i > 1) {  /* Concatenate the strings, if there's more than one. */
+    TRef hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
+		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+    TRef tr = hdr;
+    for (i = 0; J->base[i] != 0; i++)
+      tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, J->base[i]);
+    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+  }
+  UNUSED(rd);
+}
+
 /* -- Table library fast functions ---------------------------------------- */
 
 static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
@@ -809,7 +829,10 @@ static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
     TRef buf = emitir(IRT(IR_STRREF, IRT_P32), str, zero);
     TRef len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
     if (tref_isk(len) && IR(tref_ref(len))->i == 1) {
-      TRef tr = emitir(IRT(IR_XLOAD, IRT_U8), buf, IRXLOAD_READONLY);
+      IRIns *irs = IR(tref_ref(str));
+      TRef tr = (irs->o == IR_TOSTR && irs->op2 == IRTOSTR_CHAR) ?
+		irs->op1 :
+		emitir(IRT(IR_XLOAD, IRT_U8), buf, IRXLOAD_READONLY);
       tr = lj_ir_call(J, IRCALL_fputc, tr, fp);
       if (results_wanted(J) != 0)  /* Check result only if not ignored. */
 	emitir(IRTGI(IR_NE), tr, lj_ir_kint(J, -1));

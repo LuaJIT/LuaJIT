@@ -2074,6 +2074,14 @@ LJFOLDF(fload_str_len_snew)
   return NEXTFOLD;
 }
 
+LJFOLD(FLOAD TOSTR IRFL_STR_LEN)
+LJFOLDF(fload_str_len_tostr)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fleft->op2 == IRTOSTR_CHAR)
+    return INTFOLD(1);
+  return NEXTFOLD;
+}
+
 /* The C type ID of cdata objects is immutable. */
 LJFOLD(FLOAD KGC IRFL_CDATA_CTYPEID)
 LJFOLDF(fload_cdata_typeid_kgc)
