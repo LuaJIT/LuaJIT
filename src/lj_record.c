@@ -1611,7 +1611,8 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     /* First convert numbers to strings. */
     for (trp = top; trp >= base; trp--) {
       if (tref_isnumber(*trp))
-	*trp = emitir(IRT(IR_TOSTR, IRT_STR), *trp, 0);
+	*trp = emitir(IRT(IR_TOSTR, IRT_STR), *trp,
+		      tref_isnum(*trp) ? IRTOSTR_NUM : IRTOSTR_INT);
       else if (!tref_isstr(*trp))
 	break;
     }

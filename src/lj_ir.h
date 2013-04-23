@@ -133,7 +133,7 @@
   /* Type conversions. */ \
   _(CONV,	NW, ref, lit) \
   _(TOBIT,	N , ref, ref) \
-  _(TOSTR,	N , ref, ___) \
+  _(TOSTR,	N , ref, lit) \
   _(STRTO,	N , ref, ___) \
   \
   /* Calls. */ \
@@ -245,6 +245,11 @@ IRFLDEF(FLENUM)
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
+
+/* TOSTR mode, stored in op2. */
+#define IRTOSTR_INT		0	/* Convert integer to string. */
+#define IRTOSTR_NUM		1	/* Convert number to string. */
+#define IRTOSTR_CHAR		2	/* Convert char value to string. */
 
 /* -- IR operands --------------------------------------------------------- */
 

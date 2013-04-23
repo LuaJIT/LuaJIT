@@ -27,6 +27,7 @@ LJ_FUNC const char *lj_str_buftv(char *buf, cTValue *o, MSize *lenp);
 LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnum(lua_State *L, const lua_Number *np);
 LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromint(lua_State *L, int32_t k);
 LJ_FUNCA GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o);
+LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromchar(lua_State *L, int c);
 
 #define LJ_STR_INTBUF		(1+10)
 #define LJ_STR_NUMBUF		LUAI_MAXNUMBER2STR

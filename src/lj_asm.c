@@ -1070,23 +1070,26 @@ static void asm_bufput(ASMState *as, IRIns *ir)
     GCstr *s = ir_kstr(irs);
     if (s->len == 1) {  /* Optimize put of single-char string constant. */
       kchar = strdata(s)[0];
-      ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
       args[1] = ASMREF_TMP1;  /* int, truncated to char */
+      ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
     }
   } else if (mayfuse(as, ir->op2) && ra_noreg(irs->r)) {
     if (irs->o == IR_TOSTR) {  /* Fuse number to string conversions. */
-      if (LJ_SOFTFP ? (irs+1)->o == IR_HIOP : irt_isnum(IR(irs->op1)->t)) {
-	ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
+      if (irs->op2 == IRTOSTR_NUM) {
 	args[1] = ASMREF_TMP1;  /* TValue * */
+	ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
       } else {
 	lua_assert(irt_isinteger(IR(irs->op1)->t));
-	ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
 	args[1] = irs->op1;  /* int */
+	if (irs->op2 == IRTOSTR_INT)
+	  ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
+	else
+	  ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
       }
     } else if (irs->o == IR_SNEW) {  /* Fuse string allocation. */
-      ci = &lj_ir_callinfo[IRCALL_lj_buf_putmem];
       args[1] = irs->op1;  /* const void * */
       args[2] = irs->op2;  /* MSize */
+      ci = &lj_ir_callinfo[IRCALL_lj_buf_putmem];
     }
   }
   asm_setupresult(as, ir, ci);  /* SBuf * */
@@ -1114,21 +1117,24 @@ static void asm_bufstr(ASMState *as, IRIns *ir)
 
 static void asm_tostr(ASMState *as, IRIns *ir)
 {
+  const CCallInfo *ci;
   IRRef args[2];
   args[0] = ASMREF_L;
   as->gcsteps++;
-  if (irt_isnum(IR(ir->op1)->t) || (LJ_SOFTFP && (ir+1)->o == IR_HIOP)) {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
+  if (ir->op2 == IRTOSTR_NUM) {
     args[1] = ASMREF_TMP1;  /* const lua_Number * */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
+    ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
   } else {
-    const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
     args[1] = ir->op1;  /* int32_t k */
-    asm_setupresult(as, ir, ci);  /* GCstr * */
-    asm_gencall(as, ci, args);
+    if (ir->op2 == IRTOSTR_INT)
+      ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
+    else
+      ci = &lj_ir_callinfo[IRCALL_lj_str_fromchar];
   }
+  asm_setupresult(as, ir, ci);  /* GCstr * */
+  asm_gencall(as, ci, args);
+  if (ir->op2 == IRTOSTR_NUM)
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
 }
 
 #if LJ_32 && LJ_HASFFI && !LJ_SOFTFP && !LJ_TARGET_X86

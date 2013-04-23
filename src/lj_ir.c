@@ -444,7 +444,8 @@ TRef LJ_FASTCALL lj_ir_tostr(jit_State *J, TRef tr)
   if (!tref_isstr(tr)) {
     if (!tref_isnumber(tr))
       lj_trace_err(J, LJ_TRERR_BADTYPE);
-    tr = emitir(IRT(IR_TOSTR, IRT_STR), tr, 0);
+    tr = emitir(IRT(IR_TOSTR, IRT_STR), tr,
+		tref_isnum(tr) ? IRTOSTR_NUM : IRTOSTR_INT);
   }
   return tr;
 }

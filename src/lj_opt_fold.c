@@ -759,16 +759,18 @@ LJFOLDF(kfold_conv_knum_u64_num)
   return INT64FOLD(lj_num2u64(knumleft));
 }
 
-LJFOLD(TOSTR KNUM)
+LJFOLD(TOSTR KNUM any)
 LJFOLDF(kfold_tostr_knum)
 {
   return lj_ir_kstr(J, lj_str_fromnum(J->L, &knumleft));
 }
 
-LJFOLD(TOSTR KINT)
+LJFOLD(TOSTR KINT any)
 LJFOLDF(kfold_tostr_kint)
 {
-  return lj_ir_kstr(J, lj_str_fromint(J->L, fleft->i));
+  return lj_ir_kstr(J, fins->op2 == IRTOSTR_INT ?
+		       lj_str_fromint(J->L, fleft->i) :
+		       lj_str_fromchar(J->L, fleft->i));
 }
 
 LJFOLD(STRTO KGC)

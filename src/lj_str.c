@@ -274,6 +274,14 @@ GCstr * LJ_FASTCALL lj_str_fromnumber(lua_State *L, cTValue *o)
   return tvisint(o) ? lj_str_fromint(L, intV(o)) : lj_str_fromnum(L, &o->n);
 }
 
+/* Convert char value to string. */
+GCstr * LJ_FASTCALL lj_str_fromchar(lua_State *L, int c)
+{
+  char buf[1];
+  buf[0] = c;
+  return lj_str_new(L, buf, 1);
+}
+
 /* -- String formatting --------------------------------------------------- */
 
 /* Push formatted message as a string object to Lua stack. va_list variant. */

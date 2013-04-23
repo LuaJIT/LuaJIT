@@ -279,6 +279,7 @@ local litname = {
   ["FREF  "] = vmdef.irfield,
   ["FPMATH"] = vmdef.irfpm,
   ["BUFHDR"] = { [0] = "RESET", "APPEND" },
+  ["TOSTR "] = { [0] = "INT", "NUM", "CHAR" },
 }
 
 local function ctlsub(c)
