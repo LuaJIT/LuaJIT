@@ -187,7 +187,7 @@ LJLIB_CF(os_date)
 #endif
   }
   if (stm == NULL) {  /* Invalid date? */
-    setnilV(L->top-1);
+    setnilV(L->top++);
   } else if (strcmp(s, "*t") == 0) {
     lua_createtable(L, 0, 9);  /* 9 = number of fields */
     setfield(L, "sec", stm->tm_sec);
@@ -210,14 +210,14 @@ LJLIB_CF(os_date)
       char *buf = lj_buf_need(sb, sz);
       size_t len = strftime(buf, sbufsz(sb), s, stm);
       if (len) {
-	setstrV(L, L->top-1, lj_str_new(L, buf, len));
+	setstrV(L, L->top++, lj_str_new(L, buf, len));
 	lj_gc_check(L);
 	break;
       }
       sz += (sz|1);
     }
   } else {
-    setstrV(L, L->top-1, &G(L)->strempty);
+    setstrV(L, L->top++, &G(L)->strempty);
   }
   return 1;
 }
