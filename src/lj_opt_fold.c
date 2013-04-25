@@ -2293,14 +2293,16 @@ TRef LJ_FASTCALL lj_opt_fold(jit_State *J)
     if (!(J->flags & JIT_F_OPT_FOLD) && irm_kind(lj_ir_mode[fins->o]) == IRM_N)
       return lj_opt_cse(J);
 
-    /* Forwarding or CSE disabled? Emit raw IR for loads, except for SLOAD. */
-    if ((J->flags & (JIT_F_OPT_FWD|JIT_F_OPT_CSE)) !=
-		    (JIT_F_OPT_FWD|JIT_F_OPT_CSE) &&
+    /* No FOLD, forwarding or CSE? Emit raw IR for loads, except for SLOAD. */
+    if ((J->flags & (JIT_F_OPT_FOLD|JIT_F_OPT_FWD|JIT_F_OPT_CSE)) !=
+		    (JIT_F_OPT_FOLD|JIT_F_OPT_FWD|JIT_F_OPT_CSE) &&
 	irm_kind(lj_ir_mode[fins->o]) == IRM_L && fins->o != IR_SLOAD)
       return lj_ir_emit(J);
 
-    /* DSE disabled? Emit raw IR for stores. */
-    if (!(J->flags & JIT_F_OPT_DSE) && irm_kind(lj_ir_mode[fins->o]) == IRM_S)
+    /* No FOLD or DSE? Emit raw IR for stores. */
+    if ((J->flags & (JIT_F_OPT_FOLD|JIT_F_OPT_DSE)) !=
+		    (JIT_F_OPT_FOLD|JIT_F_OPT_DSE) &&
+	irm_kind(lj_ir_mode[fins->o]) == IRM_S)
       return lj_ir_emit(J);
   }
 
