@@ -533,6 +533,7 @@ LJFOLDF(bufput_append)
       fleft->op1 == IR(fright->op1)->op1) {
     IRRef ref = fins->op1;
     IR(ref)->op2 = (fleft->op2 | IRBUFHDR_APPEND);  /* Modify BUFHDR. */
+    IR(ref)->op1 = fright->op2;
     return ref;
   }
   return EMITFOLD;  /* This is a store and always emitted. */
@@ -572,27 +573,41 @@ LJFOLDF(bufstr_kfold_cse)
   lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT);
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fright->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fright->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      if (!(fright->op2 & IRBUFHDR_APPEND)) {  /* Empty buffer? */
+	lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
+      }
       fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else {
       IRIns *irb = IR(fright->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND)) {
+	lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
 	return fright->op2;  /* Shortcut for a single put operation. */
+      }
     }
   }
   /* Try to CSE the whole chain. */
-  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE) && !(fleft->op2 & IRBUFHDR_APPEND)) {
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
     IRRef ref = J->chain[IR_BUFSTR];
     while (ref) {
+      IRRef last = fins->op2;
       IRIns *irs = IR(ref), *ira = fright, *irb = IR(irs->op2);
       while (ira->o == irb->o && ira->op2 == irb->op2) {
-	if (ira->o == IR_BUFHDR) {
-	  lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
+	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND)) {
+	  IRIns *irh;
+	  for (irh = IR(ira->prev); irh != irb; irh = IR(irh->prev))
+	    if (irh->op1 == irs->op2)
+	      return ref;  /* Do CSE, but avoid rollback if append follows. */
+	  lj_ir_rollback(J, last);  /* Eliminate the current chain. */
 	  return ref;  /* CSE succeeded. */
+	} else if (ira->o == IR_CALLS) {
+	  ira = IR(ira->op1); irb = IR(irb->op1);
+	  lua_assert(ira->o == IR_CARG && irb->o == IR_CARG);
+	  if (ira->op2 != irb->op2) break;
 	}
-	ira = IR(ira->op1);
+	last = ira->op1;
+	ira = IR(last);
 	irb = IR(irb->op1);
       }
       ref = irs->prev;
