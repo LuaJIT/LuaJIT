@@ -135,8 +135,7 @@ LJLIB_ASM(string_rep)
 
 LJLIB_ASM(string_reverse)
 {
-  GCstr *s = lj_lib_checkstr(L, 1);
-  lj_buf_tmp(L, s->len);
+  lj_lib_checkstr(L, 1);
   return FFH_RETRY;
 }
 LJLIB_ASM_(string_lower)

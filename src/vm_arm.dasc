@@ -99,6 +99,7 @@
 |.type NODE,		Node
 |.type NARGS8,		int
 |.type TRACE,		GCtrace
+|.type SBUF,		SBuf
 |
 |//-----------------------------------------------------------------------
 |
@@ -1743,6 +1744,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov CARG1, L
   |   str PC, SAVE_PC
   |  bl extern lj_str_new		// (lua_State *L, char *str, size_t l)
+  |->fff_resstr:
   |  // Returns GCstr *.
   |  ldr BASE, L->base
   |   mvn CARG2, #~LJ_TSTR
@@ -1813,56 +1815,28 @@ static void build_subroutines(BuildCtx *ctx)
   |  bge <1
   |  b ->fff_newstr
   |
-  |.ffunc string_reverse
+  |.macro ffstring_op, name
+  |  .ffunc string_ .. name
   |  ffgccheck
-  |  ldrd CARG12, [BASE]
+  |  ldr CARG3, [BASE, #4]
   |   cmp NARGS8:RC, #8
+  |  ldr STR:CARG2, [BASE]
   |   blo ->fff_fallback
-  |  checkstr CARG2, ->fff_fallback
-  |  ldr CARG3, STR:CARG1->len
-  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
-  |    ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
-  |  mov CARG4, CARG3
-  |  add CARG1, STR:CARG1, #sizeof(GCstr)
-  |   add INS, CARG2, CARG3
-  |   cmp RB, INS
-  |   blo ->fff_fallback
-  |1:  // Reverse string copy.
-  |  ldrb RB, [CARG1], #1
-  |   subs CARG4, CARG4, #1
-  |   blt ->fff_newstr
-  |  strb RB, [CARG2, CARG4]
-  |  b <1
-  |
-  |.macro ffstring_case, name, lo
-  |  .ffunc name
-  |  ffgccheck
-  |  ldrd CARG12, [BASE]
-  |   cmp NARGS8:RC, #8
-  |   blo ->fff_fallback
-  |  checkstr CARG2, ->fff_fallback
-  |  ldr CARG3, STR:CARG1->len
-  |   ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
-  |    ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
-  |  mov CARG4, #0
-  |  add CARG1, STR:CARG1, #sizeof(GCstr)
-  |   add INS, CARG2, CARG3
-  |   cmp RB, INS
-  |   blo ->fff_fallback
-  |1:  // ASCII case conversion.
-  |  ldrb RB, [CARG1, CARG4]
-  |   cmp CARG4, CARG3
-  |   bhs ->fff_newstr
-  |  sub RC, RB, #lo
-  |  cmp RC, #26
-  |  eorlo RB, RB, #0x20
-  |  strb RB, [CARG2, CARG4]
-  |   add CARG4, CARG4, #1
-  |  b <1
+  |  sub SBUF:CARG1, DISPATCH, #-DISPATCH_GL(tmpbuf)
+  |  checkstr CARG3, ->fff_fallback
+  |  ldr CARG4, SBUF:CARG1->b
+  |   str BASE, L->base
+  |   str PC, SAVE_PC
+  |   str L, SBUF:CARG1->L
+  |  str CARG4, SBUF:CARG1->p
+  |  bl extern lj_buf_putstr_ .. name
+  |  bl extern lj_buf_tostr
+  |  b ->fff_resstr
   |.endmacro
   |
-  |ffstring_case string_lower, 65
-  |ffstring_case string_upper, 97
+  |ffstring_op reverse
+  |ffstring_op lower
+  |ffstring_op upper
   |
   |//-- Bit library --------------------------------------------------------
   |

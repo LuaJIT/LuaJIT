@@ -115,6 +115,7 @@
 |.type NODE,		Node
 |.type NARGS,		int
 |.type TRACE,		GCtrace
+|.type SBUF,		SBuf
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |//-----------------------------------------------------------------------
@@ -2258,6 +2259,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |  mov SAVE_PC, PC
   |  call extern lj_str_new		// (lua_State *L, char *str, size_t l)
+  |->fff_resstr:
   |  // GCstr * returned in eax (RD).
   |  mov BASE, L:RB->base
   |  mov PC, [BASE-4]
@@ -2373,69 +2375,27 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RD, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
   |  jmp ->fff_newstr
   |
-  |.ffunc_1 string_reverse
+  |.macro ffstring_op, name
+  |  .ffunc_1 string_ .. name
   |  ffgccheck
   |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
-  |  mov STR:RB, [BASE]
-  |  mov RC, STR:RB->len
-  |  test RC, RC
-  |  jz ->fff_emptystr			// Zero length string?
-  |  mov TMP2, PC			// Need another temp register.
-  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
-  |  lea RA, [PC+RC]
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RA;  jb ->fff_fallback_1
-  |  add RB, #STR
-  |.if X64
-  |  mov TMP3, RC
-  |.else
-  |  mov ARG3, RC
-  |.endif
-  |1:
-  |  movzx RA, byte [RB]
-  |  add RB, 1
-  |  sub RC, 1
-  |  mov [PC+RC], RAL
-  |  jnz <1
-  |  mov RD, PC
-  |  mov PC, TMP2
-  |  jmp ->fff_newstr
-  |
-  |.macro ffstring_case, name, lo, hi
-  |  .ffunc_1 name
-  |  ffgccheck
-  |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
-  |  mov TMP2, PC			// Need another temp register.
-  |  mov STR:RB, [BASE]
-  |  mov RC, STR:RB->len
-  |  mov PC, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
-  |  lea RA, [PC+RC]
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RA;  jb ->fff_fallback_1
-  |  add RB, #STR
-  |.if X64
-  |  mov TMP3, RC
-  |.else
-  |  mov ARG3, RC
-  |.endif
-  |  jmp >3
-  |1:  // ASCII case conversion. Yes, this is suboptimal code (do you care?).
-  |  movzx RA, byte [RB+RC]
-  |  cmp RA, lo
-  |  jb >2
-  |  cmp RA, hi
-  |  ja >2
-  |  xor RA, 0x20
-  |2:
-  |  mov [PC+RC], RAL
-  |3:
-  |  sub RC, 1
-  |  jns <1
-  |  mov RD, PC
-  |  mov PC, TMP2
-  |  jmp ->fff_newstr
+  |  mov L:RB, SAVE_L
+  |   lea SBUF:FCARG1, [DISPATCH+DISPATCH_GL(tmpbuf)]
+  |  mov L:RB->base, BASE
+  |  mov STR:FCARG2, [BASE]		// Caveat: FCARG2 == BASE
+  |   mov RC, SBUF:FCARG1->b
+  |   mov SBUF:FCARG1->L, L:RB
+  |   mov SBUF:FCARG1->p, RC
+  |  mov SAVE_PC, PC
+  |  call extern lj_buf_putstr_ .. name
+  |  mov FCARG1, eax
+  |  call extern lj_buf_tostr
+  |  jmp ->fff_resstr
   |.endmacro
   |
-  |ffstring_case string_lower, 0x41, 0x5a
-  |ffstring_case string_upper, 0x61, 0x7a
+  |ffstring_op reverse
+  |ffstring_op lower
+  |ffstring_op upper
   |
   |//-- Bit library --------------------------------------------------------
   |

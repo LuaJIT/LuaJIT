@@ -138,6 +138,7 @@
 |.type NODE,		Node
 |.type NARGS8,		int
 |.type TRACE,		GCtrace
+|.type SBUF,		SBuf
 |
 |//-----------------------------------------------------------------------
 |
@@ -1668,6 +1669,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  move CARG1, L
   |  // Returns GCstr *.
   |  lw BASE, L->base
+  |->fff_resstr:
   |  move CARG1, CRET1
   |  b ->fff_restv
   |.  li CARG3, LJ_TSTR
@@ -1756,63 +1758,32 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_newstr
   |.  nop
   |
-  |.ffunc string_reverse
+  |.macro ffstring_op, name
+  |  .ffunc string_ .. name
   |  ffgccheck
   |  lw CARG3, HI(BASE)
-  |   lw STR:CARG1, LO(BASE)
+  |   lw STR:CARG2, LO(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
   |.  li AT, LJ_TSTR
   |  bne CARG3, AT, ->fff_fallback
-  |.  lw CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
-  |   lw CARG3, STR:CARG1->len
-  |  lw TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
-  |   addiu CARG1, STR:CARG1, #STR
-  |   addu CARG4, CARG2, CARG3
-  |  sltu AT, TMP1, CARG4
-  |  bnez AT, ->fff_fallback
-  |.  addu TMP3, CARG1, CARG3
-  |1:  // Reverse string copy.
-  |   lbu TMP1, 0(CARG1)
-  |  sltu AT, CARG1, TMP3
-  |  beqz AT, ->fff_newstr
-  |.  addiu CARG1, CARG1, 1
-  |  addiu CARG4, CARG4, -1
-  |  b <1
-  |   sb TMP1, 0(CARG4)
-  |
-  |.macro ffstring_case, name, lo
-  |  .ffunc name
-  |  ffgccheck
-  |  lw CARG3, HI(BASE)
-  |   lw STR:CARG1, LO(BASE)
-  |  beqz NARGS8:RC, ->fff_fallback
-  |.  li AT, LJ_TSTR
-  |  bne CARG3, AT, ->fff_fallback
-  |.  lw CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
-  |   lw CARG3, STR:CARG1->len
-  |  lw TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
-  |   addiu CARG1, STR:CARG1, #STR
-  |   addu TMP3, CARG2, CARG3
-  |  sltu AT, TMP1, TMP3
-  |  bnez AT, ->fff_fallback
-  |.  addu TMP3, CARG1, CARG3
-  |  move CARG4, CARG2
-  |1:  // ASCII case conversion.
-  |   lbu TMP1, 0(CARG1)
-  |  sltu AT, CARG1, TMP3
-  |  beqz AT, ->fff_newstr
-  |.  addiu TMP0, TMP1, -lo
-  |   xori TMP2, TMP1, 0x20
-  |   sltiu AT, TMP0, 26
-  |   movn TMP1, TMP2, AT
-  |  addiu CARG1, CARG1, 1
-  |   sb TMP1, 0(CARG4)
-  |  b <1
-  |.  addiu CARG4, CARG4, 1
+  |.  addiu SBUF:CARG1, DISPATCH, DISPATCH_GL(tmpbuf)
+  |  load_got lj_buf_putstr_ .. name
+  |  lw TMP0, SBUF:CARG1->b
+  |   sw L, SBUF:CARG1->L
+  |   sw BASE, L->base
+  |  sw TMP0, SBUF:CARG1->p
+  |  call_intern extern lj_buf_putstr_ .. name
+  |.  sw PC, SAVE_PC
+  |  load_got lj_buf_tostr
+  |  call_intern lj_buf_tostr
+  |.  move SBUF:CARG1, SBUF:CRET1
+  |  b ->fff_resstr
+  |.  lw BASE, L->base
   |.endmacro
   |
-  |ffstring_case string_lower, 65
-  |ffstring_case string_upper, 97
+  |ffstring_op reverse
+  |ffstring_op lower
+  |ffstring_op upper
   |
   |//-- Bit library --------------------------------------------------------
   |

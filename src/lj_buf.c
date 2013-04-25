@@ -34,7 +34,7 @@ LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
 char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
 {
   SBuf *sb = &G(L)->tmpbuf;
-  setmref(sb->L, L);
+  setsbufL(sb, L);
   return lj_buf_need(sb, sz);
 }
 
@@ -95,12 +95,59 @@ SBuf * LJ_FASTCALL lj_buf_putnum(SBuf *sb, cTValue *o)
   setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), o));
   return sb;
 }
+#endif
+
+SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s)
+{
+  MSize len = s->len;
+  char *p = lj_buf_more(sb, len), *e = p+len;
+  const char *q = strdata(s)+len-1;
+  while (p < e)
+    *p++ = *q--;
+  setsbufP(sb, p);
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s)
+{
+  MSize len = s->len;
+  char *p = lj_buf_more(sb, len), *e = p+len;
+  const char *q = strdata(s);
+  for (; p < e; p++, q++) {
+    uint32_t c = *(unsigned char *)q;
+#if LJ_TARGET_PPC
+    *p = c + ((c >= 'A' && c <= 'Z') << 5);
+#else
+    if (c >= 'A' && c <= 'Z') c += 0x20;
+    *p = c;
+#endif
+  }
+  setsbufP(sb, p);
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s)
+{
+  MSize len = s->len;
+  char *p = lj_buf_more(sb, len), *e = p+len;
+  const char *q = strdata(s);
+  for (; p < e; p++, q++) {
+    uint32_t c = *(unsigned char *)q;
+#if LJ_TARGET_PPC
+    *p = c - ((c >= 'a' && c <= 'z') << 5);
+#else
+    if (c >= 'a' && c <= 'z') c -= 0x20;
+    *p = c;
+#endif
+  }
+  setsbufP(sb, p);
+  return sb;
+}
 
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
 }
-#endif
 
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {

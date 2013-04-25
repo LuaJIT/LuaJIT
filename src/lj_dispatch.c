@@ -8,6 +8,7 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_func.h"
 #include "lj_str.h"
 #include "lj_tab.h"

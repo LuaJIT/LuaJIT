@@ -31,8 +31,11 @@ LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putint(SBuf *sb, int32_t k);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putnum(SBuf *sb, cTValue *o);
-LJ_FUNC GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
 #endif
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s);
+LJ_FUNCA GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
 LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 LJ_FUNC char * LJ_FASTCALL lj_buf_wuleb128(char *p, uint32_t v);
 

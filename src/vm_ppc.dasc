@@ -293,6 +293,7 @@
 |.type NODE,		Node
 |.type NARGS8,		int
 |.type TRACE,		GCtrace
+|.type SBUF,		SBuf
 |
 |//-----------------------------------------------------------------------
 |
@@ -2103,6 +2104,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stp BASE, L->base
   |  stw PC, SAVE_PC
   |  bl extern lj_str_new		// (lua_State *L, char *str, size_t l)
+  |->fff_resstr:
   |  // Returns GCstr *.
   |  lp BASE, L->base
   |  li CARG3, LJ_TSTR
@@ -2223,66 +2225,29 @@ static void build_subroutines(BuildCtx *ctx)
   |  li CARG3, LJ_TSTR
   |  b ->fff_restv
   |
-  |.ffunc string_reverse
+  |.macro ffstring_op, name
+  |  .ffunc string_ .. name
   |  ffgccheck
   |  cmplwi NARGS8:RC, 8
   |   lwz CARG3, 0(BASE)
-  |    lwz STR:CARG1, 4(BASE)
+  |    lwz STR:CARG2, 4(BASE)
   |  blt ->fff_fallback
   |  checkstr CARG3
-  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
+  |   la SBUF:CARG1, DISPATCH_GL(tmpbuf)(DISPATCH)
   |  bne ->fff_fallback
-  |  lwz CARG3, STR:CARG1->len
-  |   la CARG1, #STR(STR:CARG1)
-  |   li TMP2, 0
-  |   add TMP3, CARG2, CARG3
-  |  cmplw TMP1, TMP3
-  |   subi TMP3, CARG3, 1
-  |  blt ->fff_fallback
-  |1:  // Reverse string copy.
-  |  cmpwi TMP3, 0
-  |   lbzx TMP1, CARG1, TMP2
-  |  blty ->fff_newstr
-  |   stbx TMP1, CARG2, TMP3
-  |  subi TMP3, TMP3, 1
-  |  addi TMP2, TMP2, 1
-  |  b <1
-  |
-  |.macro ffstring_case, name, lo
-  |  .ffunc name
-  |  ffgccheck
-  |  cmplwi NARGS8:RC, 8
-  |   lwz CARG3, 0(BASE)
-  |    lwz STR:CARG1, 4(BASE)
-  |  blt ->fff_fallback
-  |  checkstr CARG3
-  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
-  |  bne ->fff_fallback
-  |  lwz CARG3, STR:CARG1->len
-  |   la CARG1, #STR(STR:CARG1)
-  |   li TMP2, 0
-  |   add TMP3, CARG2, CARG3
-  |  cmplw TMP1, TMP3
-  |  blt ->fff_fallback
-  |1:  // ASCII case conversion.
-  |  cmplw TMP2, CARG3
-  |   lbzx TMP1, CARG1, TMP2
-  |  bgey ->fff_newstr
-  |   subi TMP0, TMP1, lo
-  |    xori TMP3, TMP1, 0x20
-  |   addic TMP0, TMP0, -26
-  |   subfe TMP3, TMP3, TMP3
-  |   rlwinm TMP3, TMP3, 0, 26, 26	// x &= 0x20.
-  |   xor TMP1, TMP1, TMP3
-  |   stbx TMP1, CARG2, TMP2
-  |  addi TMP2, TMP2, 1
-  |  b <1
+  |   lwz TMP0, SBUF:CARG1->b
+  |  stw L, SBUF:CARG1->L
+  |  stp BASE, L->base
+  |  stw PC, SAVE_PC
+  |   stw TMP0, SBUF:CARG1->p
+  |  bl extern lj_buf_putstr_ .. name
+  |  bl extern lj_buf_tostr
+  |  b ->fff_resstr
   |.endmacro
   |
-  |ffstring_case string_lower, 65
-  |ffstring_case string_upper, 97
+  |ffstring_op reverse
+  |ffstring_op lower
+  |ffstring_op upper
   |
   |//-- Bit library --------------------------------------------------------
   |
