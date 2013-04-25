@@ -111,6 +111,9 @@ typedef struct CCallInfo {
   _(ANY,	lj_buf_putchar,		2,  FS, P32, 0) \
   _(ANY,	lj_buf_putint,		2,  FS, P32, 0) \
   _(ANY,	lj_buf_putnum,		2,  FS, P32, 0) \
+  _(ANY,	lj_buf_putstr_reverse,	2,  FS, P32, 0) \
+  _(ANY,	lj_buf_putstr_lower,	2,  FS, P32, 0) \
+  _(ANY,	lj_buf_putstr_upper,	2,  FS, P32, 0) \
   _(ANY,	lj_buf_tostr,		1,  FL, STR, 0) \
   _(ANY,	lj_tab_new1,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_dup,		2,  FS, TAB, CCI_L) \

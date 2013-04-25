@@ -771,6 +771,15 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
   UNUSED(rd);
 }
 
+static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
+{
+  TRef str = lj_ir_tostr(J, J->base[0]);
+  TRef hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
+		    lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+  TRef tr = lj_ir_call(J, rd->data, hdr, str);
+  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+}
+
 /* -- Table library fast functions ---------------------------------------- */
 
 static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)

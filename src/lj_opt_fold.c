@@ -19,6 +19,7 @@
 #include "lj_tab.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
+#include "lj_ircall.h"
 #include "lj_iropt.h"
 #include "lj_trace.h"
 #if LJ_HASFFI
@@ -570,7 +571,8 @@ LJFOLDF(bufput_kgc)
 LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {
-  lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT);
+  lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT ||
+	     fright->o == IR_CALLS);
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fright->o == IR_BUFHDR) {  /* No put operations? */
       if (!(fright->op2 & IRBUFHDR_APPEND)) {  /* Empty buffer? */
@@ -579,7 +581,7 @@ LJFOLDF(bufstr_kfold_cse)
       }
       fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
-    } else {
+    } else if (fright->o == IR_BUFPUT) {
       IRIns *irb = IR(fright->op1);
       if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND)) {
 	lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
@@ -614,6 +616,26 @@ LJFOLDF(bufstr_kfold_cse)
     }
   }
   return EMITFOLD;  /* No CSE possible. */
+}
+
+LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_reverse)
+LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_upper)
+LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_lower)
+LJFOLDF(bufput_kfold_op)
+{
+  if (irref_isk(fleft->op2)) {
+    const CCallInfo *ci = &lj_ir_callinfo[fins->op2];
+    SBuf *sb = &J2G(J)->tmpbuf;
+    setsbufL(sb, J->L);
+    lj_buf_reset(sb);
+    sb = ((SBuf * LJ_FASTCALL (*)(SBuf *, GCstr *))ci->func)(sb,
+						       ir_kstr(IR(fleft->op2)));
+    fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
+    fins->op1 = fleft->op1;
+    fins->o = IR_BUFPUT;
+    return RETRYFOLD;
+  }
+  return EMITFOLD;  /* This is a store and always emitted. */
 }
 
 /* -- Constant folding of pointer arithmetic ------------------------------ */

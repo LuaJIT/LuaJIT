@@ -133,13 +133,13 @@ LJLIB_ASM(string_rep)
   return FFH_RES(1);
 }
 
-LJLIB_ASM(string_reverse)
+LJLIB_ASM(string_reverse)  LJLIB_REC(string_op IRCALL_lj_buf_putstr_reverse)
 {
   lj_lib_checkstr(L, 1);
   return FFH_RETRY;
 }
-LJLIB_ASM_(string_lower)
-LJLIB_ASM_(string_upper)
+LJLIB_ASM_(string_lower)  LJLIB_REC(string_op IRCALL_lj_buf_putstr_lower)
+LJLIB_ASM_(string_upper)  LJLIB_REC(string_op IRCALL_lj_buf_putstr_upper)
 
 /* ------------------------------------------------------------------------ */
 
