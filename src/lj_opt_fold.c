@@ -628,7 +628,7 @@ LJFOLDF(bufput_kfold_op)
     SBuf *sb = &J2G(J)->tmpbuf;
     setsbufL(sb, J->L);
     lj_buf_reset(sb);
-    sb = ((SBuf * LJ_FASTCALL (*)(SBuf *, GCstr *))ci->func)(sb,
+    sb = ((SBuf * (LJ_FASTCALL *)(SBuf *, GCstr *))ci->func)(sb,
 						       ir_kstr(IR(fleft->op2)));
     fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
     fins->op1 = fleft->op1;
