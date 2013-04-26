@@ -520,9 +520,23 @@ LJFOLDF(kfold_strcmp)
 
 /* -- Constant folding and forwarding for buffers ------------------------- */
 
-/* Note: buffer ops are not CSEd until the BUFSTR. It's ok to modify them. */
+/*
+** Buffer ops perform stores, but their effect is limited to the buffer
+** itself. Also, buffer ops are chained: a use of an op implies a use of
+** all other ops up the chain. Conversely, if an op is unused, all ops
+** up the chain can go unsed. This largely eliminates the need to treat
+** them as stores.
+**
+** Alas, treating them as normal (IRM_N) ops doesn't work, because they
+** cannot be CSEd in isolation. CSE for IRM_N is implicitly done in LOOP
+** or if FOLD is disabled.
+**
+** The compromise is to declare them as loads, emit them like stores and
+** CSE whole chains manually when the BUFSTR is to be emitted. Any chain
+** fragments left over from CSE are eliminated by DCE.
+*/
 
-/* BUFHDR is treated like a store, see below. */
+/* BUFHDR is emitted like a store, see below. */
 
 LJFOLD(BUFPUT BUFHDR BUFSTR)
 LJFOLDF(bufput_append)
@@ -530,14 +544,14 @@ LJFOLDF(bufput_append)
   /* New buffer, no other buffer op inbetween and same buffer? */
   if ((J->flags & JIT_F_OPT_FWD) &&
       !(fleft->op2 & IRBUFHDR_APPEND) &&
-      fleft->prev == fright->op1 &&
-      fleft->op1 == IR(fright->op1)->op1) {
+      fleft->prev == fright->op2 &&
+      fleft->op1 == IR(fright->op2)->op1) {
     IRRef ref = fins->op1;
     IR(ref)->op2 = (fleft->op2 | IRBUFHDR_APPEND);  /* Modify BUFHDR. */
-    IR(ref)->op1 = fright->op2;
+    IR(ref)->op1 = fright->op1;
     return ref;
   }
-  return EMITFOLD;  /* This is a store and always emitted. */
+  return EMITFOLD;  /* Always emit, CSE later. */
 }
 
 LJFOLD(BUFPUT any any)
@@ -565,45 +579,36 @@ LJFOLDF(bufput_kgc)
       }
     }
   }
-  return EMITFOLD;  /* This is a store and always emitted. */
+  return EMITFOLD;  /* Always emit, CSE later. */
 }
 
 LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {
-  lua_assert(fright->o == IR_BUFHDR || fright->o == IR_BUFPUT ||
-	     fright->o == IR_CALLS);
+  lua_assert(fleft->o == IR_BUFHDR || fleft->o == IR_BUFPUT ||
+	     fleft->o == IR_CALLL);
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
-    if (fright->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fright->op2 & IRBUFHDR_APPEND)) {  /* Empty buffer? */
-	lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
+    if (fleft->o == IR_BUFHDR) {  /* No put operations? */
+      if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
-      }
-      fins->op2 = fright->prev;  /* Relies on checks in bufput_append. */
+      fins->op1 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
-    } else if (fright->o == IR_BUFPUT) {
-      IRIns *irb = IR(fright->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND)) {
-	lj_ir_rollback(J, fins->op1);  /* Eliminate the current chain. */
-	return fright->op2;  /* Shortcut for a single put operation. */
-      }
+    } else if (fleft->o == IR_BUFPUT) {
+      IRIns *irb = IR(fleft->op1);
+      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+	return fleft->op2;  /* Shortcut for a single put operation. */
     }
   }
   /* Try to CSE the whole chain. */
   if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
     IRRef ref = J->chain[IR_BUFSTR];
     while (ref) {
-      IRRef last = fins->op2;
-      IRIns *irs = IR(ref), *ira = fright, *irb = IR(irs->op2);
+      IRRef last = fins->op1;
+      IRIns *irs = IR(ref), *ira = fleft, *irb = IR(irs->op1);
       while (ira->o == irb->o && ira->op2 == irb->op2) {
 	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND)) {
-	  IRIns *irh;
-	  for (irh = IR(ira->prev); irh != irb; irh = IR(irh->prev))
-	    if (irh->op1 == irs->op2)
-	      return ref;  /* Do CSE, but avoid rollback if append follows. */
-	  lj_ir_rollback(J, last);  /* Eliminate the current chain. */
 	  return ref;  /* CSE succeeded. */
-	} else if (ira->o == IR_CALLS) {
+	} else if (ira->o == IR_CALLL) {
 	  ira = IR(ira->op1); irb = IR(irb->op1);
 	  lua_assert(ira->o == IR_CARG && irb->o == IR_CARG);
 	  if (ira->op2 != irb->op2) break;
@@ -618,9 +623,9 @@ LJFOLDF(bufstr_kfold_cse)
   return EMITFOLD;  /* No CSE possible. */
 }
 
-LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_reverse)
-LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_upper)
-LJFOLD(CALLS CARG IRCALL_lj_buf_putstr_lower)
+LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_reverse)
+LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_upper)
+LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_lower)
 LJFOLDF(bufput_kfold_op)
 {
   if (irref_isk(fleft->op2)) {

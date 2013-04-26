@@ -121,8 +121,8 @@
   _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
   /* Buffer operations. */ \
-  _(BUFHDR,	S , ref, lit) \
-  _(BUFPUT,	S , ref, ref) \
+  _(BUFHDR,	L , ref, lit) \
+  _(BUFPUT,	L , ref, ref) \
   _(BUFSTR,	A , ref, ref) \
   \
   /* Barriers. */ \

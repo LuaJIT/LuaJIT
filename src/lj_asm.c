@@ -1039,20 +1039,18 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
 
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
-  if (ra_used(ir)) {
-    Reg sb = ra_dest(as, ir, RSET_GPR);
-    if (!(ir->op2 & IRBUFHDR_APPEND)) {
-      Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
-      /* Passing ir isn't strictly correct, but it's an IRT_P32, too. */
-      emit_storeofs(as, ir, tmp, sb, offsetof(SBuf, p));
-      emit_loadofs(as, ir, tmp, sb, offsetof(SBuf, b));
-    }
-#if LJ_TARGET_X86ORX64
-    ra_left(as, sb, ir->op1);
-#else
-    ra_leftov(as, sb, ir->op1);
-#endif
+  Reg sb = ra_dest(as, ir, RSET_GPR);
+  if (!(ir->op2 & IRBUFHDR_APPEND)) {
+    Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+    /* Passing ir isn't strictly correct, but it's an IRT_P32, too. */
+    emit_storeofs(as, ir, tmp, sb, offsetof(SBuf, p));
+    emit_loadofs(as, ir, tmp, sb, offsetof(SBuf, b));
   }
+#if LJ_TARGET_X86ORX64
+  ra_left(as, sb, ir->op1);
+#else
+  ra_leftov(as, sb, ir->op1);
+#endif
 }
 
 static void asm_bufput(ASMState *as, IRIns *ir)
@@ -1061,7 +1059,6 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   IRRef args[3];
   IRIns *irs;
   int kchar = -1;
-  if (!ra_used(ir)) return;
   args[0] = ir->op1;  /* SBuf * */
   args[1] = ir->op2;  /* GCstr * */
   irs = IR(ir->op2);
@@ -1107,7 +1104,7 @@ static void asm_bufstr(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_buf_tostr];
   IRRef args[1];
-  args[0] = ir->op2;  /* SBuf *sb */
+  args[0] = ir->op1;  /* SBuf *sb */
   as->gcsteps++;
   asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);

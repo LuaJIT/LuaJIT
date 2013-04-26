@@ -1622,7 +1622,7 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     do {
       tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, *trp++);
     } while (trp <= top);
-    tr = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+    tr = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
     J->maxslot = (BCReg)(xbase - J->base);
     if (xbase == base) return tr;
   }

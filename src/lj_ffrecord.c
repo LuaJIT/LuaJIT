@@ -766,7 +766,7 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
     TRef tr = hdr;
     for (i = 0; J->base[i] != 0; i++)
       tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, J->base[i]);
-    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
   }
   UNUSED(rd);
 }
@@ -777,7 +777,7 @@ static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
   TRef hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
 		    lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
   TRef tr = lj_ir_call(J, rd->data, hdr, str);
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, tr);
+  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
 }
 
 /* -- Table library fast functions ---------------------------------------- */
