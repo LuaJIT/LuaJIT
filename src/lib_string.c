@@ -85,7 +85,7 @@ LJLIB_ASM(string_sub)		LJLIB_REC(string_range 1)
   return FFH_RETRY;
 }
 
-LJLIB_CF(string_rep)
+LJLIB_CF(string_rep)		LJLIB_REC(.)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
   int32_t rep = lj_lib_checkint(L, 2);

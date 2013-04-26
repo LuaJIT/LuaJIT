@@ -596,18 +596,13 @@ LJFOLDF(bufstr_kfold_cse)
   if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
     IRRef ref = J->chain[IR_BUFSTR];
     while (ref) {
-      IRRef last = fins->op1;
       IRIns *irs = IR(ref), *ira = fleft, *irb = IR(irs->op1);
       while (ira->o == irb->o && ira->op2 == irb->op2) {
-	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND)) {
+	lua_assert(ira->o == IR_BUFHDR || ira->o == IR_BUFPUT ||
+		   ira->o == IR_CALLL || ira->o == IR_CARG);
+	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
 	  return ref;  /* CSE succeeded. */
-	} else if (ira->o == IR_CALLL) {
-	  ira = IR(ira->op1); irb = IR(irb->op1);
-	  lua_assert(ira->o == IR_CARG && irb->o == IR_CARG);
-	  if (ira->op2 != irb->op2) break;
-	}
-	last = ira->op1;
-	ira = IR(last);
+	ira = IR(ira->op1);
 	irb = IR(irb->op1);
       }
       ref = irs->prev;
@@ -623,17 +618,32 @@ LJFOLDF(bufput_kfold_op)
 {
   if (irref_isk(fleft->op2)) {
     const CCallInfo *ci = &lj_ir_callinfo[fins->op2];
-    SBuf *sb = &J2G(J)->tmpbuf;
-    setsbufL(sb, J->L);
-    lj_buf_reset(sb);
+    SBuf *sb = lj_buf_tmp_(J->L);
     sb = ((SBuf * (LJ_FASTCALL *)(SBuf *, GCstr *))ci->func)(sb,
 						       ir_kstr(IR(fleft->op2)));
-    fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
-    fins->op1 = fleft->op1;
     fins->o = IR_BUFPUT;
+    fins->op1 = fleft->op1;
+    fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
     return RETRYFOLD;
   }
-  return EMITFOLD;  /* This is a store and always emitted. */
+  return EMITFOLD;  /* Always emit, CSE later. */
+}
+
+LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_rep)
+LJFOLDF(bufput_kfold_rep)
+{
+  if (irref_isk(fleft->op2)) {
+    IRIns *irc = IR(fleft->op1);
+    if (irref_isk(irc->op2)) {
+      SBuf *sb = lj_buf_tmp_(J->L);
+      sb = lj_buf_putstr_rep(sb, ir_kstr(IR(irc->op2)), IR(fleft->op2)->i);
+      fins->o = IR_BUFPUT;
+      fins->op1 = irc->op1;
+      fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
+      return RETRYFOLD;
+    }
+  }
+  return EMITFOLD;  /* Always emit, CSE later. */
 }
 
 /* -- Constant folding of pointer arithmetic ------------------------------ */
