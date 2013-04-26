@@ -205,7 +205,7 @@ LJLIB_CF(os_date)
     const char *q;
     for (q = s; *q; q++)
       sz += (*q == '%') ? 30 : 1;  /* Overflow doesn't matter. */
-    setmref(sb->L, L);
+    setsbufL(sb, L);
     for (;;) {
       char *buf = lj_buf_need(sb, sz);
       size_t len = strftime(buf, sbufsz(sb), s, stm);

@@ -559,20 +559,13 @@ LJFOLDF(bufput_kgc)
 {
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fright->o == IR_KGC) {
     GCstr *s2 = ir_kstr(fright);
-    MSize len2 = s2->len;
-    if (len2 == 0) {  /* Empty string? */
+    if (s2->len == 0) {  /* Empty string? */
       return LEFTFOLD;
     } else {
       if (fleft->o == IR_BUFPUT && irref_isk(fleft->op2) &&
-	  !irt_isphi(fleft->t)) {
-	/* Join two constant string puts in a row. */
+	  !irt_isphi(fleft->t)) {  /* Join two constant string puts in a row. */
 	GCstr *s1 = ir_kstr(IR(fleft->op2));
-	MSize len1 = s1->len;
-	char *buf = lj_buf_tmp(J->L, len1 + len2);
-	IRRef kref;
-	memcpy(buf, strdata(s1), len1);
-	memcpy(buf+len1, strdata(s2), len2);
-	kref = lj_ir_kstr(J, lj_str_new(J->L, buf, len1 + len2));
+	IRRef kref = lj_ir_kstr(J, lj_buf_cat2str(J->L, s1, s2));
 	/* lj_ir_kstr() may realloc the IR and invalidates any IRIns *. */
 	IR(fins->op1)->op2 = kref;  /* Modify previous BUFPUT. */
 	return fins->op1;

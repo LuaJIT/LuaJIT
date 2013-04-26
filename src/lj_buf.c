@@ -149,6 +149,15 @@ GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
 }
 
+GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
+{
+  MSize len1 = s1->len, len2 = s2->len;
+  char *buf = lj_buf_tmp(L, len1 + len2);
+  memcpy(buf, strdata(s1), len1);
+  memcpy(buf+len1, strdata(s2), len2);
+  return lj_str_new(L, buf, len1 + len2);
+}
+
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {
   const uint8_t *p = (const uint8_t *)*pp;

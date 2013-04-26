@@ -155,9 +155,7 @@ LJLIB_CF(string_dump)
 {
   GCfunc *fn = lj_lib_checkfunc(L, 1);
   int strip = L->base+1 < L->top && tvistruecond(L->base+1);
-  SBuf *sb = &G(L)->tmpbuf;  /* Assumes lj_bcwrite() doesn't use tmpbuf. */
-  setmref(sb->L, L);
-  lj_buf_reset(sb);
+  SBuf *sb = lj_buf_tmp_(L);  /* Assumes lj_bcwrite() doesn't use tmpbuf. */
   L->top = L->base+1;
   if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, sb, strip))
     lj_err_caller(L, LJ_ERR_STRDUMP);
@@ -851,9 +849,7 @@ LJLIB_CF(string_format)
   GCstr *sfmt = lj_lib_checkstr(L, arg);
   const char *fmt = strdata(sfmt);
   const char *efmt = fmt + sfmt->len;
-  SBuf *sb = &G(L)->tmpbuf;
-  setmref(sb->L, L);
-  lj_buf_reset(sb);
+  SBuf *sb = lj_buf_tmp_(L);
   while (fmt < efmt) {
     if (*fmt != L_ESC || *++fmt == L_ESC) {
       lj_buf_putb(sb, *fmt++);

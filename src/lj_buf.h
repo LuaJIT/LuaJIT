@@ -36,6 +36,7 @@ LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s);
 LJ_FUNCA GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
+LJ_FUNC GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2);
 LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 LJ_FUNC char * LJ_FASTCALL lj_buf_wuleb128(char *p, uint32_t v);
 
@@ -48,6 +49,14 @@ static LJ_AINLINE void lj_buf_init(lua_State *L, SBuf *sb)
 static LJ_AINLINE void lj_buf_reset(SBuf *sb)
 {
   setmrefr(sb->p, sb->b);
+}
+
+static LJ_AINLINE SBuf *lj_buf_tmp_(lua_State *L)
+{
+  SBuf *sb = &G(L)->tmpbuf;
+  setsbufL(sb, L);
+  lj_buf_reset(sb);
+  return sb;
 }
 
 static LJ_AINLINE void lj_buf_free(global_State *g, SBuf *sb)
