@@ -646,12 +646,6 @@ static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 
 /* -- String library fast functions --------------------------------------- */
 
-static void LJ_FASTCALL recff_string_len(jit_State *J, RecordFFData *rd)
-{
-  J->base[0] = emitir(IRTI(IR_FLOAD), lj_ir_tostr(J, J->base[0]), IRFL_STR_LEN);
-  UNUSED(rd);
-}
-
 /* Handle string.byte (rd->data = 0) and string.sub (rd->data = 1). */
 static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
 {

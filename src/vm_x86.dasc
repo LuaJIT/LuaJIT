@@ -2202,15 +2202,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- String library -----------------------------------------------------
   |
-  |.ffunc_1 string_len
-  |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
-  |  mov STR:RB, [BASE]
-  |.if DUALNUM
-  |  mov RB, dword STR:RB->len; jmp ->fff_resi
-  |.else
-  |  cvtsi2sd xmm0, dword STR:RB->len; jmp ->fff_resxmm0
-  |.endif
-  |
   |.ffunc string_byte			// Only handle the 1-arg case here.
   |  cmp NARGS:RD, 1+1;  jne ->fff_fallback
   |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback

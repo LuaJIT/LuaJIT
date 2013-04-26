@@ -1706,12 +1706,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- String library -----------------------------------------------------
   |
-  |.ffunc_1 string_len
-  |  checkstr CARG2, ->fff_fallback
-  |  ldr CARG1, STR:CARG1->len
-  |  mvn CARG2, #~LJ_TISNUM
-  |  b ->fff_restv
-  |
   |.ffunc string_byte			// Only handle the 1-arg case here.
   |  ldrd CARG12, [BASE]
   |    ldr PC, [BASE, FRAME_PC]

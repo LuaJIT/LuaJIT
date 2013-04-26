@@ -32,11 +32,12 @@
 
 #define LJLIB_MODULE_string
 
-LJLIB_ASM(string_len)		LJLIB_REC(.)
-{
-  lj_lib_checkstr(L, 1);
-  return FFH_RETRY;
-}
+LJLIB_LUA(string_len) /*
+  function(s)
+    CHECK_str(s)
+    return #s
+  end
+*/
 
 LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
 {

@@ -2045,11 +2045,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- String library -----------------------------------------------------
   |
-  |.ffunc_1 string_len
-  |  checkstr CARG3; bne ->fff_fallback
-  |  lwz CRET1, STR:CARG1->len
-  |  b ->fff_resi
-  |
   |.ffunc string_byte			// Only handle the 1-arg case here.
   |  cmplwi NARGS8:RC, 8
   |   lwz CARG3, 0(BASE)
