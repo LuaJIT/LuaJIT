@@ -2331,41 +2331,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  xor RC, RC				// Zero length. Any ptr in RB is ok.
   |  jmp <4
   |
-  |.ffunc string_rep			// Only handle the 1-char case inline.
-  |  ffgccheck
-  |  cmp NARGS:RD, 2+1; jne ->fff_fallback	// Exactly 2 arguments.
-  |  cmp dword [BASE+4], LJ_TSTR;  jne ->fff_fallback
-  |  cmp dword [BASE+12], LJ_TISNUM
-  |  mov STR:RB, [BASE]
-  |.if DUALNUM
-  |  jne ->fff_fallback
-  |  mov RC, dword [BASE+8]
-  |.else
-  |  jae ->fff_fallback
-  |  cvttsd2si RC, qword [BASE+8]
-  |.endif
-  |  test RC, RC
-  |  jle ->fff_emptystr			// Count <= 0? (or non-int)
-  |  cmp dword STR:RB->len, 1
-  |  jb ->fff_emptystr			// Zero length string?
-  |  jne ->fff_fallback_2		// Fallback for > 1-char strings.
-  |  movzx RA, byte STR:RB[1]
-  |  mov RB, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
-  |  add RB, RC
-  |  cmp [DISPATCH+DISPATCH_GL(tmpbuf.e)], RB;  jb ->fff_fallback_2
-  |.if X64
-  |  mov TMP3, RC
-  |.else
-  |  mov ARG3, RC
-  |.endif
-  |1:  // Fill buffer with char.
-  |  sub RB, 1
-  |  sub RC, 1
-  |  mov [RB], RAL
-  |  jnz <1
-  |  mov RD, [DISPATCH+DISPATCH_GL(tmpbuf.b)]
-  |  jmp ->fff_newstr
-  |
   |.macro ffstring_op, name
   |  .ffunc_1 string_ .. name
   |  ffgccheck

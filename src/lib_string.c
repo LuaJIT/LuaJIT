@@ -85,53 +85,23 @@ LJLIB_ASM(string_sub)		LJLIB_REC(string_range 1)
   return FFH_RETRY;
 }
 
-LJLIB_ASM(string_rep)
+LJLIB_CF(string_rep)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
-  int32_t k = lj_lib_checkint(L, 2);
+  int32_t rep = lj_lib_checkint(L, 2);
   GCstr *sep = lj_lib_optstr(L, 3);
-  int32_t len = (int32_t)s->len;
-  global_State *g = G(L);
-  int64_t tlen;
-  if (k <= 0) {
-  empty:
-    setstrV(L, L->base-1, &g->strempty);
-    return FFH_RES(1);
+  SBuf *sb = lj_buf_tmp_(L);
+  if (sep && rep > 1) {
+    GCstr *s2 = lj_buf_cat2str(L, sep, s);
+    lj_buf_reset(sb);
+    lj_buf_putstr(sb, s);
+    s = s2;
+    rep--;
   }
-  if (sep) {
-    tlen = (int64_t)len + sep->len;
-    if (tlen > LJ_MAX_STR)
-      lj_err_caller(L, LJ_ERR_STROV);
-    tlen *= k;
-    if (tlen > LJ_MAX_STR)
-      lj_err_caller(L, LJ_ERR_STROV);
-  } else {
-    tlen = (int64_t)k * len;
-    if (tlen > LJ_MAX_STR)
-      lj_err_caller(L, LJ_ERR_STROV);
-  }
-  if (tlen == 0) {
-    goto empty;
-  } else {
-    char *buf = lj_buf_tmp(L, (MSize)tlen), *p = buf;
-    const char *src = strdata(s);
-    if (sep) {
-      tlen -= sep->len;  /* Ignore trailing separator. */
-      if (k > 1) {  /* Paste one string and one separator. */
-	int32_t i;
-	i = 0; while (i < len) *p++ = src[i++];
-	src = strdata(sep); len = sep->len;
-	i = 0; while (i < len) *p++ = src[i++];
-	src = buf; len += s->len; k--;  /* Now copy that k-1 times. */
-      }
-    }
-    do {
-      int32_t i = 0;
-      do { *p++ = src[i++]; } while (i < len);
-    } while (--k > 0);
-    setstrV(L, L->base-1, lj_str_new(L, buf, (size_t)tlen));
-  }
-  return FFH_RES(1);
+  sb = lj_buf_putstr_rep(sb, s, rep);
+  setstrV(L, L->top-1, lj_buf_str(L, sb));
+  lj_gc_check(L);
+  return 1;
 }
 
 LJLIB_ASM(string_reverse)  LJLIB_REC(string_op IRCALL_lj_buf_putstr_reverse)

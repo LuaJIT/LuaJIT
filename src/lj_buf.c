@@ -144,6 +144,30 @@ SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s)
   return sb;
 }
 
+SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep)
+{
+  MSize len = s->len;
+  if (rep > 0 && len) {
+    uint64_t tlen = (uint64_t)rep * len;
+    char *p;
+    if (LJ_UNLIKELY(tlen > LJ_MAX_STR))
+      lj_err_mem(sbufL(sb));
+    p = lj_buf_more(sb, (MSize)tlen);
+    if (len == 1) {  /* Optimize a common case. */
+      uint32_t c = strdata(s)[0];
+      do { *p++ = c; } while (--rep > 0);
+    } else {
+      const char *e = strdata(s) + len;
+      do {
+	const char *q = strdata(s);
+	do { *p++ = *q++; } while (q < e);
+      } while (--rep > 0);
+    }
+    setsbufP(sb, p);
+  }
+  return sb;
+}
+
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));

@@ -2177,49 +2177,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  addi TMP1, TMP1, 1			// start = 1 + (start ? start+len : 0)
   |  b <3
   |
-  |.ffunc string_rep			// Only handle the 1-char case inline.
-  |  ffgccheck
-  |  cmplwi NARGS8:RC, 16
-  |   lwz TMP0, 0(BASE)
-  |    lwz STR:CARG1, 4(BASE)
-  |   lwz CARG4, 8(BASE)
-  |.if DUALNUM
-  |    lwz CARG3, 12(BASE)
-  |.else
-  |    lfd FARG2, 8(BASE)
-  |.endif
-  |  bne ->fff_fallback			// Exactly 2 arguments.
-  |  checkstr TMP0; bne ->fff_fallback
-  |.if DUALNUM
-  |  checknum CARG4; bne ->fff_fallback
-  |.else
-  |  checknum CARG4; bge ->fff_fallback
-  |    toint CARG3, FARG2
-  |.endif
-  |   lwz TMP0, STR:CARG1->len
-  |  cmpwi CARG3, 0
-  |   lwz TMP1, DISPATCH_GL(tmpbuf.e)(DISPATCH)
-  |   lwz CARG2, DISPATCH_GL(tmpbuf.b)(DISPATCH)
-  |  ble >2				// Count <= 0? (or non-int)
-  |   cmplwi TMP0, 1
-  |   add TMP3, CARG2, CARG3
-  |  subi TMP2, CARG3, 1
-  |   blt >2				// Zero length string?
-  |  cmplw cr1, TMP1, TMP3
-  |   bne ->fff_fallback		// Fallback for > 1-char strings.
-  |   lbz TMP0, STR:CARG1[1]
-  |  blt cr1, ->fff_fallback
-  |1:  // Fill buffer with char. Yes, this is suboptimal code (do you care?).
-  |  cmplwi TMP2, 0
-  |   stbx TMP0, CARG2, TMP2
-  |   subi TMP2, TMP2, 1
-  |  bne <1
-  |  b ->fff_newstr
-  |2:  // Return empty string.
-  |  la STR:CARG1, DISPATCH_GL(strempty)(DISPATCH)
-  |  li CARG3, LJ_TSTR
-  |  b ->fff_restv
-  |
   |.macro ffstring_op, name
   |  .ffunc string_ .. name
   |  ffgccheck

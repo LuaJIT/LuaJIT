@@ -1782,33 +1782,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mvn CARG2, #~LJ_TSTR
   |  b ->fff_restv
   |
-  |.ffunc string_rep			// Only handle the 1-char case inline.
-  |  ffgccheck
-  |  ldrd CARG12, [BASE]
-  |   ldrd CARG34, [BASE, #8]
-  |    cmp NARGS8:RC, #16
-  |    bne ->fff_fallback		// Exactly 2 arguments
-  |  checktp CARG2, LJ_TSTR
-  |   checktpeq CARG4, LJ_TISNUM
-  |   bne ->fff_fallback
-  |  subs CARG4, CARG3, #1
-  |   ldr CARG2, STR:CARG1->len
-  |  blt ->fff_emptystr			// Count <= 0?
-  |   cmp CARG2, #1
-  |   blo ->fff_emptystr		// Zero-length string?
-  |   bne ->fff_fallback		// Fallback for > 1-char strings.
-  |  ldr CARG2, [DISPATCH, #DISPATCH_GL(tmpbuf.b)]
-  |   ldr RB, [DISPATCH, #DISPATCH_GL(tmpbuf.e)]
-  |   ldr CARG1, STR:CARG1[1]
-  |  add INS, CARG2, CARG3
-  |  cmp RB, INS
-  |  blo ->fff_fallback
-  |1:  // Fill buffer with char.
-  |   strb CARG1, [CARG2, CARG4]
-  |  subs CARG4, CARG4, #1
-  |  bge <1
-  |  b ->fff_newstr
-  |
   |.macro ffstring_op, name
   |  .ffunc string_ .. name
   |  ffgccheck
