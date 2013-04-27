@@ -678,6 +678,8 @@ static int check_downrec_unroll(jit_State *J, GCproto *pt)
   return 0;
 }
 
+static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot);
+
 /* Record return. */
 void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
@@ -770,7 +772,24 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     } else if (cont == lj_cont_nop) {
       /* Nothing to do here. */
     } else if (cont == lj_cont_cat) {
-      lua_assert(0);
+      BCReg bslot = bc_b(*(frame_contpc(frame)-1));
+      TRef tr = gotresults ? J->base[cbase+rbase] : TREF_NIL;
+      if (bslot != cbase-2) {  /* Concatenate the remainder. */
+	TValue *b = J->L->base, save;  /* Simulate lower frame and result. */
+	J->base[cbase-2] = tr;
+	copyTV(J->L, &save, b-2);
+	if (gotresults) copyTV(J->L, b-2, b+rbase); else setnilV(b-2);
+	J->L->base = b - cbase;
+	tr = rec_cat(J, bslot, cbase-2);
+	b = J->L->base + cbase;  /* Undo. */
+	J->L->base = b;
+	copyTV(J->L, b-2, &save);
+      }
+      if (tr) {  /* Store final result. */
+	BCReg dst = bc_a(*(frame_contpc(frame)-1));
+	J->base[dst] = tr;
+	if (dst >= J->maxslot) J->maxslot = dst+1;
+      }  /* Otherwise continue with another __concat call. */
     } else {
       /* Result type already specialized. */
       lua_assert(cont == lj_cont_condf || cont == lj_cont_condt);
@@ -786,13 +805,11 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 /* Prepare to record call to metamethod. */
 static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 {
-  BCReg s, top = curr_proto(J->L)->framesize;
-  TRef trcont;
-  setcont(&J->L->base[top], cont);
+  BCReg s, top = cont == lj_cont_cat ? J->maxslot : curr_proto(J->L)->framesize;
 #if LJ_64
-  trcont = lj_ir_kptr(J, (void *)((int64_t)cont - (int64_t)lj_vm_asm_begin));
+  TRef trcont = lj_ir_kptr(J, (void *)((int64_t)cont-(int64_t)lj_vm_asm_begin));
 #else
-  trcont = lj_ir_kptr(J, (void *)cont);
+  TRef trcont = lj_ir_kptr(J, (void *)cont);
 #endif
   J->base[top] = trcont | TREF_CONT;
   J->framedepth++;
@@ -873,7 +890,7 @@ nocheck:
 static TRef rec_mm_arith(jit_State *J, RecordIndex *ix, MMS mm)
 {
   /* Set up metamethod call first to save ix->tab and ix->tabv. */
-  BCReg func = rec_mm_prep(J, lj_cont_ra);
+  BCReg func = rec_mm_prep(J, mm == MM_concat ? lj_cont_cat : lj_cont_ra);
   TRef *base = J->base + func;
   TValue *basev = J->L->base + func;
   base[1] = ix->tab; base[2] = ix->key;
@@ -1604,10 +1621,15 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
 
 static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
 {
-  TRef *top = &J->base[topslot], tr = *top;
+  TRef *top = &J->base[topslot];
+  TValue savetv[5];
+  BCReg s;
+  RecordIndex ix;
   lua_assert(baseslot < topslot);
-  if (tref_isnumber_str(tr) && tref_isnumber_str(*(top-1))) {
-    TRef hdr, *trp, *xbase, *base = &J->base[baseslot];
+  for (s = baseslot; s <= topslot; s++)
+    (void)getslot(J, s);  /* Ensure all arguments have a reference. */
+  if (tref_isnumber_str(top[0]) && tref_isnumber_str(top[-1])) {
+    TRef tr, hdr, *trp, *xbase, *base = &J->base[baseslot];
     /* First convert numbers to strings. */
     for (trp = top; trp >= base; trp--) {
       if (tref_isnumber(*trp))
@@ -1624,11 +1646,23 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     } while (trp <= top);
     tr = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
     J->maxslot = (BCReg)(xbase - J->base);
-    if (xbase == base) return tr;
+    if (xbase == base) return tr;  /* Return simple concatenation result. */
+    /* Pass partial result. */
+    topslot = J->maxslot--;
+    *xbase = tr;
+    top = xbase;
+    setstrV(J->L, &ix.keyv, &J2G(J)->strempty);  /* Simulate string result. */
+  } else {
+    J->maxslot = topslot-1;
+    copyTV(J->L, &ix.keyv, &J->L->base[topslot]);
   }
-  setintV(&J->errinfo, BC_CAT);
-  lj_trace_err_info(J, LJ_TRERR_NYIBC);  /* __concat metamethod. */
-  return 0;
+  copyTV(J->L, &ix.tabv, &J->L->base[topslot-1]);
+  ix.tab = top[-1];
+  ix.key = top[0];
+  memcpy(savetv, &J->L->base[topslot-1], sizeof(savetv));  /* Save slots. */
+  rec_mm_arith(J, &ix, MM_concat);  /* Call __concat metamethod. */
+  memcpy(&J->L->base[topslot-1], savetv, sizeof(savetv));  /* Restore slots. */
+  return 0;  /* No result yet. */
 }
 
 /* -- Record bytecode ops ------------------------------------------------- */
