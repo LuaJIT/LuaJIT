@@ -1135,11 +1135,11 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_istype:
   |.if X64
-  |  mov L:CARG1d, SAVE_L
-  |  mov L:CARG1d->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE		// Caveat: CARG2d/CARG3d may be BASE.
   |  mov CARG2d, RA
   |  movzx CARG3d, PC_RD
-  |  mov L:RB, L:CARG1d
+  |  mov L:CARG1d, L:RB
   |.else
   |  movzx RD, PC_RD
   |  mov ARG2, RA
