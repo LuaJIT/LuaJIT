@@ -825,6 +825,33 @@ static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
+static void LJ_FASTCALL recff_table_concat(jit_State *J, RecordFFData *rd)
+{
+  TRef tab = J->base[0];
+  if (tref_istab(tab)) {
+    TRef sep = 0, tri = 0, tre = 0;
+    TRef hdr, tr;
+    if (J->base[1]) {
+      sep = lj_ir_tostr(J, J->base[1]);
+      if (J->base[2]) {
+	tri = lj_opt_narrow_toint(J, J->base[2]);
+	if (J->base[3])
+	  tre = lj_opt_narrow_toint(J, J->base[3]);
+      }
+    } else {
+      sep = lj_ir_knull(J, IRT_STR);
+    }
+    if (!tri) tri = lj_ir_kint(J, 1);
+    if (!tre) tre = lj_ir_call(J, IRCALL_lj_tab_len, tab);
+    hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
+		 lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+    tr = lj_ir_call(J, IRCALL_lj_buf_puttab, hdr, tab, sep, tri, tre);
+    emitir(IRTG(IR_NE, IRT_PTR), tr, lj_ir_kptr(J, NULL));
+    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  }  /* else: Interpreter will throw. */
+  UNUSED(rd);
+}
+
 /* -- I/O library fast functions ------------------------------------------ */
 
 /* Get FILE* for I/O function. Any I/O error aborts recording, so there's

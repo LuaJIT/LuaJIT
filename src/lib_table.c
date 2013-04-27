@@ -129,7 +129,7 @@ LJLIB_LUA(table_remove) /*
   end
 */
 
-LJLIB_CF(table_concat)
+LJLIB_CF(table_concat)		LJLIB_REC(.)
 {
   GCtab *t = lj_lib_checktab(L, 1);
   GCstr *sep = lj_lib_optstr(L, 2);
