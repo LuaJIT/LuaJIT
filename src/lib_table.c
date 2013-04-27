@@ -133,31 +133,19 @@ LJLIB_CF(table_concat)
 {
   GCtab *t = lj_lib_checktab(L, 1);
   GCstr *sep = lj_lib_optstr(L, 2);
-  MSize seplen = sep ? sep->len : 0;
   int32_t i = lj_lib_optint(L, 3, 1);
   int32_t e = L->base+3 < L->top ? lj_lib_checkint(L, 4) :
 				   (int32_t)lj_tab_len(t);
-  if (i <= e) {
-    char buf[LJ_STR_NUMBERBUF];
-    SBuf *sb = &G(L)->tmpbuf;
-    setsbufL(sb, L);
-    lj_buf_reset(sb);
-    for (;;) {
-      cTValue *o = lj_tab_getint(t, i);
-      MSize len;
-      const char *p = lj_str_buftv(buf, o, &len);
-      if (!p)
-	lj_err_callerv(L, LJ_ERR_TABCAT, lj_typename(o), i);
-      lj_buf_putmem(sb, p, len);
-      if (i++ == e) break;
-      if (seplen)
-	lj_buf_putmem(sb, strdata(sep), seplen);
-    }
-    setstrV(L, L->top-1, lj_buf_str(L, sb));
-    lj_gc_check(L);
-  } else {
-    setstrV(L, L->top-1, &G(L)->strempty);
+  SBuf *sb = lj_buf_tmp_(L);
+  SBuf *sbx = lj_buf_puttab(sb, t, sep, i, e);
+  if (LJ_UNLIKELY(!sbx)) {  /* Error: bad element type. */
+    int32_t idx = (int32_t)(intptr_t)sbufP(sb);
+    cTValue *o = lj_tab_getint(t, idx);
+    lj_err_callerv(L, LJ_ERR_TABCAT,
+		   lj_obj_itypename[o ? itypemap(o) : ~LJ_TNIL], idx);
   }
+  setstrV(L, L->top-1, lj_buf_str(L, sbx));
+  lj_gc_check(L);
   return 1;
 }
 

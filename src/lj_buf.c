@@ -13,6 +13,7 @@
 #include "lj_err.h"
 #include "lj_buf.h"
 #include "lj_str.h"
+#include "lj_tab.h"
 
 LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
 {
@@ -164,6 +165,38 @@ SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep)
       } while (--rep > 0);
     }
     setsbufP(sb, p);
+  }
+  return sb;
+}
+
+SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
+{
+  MSize seplen = sep ? sep->len : 0;
+  if (i <= e) {
+    for (;;) {
+      cTValue *o = lj_tab_getint(t, i);
+      char *p;
+      if (!o) {
+      badtype:  /* Error: bad element type. */
+	setsbufP(sb, (intptr_t)i);  /* Store failing index. */
+	return NULL;
+      } else if (tvisstr(o)) {
+	MSize len = strV(o)->len;
+	p = lj_buf_wmem(lj_buf_more(sb, len + seplen), strVdata(o), len);
+      } else if (tvisint(o)) {
+	p = lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF + seplen), intV(o));
+      } else if (tvisnum(o)) {
+	p = lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF + seplen), o);
+      } else {
+	goto badtype;
+      }
+      if (i++ == e) {
+	setsbufP(sb, p);
+	break;
+      }
+      if (seplen) p = lj_buf_wmem(p, strdata(sep), seplen);
+      setsbufP(sb, p);
+    }
   }
   return sb;
 }
