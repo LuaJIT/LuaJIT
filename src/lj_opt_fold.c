@@ -602,6 +602,8 @@ LJFOLDF(bufstr_kfold_cse)
 		   ira->o == IR_CALLL || ira->o == IR_CARG);
 	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
 	  return ref;  /* CSE succeeded. */
+	if (ira->o == IR_CALLL && ira->op2 == IRCALL_lj_buf_puttab)
+	  break;
 	ira = IR(ira->op1);
 	irb = IR(irb->op1);
       }
