@@ -187,7 +187,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
   if (dig) {
     uint32_t i = dig;
     if (i > STRSCAN_MAXDIG) {
-      ex10 -= (int32_t)(i - STRSCAN_MAXDIG);
+      ex10 += (int32_t)(i - STRSCAN_MAXDIG);
       i = STRSCAN_MAXDIG;
     }
     /* Scan unaligned leading digit. */
@@ -280,9 +280,10 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
 	if (d == 0 && i == DPREV(lo)) lo = i;
       }
       if (cy) {
+	hi = DPREV(hi);
 	if (xi[DPREV(lo)] == 0) lo = DPREV(lo);
 	else if (hi == lo) { lo = DPREV(lo); xi[DPREV(lo)] |= xi[lo]; }
-	hi = DPREV(hi); xi[hi] = (uint8_t)cy; idig++;
+	xi[hi] = (uint8_t)cy; idig++;
       }
     }
 
