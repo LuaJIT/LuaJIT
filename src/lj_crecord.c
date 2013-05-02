@@ -1084,7 +1084,7 @@ static void crec_snap_caller(jit_State *J)
   const BCIns *pc = J->pc;
   TRef ftr = J->base[-1];
   ptrdiff_t delta;
-  if (!frame_islua(base-1))
+  if (!frame_islua(base-1) || J->framedepth <= 0)
     lj_trace_err(J, LJ_TRERR_NYICALL);
   J->pc = frame_pc(base-1); delta = 1+bc_a(J->pc[-1]);
   L->top = base; L->base = base - delta;
