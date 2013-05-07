@@ -16,7 +16,7 @@
 #include "lj_state.h"
 #include "lj_char.h"
 
-/* -- String interning ---------------------------------------------------- */
+/* -- String helpers ------------------------------------------------------ */
 
 /* Ordered compare of strings. Assumes string data is 4-byte aligned. */
 int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b)
@@ -61,6 +61,40 @@ static LJ_AINLINE int str_fastcmp(const char *a, const char *b, MSize len)
   } while (i < len);
   return 0;
 }
+
+/* Find fixed string p inside string s. */
+const char *lj_str_find(const char *s, const char *p, MSize slen, MSize plen)
+{
+  if (plen <= slen) {
+    if (plen == 0) {
+      return s;
+    } else {
+      int c = *(const uint8_t *)p++;
+      plen--; slen -= plen;
+      while (slen) {
+	const char *q = (const char *)memchr(s, c, slen);
+	if (!q) break;
+	if (memcmp(q+1, p, plen) == 0) return q;
+	q++; slen -= (MSize)(q-s); s = q;
+      }
+    }
+  }
+  return NULL;
+}
+
+/* Check whether a string has a pattern matching character. */
+int lj_str_haspattern(GCstr *s)
+{
+  const char *p = strdata(s), *q = p + s->len;
+  while (p < q) {
+    int c = *(const uint8_t *)p++;
+    if (lj_char_ispunct(c) && strchr("^$*+?.([%-", c))
+      return 1;  /* Found a pattern matching char. */
+  }
+  return 0;  /* No pattern matching chars found. */
+}
+
+/* -- String interning ---------------------------------------------------- */
 
 /* Resize the string hash table (grow and shrink). */
 void lj_str_resize(lua_State *L, MSize newmask)

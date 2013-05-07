@@ -155,7 +155,6 @@ typedef struct MatchState {
 } MatchState;
 
 #define L_ESC		'%'
-#define SPECIALS	"^$*+?.([%-"
 
 static int check_capture(MatchState *ms, int l)
 {
@@ -422,30 +421,6 @@ static const char *match(MatchState *ms, const char *s, const char *p)
   return s;
 }
 
-static const char *lmemfind(const char *s1, size_t l1,
-			    const char *s2, size_t l2)
-{
-  if (l2 == 0) {
-    return s1;  /* empty strings are everywhere */
-  } else if (l2 > l1) {
-    return NULL;  /* avoids a negative `l1' */
-  } else {
-    const char *init;  /* to search for a `*s2' inside `s1' */
-    l2--;  /* 1st char will be checked by `memchr' */
-    l1 = l1-l2;  /* `s2' cannot be found after that */
-    while (l1 > 0 && (init = (const char *)memchr(s1, *s2, l1)) != NULL) {
-      init++;   /* 1st char is already checked */
-      if (memcmp(init, s2+1, l2) == 0) {
-	return init-1;
-      } else {  /* correct `l1' and `s1' to try again */
-	l1 -= (size_t)(init-s1);
-	s1 = init;
-      }
-    }
-    return NULL;  /* not found */
-  }
-}
-
 static void push_onecapture(MatchState *ms, int i, const char *s, const char *e)
 {
   if (i >= ms->level) {
@@ -473,60 +448,56 @@ static int push_captures(MatchState *ms, const char *s, const char *e)
   return nlevels;  /* number of strings pushed */
 }
 
-static ptrdiff_t posrelat(ptrdiff_t pos, size_t len)
-{
-  /* relative string position: negative means back from end */
-  if (pos < 0) pos += (ptrdiff_t)len + 1;
-  return (pos >= 0) ? pos : 0;
-}
-
 static int str_find_aux(lua_State *L, int find)
 {
-  size_t l1, l2;
-  const char *s = luaL_checklstring(L, 1, &l1);
-  const char *p = luaL_checklstring(L, 2, &l2);
-  ptrdiff_t init = posrelat(luaL_optinteger(L, 3, 1), l1) - 1;
-  if (init < 0) {
-    init = 0;
-  } else if ((size_t)(init) > l1) {
+  GCstr *s = lj_lib_checkstr(L, 1);
+  GCstr *p = lj_lib_checkstr(L, 2);
+  int32_t start = lj_lib_optint(L, 3, 1);
+  MSize st;
+  if (start < 0) start += (int32_t)s->len; else start--;
+  if (start < 0) start = 0;
+  st = (MSize)start;
+  if (st > s->len) {
 #if LJ_52
     setnilV(L->top-1);
     return 1;
 #else
-    init = (ptrdiff_t)l1;
+    st = s->len;
 #endif
   }
-  if (find && (lua_toboolean(L, 4) ||  /* explicit request? */
-      strpbrk(p, SPECIALS) == NULL)) {  /* or no special characters? */
-    /* do a plain search */
-    const char *s2 = lmemfind(s+init, l1-(size_t)init, p, l2);
-    if (s2) {
-      lua_pushinteger(L, s2-s+1);
-      lua_pushinteger(L, s2-s+(ptrdiff_t)l2);
+  if (find && ((L->base+3 < L->top && tvistruecond(L->base+3)) ||
+	       !lj_str_haspattern(p))) {  /* Search for fixed string. */
+    const char *q = lj_str_find(strdata(s)+st, strdata(p), s->len-st, p->len);
+    if (q) {
+      setintV(L->top-2, (int32_t)(q-strdata(s)) + 1);
+      setintV(L->top-1, (int32_t)(q-strdata(s)) + (int32_t)p->len);
       return 2;
     }
-  } else {
+  } else {  /* Search for pattern. */
     MatchState ms;
-    int anchor = (*p == '^') ? (p++, 1) : 0;
-    const char *s1=s+init;
+    const char *pstr = strdata(p);
+    const char *sstr = strdata(s) + st;
+    int anchor = 0;
+    if (*pstr == '^') { pstr++; anchor = 1; }
     ms.L = L;
-    ms.src_init = s;
-    ms.src_end = s+l1;
-    do {
-      const char *res;
+    ms.src_init = strdata(s);
+    ms.src_end = strdata(s) + s->len;
+    do {  /* Loop through string and try to match the pattern. */
+      const char *q;
       ms.level = ms.depth = 0;
-      if ((res=match(&ms, s1, p)) != NULL) {
+      q = match(&ms, sstr, pstr);
+      if (q) {
 	if (find) {
-	  lua_pushinteger(L, s1-s+1);  /* start */
-	  lua_pushinteger(L, res-s);   /* end */
-	  return push_captures(&ms, NULL, 0) + 2;
+	  setintV(L->top++, (int32_t)(sstr-(strdata(s)-1)));
+	  setintV(L->top++, (int32_t)(q-strdata(s)));
+	  return push_captures(&ms, NULL, NULL) + 2;
 	} else {
-	  return push_captures(&ms, s1, res);
+	  return push_captures(&ms, sstr, q);
 	}
       }
-    } while (s1++ < ms.src_end && !anchor);
+    } while (sstr++ < ms.src_end && !anchor);
   }
-  lua_pushnil(L);  /* not found */
+  setnilV(L->top-1);  /* Not found. */
   return 1;
 }
 
