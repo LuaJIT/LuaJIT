@@ -895,23 +895,16 @@ static void LJ_FASTCALL recff_table_concat(jit_State *J, RecordFFData *rd)
 {
   TRef tab = J->base[0];
   if (tref_istab(tab)) {
-    TRef sep = 0, tri = 0, tre = 0;
-    TRef hdr, tr;
-    if (J->base[1]) {
-      sep = lj_ir_tostr(J, J->base[1]);
-      if (J->base[2]) {
-	tri = lj_opt_narrow_toint(J, J->base[2]);
-	if (J->base[3])
-	  tre = lj_opt_narrow_toint(J, J->base[3]);
-      }
-    } else {
-      sep = lj_ir_knull(J, IRT_STR);
-    }
-    if (!tri) tri = lj_ir_kint(J, 1);
-    if (!tre) tre = lj_ir_call(J, IRCALL_lj_tab_len, tab);
-    hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
-		 lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
-    tr = lj_ir_call(J, IRCALL_lj_buf_puttab, hdr, tab, sep, tri, tre);
+    TRef sep = !tref_isnil(J->base[1]) ?
+	       lj_ir_tostr(J, J->base[1]) : lj_ir_knull(J, IRT_STR);
+    TRef tri = (J->base[1] && !tref_isnil(J->base[2])) ?
+	       lj_opt_narrow_toint(J, J->base[2]) : lj_ir_kint(J, 1);
+    TRef tre = (J->base[1] && J->base[2] && !tref_isnil(J->base[3])) ?
+	       lj_opt_narrow_toint(J, J->base[3]) :
+	       lj_ir_call(J, IRCALL_lj_tab_len, tab);
+    TRef hdr = emitir(IRT(IR_BUFHDR, IRT_P32),
+		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+    TRef tr = lj_ir_call(J, IRCALL_lj_buf_puttab, hdr, tab, sep, tri, tre);
     emitir(IRTG(IR_NE, IRT_PTR), tr, lj_ir_kptr(J, NULL));
     J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
   }  /* else: Interpreter will throw. */
