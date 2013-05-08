@@ -272,7 +272,7 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];
   TRef base = J->base[1];
-  if (tr && base) {
+  if (tr && !tref_isnil(base)) {
     base = lj_opt_narrow_toint(J, base);
     if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
       recff_nyiu(J);
@@ -657,7 +657,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       end = argv2int(J, &rd->argv[2]);
     }
   } else {  /* string.byte(str, [,start [,end]]) */
-    if (J->base[1]) {
+    if (!tref_isnil(J->base[1])) {
       start = argv2int(J, &rd->argv[1]);
       trstart = lj_opt_narrow_toint(J, J->base[1]);
       trend = J->base[2];
@@ -750,7 +750,7 @@ static void LJ_FASTCALL recff_table_remove(jit_State *J, RecordFFData *rd)
   TRef tab = J->base[0];
   rd->nres = 0;
   if (tref_istab(tab)) {
-    if (!J->base[1] || tref_isnil(J->base[1])) {  /* Simple pop: t[#t] = nil */
+    if (tref_isnil(J->base[1])) {  /* Simple pop: t[#t] = nil */
       TRef trlen = lj_ir_call(J, IRCALL_lj_tab_len, tab);
       GCtab *t = tabV(&rd->argv[0]);
       MSize len = lj_tab_len(t);
