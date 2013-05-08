@@ -501,7 +501,7 @@ static int str_find_aux(lua_State *L, int find)
   return 1;
 }
 
-LJLIB_CF(string_find)
+LJLIB_CF(string_find)		LJLIB_REC(.)
 {
   return str_find_aux(L, 1);
 }

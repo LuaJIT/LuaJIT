@@ -646,6 +646,32 @@ static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 
 /* -- String library fast functions --------------------------------------- */
 
+/* Specialize to relative starting position for string. */
+static TRef recff_string_start(jit_State *J, GCstr *s, int32_t *st, TRef tr,
+			       TRef trlen, TRef tr0)
+{
+  int32_t start = *st;
+  if (start < 0) {
+    emitir(IRTGI(IR_LT), tr, tr0);
+    tr = emitir(IRTI(IR_ADD), trlen, tr);
+    start = start + (int32_t)s->len;
+    emitir(start < 0 ? IRTGI(IR_LT) : IRTGI(IR_GE), tr, tr0);
+    if (start < 0) {
+      tr = tr0;
+      start = 0;
+    }
+  } else if (start == 0) {
+    emitir(IRTGI(IR_EQ), tr, tr0);
+    tr = tr0;
+  } else {
+    tr = emitir(IRTI(IR_ADD), tr, lj_ir_kint(J, -1));
+    emitir(IRTGI(IR_GE), tr, tr0);
+    start--;
+  }
+  *st = start;
+  return tr;
+}
+
 /* Handle string.byte (rd->data = 0) and string.sub (rd->data = 1). */
 static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
 {
@@ -691,29 +717,11 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
   } else if ((MSize)end <= str->len) {
     emitir(IRTGI(IR_ULE), trend, trlen);
   } else {
-    emitir(IRTGI(IR_GT), trend, trlen);
+    emitir(IRTGI(IR_UGT), trend, trlen);
     end = (int32_t)str->len;
     trend = trlen;
   }
-  if (start < 0) {
-    emitir(IRTGI(IR_LT), trstart, tr0);
-    trstart = emitir(IRTI(IR_ADD), trlen, trstart);
-    start = start+(int32_t)str->len;
-    emitir(start < 0 ? IRTGI(IR_LT) : IRTGI(IR_GE), trstart, tr0);
-    if (start < 0) {
-      trstart = tr0;
-      start = 0;
-    }
-  } else {
-    if (start == 0) {
-      emitir(IRTGI(IR_EQ), trstart, tr0);
-      trstart = tr0;
-    } else {
-      trstart = emitir(IRTI(IR_ADD), trstart, lj_ir_kint(J, -1));
-      emitir(IRTGI(IR_GE), trstart, tr0);
-      start--;
-    }
-  }
+  trstart = recff_string_start(J, str, &start, trstart, trlen, tr0);
   if (rd->data) {  /* Return string.sub result. */
     if (end - start >= 0) {
       /* Also handle empty range here, to avoid extra traces. */
@@ -723,7 +731,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), trptr, trslen);
     } else {  /* Range underflow: return empty string. */
       emitir(IRTGI(IR_LT), trend, trstart);
-      J->base[0] = lj_ir_kstr(J, lj_str_new(J->L, strdata(str), 0));
+      J->base[0] = lj_ir_kstr(J, &J2G(J)->strempty);
     }
   } else {  /* Return string.byte result(s). */
     ptrdiff_t i, len = end - start;
@@ -800,6 +808,64 @@ static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
 		    lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
   TRef tr = lj_ir_call(J, rd->data, hdr, str);
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+}
+
+static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
+{
+  TRef trstr = lj_ir_tostr(J, J->base[0]);
+  TRef trpat = lj_ir_tostr(J, J->base[1]);
+  TRef trlen = emitir(IRTI(IR_FLOAD), trstr, IRFL_STR_LEN);
+  TRef tr0 = lj_ir_kint(J, 0);
+  TRef trstart;
+  GCstr *str = argv2str(J, &rd->argv[0]);
+  GCstr *pat = argv2str(J, &rd->argv[1]);
+  int32_t start;
+  J->needsnap = 1;
+  if (tref_isnil(J->base[2])) {
+    trstart = lj_ir_kint(J, 1);
+    start = 1;
+  } else {
+    trstart = lj_opt_narrow_toint(J, J->base[2]);
+    start = argv2int(J, &rd->argv[2]);
+  }
+  trstart = recff_string_start(J, str, &start, trstart, trlen, tr0);
+  if ((MSize)start <= str->len) {
+    emitir(IRTGI(IR_ULE), trstart, trlen);
+  } else {
+    emitir(IRTGI(IR_UGT), trstart, trlen);
+#if LJ_52
+    J->base[0] = TREF_NIL;
+    return;
+#else
+    trstart = trlen;
+    start = str->len;
+#endif
+  }
+  /* Fixed arg or no pattern matching chars? (Specialized to pattern string.) */
+  if ((J->base[2] && tref_istruecond(J->base[3])) ||
+      (emitir(IRTG(IR_EQ, IRT_STR), trpat, lj_ir_kstr(J, pat)),
+       !lj_str_haspattern(pat))) {  /* Search for fixed string. */
+    TRef trsptr = emitir(IRT(IR_STRREF, IRT_P32), trstr, trstart);
+    TRef trpptr = emitir(IRT(IR_STRREF, IRT_P32), trpat, tr0);
+    TRef trslen = emitir(IRTI(IR_SUB), trlen, trstart);
+    TRef trplen = emitir(IRTI(IR_FLOAD), trpat, IRFL_STR_LEN);
+    TRef tr = lj_ir_call(J, IRCALL_lj_str_find, trsptr, trpptr, trslen, trplen);
+    TRef trp0 = lj_ir_kkptr(J, NULL);
+    if (lj_str_find(strdata(str)+(MSize)start, strdata(pat),
+		    str->len-(MSize)start, pat->len)) {
+      TRef pos;
+      emitir(IRTG(IR_NE, IRT_P32), tr, trp0);
+      pos = emitir(IRTI(IR_SUB), tr, emitir(IRT(IR_STRREF, IRT_P32), trstr, tr0));
+      J->base[0] = emitir(IRTI(IR_ADD), pos, lj_ir_kint(J, 1));
+      J->base[1] = emitir(IRTI(IR_ADD), pos, trplen);
+      rd->nres = 2;
+    } else {
+      emitir(IRTG(IR_EQ, IRT_P32), tr, trp0);
+      J->base[0] = TREF_NIL;
+    }
+  } else {  /* Search for pattern. */
+    recff_nyiu(J);
+  }
 }
 
 /* -- Table library fast functions ---------------------------------------- */
