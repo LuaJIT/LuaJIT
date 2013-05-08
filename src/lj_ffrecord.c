@@ -269,7 +269,7 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];
   TRef base = J->base[1];
-  if (tr && base) {
+  if (tr && !tref_isnil(base)) {
     base = lj_opt_narrow_toint(J, base);
     if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
       recff_nyiu(J);
@@ -693,7 +693,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       end = argv2int(J, &rd->argv[2]);
     }
   } else {  /* string.byte(str, [,start [,end]]) */
-    if (J->base[1]) {
+    if (!tref_isnil(J->base[1])) {
       start = argv2int(J, &rd->argv[1]);
       trstart = lj_opt_narrow_toint(J, J->base[1]);
       trend = J->base[2];
@@ -778,7 +778,7 @@ static void LJ_FASTCALL recff_string_rep(jit_State *J, RecordFFData *rd)
   TRef str = lj_ir_tostr(J, J->base[0]);
   TRef rep = lj_opt_narrow_toint(J, J->base[1]);
   TRef hdr, tr, str2 = 0;
-  if (J->base[2]) {
+  if (!tref_isnil(J->base[2])) {
     TRef sep = lj_ir_tostr(J, J->base[2]);
     int32_t vrep = argv2int(J, &rd->argv[1]);
     emitir(IRTGI(vrep > 1 ? IR_GT : IR_LE), rep, lj_ir_kint(J, 1));
