@@ -307,7 +307,13 @@ else
   ifneq (,$(findstring stack-protector,$(shell $(TARGET_CC) -dumpspecs)))
     TARGET_XCFLAGS+= -fno-stack-protector
   endif
-  ifneq (SunOS,$(TARGET_SYS))
+  ifeq (SunOS,$(TARGET_SYS))
+    TARGET_XSHLDFLAGS= -shared -fPIC -Wl,-h,$(TARGET_SONAME) -zdefs
+    ifeq (x64,$(TARGET_LJARCH))
+      TARGET_XLDFLAGS+= -Wl,-M,luajit-solaris64.mapfile
+      TARGET_XLIBS+= -lumem
+    endif
+  else
     ifneq (PS3,$(TARGET_SYS))
       TARGET_XLDFLAGS+= -Wl,-E
     endif

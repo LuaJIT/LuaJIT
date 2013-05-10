@@ -236,7 +236,11 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
   if (version != 1)
     return _URC_FATAL_PHASE1_ERROR;
   UNUSED(uexclass);
+#if SOLARIS_STD_UNWINDER
+  cf = (void *)((char *)_Unwind_GetCFA(ctx) - 80);
+#else
   cf = (void *)_Unwind_GetCFA(ctx);
+#endif
   L = cframe_L(cf);
   if ((actions & _UA_SEARCH_PHASE)) {
 #if LJ_UNWIND_EXT

@@ -495,6 +495,9 @@ LUALIB_API int luaL_checkoption(lua_State *L, int idx, const char *def,
     if (strcmp(lst[i], s) == 0)
       return (int)i;
   lj_err_argv(L, idx, LJ_ERR_INVOPTM, s);
+#ifdef SOLARIS_STD_UNWINDER
+  return 0;
+#endif
 }
 
 LUA_API size_t lua_objlen(lua_State *L, int idx)

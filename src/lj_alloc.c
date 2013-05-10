@@ -34,6 +34,16 @@
 
 #ifndef LUAJIT_USE_SYSMALLOC
 
+#if LJ_TARGET_SOLARIS
+#include <sys/vmem.h>
+#include <errno.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <string.h>
+#include <umem.h>
+#include <unistd.h>
+#endif
+
 #define MAX_SIZE_T		(~(size_t)0)
 #define MALLOC_ALIGNMENT	((size_t)8U)
 
@@ -235,6 +245,237 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
   return CMFAIL;
 }
 
+#elif LJ_TARGET_SOLARIS
+
+#define MMAP_REGION_START	((uintptr_t)0x10000)
+#define MMAP_REGION_END		((uintptr_t)0x70280000)
+
+struct lj_memseg
+{
+  struct lj_memseg *next;
+  void *ptr;
+  size_t size;
+};
+
+static volatile vmem_t *vmp = NULL;
+static volatile umem_cache_t *memseg_cache = NULL;
+
+static pthread_mutex_t s_mmap_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void INIT_MMAP(void)
+{
+  size_t pagesize;
+  void *p;
+  static char memseg_cache_name[] = "luajit_memseg";
+
+  if (vmp != NULL) {
+    return;
+  }
+
+  pthread_mutex_lock(&s_mmap_init_mutex);
+
+  if (vmp != NULL) {
+      goto out;
+  }
+
+  pagesize = sysconf(_SC_PAGESIZE);
+
+  /* init umem */
+  if ((p = umem_alloc(1, UMEM_DEFAULT)) != NULL) {
+    umem_free(p, 1);
+  }
+
+  /* reserve virtual space */
+  if (mmap((void *) MMAP_REGION_START,
+           MMAP_REGION_END - MMAP_REGION_START,
+           PROT_NONE,
+           MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED,
+           -1, 0) == MAP_FAILED) {
+    fprintf(stderr, "INIT_MMAP(): mmap() failed: %s [%d]\n", strerror(errno), errno);
+    goto out;
+  }
+
+  /* create vmem arena */
+  vmp = vmem_create(
+      "luajit",
+      (void *) MMAP_REGION_START,           /* start */
+      MMAP_REGION_END - MMAP_REGION_START,  /* size */
+      pagesize,                             /* quantum */
+      NULL, NULL, NULL, 0,
+      VM_NOSLEEP | VMC_NO_QCACHE | VMC_IDENTIFIER);
+
+  if (vmp == NULL) {
+    fprintf(stderr, "INIT_MMAP(): vmem arena creation failed\n");
+    goto out;
+  }
+
+  /* create memseg cache */
+  memseg_cache = umem_cache_create(memseg_cache_name, sizeof(struct lj_memseg), 0,
+      NULL, NULL, NULL, NULL, NULL, 0);
+
+  if (memseg_cache == NULL) {
+    fprintf(stderr, "INIT_MMAP(): memseg cache creation failed\n");
+    vmem_destroy((vmem_t *) vmp);
+    vmp = NULL;
+    goto out;
+  }
+
+ out:
+  pthread_mutex_unlock(&s_mmap_init_mutex);
+}
+
+void *
+lj_mmap(size_t size, int prot)
+{
+  void *addr;
+
+  /* allocate address space */
+  addr = vmem_alloc((vmem_t *) vmp, size, VM_NOSLEEP);
+  if (LJ_UNLIKELY(addr == NULL)) {
+    fprintf(stderr, "lj_mmap(): vmem_alloc(%lu) failed\n", size);
+    return MAP_FAILED;
+  }
+
+  /* back by pages */
+  if (LJ_UNLIKELY(mmap(addr, size, prot, MMAP_FLAGS | MAP_FIXED, -1, 0) == MAP_FAILED)) {
+    fprintf(stderr, "lj_mmap(): mmap(%p, %lu, %d) failed: %s [%d]\n", addr, size, prot,
+            strerror(errno), errno);
+    vmem_free((vmem_t *) vmp, addr, size);
+    return MAP_FAILED;
+  }
+
+  return addr;
+}
+
+
+struct munmap_ctx
+{
+  void *ptr;
+  size_t size;
+  struct lj_memseg head;
+  int partial;
+};
+
+static void
+munmap_walker(void *arg, void *ptr, size_t size)
+{
+  struct munmap_ctx *ctx = (struct munmap_ctx *)arg;
+  struct lj_memseg *seg;
+  if (ctx->partial ||
+      ((char *)ptr + size <= (char *)ctx->ptr) || 
+      ((char *)ctx->ptr + ctx->size <= (char *)ptr)) {
+    return;
+  }
+
+  if ((char *)ptr < (char *)ctx->ptr ||
+      (char *)ctx->ptr + ctx->size < (char *)ptr + size) {
+    /* found partial free, remember it in ctx */
+    ctx->partial = 1;
+    ctx->ptr = ptr;
+    ctx->size = size;
+    return;
+  }
+
+  if (ctx->head.ptr == NULL) {
+    seg = &ctx->head;
+  }
+  else {
+    seg = umem_cache_alloc((umem_cache_t *) memseg_cache, UMEM_DEFAULT);
+    if (seg == NULL) {
+      fprintf(stderr, "munmap_walker: umem_cache_alloc() returned NULL\n");
+      return;
+    }
+  }
+
+  seg->ptr = ptr;
+  seg->size = size;
+  seg->next = ctx->head.next;
+
+  ctx->head.next = seg;
+}
+
+int
+lj_munmap(void *ptr, size_t size)
+{
+  struct munmap_ctx ctx;
+  struct lj_memseg *seg;
+
+  ctx.ptr = ptr;
+  ctx.size = size;
+  ctx.head.ptr = NULL;
+  ctx.head.next = &ctx.head;
+  ctx.partial = 0;
+
+  vmem_walk((vmem_t *) vmp, VMEM_ALLOC, &munmap_walker, &ctx);
+
+  if (LJ_UNLIKELY(ctx.head.ptr == NULL)) {  // oops!
+    fprintf(stderr, "lj_munmap: no segment found for (%p, %lu)\n", ptr, size);
+    return 0;
+  }
+
+  if (size == ctx.head.size) {
+    if (LJ_UNLIKELY(munmap(ptr, size) != 0)) {
+      fprintf(stderr, "munmap(%p, %lu) failed: %s [%d]\n", ptr, size, strerror(errno), errno);
+      return -1;
+    }
+    vmem_free((vmem_t *) vmp, ptr, size);
+    return 0;
+  }
+
+  if (ctx.partial) {
+    fprintf(stderr, "lj_munmap(%p, %lu): partial free of segment (%p, %lu)\n",
+      ptr, size, ctx.ptr, ctx.size);
+
+    /* free allocated segs */
+    for (seg = ctx.head.next; seg != &ctx.head;) {
+      struct lj_memseg *next_seg = seg->next;
+      umem_cache_free((umem_cache_t *) memseg_cache, seg);
+      seg = next_seg;
+    }
+
+    return -1;
+  }
+
+  /* ok, no partial free */
+  for (seg = &ctx.head;;) {
+    struct lj_memseg *next_seg = seg->next;
+
+    if (LJ_UNLIKELY(munmap(seg->ptr, seg->size) != 0)) {
+      fprintf(stderr, "munmap(%p, %lu) failed: %s [%d]\n", ptr, size, strerror(errno), errno);
+    }
+
+    vmem_free((vmem_t *) vmp, seg->ptr, seg->size);
+
+    if (seg != &ctx.head) {
+      umem_cache_free((umem_cache_t *) memseg_cache, seg);
+    }
+
+    if (next_seg == &ctx.head) {
+      break;
+    }
+
+    seg = next_seg;
+  }
+
+  return 0;
+}
+
+static LJ_AINLINE void *CALL_MMAP(size_t size)
+{
+  int olderr = errno;
+  void *ptr = lj_mmap(size, MMAP_PROT);
+  errno = olderr;
+  return (ptr != MAP_FAILED ? ptr : CMFAIL);
+}
+
+static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
+{
+  int olderr = errno;
+  int ret = lj_munmap(ptr, size);
+  errno = olderr;
+  return ret;
+}
+
 #else
 
 #error "NYI: need an equivalent of MAP_32BIT for this 64 bit OS"
@@ -254,8 +495,11 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
 
 #endif
 
-#define INIT_MMAP()		((void)0)
 #define DIRECT_MMAP(s)		CALL_MMAP(s)
+
+#if !LJ_TARGET_SOLARIS || !LJ_64
+
+#define INIT_MMAP()		((void)0)
 
 static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 {
@@ -264,6 +508,7 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
   errno = olderr;
   return ret;
 }
+#endif
 
 #if LJ_TARGET_LINUX
 /* Need to define _GNU_SOURCE to get the mremap prototype. */

@@ -16,6 +16,7 @@
 #endif
 #if LJ_HASJIT || LJ_HASFFI
 #include "lj_vm.h"
+#include "lj_alloc.h"
 #endif
 
 /* -- OS-specific functions ----------------------------------------------- */
@@ -98,7 +99,13 @@ static void mcode_setprot(void *p, size_t sz, DWORD prot)
 
 static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 {
+/* Solaris/X64 ignores hint and returns memory above 1<<48 so use custom
+   mmap()-er that maps to low 2G */
+#if LJ_TARGET_SOLARIS && LJ_64
+  void *p = lj_mmap(sz, prot);
+#else
   void *p = mmap((void *)hint, sz, prot, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+#endif
   if (p == MAP_FAILED) {
     if (!hint) lj_trace_err(J, LJ_TRERR_MCODEAL);
     p = NULL;
@@ -109,7 +116,11 @@ static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
 static void mcode_free(jit_State *J, void *p, size_t sz)
 {
   UNUSED(J);
+#if LJ_TARGET_SOLARIS && LJ_64
+  lj_munmap(p, sz);
+#else
   munmap(p, sz);
+#endif
 }
 
 static void mcode_setprot(void *p, size_t sz, int prot)
