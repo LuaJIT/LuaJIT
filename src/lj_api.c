@@ -24,6 +24,7 @@
 #include "lj_trace.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -606,7 +607,7 @@ LUA_API const char *lua_pushvfstring(lua_State *L, const char *fmt,
 				     va_list argp)
 {
   lj_gc_check(L);
-  return lj_str_pushvf(L, fmt, argp);
+  return lj_strfmt_pushvf(L, fmt, argp);
 }
 
 LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
@@ -615,7 +616,7 @@ LUA_API const char *lua_pushfstring(lua_State *L, const char *fmt, ...)
   va_list argp;
   lj_gc_check(L);
   va_start(argp, fmt);
-  ret = lj_str_pushvf(L, fmt, argp);
+  ret = lj_strfmt_pushvf(L, fmt, argp);
   va_end(argp);
   return ret;
 }

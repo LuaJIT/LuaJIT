@@ -21,6 +21,7 @@
 #include "lj_lex.h"
 #include "lj_bcdump.h"
 #include "lj_state.h"
+#include "lj_strfmt.h"
 
 /* Reuse some lexer fields for our own purposes. */
 #define bcread_flags(ls)	ls->level
@@ -39,7 +40,7 @@ static LJ_NOINLINE void bcread_error(LexState *ls, ErrMsg em)
   const char *name = ls->chunkarg;
   if (*name == BCDUMP_HEAD1) name = "(binary)";
   else if (*name == '@' || *name == '=') name++;
-  lj_str_pushf(L, "%s: %s", name, err2msg(em));
+  lj_strfmt_pushf(L, "%s: %s", name, err2msg(em));
   lj_err_throw(L, LUA_ERRSYNTAX);
 }
 

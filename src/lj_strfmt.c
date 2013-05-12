@@ -10,6 +10,7 @@
 
 #include "lj_obj.h"
 #include "lj_buf.h"
+#include "lj_state.h"
 #include "lj_char.h"
 #include "lj_strfmt.h"
 
@@ -291,5 +292,80 @@ SBuf *lj_strfmt_putnum(SBuf *sb, SFormat sf, lua_Number n)
     setsbufP(sb, p + sprintf(p, fmt, n));
   }
   return sb;
+}
+
+/* -- Internal string formatting ------------------------------------------ */
+
+/*
+** These functions are only used for lua_pushfstring(), lua_pushvfstring()
+** and for internal string formatting (e.g. error messages). Caveat: unlike
+** string.format(), only a limited subset of formats and flags are supported!
+**
+** LuaJIT has support for a couple more formats than Lua 5.1/5.2:
+** - %d %u %o %x with full formatting, 32 bit integers only.
+** - %f and other FP formats are really %.14g.
+** - %s %c %p without formatting.
+*/
+
+/* Push formatted message as a string object to Lua stack. va_list variant. */
+const char *lj_strfmt_pushvf(lua_State *L, const char *fmt, va_list argp)
+{
+  SBuf *sb = lj_buf_tmp_(L);
+  FormatState fs;
+  SFormat sf;
+  GCstr *str;
+  lj_strfmt_init(&fs, fmt, strlen(fmt));
+  while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {
+    switch (STRFMT_TYPE(sf)) {
+    case STRFMT_LIT:
+      lj_buf_putmem(sb, fs.str, fs.len);
+      break;
+    case STRFMT_INT:
+      lj_strfmt_putxint(sb, sf, va_arg(argp, int32_t));
+      break;
+    case STRFMT_UINT:
+      lj_strfmt_putxint(sb, sf, va_arg(argp, uint32_t));
+      break;
+    case STRFMT_NUM: {
+      TValue tv;
+      tv.n = va_arg(argp, lua_Number);
+      setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), &tv));
+      break;
+      }
+    case STRFMT_STR: {
+      const char *s = va_arg(argp, char *);
+      if (s == NULL) s = "(null)";
+      lj_buf_putmem(sb, s, (MSize)strlen(s));
+      break;
+      }
+    case STRFMT_CHAR:
+      lj_buf_putb(sb, va_arg(argp, int));
+      break;
+    case STRFMT_PTR:
+      setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
+				 va_arg(argp, void *)));
+      break;
+    case STRFMT_ERR:
+    default:
+      lj_buf_putb(sb, '?');
+      lua_assert(0);
+      break;
+    }
+  }
+  str = lj_buf_str(L, sb);
+  setstrV(L, L->top, str);
+  incr_top(L);
+  return strdata(str);
+}
+
+/* Push formatted message as a string object to Lua stack. Vararg variant. */
+const char *lj_strfmt_pushf(lua_State *L, const char *fmt, ...)
+{
+  const char *msg;
+  va_list argp;
+  va_start(argp, fmt);
+  msg = lj_strfmt_pushvf(L, fmt, argp);
+  va_end(argp);
+  return msg;
 }
 

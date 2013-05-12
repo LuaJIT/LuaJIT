@@ -25,6 +25,7 @@
 #include "lj_parse.h"
 #include "lj_char.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 
 /* Lua lexer token names. */
 static const char *const tokennames[] = {
@@ -444,9 +445,9 @@ const char *lj_lex_token2str(LexState *ls, LexToken tok)
   if (tok > TK_OFS)
     return tokennames[tok-TK_OFS-1];
   else if (!lj_char_iscntrl(tok))
-    return lj_str_pushf(ls->L, "%c", tok);
+    return lj_strfmt_pushf(ls->L, "%c", tok);
   else
-    return lj_str_pushf(ls->L, "char(%d)", tok);
+    return lj_strfmt_pushf(ls->L, "char(%d)", tok);
 }
 
 /* Lexer error. */

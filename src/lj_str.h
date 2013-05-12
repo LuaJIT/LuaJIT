@@ -39,12 +39,4 @@ LJ_FUNC GCstr * LJ_FASTCALL lj_str_fromchar(lua_State *L, int c);
 #define LJ_STR_NUMBERBUF	LUAI_MAXNUMBER2STR
 #define LJ_STR_PTRBUF		(2*sizeof(ptrdiff_t)+2)
 
-/* String formatting. */
-LJ_FUNC const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp);
-LJ_FUNC const char *lj_str_pushf(lua_State *L, const char *fmt, ...)
-#if defined(__GNUC__)
-  __attribute__ ((format (printf, 2, 3)))
-#endif
-  ;
-
 #endif

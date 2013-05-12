@@ -17,6 +17,7 @@
 #include "lj_vm.h"
 #include "lj_char.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 
 /*
 ** Important note: this is NOT a validating C parser! This is a minimal
@@ -47,9 +48,9 @@ static const char *cp_tok2str(CPState *cp, CPToken tok)
   if (tok > CTOK_OFS)
     return ctoknames[tok-CTOK_OFS-1];
   else if (!lj_char_iscntrl(tok))
-    return lj_str_pushf(cp->L, "%c", tok);
+    return lj_strfmt_pushf(cp->L, "%c", tok);
   else
-    return lj_str_pushf(cp->L, "char(%d)", tok);
+    return lj_strfmt_pushf(cp->L, "char(%d)", tok);
 }
 
 /* End-of-line? */
@@ -117,12 +118,12 @@ LJ_NORET static void cp_errmsg(CPState *cp, CPToken tok, ErrMsg em, ...)
   }
   L = cp->L;
   va_start(argp, em);
-  msg = lj_str_pushvf(L, err2msg(em), argp);
+  msg = lj_strfmt_pushvf(L, err2msg(em), argp);
   va_end(argp);
   if (tokstr)
-    msg = lj_str_pushf(L, err2msg(LJ_ERR_XNEAR), msg, tokstr);
+    msg = lj_strfmt_pushf(L, err2msg(LJ_ERR_XNEAR), msg, tokstr);
   if (cp->linenumber > 1)
-    msg = lj_str_pushf(L, "%s at line %d", msg, cp->linenumber);
+    msg = lj_strfmt_pushf(L, "%s at line %d", msg, cp->linenumber);
   lj_err_callermsg(L, msg);
 }
 
@@ -998,7 +999,7 @@ static void cp_decl_asm(CPState *cp, CPDecl *decl)
   if (cp->tok == CTOK_STRING) {
     GCstr *str = cp->str;
     while (cp_next(cp) == CTOK_STRING) {
-      lj_str_pushf(cp->L, "%s%s", strdata(str), strdata(cp->str));
+      lj_strfmt_pushf(cp->L, "%s%s", strdata(str), strdata(cp->str));
       cp->L->top--;
       str = strV(cp->L->top);
     }

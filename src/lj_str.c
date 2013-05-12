@@ -13,7 +13,6 @@
 #include "lj_err.h"
 #include "lj_buf.h"
 #include "lj_str.h"
-#include "lj_state.h"
 #include "lj_char.h"
 
 /* -- String helpers ------------------------------------------------------ */
@@ -314,70 +313,5 @@ GCstr * LJ_FASTCALL lj_str_fromchar(lua_State *L, int c)
   char buf[1];
   buf[0] = c;
   return lj_str_new(L, buf, 1);
-}
-
-/* -- String formatting --------------------------------------------------- */
-
-/* Push formatted message as a string object to Lua stack. va_list variant. */
-const char *lj_str_pushvf(lua_State *L, const char *fmt, va_list argp)
-{
-  SBuf *sb = &G(L)->tmpbuf;
-  setsbufL(sb, L);
-  lj_buf_need(sb, (MSize)strlen(fmt));
-  lj_buf_reset(sb);
-  for (;;) {
-    const char *e = strchr(fmt, '%');
-    if (e == NULL) break;
-    lj_buf_putmem(sb, fmt, (MSize)(e-fmt));
-    /* This function only handles %s, %c, %d, %f and %p formats. */
-    switch (e[1]) {
-    case 's': {
-      const char *s = va_arg(argp, char *);
-      if (s == NULL) s = "(null)";
-      lj_buf_putmem(sb, s, (MSize)strlen(s));
-      break;
-      }
-    case 'c':
-      lj_buf_putb(sb, va_arg(argp, int));
-      break;
-    case 'd':
-      setsbufP(sb, lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF),
-				 va_arg(argp, int32_t)));
-      break;
-    case 'f': {
-      TValue tv;
-      tv.n = va_arg(argp, lua_Number);
-      setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), &tv));
-      break;
-      }
-    case 'p':
-      setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
-				 va_arg(argp, void *)));
-      break;
-    case '%':
-      lj_buf_putb(sb, '%');
-      break;
-    default:
-      lj_buf_putb(sb, '%');
-      lj_buf_putb(sb, e[1]);
-      break;
-    }
-    fmt = e+2;
-  }
-  lj_buf_putmem(sb, fmt, (MSize)strlen(fmt));
-  setstrV(L, L->top, lj_buf_str(L, sb));
-  incr_top(L);
-  return strVdata(L->top - 1);
-}
-
-/* Push formatted message as a string object to Lua stack. Vararg variant. */
-const char *lj_str_pushf(lua_State *L, const char *fmt, ...)
-{
-  const char *msg;
-  va_list argp;
-  va_start(argp, fmt);
-  msg = lj_str_pushvf(L, fmt, argp);
-  va_end(argp);
-  return msg;
 }
 

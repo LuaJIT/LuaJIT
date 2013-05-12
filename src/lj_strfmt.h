@@ -73,6 +73,7 @@ static LJ_AINLINE void lj_strfmt_init(FormatState *fs, const char *p, MSize len)
 }
 
 LJ_FUNC SFormat LJ_FASTCALL lj_strfmt_parse(FormatState *fs);
+
 LJ_FUNC SBuf *lj_strfmt_putchar(SBuf *sb, SFormat, int32_t c);
 LJ_FUNC SBuf *lj_strfmt_putstr(SBuf *sb, SFormat, GCstr *str);
 LJ_FUNC SBuf *lj_strfmt_putquoted(SBuf *sb, GCstr *str);
@@ -80,5 +81,13 @@ LJ_FUNC SBuf *lj_strfmt_putxint(SBuf *sb, SFormat sf, uint64_t k);
 LJ_FUNC SBuf *lj_strfmt_putnum_int(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putnum_uint(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putnum(SBuf *sb, SFormat, lua_Number n);
+
+LJ_FUNC const char *lj_strfmt_pushvf(lua_State *L, const char *fmt,
+				     va_list argp);
+LJ_FUNC const char *lj_strfmt_pushf(lua_State *L, const char *fmt, ...)
+#ifdef __GNUC__
+  __attribute__ ((format (printf, 2, 3)))
+#endif
+  ;
 
 #endif

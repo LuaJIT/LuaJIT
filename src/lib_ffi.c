@@ -29,6 +29,7 @@
 #include "lj_ccall.h"
 #include "lj_ccallback.h"
 #include "lj_clib.h"
+#include "lj_strfmt.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -317,7 +318,7 @@ LJLIB_CF(ffi_meta___tostring)
       }
     }
   }
-  lj_str_pushf(L, msg, strdata(lj_ctype_repr(L, id, NULL)), p);
+  lj_strfmt_pushf(L, msg, strdata(lj_ctype_repr(L, id, NULL)), p);
 checkgc:
   lj_gc_check(L);
   return 1;

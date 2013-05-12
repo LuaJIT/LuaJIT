@@ -15,6 +15,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_strfmt.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -350,12 +351,12 @@ void lj_debug_addloc(lua_State *L, const char *msg,
 	GCproto *pt = funcproto(fn);
 	char buf[LUA_IDSIZE];
 	lj_debug_shortname(buf, proto_chunkname(pt), pt->firstline);
-	lj_str_pushf(L, "%s:%d: %s", buf, line, msg);
+	lj_strfmt_pushf(L, "%s:%d: %s", buf, line, msg);
 	return;
       }
     }
   }
-  lj_str_pushf(L, "%s", msg);
+  lj_strfmt_pushf(L, "%s", msg);
 }
 
 /* Push location string for a bytecode position to Lua stack. */
@@ -366,7 +367,7 @@ void lj_debug_pushloc(lua_State *L, GCproto *pt, BCPos pc)
   MSize i, len = name->len;
   BCLine line = lj_debug_line(pt, pc);
   if (pt->firstline == ~(BCLine)0) {
-    lj_str_pushf(L, "builtin:%s", s);
+    lj_strfmt_pushf(L, "builtin:%s", s);
   } else if (*s == '@') {
     s++; len--;
     for (i = len; i > 0; i--)
@@ -374,13 +375,13 @@ void lj_debug_pushloc(lua_State *L, GCproto *pt, BCPos pc)
 	s += i+1;
 	break;
       }
-    lj_str_pushf(L, "%s:%d", s, line);
+    lj_strfmt_pushf(L, "%s:%d", s, line);
   } else if (len > 40) {
-    lj_str_pushf(L, "%p:%d", pt, line);
+    lj_strfmt_pushf(L, "%p:%d", pt, line);
   } else if (*s == '=') {
-    lj_str_pushf(L, "%s:%d", s+1, line);
+    lj_strfmt_pushf(L, "%s:%d", s+1, line);
   } else {
-    lj_str_pushf(L, "\"%s\":%d", s, line);
+    lj_strfmt_pushf(L, "\"%s\":%d", s, line);
   }
 }
 

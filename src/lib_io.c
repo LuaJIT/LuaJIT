@@ -22,6 +22,7 @@
 #include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_state.h"
+#include "lj_strfmt.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -85,7 +86,7 @@ static IOFileUD *io_file_open(lua_State *L, const char *mode)
   IOFileUD *iof = io_file_new(L);
   iof->fp = fopen(fname, mode);
   if (iof->fp == NULL)
-    luaL_argerror(L, 1, lj_str_pushf(L, "%s: %s", fname, strerror(errno)));
+    luaL_argerror(L, 1, lj_strfmt_pushf(L, "%s: %s", fname, strerror(errno)));
   return iof;
 }
 
