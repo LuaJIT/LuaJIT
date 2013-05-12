@@ -223,20 +223,6 @@ int32_t lj_lib_optint(lua_State *L, int narg, int32_t def)
   return (o < L->top && !tvisnil(o)) ? lj_lib_checkint(L, narg) : def;
 }
 
-int32_t lj_lib_checkbit(lua_State *L, int narg)
-{
-  TValue *o = L->base + narg-1;
-  if (!(o < L->top && lj_strscan_numberobj(o)))
-    lj_err_argt(L, narg, LUA_TNUMBER);
-  if (LJ_LIKELY(tvisint(o))) {
-    return intV(o);
-  } else {
-    int32_t i = lj_num2bit(numV(o));
-    if (LJ_DUALNUM) setintV(o, i);
-    return i;
-  }
-}
-
 GCfunc *lj_lib_checkfunc(lua_State *L, int narg)
 {
   TValue *o = L->base + narg-1;

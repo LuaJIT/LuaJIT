@@ -12,7 +12,9 @@
 
 #include "lj_obj.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
+#include "lj_strfmt.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_cdata.h"
@@ -33,6 +35,20 @@ static int bit_result64(lua_State *L, CTypeID id, uint64_t x)
   *(uint64_t *)cdataptr(cd) = x;
   setcdataV(L, L->base-1, cd);
   return FFH_RES(1);
+}
+#else
+static int32_t bit_checkbit(lua_State *L, int narg)
+{
+  TValue *o = L->base + narg-1;
+  if (!(o < L->top && lj_strscan_numberobj(o)))
+    lj_err_argt(L, narg, LUA_TNUMBER);
+  if (LJ_LIKELY(tvisint(o))) {
+    return intV(o);
+  } else {
+    int32_t i = lj_num2bit(numV(o));
+    if (LJ_DUALNUM) setintV(o, i);
+    return i;
+  }
 }
 #endif
 
@@ -86,7 +102,7 @@ LJLIB_ASM(bit_lshift)		LJLIB_REC(bit_shift IR_BSHL)
   return FFH_RETRY;
 #else
   lj_lib_checknumber(L, 1);
-  lj_lib_checkbit(L, 2);
+  bit_checkbit(L, 2);
   return FFH_RETRY;
 #endif
 }
@@ -131,20 +147,19 @@ LJLIB_CF(bit_tohex)
 #if LJ_HASFFI
   CTypeID id = 0, id2 = 0;
   uint64_t b = lj_carith_check64(L, 1, &id);
-  int32_t i, dig = id ? 16 : 8;
-  int32_t n = L->base+1>=L->top ? dig : (int32_t)lj_carith_check64(L, 2, &id2);
-  char buf[16];
+  int32_t n = L->base+1>=L->top ? (id ? 16 : 8) :
+				  (int32_t)lj_carith_check64(L, 2, &id2);
 #else
-  uint32_t b = (uint32_t)lj_lib_checkbit(L, 1);
-  int32_t i, dig = 8;
-  int32_t n = L->base+1>=L->top ? dig : lj_lib_checkbit(L, 2);
-  char buf[8];
+  uint32_t b = (uint32_t)bit_checkbit(L, 1);
+  int32_t n = L->base+1>=L->top ? 8 : bit_checkbit(L, 2);
 #endif
-  const char *hexdigits = "0123456789abcdef";
-  if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
-  if (n > dig) n = dig;
-  for (i = n; --i >= 0; ) { buf[i] = hexdigits[b & 15]; b >>= 4; }
-  lua_pushlstring(L, buf, (size_t)n);
+  SBuf *sb = lj_buf_tmp_(L);
+  SFormat sf = (STRFMT_UINT|STRFMT_T_HEX);
+  if (n < 0) { n = -n; sf |= STRFMT_F_UPPER; }
+  sf |= ((SFormat)(n+1) << STRFMT_SH_PREC);
+  sb = lj_strfmt_putxint(sb, sf, b);
+  setstrV(L, L->top-1, lj_buf_str(L, sb));
+  lj_gc_check(L);
   return 1;
 }
 
