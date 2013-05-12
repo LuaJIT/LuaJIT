@@ -6,8 +6,6 @@
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
 */
 
-#include <stdio.h>
-
 #define lib_string_c
 #define LUA_LIB
 
@@ -26,6 +24,7 @@
 #include "lj_ff.h"
 #include "lj_bcdump.h"
 #include "lj_char.h"
+#include "lj_strfmt.h"
 #include "lj_lib.h"
 
 /* ------------------------------------------------------------------------ */
@@ -641,130 +640,20 @@ LJLIB_CF(string_gsub)
 
 /* ------------------------------------------------------------------------ */
 
-/* Max. buffer size needed (at least #string.format("%99.99f", -1e308)). */
-#define STRING_FMT_MAXBUF	512
-/* Valid format specifier flags. */
-#define STRING_FMT_FLAGS	"-+ #0"
-/* Max. format specifier size. */
-#define STRING_FMT_MAXSPEC \
-  (sizeof(STRING_FMT_FLAGS) + sizeof(LUA_INTFRMLEN) + 10)
-
-/* Add quoted string to buffer. */
-static void string_fmt_quoted(SBuf *sb, GCstr *str)
-{
-  const char *s = strdata(str);
-  MSize len = str->len;
-  lj_buf_putb(sb, '"');
-  while (len--) {
-    uint32_t c = (uint32_t)(uint8_t)*s++;
-    char *p = lj_buf_more(sb, 4);
-    if (c == '"' || c == '\\' || c == '\n') {
-      *p++ = '\\';
-    } else if (lj_char_iscntrl(c)) {  /* This can only be 0-31 or 127. */
-      uint32_t d;
-      *p++ = '\\';
-      if (c >= 100 || lj_char_isdigit((uint8_t)*s)) {
-	*p++ = (char)('0'+(c >= 100)); if (c >= 100) c -= 100;
-	goto tens;
-      } else if (c >= 10) {
-      tens:
-	d = (c * 205) >> 11; c -= d * 10; *p++ = (char)('0'+d);
-      }
-      c += '0';
-    }
-    *p++ = (char)c;
-    setsbufP(sb, p);
-  }
-  lj_buf_putb(sb, '"');
-}
-
-/* Scan format and generate format specifier. */
-static const char *string_fmt_scan(lua_State *L, char *spec, const char *fmt)
-{
-  const char *p = fmt;
-  while (*p && strchr(STRING_FMT_FLAGS, *p) != NULL) p++;  /* Skip flags. */
-  if ((size_t)(p - fmt) >= sizeof(STRING_FMT_FLAGS))
-    lj_err_caller(L, LJ_ERR_STRFMTR);
-  if (lj_char_isdigit((uint8_t)*p)) p++;  /* Skip max. 2 digits for width. */
-  if (lj_char_isdigit((uint8_t)*p)) p++;
-  if (*p == '.') {
-    p++;
-    if (lj_char_isdigit((uint8_t)*p)) p++;  /* Skip max. 2 digits for prec. */
-    if (lj_char_isdigit((uint8_t)*p)) p++;
-  }
-  if (lj_char_isdigit((uint8_t)*p))
-    lj_err_caller(L, LJ_ERR_STRFMTW);
-  *spec++ = '%';
-  strncpy(spec, fmt, (size_t)(p - fmt + 1));
-  spec += p - fmt + 1;
-  *spec = '\0';
-  return p;
-}
-
-/* Patch LUA_INTRFRMLEN into integer format specifier. */
-static void string_fmt_intfmt(char *spec)
-{
-  char c;
-  do {
-    c = *spec++;
-  } while (*spec);
-  *--spec = (LUA_INTFRMLEN)[0];
-  if ((LUA_INTFRMLEN)[1]) *++spec = (LUA_INTFRMLEN)[1];
-  *++spec = c;
-  *++spec = '\0';
-}
-
-/* Derive sprintf argument for integer format. Ugly. */
-static LUA_INTFRM_T string_fmt_intarg(lua_State *L, int arg)
-{
-  if (sizeof(LUA_INTFRM_T) == 4) {
-    return (LUA_INTFRM_T)lj_lib_checkbit(L, arg);
-  } else {
-    cTValue *o;
-    lj_lib_checknumber(L, arg);
-    o = L->base+arg-1;
-    if (tvisint(o))
-      return (LUA_INTFRM_T)intV(o);
-    else
-      return (LUA_INTFRM_T)numV(o);
-  }
-}
-
-/* Derive sprintf argument for unsigned integer format. Ugly. */
-static unsigned LUA_INTFRM_T string_fmt_uintarg(lua_State *L, int arg)
-{
-  if (sizeof(LUA_INTFRM_T) == 4) {
-    return (unsigned LUA_INTFRM_T)lj_lib_checkbit(L, arg);
-  } else {
-    cTValue *o;
-    lj_lib_checknumber(L, arg);
-    o = L->base+arg-1;
-    if (tvisint(o))
-      return (unsigned LUA_INTFRM_T)intV(o);
-    else if ((int32_t)o->u32.hi < 0)
-      return (unsigned LUA_INTFRM_T)(LUA_INTFRM_T)numV(o);
-    else
-      return (unsigned LUA_INTFRM_T)numV(o);
-  }
-}
-
 /* Emulate tostring() inline. */
-static GCstr *string_fmt_tostring(lua_State *L, int arg)
+static GCstr *string_fmt_tostring(lua_State *L, int arg, int retry)
 {
   TValue *o = L->base+arg-1;
   cTValue *mo;
   lua_assert(o < L->top);  /* Caller already checks for existence. */
   if (LJ_LIKELY(tvisstr(o)))
     return strV(o);
-  if (!tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
+  if (retry != 2 && !tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
     copyTV(L, L->top++, mo);
     copyTV(L, L->top++, o);
     lua_call(L, 1, 1);
-    L->top--;
-    if (tvisstr(L->top))
-      return strV(L->top);
-    o = L->base+arg-1;
-    copyTV(L, o, L->top);
+    copyTV(L, L->base+arg-1, --L->top);
+    return NULL;  /* Buffer may be overwritten, retry. */
   }
   if (tvisnumber(o)) {
     return lj_str_fromnumber(L, o);
@@ -775,84 +664,85 @@ static GCstr *string_fmt_tostring(lua_State *L, int arg)
   } else if (tvistrue(o)) {
     return lj_str_newlit(L, "true");
   } else {
-    if (tvisfunc(o) && isffunc(funcV(o)))
-      lj_str_pushf(L, "function: builtin#%d", funcV(o)->c.ffid);
-    else
-      lj_str_pushf(L, "%s: %p", lj_typename(o), lua_topointer(L, arg));
-    L->top--;
-    return strV(L->top);
+    char buf[8+2+2+16], *p = buf;
+    if (tvisfunc(o) && isffunc(funcV(o))) {
+      p = lj_buf_wmem(p, "function: builtin#", 18);
+      p = lj_str_bufint(p, funcV(o)->c.ffid);
+    } else {
+      p = lj_buf_wmem(p, lj_typename(o), strlen(lj_typename(o)));
+      *p++ = ':'; *p++ = ' ';
+      p = lj_str_bufptr(p, lua_topointer(L, arg));
+    }
+    return lj_str_new(L, buf, (size_t)(p - buf));
   }
 }
 
 LJLIB_CF(string_format)
 {
-  int arg = 1, top = (int)(L->top - L->base);
-  GCstr *sfmt = lj_lib_checkstr(L, arg);
-  const char *fmt = strdata(sfmt);
-  const char *efmt = fmt + sfmt->len;
-  SBuf *sb = lj_buf_tmp_(L);
-  while (fmt < efmt) {
-    if (*fmt != L_ESC || *++fmt == L_ESC) {
-      lj_buf_putb(sb, *fmt++);
+  int arg, top = (int)(L->top - L->base);
+  GCstr *sfmt;
+  SBuf *sb;
+  FormatState fs;
+  SFormat sf;
+  int retry = 0;
+again:
+  arg = 1;
+  sb = lj_buf_tmp_(L);
+  sfmt = lj_lib_checkstr(L, arg);
+  lj_strfmt_init(&fs, strdata(sfmt), sfmt->len);
+  while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {
+    if (sf == STRFMT_LIT) {
+      lj_buf_putmem(sb, fs.str, fs.len);
+    } else if (sf == STRFMT_ERR) {
+      lj_err_callerv(L, LJ_ERR_STRFMT, strdata(lj_str_new(L, fs.str, fs.len)));
     } else {
-      char buf[STRING_FMT_MAXBUF];
-      char spec[STRING_FMT_MAXSPEC];
-      MSize len = 0;
       if (++arg > top)
 	luaL_argerror(L, arg, lj_obj_typename[0]);
-      fmt = string_fmt_scan(L, spec, fmt);
-      switch (*fmt++) {
-      case 'c':
-	len = (MSize)sprintf(buf, spec, lj_lib_checkint(L, arg));
-	break;
-      case 'd':  case 'i':
-	string_fmt_intfmt(spec);
-	len = (MSize)sprintf(buf, spec, string_fmt_intarg(L, arg));
-	break;
-      case 'o':  case 'u':  case 'x':  case 'X':
-	string_fmt_intfmt(spec);
-	len = (MSize)sprintf(buf, spec, string_fmt_uintarg(L, arg));
-	break;
-      case 'e':  case 'E': case 'f': case 'g': case 'G': case 'a': case 'A': {
-	TValue tv;
-	tv.n = lj_lib_checknum(L, arg);
-	if (LJ_UNLIKELY((tv.u32.hi << 1) >= 0xffe00000)) {
-	  /* Canonicalize output of non-finite values. */
-	  char nbuf[LJ_STR_NUMBUF];
-	  char *p = lj_str_bufnum(nbuf, &tv);
-	  if (fmt[-1] < 'a') { *(p-3) -= 0x20; *(p-2) -= 0x20; *(p-1) -= 0x20; }
-	  *p = '\0';
-	  for (p = spec; *p < 'A' && *p != '.'; p++) ;
-	  *p++ = 's'; *p = '\0';
-	  len = (MSize)sprintf(buf, spec, nbuf);
-	  break;
+      switch (STRFMT_TYPE(sf)) {
+      case STRFMT_INT:
+	if (tvisint(L->base+arg-1)) {
+	  int32_t k = intV(L->base+arg-1);
+	  if (sf == STRFMT_INT)
+	    lj_buf_putint(sb, k);  /* Shortcut for plain %d. */
+	  else
+	    lj_strfmt_putxint(sb, sf, k);
+	} else {
+	  lj_strfmt_putnum_int(sb, sf, lj_lib_checknum(L, arg));
 	}
-	len = (MSize)sprintf(buf, spec, (double)tv.n);
+	break;
+      case STRFMT_UINT:
+	if (tvisint(L->base+arg-1))
+	  lj_strfmt_putxint(sb, sf, intV(L->base+arg-1));
+	else
+	  lj_strfmt_putnum_uint(sb, sf, lj_lib_checknum(L, arg));
+	break;
+      case STRFMT_NUM:
+	lj_strfmt_putnum(sb, sf, lj_lib_checknum(L, arg));
+	break;
+      case STRFMT_STR: {
+	GCstr *str = string_fmt_tostring(L, arg, retry);
+	if (str == NULL)
+	  retry = 1;
+	else if ((sf & STRFMT_T_QUOTED))
+	  lj_strfmt_putquoted(sb, str);
+	else
+	  lj_strfmt_putstr(sb, sf, str);
 	break;
 	}
-      case 'q':
-	string_fmt_quoted(sb, lj_lib_checkstr(L, arg));
-	continue;
-      case 'p':
+      case STRFMT_CHAR:
+	lj_strfmt_putchar(sb, sf, lj_lib_checkint(L, arg));
+	break;
+      case STRFMT_PTR:  /* No formatting. */
 	setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
 				   lua_topointer(L, arg)));
-	continue;
-      case 's': {
-	GCstr *str = string_fmt_tostring(L, arg);
-	if (!strchr(spec, '.') && str->len >= 100) {  /* Format overflow? */
-	  lj_buf_putmem(sb, strdata(str), str->len);  /* Use orig string. */
-	  continue;
-	}
-	len = (MSize)sprintf(buf, spec, strdata(str));
 	break;
-	}
       default:
-	lj_err_callerv(L, LJ_ERR_STRFMTO, fmt[-1] ? fmt[-1] : ' ');
+	lua_assert(0);
 	break;
       }
-      lj_buf_putmem(sb, buf, len);
     }
   }
+  if (retry++ == 1) goto again;
   setstrV(L, L->top-1, lj_buf_str(L, sb));
   lj_gc_check(L);
   return 1;

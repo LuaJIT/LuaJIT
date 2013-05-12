@@ -25,7 +25,7 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 #define lj_str_newlit(L, s)	(lj_str_new(L, "" s, sizeof(s)-1))
 
 /* Type conversions. */
-LJ_FUNC char * LJ_FASTCALL lj_str_bufint(char *buf, int32_t k);
+LJ_FUNC char * LJ_FASTCALL lj_str_bufint(char *p, int32_t k);
 LJ_FUNC char * LJ_FASTCALL lj_str_bufnum(char *p, cTValue *o);
 LJ_FUNC char * LJ_FASTCALL lj_str_bufptr(char *p, const void *v);
 LJ_FUNC const char *lj_str_buftv(char *buf, cTValue *o, MSize *lenp);
