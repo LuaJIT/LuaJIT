@@ -546,17 +546,7 @@ LUA_API lua_State *lua_tothread(lua_State *L, int idx)
 
 LUA_API const void *lua_topointer(lua_State *L, int idx)
 {
-  cTValue *o = index2adr(L, idx);
-  if (tvisudata(o))
-    return uddata(udataV(o));
-  else if (tvislightud(o))
-    return lightudV(o);
-  else if (tviscdata(o))
-    return cdataptr(cdataV(o));
-  else if (tvisgcv(o))
-    return gcV(o);
-  else
-    return NULL;
+  return lj_obj_ptr(index2adr(L, idx));
 }
 
 /* -- Stack setters (object creation) ------------------------------------- */

@@ -82,6 +82,8 @@ LJ_FUNC SBuf *lj_strfmt_putnum_int(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putnum_uint(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putnum(SBuf *sb, SFormat, lua_Number n);
 
+LJ_FUNC GCstr *lj_strfmt_obj(lua_State *L, cTValue *o);
+
 LJ_FUNC const char *lj_strfmt_pushvf(lua_State *L, const char *fmt,
 				     va_list argp);
 LJ_FUNC const char *lj_strfmt_pushf(lua_State *L, const char *fmt, ...)

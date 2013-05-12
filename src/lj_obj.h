@@ -848,6 +848,7 @@ LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 #define lj_typename(o)	(lj_obj_itypename[itypemap(o)])
 
 /* Compare two objects without calling metamethods. */
-LJ_FUNC int lj_obj_equal(cTValue *o1, cTValue *o2);
+LJ_FUNC int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2);
+LJ_FUNC const void * LJ_FASTCALL lj_obj_ptr(cTValue *o);
 
 #endif

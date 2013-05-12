@@ -655,26 +655,7 @@ static GCstr *string_fmt_tostring(lua_State *L, int arg, int retry)
     copyTV(L, L->base+arg-1, --L->top);
     return NULL;  /* Buffer may be overwritten, retry. */
   }
-  if (tvisnumber(o)) {
-    return lj_str_fromnumber(L, o);
-  } else if (tvisnil(o)) {
-    return lj_str_newlit(L, "nil");
-  } else if (tvisfalse(o)) {
-    return lj_str_newlit(L, "false");
-  } else if (tvistrue(o)) {
-    return lj_str_newlit(L, "true");
-  } else {
-    char buf[8+2+2+16], *p = buf;
-    if (tvisfunc(o) && isffunc(funcV(o))) {
-      p = lj_buf_wmem(p, "function: builtin#", 18);
-      p = lj_str_bufint(p, funcV(o)->c.ffid);
-    } else {
-      p = lj_buf_wmem(p, lj_typename(o), strlen(lj_typename(o)));
-      *p++ = ':'; *p++ = ' ';
-      p = lj_str_bufptr(p, lua_topointer(L, arg));
-    }
-    return lj_str_new(L, buf, (size_t)(p - buf));
-  }
+  return lj_strfmt_obj(L, o);
 }
 
 LJLIB_CF(string_format)
@@ -734,7 +715,7 @@ again:
 	break;
       case STRFMT_PTR:  /* No formatting. */
 	setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
-				   lua_topointer(L, arg)));
+				   lj_obj_ptr(L->base+arg-1)));
 	break;
       default:
 	lua_assert(0);

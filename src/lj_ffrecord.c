@@ -27,6 +27,7 @@
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -333,12 +334,12 @@ static void LJ_FASTCALL recff_tostring(jit_State *J, RecordFFData *rd)
   if (tref_isstr(tr)) {
     /* Ignore __tostring in the string base metatable. */
     /* Pass on result in J->base[0]. */
-  } else if (!recff_metacall(J, rd, MM_tostring)) {
+  } else if (tr && !recff_metacall(J, rd, MM_tostring)) {
     if (tref_isnumber(tr)) {
       J->base[0] = emitir(IRT(IR_TOSTR, IRT_STR), tr,
 			  tref_isnum(tr) ? IRTOSTR_NUM : IRTOSTR_INT);
     } else if (tref_ispri(tr)) {
-      J->base[0] = lj_ir_kstr(J, strV(&J->fn->c.upvalue[tref_type(tr)]));
+      J->base[0] = lj_ir_kstr(J, lj_strfmt_obj(J->L, &rd->argv[0]));
     } else {
       recff_nyiu(J);
     }

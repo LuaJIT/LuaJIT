@@ -86,7 +86,7 @@ retlit:
   return fs->len ? STRFMT_LIT : STRFMT_EOF;
 }
 
-/* -- Format conversions -------------------------------------------------- */
+/* -- Formatted conversions to buffer ------------------------------------- */
 
 /* Add formatted char to buffer. */
 SBuf *lj_strfmt_putchar(SBuf *sb, SFormat sf, int32_t c)
@@ -292,6 +292,35 @@ SBuf *lj_strfmt_putnum(SBuf *sb, SFormat sf, lua_Number n)
     setsbufP(sb, p + sprintf(p, fmt, n));
   }
   return sb;
+}
+
+/* -- Conversions to strings ---------------------------------------------- */
+
+/* Raw conversion of object to string. */
+GCstr *lj_strfmt_obj(lua_State *L, cTValue *o)
+{
+  if (tvisstr(o)) {
+    return strV(o);
+  } else if (tvisnumber(o)) {
+    return lj_str_fromnumber(L, o);
+  } else if (tvisnil(o)) {
+    return lj_str_newlit(L, "nil");
+  } else if (tvisfalse(o)) {
+    return lj_str_newlit(L, "false");
+  } else if (tvistrue(o)) {
+    return lj_str_newlit(L, "true");
+  } else {
+    char buf[8+2+2+16], *p = buf;
+    p = lj_buf_wmem(p, lj_typename(o), strlen(lj_typename(o)));
+    *p++ = ':'; *p++ = ' ';
+    if (tvisfunc(o) && isffunc(funcV(o))) {
+      p = lj_buf_wmem(p, "builtin#", 8);
+      p = lj_str_bufint(p, funcV(o)->c.ffid);
+    } else {
+      p = lj_str_bufptr(p, lj_obj_ptr(o));
+    }
+    return lj_str_new(L, buf, (size_t)(p - buf));
+  }
 }
 
 /* -- Internal string formatting ------------------------------------------ */

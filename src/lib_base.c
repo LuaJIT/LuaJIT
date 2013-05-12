@@ -32,6 +32,7 @@
 #include "lj_dispatch.h"
 #include "lj_char.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 #include "lj_lib.h"
 
 /* -- Base library: checks ------------------------------------------------ */
@@ -301,9 +302,6 @@ LJLIB_ASM(tonumber)		LJLIB_REC(.)
   return FFH_RES(1);
 }
 
-LJLIB_PUSH("nil")
-LJLIB_PUSH("false")
-LJLIB_PUSH("true")
 LJLIB_ASM(tostring)		LJLIB_REC(.)
 {
   TValue *o = lj_lib_checkany(L, 1);
@@ -312,23 +310,10 @@ LJLIB_ASM(tostring)		LJLIB_REC(.)
   if (!tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
     copyTV(L, L->base-1, mo);  /* Replace callable. */
     return FFH_TAILCALL;
-  } else {
-    GCstr *s;
-    if (tvisnumber(o)) {
-      s = lj_str_fromnumber(L, o);
-    } else if (tvispri(o)) {
-      s = strV(lj_lib_upvalue(L, -(int32_t)itype(o)));
-    } else {
-      if (tvisfunc(o) && isffunc(funcV(o)))
-	lua_pushfstring(L, "function: builtin#%d", funcV(o)->c.ffid);
-      else
-	lua_pushfstring(L, "%s: %p", lj_typename(o), lua_topointer(L, 1));
-      /* Note: lua_pushfstring calls the GC which may invalidate o. */
-      s = strV(L->top-1);
-    }
-    setstrV(L, L->base-1, s);
-    return FFH_RES(1);
   }
+  lj_gc_check(L);
+  setstrV(L, L->base-1, lj_strfmt_obj(L, L->base));
+  return FFH_RES(1);
 }
 
 /* -- Base library: throw and catch errors -------------------------------- */
