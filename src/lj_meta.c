@@ -20,6 +20,7 @@
 #include "lj_bc.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 #include "lj_lib.h"
 
 /* -- Metamethod handling ------------------------------------------------- */
@@ -269,10 +270,10 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       ** next step: [...][CAT stack ............]
       */
       TValue *e, *o = top;
-      uint64_t tlen = tvisstr(o) ? strV(o)->len : LJ_STR_NUMBERBUF;
+      uint64_t tlen = tvisstr(o) ? strV(o)->len : STRFMT_MAXBUF_NUM;
       char *p, *buf;
       do {
-	o--; tlen += tvisstr(o) ? strV(o)->len : LJ_STR_NUMBERBUF;
+	o--; tlen += tvisstr(o) ? strV(o)->len : STRFMT_MAXBUF_NUM;
       } while (--left > 0 && (tvisstr(o-1) || tvisnumber(o-1)));
       if (tlen >= LJ_MAX_STR) lj_err_msg(L, LJ_ERR_STROV);
       p = buf = lj_buf_tmp(L, (MSize)tlen);
@@ -282,10 +283,10 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
 	  MSize len = s->len;
 	  p = lj_buf_wmem(p, strdata(s), len);
 	} else if (tvisint(o)) {
-	  p = lj_str_bufint(p, intV(o));
+	  p = lj_strfmt_wint(p, intV(o));
 	} else {
 	  lua_assert(tvisnum(o));
-	  p = lj_str_bufnum(p, o);
+	  p = lj_strfmt_wnum(p, o);
 	}
       }
       setstrV(L, top, lj_str_new(L, buf, (size_t)(p-buf)));

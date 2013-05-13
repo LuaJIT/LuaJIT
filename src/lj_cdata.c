@@ -9,7 +9,6 @@
 
 #include "lj_gc.h"
 #include "lj_err.h"
-#include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_ctype.h"
 #include "lj_cconv.h"

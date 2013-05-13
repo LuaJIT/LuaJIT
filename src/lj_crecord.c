@@ -11,7 +11,6 @@
 #if LJ_HASJIT && LJ_HASFFI
 
 #include "lj_err.h"
-#include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_frame.h"
 #include "lj_ctype.h"

@@ -80,7 +80,7 @@ static GCstr *argv2str(jit_State *J, TValue *o)
     GCstr *s;
     if (!tvisnumber(o))
       lj_trace_err(J, LJ_TRERR_BADTYPE);
-    s = lj_str_fromnumber(J->L, o);
+    s = lj_strfmt_number(J->L, o);
     setstrV(J->L, o, s);
     return s;
   }

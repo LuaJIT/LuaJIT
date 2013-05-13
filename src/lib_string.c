@@ -684,21 +684,21 @@ again:
 	if (tvisint(L->base+arg-1)) {
 	  int32_t k = intV(L->base+arg-1);
 	  if (sf == STRFMT_INT)
-	    lj_buf_putint(sb, k);  /* Shortcut for plain %d. */
+	    lj_strfmt_putint(sb, k);  /* Shortcut for plain %d. */
 	  else
-	    lj_strfmt_putxint(sb, sf, k);
+	    lj_strfmt_putfxint(sb, sf, k);
 	} else {
-	  lj_strfmt_putnum_int(sb, sf, lj_lib_checknum(L, arg));
+	  lj_strfmt_putfnum_int(sb, sf, lj_lib_checknum(L, arg));
 	}
 	break;
       case STRFMT_UINT:
 	if (tvisint(L->base+arg-1))
-	  lj_strfmt_putxint(sb, sf, intV(L->base+arg-1));
+	  lj_strfmt_putfxint(sb, sf, intV(L->base+arg-1));
 	else
-	  lj_strfmt_putnum_uint(sb, sf, lj_lib_checknum(L, arg));
+	  lj_strfmt_putfnum_uint(sb, sf, lj_lib_checknum(L, arg));
 	break;
       case STRFMT_NUM:
-	lj_strfmt_putnum(sb, sf, lj_lib_checknum(L, arg));
+	lj_strfmt_putfnum(sb, sf, lj_lib_checknum(L, arg));
 	break;
       case STRFMT_STR: {
 	GCstr *str = string_fmt_tostring(L, arg, retry);
@@ -707,15 +707,15 @@ again:
 	else if ((sf & STRFMT_T_QUOTED))
 	  lj_strfmt_putquoted(sb, str);
 	else
-	  lj_strfmt_putstr(sb, sf, str);
+	  lj_strfmt_putfstr(sb, sf, str);
 	break;
 	}
       case STRFMT_CHAR:
-	lj_strfmt_putchar(sb, sf, lj_lib_checkint(L, arg));
+	lj_strfmt_putfchar(sb, sf, lj_lib_checkint(L, arg));
 	break;
       case STRFMT_PTR:  /* No formatting. */
-	setsbufP(sb, lj_str_bufptr(lj_buf_more(sb, LJ_STR_PTRBUF),
-				   lj_obj_ptr(L->base+arg-1)));
+	setsbufP(sb, lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR),
+				    lj_obj_ptr(L->base+arg-1)));
 	break;
       default:
 	lua_assert(0);

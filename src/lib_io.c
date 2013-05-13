@@ -232,9 +232,9 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
   cTValue *tv;
   int status = 1;
   for (tv = L->base+start; tv < L->top; tv++) {
-    char buf[LJ_STR_NUMBERBUF];
+    char buf[STRFMT_MAXBUF_NUM];
     MSize len;
-    const char *p = lj_str_buftv(buf, tv, &len);
+    const char *p = lj_strfmt_wstrnum(buf, tv, &len);
     if (!p)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
     status = status && (fwrite(p, 1, len, fp) == len);

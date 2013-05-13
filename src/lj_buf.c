@@ -14,6 +14,9 @@
 #include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
+#include "lj_strfmt.h"
+
+/* -- Buffer management --------------------------------------------------- */
 
 LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
 {
@@ -32,13 +35,6 @@ LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
   setmref(sb->e, b + nsz);
 }
 
-char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
-{
-  SBuf *sb = &G(L)->tmpbuf;
-  setsbufL(sb, L);
-  return lj_buf_need(sb, sz);
-}
-
 void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
 {
   char *b = sbufB(sb);
@@ -52,6 +48,16 @@ void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
   }
 }
 
+char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
+{
+  SBuf *sb = &G(L)->tmpbuf;
+  setsbufL(sb, L);
+  return lj_buf_need(sb, sz);
+}
+
+/* -- Low-level buffer put operations ------------------------------------- */
+
+/* Write memory block to buffer. */
 char *lj_buf_wmem(char *p, const void *q, MSize len)
 {
   const char *s = (const char *)q, *e = s + len;
@@ -68,6 +74,15 @@ SBuf * lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 }
 
 #if LJ_HASJIT
+SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
+{
+  char *p = lj_buf_more(sb, 1);
+  *p++ = (char)c;
+  setsbufP(sb, p);
+  return sb;
+}
+#endif
+
 SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
 {
   MSize len = s->len;
@@ -77,26 +92,7 @@ SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
   return sb;
 }
 
-SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
-{
-  char *p = lj_buf_more(sb, 1);
-  *p++ = (char)c;
-  setsbufP(sb, p);
-  return sb;
-}
-
-SBuf * LJ_FASTCALL lj_buf_putint(SBuf *sb, int32_t k)
-{
-  setsbufP(sb, lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF), k));
-  return sb;
-}
-
-SBuf * LJ_FASTCALL lj_buf_putnum(SBuf *sb, cTValue *o)
-{
-  setsbufP(sb, lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF), o));
-  return sb;
-}
-#endif
+/* -- High-level buffer put operations ------------------------------------ */
 
 SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s)
 {
@@ -184,9 +180,9 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
 	MSize len = strV(o)->len;
 	p = lj_buf_wmem(lj_buf_more(sb, len + seplen), strVdata(o), len);
       } else if (tvisint(o)) {
-	p = lj_str_bufint(lj_buf_more(sb, LJ_STR_INTBUF + seplen), intV(o));
+	p = lj_strfmt_wint(lj_buf_more(sb, STRFMT_MAXBUF_INT+seplen), intV(o));
       } else if (tvisnum(o)) {
-	p = lj_str_bufnum(lj_buf_more(sb, LJ_STR_NUMBUF + seplen), o);
+	p = lj_strfmt_wnum(lj_buf_more(sb, STRFMT_MAXBUF_NUM+seplen), o);
       } else {
 	goto badtype;
       }
@@ -201,11 +197,14 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
   return sb;
 }
 
+/* -- Miscellaneous buffer operations ------------------------------------- */
+
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
 }
 
+/* Concatenate two strings. */
 GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
 {
   MSize len1 = s1->len, len2 = s2->len;
@@ -215,6 +214,7 @@ GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
   return lj_str_new(L, buf, len1 + len2);
 }
 
+/* Read ULEB128 from buffer. */
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {
   const uint8_t *p = (const uint8_t *)*pp;
@@ -226,13 +226,5 @@ uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
   }
   *pp = (const char *)p;
   return v;
-}
-
-char * LJ_FASTCALL lj_buf_wuleb128(char *p, uint32_t v)
-{
-  for (; v >= 0x80; v >>= 7)
-    *p++ = (char)((v & 0x7f) | 0x80);
-  *p++ = (char)v;
-  return p;
 }
 

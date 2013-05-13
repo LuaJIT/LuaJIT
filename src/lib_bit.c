@@ -13,7 +13,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_buf.h"
-#include "lj_str.h"
+#include "lj_strscan.h"
 #include "lj_strfmt.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
@@ -157,7 +157,7 @@ LJLIB_CF(bit_tohex)
   SFormat sf = (STRFMT_UINT|STRFMT_T_HEX);
   if (n < 0) { n = -n; sf |= STRFMT_F_UPPER; }
   sf |= ((SFormat)(n+1) << STRFMT_SH_PREC);
-  sb = lj_strfmt_putxint(sb, sf, b);
+  sb = lj_strfmt_putfxint(sb, sf, b);
   setstrV(L, L->top-1, lj_buf_str(L, sb));
   lj_gc_check(L);
   return 1;

@@ -18,6 +18,7 @@
 #include "lj_frame.h"
 #include "lj_bc.h"
 #include "lj_ff.h"
+#include "lj_strfmt.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif

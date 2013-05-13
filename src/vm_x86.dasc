@@ -1586,9 +1586,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |  mov L:FCARG1, L:RB
   |.if DUALNUM
-  |  call extern lj_str_fromnumber@8	// (lua_State *L, cTValue *o)
+  |  call extern lj_strfmt_number@8	// (lua_State *L, cTValue *o)
   |.else
-  |  call extern lj_str_fromnum@8	// (lua_State *L, lua_Number *np)
+  |  call extern lj_strfmt_num@8	// (lua_State *L, lua_Number *np)
   |.endif
   |  // GCstr returned in eax (RD).
   |  mov BASE, L:RB->base

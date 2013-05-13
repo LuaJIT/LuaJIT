@@ -16,7 +16,6 @@
 #include "lj_gc.h"
 #include "lj_err.h"
 #include "lj_buf.h"
-#include "lj_str.h"
 #include "lj_func.h"
 #include "lj_frame.h"
 #include "lj_vm.h"

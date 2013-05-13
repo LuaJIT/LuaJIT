@@ -22,6 +22,7 @@
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #endif
+#include "lj_strfmt.h"
 #include "lj_lex.h"
 #include "lj_parse.h"
 #include "lj_vm.h"
@@ -1462,8 +1463,8 @@ static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
 	p = lj_buf_wmem(p, strdata(s), len);
       }
       startpc = vs->startpc;
-      p = lj_buf_wuleb128(p, startpc-lastpc);
-      p = lj_buf_wuleb128(p, vs->endpc-startpc);
+      p = lj_strfmt_wuleb128(p, startpc-lastpc);
+      p = lj_strfmt_wuleb128(p, vs->endpc-startpc);
       setsbufP(&ls->sb, p);
       lastpc = startpc;
     }

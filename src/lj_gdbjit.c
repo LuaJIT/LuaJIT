@@ -15,6 +15,7 @@
 #include "lj_debug.h"
 #include "lj_frame.h"
 #include "lj_buf.h"
+#include "lj_strfmt.h"
 #include "lj_jit.h"
 #include "lj_dispatch.h"
 
@@ -443,7 +444,7 @@ static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
 #define DU16(x)		(*(uint16_t *)p = (x), p += 2)
 #define DU32(x)		(*(uint32_t *)p = (x), p += 4)
 #define DADDR(x)	(*(uintptr_t *)p = (x), p += sizeof(uintptr_t))
-#define DUV(x)		(p = (uint8_t *)lj_buf_wuleb128((char *)p, (x)))
+#define DUV(x)		(p = (uint8_t *)lj_strfmt_wuleb128((char *)p, (x)))
 #define DSV(x)		(ctx->p = p, gdbjit_sleb128(ctx, (x)), p = ctx->p)
 #define DSTR(str)	(ctx->p = p, gdbjit_strz(ctx, (str)), p = ctx->p)
 #define DALIGNNOP(s)	while ((uintptr_t)p & ((s)-1)) *p++ = DW_CFA_nop

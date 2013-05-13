@@ -9,7 +9,6 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_buf.h"
-#include "lj_str.h"
 #include "lj_bc.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
@@ -18,6 +17,7 @@
 #include "lj_dispatch.h"
 #include "lj_jit.h"
 #endif
+#include "lj_strfmt.h"
 #include "lj_bcdump.h"
 #include "lj_vm.h"
 
@@ -41,25 +41,25 @@ static void bcwrite_ktabk(BCWriteCtx *ctx, cTValue *o, int narrow)
     const GCstr *str = strV(o);
     MSize len = str->len;
     p = lj_buf_more(&ctx->sb, 5+len);
-    p = lj_buf_wuleb128(p, BCDUMP_KTAB_STR+len);
+    p = lj_strfmt_wuleb128(p, BCDUMP_KTAB_STR+len);
     p = lj_buf_wmem(p, strdata(str), len);
   } else if (tvisint(o)) {
     *p++ = BCDUMP_KTAB_INT;
-    p = lj_buf_wuleb128(p, intV(o));
+    p = lj_strfmt_wuleb128(p, intV(o));
   } else if (tvisnum(o)) {
     if (!LJ_DUALNUM && narrow) {  /* Narrow number constants to integers. */
       lua_Number num = numV(o);
       int32_t k = lj_num2int(num);
       if (num == (lua_Number)k) {  /* -0 is never a constant. */
 	*p++ = BCDUMP_KTAB_INT;
-	p = lj_buf_wuleb128(p, k);
+	p = lj_strfmt_wuleb128(p, k);
 	setsbufP(&ctx->sb, p);
 	return;
       }
     }
     *p++ = BCDUMP_KTAB_NUM;
-    p = lj_buf_wuleb128(p, o->u32.lo);
-    p = lj_buf_wuleb128(p, o->u32.hi);
+    p = lj_strfmt_wuleb128(p, o->u32.lo);
+    p = lj_strfmt_wuleb128(p, o->u32.hi);
   } else {
     lua_assert(tvispri(o));
     *p++ = BCDUMP_KTAB_NIL+~itype(o);
@@ -86,8 +86,8 @@ static void bcwrite_ktab(BCWriteCtx *ctx, char *p, const GCtab *t)
       nhash += !tvisnil(&node[i].val);
   }
   /* Write number of array slots and hash slots. */
-  p = lj_buf_wuleb128(p, narray);
-  p = lj_buf_wuleb128(p, nhash);
+  p = lj_strfmt_wuleb128(p, narray);
+  p = lj_strfmt_wuleb128(p, nhash);
   setsbufP(&ctx->sb, p);
   if (narray) {  /* Write array entries (may contain nil). */
     MSize i;
@@ -143,7 +143,7 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
     }
     /* Write constant type. */
     p = lj_buf_more(&ctx->sb, need);
-    p = lj_buf_wuleb128(p, tp);
+    p = lj_strfmt_wuleb128(p, tp);
     /* Write constant data (if any). */
     if (tp >= BCDUMP_KGC_STR) {
       p = lj_buf_wmem(p, strdata(gco2str(o)), gco2str(o)->len);
@@ -153,11 +153,11 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
 #if LJ_HASFFI
     } else if (tp != BCDUMP_KGC_CHILD) {
       cTValue *q = (TValue *)cdataptr(gco2cd(o));
-      p = lj_buf_wuleb128(p, q[0].u32.lo);
-      p = lj_buf_wuleb128(p, q[0].u32.hi);
+      p = lj_strfmt_wuleb128(p, q[0].u32.lo);
+      p = lj_strfmt_wuleb128(p, q[0].u32.hi);
       if (tp == BCDUMP_KGC_COMPLEX) {
-	p = lj_buf_wuleb128(p, q[1].u32.lo);
-	p = lj_buf_wuleb128(p, q[1].u32.hi);
+	p = lj_strfmt_wuleb128(p, q[1].u32.lo);
+	p = lj_strfmt_wuleb128(p, q[1].u32.hi);
       }
 #endif
     }
@@ -183,16 +183,16 @@ static void bcwrite_knum(BCWriteCtx *ctx, GCproto *pt)
 	k = lj_num2int(num);
 	if (num == (lua_Number)k) {  /* -0 is never a constant. */
 	save_int:
-	  p = lj_buf_wuleb128(p, 2*(uint32_t)k | ((uint32_t)k & 0x80000000u));
+	  p = lj_strfmt_wuleb128(p, 2*(uint32_t)k | ((uint32_t)k&0x80000000u));
 	  if (k < 0)
 	    p[-1] = (p[-1] & 7) | ((k>>27) & 0x18);
 	  continue;
 	}
       }
-      p = lj_buf_wuleb128(p, 1+(2*o->u32.lo | (o->u32.lo & 0x80000000u)));
+      p = lj_strfmt_wuleb128(p, 1+(2*o->u32.lo | (o->u32.lo & 0x80000000u)));
       if (o->u32.lo >= 0x80000000u)
 	p[-1] = (p[-1] & 7) | ((o->u32.lo>>27) & 0x18);
-      p = lj_buf_wuleb128(p, o->u32.hi);
+      p = lj_strfmt_wuleb128(p, o->u32.hi);
     }
   }
   setsbufP(&ctx->sb, p);
@@ -257,16 +257,16 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
   *p++ = pt->numparams;
   *p++ = pt->framesize;
   *p++ = pt->sizeuv;
-  p = lj_buf_wuleb128(p, pt->sizekgc);
-  p = lj_buf_wuleb128(p, pt->sizekn);
-  p = lj_buf_wuleb128(p, pt->sizebc-1);
+  p = lj_strfmt_wuleb128(p, pt->sizekgc);
+  p = lj_strfmt_wuleb128(p, pt->sizekn);
+  p = lj_strfmt_wuleb128(p, pt->sizebc-1);
   if (!ctx->strip) {
     if (proto_lineinfo(pt))
       sizedbg = pt->sizept - (MSize)((char *)proto_lineinfo(pt) - (char *)pt);
-    p = lj_buf_wuleb128(p, sizedbg);
+    p = lj_strfmt_wuleb128(p, sizedbg);
     if (sizedbg) {
-      p = lj_buf_wuleb128(p, pt->firstline);
-      p = lj_buf_wuleb128(p, pt->numline);
+      p = lj_strfmt_wuleb128(p, pt->firstline);
+      p = lj_strfmt_wuleb128(p, pt->numline);
     }
   }
 
@@ -291,7 +291,7 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
     MSize n = sbuflen(&ctx->sb) - 5;
     MSize nn = (lj_fls(n)+8)*9 >> 6;
     char *q = sbufB(&ctx->sb) + (5 - nn);
-    p = lj_buf_wuleb128(q, n);  /* Fill in final size. */
+    p = lj_strfmt_wuleb128(q, n);  /* Fill in final size. */
     lua_assert(p == sbufB(&ctx->sb) + 5);
     ctx->status = ctx->wfunc(sbufL(&ctx->sb), q, nn+n, ctx->wdata);
   }
@@ -312,7 +312,7 @@ static void bcwrite_header(BCWriteCtx *ctx)
 		       (LJ_BE ? BCDUMP_F_BE : 0) +
 		       ((ctx->pt->flags & PROTO_FFI) ? BCDUMP_F_FFI : 0);
   if (!ctx->strip) {
-    p = lj_buf_wuleb128(p, len);
+    p = lj_strfmt_wuleb128(p, len);
     p = lj_buf_wmem(p, name, len);
   }
   ctx->status = ctx->wfunc(sbufL(&ctx->sb), sbufB(&ctx->sb),

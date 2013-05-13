@@ -1394,9 +1394,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  mr CARG1, L
   |  mr CARG2, BASE
   |.if DUALNUM
-  |  bl extern lj_str_fromnumber	// (lua_State *L, cTValue *o)
+  |  bl extern lj_strfmt_number		// (lua_State *L, cTValue *o)
   |.else
-  |  bl extern lj_str_fromnum		// (lua_State *L, lua_Number *np)
+  |  bl extern lj_strfmt_num		// (lua_State *L, lua_Number *np)
   |.endif
   |  // Returns GCstr *.
   |  li CARG3, LJ_TSTR

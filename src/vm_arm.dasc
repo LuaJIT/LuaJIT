@@ -1084,7 +1084,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ffgccheck
   |  mov CARG1, L
   |  mov CARG2, BASE
-  |  bl extern lj_str_fromnumber	// (lua_State *L, cTValue *o)
+  |  bl extern lj_strfmt_number		// (lua_State *L, cTValue *o)
   |  // Returns GCstr *.
   |  ldr BASE, L->base
   |  mvn CARG2, #~LJ_TSTR

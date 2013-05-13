@@ -492,11 +492,11 @@ LJLIB_CF(print)
   shortcut = (tvisfunc(tv) && funcV(tv)->c.ffid == FF_tostring);
   for (i = 0; i < nargs; i++) {
     cTValue *o = &L->base[i];
-    char buf[LJ_STR_NUMBERBUF];
+    char buf[STRFMT_MAXBUF_NUM];
     const char *str;
     size_t size;
     MSize len;
-    if (shortcut && (str = lj_str_buftv(buf, o, &len)) != NULL) {
+    if (shortcut && (str = lj_strfmt_wstrnum(buf, o, &len)) != NULL) {
       size = len;
     } else {
       copyTV(L, L->top+1, o);

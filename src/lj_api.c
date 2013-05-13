@@ -435,7 +435,7 @@ LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnumber(L, o);
+    s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
     if (len != NULL) *len = 0;
@@ -454,7 +454,7 @@ LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnumber(L, o);
+    s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
     lj_err_argt(L, idx, LUA_TSTRING);
@@ -476,7 +476,7 @@ LUALIB_API const char *luaL_optlstring(lua_State *L, int idx,
   } else if (tvisnumber(o)) {
     lj_gc_check(L);
     o = index2adr(L, idx);  /* GC may move the stack. */
-    s = lj_str_fromnumber(L, o);
+    s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
   } else {
     lj_err_argt(L, idx, LUA_TSTRING);
@@ -508,7 +508,7 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
   } else if (tvisudata(o)) {
     return udataV(o)->len;
   } else if (tvisnumber(o)) {
-    GCstr *s = lj_str_fromnumber(L, o);
+    GCstr *s = lj_strfmt_number(L, o);
     setstrV(L, o, s);
     return s->len;
   } else {

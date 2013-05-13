@@ -28,6 +28,7 @@
 #endif
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 
 /* Here's a short description how the FOLD engine processes instructions:
 **
@@ -809,15 +810,15 @@ LJFOLDF(kfold_conv_knum_u64_num)
 LJFOLD(TOSTR KNUM any)
 LJFOLDF(kfold_tostr_knum)
 {
-  return lj_ir_kstr(J, lj_str_fromnum(J->L, &knumleft));
+  return lj_ir_kstr(J, lj_strfmt_num(J->L, ir_knum(fleft)));
 }
 
 LJFOLD(TOSTR KINT any)
 LJFOLDF(kfold_tostr_kint)
 {
   return lj_ir_kstr(J, fins->op2 == IRTOSTR_INT ?
-		       lj_str_fromint(J->L, fleft->i) :
-		       lj_str_fromchar(J->L, fleft->i));
+		       lj_strfmt_int(J->L, fleft->i) :
+		       lj_strfmt_char(J->L, fleft->i));
 }
 
 LJFOLD(STRTO KGC)

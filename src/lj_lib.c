@@ -18,6 +18,7 @@
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 #include "lj_lex.h"
 #include "lj_bcdump.h"
 #include "lj_lib.h"
@@ -164,7 +165,7 @@ GCstr *lj_lib_checkstr(lua_State *L, int narg)
     if (LJ_LIKELY(tvisstr(o))) {
       return strV(o);
     } else if (tvisnumber(o)) {
-      GCstr *s = lj_str_fromnumber(L, o);
+      GCstr *s = lj_strfmt_number(L, o);
       setstrV(L, o, s);
       return s;
     }

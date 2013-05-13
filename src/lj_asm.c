@@ -1086,12 +1086,12 @@ static void asm_bufput(ASMState *as, IRIns *ir)
     if (irs->o == IR_TOSTR) {  /* Fuse number to string conversions. */
       if (irs->op2 == IRTOSTR_NUM) {
 	args[1] = ASMREF_TMP1;  /* TValue * */
-	ci = &lj_ir_callinfo[IRCALL_lj_buf_putnum];
+	ci = &lj_ir_callinfo[IRCALL_lj_strfmt_putnum];
       } else {
 	lua_assert(irt_isinteger(IR(irs->op1)->t));
 	args[1] = irs->op1;  /* int */
 	if (irs->op2 == IRTOSTR_INT)
-	  ci = &lj_ir_callinfo[IRCALL_lj_buf_putint];
+	  ci = &lj_ir_callinfo[IRCALL_lj_strfmt_putint];
 	else
 	  ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
       }
@@ -1131,14 +1131,14 @@ static void asm_tostr(ASMState *as, IRIns *ir)
   args[0] = ASMREF_L;
   as->gcsteps++;
   if (ir->op2 == IRTOSTR_NUM) {
-    args[1] = ASMREF_TMP1;  /* const lua_Number * */
-    ci = &lj_ir_callinfo[IRCALL_lj_str_fromnum];
+    args[1] = ASMREF_TMP1;  /* cTValue * */
+    ci = &lj_ir_callinfo[IRCALL_lj_strfmt_num];
   } else {
     args[1] = ir->op1;  /* int32_t k */
     if (ir->op2 == IRTOSTR_INT)
-      ci = &lj_ir_callinfo[IRCALL_lj_str_fromint];
+      ci = &lj_ir_callinfo[IRCALL_lj_strfmt_int];
     else
-      ci = &lj_ir_callinfo[IRCALL_lj_str_fromchar];
+      ci = &lj_ir_callinfo[IRCALL_lj_strfmt_char];
   }
   asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);

@@ -1152,9 +1152,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.  sw BASE, L->base			// Add frame since C call can throw.
   |  ffgccheck
   |.  sw PC, SAVE_PC			// Redundant (but a defined value).
-  |  load_got lj_str_fromnum
+  |  load_got lj_strfmt_num
   |  move CARG1, L
-  |  call_intern lj_str_fromnum		// (lua_State *L, lua_Number *np)
+  |  call_intern lj_strfmt_num		// (lua_State *L, lua_Number *np)
   |.  move CARG2, BASE
   |  // Returns GCstr *.
   |  li CARG3, LJ_TSTR
