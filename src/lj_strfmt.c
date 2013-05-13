@@ -338,7 +338,7 @@ SBuf *lj_strfmt_putfnum_int(SBuf *sb, SFormat sf, lua_Number n)
 {
   int64_t k = (int64_t)n;
   if (checki32(k) && sf == STRFMT_INT)
-    return lj_strfmt_putint(sb, k);  /* Shortcut for plain %d. */
+    return lj_strfmt_putint(sb, (int32_t)k);  /* Shortcut for plain %d. */
   else
     return lj_strfmt_putfxint(sb, sf, (uint64_t)k);
 }
@@ -446,7 +446,7 @@ GCstr * LJ_FASTCALL lj_strfmt_char(lua_State *L, int c)
 #endif
 
 /* Raw conversion of object to string. */
-GCstr *lj_strfmt_obj(lua_State *L, cTValue *o)
+GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o)
 {
   if (tvisstr(o)) {
     return strV(o);
@@ -460,7 +460,7 @@ GCstr *lj_strfmt_obj(lua_State *L, cTValue *o)
     return lj_str_newlit(L, "true");
   } else {
     char buf[8+2+2+16], *p = buf;
-    p = lj_buf_wmem(p, lj_typename(o), strlen(lj_typename(o)));
+    p = lj_buf_wmem(p, lj_typename(o), (MSize)strlen(lj_typename(o)));
     *p++ = ':'; *p++ = ' ';
     if (tvisfunc(o) && isffunc(funcV(o))) {
       p = lj_buf_wmem(p, "builtin#", 8);
@@ -492,7 +492,7 @@ const char *lj_strfmt_pushvf(lua_State *L, const char *fmt, va_list argp)
   FormatState fs;
   SFormat sf;
   GCstr *str;
-  lj_strfmt_init(&fs, fmt, strlen(fmt));
+  lj_strfmt_init(&fs, fmt, (MSize)strlen(fmt));
   while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {
     switch (STRFMT_TYPE(sf)) {
     case STRFMT_LIT:
