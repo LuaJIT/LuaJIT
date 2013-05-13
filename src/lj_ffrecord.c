@@ -871,6 +871,84 @@ static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
   }
 }
 
+static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
+{
+  TRef trfmt = lj_ir_tostr(J, J->base[0]);
+  GCstr *fmt = argv2str(J, &rd->argv[0]);
+  int arg = 1;
+  TRef hdr, tr;
+  FormatState fs;
+  SFormat sf;
+  /* Specialize to the format string. */
+  emitir(IRTG(IR_EQ, IRT_STR), trfmt, lj_ir_kstr(J, fmt));
+  tr = hdr = recff_bufhdr(J);
+  lj_strfmt_init(&fs, strdata(fmt), fmt->len);
+  while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {  /* Parse format. */
+    TRef tra = sf == STRFMT_LIT ? 0 : J->base[arg++];
+    TRef trsf = lj_ir_kint(J, (int32_t)sf);
+    IRCallID id;
+    switch (STRFMT_TYPE(sf)) {
+    case STRFMT_LIT:
+      tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr,
+		  lj_ir_kstr(J, lj_str_new(J->L, fs.str, fs.len)));
+      break;
+    case STRFMT_INT:
+      id = IRCALL_lj_strfmt_putfnum_int;
+    handle_int:
+      if (!tref_isinteger(tra))
+	goto handle_num;
+      if (sf == STRFMT_INT) { /* Shortcut for plain %d. */
+	tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr,
+		    emitir(IRT(IR_TOSTR, IRT_STR), tra, IRTOSTR_INT));
+      } else {
+#if LJ_HASFFI
+	tra = emitir(IRT(IR_CONV, IRT_U64), tra,
+		     (IRT_INT|(IRT_U64<<5)|IRCONV_SEXT));
+	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfxint, tr, trsf, tra);
+	lj_needsplit(J);
+#else
+	recff_nyiu(J);  /* Don't bother working around this NYI. */
+#endif
+      }
+      break;
+    case STRFMT_UINT:
+      id = IRCALL_lj_strfmt_putfnum_uint;
+      goto handle_int;
+    case STRFMT_NUM:
+      id = IRCALL_lj_strfmt_putfnum;
+    handle_num:
+      tra = lj_ir_tonum(J, tra);
+      tr = lj_ir_call(J, id, tr, trsf, tra);
+      if (LJ_SOFTFP) lj_needsplit(J);
+      break;
+    case STRFMT_STR:
+      if (!tref_isstr(tra))
+	recff_nyiu(J);  /* NYI: __tostring and non-string types for %s. */
+      if (sf == STRFMT_STR)  /* Shortcut for plain %s. */
+	tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, tra);
+      else if ((sf & STRFMT_T_QUOTED))
+	tr = lj_ir_call(J, IRCALL_lj_strfmt_putquoted, tr, tra);
+      else
+	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfstr, tr, trsf, tra);
+      break;
+    case STRFMT_CHAR:
+      tra = lj_opt_narrow_toint(J, tra);
+      if (sf == STRFMT_CHAR)  /* Shortcut for plain %c. */
+	tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr,
+		    emitir(IRT(IR_TOSTR, IRT_STR), tra, IRTOSTR_CHAR));
+      else
+	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfchar, tr, trsf, tra);
+      break;
+    case STRFMT_PTR:  /* NYI */
+    case STRFMT_ERR:
+    default:
+      recff_nyiu(J);
+      break;
+    }
+  }
+  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+}
+
 /* -- Table library fast functions ---------------------------------------- */
 
 static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)

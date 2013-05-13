@@ -658,10 +658,10 @@ static GCstr *string_fmt_tostring(lua_State *L, int arg, int retry)
   return lj_strfmt_obj(L, o);
 }
 
-LJLIB_CF(string_format)
+LJLIB_CF(string_format)		LJLIB_REC(.)
 {
   int arg, top = (int)(L->top - L->base);
-  GCstr *sfmt;
+  GCstr *fmt;
   SBuf *sb;
   FormatState fs;
   SFormat sf;
@@ -669,8 +669,8 @@ LJLIB_CF(string_format)
 again:
   arg = 1;
   sb = lj_buf_tmp_(L);
-  sfmt = lj_lib_checkstr(L, arg);
-  lj_strfmt_init(&fs, strdata(sfmt), sfmt->len);
+  fmt = lj_lib_checkstr(L, arg);
+  lj_strfmt_init(&fs, strdata(fmt), fmt->len);
   while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {
     if (sf == STRFMT_LIT) {
       lj_buf_putmem(sb, fs.str, fs.len);
@@ -705,7 +705,7 @@ again:
 	if (str == NULL)
 	  retry = 1;
 	else if ((sf & STRFMT_T_QUOTED))
-	  lj_strfmt_putquoted(sb, str);
+	  lj_strfmt_putquoted(sb, str);  /* No formatting. */
 	else
 	  lj_strfmt_putfstr(sb, sf, str);
 	break;

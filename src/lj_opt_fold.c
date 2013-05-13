@@ -617,6 +617,7 @@ LJFOLDF(bufstr_kfold_cse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_reverse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_upper)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_lower)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putquoted)
 LJFOLDF(bufput_kfold_op)
 {
   if (irref_isk(fleft->op2)) {
@@ -645,6 +646,48 @@ LJFOLDF(bufput_kfold_rep)
       fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
       return RETRYFOLD;
     }
+  }
+  return EMITFOLD;  /* Always emit, CSE later. */
+}
+
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfxint)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfnum_int)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfnum_uint)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfnum)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfstr)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putfchar)
+LJFOLDF(bufput_kfold_fmt)
+{
+  IRIns *irc = IR(fleft->op1);
+  lua_assert(irref_isk(irc->op2));  /* SFormat must be const. */
+  if (irref_isk(fleft->op2)) {
+    SFormat sf = (SFormat)IR(irc->op2)->i;
+    IRIns *ira = IR(fleft->op2);
+    SBuf *sb = lj_buf_tmp_(J->L);
+    switch (fins->op2) {
+    case IRCALL_lj_strfmt_putfxint:
+      sb = lj_strfmt_putfxint(sb, sf, ir_k64(ira)->u64);
+      break;
+    case IRCALL_lj_strfmt_putfstr:
+      sb = lj_strfmt_putfstr(sb, sf, ir_kstr(ira));
+      break;
+    case IRCALL_lj_strfmt_putfchar:
+      sb = lj_strfmt_putfchar(sb, sf, ira->i);
+      break;
+    case IRCALL_lj_strfmt_putfnum_int:
+    case IRCALL_lj_strfmt_putfnum_uint:
+    case IRCALL_lj_strfmt_putfnum:
+    default: {
+      const CCallInfo *ci = &lj_ir_callinfo[fins->op2];
+      sb = ((SBuf * (*)(SBuf *, SFormat, lua_Number))ci->func)(sb, sf,
+							 ir_knum(ira)->n);
+      break;
+      }
+    }
+    fins->o = IR_BUFPUT;
+    fins->op1 = irc->op1;
+    fins->op2 = lj_ir_kstr(J, lj_buf_tostr(sb));
+    return RETRYFOLD;
   }
   return EMITFOLD;  /* Always emit, CSE later. */
 }
