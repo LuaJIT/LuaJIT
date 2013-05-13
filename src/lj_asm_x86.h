@@ -384,7 +384,7 @@ static Reg asm_fuseloadm(ASMState *as, IRRef ref, RegSet allow, int is64)
 /* Count the required number of stack slots for a call. */
 static int asm_count_call_slots(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
-  uint32_t i, nargs = CCI_NARGS(ci);
+  uint32_t i, nargs = CCI_XNARGS(ci);
   int nslots = 0;
 #if LJ_64
   if (LJ_ABI_WIN) {
@@ -417,7 +417,7 @@ static int asm_count_call_slots(ASMState *as, const CCallInfo *ci, IRRef *args)
 /* Generate a call to a C function. */
 static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
-  uint32_t n, nargs = CCI_NARGS(ci);
+  uint32_t n, nargs = CCI_XNARGS(ci);
   int32_t ofs = STACKARG_OFS;
 #if LJ_64
   uint32_t gprs = REGARG_GPRS;

@@ -1197,7 +1197,7 @@ static void asm_newref(ASMState *as, IRIns *ir)
 static void asm_collectargs(ASMState *as, IRIns *ir,
 			    const CCallInfo *ci, IRRef *args)
 {
-  uint32_t n = CCI_NARGS(ci);
+  uint32_t n = CCI_XNARGS(ci);
   lua_assert(n <= CCI_NARGS_MAX);
   if ((ci->flags & CCI_L)) { *args++ = ASMREF_L; n--; }
   while (n-- > 1) {

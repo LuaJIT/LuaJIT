@@ -338,7 +338,7 @@ static int asm_fusemadd(ASMState *as, IRIns *ir, ARMIns ai, ARMIns air)
 /* Generate a call to a C function. */
 static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 {
-  uint32_t n, nargs = CCI_NARGS(ci);
+  uint32_t n, nargs = CCI_XNARGS(ci);
   int32_t ofs = 0;
 #if LJ_SOFTFP
   Reg gpr = REGARG_FIRSTGPR;
@@ -2133,7 +2133,7 @@ static void asm_tail_prep(ASMState *as)
 static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 {
   IRRef args[CCI_NARGS_MAX];
-  uint32_t i, nargs = (int)CCI_NARGS(ci);
+  uint32_t i, nargs = CCI_XNARGS(ci);
   int nslots = 0, ngpr = REGARG_NUMGPR, nfpr = REGARG_NUMFPR, fprodd = 0;
   asm_collectargs(as, ir, ci, args);
   for (i = 0; i < nargs; i++) {
