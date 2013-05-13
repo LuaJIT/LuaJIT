@@ -62,7 +62,7 @@ local traceinfo, traceir, tracek = jutil.traceinfo, jutil.traceir, jutil.tracek
 local tracemc, tracesnap = jutil.tracemc, jutil.tracesnap
 local traceexitstub, ircalladdr = jutil.traceexitstub, jutil.ircalladdr
 local bit = require("bit")
-local band, shl, shr = bit.band, bit.lshift, bit.rshift
+local band, shl, shr, tohex = bit.band, bit.lshift, bit.rshift, bit.tohex
 local sub, gsub, format = string.sub, string.gsub, string.format
 local byte, char, rep = string.byte, string.char, string.rep
 local type, tostring = type, tostring
@@ -135,6 +135,7 @@ local function dump_mcode(tr)
   local mcode, addr, loop = tracemc(tr)
   if not mcode then return end
   if not disass then disass = require("jit.dis_"..jit.arch) end
+  if addr < 0 then addr = addr + 2^32 end
   out:write("---- TRACE ", tr, " mcode ", #mcode, "\n")
   local ctx = disass.create(mcode, addr, dumpwrite)
   ctx.hexdump = 0
@@ -609,7 +610,7 @@ local function dump_texit(tr, ex, ngpr, nfpr, ...)
       end
     else
       for i=1,ngpr do
-	out:write(format(" %08x", regs[i]))
+	out:write(" ", tohex(regs[i]))
 	if i % 8 == 0 then out:write("\n") end
       end
     end
