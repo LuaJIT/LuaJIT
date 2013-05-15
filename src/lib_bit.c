@@ -156,7 +156,12 @@ LJLIB_CF(bit_tohex)
   SBuf *sb = lj_buf_tmp_(L);
   SFormat sf = (STRFMT_UINT|STRFMT_T_HEX);
   if (n < 0) { n = -n; sf |= STRFMT_F_UPPER; }
-  sf |= ((SFormat)(n+1) << STRFMT_SH_PREC);
+  sf |= ((SFormat)((n+1)&255) << STRFMT_SH_PREC);
+#if LJ_HASFFI
+  if (n < 16) b &= ((uint64_t)1 << 4*n)-1;
+#else
+  if (n < 8) b &= (1u << 4*n)-1;
+#endif
   sb = lj_strfmt_putfxint(sb, sf, b);
   setstrV(L, L->top-1, lj_buf_str(L, sb));
   lj_gc_check(L);
