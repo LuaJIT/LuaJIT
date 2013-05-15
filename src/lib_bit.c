@@ -142,7 +142,7 @@ LJLIB_ASM_(bit_bxor)		LJLIB_REC(bit_nary IR_BXOR)
 
 /* ------------------------------------------------------------------------ */
 
-LJLIB_CF(bit_tohex)
+LJLIB_CF(bit_tohex)		LJLIB_REC(.)
 {
 #if LJ_HASFFI
   CTypeID id = 0, id2 = 0;

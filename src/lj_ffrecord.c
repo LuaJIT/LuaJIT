@@ -119,6 +119,13 @@ static void LJ_FASTCALL recff_c(jit_State *J, RecordFFData *rd)
   UNUSED(rd);
 }
 
+/* Emit BUFHDR for the global temporary buffer. */
+static TRef recff_bufhdr(jit_State *J)
+{
+  return emitir(IRT(IR_BUFHDR, IRT_P32),
+		lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+}
+
 /* -- Base library fast functions ----------------------------------------- */
 
 static void LJ_FASTCALL recff_assert(jit_State *J, RecordFFData *rd)
@@ -645,14 +652,18 @@ static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
   }
 }
 
-/* -- String library fast functions --------------------------------------- */
-
-/* Emit BUFHDR for the global temporary buffer. */
-static TRef recff_bufhdr(jit_State *J)
+static void LJ_FASTCALL recff_bit_tohex(jit_State *J, RecordFFData *rd)
 {
-  return emitir(IRT(IR_BUFHDR, IRT_P32),
-		lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
+#if LJ_HASFFI
+  TRef hdr = recff_bufhdr(J);
+  TRef tr = recff_bit64_tohex(J, rd, hdr);
+  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+#else
+  recff_nyiu(J);  /* Don't bother working around this NYI. */
+#endif
 }
+
+/* -- String library fast functions --------------------------------------- */
 
 /* Specialize to relative starting position for string. */
 static TRef recff_string_start(jit_State *J, GCstr *s, int32_t *st, TRef tr,
