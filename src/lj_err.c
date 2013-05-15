@@ -385,12 +385,17 @@ typedef struct UndocumentedDispatcherContext {
   ULONG Fill0;
 } UndocumentedDispatcherContext;
 
-#ifdef _MSC_VER
 /* Another wild guess. */
-extern __DestructExceptionObject(EXCEPTION_RECORD *rec, int nothrow);
+extern void __DestructExceptionObject(EXCEPTION_RECORD *rec, int nothrow);
+
+#ifdef MINGW_SDK_INIT
+/* Workaround for broken MinGW64 declaration. */
+VOID RtlUnwindEx_FIXED(PVOID,PVOID,PVOID,PVOID,PVOID,PVOID) asm("RtlUnwindEx");
+#define RtlUnwindEx RtlUnwindEx_FIXED
 #endif
 
 #define LJ_MSVC_EXCODE		((DWORD)0xe06d7363)
+#define LJ_GCC_EXCODE		((DWORD)0x20474343)
 
 #define LJ_EXCODE		((DWORD)0xe24c4a00)
 #define LJ_EXCODE_MAKE(c)	(LJ_EXCODE | (DWORD)(c))
@@ -410,10 +415,9 @@ LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win64(EXCEPTION_RECORD *rec,
   } else {
     void *cf2 = err_unwind(L, cf, 0);
     if (cf2) {  /* We catch it, so start unwinding the upper frames. */
-      if (rec->ExceptionCode == LJ_MSVC_EXCODE) {
-#ifdef _MSC_VER
+      if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
+	  rec->ExceptionCode == LJ_GCC_EXCODE) {
 	__DestructExceptionObject(rec, 1);
-#endif
 	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
       } else if (!LJ_EXCODE_CHECK(rec->ExceptionCode)) {
 	/* Don't catch access violations etc. */
@@ -426,7 +430,7 @@ LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win64(EXCEPTION_RECORD *rec,
       RtlUnwindEx(cf, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
 			       lj_vm_unwind_ff_eh :
 			       lj_vm_unwind_c_eh),
-		  rec, (void *)errcode, ctx, dispatch->HistoryTable);
+		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
       /* RtlUnwindEx should never return. */
     }
   }

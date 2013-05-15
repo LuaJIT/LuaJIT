@@ -103,9 +103,9 @@
 /* Windows/x64 argument registers are strictly positional (use ngpr). */
 #define CCALL_HANDLE_REGARG \
   if (isfp) { \
-    if (ngpr < 4) { dp = &cc->fpr[ngpr++]; nfpr = ngpr; goto done; } \
+    if (ngpr < maxgpr) { dp = &cc->fpr[ngpr++]; nfpr = ngpr; goto done; } \
   } else { \
-    if (ngpr < 4) { dp = &cc->gpr[ngpr++]; goto done; } \
+    if (ngpr < maxgpr) { dp = &cc->gpr[ngpr++]; goto done; } \
   }
 
 #elif LJ_TARGET_X64
