@@ -1198,7 +1198,7 @@ static void asm_collectargs(ASMState *as, IRIns *ir,
 			    const CCallInfo *ci, IRRef *args)
 {
   uint32_t n = CCI_XNARGS(ci);
-  lua_assert(n <= CCI_NARGS_MAX);
+  lua_assert(n <= CCI_NARGS_MAX*2);  /* Account for split args. */
   if ((ci->flags & CCI_L)) { *args++ = ASMREF_L; n--; }
   while (n-- > 1) {
     ir = IR(ir->op1);
