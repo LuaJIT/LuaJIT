@@ -609,7 +609,7 @@ static void *asm_callx_func(ASMState *as, IRIns *irf, IRRef func)
 
 static void asm_callx(ASMState *as, IRIns *ir)
 {
-  IRRef args[CCI_NARGS_MAX];
+  IRRef args[CCI_NARGS_MAX*2];
   CCallInfo ci;
   IRRef func;
   IRIns *irf;
@@ -2742,7 +2742,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
 /* Ensure there are enough stack slots for call arguments. */
 static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 {
-  IRRef args[CCI_NARGS_MAX];
+  IRRef args[CCI_NARGS_MAX*2];
   int nslots;
   asm_collectargs(as, ir, ci, args);
   nslots = asm_count_call_slots(as, ci, args);
