@@ -694,9 +694,9 @@ local function dumpon(opt, outfile)
 end
 
 -- Public module functions.
-module(...)
-
-on = dumpon
-off = dumpoff
-start = dumpon -- For -j command line option.
+return {
+  on = dumpon,
+  off = dumpoff,
+  start = dumpon -- For -j command line option.
+}
 

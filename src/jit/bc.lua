@@ -179,13 +179,12 @@ local function bcliston(outfile)
 end
 
 -- Public module functions.
-module(...)
-
-line = bcline
-dump = bcdump
-targets = bctargets
-
-on = bcliston
-off = bclistoff
-start = bcliston -- For -j command line option.
+return {
+  line = bcline,
+  dump = bcdump,
+  targets = bctargets,
+  on = bcliston,
+  off = bclistoff,
+  start = bcliston -- For -j command line option.
+}
 

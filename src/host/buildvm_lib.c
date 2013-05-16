@@ -432,7 +432,7 @@ void emit_lib(BuildCtx *ctx)
       "#ifndef FF_NUM_ASMFUNC\n#define FF_NUM_ASMFUNC %d\n#endif\n\n",
       ffasmfunc);
   } else if (ctx->mode == BUILD_vmdef) {
-    fprintf(ctx->fp, "}\n\n");
+    fprintf(ctx->fp, "},\n\n");
   } else if (ctx->mode == BUILD_bcdef) {
     int i;
     fprintf(ctx->fp, "\n};\n\n");

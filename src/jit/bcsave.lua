@@ -653,7 +653,7 @@ end
 ------------------------------------------------------------------------------
 
 -- Public module functions.
-module(...)
-
-start = docmd -- Process -b command line option.
+return {
+  start = docmd -- Process -b command line option.
+}
 

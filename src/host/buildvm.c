@@ -314,20 +314,20 @@ static void emit_vmdef(BuildCtx *ctx)
   char buf[80];
   int i;
   fprintf(ctx->fp, "-- This is a generated file. DO NOT EDIT!\n\n");
-  fprintf(ctx->fp, "module(...)\n\n");
+  fprintf(ctx->fp, "return {\n\n");
 
   fprintf(ctx->fp, "bcnames = \"");
   for (i = 0; bc_names[i]; i++) fprintf(ctx->fp, "%-6s", bc_names[i]);
-  fprintf(ctx->fp, "\"\n\n");
+  fprintf(ctx->fp, "\",\n\n");
 
   fprintf(ctx->fp, "irnames = \"");
   for (i = 0; ir_names[i]; i++) fprintf(ctx->fp, "%-6s", ir_names[i]);
-  fprintf(ctx->fp, "\"\n\n");
+  fprintf(ctx->fp, "\",\n\n");
 
   fprintf(ctx->fp, "irfpm = { [0]=");
   for (i = 0; irfpm_names[i]; i++)
     fprintf(ctx->fp, "\"%s\", ", lower(buf, irfpm_names[i]));
-  fprintf(ctx->fp, "}\n\n");
+  fprintf(ctx->fp, "},\n\n");
 
   fprintf(ctx->fp, "irfield = { [0]=");
   for (i = 0; irfield_names[i]; i++) {
@@ -337,17 +337,17 @@ static void emit_vmdef(BuildCtx *ctx)
     if (p) *p = '.';
     fprintf(ctx->fp, "\"%s\", ", buf);
   }
-  fprintf(ctx->fp, "}\n\n");
+  fprintf(ctx->fp, "},\n\n");
 
   fprintf(ctx->fp, "ircall = {\n[0]=");
   for (i = 0; ircall_names[i]; i++)
     fprintf(ctx->fp, "\"%s\",\n", ircall_names[i]);
-  fprintf(ctx->fp, "}\n\n");
+  fprintf(ctx->fp, "},\n\n");
 
   fprintf(ctx->fp, "traceerr = {\n[0]=");
   for (i = 0; trace_errors[i]; i++)
     fprintf(ctx->fp, "\"%s\",\n", trace_errors[i]);
-  fprintf(ctx->fp, "}\n\n");
+  fprintf(ctx->fp, "},\n\n");
 }
 
 /* -- Argument parsing ---------------------------------------------------- */
@@ -484,6 +484,7 @@ int main(int argc, char **argv)
   case BUILD_vmdef:
     emit_vmdef(ctx);
     emit_lib(ctx);
+    fprintf(ctx->fp, "}\n\n");
     break;
   case BUILD_ffdef:
   case BUILD_libdef:
