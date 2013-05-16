@@ -584,22 +584,26 @@ static unsigned int ccall_classify_struct(CTState *cts, CType *ct, CType *ctf)
   unsigned int r = 0, n = 0, isu = (ct->info & CTF_UNION);
   if ((ctf->info & CTF_VARARG)) goto noth;
   while (ct->sib) {
+    CType *sct;
     ct = ctype_get(cts, ct->sib);
     if (ctype_isfield(ct->info)) {
-      CType *sct = ctype_rawchild(cts, ct);
+      sct = ctype_rawchild(cts, ct);
       if (ctype_isfp(sct->info)) {
 	r |= sct->size;
 	if (!isu) n++; else if (n == 0) n = 1;
       } else if (ctype_iscomplex(sct->info)) {
 	r |= (sct->size >> 1);
 	if (!isu) n += 2; else if (n < 2) n = 2;
+      } else if (ctype_isstruct(sct->info)) {
+	goto substruct;
       } else {
 	goto noth;
       }
     } else if (ctype_isbitfield(ct->info)) {
       goto noth;
     } else if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
-      CType *sct = ctype_rawchild(cts, ct);
+      sct = ctype_rawchild(cts, ct);
+    substruct:
       if (sct->size > 0) {
 	unsigned int s = ccall_classify_struct(cts, sct, ctf);
 	if (s <= 1) goto noth;
