@@ -57,15 +57,7 @@ char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
 
 /* -- Low-level buffer put operations ------------------------------------- */
 
-/* Write memory block to buffer. */
-char *lj_buf_wmem(char *p, const void *q, MSize len)
-{
-  const char *s = (const char *)q, *e = s + len;
-  while (s < e) *p++ = *s++;
-  return p;
-}
-
-SBuf * lj_buf_putmem(SBuf *sb, const void *q, MSize len)
+SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 {
   char *p = lj_buf_more(sb, len);
   p = lj_buf_wmem(p, q, len);
