@@ -1978,6 +1978,7 @@ LJFOLDF(merge_eqne_snew_kgc)
 #define FOLD_SNEW_TYPE8		IRT_U8  /* Prefer unsigned loads. */
 #endif
 
+  PHIBARRIER(fleft);
   if (len <= FOLD_SNEW_MAX_LEN) {
     IROp op = (IROp)fins->o;
     IRRef strref = fleft->op1;
