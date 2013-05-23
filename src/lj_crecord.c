@@ -453,6 +453,10 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
     sinfo = CTINFO(CT_NUM, CTF_UNSIGNED);
     ssize = CTSIZE_PTR;
     st = IRT_UINTP;
+    if (((dsize ^ ssize) & 8) == 0) {  /* Must insert no-op type conversion. */
+      sp = emitconv(sp, dsize < 4 ? IRT_INT : dt, IRT_PTR, 0);
+      goto xstore;
+    }
     goto conv_I_I;
 
   /* Destination is a floating-point number. */
