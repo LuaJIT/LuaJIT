@@ -126,11 +126,6 @@ static IRType crec_ct2irt(CTState *cts, CType *ct)
 #define CREC_COPY_MAXLEN		128
 
 #define CREC_FILL_MAXUNROLL		16
-#if LJ_TARGET_UNALIGNED
-#define CREC_FILL_MAXLEN		(CTSIZE_PTR * CREC_FILL_MAXUNROLL)
-#else
-#define CREC_FILL_MAXLEN		CREC_FILL_MAXUNROLL
-#endif
 
 /* Number of windowed registers used for optimized memory copy. */
 #if LJ_TARGET_X86
@@ -321,9 +316,9 @@ static void crec_fill(jit_State *J, TRef trdst, TRef trlen, TRef trfill,
     MSize mlp;
     CTSize len = (CTSize)IR(tref_ref(trlen))->i;
     if (len == 0) return;  /* Shortcut. */
-    if (len > CREC_FILL_MAXLEN) goto fallback;
     if (LJ_TARGET_UNALIGNED || step >= CTSIZE_PTR)
       step = CTSIZE_PTR;
+    if (step * CREC_FILL_MAXUNROLL < len) goto fallback;
     mlp = crec_fill_unroll(ml, len, step);
     if (!mlp) goto fallback;
     if (tref_isk(trfill) || ml[0].tp != IRT_U8)
