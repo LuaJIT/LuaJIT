@@ -2050,7 +2050,16 @@ static void asm_setup_regsp(ASMState *as)
     case IR_SNEW: case IR_XSNEW: case IR_NEWREF: case IR_BUFPUT:
       if (REGARG_NUMGPR < 3 && as->evenspill < 3)
 	as->evenspill = 3;  /* lj_str_new and lj_tab_newkey need 3 args. */
-    case IR_TNEW: case IR_TDUP: case IR_CNEW: case IR_CNEWI: case IR_TOSTR:
+#if LJ_TARGET_X86 && LJ_HASFFI
+      if (0) {
+    case IR_CNEW:
+	if (ir->op2 != REF_NIL && as->evenspill < 4)
+	  as->evenspill = 4;  /* lj_cdata_newv needs 4 args. */
+      }
+#else
+    case IR_CNEW:
+#endif
+    case IR_TNEW: case IR_TDUP: case IR_CNEWI: case IR_TOSTR:
     case IR_BUFSTR:
       ir->prev = REGSP_HINT(RID_RET);
       if (inloop)

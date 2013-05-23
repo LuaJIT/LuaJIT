@@ -888,10 +888,8 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
   CTSize sz;
   CTInfo info = lj_ctype_info(cts, id, &sz);
   CType *d = ctype_raw(cts, id);
-  TRef trid;
-  if (!sz || sz > 128 || (info & CTF_VLA) || ctype_align(info) > CT_MEMALIGN)
-    lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: large/special allocations. */
-  trid = lj_ir_kint(J, id);
+  TRef trcd, trid = lj_ir_kint(J, id);
+  cTValue *fin;
   /* Use special instruction to box pointer or 32/64 bit integer. */
   if (ctype_isptr(info) || (ctype_isinteger(info) && (sz == 4 || sz == 8))) {
     TRef sp = J->base[1] ? crec_ct_tv(J, d, 0, J->base[1], &rd->argv[1]) :
@@ -899,11 +897,36 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	      sz == 4 ? lj_ir_kint(J, 0) :
 	      (lj_needsplit(J), lj_ir_kint64(J, 0));
     J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, sp);
+    return;
   } else {
-    TRef trcd = emitir(IRTG(IR_CNEW, IRT_CDATA), trid, TREF_NIL);
-    cTValue *fin;
-    J->base[0] = trcd;
-    if (J->base[1] && !J->base[2] &&
+    TRef trsz = TREF_NIL;
+    if ((info & CTF_VLA)) {  /* Calculate VLA/VLS size at runtime. */
+      CTSize sz0, sz1;
+      if (!J->base[1] || J->base[2])
+	lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: init VLA/VLS. */
+      trsz = crec_ct_tv(J, ctype_get(cts, CTID_INT32), 0,
+			J->base[1], &rd->argv[1]);
+      sz0 = lj_ctype_vlsize(cts, d, 0);
+      sz1 = lj_ctype_vlsize(cts, d, 1);
+      trsz = emitir(IRTGI(IR_MULOV), trsz, lj_ir_kint(J, (int32_t)(sz1-sz0)));
+      trsz = emitir(IRTGI(IR_ADDOV), trsz, lj_ir_kint(J, (int32_t)sz0));
+      J->base[1] = 0;  /* Simplify logic below. */
+    } else if (ctype_align(info) > CT_MEMALIGN) {
+      trsz = lj_ir_kint(J, sz);
+    }
+    trcd = emitir(IRTG(IR_CNEW, IRT_CDATA), trid, trsz);
+    if (sz > 128 || (info & CTF_VLA)) {
+      TRef dp;
+      CTSize align;
+    special:  /* Only handle bulk zero-fill for large/VLA/VLS types. */
+      if (J->base[1])
+	lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: init large/VLA/VLS types. */
+      dp = emitir(IRT(IR_ADD, IRT_PTR), trcd, lj_ir_kintp(J, sizeof(GCcdata)));
+      if (trsz == TREF_NIL) trsz = lj_ir_kint(J, sz);
+      align = ctype_align(info);
+      if (align < CT_MEMALIGN) align = CT_MEMALIGN;
+      crec_fill(J, dp, trsz, lj_ir_kint(J, 0), (1u << align));
+    } else if (J->base[1] && !J->base[2] &&
 	!lj_cconv_multi_init(cts, d, &rd->argv[1])) {
       goto single_init;
     } else if (ctype_isarray(d->info)) {
@@ -914,8 +937,9 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
       TValue *sval = &tv;
       MSize i;
       tv.u64 = 0;
-      if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info)))
-	lj_trace_err(J, LJ_TRERR_NYICONV);  /* NYI: init array of aggregates. */
+      if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info)) ||
+	  esize * CREC_FILL_MAXUNROLL < sz)
+	goto special;
       for (i = 1, ofs = 0; ofs < sz; ofs += esize) {
 	TRef dp = emitir(IRT(IR_ADD, IRT_PTR), trcd,
 			 lj_ir_kintp(J, ofs + sizeof(GCcdata)));
@@ -972,11 +996,12 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	crec_ct_tv(J, d, dp, lj_ir_kint(J, 0), &tv);
       }
     }
-    /* Handle __gc metamethod. */
-    fin = lj_ctype_meta(cts, id, MM_gc);
-    if (fin)
-      crec_finalizer(J, trcd, fin);
   }
+  J->base[0] = trcd;
+  /* Handle __gc metamethod. */
+  fin = lj_ctype_meta(cts, id, MM_gc);
+  if (fin)
+    crec_finalizer(J, trcd, fin);
 }
 
 /* Record argument conversions. */
