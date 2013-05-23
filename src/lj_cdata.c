@@ -26,12 +26,12 @@ GCcdata *lj_cdata_newref(CTState *cts, const void *p, CTypeID id)
 }
 
 /* Allocate variable-sized or specially aligned C data object. */
-GCcdata *lj_cdata_newv(CTState *cts, CTypeID id, CTSize sz, CTSize align)
+GCcdata *lj_cdata_newv(lua_State *L, CTypeID id, CTSize sz, CTSize align)
 {
   global_State *g;
   MSize extra = sizeof(GCcdataVar) + sizeof(GCcdata) +
 		(align > CT_MEMALIGN ? (1u<<align) - (1u<<CT_MEMALIGN) : 0);
-  char *p = lj_mem_newt(cts->L, extra + sz, char);
+  char *p = lj_mem_newt(L, extra + sz, char);
   uintptr_t adata = (uintptr_t)p + sizeof(GCcdataVar) + sizeof(GCcdata);
   uintptr_t almask = (1u << align) - 1u;
   GCcdata *cd = (GCcdata *)(((adata + almask) & ~almask) - sizeof(GCcdata));
@@ -39,7 +39,7 @@ GCcdata *lj_cdata_newv(CTState *cts, CTypeID id, CTSize sz, CTSize align)
   cdatav(cd)->offset = (uint16_t)((char *)cd - p);
   cdatav(cd)->extra = extra;
   cdatav(cd)->len = sz;
-  g = cts->g;
+  g = G(L);
   setgcrefr(cd->nextgc, g->gc.root);
   setgcref(g->gc.root, obj2gco(cd));
   newwhite(g, obj2gco(cd));
