@@ -75,21 +75,20 @@ void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
   }
 }
 
-TValue * LJ_FASTCALL lj_cdata_setfin(lua_State *L, GCcdata *cd)
+void lj_cdata_setfin(lua_State *L, GCcdata *cd, GCobj *obj, uint32_t it)
 {
-  global_State *g = G(L);
-  GCtab *t = ctype_ctsG(g)->finalizer;
+  GCtab *t = ctype_ctsG(G(L))->finalizer;
   if (gcref(t->metatable)) {
     /* Add cdata to finalizer table, if still enabled. */
     TValue *tv, tmp;
     setcdataV(L, &tmp, cd);
     lj_gc_anybarriert(L, t);
     tv = lj_tab_set(L, t, &tmp);
-    cd->marked |= LJ_GC_CDATA_FIN;
-    return tv;
-  } else {
-    /* Otherwise return dummy TValue. */
-    return &g->tmptv;
+    setgcV(L, tv, obj, it);
+    if (!tvisnil(tv))
+      cd->marked |= LJ_GC_CDATA_FIN;
+    else
+      cd->marked &= ~LJ_GC_CDATA_FIN;
   }
 }
 

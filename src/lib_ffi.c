@@ -768,19 +768,11 @@ LJLIB_CF(ffi_gc)	LJLIB_REC(.)
   GCcdata *cd = ffi_checkcdata(L, 1);
   TValue *fin = lj_lib_checkany(L, 2);
   CTState *cts = ctype_cts(L);
-  GCtab *t = cts->finalizer;
   CType *ct = ctype_raw(cts, cd->ctypeid);
   if (!(ctype_isptr(ct->info) || ctype_isstruct(ct->info) ||
 	ctype_isrefarray(ct->info)))
     lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
-  if (gcref(t->metatable)) {  /* Update finalizer table, if still enabled. */
-    copyTV(L, lj_tab_set(L, t, L->base), fin);
-    lj_gc_anybarriert(L, t);
-    if (!tvisnil(fin))
-      cd->marked |= LJ_GC_CDATA_FIN;
-    else
-      cd->marked &= ~LJ_GC_CDATA_FIN;
-  }
+  lj_cdata_setfin(L, cd, gcval(fin), itype(fin));
   L->top = L->base+1;  /* Pass through the cdata object. */
   return 1;
 }

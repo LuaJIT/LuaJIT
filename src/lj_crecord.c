@@ -863,21 +863,17 @@ again:
 }
 
 /* Record setting a finalizer. */
-static void crec_finalizer(jit_State *J, TRef trcd, cTValue *fin)
+static void crec_finalizer(jit_State *J, TRef trcd, TRef trfin, cTValue *fin)
 {
-  TRef trlo = lj_ir_call(J, IRCALL_lj_cdata_setfin, trcd);
-  TRef trhi = emitir(IRT(IR_ADD, IRT_P32), trlo, lj_ir_kint(J, 4));
-  if (LJ_BE) { TRef tmp = trlo; trlo = trhi; trhi = tmp; }
-  if (tvisfunc(fin)) {
-    emitir(IRT(IR_XSTORE, IRT_P32), trlo, lj_ir_kfunc(J, funcV(fin)));
-    emitir(IRTI(IR_XSTORE), trhi, lj_ir_kint(J, LJ_TFUNC));
-  } else if (tviscdata(fin)) {
-    emitir(IRT(IR_XSTORE, IRT_P32), trlo,
-	   lj_ir_kgc(J, obj2gco(cdataV(fin)), IRT_CDATA));
-    emitir(IRTI(IR_XSTORE), trhi, lj_ir_kint(J, LJ_TCDATA));
+  if (tvisgcv(fin)) {
+    if (!trfin) trfin = lj_ir_kptr(J, gcval(fin));
+  } else if (tvisnil(fin)) {
+    trfin = lj_ir_kptr(J, NULL);
   } else {
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   }
+  lj_ir_call(J, IRCALL_lj_cdata_setfin, trcd,
+	     trfin, lj_ir_kint(J, (int32_t)itype(fin)));
   J->needsnap = 1;
 }
 
@@ -1001,7 +997,7 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
   /* Handle __gc metamethod. */
   fin = lj_ctype_meta(cts, id, MM_gc);
   if (fin)
-    crec_finalizer(J, trcd, fin);
+    crec_finalizer(J, trcd, 0, fin);
 }
 
 /* Record argument conversions. */
@@ -1648,7 +1644,9 @@ void LJ_FASTCALL recff_ffi_xof(jit_State *J, RecordFFData *rd)
 void LJ_FASTCALL recff_ffi_gc(jit_State *J, RecordFFData *rd)
 {
   argv2cdata(J, J->base[0], &rd->argv[0]);
-  crec_finalizer(J, J->base[0], &rd->argv[1]);
+  if (!J->base[1])
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  crec_finalizer(J, J->base[0], J->base[1], &rd->argv[1]);
 }
 
 /* -- 64 bit bit.* library functions -------------------------------------- */
