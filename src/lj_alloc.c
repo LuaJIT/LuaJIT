@@ -188,20 +188,23 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
   return ptr;
 }
 
-#elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__)
+#elif LJ_TARGET_OSX || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__) || defined(__sun__)
 
 /* OSX and FreeBSD mmap() use a naive first-fit linear search.
 ** That's perfect for us. Except that -pagezero_size must be set for OSX,
 ** otherwise the lower 4GB are blocked. And the 32GB RLIMIT_DATA needs
 ** to be reduced to 250MB on FreeBSD.
 */
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__OpenBSD__)
-#include <sys/resource.h>
-#define MMAP_REGION_START	((uintptr_t)0x10000000)
-#else
+#if LJ_TARGET_OSX
 #define MMAP_REGION_START	((uintptr_t)0x10000)
+#else
+#define MMAP_REGION_START	((uintptr_t)0x10000000)
 #endif
 #define MMAP_REGION_END		((uintptr_t)0x80000000)
+
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+#include <sys/resource.h>
+#endif
 
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
@@ -227,6 +230,10 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
       return p;
     }
     if (p != CMFAIL) munmap(p, size);
+#ifdef __sun__
+    alloc_hint += 0x1000000;  /* Need near-exhaustive linear scan. */
+    if (alloc_hint + size < MMAP_REGION_END) continue;
+#endif
     if (retry) break;
     retry = 1;
     alloc_hint = MMAP_REGION_START;
