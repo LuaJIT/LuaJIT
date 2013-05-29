@@ -90,6 +90,7 @@ local function fillsymtab_tr(tr, nexit)
   end
   for i=0,nexit-1 do
     local addr = traceexitstub(tr, i)
+    if addr < 0 then addr = addr + 2^32 end
     t[addr] = tostring(i)
   end
   local addr = traceexitstub(tr, nexit)
@@ -103,7 +104,10 @@ local function fillsymtab(tr, nexit)
     local ircall = vmdef.ircall
     for i=0,#ircall do
       local addr = ircalladdr(i)
-      if addr ~= 0 then t[addr] = ircall[i] end
+      if addr ~= 0 then
+	if addr < 0 then addr = addr + 2^32 end
+	t[addr] = ircall[i]
+      end
     end
   end
   if nexitsym == 1000000 then -- Per-trace exit stubs.
@@ -117,6 +121,7 @@ local function fillsymtab(tr, nexit)
 	nexit = 1000000
 	break
       end
+      if addr < 0 then addr = addr + 2^32 end
       t[addr] = tostring(i)
     end
     nexitsym = nexit
