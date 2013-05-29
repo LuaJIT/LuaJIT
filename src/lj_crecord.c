@@ -618,7 +618,7 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
       emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
       sp = emitir(IRT(IR_FLOAD, IRT_PTR), sp, IRFL_UDATA_FILE);
     } else {
-      sp = emitir(IRT(IR_ADD, IRT_P32), sp, lj_ir_kint(J, sizeof(GCudata)));
+      sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCudata)));
     }
   } else if (tref_isstr(sp)) {
     if (ctype_isenum(d->info)) {  /* Match string against enum constant. */
@@ -636,7 +636,8 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
     } else if (ctype_isrefarray(d->info)) {  /* Copy string to array. */
       lj_trace_err(J, LJ_TRERR_BADTYPE);  /* NYI */
     } else {  /* Otherwise pass the string data as a const char[]. */
-      sp = emitir(IRT(IR_STRREF, IRT_P32), sp, lj_ir_kint(J, 0));
+      /* Don't use STRREF. It folds with SNEW, which loses the trailing NUL. */
+      sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCstr)));
       sid = CTID_A_CCHAR;
     }
   } else {  /* NYI: tref_istab(sp), tref_islightud(sp). */
