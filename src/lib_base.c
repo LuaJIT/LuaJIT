@@ -619,9 +619,10 @@ static void setpc_wrap_aux(lua_State *L, GCfunc *fn);
 
 LJLIB_CF(coroutine_wrap)
 {
+  GCfunc *fn;
   lj_cf_coroutine_create(L);
-  lj_lib_pushcc(L, lj_ffh_coroutine_wrap_aux, FF_coroutine_wrap_aux, 1);
-  setpc_wrap_aux(L, funcV(L->top-1));
+  fn = lj_lib_pushcc(L, lj_ffh_coroutine_wrap_aux, FF_coroutine_wrap_aux, 1);
+  setpc_wrap_aux(L, fn);
   return 1;
 }
 

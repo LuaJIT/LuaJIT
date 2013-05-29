@@ -60,14 +60,15 @@ LJ_FUNC int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst);
 #endif
 
 /* Push internal function on the stack. */
-static LJ_AINLINE void lj_lib_pushcc(lua_State *L, lua_CFunction f,
-				     int id, int n)
+static LJ_AINLINE GCfunc *lj_lib_pushcc(lua_State *L, lua_CFunction f,
+					int id, int n)
 {
   GCfunc *fn;
   lua_pushcclosure(L, f, n);
   fn = funcV(L->top-1);
   fn->c.ffid = (uint8_t)id;
   setmref(fn->c.pc, &G(L)->bc_cfunc_int);
+  return fn;
 }
 
 #define lj_lib_pushcf(L, fn, id)	(lj_lib_pushcc(L, (fn), (id), 0))
