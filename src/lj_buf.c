@@ -3,8 +3,6 @@
 ** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
 */
 
-#include <stdio.h>
-
 #define lj_buf_c
 #define LUA_CORE
 
@@ -18,21 +16,35 @@
 
 /* -- Buffer management --------------------------------------------------- */
 
-LJ_NOINLINE void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en)
+static void buf_grow(SBuf *sb, MSize sz)
 {
-  lua_State *L = sbufL(sb);
-  char *b = sbufB(sb);
-  MSize sz = (MSize)(en - b);
-  MSize osz = (MSize)(sbufE(sb) - b), nsz = osz;
-  MSize n = (MSize)(sbufP(sb) - b);
-  if (LJ_UNLIKELY(sz > LJ_MAX_MEM))
-    lj_err_mem(L);
+  MSize osz = sbufsz(sb), len = sbuflen(sb), nsz = osz;
+  char *b;
   if (nsz < LJ_MIN_SBUF) nsz = LJ_MIN_SBUF;
   while (nsz < sz) nsz += nsz;
-  b = (char *)lj_mem_realloc(L, b, osz, nsz);
+  b = (char *)lj_mem_realloc(sbufL(sb), sbufB(sb), osz, nsz);
   setmref(sb->b, b);
-  setmref(sb->p, b + n);
+  setmref(sb->p, b + len);
   setmref(sb->e, b + nsz);
+}
+
+LJ_NOINLINE char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz)
+{
+  lua_assert(sz > sbufsz(sb));
+  if (LJ_UNLIKELY(sz > LJ_MAX_MEM))
+    lj_err_mem(sbufL(sb));
+  buf_grow(sb, sz);
+  return sbufB(sb);
+}
+
+LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
+{
+  MSize len = sbuflen(sb);
+  lua_assert(sz > sbufleft(sb));
+  if (LJ_UNLIKELY(sz > LJ_MAX_MEM || len + sz > LJ_MAX_MEM))
+    lj_err_mem(sbufL(sb));
+  buf_grow(sb, len + sz);
+  return sbufP(sb);
 }
 
 void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)

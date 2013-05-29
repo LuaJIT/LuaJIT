@@ -17,11 +17,13 @@
 #define sbufL(sb)	(mref((sb)->L, lua_State))
 #define sbufsz(sb)	((MSize)(sbufE((sb)) - sbufB((sb))))
 #define sbuflen(sb)	((MSize)(sbufP((sb)) - sbufB((sb))))
+#define sbufleft(sb)	((MSize)(sbufE((sb)) - sbufP((sb))))
 #define setsbufP(sb, q)	(setmref((sb)->p, (q)))
 #define setsbufL(sb, l)	(setmref((sb)->L, (l)))
 
 /* Buffer management */
-LJ_FUNC void LJ_FASTCALL lj_buf_grow(SBuf *sb, char *en);
+LJ_FUNC char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz);
+LJ_FUNC char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz);
 LJ_FUNC void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb);
 LJ_FUNC char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz);
 
@@ -51,17 +53,15 @@ static LJ_AINLINE void lj_buf_free(global_State *g, SBuf *sb)
 
 static LJ_AINLINE char *lj_buf_need(SBuf *sb, MSize sz)
 {
-  char *en = sbufB(sb) + sz;
-  if (LJ_UNLIKELY(en > sbufE(sb)))
-    lj_buf_grow(sb, en);
+  if (LJ_UNLIKELY(sz > sbufsz(sb)))
+    return lj_buf_need2(sb, sz);
   return sbufB(sb);
 }
 
 static LJ_AINLINE char *lj_buf_more(SBuf *sb, MSize sz)
 {
-  char *en = sbufP(sb) + sz;
-  if (LJ_UNLIKELY(en > sbufE(sb)))
-    lj_buf_grow(sb, en);
+  if (LJ_UNLIKELY(sz > sbufleft(sb)))
+    return lj_buf_more2(sb, sz);
   return sbufP(sb);
 }
 

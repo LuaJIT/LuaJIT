@@ -3,8 +3,6 @@
 ** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
 */
 
-#include <stdio.h>
-
 #define lj_str_c
 #define LUA_CORE
 
