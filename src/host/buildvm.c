@@ -108,10 +108,16 @@ static const char *sym_decorate(BuildCtx *ctx,
   sprintf(name, "%s%s%s", symprefix, prefix, suffix);
   p = strchr(name, '@');
   if (p) {
+#if LJ_TARGET_X86ORX64
     if (!LJ_64 && (ctx->mode == BUILD_coffasm || ctx->mode == BUILD_peobj))
       name[0] = '@';
     else
       *p = '\0';
+#elif (LJ_TARGET_PPC  || LJ_TARGET_PPCSPE) && !LJ_TARGET_CONSOLE
+    /* Keep @plt. */
+#else
+    *p = '\0';
+#endif
   }
   p = (char *)malloc(strlen(name)+1);  /* MSVC doesn't like strdup. */
   strcpy(p, name);
