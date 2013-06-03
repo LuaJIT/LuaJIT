@@ -63,7 +63,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.1</strong>.<br>
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.2</strong>.<br>
 </p>
 <p>
 Please check the
@@ -72,6 +72,36 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.0.2">LuaJIT 2.0.2 &mdash; 2013-06-03</h2>
+<ul>
+<li>Fix memory access check for fast string interning.</li>
+<li>Fix MSVC intrinsics for older versions.</li>
+<li>Add missing GC steps for <tt>io.*</tt> functions.</li>
+<li>Fix spurious red zone overflows in machine code generation.</li>
+<li>Fix jump-range constrained mcode allocation.</li>
+<li>Inhibit DSE for implicit loads via calls.</li>
+<li>Fix builtin string to number conversion for overflow digits.</li>
+<li>Fix optional argument handling while recording builtins.</li>
+<li>Fix optional argument handling in <tt>table.concat()</tt>.</li>
+<li>Add partial support for building with MingW64 GCC 4.8-SEH.</li>
+<li>Add missing PHI barrier to <tt>string.sub(str, a, b) == kstr</tt> FOLD rule.</li>
+<li>Fix compatibility issues with Illumos.</li>
+<li>ARM: Fix cache flush/sync for exit stubs of JIT-compiled code.</li>
+<li>MIPS: Fix cache flush/sync for JIT-compiled code jump area.</li>
+<li>PPC: Add <tt>plt</tt> suffix for external calls from assembler code.</li>
+<li>FFI: Fix snapshot substitution in SPLIT pass.</li>
+<li>FFI/x86: Fix register allocation for 64 bit comparisons.</li>
+<li>FFI: Fix tailcall in lowest frame to C&nbsp;function with bool result.</li>
+<li>FFI: Ignore <tt>long</tt> type specifier in <tt>ffi.istype()</tt>.</li>
+<li>FFI: Fix calling conventions for 32 bit OSX and iOS simulator (struct returns).</li>
+<li>FFI: Fix calling conventions for ARM hard-float EABI (nested structs).</li>
+<li>FFI: Improve error messages for arithmetic and comparison operators.</li>
+<li>FFI: Insert no-op type conversion for pointer to integer cast.</li>
+<li>FFI: Fix unroll limit for <tt>ffi.fill()</tt>.</li>
+<li>FFI: Must sink <tt>XBAR</tt> together with <tt>XSTORE</tt>s.</li>
+<li>FFI: Preserve intermediate string for <tt>const&nbsp;char&nbsp;*</tt> conversion.</li>
+</ul>
+
 <h2 id="LuaJIT-2.0.1">LuaJIT 2.0.1 &mdash; 2013-02-19</h2>
 <ul>
 <li>Don't clear frame for out-of-memory error.</li>
