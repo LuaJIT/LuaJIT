@@ -1390,7 +1390,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknum CARG2
   |   evmergehi CARG1, CARG2, CARG2
   |  checkfail ->fff_fallback
-  |  bl extern func
+  |  bl extern func@plt
   |  evmergelo CRET1, CRET1, CRET2
   |  b ->fff_restv
   |.endmacro
@@ -1405,7 +1405,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknum CARG1
   |   evmergehi CARG3, CARG4, CARG4
   |  checkanyfail ->fff_fallback
-  |  bl extern func
+  |  bl extern func@plt
   |  evmergelo CRET1, CRET1, CRET2
   |  b ->fff_restv
   |.endmacro
@@ -1437,7 +1437,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknum CARG2
   |   evmergehi CARG1, CARG2, CARG2
   |  checkfail ->fff_fallback
-  |  bl extern log
+  |  bl extern log@plt
   |  evmergelo CRET1, CRET1, CRET2
   |  b ->fff_restv
   |
@@ -1471,7 +1471,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknum CARG1
   |  checkanyfail ->fff_fallback
   |  efdctsi CARG3, CARG4
-  |  bl extern ldexp
+  |  bl extern ldexp@plt
   |  evmergelo CRET1, CRET1, CRET2
   |  b ->fff_restv
   |
@@ -1484,7 +1484,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checkfail ->fff_fallback
   |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
   |   lwz PC, FRAME_PC(BASE)
-  |  bl extern frexp
+  |  bl extern frexp@plt
   |   lwz TMP1, DISPATCH_GL(tmptv)(DISPATCH)
   |  evmergelo CRET1, CRET1, CRET2
   |   efdcfsi CRET2, TMP1
@@ -1503,7 +1503,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checkfail ->fff_fallback
   |  la CARG3, -8(BASE)
   |   lwz PC, FRAME_PC(BASE)
-  |  bl extern modf
+  |  bl extern modf@plt
   |  evmergelo CRET1, CRET1, CRET2
   |   la RA, -8(BASE)
   |  evstdd CRET1, 0(BASE)
@@ -2399,7 +2399,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checknum CARG1
     |   evmergehi CARG3, CARG4, CARG4
     |  checkanyfail ->vmeta_arith_vv
-    |  bl extern pow
+    |  bl extern pow@plt
     |  evmergelo CRET2, CRET1, CRET2
     |  evstddx CRET2, BASE, RA
     |  ins_next
