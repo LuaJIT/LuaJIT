@@ -30,9 +30,9 @@
 
 #include "lua.h"
 
-#define LUAJIT_VERSION		"LuaJIT 2.0.1"
-#define LUAJIT_VERSION_NUM	20001  /* Version 2.0.1 = 02.00.01. */
-#define LUAJIT_VERSION_SYM	luaJIT_version_2_0_1
+#define LUAJIT_VERSION		"LuaJIT 2.0.2"
+#define LUAJIT_VERSION_NUM	20002  /* Version 2.0.2 = 02.00.02. */
+#define LUAJIT_VERSION_SYM	luaJIT_version_2_0_2
 #define LUAJIT_COPYRIGHT	"Copyright (C) 2005-2013 Mike Pall"
 #define LUAJIT_URL		"http://luajit.org/"
 
