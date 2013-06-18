@@ -396,13 +396,13 @@ static AliasRet aa_uref(IRIns *refa, IRIns *refb)
 TRef LJ_FASTCALL lj_opt_fwd_uload(jit_State *J)
 {
   IRRef uref = fins->op1;
-  IRRef lim = uref;  /* Search limit. */
+  IRRef lim = REF_BASE;  /* Search limit. */
   IRIns *xr = IR(uref);
   IRRef ref;
 
   /* Search for conflicting stores. */
   ref = J->chain[IR_USTORE];
-  while (ref > uref) {
+  while (ref > lim) {
     IRIns *store = IR(ref);
     switch (aa_uref(xr, IR(store->op1))) {
     case ALIAS_NO:   break;  /* Continue searching. */
@@ -414,7 +414,16 @@ TRef LJ_FASTCALL lj_opt_fwd_uload(jit_State *J)
 
 cselim:
   /* Try to find a matching load. Below the conflicting store, if any. */
-  return lj_opt_cselim(J, lim);
+
+  ref = J->chain[IR_ULOAD];
+  while (ref > lim) {
+    IRIns *ir = IR(ref);
+    if (ir->op1 == uref ||
+	(IR(ir->op1)->op12 == IR(uref)->op12 && IR(ir->op1)->o == IR(uref)->o))
+      return ref;  /* Match for identical or equal UREFx (non-CSEable UREFO). */
+    ref = ir->prev;
+  }
+  return lj_ir_emit(J);
 }
 
 /* USTORE elimination. */
