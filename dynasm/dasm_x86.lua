@@ -1040,7 +1040,7 @@ local map_op = {
   -- ED: *in Rdw,dx
   -- EE: *out dx,Rb
   -- EF: *out dx,Rdw
-  -- F0: *lock
+  lock_0 =	"F0",
   int1_0 =	"F1",
   repne_0 =	"F2",
   repnz_0 =	"F2",
