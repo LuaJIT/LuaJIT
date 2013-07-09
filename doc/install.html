@@ -565,9 +565,11 @@ for a regular distribution build:
 <ul>
 <li><tt>PREFIX</tt> overrides the installation path and should usually
 be set to <tt>/usr</tt>. Setting this also changes the module paths and
-the <tt>-rpath</tt> of the shared library.</li>
+the paths needed to locate the shared library.</li>
 <li><tt>DESTDIR</tt> is an absolute path which allows you to install
 to a shadow tree instead of the root tree of the build system.</li>
+<li><tt>MULTILIB</tt> sets the architecture-specific library path component
+for multilib systems. The default is <tt>lib</tt>.</li>
 <li>Have a look at the top-level <tt>Makefile</tt> and <tt>src/Makefile</tt>
 for additional variables to tweak. The following variables <em>may</em> be
 overridden, but it's <em>not</em> recommended, except for special needs

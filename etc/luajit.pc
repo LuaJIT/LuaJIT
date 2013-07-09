@@ -6,13 +6,14 @@ version=${majver}.${minver}.${relver}
 abiver=5.1
 
 prefix=/usr/local
+multilib=lib
 exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
+libdir=${exec_prefix}/${multilib}
 libname=luajit-${abiver}
 includedir=${prefix}/include/luajit-${majver}.${minver}
 
 INSTALL_LMOD=${prefix}/share/lua/${abiver}
-INSTALL_CMOD=${prefix}/lib/lua/${abiver}
+INSTALL_CMOD=${prefix}/${multilib}/lua/${abiver}
 
 Name: LuaJIT
 Description: Just-in-time compiler for Lua

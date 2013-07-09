@@ -25,11 +25,12 @@ ABIVER=  5.1
 # the paths in src/luaconf.h, too. Note: PREFIX must be an absolute path!
 #
 export PREFIX= /usr/local
+export MULTILIB= lib
 ##############################################################################
 
 DPREFIX= $(DESTDIR)$(PREFIX)
 INSTALL_BIN=   $(DPREFIX)/bin
-INSTALL_LIB=   $(DPREFIX)/lib
+INSTALL_LIB=   $(DPREFIX)/$(MULTILIB)
 INSTALL_SHARE= $(DPREFIX)/share
 INSTALL_INC=   $(DPREFIX)/include/luajit-$(MAJVER).$(MINVER)
 
@@ -73,7 +74,8 @@ INSTALL_X= install -m 0755
 INSTALL_F= install -m 0644
 UNINSTALL= $(RM)
 LDCONFIG= ldconfig -n
-SED_PC= sed -e "s|^prefix=.*|prefix=$(PREFIX)|"
+SED_PC= sed -e "s|^prefix=.*|prefix=$(PREFIX)|" \
+            -e "s|^multilib=.*|multilib=$(MULTILIB)|"
 
 FILE_T= luajit
 FILE_A= libluajit.a

@@ -188,9 +188,10 @@ TARGET_LD= $(CROSS)$(CC)
 TARGET_AR= $(CROSS)ar rcus
 TARGET_STRIP= $(CROSS)strip
 
+TARGET_LIBPATH= $(or $(PREFIX),/usr/local)/$(or $(MULTILIB),lib)
 TARGET_SONAME= libluajit-$(ABIVER).so.$(MAJVER)
 TARGET_DYLIBNAME= libluajit-$(ABIVER).$(MAJVER).dylib
-TARGET_DYLIBPATH= $(or $(PREFIX),/usr/local)/lib/$(TARGET_DYLIBNAME)
+TARGET_DYLIBPATH= $(TARGET_LIBPATH)/$(TARGET_DYLIBNAME)
 TARGET_DLLNAME= lua$(NODOTABIVER).dll
 TARGET_XSHLDFLAGS= -shared -fPIC -Wl,-soname,$(TARGET_SONAME)
 TARGET_DYNXLDOPTS=
@@ -249,11 +250,17 @@ TARGET_ARCH+= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET_LJARCH))
 
 ifneq (,$(PREFIX))
 ifneq (/usr/local,$(PREFIX))
-  TARGET_XCFLAGS+= -DLUA_XROOT=\"$(PREFIX)/\"
+  TARGET_XCFLAGS+= -DLUA_ROOT=\"$(PREFIX)\"
   ifneq (/usr,$(PREFIX))
-    TARGET_DYNXLDOPTS= -Wl,-rpath,$(PREFIX)/lib
+    TARGET_DYNXLDOPTS= -Wl,-rpath,$(TARGET_LIBPATH)
   endif
 endif
+endif
+ifneq (,$(MULTILIB))
+  TARGET_XCFLAGS+= -DLUA_MULTILIB=\"$(MULTILIB)\"
+endif
+ifneq (,$(LMULTILIB))
+  TARGET_XCFLAGS+= -DLUA_LMULTILIB=\"$(LMULTILIB)\"
 endif
 
 ##############################################################################
