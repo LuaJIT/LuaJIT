@@ -220,7 +220,7 @@ static void clib_unloadlib(CLibrary *cl)
 	FreeLibrary((HINSTANCE)h);
       }
     }
-  } else if (!cl->handle) {
+  } else if (cl->handle) {
     FreeLibrary((HINSTANCE)cl->handle);
   }
 }
