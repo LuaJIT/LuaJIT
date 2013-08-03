@@ -57,12 +57,20 @@ static LJ_AINLINE int cp_iseol(CPChar c)
   return (c == '\n' || c == '\r');
 }
 
-static LJ_AINLINE CPChar cp_get(CPState *cp);
-
 /* Peek next raw character. */
 static LJ_AINLINE CPChar cp_rawpeek(CPState *cp)
 {
   return (CPChar)(uint8_t)(*cp->p);
+}
+
+static LJ_NOINLINE CPChar cp_get_bs(CPState *cp);
+
+/* Get next character. */
+static LJ_AINLINE CPChar cp_get(CPState *cp)
+{
+  cp->c = (CPChar)(uint8_t)(*cp->p++);
+  if (LJ_LIKELY(cp->c != '\\')) return cp->c;
+  return cp_get_bs(cp);
 }
 
 /* Transparently skip backslash-escaped line breaks. */
@@ -75,14 +83,6 @@ static LJ_NOINLINE CPChar cp_get_bs(CPState *cp)
   if (cp_iseol(c2) && c2 != c) cp->p++;
   cp->linenumber++;
   return cp_get(cp);
-}
-
-/* Get next character. */
-static LJ_AINLINE CPChar cp_get(CPState *cp)
-{
-  cp->c = (CPChar)(uint8_t)(*cp->p++);
-  if (LJ_LIKELY(cp->c != '\\')) return cp->c;
-  return cp_get_bs(cp);
 }
 
 /* Grow save buffer. */
