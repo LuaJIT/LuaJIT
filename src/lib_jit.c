@@ -73,7 +73,7 @@ LJLIB_CF(jit_off)
 LJLIB_CF(jit_flush)
 {
 #if LJ_HASJIT
-  if (L->base < L->top && !tvisnil(L->base)) {
+  if (L->base < L->top && tvisnumber(L->base)) {
     int traceno = lj_lib_checkint(L, 1);
     luaJIT_setmode(L, traceno, LUAJIT_MODE_FLUSH|LUAJIT_MODE_TRACE);
     return 0;
