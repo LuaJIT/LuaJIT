@@ -2708,7 +2708,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov L:RB, [DISPATCH+DISPATCH_GL(jit_L)]
   |  mov BASE, [DISPATCH+DISPATCH_GL(jit_base)]
   |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
-  |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
   |  mov L:RB->base, BASE
   |.if X64WIN
   |  lea CARG2, [rsp+4*8]
@@ -2718,6 +2717,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lea FCARG2, [esp+16]
   |.endif
   |  lea FCARG1, [DISPATCH+GG_DISP2J]
+  |  mov dword [DISPATCH+DISPATCH_GL(jit_base)], 0
   |  call extern lj_trace_exit@8	// (jit_State *J, ExitState *ex)
   |  // MULTRES or negated error code returned in eax (RD).
   |  mov RAa, L:RB->cframe
@@ -2765,11 +2765,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov r12, TMPQ
   |.endif
   |  test RD, RD; js >3			// Check for error from exit.
+  |  mov L:RB, SAVE_L
   |  mov MULTRES, RD
   |  mov LFUNC:KBASE, [BASE-8]
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
-  |  mov dword [DISPATCH+DISPATCH_GL(jit_L)], 0
+  |  mov L:RB->base, BASE
+  |  mov dword [DISPATCH+DISPATCH_GL(jit_base)], 0
   |  set_vmstate INTERP
   |  // Modified copy of ins_next which handles function header dispatch, too.
   |  mov RC, [PC]

@@ -60,7 +60,7 @@ static void resizestack(lua_State *L, MSize n)
   GCobj *up;
   lua_assert((MSize)(tvref(L->maxstack)-oldst)==L->stacksize-LJ_STACK_EXTRA-1);
   st = (TValue *)lj_mem_realloc(L, tvref(L->stack),
-				(MSize)(L->stacksize*sizeof(TValue)),
+				(MSize)(oldsize*sizeof(TValue)),
 				(MSize)(realsize*sizeof(TValue)));
   setmref(L->stack, st);
   delta = (char *)st - (char *)oldst;
@@ -68,12 +68,12 @@ static void resizestack(lua_State *L, MSize n)
   while (oldsize < realsize)  /* Clear new slots. */
     setnilV(st + oldsize++);
   L->stacksize = realsize;
+  if ((size_t)(mref(G(L)->jit_base, char) - (char *)oldst) < oldsize)
+    setmref(G(L)->jit_base, mref(G(L)->jit_base, char) + delta);
   L->base = (TValue *)((char *)L->base + delta);
   L->top = (TValue *)((char *)L->top + delta);
   for (up = gcref(L->openupval); up != NULL; up = gcnext(up))
     setmref(gco2uv(up)->v, (TValue *)((char *)uvval(gco2uv(up)) + delta));
-  if (obj2gco(L) == gcref(G(L)->jit_L))
-    setmref(G(L)->jit_base, mref(G(L)->jit_base, char) + delta);
 }
 
 /* Relimit stack after error, in case the limit was overdrawn. */
@@ -90,7 +90,8 @@ void lj_state_shrinkstack(lua_State *L, MSize used)
     return;  /* Avoid stack shrinking while handling stack overflow. */
   if (4*used < L->stacksize &&
       2*(LJ_STACK_START+LJ_STACK_EXTRA) < L->stacksize &&
-      obj2gco(L) != gcref(G(L)->jit_L))  /* Don't shrink stack of live trace. */
+      /* Don't shrink stack of live trace. */
+      (tvref(G(L)->jit_base) == NULL || obj2gco(L) != gcref(G(L)->jit_L)))
     resizestack(L, L->stacksize >> 1);
 }
 

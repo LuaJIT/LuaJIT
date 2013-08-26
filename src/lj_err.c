@@ -453,7 +453,7 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
 {
   global_State *g = G(L);
   lj_trace_abort(g);
-  setgcrefnull(g->jit_L);
+  setmref(g->jit_base, NULL);
   L->status = 0;
 #if LJ_UNWIND_EXT
   err_raise_ext(errcode);

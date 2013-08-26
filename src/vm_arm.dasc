@@ -2107,9 +2107,9 @@ static void build_subroutines(BuildCtx *ctx)
   |    ldr BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
   |   str CARG1, [DISPATCH, #DISPATCH_J(exitno)]
   |   mov CARG4, #0
-  |  str L, [DISPATCH, #DISPATCH_J(L)]
   |    str BASE, L->base
-  |   str CARG4, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |  str L, [DISPATCH, #DISPATCH_J(L)]
+  |   str CARG4, [DISPATCH, #DISPATCH_GL(jit_base)]
   |  sub CARG1, DISPATCH, #-GG_DISP2J
   |  mov CARG2, sp
   |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)
@@ -2133,8 +2133,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
   |   str RC, SAVE_MULTRES
   |   mov CARG3, #0
+  |   str BASE, L->base
   |  ldr CARG2, LFUNC:CARG2->field_pc
-  |   str CARG3, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |   str CARG3, [DISPATCH, #DISPATCH_GL(jit_base)]
   |    mv_vmstate CARG4, INTERP
   |  ldr KBASE, [CARG2, #PC2PROTO(k)]
   |  // Modified copy of ins_next which handles function header dispatch, too.

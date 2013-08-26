@@ -475,7 +475,7 @@ static void gc_finalize(lua_State *L)
   global_State *g = G(L);
   GCobj *o = gcnext(gcref(g->gc.mmudata));
   cTValue *mo;
-  lua_assert(gcref(g->jit_L) == NULL);  /* Must not be called on trace. */
+  lua_assert(tvref(g->jit_base) == NULL);  /* Must not be called on trace. */
   /* Unchain from list of userdata to be finalized. */
   if (o == gcref(g->gc.mmudata))
     setgcrefnull(g->gc.mmudata);
@@ -606,7 +606,7 @@ static size_t gc_onestep(lua_State *L)
     g->gc.state = GCSatomic;  /* End of mark phase. */
     return 0;
   case GCSatomic:
-    if (gcref(g->jit_L))  /* Don't run atomic phase on trace. */
+    if (tvref(g->jit_base))  /* Don't run atomic phase on trace. */
       return LJ_MAX_MEM;
     atomic(g, L);
     g->gc.state = GCSsweepstring;  /* Start of sweep phase. */
@@ -640,7 +640,7 @@ static size_t gc_onestep(lua_State *L)
     }
   case GCSfinalize:
     if (gcref(g->gc.mmudata) != NULL) {
-      if (gcref(g->jit_L))  /* Don't call finalizers on trace. */
+      if (tvref(g->jit_base))  /* Don't call finalizers on trace. */
 	return LJ_MAX_MEM;
       gc_finalize(L);  /* Finalize one userdata object. */
       if (g->gc.estimate > GCFINALIZECOST)
@@ -697,7 +697,7 @@ void LJ_FASTCALL lj_gc_step_fixtop(lua_State *L)
 int LJ_FASTCALL lj_gc_step_jit(global_State *g, MSize steps)
 {
   lua_State *L = gco2th(gcref(g->jit_L));
-  L->base = mref(G(L)->jit_base, TValue);
+  L->base = tvref(G(L)->jit_base);
   L->top = curr_topL(L);
   while (steps-- > 0 && lj_gc_step(L) == 0)
     ;

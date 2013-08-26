@@ -2046,13 +2046,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  st_vmstate
   |   sw TMP2, 16+32*8+29*4(sp)		// Store sp in RID_SP.
   |  lw L, DISPATCH_GL(jit_L)(DISPATCH)
-  |  lw BASE, DISPATCH_GL(jit_base)(DISPATCH)
+  |   lw BASE, DISPATCH_GL(jit_base)(DISPATCH)
   |  load_got lj_trace_exit
   |  sw L, DISPATCH_J(L)(DISPATCH)
   |  sw ra, DISPATCH_J(parent)(DISPATCH)  // Store trace number.
+  |   sw BASE, L->base
   |  sw TMP1, DISPATCH_J(exitno)(DISPATCH)  // Store exit number.
   |  addiu CARG1, DISPATCH, GG_DISP2J
-  |  sw BASE, L->base
+  |   sw r0, DISPATCH_GL(jit_base)(DISPATCH)
   |  call_intern lj_trace_exit		// (jit_State *J, ExitState *ex)
   |.  addiu CARG2, sp, 16
   |  // Returns MULTRES (unscaled) or negated error code.
@@ -2068,7 +2069,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.if JIT
   |  // CRET1 = MULTRES or negated error code, BASE, PC and JGL set.
   |  lw L, SAVE_L
-  |  addiu DISPATCH, JGL, -GG_DISP2G-32768
+  |   addiu DISPATCH, JGL, -GG_DISP2G-32768
+  |  sw BASE, L->base
   |1:
   |  bltz CRET1, >3			// Check for error from exit.
   |.  lw LFUNC:TMP1, FRAME_FUNC(BASE)
@@ -2078,7 +2080,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sw MULTRES, SAVE_MULTRES
   |    mtc1 TMP3, TOBIT
   |  lw TMP1, LFUNC:TMP1->pc
-  |   sw r0, DISPATCH_GL(jit_L)(DISPATCH)
+  |   sw r0, DISPATCH_GL(jit_base)(DISPATCH)
   |  lw KBASE, PC2PROTO(k)(TMP1)
   |    cvt.d.s TOBIT, TOBIT
   |  // Modified copy of ins_next which handles function header dispatch, too.

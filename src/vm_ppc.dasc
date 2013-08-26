@@ -2542,9 +2542,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   srwi CARG3, CARG3, 2
   |  stw L, DISPATCH_J(L)(DISPATCH)
   |   subi CARG3, CARG3, 2
-  |  stw TMP1, DISPATCH_GL(jit_L)(DISPATCH)
-  |   stw CARG4, DISPATCH_J(parent)(DISPATCH)
   |  stp BASE, L->base
+  |   stw CARG4, DISPATCH_J(parent)(DISPATCH)
+  |  stw TMP1, DISPATCH_GL(jit_base)(DISPATCH)
   |  addi CARG1, DISPATCH, GG_DISP2J
   |   stw CARG3, DISPATCH_J(exitno)(DISPATCH)
   |  addi CARG2, sp, 16
@@ -2568,6 +2568,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // CARG1 = MULTRES or negated error code, BASE, PC and JGL set.
   |  lwz L, SAVE_L
   |  addi DISPATCH, JGL, -GG_DISP2G-32768
+  |  stp BASE, L->base
   |1:
   |  cmpwi CARG1, 0
   |  blt >3				// Check for error from exit.
@@ -2576,7 +2577,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    li TMP2, 0
   |   stw MULTRES, SAVE_MULTRES
   |  lwz TMP1, LFUNC:TMP1->pc
-  |    stw TMP2, DISPATCH_GL(jit_L)(DISPATCH)
+  |    stw TMP2, DISPATCH_GL(jit_base)(DISPATCH)
   |  lwz KBASE, PC2PROTO(k)(TMP1)
   |  // Setup type comparison constants.
   |  li TISNUM, LJ_TISNUM
