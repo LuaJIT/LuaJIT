@@ -630,17 +630,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  lea KBASEa, [esp+CFRAME_RESUME]
   |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  add DISPATCH, GG_G2DISP
-  |  mov L:RB->cframe, KBASEa
   |  mov SAVE_PC, RD			// Any value outside of bytecode is ok.
   |  mov SAVE_CFRAME, RDa
   |.if X64
   |  mov SAVE_NRES, RD
   |  mov SAVE_ERRF, RD
   |.endif
+  |  mov L:RB->cframe, KBASEa
   |  cmp byte L:RB->status, RDL
-  |  je >3				// Initial resume (like a call).
+  |  je >2				// Initial resume (like a call).
   |
   |  // Resume after yield (like a return).
+  |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
   |  set_vmstate INTERP
   |  mov byte L:RB->status, RDL
   |  mov BASE, L:RB->base
@@ -680,20 +681,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RA, INARG_BASE			// Caveat: overlaps SAVE_CFRAME!
   |.endif
   |
+  |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  mov KBASEa, L:RB->cframe		// Add our C frame to cframe chain.
   |  mov SAVE_CFRAME, KBASEa
   |  mov SAVE_PC, L:RB			// Any value outside of bytecode is ok.
+  |  add DISPATCH, GG_G2DISP
   |.if X64
   |  mov L:RB->cframe, rsp
   |.else
   |  mov L:RB->cframe, esp
   |.endif
   |
-  |2:  // Entry point for vm_cpcall below (RA = base, RB = L, PC = ftype).
-  |  mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
-  |  add DISPATCH, GG_G2DISP
-  |
-  |3:  // Entry point for vm_resume above (RA = base, RB = L, PC = ftype).
+  |2:  // Entry point for vm_resume/vm_cpcall (RA = base, RB = L, PC = ftype).
+  |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
   |  set_vmstate INTERP
   |  mov BASE, L:RB->base		// BASE = old base (used in vmeta_call).
   |  add PC, RA
@@ -731,14 +731,17 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  mov KBASE, L:RB->stack		// Compute -savestack(L, L->top).
   |  sub KBASE, L:RB->top
+  |   mov DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  mov SAVE_ERRF, 0			// No error function.
   |  mov SAVE_NRES, KBASE		// Neg. delta means cframe w/o frame.
+  |   add DISPATCH, GG_G2DISP
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
   |
   |.if X64
   |  mov KBASEa, L:RB->cframe		// Add our C frame to cframe chain.
   |  mov SAVE_CFRAME, KBASEa
   |  mov L:RB->cframe, rsp
+  |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
   |
   |  call CARG4			// (lua_State *L, lua_CFunction func, void *ud)
   |.else
@@ -749,6 +752,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov KBASE, L:RB->cframe		// Add our C frame to cframe chain.
   |  mov SAVE_CFRAME, KBASE
   |  mov L:RB->cframe, esp
+  |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
   |
   |  call BASE			// (lua_State *L, lua_CFunction func, void *ud)
   |.endif
@@ -1840,7 +1844,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov ARG3, RA
   |.endif
   |  call ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
-  |  set_vmstate INTERP
   |
   |  mov L:RB, SAVE_L
   |.if X64
@@ -1849,6 +1852,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov L:PC, ARG1			// The callee doesn't modify SAVE_L.
   |.endif
   |  mov BASE, L:RB->base
+  |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
+  |  set_vmstate INTERP
+  |
   |  cmp eax, LUA_YIELD
   |  ja >8
   |4:
@@ -2705,7 +2711,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movsd qword [ebp-88], xmm1; movsd qword [ebp-96], xmm0
   |.endif
   |  // Caveat: RB is ebp.
-  |  mov L:RB, [DISPATCH+DISPATCH_GL(jit_L)]
+  |  mov L:RB, [DISPATCH+DISPATCH_GL(cur_L)]
   |  mov BASE, [DISPATCH+DISPATCH_GL(jit_base)]
   |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
   |  mov L:RB->base, BASE
@@ -5382,7 +5388,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov RDa, TRACE:RD->mcode
     |  mov L:RB, SAVE_L
     |  mov [DISPATCH+DISPATCH_GL(jit_base)], BASE
-    |  mov [DISPATCH+DISPATCH_GL(jit_L)], L:RB
     |  mov [DISPATCH+DISPATCH_GL(tmpbuf.L)], L:RB
     |  // Save additional callee-save registers only used in compiled code.
     |.if X64WIN
@@ -5550,9 +5555,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  // (lua_State *L, lua_CFunction f)
       |  call aword [DISPATCH+DISPATCH_GL(wrapf)]
     }
-    |  set_vmstate INTERP
     |  // nresults returned in eax (RD).
     |  mov BASE, L:RB->base
+    |  mov [DISPATCH+DISPATCH_GL(cur_L)], L:RB
+    |  set_vmstate INTERP
     |  lea RA, [BASE+RD*8]
     |  neg RA
     |  add RA, L:RB->top		// RA = (L->top-(L->base+nresults))*8

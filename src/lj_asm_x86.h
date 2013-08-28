@@ -2369,7 +2369,7 @@ static void asm_stack_check(ASMState *as, BCReg topslot,
     emit_rmro(as, XO_ARITH(XOg_SUB), r, RID_NONE,
 	      ptr2addr(&J2G(as->J)->jit_base));
   emit_rmro(as, XO_MOV, r, r, offsetof(lua_State, maxstack));
-  emit_getgl(as, r, jit_L);
+  emit_getgl(as, r, cur_L);
   if (allow == RSET_EMPTY)  /* Spill temp. register. */
     emit_rmro(as, XO_MOVto, r|REX_64, RID_ESP, 0);
 }

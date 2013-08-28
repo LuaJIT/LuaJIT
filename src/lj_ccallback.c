@@ -562,9 +562,9 @@ void LJ_FASTCALL lj_ccallback_leave(CTState *cts, TValue *o)
   }
   callback_conv_result(cts, L, o);
   /* Finally drop C frame and continuation frame. */
-  L->cframe = cframe_prev(L->cframe);
   L->top -= 2;
   L->base = obase;
+  L->cframe = cframe_prev(L->cframe);
   cts->cb.slot = 0;  /* Blacklist C function that called the callback. */
 }
 

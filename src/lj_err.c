@@ -99,8 +99,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       TValue *top = restorestack(L, -nres);
       if (frame < top) {  /* Frame reached? */
 	if (errcode) {
-	  L->cframe = cframe_prev(cf);
 	  L->base = frame+1;
+	  L->cframe = cframe_prev(cf);
 	  unwindstack(L, top);
 	}
 	return cf;
@@ -119,8 +119,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 #endif
 #if LJ_UNWIND_EXT
       if (errcode) {
-	L->cframe = cframe_prev(cf);
 	L->base = frame_prevd(frame) + 1;
+	L->cframe = cframe_prev(cf);
 	unwindstack(L, frame);
       } else if (cf != stopcf) {
 	cf = cframe_prev(cf);
@@ -144,8 +144,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	return cf;
       }
       if (errcode) {
-	L->cframe = cframe_prev(cf);
 	L->base = frame_prevd(frame) + 1;
+	L->cframe = cframe_prev(cf);
 	unwindstack(L, frame);
       }
       return cf;
@@ -166,8 +166,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	}
 	if (frame_typep(frame) == FRAME_PCALL)
 	  hook_leave(G(L));
-	L->cframe = cf;
 	L->base = frame_prevd(frame) + 1;
+	L->cframe = cf;
 	unwindstack(L, L->base);
       }
       return (void *)((intptr_t)cf | CFRAME_UNWIND_FF);
@@ -175,8 +175,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
   }
   /* No C frame. */
   if (errcode) {
-    L->cframe = NULL;
     L->base = tvref(L->stack)+1;
+    L->cframe = NULL;
     unwindstack(L, L->base);
     if (G(L)->panic)
       G(L)->panic(L);

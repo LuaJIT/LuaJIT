@@ -487,12 +487,13 @@ static void build_subroutines(BuildCtx *ctx)
   |    addiu DISPATCH, DISPATCH, GG_G2DISP
   |   sw r0, SAVE_NRES
   |   sw r0, SAVE_ERRF
-  |  sw TMP0, L->cframe
+  |   sw CARG1, SAVE_PC		// Any value outside of bytecode is ok.
   |   sw r0, SAVE_CFRAME
   |    beqz TMP1, >3
-  |.  sw CARG1, SAVE_PC		// Any value outside of bytecode is ok.
+  |. sw TMP0, L->cframe
   |
   |  // Resume after yield (like a return).
+  |  sw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  move RA, BASE
   |   lw BASE, L->base
   |   lw TMP1, L->top
@@ -526,17 +527,18 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |1:  // Entry point for vm_pcall above (PC = ftype).
   |  lw TMP1, L:CARG1->cframe
-  |   sw CARG3, SAVE_NRES
   |    move L, CARG1
-  |   sw CARG1, SAVE_L
-  |    move BASE, CARG2
-  |  sw sp, L->cframe			// Add our C frame to cframe chain.
+  |   sw CARG3, SAVE_NRES
   |    lw DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |   sw CARG1, SAVE_L
+  |     move BASE, CARG2
+  |    addiu DISPATCH, DISPATCH, GG_G2DISP
   |   sw CARG1, SAVE_PC		// Any value outside of bytecode is ok.
   |  sw TMP1, SAVE_CFRAME
-  |    addiu DISPATCH, DISPATCH, GG_G2DISP
+  |  sw sp, L->cframe			// Add our C frame to cframe chain.
   |
   |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
+  |  sw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  lw TMP2, L->base			// TMP2 = old base (used in vmeta_call).
   |     lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |   lw TMP1, L->top
@@ -567,20 +569,21 @@ static void build_subroutines(BuildCtx *ctx)
   |   lw TMP0, L:CARG1->stack
   |  sw CARG1, SAVE_L
   |   lw TMP1, L->top
+  |     lw DISPATCH, L->glref		// Setup pointer to dispatch table.
   |  sw CARG1, SAVE_PC			// Any value outside of bytecode is ok.
   |   subu TMP0, TMP0, TMP1		// Compute -savestack(L, L->top).
   |    lw TMP1, L->cframe
-  |    sw sp, L->cframe			// Add our C frame to cframe chain.
+  |     addiu DISPATCH, DISPATCH, GG_G2DISP
   |   sw TMP0, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |  sw r0, SAVE_ERRF			// No error function.
-  |  move CFUNCADDR, CARG4
+  |    sw TMP1, SAVE_CFRAME
+  |    sw sp, L->cframe			// Add our C frame to cframe chain.
+  |     sw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  jalr CARG4			// (lua_State *L, lua_CFunction func, void *ud)
-  |.   sw TMP1, SAVE_CFRAME
+  |.  move CFUNCADDR, CARG4
   |  move BASE, CRET1
-  |   lw DISPATCH, L->glref		// Setup pointer to dispatch table.
-  |    li PC, FRAME_CP
   |  bnez CRET1, <3			// Else continue with the call.
-  |.  addiu DISPATCH, DISPATCH, GG_G2DISP
+  |.  li PC, FRAME_CP
   |  b ->vm_leave_cp			// No base? Just remove C frame.
   |.  nop
   |
@@ -1364,6 +1367,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw TMP3, L:RA->top
   |    li_vmstate INTERP
   |  lw BASE, L->base
+  |    sw L, DISPATCH_GL(cur_L)(DISPATCH)
   |    st_vmstate
   |   beqz AT, >8
   |. subu RD, TMP3, TMP2
@@ -2045,7 +2049,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw TMP1, 0(TMP2)			// Load exit number.
   |  st_vmstate
   |   sw TMP2, 16+32*8+29*4(sp)		// Store sp in RID_SP.
-  |  lw L, DISPATCH_GL(jit_L)(DISPATCH)
+  |  lw L, DISPATCH_GL(cur_L)(DISPATCH)
   |   lw BASE, DISPATCH_GL(jit_base)(DISPATCH)
   |  load_got lj_trace_exit
   |  sw L, DISPATCH_J(L)(DISPATCH)
@@ -3980,7 +3984,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   sw AT, DISPATCH_GL(vmstate)(DISPATCH)
     |  lw TRACE:TMP2, 0(TMP1)
     |   sw BASE, DISPATCH_GL(jit_base)(DISPATCH)
-    |   sw L, DISPATCH_GL(jit_L)(DISPATCH)
     |  lw TMP2, TRACE:TMP2->mcode
     |   sw L, DISPATCH_GL(tmpbuf.L)(DISPATCH)
     |  jr TMP2
@@ -4108,6 +4111,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    li_vmstate INTERP
     |  lw PC, FRAME_PC(BASE)		// Fetch PC of caller.
     |   subu RA, TMP1, RD		// RA = L->top - nresults*8
+    |    sw L, DISPATCH_GL(cur_L)(DISPATCH)
     |  b ->vm_returnc
     |.   st_vmstate
     break;

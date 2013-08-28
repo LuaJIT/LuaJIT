@@ -1586,7 +1586,7 @@ static void asm_stack_check(ASMState *as, BCReg topslot,
   emit_tsi(as, MIPSI_LW, tmp, tmp, offsetof(lua_State, maxstack));
   if (pbase == RID_TMP)
     emit_getgl(as, RID_TMP, jit_base);
-  emit_getgl(as, tmp, jit_L);
+  emit_getgl(as, tmp, cur_L);
   if (allow == RSET_EMPTY)  /* Spill temp. register. */
     emit_tsi(as, MIPSI_SW, tmp, RID_SP, 0);
 }

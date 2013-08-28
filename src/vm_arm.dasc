@@ -419,13 +419,14 @@ static void build_subroutines(BuildCtx *ctx)
   |    add CARG2, sp, #CFRAME_RESUME
   |  ldrb CARG1, L->status
   |   str CARG3, SAVE_ERRF
-  |    str CARG2, L->cframe
+  |   str L, SAVE_PC			// Any value outside of bytecode is ok.
   |   str CARG3, SAVE_CFRAME
   |  cmp CARG1, #0
-  |   str L, SAVE_PC			// Any value outside of bytecode is ok.
+  |    str CARG2, L->cframe
   |  beq >3
   |
   |  // Resume after yield (like a return).
+  |  str L, [DISPATCH, #DISPATCH_GL(cur_L)]
   |  mov RA, BASE
   |   ldr BASE, L->base
   |   ldr CARG1, L->top
@@ -459,14 +460,15 @@ static void build_subroutines(BuildCtx *ctx)
   |   str CARG3, SAVE_NRES
   |    mov L, CARG1
   |   str CARG1, SAVE_L
-  |    mov BASE, CARG2
-  |  str sp, L->cframe			// Add our C frame to cframe chain.
   |    ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
+  |     mov BASE, CARG2
   |   str CARG1, SAVE_PC		// Any value outside of bytecode is ok.
   |  str RC, SAVE_CFRAME
   |    add DISPATCH, DISPATCH, #GG_G2DISP
+  |  str sp, L->cframe			// Add our C frame to cframe chain.
   |
   |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
+  |  str L, [DISPATCH, #DISPATCH_GL(cur_L)]
   |  ldr RB, L->base			// RB = old base (for vmeta_call).
   |   ldr CARG1, L->top
   |    mov MASKR8, #255
@@ -492,20 +494,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov L, CARG1
   |   ldr RA, L:CARG1->stack
   |  str CARG1, SAVE_L
+  |    ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
   |   ldr RB, L->top
   |  str CARG1, SAVE_PC			// Any value outside of bytecode is ok.
   |  ldr RC, L->cframe
+  |    add DISPATCH, DISPATCH, #GG_G2DISP
   |   sub RA, RA, RB			// Compute -savestack(L, L->top).
-  |  str sp, L->cframe			// Add our C frame to cframe chain.
   |  mov RB, #0
   |   str RA, SAVE_NRES			// Neg. delta means cframe w/o frame.
   |  str RB, SAVE_ERRF			// No error function.
   |  str RC, SAVE_CFRAME
+  |  str sp, L->cframe			// Add our C frame to cframe chain.
+  |    str L, [DISPATCH, #DISPATCH_GL(cur_L)]
   |  blx CARG4			// (lua_State *L, lua_CFunction func, void *ud)
-  |   ldr DISPATCH, L->glref		// Setup pointer to dispatch table.
   |  movs BASE, CRET1
-  |    mov PC, #FRAME_CP
-  |   add DISPATCH, DISPATCH, #GG_G2DISP
+  |   mov PC, #FRAME_CP
   |  bne <3				// Else continue with the call.
   |  b ->vm_leave_cp			// No base? Just remove C frame.
   |
@@ -1262,9 +1265,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr CARG3, L:RA->base
   |    mv_vmstate CARG2, INTERP
   |  ldr CARG4, L:RA->top
-  |    st_vmstate CARG2
   |   cmp CRET1, #LUA_YIELD
   |  ldr BASE, L->base
+  |    str L, [DISPATCH, #DISPATCH_GL(cur_L)]
+  |    st_vmstate CARG2
   |   bhi >8
   |  subs RC, CARG4, CARG3
   |   ldr CARG1, L->maxstack
@@ -2102,7 +2106,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  add CARG1, CARG1, CARG2, asr #6
   |   ldr CARG2, [lr, #4]	// Load exit stub group offset.
   |   sub CARG1, CARG1, lr
-  |  ldr L, [DISPATCH, #DISPATCH_GL(jit_L)]
+  |  ldr L, [DISPATCH, #DISPATCH_GL(cur_L)]
   |   add CARG1, CARG2, CARG1, lsr #2	// Compute exit number.
   |    ldr BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
   |   str CARG1, [DISPATCH, #DISPATCH_J(exitno)]
@@ -4285,7 +4289,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   st_vmstate CARG2
     |  ldr RA, TRACE:RC->mcode
     |   str BASE, [DISPATCH, #DISPATCH_GL(jit_base)]
-    |   str L, [DISPATCH, #DISPATCH_GL(jit_L)]
     |   str L, [DISPATCH, #DISPATCH_GL(tmpbuf.L)]
     |  bx RA
     |.endif
@@ -4404,6 +4407,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ldr BASE, L->base
     |    mv_vmstate CARG3, INTERP
     |   ldr CRET2, L->top
+    |    str L, [DISPATCH, #DISPATCH_GL(cur_L)]
     |   lsl RC, CRET1, #3
     |    st_vmstate CARG3
     |  ldr PC, [BASE, FRAME_PC]
