@@ -93,6 +93,7 @@ LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putint(SBuf *sb, int32_t k);
 #if LJ_HASJIT
 LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putnum(SBuf *sb, cTValue *o);
 #endif
+LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putptr(SBuf *sb, const void *v);
 LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str);
 
 /* Formatted conversions to buffer. */

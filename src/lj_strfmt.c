@@ -203,6 +203,12 @@ SBuf * LJ_FASTCALL lj_strfmt_putnum(SBuf *sb, cTValue *o)
 }
 #endif
 
+SBuf * LJ_FASTCALL lj_strfmt_putptr(SBuf *sb, const void *v)
+{
+  setsbufP(sb, lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR), v));
+  return sb;
+}
+
 /* Add quoted string to buffer. */
 SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str)
 {
@@ -520,8 +526,7 @@ const char *lj_strfmt_pushvf(lua_State *L, const char *fmt, va_list argp)
       lj_buf_putb(sb, va_arg(argp, int));
       break;
     case STRFMT_PTR:
-      setsbufP(sb, lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR),
-				  va_arg(argp, void *)));
+      lj_strfmt_putptr(sb, va_arg(argp, void *));
       break;
     case STRFMT_ERR:
     default:

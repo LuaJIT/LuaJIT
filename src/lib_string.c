@@ -714,8 +714,7 @@ again:
 	lj_strfmt_putfchar(sb, sf, lj_lib_checkint(L, arg));
 	break;
       case STRFMT_PTR:  /* No formatting. */
-	setsbufP(sb, lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR),
-				    lj_obj_ptr(L->base+arg-1)));
+	lj_strfmt_putptr(sb, lj_obj_ptr(L->base+arg-1));
 	break;
       default:
 	lua_assert(0);
