@@ -89,6 +89,8 @@ static LJ_AINLINE GCfunc *lj_lib_pushcc(lua_State *L, lua_CFunction f,
 
 LJ_FUNC void lj_lib_register(lua_State *L, const char *libname,
 			     const uint8_t *init, const lua_CFunction *cf);
+LJ_FUNC void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f,
+			   GCtab *env);
 
 /* Library init data tags. */
 #define LIBINIT_LENMASK	0x3f

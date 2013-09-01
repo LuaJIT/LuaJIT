@@ -148,6 +148,16 @@ void lj_lib_register(lua_State *L, const char *libname,
   }
 }
 
+void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f, GCtab *env)
+{
+  luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD", 4);
+  lua_pushcfunction(L, f);
+  /* NOBARRIER: The function is new (marked white). */
+  setgcref(funcV(L->top-1)->c.env, obj2gco(env));
+  lua_setfield(L, -2, name);
+  L->top--;
+}
+
 /* -- Type checks --------------------------------------------------------- */
 
 TValue *lj_lib_checkany(lua_State *L, int narg)
