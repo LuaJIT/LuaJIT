@@ -524,6 +524,103 @@ LJLIB_CF(jit_opt_start)
 
 #endif
 
+/* -- jit.profile module -------------------------------------------------- */
+
+#if LJ_HASPROFILE
+
+#define LJLIB_MODULE_jit_profile
+
+/* Not loaded by default, use: local profile = require("jit.profile") */
+
+static const char KEY_PROFILE_THREAD = 't';
+static const char KEY_PROFILE_FUNC = 'f';
+
+static void jit_profile_callback(lua_State *L2, lua_State *L, int samples,
+				 int vmstate)
+{
+  TValue key;
+  cTValue *tv;
+  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  tv = lj_tab_get(L, tabV(registry(L)), &key);
+  if (tvisfunc(tv)) {
+    char vmst = (char)vmstate;
+    int status;
+    setfuncV(L2, L2->top++, funcV(tv));
+    setthreadV(L2, L2->top++, L);
+    setintV(L2->top++, samples);
+    setstrV(L2, L2->top++, lj_str_new(L2, &vmst, 1));
+    status = lua_pcall(L2, 3, 0, 0);  /* callback(thread, samples, vmstate) */
+    if (status) {
+      if (G(L2)->panic) G(L2)->panic(L2);
+      exit(EXIT_FAILURE);
+    }
+  }
+}
+
+/* profile.start(mode, func) */
+LJLIB_CF(jit_profile_start)
+{
+  GCtab *registry = tabV(registry(L));
+  GCstr *mode = lj_lib_optstr(L, 1);
+  GCfunc *func = lj_lib_checkfunc(L, 2);
+  lua_State *L2 = lua_newthread(L);  /* Thread that runs profiler callback. */
+  TValue key;
+  /* Anchor thread and function in registry. */
+  setlightudV(&key, (void *)&KEY_PROFILE_THREAD);
+  setthreadV(L, lj_tab_set(L, registry, &key), L2);
+  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  setfuncV(L, lj_tab_set(L, registry, &key), func);
+  lj_gc_anybarriert(L, registry);
+  luaJIT_profile_start(L, mode ? strdata(mode) : "",
+		       (luaJIT_profile_callback)jit_profile_callback, L2);
+  return 0;
+}
+
+/* profile.stop() */
+LJLIB_CF(jit_profile_stop)
+{
+  GCtab *registry;
+  TValue key;
+  luaJIT_profile_stop(L);
+  registry = tabV(registry(L));
+  setlightudV(&key, (void *)&KEY_PROFILE_THREAD);
+  setnilV(lj_tab_set(L, registry, &key));
+  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  setnilV(lj_tab_set(L, registry, &key));
+  lj_gc_anybarriert(L, registry);
+  return 0;
+}
+
+/* profile.dumpstack([thread,] fmt, depth) */
+LJLIB_CF(jit_profile_dumpstack)
+{
+  lua_State *L2 = L;
+  int arg = 0;
+  size_t len;
+  int depth;
+  GCstr *fmt;
+  const char *p;
+  if (L->top > L->base && tvisthread(L->base)) {
+    L2 = threadV(L->base);
+    arg = 1;
+  }
+  fmt = lj_lib_checkstr(L, arg+1);
+  depth = lj_lib_checkint(L, arg+2);
+  p = luaJIT_profile_dumpstack(L2, strdata(fmt), depth, &len);
+  lua_pushlstring(L, p, len);
+  return 1;
+}
+
+#include "lj_libdef.h"
+
+static int luaopen_jit_profile(lua_State *L)
+{
+  LJ_LIB_REG(L, NULL, jit_profile);
+  return 1;
+}
+
+#endif
+
 /* -- JIT compiler initialization ----------------------------------------- */
 
 #if LJ_HASJIT
@@ -646,6 +743,10 @@ LUALIB_API int luaopen_jit(lua_State *L)
   lua_pushinteger(L, LUAJIT_VERSION_NUM);
   lua_pushliteral(L, LUAJIT_VERSION);
   LJ_LIB_REG(L, LUA_JITLIBNAME, jit);
+#if LJ_HASPROFILE
+  lj_lib_prereg(L, LUA_JITLIBNAME ".profile", luaopen_jit_profile,
+		tabref(L->env));
+#endif
 #ifndef LUAJIT_DISABLE_JITUTIL
   LJ_LIB_REG(L, "jit.util", jit_util);
 #endif
