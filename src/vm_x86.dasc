@@ -2588,7 +2588,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov FCARG2, PC			// Caveat: FCARG2 == BASE
   |  mov FCARG1, L:RB
   |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
-  |  call extern lj_dispatch_ins@8	// (lua_State *L, BCIns *pc)
+  |  call extern lj_dispatch_ins@8	// (lua_State *L, const BCIns *pc)
   |3:
   |  mov BASE, L:RB->base
   |4:
@@ -2658,6 +2658,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  shr RD, 3
   |  add NARGS:RD, 1
   |  jmp RBa
+  |
+  |->vm_profhook:			// Dispatch target for profiler hook.
+#if LJ_HASPROFILE
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE
+  |  mov FCARG2, PC			// Caveat: FCARG2 == BASE
+  |  mov FCARG1, L:RB
+  |  call extern lj_dispatch_profile@8	// (lua_State *L, const BCIns *pc)
+  |  mov BASE, L:RB->base
+  |  // HOOK_PROFILE is off again, so re-dispatch to dynamic instruction.
+  |  sub PC, 4
+  |  jmp ->cont_nop
+#endif
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------

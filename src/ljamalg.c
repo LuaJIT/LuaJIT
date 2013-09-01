@@ -47,6 +47,7 @@
 #include "lj_strscan.c"
 #include "lj_strfmt.c"
 #include "lj_api.c"
+#include "lj_profile.c"
 #include "lj_lex.c"
 #include "lj_parse.c"
 #include "lj_bcread.c"

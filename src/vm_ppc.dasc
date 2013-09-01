@@ -2505,6 +2505,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mtctr CRET1
   |  bctr
   |
+  |->vm_profhook:			// Dispatch target for profiler hook.
+#if LJ_HASPROFILE
+  |  mr CARG1, L
+  |   stw MULTRES, SAVE_MULTRES
+  |  mr CARG2, PC
+  |   stp BASE, L->base
+  |  bl extern lj_dispatch_profile	// (lua_State *L, const BCIns *pc)
+  |  // HOOK_PROFILE is off again, so re-dispatch to dynamic instruction.
+  |  lp BASE, L->base
+  |  subi PC, PC, 4
+  |  b ->cont_nop
+#endif
+  |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
   |//-----------------------------------------------------------------------

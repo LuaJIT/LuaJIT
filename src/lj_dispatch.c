@@ -27,6 +27,9 @@
 #endif
 #include "lj_trace.h"
 #include "lj_dispatch.h"
+#if LJ_HASPROFILE
+#include "lj_profile.h"
+#endif
 #include "lj_vm.h"
 #include "luajit.h"
 
@@ -84,11 +87,12 @@ void lj_dispatch_init_hotcount(global_State *g)
 #endif
 
 /* Internal dispatch mode bits. */
-#define DISPMODE_JIT	0x01	/* JIT compiler on. */
-#define DISPMODE_REC	0x02	/* Recording active. */
+#define DISPMODE_CALL	0x01	/* Override call dispatch. */
+#define DISPMODE_RET	0x02	/* Override return dispatch. */
 #define DISPMODE_INS	0x04	/* Override instruction dispatch. */
-#define DISPMODE_CALL	0x08	/* Override call dispatch. */
-#define DISPMODE_RET	0x10	/* Override return dispatch. */
+#define DISPMODE_JIT	0x10	/* JIT compiler on. */
+#define DISPMODE_REC	0x20	/* Recording active. */
+#define DISPMODE_PROF	0x40	/* Profiling active. */
 
 /* Update dispatch table depending on various flags. */
 void lj_dispatch_update(global_State *g)
@@ -99,6 +103,9 @@ void lj_dispatch_update(global_State *g)
   mode |= (G2J(g)->flags & JIT_F_ON) ? DISPMODE_JIT : 0;
   mode |= G2J(g)->state != LJ_TRACE_IDLE ?
 	    (DISPMODE_REC|DISPMODE_INS|DISPMODE_CALL) : 0;
+#endif
+#if LJ_HASPROFILE
+  mode |= (g->hookmask & HOOK_PROFILE) ? (DISPMODE_PROF|DISPMODE_INS) : 0;
 #endif
   mode |= (g->hookmask & (LUA_MASKLINE|LUA_MASKCOUNT)) ? DISPMODE_INS : 0;
   mode |= (g->hookmask & LUA_MASKCALL) ? DISPMODE_CALL : 0;
@@ -128,9 +135,9 @@ void lj_dispatch_update(global_State *g)
     disp[GG_LEN_DDISP+BC_LOOP] = f_loop;
 
     /* Set dynamic instruction dispatch. */
-    if ((oldmode ^ mode) & (DISPMODE_REC|DISPMODE_INS)) {
+    if ((oldmode ^ mode) & (DISPMODE_PROF|DISPMODE_REC|DISPMODE_INS)) {
       /* Need to update the whole table. */
-      if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {  /* No ins dispatch? */
+      if (!(mode & DISPMODE_INS)) {  /* No ins dispatch? */
 	/* Copy static dispatch table to dynamic dispatch table. */
 	memcpy(&disp[0], &disp[GG_LEN_DDISP], GG_LEN_SDISP*sizeof(ASMFunction));
 	/* Overwrite with dynamic return dispatch. */
@@ -142,12 +149,13 @@ void lj_dispatch_update(global_State *g)
 	}
       } else {
 	/* The recording dispatch also checks for hooks. */
-	ASMFunction f = (mode & DISPMODE_REC) ? lj_vm_record : lj_vm_inshook;
+	ASMFunction f = (mode & DISPMODE_PROF) ? lj_vm_profhook :
+			(mode & DISPMODE_REC) ? lj_vm_record : lj_vm_inshook;
 	uint32_t i;
 	for (i = 0; i < GG_LEN_SDISP; i++)
 	  disp[i] = f;
       }
-    } else if (!(mode & (DISPMODE_REC|DISPMODE_INS))) {
+    } else if (!(mode & DISPMODE_INS)) {
       /* Otherwise set dynamic counting ins. */
       disp[BC_FORL] = f_forl;
       disp[BC_ITERL] = f_iterl;
@@ -494,4 +502,35 @@ out:
   ERRNO_RESTORE
   return makeasmfunc(lj_bc_ofs[op]);  /* Return static dispatch target. */
 }
+
+#if LJ_HASPROFILE
+/* Profile dispatch. */
+void LJ_FASTCALL lj_dispatch_profile(lua_State *L, const BCIns *pc)
+{
+  ERRNO_SAVE
+  global_State *g = G(L);
+  uint8_t mask = g->hookmask;
+  g->hookmask = (mask & ~HOOK_PROFILE);
+  lj_dispatch_update(g);
+  if (!(mask & HOOK_VMEVENT)) {
+    GCfunc *fn = curr_func(L);
+    GCproto *pt = funcproto(fn);
+    void *cf = cframe_raw(L->cframe);
+    const BCIns *oldpc = cframe_pc(cf);
+    uint8_t oldh = hook_save(g);
+    BCReg slots;
+    hook_vmevent(g);
+    setcframe_pc(cf, pc);
+    slots = cur_topslot(pt, pc, cframe_multres_n(cf));
+    L->top = L->base + slots;  /* Fix top. */
+    lj_profile_interpreter(L);
+    setgcref(g->cur_L, obj2gco(L));
+    setcframe_pc(cf, oldpc);
+    hook_restore(g, oldh);
+    lj_trace_abort(g);
+    setvmstate(g, INTERP);
+  }
+  ERRNO_RESTORE
+}
+#endif
 

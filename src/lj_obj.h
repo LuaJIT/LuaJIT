@@ -554,6 +554,7 @@ typedef struct global_State {
 #define HOOK_ACTIVE_SHIFT	4
 #define HOOK_VMEVENT		0x20
 #define HOOK_GC			0x40
+#define HOOK_PROFILE		0x80
 #define hook_active(g)		((g)->hookmask & HOOK_ACTIVE)
 #define hook_enter(g)		((g)->hookmask |= HOOK_ACTIVE)
 #define hook_entergc(g)		((g)->hookmask |= (HOOK_ACTIVE|HOOK_GC))

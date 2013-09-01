@@ -366,6 +366,18 @@
 #define LJ_HASFFI		1
 #endif
 
+#if defined(LUAJIT_DISABLE_PROFILE)
+#define LJ_HASPROFILE		0
+#elif LJ_TARGET_POSIX
+#define LJ_HASPROFILE		1
+#define LJ_PROFILE_SIGPROF	1
+#elif LJ_TARGET_WINDOWS
+#define LJ_HASPROFILE		1
+#define LJ_PROFILE_WTHREAD	1
+#else
+#define LJ_HASPROFILE		0
+#endif
+
 #ifndef LJ_ARCH_HASFPU
 #define LJ_ARCH_HASFPU		1
 #endif

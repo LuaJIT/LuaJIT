@@ -29,7 +29,7 @@
   _(floor) _(ceil) _(trunc) _(log) _(log10) _(exp) _(sin) _(cos) _(tan) \
   _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
   _(pow) _(fmod) _(ldexp) \
-  _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_err_throw) \
+  _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_dispatch_profile) _(lj_err_throw)\
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \
   _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) \
   _(lj_meta_call) _(lj_meta_cat) _(lj_meta_comp) _(lj_meta_equal) \
@@ -110,7 +110,9 @@ LJ_FUNC void lj_dispatch_update(global_State *g);
 /* Instruction dispatch callback for hooks or when recording. */
 LJ_FUNCA void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc);
 LJ_FUNCA ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns*pc);
-LJ_FUNCA void LJ_FASTCALL lj_dispatch_return(lua_State *L, const BCIns *pc);
+#if LJ_HASPROFILE
+LJ_FUNCA void LJ_FASTCALL lj_dispatch_profile(lua_State *L, const BCIns *pc);
+#endif
 
 #if LJ_HASFFI && !defined(_BUILDVM_H)
 /* Save/restore errno and GetLastError() around hooks, exits and recording. */

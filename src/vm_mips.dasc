@@ -2011,6 +2011,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  jr CRET1
   |.  lw INS, -4(PC)
   |
+  |->vm_profhook:			// Dispatch target for profiler hook.
+#if LJ_HASPROFILE
+  |  load_got lj_dispatch_profile
+  |   sw MULTRES, SAVE_MULTRES
+  |  move CARG2, PC
+  |   sw BASE, L->base
+  |  call_intern lj_dispatch_profile	// (lua_State *L, const BCIns *pc)
+  |.  move CARG1, L
+  |  // HOOK_PROFILE is off again, so re-dispatch to dynamic instruction.
+  |  addiu PC, PC, -4
+  |  b ->cont_nop
+  |.  lw BASE, L->base
+#endif
+  |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
   |//-----------------------------------------------------------------------
