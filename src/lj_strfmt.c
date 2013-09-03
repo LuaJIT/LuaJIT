@@ -303,7 +303,7 @@ SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k)
     const char *hexdig = (sf & STRFMT_F_UPPER) ? "0123456789ABCDEF" :
 						 "0123456789abcdef";
     do { *--q = hexdig[(k & 15)]; k >>= 4; } while (k);
-    if ((sf & STRFMT_F_ALT)) prefix = 512 + 'x';
+    if ((sf & STRFMT_F_ALT)) prefix = 512 + ((sf & STRFMT_F_UPPER) ? 'X' : 'x');
   } else {  /* Octal. */
     do { *--q = (char)('0' + (uint32_t)(k & 7)); k >>= 3; } while (k);
     if ((sf & STRFMT_F_ALT)) *--q = '0';
@@ -324,7 +324,7 @@ SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k)
   if ((sf & (STRFMT_F_LEFT|STRFMT_F_ZERO)) == 0)
     while (width-- > pprec) *p++ = ' ';
   if (prefix) {
-    if ((char)prefix == 'x') *p++ = '0';
+    if ((char)prefix >= 'X') *p++ = '0';
     *p++ = (char)prefix;
   }
   if ((sf & (STRFMT_F_LEFT|STRFMT_F_ZERO)) == STRFMT_F_ZERO)
