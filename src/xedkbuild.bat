@@ -54,13 +54,13 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if errorlevel 1 goto :BAD
 
 @rem ---- Cross compiler ----
-@set LJCOMPILE="%XEDK%\bin\win32\cl" /nologo /c /MT /O2 /W3 /GF /Gm- /GR- /GS- /Gy /openmp- /D_CRT_SECURE_NO_DEPRECATE /DNDEBUG /D_XBOX /D_LIB /DLUAJIT_USE_SYSMALLOC
-@set LJLIB="%XEDK%\bin\win32\lib" /nologo
-@set INCLUDE="%XEDK%\include\xbox"
+@set "LJCOMPILE=%XEDK%\bin\win32\cl /nologo /c /MT /O2 /W3 /GF /Gm- /GR- /GS- /Gy /openmp- /D_CRT_SECURE_NO_DEPRECATE /DNDEBUG /D_XBOX /D_LIB /DLUAJIT_USE_SYSMALLOC"
+@set "LJLIB=%XEDK%\bin\win32\lib /nologo"
+@set "INCLUDE=%XEDK%\include\xbox"
 
 @if "%1" neq "debug" goto :NODEBUG
 @shift
-@set LJCOMPILE="%LJCOMPILE%" /Zi
+@set "LJCOMPILE=%LJCOMPILE% /Zi"
 :NODEBUG
 @if "%1"=="amalg" goto :AMALG
 %LJCOMPILE% /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
