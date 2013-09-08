@@ -396,6 +396,12 @@ typedef struct jit_State {
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
 
   TValue errinfo;	/* Additional info element for trace errors. */
+
+#if LJ_HASPROFILE
+  GCproto *prev_pt;	/* Previous prototype. */
+  BCLine prev_line;	/* Previous line. */
+  int prof_mode;	/* Profiling mode: 0, 'f', 'l'. */
+#endif
 }
 #if LJ_TARGET_ARM
 LJ_ALIGN(16)		/* For DISPATCH-relative addresses in assembler part. */

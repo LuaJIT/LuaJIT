@@ -2348,6 +2348,16 @@ static void asm_hiop(ASMState *as, IRIns *ir)
 #endif
 }
 
+/* -- Profiling ----------------------------------------------------------- */
+
+static void asm_prof(ASMState *as, IRIns *ir)
+{
+  UNUSED(ir);
+  asm_guardcc(as, CC_NE);
+  emit_i8(as, HOOK_PROFILE);
+  emit_rma(as, XO_GROUP3b, XOg_TEST, &J2G(as->J)->hookmask);
+}
+
 /* -- Stack handling ------------------------------------------------------ */
 
 /* Check Lua stack size for overflow. Use exit handler as fallback. */

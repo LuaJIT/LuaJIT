@@ -766,17 +766,20 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   if (errcode)
     return -errcode;  /* Return negated error code. */
 
-  lj_vmevent_send(L, TEXIT,
-    lj_state_checkstack(L, 4+RID_NUM_GPR+RID_NUM_FPR+LUA_MINSTACK);
-    setintV(L->top++, J->parent);
-    setintV(L->top++, J->exitno);
-    trace_exit_regs(L, ex);
-  );
+  if (!(LJ_HASPROFILE && (G(L)->hookmask & HOOK_PROFILE)))
+    lj_vmevent_send(L, TEXIT,
+      lj_state_checkstack(L, 4+RID_NUM_GPR+RID_NUM_FPR+LUA_MINSTACK);
+      setintV(L->top++, J->parent);
+      setintV(L->top++, J->exitno);
+      trace_exit_regs(L, ex);
+    );
 
   pc = exd.pc;
   cf = cframe_raw(L->cframe);
   setcframe_pc(cf, pc);
-  if (G(L)->gc.state == GCSatomic || G(L)->gc.state == GCSfinalize) {
+  if (LJ_HASPROFILE && (G(L)->hookmask & HOOK_PROFILE)) {
+    /* Just exit to interpreter. */
+  } else if (G(L)->gc.state == GCSatomic || G(L)->gc.state == GCSfinalize) {
     if (!(G(L)->hookmask & HOOK_GC))
       lj_gc_step(L);  /* Exited because of GC: drive GC forward. */
   } else {

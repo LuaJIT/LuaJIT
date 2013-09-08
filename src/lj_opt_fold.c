@@ -2285,6 +2285,17 @@ LJFOLDF(barrier_tnew_tdup)
   return DROPFOLD;
 }
 
+/* -- Profiling ----------------------------------------------------------- */
+
+LJFOLD(PROF any any)
+LJFOLDF(prof)
+{
+  IRRef ref = J->chain[IR_PROF];
+  if (ref+1 == J->cur.nins)  /* Drop neighbouring IR_PROF. */
+    return ref;
+  return EMITFOLD;
+}
+
 /* -- Stores and allocations ---------------------------------------------- */
 
 /* Stores and allocations cannot be folded or passed on to CSE in general.

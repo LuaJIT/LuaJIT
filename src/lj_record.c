@@ -20,6 +20,9 @@
 #endif
 #include "lj_bc.h"
 #include "lj_ff.h"
+#if LJ_HASPROFILE
+#include "lj_debug.h"
+#endif
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_ircall.h"
@@ -578,6 +581,52 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
       rec_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
 }
+
+/* -- Record profiler hook checks ----------------------------------------- */
+
+#if LJ_HASPROFILE
+
+/* Need to insert profiler hook check? */
+static int rec_profile_need(jit_State *J, GCproto *pt, const BCIns *pc)
+{
+  GCproto *ppt;
+  lua_assert(J->prof_mode == 'f' || J->prof_mode == 'l');
+  if (!pt)
+    return 0;
+  ppt = J->prev_pt;
+  J->prev_pt = pt;
+  if (pt != ppt && ppt) {
+    J->prev_line = -1;
+    return 1;
+  }
+  if (J->prof_mode == 'l') {
+    BCLine line = lj_debug_line(pt, proto_bcpos(pt, pc));
+    BCLine pline = J->prev_line;
+    J->prev_line = line;
+    if (pline != line)
+      return 1;
+  }
+  return 0;
+}
+
+static void rec_profile_ins(jit_State *J, const BCIns *pc)
+{
+  if (J->prof_mode && rec_profile_need(J, J->pt, pc)) {
+    emitir(IRTG(IR_PROF, IRT_NIL), 0, 0);
+    lj_snap_add(J);
+  }
+}
+
+static void rec_profile_ret(jit_State *J)
+{
+  if (J->prof_mode == 'f') {
+    emitir(IRTG(IR_PROF, IRT_NIL), 0, 0);
+    J->prev_pt = NULL;
+    lj_snap_add(J);
+  }
+}
+
+#endif
 
 /* -- Record calls and returns -------------------------------------------- */
 
@@ -1770,6 +1819,10 @@ void lj_record_ins(jit_State *J)
   rec_check_ir(J);
 #endif
 
+#if LJ_HASPROFILE
+  rec_profile_ins(J, pc);
+#endif
+
   /* Keep a copy of the runtime values of var/num/str operands. */
 #define rav	(&ix.valv)
 #define rbv	(&ix.tabv)
@@ -2074,6 +2127,9 @@ void lj_record_ins(jit_State *J)
     rc = (BCReg)(J->L->top - J->L->base) - ra + 1;
     /* fallthrough */
   case BC_RET: case BC_RET0: case BC_RET1:
+#if LJ_HASPROFILE
+    rec_profile_ret(J);
+#endif
     lj_record_ret(J, ra, (ptrdiff_t)rc-1);
     break;
 
@@ -2303,6 +2359,10 @@ void lj_record_setup(jit_State *J)
     if (1 + J->pt->framesize >= LJ_MAX_JSLOTS)
       lj_trace_err(J, LJ_TRERR_STACKOV);
   }
+#if LJ_HASPROFILE
+  J->prev_pt = NULL;
+  J->prev_line = -1;
+#endif
 #ifdef LUAJIT_ENABLE_CHECKHOOK
   /* Regularly check for instruction/line hooks from compiled code and
   ** exit to the interpreter if the hooks are set.

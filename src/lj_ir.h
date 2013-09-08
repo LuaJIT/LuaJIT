@@ -40,6 +40,7 @@
   _(USE,	S , ref, ___) \
   _(PHI,	S , ref, ref) \
   _(RENAME,	S , ref, lit) \
+  _(PROF,	S , ___, ___) \
   \
   /* Constants. */ \
   _(KPRI,	N , ___, ___) \
