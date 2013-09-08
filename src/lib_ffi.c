@@ -657,7 +657,7 @@ LJLIB_CF(ffi_string)	LJLIB_REC(.)
   TValue *o = lj_lib_checkany(L, 1);
   const char *p;
   size_t len;
-  if (o+1 < L->top) {
+  if (o+1 < L->top && !tvisnil(o+1)) {
     len = (size_t)ffi_checkint(L, 2);
     lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&p, o,
 		   CCF_ARG(1));
