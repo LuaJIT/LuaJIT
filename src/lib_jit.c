@@ -427,6 +427,12 @@ LJLIB_CF(jit_util_ircalladdr)
 
 #include "lj_libdef.h"
 
+static int luaopen_jit_util(lua_State *L)
+{
+  LJ_LIB_REG(L, NULL, jit_util);
+  return 1;
+}
+
 /* -- jit.opt module ------------------------------------------------------ */
 
 #if LJ_HASJIT
@@ -748,7 +754,7 @@ LUALIB_API int luaopen_jit(lua_State *L)
 		tabref(L->env));
 #endif
 #ifndef LUAJIT_DISABLE_JITUTIL
-  LJ_LIB_REG(L, "jit.util", jit_util);
+  lj_lib_prereg(L, LUA_JITLIBNAME ".util", luaopen_jit_util, tabref(L->env));
 #endif
 #if LJ_HASJIT
   LJ_LIB_REG(L, "jit.opt", jit_opt);
