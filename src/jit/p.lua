@@ -119,7 +119,6 @@ local function prof_top(count1, count2, samples, indent)
     n = n + 1
     t[n] = k
   end
-  if not t[1] then return end
   sort(t, function(a, b) return count1[a] > count1[b] end)
   local raw = prof_raw
   for i=1,min(n, prof_maxn) do
@@ -148,7 +147,10 @@ local function prof_finish()
   if prof_ud then
     profile.stop()
     local samples = prof_samples
-    if samples == 0 then return end
+    if samples == 0 then
+      if prof_raw ~= true then out:write("[no samples collected]\n") end
+      return
+    end
     prof_top(prof_count1, prof_count2, samples, "")
     prof_count1 = nil
     prof_count2 = nil
