@@ -563,7 +563,7 @@ static void jit_profile_callback(lua_State *L2, lua_State *L, int samples,
   }
 }
 
-/* profile.start(mode, func) */
+/* profile.start(mode, cb) */
 LJLIB_CF(jit_profile_start)
 {
   GCtab *registry = tabV(registry(L));
@@ -597,7 +597,7 @@ LJLIB_CF(jit_profile_stop)
   return 0;
 }
 
-/* profile.dumpstack([thread,] fmt, depth) */
+/* dump = profile.dumpstack([thread,] fmt, depth) */
 LJLIB_CF(jit_profile_dumpstack)
 {
   lua_State *L2 = L;

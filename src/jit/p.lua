@@ -21,7 +21,7 @@
 --
 -- The following dump features are available:
 --
---   f  Stack dump: function name, Otherwise module:line. Default mode
+--   f  Stack dump: function name, otherwise module:line. Default mode.
 --   F  Stack dump: ditto, but always prepend module.
 --   l  Stack dump: module:line.
 --   <number> stack dump depth (callee < caller). Default: 1.
@@ -33,7 +33,7 @@
 --   r  Show raw sample counts. Default: show percentages.
 --   a  Annotate excerpts from source code files.
 --   A  Annotate complete source code files.
---   G  Produce output suitable for graphical tools (e.g. flame graphs).
+--   G  Produce raw output suitable for graphical tools (e.g. flame graphs).
 --   m<number> Minimum sample percentage to be shown. Default: 3.
 --   i<number> Sampling interval in milliseconds. Default: 10.
 --
@@ -87,6 +87,8 @@ local function prof_cb(th, samples, vmmode)
     if prof_split == 2 then
       local k1, k2 = key_stack:match("(.-) [<>] (.*)")
       if k2 then key_stack, key_stack2 = k1, k2 end
+    elseif prof_split == 3 then
+      key_stack2 = profile.dumpstack(th, "l", 1)
     end
   end
   -- Order keys.
@@ -138,7 +140,8 @@ local function prof_top(count1, count2, samples, indent)
     if count2 then
       local r = count2[k]
       if r then
-	prof_top(r, nil, v, prof_depth < 0 and "  -> " or "  <- ")
+	prof_top(r, nil, v, (prof_split == 3 or prof_split == 1) and "  -- " or
+			    (prof_depth < 0 and "  -> " or "  <- "))
       end
     end
   end
@@ -221,7 +224,7 @@ local function prof_finish()
     profile.stop()
     local samples = prof_samples
     if samples == 0 then
-      if prof_raw ~= true then out:write("[no samples collected]\n") end
+      if prof_raw ~= true then out:write("[No samples collected]\n") end
       return
     end
     if prof_ann then
@@ -254,6 +257,9 @@ local function prof_start(mode)
     prof_split = 2
     if prof_depth == -1 or m["-"] then prof_depth = -2
     elseif prof_depth == 1 then prof_depth = 2 end
+  elseif mode:find("[fF].*l") then
+    scope = "l"
+    prof_split = 3
   else
     prof_split = (scope == "" or mode:find("[zv].*[lfF]")) and 1 or 0
   end
@@ -271,7 +277,8 @@ local function prof_start(mode)
   elseif scope == "" then
     prof_fmt = false
   else
-    prof_fmt = flags..scope..(prof_depth >= 0 and "Z < " or "Z > ")
+    local sc = prof_split == 3 and m.f or m.F or scope
+    prof_fmt = flags..sc..(prof_depth >= 0 and "Z < " or "Z > ")
   end
   prof_count1 = {}
   prof_count2 = {}
