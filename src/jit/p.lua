@@ -32,7 +32,7 @@
 --   z  Show zones. Can be combined with stack dumps, e.g. zf or fz.
 --   r  Show raw sample counts. Default: show percentages.
 --   G  Produce output suitable for graphical tools (e.g. flame graphs).
---   n<number> Show top N samples. Default: 10.
+--   m<number> Minimum sample percentage to be shown. Default: 3.
 --   i<number> Sampling interval in milliseconds. Default: 10.
 --
 ----------------------------------------------------------------------------
@@ -53,7 +53,7 @@ local out
 ------------------------------------------------------------------------------
 
 local prof_ud
-local prof_states, prof_split, prof_maxn, prof_raw, prof_fmt, prof_depth
+local prof_states, prof_split, prof_min, prof_raw, prof_fmt, prof_depth
 local prof_count1, prof_count2, prof_samples
 
 local map_vmmode = {
@@ -121,11 +121,13 @@ local function prof_top(count1, count2, samples, indent)
   end
   sort(t, function(a, b) return count1[a] > count1[b] end)
   local raw = prof_raw
-  for i=1,min(n, prof_maxn) do
+  for i=1,n do
     local k = t[i]
     local v = count1[k]
+    local pct = floor(v*100/samples + 0.5)
+    if pct < prof_min then break end
     if not raw then
-      out:write(format("%s%2d%%  %s\n", indent, floor(v*100/samples + 0.5), k))
+      out:write(format("%s%2d%%  %s\n", indent, pct, k))
     elseif raw == "r" then
       out:write(format("%s%5d  %s\n", indent, v, k))
     else
@@ -162,8 +164,8 @@ end
 local function prof_start(mode)
   local interval = ""
   mode = mode:gsub("i%d*", function(s) interval = s; return "" end)
-  prof_maxn = 10
-  mode = mode:gsub("n(%d+)", function(s) prof_maxn = tonumber(s); return "" end)
+  prof_min = 3
+  mode = mode:gsub("m(%d+)", function(s) prof_min = tonumber(s); return "" end)
   prof_depth = 1
   mode = mode:gsub("%-?%d+", function(s) prof_depth = tonumber(s); return "" end)
   local m = {}
@@ -184,7 +186,7 @@ local function prof_start(mode)
     prof_fmt = flags..scope.."Z;"
     prof_depth = -100
     prof_raw = true
-    prof_maxn = 2147483647
+    prof_min = 0
   elseif scope == "" then
     prof_fmt = false
   else
