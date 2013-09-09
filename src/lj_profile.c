@@ -30,6 +30,10 @@
 #elif LJ_PROFILE_PTHREAD
 
 #include <pthread.h>
+#include <time.h>
+#if LJ_TARGET_PS3
+#include <sys/timer.h>
+#endif
 
 #elif LJ_PROFILE_WTHREAD
 
@@ -54,9 +58,11 @@ typedef struct ProfileState {
   pthread_t thread;		/* Timer thread. */
   int abort;			/* Abort timer thread. */
 #elif LJ_PROFILE_WTHREAD
+#if LJ_TARGET_WINDOWS
   HINSTANCE wmm;		/* WinMM library handle. */
   WMM_TPFUNC wmm_tbp;		/* WinMM timeBeginPeriod function. */
   WMM_TPFUNC wmm_tep;		/* WinMM timeEndPeriod function. */
+#endif
   HANDLE thread;		/* Timer thread. */
   int abort;			/* Abort timer thread. */
 #endif
@@ -144,11 +150,17 @@ static void profile_timer_stop(ProfileState *ps)
 static void *profile_thread(ProfileState *ps)
 {
   int interval = ps->interval;
+#if !LJ_TARGET_PS3
   struct timespec ts;
   ts.tv_sec = interval / 1000;
   ts.tv_nsec = (interval % 1000) * 1000000;
+#endif
   while (1) {
+#if LJ_TARGET_PS3
+    sys_timer_usleep(interval * 1000);
+#else
     nanosleep(&ts, NULL);
+#endif
     if (ps->abort) break;
     profile_trigger(ps);
   }
@@ -176,19 +188,24 @@ static DWORD WINAPI profile_thread(void *psx)
 {
   ProfileState *ps = (ProfileState *)psx;
   int interval = ps->interval;
-  ps->wmm_tbp(1);
+#if LJ_TARGET_WINDOWS
+  ps->wmm_tbp(interval);
+#endif
   while (1) {
     Sleep(interval);
     if (ps->abort) break;
     profile_trigger(ps);
   }
-  ps->wmm_tep(1);
+#if LJ_TARGET_WINDOWS
+  ps->wmm_tep(interval);
+#endif
   return 0;
 }
 
 /* Start profiling timer thread. */
 static void profile_timer_start(ProfileState *ps)
 {
+#if LJ_TARGET_WINDOWS
   if (!ps->wmm) {  /* Load WinMM library on-demand. */
     ps->wmm = LoadLibraryA("winmm.dll");
     if (ps->wmm) {
@@ -200,6 +217,7 @@ static void profile_timer_start(ProfileState *ps)
       }
     }
   }
+#endif
   ps->abort = 0;
   ps->thread = CreateThread(NULL, 0, profile_thread, ps, 0, NULL);
 }
