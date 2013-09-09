@@ -3226,7 +3226,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if not PPE and not GPR64
     |  add. TMP0, TMP0, TMP1
     |.else
-    |  neg TMP1
+    |  neg TMP1, TMP1
     |  cmpw TMP0, TMP1
     |.endif
     |  bne ->vmeta_istype
