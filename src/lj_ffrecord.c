@@ -659,6 +659,7 @@ static void LJ_FASTCALL recff_bit_tohex(jit_State *J, RecordFFData *rd)
   TRef tr = recff_bit64_tohex(J, rd, hdr);
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
 #else
+  UNUSED(rd);
   recff_nyiu(J);  /* Don't bother working around this NYI. */
 #endif
 }
