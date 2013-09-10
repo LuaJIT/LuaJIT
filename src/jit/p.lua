@@ -196,9 +196,11 @@ local function prof_annotate(count1, samples)
       end
       local v = fl[n]
       if ann ~= 0 then
+	local v2 = fl[n+ann]
 	if show then
-	  if v then show = n elseif show+ann < n then show = false end
-	elseif fl[n+ann] then
+	  if v2 then show = n+ann elseif v then show = n
+	  elseif show+ann < n then show = false end
+	elseif v2 then
 	  show = n+ann
 	  out:write(format("@@ %d @@\n", n))
 	end
