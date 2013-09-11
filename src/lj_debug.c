@@ -567,7 +567,7 @@ static int debug_putchunkname(SBuf *sb, GCproto *pt, int pathstrip)
     }
     lj_buf_putmem(sb, p, len);
   } else {
-    lj_buf_putmem(sb, "[string]", 9);
+    lj_buf_putmem(sb, "[string]", 8);
   }
   return 1;
 }
