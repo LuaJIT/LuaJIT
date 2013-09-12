@@ -85,7 +85,7 @@ end
 -- Resync CPP line numbers.
 local function wsync()
   if g_synclineno ~= g_lineno and g_opt.cpp then
-    wline("# "..g_lineno..' "'..g_fname..'"')
+    wline("#line "..g_lineno..' "'..g_fname..'"')
     g_synclineno = g_lineno
   end
 end
