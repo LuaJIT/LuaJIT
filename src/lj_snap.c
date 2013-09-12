@@ -845,11 +845,14 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 
   /* Compute current stack top. */
   switch (bc_op(*pc)) {
+  default:
+    if (bc_op(*pc) < BC_FUNCF) {
+      L->top = curr_topL(L);
+      break;
+    }
+    /* fallthrough */
   case BC_CALLM: case BC_CALLMT: case BC_RETM: case BC_TSETM:
     L->top = frame + snap->nslots;
-    break;
-  default:
-    L->top = curr_topL(L);
     break;
   }
   return pc;
