@@ -1699,7 +1699,8 @@ LJFOLDF(abc_k)
 LJFOLD(ABC any any)
 LJFOLDF(abc_invar)
 {
-  if (!irt_isint(fins->t) && J->chain[IR_LOOP])  /* Currently marked as PTR. */
+  /* Invariant ABC marked as PTR. Drop if op1 is invariant, too. */
+  if (!irt_isint(fins->t) && fins->op1 < J->chain[IR_LOOP])
     return DROPFOLD;
   return NEXTFOLD;
 }
