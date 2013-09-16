@@ -508,28 +508,18 @@ out:
 void LJ_FASTCALL lj_dispatch_profile(lua_State *L, const BCIns *pc)
 {
   ERRNO_SAVE
-  global_State *g = G(L);
-  uint8_t mask = g->hookmask;
-  g->hookmask = (mask & ~HOOK_PROFILE);
-  lj_dispatch_update(g);
-  if (!(mask & HOOK_VMEVENT)) {
-    GCfunc *fn = curr_func(L);
-    GCproto *pt = funcproto(fn);
-    void *cf = cframe_raw(L->cframe);
-    const BCIns *oldpc = cframe_pc(cf);
-    uint8_t oldh = hook_save(g);
-    BCReg slots;
-    hook_vmevent(g);
-    setcframe_pc(cf, pc);
-    slots = cur_topslot(pt, pc, cframe_multres_n(cf));
-    L->top = L->base + slots;  /* Fix top. */
-    lj_profile_interpreter(L);
-    setgcref(g->cur_L, obj2gco(L));
-    setcframe_pc(cf, oldpc);
-    hook_restore(g, oldh);
-    lj_trace_abort(g);
-    setvmstate(g, INTERP);
-  }
+  GCfunc *fn = curr_func(L);
+  GCproto *pt = funcproto(fn);
+  void *cf = cframe_raw(L->cframe);
+  const BCIns *oldpc = cframe_pc(cf);
+  global_State *g;
+  setcframe_pc(cf, pc);
+  L->top = L->base + cur_topslot(pt, pc, cframe_multres_n(cf));
+  lj_profile_interpreter(L);
+  setcframe_pc(cf, oldpc);
+  g = G(L);
+  setgcref(g->cur_L, obj2gco(L));
+  setvmstate(g, INTERP);
   ERRNO_RESTORE
 }
 #endif

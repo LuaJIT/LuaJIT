@@ -26,6 +26,8 @@
 
 #include <sys/time.h>
 #include <signal.h>
+#define profile_lock(ps)	UNUSED(ps)
+#define profile_unlock(ps)	UNUSED(ps)
 
 #elif LJ_PROFILE_PTHREAD
 
@@ -34,12 +36,16 @@
 #if LJ_TARGET_PS3
 #include <sys/timer.h>
 #endif
+#define profile_lock(ps)	pthread_mutex_lock(&ps->lock)
+#define profile_unlock(ps)	pthread_mutex_unlock(&ps->lock)
 
 #elif LJ_PROFILE_WTHREAD
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 typedef unsigned int (WINAPI *WMM_TPFUNC)(unsigned int);
+#define profile_lock(ps)	EnterCriticalSection(&ps->lock)
+#define profile_unlock(ps)	LeaveCriticalSection(&ps->lock)
 
 #endif
 
@@ -55,6 +61,7 @@ typedef struct ProfileState {
 #if LJ_PROFILE_SIGPROF
   struct sigaction oldsa;	/* Previous SIGPROF state. */
 #elif LJ_PROFILE_PTHREAD
+  pthread_mutex_t lock;		/* g->hookmask update lock. */
   pthread_t thread;		/* Timer thread. */
   int abort;			/* Abort timer thread. */
 #elif LJ_PROFILE_WTHREAD
@@ -63,6 +70,7 @@ typedef struct ProfileState {
   WMM_TPFUNC wmm_tbp;		/* WinMM timeBeginPeriod function. */
   WMM_TPFUNC wmm_tep;		/* WinMM timeEndPeriod function. */
 #endif
+  CRITICAL_SECTION lock;	/* g->hookmask update lock. */
   HANDLE thread;		/* Timer thread. */
   int abort;			/* Abort timer thread. */
 #endif
@@ -85,9 +93,23 @@ static ProfileState profile_state;
 void LJ_FASTCALL lj_profile_interpreter(lua_State *L)
 {
   ProfileState *ps = &profile_state;
-  int samples = ps->samples;
-  ps->samples = 0;
-  ps->cb(ps->data, L, samples, ps->vmstate);  /* Invoke user callback. */
+  global_State *g = G(L);
+  uint8_t mask;
+  profile_lock(ps);
+  mask = (g->hookmask & ~HOOK_PROFILE);
+  if (!(mask & HOOK_VMEVENT)) {
+    int samples = ps->samples;
+    ps->samples = 0;
+    g->hookmask = HOOK_VMEVENT;
+    lj_dispatch_update(g);
+    profile_unlock(ps);
+    ps->cb(ps->data, L, samples, ps->vmstate);  /* Invoke user callback. */
+    profile_lock(ps);
+    mask |= (g->hookmask & HOOK_PROFILE);
+  }
+  g->hookmask = mask;
+  lj_dispatch_update(g);
+  profile_unlock(ps);
 }
 
 /* Trigger profile hook. Asynchronous call from OS-specific profile timer. */
@@ -95,9 +117,10 @@ static void profile_trigger(ProfileState *ps)
 {
   global_State *g = ps->g;
   uint8_t mask;
+  profile_lock(ps);
   ps->samples++;  /* Always increment number of samples. */
   mask = g->hookmask;
-  if (!(mask & HOOK_PROFILE)) {  /* Set profile hook, unless already set. */
+  if (!(mask & (HOOK_PROFILE|HOOK_VMEVENT))) {  /* Set profile hook. */
     int st = g->vmstate;
     ps->vmstate = st >= 0 ? 'N' :
 		  st == ~LJ_VMST_INTERP ? 'I' :
@@ -106,6 +129,7 @@ static void profile_trigger(ProfileState *ps)
     g->hookmask = (mask | HOOK_PROFILE);
     lj_dispatch_update(g);
   }
+  profile_unlock(ps);
 }
 
 /* -- OS-specific profile timer handling ---------------------------------- */
@@ -170,6 +194,7 @@ static void *profile_thread(ProfileState *ps)
 /* Start profiling timer thread. */
 static void profile_timer_start(ProfileState *ps)
 {
+  pthread_mutex_init(&ps->lock, 0);
   ps->abort = 0;
   pthread_create(&ps->thread, NULL, (void *(*)(void *))profile_thread, ps);
 }
@@ -179,6 +204,7 @@ static void profile_timer_stop(ProfileState *ps)
 {
   ps->abort = 1;
   pthread_join(ps->thread, NULL);
+  pthread_mutex_destroy(&ps->lock);
 }
 
 #elif LJ_PROFILE_WTHREAD
@@ -218,6 +244,7 @@ static void profile_timer_start(ProfileState *ps)
     }
   }
 #endif
+  InitializeCriticalSection(&ps->lock);
   ps->abort = 0;
   ps->thread = CreateThread(NULL, 0, profile_thread, ps, 0, NULL);
 }
@@ -227,6 +254,7 @@ static void profile_timer_stop(ProfileState *ps)
 {
   ps->abort = 1;
   WaitForSingleObject(ps->thread, INFINITE);
+  DeleteCriticalSection(&ps->lock);
 }
 
 #endif
