@@ -362,11 +362,19 @@ static void callhook(lua_State *L, int event, BCLine line)
     /* Top frame, nextframe = NULL. */
     ar.i_ci = (int)((L->base-1) - tvref(L->stack));
     lj_state_checkstack(L, 1+LUA_MINSTACK);
+#if LJ_HASPROFILE && !LJ_PROFILE_SIGPROF
+    lj_profile_hook_enter(g);
+#else
     hook_enter(g);
+#endif
     hookf(L, &ar);
     lua_assert(hook_active(g));
     setgcref(g->cur_L, obj2gco(L));
+#if LJ_HASPROFILE && !LJ_PROFILE_SIGPROF
+    lj_profile_hook_leave(g);
+#else
     hook_leave(g);
+#endif
   }
 }
 
