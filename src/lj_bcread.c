@@ -446,7 +446,8 @@ GCproto *lj_bcread(LexState *ls)
     setprotoV(L, L->top, pt);
     incr_top(L);
   }
-  if (ls->p < ls->pe || L->top-1 != bcread_oldtop(L, ls))
+  if ((int32_t)(2*(uint32_t)(ls->pe - ls->p)) > 0 ||
+      L->top-1 != bcread_oldtop(L, ls))
     bcread_error(ls, LJ_ERR_BCBAD);
   /* Pop off last prototype. */
   L->top--;
