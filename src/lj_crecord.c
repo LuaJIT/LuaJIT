@@ -641,7 +641,12 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
       sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCstr)));
       sid = CTID_A_CCHAR;
     }
-  } else {  /* NYI: tref_istab(sp), tref_islightud(sp). */
+  } else if (tref_islightud(sp)) {
+#if LJ_64
+    sp = emitir(IRT(IR_BAND, IRT_P64), sp,
+		lj_ir_kint64(J, U64x(00007fff,ffffffff)));
+#endif
+  } else {  /* NYI: tref_istab(sp). */
     IRType t;
     sid = argv2cdata(J, sp, sval)->ctypeid;
     s = ctype_raw(cts, sid);
