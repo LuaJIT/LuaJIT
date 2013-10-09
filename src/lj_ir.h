@@ -97,6 +97,7 @@
   _(UREFC,	LW, ref, lit) \
   _(FREF,	R , ref, lit) \
   _(STRREF,	N , ref, ref) \
+  _(LREF,	L , ___, ___) \
   \
   /* Loads and Stores. These must be in the same order. */ \
   _(ALOAD,	L , ref, ___) \
@@ -193,6 +194,7 @@ IRFPMDEF(FPMENUM)
   _(STR_LEN,	offsetof(GCstr, len)) \
   _(FUNC_ENV,	offsetof(GCfunc, l.env)) \
   _(FUNC_PC,	offsetof(GCfunc, l.pc)) \
+  _(THREAD_ENV,	offsetof(lua_State, env)) \
   _(TAB_META,	offsetof(GCtab, metatable)) \
   _(TAB_ARRAY,	offsetof(GCtab, array)) \
   _(TAB_NODE,	offsetof(GCtab, node)) \

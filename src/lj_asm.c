@@ -699,7 +699,7 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
 	emit_loadu64(as, dest, ir_kint64(ir)->u64);
 	return;
 #endif
-      } else {
+      } else if (ir->o != IR_KPRI) {
 	lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
 		   ir->o == IR_KPTR || ir->o == IR_KKPTR || ir->o == IR_KNULL);
 	emit_loadi(as, dest, ir->i);
@@ -1191,6 +1191,16 @@ static void asm_newref(ASMState *as, IRIns *ir)
   asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
 }
 
+static void asm_lref(ASMState *as, IRIns *ir)
+{
+  Reg r = ra_dest(as, ir, RSET_GPR);
+#if LJ_TARGET_X86ORX64
+  ra_left(as, r, ASMREF_L);
+#else
+  ra_leftov(as, r, ASMREF_L);
+#endif
+}
+
 /* -- Calls --------------------------------------------------------------- */
 
 /* Collect arguments from CALL* and CARG instructions. */
@@ -1624,6 +1634,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
   case IR_FREF: asm_fref(as, ir); break;
   case IR_STRREF: asm_strref(as, ir); break;
+  case IR_LREF: asm_lref(as, ir); break;
 
   /* Loads and stores. */
   case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:

@@ -2104,6 +2104,7 @@ LJFOLDF(fwd_href_tdup)
 ** an aliased table, as it may invalidate all of the pointers and fields.
 ** Only HREF needs the NEWREF check -- AREF and HREFK already depend on
 ** FLOADs. And NEWREF itself is treated like a store (see below).
+** LREF is constant (per trace) since coroutine switches are not inlined.
 */
 LJFOLD(FLOAD TNEW IRFL_TAB_ASIZE)
 LJFOLDF(fload_tab_tnew_asize)
@@ -2221,6 +2222,8 @@ LJFOLDF(fload_cdata_ptr_int64_cnew)
 }
 
 LJFOLD(FLOAD any IRFL_STR_LEN)
+LJFOLD(FLOAD any IRFL_FUNC_ENV)
+LJFOLD(FLOAD any IRFL_THREAD_ENV)
 LJFOLD(FLOAD any IRFL_CDATA_CTYPEID)
 LJFOLD(FLOAD any IRFL_CDATA_PTR)
 LJFOLD(FLOAD any IRFL_CDATA_INT)

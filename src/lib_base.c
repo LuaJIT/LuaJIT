@@ -136,7 +136,7 @@ LJLIB_ASM(setmetatable)		LJLIB_REC(.)
   return FFH_RES(1);
 }
 
-LJLIB_CF(getfenv)
+LJLIB_CF(getfenv)		LJLIB_REC(.)
 {
   GCfunc *fn;
   cTValue *o = L->base;

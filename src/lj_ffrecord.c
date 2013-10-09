@@ -422,6 +422,19 @@ static void LJ_FASTCALL recff_xpcall(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
+static void LJ_FASTCALL recff_getfenv(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  /* Only support getfenv(0) for now. */
+  if (tref_isint(tr) && tref_isk(tr) && IR(tref_ref(tr))->i == 0) {
+    TRef trl = emitir(IRT(IR_LREF, IRT_THREAD), 0, 0);
+    J->base[0] = emitir(IRT(IR_FLOAD, IRT_TAB), trl, IRFL_THREAD_ENV);
+    return;
+  }
+  recff_nyiu(J);
+  UNUSED(rd);
+}
+
 /* -- Math library fast functions ----------------------------------------- */
 
 static void LJ_FASTCALL recff_math_abs(jit_State *J, RecordFFData *rd)
