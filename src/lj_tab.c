@@ -149,6 +149,12 @@ GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits)
   return t;
 }
 
+/* The API of this function conforms to lua_createtable(). */
+GCtab *lj_tab_new_ah(lua_State *L, int32_t a, int32_t h)
+{
+  return lj_tab_new(L, (uint32_t)(a > 0 ? a+1 : 0), hsize2hbits(h));
+}
+
 #if LJ_HASJIT
 GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize)
 {

@@ -208,6 +208,15 @@ minor releases (2.0 &rarr; 2.1) or between any beta release. Foreign
 bytecode (e.g. from Lua 5.1) is incompatible and cannot be loaded.
 </p>
 
+<h3 id="table_new"><tt>table.new(narray, nhash)</tt> allocates a pre-sized table</h3>
+<p>
+An extra library function <tt>table.new()</tt> can be made available via
+<tt>require("table.new")</tt>. This creates a pre-sized table, just like
+the C API equivalent <tt>lua_createtable()</tt>. This is useful for big
+tables if the final table size is known and automatic table resizing is
+too expensive.
+</p>
+
 <h3 id="math_random">Enhanced PRNG for <tt>math.random()</tt></h3>
 <p>
 LuaJIT uses a Tausworthe PRNG with period 2^223 to implement

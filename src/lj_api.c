@@ -640,10 +640,8 @@ LUA_API void lua_pushlightuserdata(lua_State *L, void *p)
 
 LUA_API void lua_createtable(lua_State *L, int narray, int nrec)
 {
-  GCtab *t;
   lj_gc_check(L);
-  t = lj_tab_new(L, (uint32_t)(narray > 0 ? narray+1 : 0), hsize2hbits(nrec));
-  settabV(L, L->top, t);
+  settabV(L, L->top, lj_tab_new_ah(L, narray, nrec));
   incr_top(L);
 }
 

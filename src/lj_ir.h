@@ -139,6 +139,7 @@
   \
   /* Calls. */ \
   _(CALLN,	N , ref, lit) \
+  _(CALLA,	A , ref, lit) \
   _(CALLL,	L , ref, lit) \
   _(CALLS,	S , ref, lit) \
   _(CALLXS,	S , ref, ref) \

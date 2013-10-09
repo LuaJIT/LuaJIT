@@ -1659,6 +1659,9 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_STRTO: asm_strto(as, ir); break;
 
   /* Calls. */
+  case IR_CALLA:
+    as->gcsteps++;
+    /* fallthrough */
   case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
   case IR_CALLXS: asm_callx(as, ir); break;
   case IR_CARG: break;

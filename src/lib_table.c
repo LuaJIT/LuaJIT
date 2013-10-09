@@ -18,6 +18,7 @@
 #include "lj_err.h"
 #include "lj_buf.h"
 #include "lj_tab.h"
+#include "lj_ff.h"
 #include "lj_lib.h"
 
 /* ------------------------------------------------------------------------ */
@@ -264,6 +265,24 @@ LJLIB_CF(table_pack)
 }
 #endif
 
+LJLIB_NOREG LJLIB_CF(table_new)		LJLIB_REC(.)
+{
+  int32_t a = lj_lib_checkint(L, 1);
+  int32_t h = lj_lib_checkint(L, 2);
+  lua_createtable(L, a, h);
+  return 1;
+}
+
+static int luaopen_table_new(lua_State *L)
+{
+  GCfunc *fn = lj_lib_pushcc(L, lj_cf_table_new, FF_table_new, 0);
+  GCtab *t = tabref(curr_func(L)->c.env);  /* Reference to "table". */
+  setfuncV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "new")), fn);
+  lj_gc_anybarriert(L, t);
+  setfuncV(L, L->top++, fn);
+  return 1;
+}
+
 /* ------------------------------------------------------------------------ */
 
 #include "lj_libdef.h"
@@ -275,6 +294,7 @@ LUALIB_API int luaopen_table(lua_State *L)
   lua_getglobal(L, "unpack");
   lua_setfield(L, -2, "unpack");
 #endif
+  lj_lib_prereg(L, LUA_TABLIBNAME ".new", luaopen_table_new, tabV(L->top-1));
   return 1;
 }
 

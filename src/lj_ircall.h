@@ -25,6 +25,7 @@ typedef struct CCallInfo {
 #define CCI_OP(ci)		((ci)->flags >> CCI_OPSHIFT)  /* Get op. */
 
 #define CCI_CALL_N		(IR_CALLN << CCI_OPSHIFT)
+#define CCI_CALL_A		(IR_CALLA << CCI_OPSHIFT)
 #define CCI_CALL_L		(IR_CALLL << CCI_OPSHIFT)
 #define CCI_CALL_S		(IR_CALLS << CCI_OPSHIFT)
 #define CCI_CALL_FN		(CCI_CALL_N|CCI_CC_FASTCALL)
@@ -140,6 +141,7 @@ typedef struct CCallInfo {
   _(ANY,	lj_buf_putstr_rep,	3,   L, P32, 0) \
   _(ANY,	lj_buf_puttab,		5,   L, P32, 0) \
   _(ANY,	lj_buf_tostr,		1,  FL, STR, 0) \
+  _(ANY,	lj_tab_new_ah,		3,   A, TAB, CCI_L) \
   _(ANY,	lj_tab_new1,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_dup,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_newkey,		3,   S, P32, CCI_L) \

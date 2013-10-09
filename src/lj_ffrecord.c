@@ -1003,6 +1003,14 @@ static void LJ_FASTCALL recff_table_concat(jit_State *J, RecordFFData *rd)
   UNUSED(rd);
 }
 
+static void LJ_FASTCALL recff_table_new(jit_State *J, RecordFFData *rd)
+{
+  TRef tra = lj_opt_narrow_toint(J, J->base[0]);
+  TRef trh = lj_opt_narrow_toint(J, J->base[1]);
+  J->base[0] = lj_ir_call(J, IRCALL_lj_tab_new_ah, tra, trh);
+  UNUSED(rd);
+}
+
 /* -- I/O library fast functions ------------------------------------------ */
 
 /* Get FILE* for I/O function. Any I/O error aborts recording, so there's
