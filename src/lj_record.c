@@ -1351,6 +1351,22 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   }
 }
 
+static void rec_tsetm(jit_State *J, BCReg ra, BCReg rn, int32_t i)
+{
+  RecordIndex ix;
+  cTValue *basev = J->L->base;
+  copyTV(J->L, &ix.tabv, &basev[ra-1]);
+  ix.tab = getslot(J, ra-1);
+  ix.idxchain = 0;
+  for (; ra < rn; i++, ra++) {
+    setintV(&ix.keyv, i);
+    ix.key = lj_ir_kint(J, i);
+    copyTV(J->L, &ix.valv, &basev[ra]);
+    ix.val = getslot(J, ra);
+    lj_record_idx(J, &ix);
+  }
+}
+
 /* -- Upvalue access ------------------------------------------------------ */
 
 /* Check whether upvalue is immutable and ok to constify. */
@@ -2078,6 +2094,10 @@ void lj_record_ins(jit_State *J)
     rc = lj_record_idx(J, &ix);
     break;
 
+  case BC_TSETM:
+    rec_tsetm(J, ra, (BCReg)(J->L->top - J->L->base), (int32_t)rcv->u32.lo);
+    break;
+
   case BC_TNEW:
     rc = rec_tnew(J, rc);
     break;
@@ -2211,7 +2231,6 @@ void lj_record_ins(jit_State *J)
   case BC_ISNEXT:
   case BC_UCLO:
   case BC_FNEW:
-  case BC_TSETM:
     setintV(&J->errinfo, (int32_t)op);
     lj_trace_err_info(J, LJ_TRERR_NYIBC);
     break;
