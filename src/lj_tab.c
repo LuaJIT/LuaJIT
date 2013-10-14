@@ -351,6 +351,13 @@ static void rehashtab(lua_State *L, GCtab *t, cTValue *ek)
   resizetab(L, t, asize, hsize2hbits(total));
 }
 
+#if LJ_HASFFI
+void lj_tab_rehash(lua_State *L, GCtab *t)
+{
+  rehashtab(L, t, niltv(L));
+}
+#endif
+
 void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize)
 {
   resizetab(L, t, nasize+1, t->hmask > 0 ? lj_fls(t->hmask)+1 : 0);
