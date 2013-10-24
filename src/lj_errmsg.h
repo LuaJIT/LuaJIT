@@ -102,6 +102,7 @@ ERRDEF(STRFMTW,	"invalid format (width or precision too long)")
 ERRDEF(STRGSRV,	"invalid replacement value (a %s)")
 ERRDEF(BADMODN,	"name conflict for module " LUA_QS)
 #if LJ_HASJIT
+ERRDEF(JITPROT,	"runtime code generation failed, restricted kernel?")
 #if LJ_TARGET_X86ORX64
 ERRDEF(NOJIT,	"JIT compiler disabled, CPU does not support SSE2")
 #else
