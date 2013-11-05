@@ -689,12 +689,14 @@ int LJ_FASTCALL lj_gc_step(lua_State *L)
   } while ((int32_t)lim > 0);
   if (g->gc.debt < GCSTEPSIZE) {
     g->gc.threshold = g->gc.total + GCSTEPSIZE;
+    g->vmstate = ostate;
+    return 1;
   } else {
     g->gc.debt -= GCSTEPSIZE;
     g->gc.threshold = g->gc.total;
+    g->vmstate = ostate;
+    return 0;
   }
-  g->vmstate = ostate;
-  return 0;
 }
 
 /* Ditto, but fix the stack top first. */
