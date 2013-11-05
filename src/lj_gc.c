@@ -685,7 +685,7 @@ int LJ_FASTCALL lj_gc_step(lua_State *L)
   if (g->gc.debt < GCSTEPSIZE) {
     g->gc.threshold = g->gc.total + GCSTEPSIZE;
     g->vmstate = ostate;
-    return 1;
+    return -1;
   } else {
     g->gc.debt -= GCSTEPSIZE;
     g->gc.threshold = g->gc.total;
