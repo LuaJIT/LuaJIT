@@ -618,16 +618,17 @@ static AliasRet aa_xref(jit_State *J, IRIns *refa, IRIns *xa, IRIns *xb)
     basea = IR(refa->op1);
     ofsa = (LJ_64 && irk->o == IR_KINT64) ? (ptrdiff_t)ir_k64(irk)->u64 :
 					    (ptrdiff_t)irk->i;
-    if (basea == refb && ofsa != 0)
-      return ALIAS_NO;  /* base+-ofs vs. base. */
   }
   if (refb->o == IR_ADD && irref_isk(refb->op2)) {
     IRIns *irk = IR(refb->op2);
     baseb = IR(refb->op1);
     ofsb = (LJ_64 && irk->o == IR_KINT64) ? (ptrdiff_t)ir_k64(irk)->u64 :
 					    (ptrdiff_t)irk->i;
-    if (refa == baseb && ofsb != 0)
-      return ALIAS_NO;  /* base vs. base+-ofs. */
+  }
+  /* Treat constified pointers like base vs. base+offset. */
+  if (basea->o == IR_KPTR && baseb->o == IR_KPTR) {
+    ofsb += (char *)ir_kptr(baseb) - (char *)ir_kptr(basea);
+    baseb = basea;
   }
   /* This implements (very) strict aliasing rules.
   ** Different types do NOT alias, except for differences in signedness.
