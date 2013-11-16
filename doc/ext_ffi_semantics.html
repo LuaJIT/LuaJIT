@@ -1188,7 +1188,9 @@ storing and initializing them are supported, yet.</li>
 <li>The <tt>volatile</tt> type qualifier is currently ignored by
 compiled code.</li>
 <li><a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a> silently
-ignores all re-declarations.</li>
+ignores most re-declarations. Note: avoid re-declarations which do not
+conform to C99. The implementation will eventually be changed to
+perform strict checks.</li>
 </ul>
 <p>
 The JIT compiler already handles a large subset of all FFI operations.
