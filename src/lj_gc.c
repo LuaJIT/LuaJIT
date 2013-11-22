@@ -673,7 +673,8 @@ int LJ_FASTCALL lj_gc_step(lua_State *L)
   lim = (GCSTEPSIZE/100) * g->gc.stepmul;
   if (lim == 0)
     lim = LJ_MAX_MEM;
-  g->gc.debt += g->gc.total - g->gc.threshold;
+  if (g->gc.total > g->gc.threshold)
+    g->gc.debt += g->gc.total - g->gc.threshold;
   do {
     lim -= (MSize)gc_onestep(L);
     if (g->gc.state == GCSpause) {
