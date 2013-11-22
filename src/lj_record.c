@@ -722,6 +722,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
     BCReg cbase = bc_a(callins);
     GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
+    if ((pt->flags & PROTO_NOJIT))
+      lj_trace_err(J, LJ_TRERR_CJITOFF);
     if (J->framedepth == 0 && J->pt && frame == J->L->base - 1) {
       if (check_downrec_unroll(J, pt)) {
 	J->maxslot = (BCReg)(rbase + gotresults);

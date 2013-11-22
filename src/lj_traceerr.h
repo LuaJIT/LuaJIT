@@ -20,7 +20,7 @@ TREDEF(LUNROLL,	"loop unroll limit reached")
 
 /* Recording calls/returns. */
 TREDEF(BADTYPE,	"bad argument type")
-TREDEF(CJITOFF,	"call to JIT-disabled function")
+TREDEF(CJITOFF,	"JIT compilation disabled for function")
 TREDEF(CUNROLL,	"call unroll limit reached")
 TREDEF(DOWNREC,	"down-recursion, restarting")
 TREDEF(NYICF,	"NYI: C function %p")
