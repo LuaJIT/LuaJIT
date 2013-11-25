@@ -275,12 +275,7 @@ LJLIB_NOREG LJLIB_CF(table_new)		LJLIB_REC(.)
 
 static int luaopen_table_new(lua_State *L)
 {
-  GCfunc *fn = lj_lib_pushcc(L, lj_cf_table_new, FF_table_new, 0);
-  GCtab *t = tabref(curr_func(L)->c.env);  /* Reference to "table". */
-  setfuncV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "new")), fn);
-  lj_gc_anybarriert(L, t);
-  setfuncV(L, L->top++, fn);
-  return 1;
+  return lj_lib_postreg(L, lj_cf_table_new, FF_table_new, "new");
 }
 
 /* ------------------------------------------------------------------------ */

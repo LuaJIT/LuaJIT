@@ -148,6 +148,17 @@ void lj_lib_register(lua_State *L, const char *libname,
   }
 }
 
+/* Push internal function on the stack. */
+GCfunc *lj_lib_pushcc(lua_State *L, lua_CFunction f, int id, int n)
+{
+  GCfunc *fn;
+  lua_pushcclosure(L, f, n);
+  fn = funcV(L->top-1);
+  fn->c.ffid = (uint8_t)id;
+  setmref(fn->c.pc, &G(L)->bc_cfunc_int);
+  return fn;
+}
+
 void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f, GCtab *env)
 {
   luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD", 4);
@@ -156,6 +167,16 @@ void lj_lib_prereg(lua_State *L, const char *name, lua_CFunction f, GCtab *env)
   setgcref(funcV(L->top-1)->c.env, obj2gco(env));
   lua_setfield(L, -2, name);
   L->top--;
+}
+
+int lj_lib_postreg(lua_State *L, lua_CFunction cf, int id, const char *name)
+{
+  GCfunc *fn = lj_lib_pushcf(L, cf, id);
+  GCtab *t = tabref(curr_func(L)->c.env);  /* Reference to parent table. */
+  setfuncV(L, lj_tab_setstr(L, t, lj_str_newz(L, name)), fn);
+  lj_gc_anybarriert(L, t);
+  setfuncV(L, L->top++, fn);
+  return 1;
 }
 
 /* -- Type checks --------------------------------------------------------- */
