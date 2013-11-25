@@ -39,6 +39,7 @@ LJ_FUNC GCtab *lj_tab_new_ah(lua_State *L, int32_t a, int32_t h);
 LJ_FUNC GCtab * LJ_FASTCALL lj_tab_new1(lua_State *L, uint32_t ahsize);
 #endif
 LJ_FUNCA GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt);
+LJ_FUNC void LJ_FASTCALL lj_tab_clear(GCtab *t);
 LJ_FUNC void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t);
 #if LJ_HASFFI
 LJ_FUNC void lj_tab_rehash(lua_State *L, GCtab *t);

@@ -217,6 +217,22 @@ tables if the final table size is known and automatic table resizing is
 too expensive.
 </p>
 
+<h3 id="table_clear"><tt>table.clear(tab)</tt> clears a table</h3>
+<p>
+An extra library function <tt>table.clear()</tt> can be made available
+via <tt>require("table.clear")</tt>. This clears all keys and values
+from a table, but preserves the allocated array/hash sizes. This is
+useful when a table, which is linked from multiple places, needs to be
+cleared and/or when recycling a table for use by the same context. This
+avoids managing backlinks, saves an allocation and the overhead of
+incremental array/hash part growth.
+</p>
+<p>
+Please note this function is meant for very specific situations. In most
+cases it's better to replace the (usually single) link with a new table
+and let the GC do its work.
+</p>
+
 <h3 id="math_random">Enhanced PRNG for <tt>math.random()</tt></h3>
 <p>
 LuaJIT uses a Tausworthe PRNG with period 2^223 to implement

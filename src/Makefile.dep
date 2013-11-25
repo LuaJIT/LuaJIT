@@ -155,7 +155,7 @@ lj_opt_loop.o: lj_opt_loop.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
  lj_iropt.h lj_trace.h lj_dispatch.h lj_bc.h lj_traceerr.h lj_snap.h \
  lj_vm.h
 lj_opt_mem.o: lj_opt_mem.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_tab.h lj_ir.h lj_jit.h lj_iropt.h
+ lj_tab.h lj_ir.h lj_jit.h lj_iropt.h lj_ircall.h
 lj_opt_narrow.o: lj_opt_narrow.c lj_obj.h lua.h luaconf.h lj_def.h \
  lj_arch.h lj_bc.h lj_ir.h lj_jit.h lj_iropt.h lj_trace.h lj_dispatch.h \
  lj_traceerr.h lj_vm.h lj_strscan.h

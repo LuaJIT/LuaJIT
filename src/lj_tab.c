@@ -204,6 +204,17 @@ GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)
   return t;
 }
 
+/* Clear a table. */
+void LJ_FASTCALL lj_tab_clear(GCtab *t)
+{
+  clearapart(t);
+  if (t->hmask > 0) {
+    Node *node = noderef(t->node);
+    setmref(node->freetop, &node[t->hmask+1]);
+    clearhpart(t);
+  }
+}
+
 /* Free a table. */
 void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t)
 {
