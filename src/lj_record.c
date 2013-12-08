@@ -1471,6 +1471,7 @@ static void check_call_unroll(jit_State *J, TraceNo lnk)
   int32_t count = 0;
   if ((J->pt->flags & PROTO_VARARG)) depth--;  /* Vararg frame still missing. */
   for (; depth > 0; depth--) {  /* Count frames with same prototype. */
+    if (frame_iscont(frame)) depth--;
     frame = frame_prev(frame);
     if (mref(frame_func(frame)->l.pc, void) == pc)
       count++;
