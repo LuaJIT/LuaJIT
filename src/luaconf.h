@@ -6,6 +6,9 @@
 #ifndef luaconf_h
 #define luaconf_h
 
+#ifndef WINVER
+#define WINVER 0x0501
+#endif
 #include <limits.h>
 #include <stddef.h>
 
