@@ -68,9 +68,6 @@ static const char *ll_bcsym(void *lib, const char *sym)
 #elif LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
-#ifndef WINVER
-#define WINVER 0x0500
-#endif
 #include <windows.h>
 
 #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
