@@ -2155,7 +2155,7 @@ static void build_subroutines(BuildCtx *ctx)
   |2:
   |  addiu RC, MULTRES, -8
   |  jr AT
-  |.  add RA, RA, BASE
+  |.  addu RA, RA, BASE
   |
   |3:  // Rethrow error from the right C frame.
   |  load_got lj_err_throw
