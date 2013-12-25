@@ -233,7 +233,7 @@ static void canonicalize_slots(jit_State *J)
 }
 
 /* Stop recording. */
-static void rec_stop(jit_State *J, TraceLink linktype, TraceNo lnk)
+void lj_record_stop(jit_State *J, TraceLink linktype, TraceNo lnk)
 {
   lj_trace_end(J);
   J->cur.linktype = (uint8_t)linktype;
@@ -501,8 +501,7 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
 static LoopEvent rec_iterl(jit_State *J, const BCIns iterins)
 {
   BCReg ra = bc_a(iterins);
-  lua_assert(J->base[ra] != 0);
-  if (!tref_isnil(J->base[ra])) {  /* Looping back? */
+  if (!tref_isnil(getslot(J, ra))) {  /* Looping back? */
     J->base[ra-1] = J->base[ra];  /* Copy result of ITERC to control var. */
     J->maxslot = ra-1+bc_b(J->pc[-1]);
     J->pc += bc_j(iterins)+1;
@@ -540,12 +539,12 @@ static int innerloopleft(jit_State *J, const BCIns *pc)
 /* Handle the case when an interpreted loop op is hit. */
 static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
 {
-  if (J->parent == 0) {
+  if (J->parent == 0 && J->exitno == 0) {
     if (pc == J->startpc && J->framedepth + J->retdepth == 0) {
       /* Same loop? */
       if (ev == LOOPEV_LEAVE)  /* Must loop back to form a root trace. */
 	lj_trace_err(J, LJ_TRERR_LLEAVE);
-      rec_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Looping root trace. */
+      lj_record_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Looping trace. */
     } else if (ev != LOOPEV_LEAVE) {  /* Entering inner loop? */
       /* It's usually better to abort here and wait until the inner loop
       ** is traced. But if the inner loop repeatedly didn't loop back,
@@ -570,15 +569,15 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
 /* Handle the case when an already compiled loop op is hit. */
 static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
 {
-  if (J->parent == 0) {  /* Root trace hit an inner loop. */
+  if (J->parent == 0 && J->exitno == 0) {  /* Root trace hit an inner loop. */
     /* Better let the inner loop spawn a side trace back here. */
     lj_trace_err(J, LJ_TRERR_LINNER);
   } else if (ev != LOOPEV_LEAVE) {  /* Side trace enters a compiled loop. */
     J->instunroll = 0;  /* Cannot continue across a compiled loop op. */
     if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
-      rec_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Form an extra loop. */
+      lj_record_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Form extra loop. */
     else
-      rec_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the loop. */
+      lj_record_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
 }
 
@@ -642,6 +641,18 @@ static TRef rec_call_specialize(jit_State *J, GCfunc *fn, TRef tr)
       emitir(IRTG(IR_EQ, IRT_P32), trpt, lj_ir_kptr(J, proto_bc(pt)));
       (void)lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);  /* Prevent GC of proto. */
       return tr;
+    }
+  } else {
+    /* Don't specialize to non-monomorphic builtins. */
+    switch (fn->c.ffid) {
+    case FF_coroutine_wrap_aux:
+    case FF_string_gmatch_aux:
+      /* NYI: io_file_iter doesn't have an ffid, yet. */
+      /* NYI: specialize to ffid? Not strictly necessary, trace will stop. */
+      return tr;
+    default:
+      /* NYI: don't specialize to non-monomorphic C functions. */
+      break;
     }
   }
   /* Otherwise specialize to the function (closure) value itself. */
@@ -750,12 +761,13 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
   /* Return to lower frame via interpreter for unhandled cases. */
   if (J->framedepth == 0 && J->pt && bc_isret(bc_op(*J->pc)) &&
        (!frame_islua(frame) ||
-	(J->parent == 0 && !bc_isret(bc_op(J->cur.startins))))) {
+	(J->parent == 0 && J->exitno == 0 &&
+	 !bc_isret(bc_op(J->cur.startins))))) {
     /* NYI: specialize to frame type and return directly, not via RET*. */
     for (i = -1; i < (ptrdiff_t)rbase; i++)
       J->base[i] = 0;  /* Purge dead slots. */
     J->maxslot = rbase + (BCReg)gotresults;
-    rec_stop(J, LJ_TRLINK_RETURN, 0);  /* Return to interpreter. */
+    lj_record_stop(J, LJ_TRLINK_RETURN, 0);  /* Return to interpreter. */
     return;
   }
   if (frame_isvarg(frame)) {
@@ -779,7 +791,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       if (check_downrec_unroll(J, pt)) {
 	J->maxslot = (BCReg)(rbase + gotresults);
 	lj_snap_purge(J);
-	rec_stop(J, LJ_TRLINK_DOWNREC, J->cur.traceno);  /* Down-recursion. */
+	lj_record_stop(J, LJ_TRLINK_DOWNREC, J->cur.traceno);  /* Down-rec. */
 	return;
       }
       lj_snap_add(J);
@@ -792,7 +804,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       lua_assert(J->baseslot > cbase+1);
       J->baseslot -= cbase+1;
       J->base -= cbase+1;
-    } else if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins))) {
+    } else if (J->parent == 0 && J->exitno == 0 &&
+	       !bc_isret(bc_op(J->cur.startins))) {
       /* Return to lower frame would leave the loop in a root trace. */
       lj_trace_err(J, LJ_TRERR_LLEAVE);
     } else {  /* Return to lower frame. Guard for the target we return to. */
@@ -1480,9 +1493,9 @@ static void check_call_unroll(jit_State *J, TraceNo lnk)
     if (count + J->tailcalled > J->param[JIT_P_recunroll]) {
       J->pc++;
       if (J->framedepth + J->retdepth == 0)
-	rec_stop(J, LJ_TRLINK_TAILREC, J->cur.traceno);  /* Tail-recursion. */
+	lj_record_stop(J, LJ_TRLINK_TAILREC, J->cur.traceno);  /* Tail-rec. */
       else
-	rec_stop(J, LJ_TRLINK_UPREC, J->cur.traceno);  /* Up-recursion. */
+	lj_record_stop(J, LJ_TRLINK_UPREC, J->cur.traceno);  /* Up-recursion. */
     }
   } else {
     if (count > J->param[JIT_P_callunroll]) {
@@ -1556,9 +1569,9 @@ static void rec_func_jit(jit_State *J, TraceNo lnk)
   }
   J->instunroll = 0;  /* Cannot continue across a compiled function. */
   if (J->pc == J->startpc && J->framedepth + J->retdepth == 0)
-    rec_stop(J, LJ_TRLINK_TAILREC, J->cur.traceno);  /* Extra tail-recursion. */
+    lj_record_stop(J, LJ_TRLINK_TAILREC, J->cur.traceno);  /* Extra tail-rec. */
   else
-    rec_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the function. */
+    lj_record_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the function. */
 }
 
 /* -- Vararg handling ----------------------------------------------------- */
@@ -2165,7 +2178,7 @@ void lj_record_ins(jit_State *J)
   case BC_JFORI:
     lua_assert(bc_op(pc[(ptrdiff_t)rc-BCBIAS_J]) == BC_JFORL);
     if (rec_for(J, pc, 0) != LOOPEV_LEAVE)  /* Link to existing loop. */
-      rec_stop(J, LJ_TRLINK_ROOT, bc_d(pc[(ptrdiff_t)rc-BCBIAS_J]));
+      lj_record_stop(J, LJ_TRLINK_ROOT, bc_d(pc[(ptrdiff_t)rc-BCBIAS_J]));
     /* Continue tracing if the loop is not entered. */
     break;
 
@@ -2299,6 +2312,12 @@ static const BCIns *rec_setup_root(jit_State *J)
     J->maxslot = J->pt->numparams;
     pc++;
     break;
+  case BC_CALLM:
+  case BC_CALL:
+  case BC_ITERC:
+    /* No bytecode range check for stitched traces. */
+    pc++;
+    break;
   default:
     lua_assert(0);
     break;
@@ -2366,7 +2385,7 @@ void lj_record_setup(jit_State *J)
     if (traceref(J, J->cur.root)->nchild >= J->param[JIT_P_maxside] ||
 	T->snap[J->exitno].count >= J->param[JIT_P_hotexit] +
 				    J->param[JIT_P_tryside]) {
-      rec_stop(J, LJ_TRLINK_INTERP, 0);
+      lj_record_stop(J, LJ_TRLINK_INTERP, 0);
     }
   } else {  /* Root trace. */
     J->cur.root = 0;
@@ -2378,6 +2397,8 @@ void lj_record_setup(jit_State *J)
     lj_snap_add(J);
     if (bc_op(J->cur.startins) == BC_FORL)
       rec_for_loop(J, J->pc-1, &J->scev, 1);
+    else if (bc_op(J->cur.startins) == BC_ITERC)
+      J->startpc = NULL;
     if (1 + J->pt->framesize >= LJ_MAX_JSLOTS)
       lj_trace_err(J, LJ_TRERR_STACKOV);
   }

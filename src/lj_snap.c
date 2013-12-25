@@ -97,7 +97,8 @@ static BCReg snapshot_framelinks(jit_State *J, SnapEntry *map)
 {
   cTValue *frame = J->L->base - 1;
   cTValue *lim = J->L->base - J->baseslot;
-  cTValue *ftop = frame + funcproto(frame_func(frame))->framesize;
+  GCfunc *fn = frame_func(frame);
+  cTValue *ftop = isluafunc(fn) ? (frame+funcproto(fn)->framesize) : J->L->top;
   MSize f = 0;
   map[f++] = SNAP_MKPC(J->pc);  /* The current PC is always the first entry. */
   while (frame > lim) {  /* Backwards traversal of all frames above base. */

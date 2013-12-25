@@ -2011,6 +2011,60 @@ static void build_subroutines(BuildCtx *ctx)
   |  jr CRET1
   |.  lw INS, -4(PC)
   |
+  |->cont_stitch:			// Trace stitching.
+  |.if JIT
+  |  // RA = resultptr, RB = meta base
+  |  lw INS, -4(PC)
+  |    lw TMP3, -24+LO(RB)		// Save previous trace number.
+  |  decode_RA8a RC, INS
+  |   addiu AT, MULTRES, -8
+  |  decode_RA8b RC
+  |   beqz AT, >2
+  |. addu RC, BASE, RC			// Call base.
+  |1:  // Move results down.
+  |  ldc1 f0, 0(RA)
+  |   addiu AT, AT, -8
+  |    addiu RA, RA, 8
+  |  sdc1 f0, 0(RC)
+  |   bnez AT, <1
+  |.   addiu RC, RC, 8
+  |2:
+  |   decode_RA8a RA, INS
+  |    decode_RB8a RB, INS
+  |   decode_RA8b RA
+  |    decode_RB8b RB
+  |   addu RA, RA, RB
+  |  lw TMP1, DISPATCH_J(trace)(DISPATCH)
+  |   addu RA, BASE, RA
+  |3:
+  |   sltu AT, RC, RA
+  |   bnez AT, >9			// More results wanted?
+  |. sll TMP2, TMP3, 2
+  |
+  |  addu TMP2, TMP1, TMP2
+  |  lw TRACE:TMP2, 0(TMP2)
+  |  lhu RD, TRACE:TMP2->link
+  |  beq RD, TMP3, ->cont_nop		// Blacklisted.
+  |.  load_got lj_dispatch_stitch
+  |  bnez RD, =>BC_JLOOP		// Jump to stitched trace.
+  |.  sll RD, RD, 3
+  |
+  |  // Stitch a new trace to the previous trace.
+  |  sw TMP3, DISPATCH_J(exitno)(DISPATCH)
+  |  sw L, DISPATCH_J(L)(DISPATCH)
+  |  sw BASE, L->base
+  |  addiu CARG1, DISPATCH, GG_DISP2J
+  |  call_intern lj_dispatch_stitch	// (jit_State *J, const BCIns *pc)
+  |.  move CARG2, PC
+  |  b ->cont_nop
+  |.  lw BASE, L->base
+  |
+  |9:
+  |  sw TISNIL, HI(RC)
+  |  b <3
+  |.  addiu RC, RC, 8
+  |.endif
+  |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
   |  load_got lj_dispatch_profile
@@ -2091,13 +2145,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  sw BASE, L->base
   |1:
   |  bltz CRET1, >3			// Check for error from exit.
-  |.  lw LFUNC:TMP1, FRAME_FUNC(BASE)
+  |.  lw LFUNC:RB, FRAME_FUNC(BASE)
   |    lui TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
   |  sll MULTRES, CRET1, 3
   |    li TISNIL, LJ_TNIL
   |  sw MULTRES, SAVE_MULTRES
   |    mtc1 TMP3, TOBIT
-  |  lw TMP1, LFUNC:TMP1->pc
+  |  lw TMP1, LFUNC:RB->pc
   |   sw r0, DISPATCH_GL(jit_base)(DISPATCH)
   |  lw KBASE, PC2PROTO(k)(TMP1)
   |    cvt.d.s TOBIT, TOBIT

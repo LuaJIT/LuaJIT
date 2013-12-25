@@ -2505,6 +2505,55 @@ static void build_subroutines(BuildCtx *ctx)
   |  mtctr CRET1
   |  bctr
   |
+  |->cont_stitch:			// Trace stitching.
+  |.if JIT
+  |  // RA = resultptr, RB = meta base
+  |  lwz INS, -4(PC)
+  |    lwz TMP3, -20(RB)		// Save previous trace number.
+  |   addic. TMP1, MULTRES, -8
+  |  decode_RA8 RC, INS			// Call base.
+  |   beq >2
+  |1:  // Move results down.
+  |  lfd f0, 0(RA)
+  |   addic. TMP1, TMP1, -8
+  |    addi RA, RA, 8
+  |  stfdx f0, BASE, RC
+  |    addi RC, RC, 8
+  |   bne <1
+  |2:
+  |   decode_RA8 RA, INS
+  |   decode_RB8 RB, INS
+  |   add RA, RA, RB
+  |  lwz TMP1, DISPATCH_J(trace)(DISPATCH)
+  |3:
+  |   cmplw RA, RC
+  |   bgt >9				// More results wanted?
+  |
+  |  slwi TMP2, TMP3, 2
+  |  lwzx TRACE:TMP2, TMP1, TMP2
+  |  lhz RD, TRACE:TMP2->link
+  |  cmpw RD, TMP3
+  |   cmpwi cr1, RD, 0
+  |  beq ->cont_nop			// Blacklisted.
+  |    slwi RD, RD, 3
+  |   bne cr1, =>BC_JLOOP		// Jump to stitched trace.
+  |
+  |  // Stitch a new trace to the previous trace.
+  |  stw TMP3, DISPATCH_J(exitno)(DISPATCH)
+  |  stp L, DISPATCH_J(L)(DISPATCH)
+  |  stp BASE, L->base
+  |  addi CARG1, DISPATCH, GG_DISP2J
+  |  mr CARG2, PC
+  |  bl extern lj_dispatch_stitch	// (jit_State *J, const BCIns *pc)
+  |  lp BASE, L->base
+  |  b ->cont_nop
+  |
+  |9:
+  |  stwx TISNIL, BASE, RC
+  |  addi RC, RC, 8
+  |  b <3
+  |.endif
+  |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
   |  mr CARG1, L
@@ -2557,7 +2606,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub CARG3, TMP0, CARG3		// Compute exit number.
   |  lp BASE, DISPATCH_GL(jit_base)(DISPATCH)
   |   srwi CARG3, CARG3, 2
-  |  stw L, DISPATCH_J(L)(DISPATCH)
+  |  stp L, DISPATCH_J(L)(DISPATCH)
   |   subi CARG3, CARG3, 2
   |  stp BASE, L->base
   |   stw CARG4, DISPATCH_J(parent)(DISPATCH)
@@ -2589,11 +2638,11 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  cmpwi CARG1, 0
   |  blt >3				// Check for error from exit.
-  |  lwz LFUNC:TMP1, FRAME_FUNC(BASE)
+  |  lwz LFUNC:RB, FRAME_FUNC(BASE)
   |   slwi MULTRES, CARG1, 3
   |    li TMP2, 0
   |   stw MULTRES, SAVE_MULTRES
-  |  lwz TMP1, LFUNC:TMP1->pc
+  |  lwz TMP1, LFUNC:RB->pc
   |    stw TMP2, DISPATCH_GL(jit_base)(DISPATCH)
   |  lwz KBASE, PC2PROTO(k)(TMP1)
   |  // Setup type comparison constants.

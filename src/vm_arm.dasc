@@ -2082,6 +2082,55 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldr INS, [PC, #-4]
   |  bx CRET1
   |
+  |->cont_stitch:			// Trace stitching.
+  |.if JIT
+  |  // RA = resultptr, CARG4 = meta base
+  |   ldr RB, SAVE_MULTRES
+  |  ldr INS, [PC, #-4]
+  |    ldr CARG3, [CARG4, #-24]		// Save previous trace number.
+  |   subs RB, RB, #8
+  |  decode_RA8 RC, INS			// Call base.
+  |   beq >2
+  |1:  // Move results down.
+  |  ldrd CARG12, [RA]
+  |    add RA, RA, #8
+  |   subs RB, RB, #8
+  |  strd CARG12, [BASE, RC]
+  |    add RC, RC, #8
+  |   bne <1
+  |2:
+  |   decode_RA8 RA, INS
+  |   decode_RB8 RB, INS
+  |   add RA, RA, RB
+  |  ldr CARG1, [DISPATCH, #DISPATCH_J(trace)]
+  |3:
+  |   cmp RA, RC
+  |  mvn CARG2, #~LJ_TNIL
+  |   bhi >9				// More results wanted?
+  |
+  |  ldr TRACE:RA, [CARG1, CARG3, lsl #2]
+  |  ldrh RC, TRACE:RA->link
+  |  cmp RC, CARG3
+  |  beq ->cont_nop			// Blacklisted.
+  |  cmp RC, #0
+  |  bne =>BC_JLOOP			// Jump to stitched trace.
+  |
+  |  // Stitch a new trace to the previous trace.
+  |  str CARG3, [DISPATCH, #DISPATCH_J(exitno)]
+  |  str L, [DISPATCH, #DISPATCH_J(L)]
+  |  str BASE, L->base
+  |  sub CARG1, DISPATCH, #-GG_DISP2J
+  |  mov CARG2, PC
+  |  bl extern lj_dispatch_stitch	// (jit_State *J, const BCIns *pc)
+  |  ldr BASE, L->base
+  |  b ->cont_nop
+  |
+  |9:  // Fill up results with nil.
+  |  strd CARG12, [BASE, RC]
+  |  add RC, RC, #8
+  |  b <3
+  |.endif
+  |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
   |  mov CARG1, L
@@ -2166,6 +2215,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   lsrlo RC, INS, #16	// No: Decode operands A*8 and D.
   |   subhs RC, RC, #8
   |   addhs RA, RA, BASE	// Yes: RA = BASE+framesize*8, RC = nargs*8
+  |   ldrhs CARG3, [BASE, FRAME_FUNC]
   |  bx OP
   |
   |3:  // Rethrow error from the right C frame.

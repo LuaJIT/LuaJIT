@@ -101,7 +101,7 @@ static int ffh_pairs(lua_State *L, MMS mm)
 #endif
 
 LJLIB_PUSH(lastcl)
-LJLIB_ASM(pairs)
+LJLIB_ASM(pairs)		LJLIB_REC(xpairs 0)
 {
   return ffh_pairs(L, MM_pairs);
 }
@@ -114,7 +114,7 @@ LJLIB_NOREGUV LJLIB_ASM(ipairs_aux)	LJLIB_REC(.)
 }
 
 LJLIB_PUSH(lastcl)
-LJLIB_ASM(ipairs)		LJLIB_REC(.)
+LJLIB_ASM(ipairs)		LJLIB_REC(xpairs 1)
 {
   return ffh_pairs(L, MM_ipairs);
 }

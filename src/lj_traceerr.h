@@ -7,6 +7,7 @@
 
 /* Recording. */
 TREDEF(RECERR,	"error thrown or hook called during recording")
+TREDEF(TRACEUV,	"trace too short")
 TREDEF(TRACEOV,	"trace too long")
 TREDEF(STACKOV,	"trace too deep")
 TREDEF(SNAPOV,	"too many snapshots")
@@ -23,8 +24,6 @@ TREDEF(BADTYPE,	"bad argument type")
 TREDEF(CJITOFF,	"JIT compilation disabled for function")
 TREDEF(CUNROLL,	"call unroll limit reached")
 TREDEF(DOWNREC,	"down-recursion, restarting")
-TREDEF(NYICF,	"NYI: C function %p")
-TREDEF(NYIFF,	"NYI: FastFunc %s")
 TREDEF(NYIFFU,	"NYI: unsupported variant of FastFunc %s")
 TREDEF(NYIRETL,	"NYI: return to lower frame")
 

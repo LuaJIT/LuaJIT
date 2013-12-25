@@ -96,28 +96,81 @@ static ptrdiff_t results_wanted(jit_State *J)
     return -1;
 }
 
-/* Throw error for unsupported variant of fast function. */
-LJ_NORET static void recff_nyiu(jit_State *J)
+/* Trace stitching: add continuation below frame to start a new trace. */
+static void recff_stitch(jit_State *J)
 {
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYIFFU);
+  ASMFunction cont = lj_cont_stitch;
+  TraceNo traceno = J->cur.traceno;
+  lua_State *L = J->L;
+  TValue *base = L->base;
+  const BCIns *pc = frame_pc(base-1);
+  TValue *pframe = frame_prevl(base-1);
+  TRef trcont;
+
+  /* Move func + args up in Lua stack and insert continuation. */
+  memmove(&base[1], &base[-1], sizeof(TValue)*(J->maxslot+1));
+  setframe_ftsz(base+1, (int)((char *)(base+1) - (char *)pframe) + FRAME_CONT);
+  setcont(base, cont);
+  setframe_pc(base, pc);
+  if (LJ_DUALNUM) setintV(base-1, traceno); else base[-1].u64 = traceno;
+  L->base += 2;
+  L->top += 2;
+
+  /* Ditto for the IR. */
+  memmove(&J->base[1], &J->base[-1], sizeof(TRef)*(J->maxslot+1));
+#if LJ_64
+  trcont = lj_ir_kptr(J, (void *)((int64_t)cont-(int64_t)lj_vm_asm_begin));
+#else
+  trcont = lj_ir_kptr(J, (void *)cont);
+#endif
+  J->base[0] = trcont | TREF_CONT;
+  J->base[-1] = LJ_DUALNUM ? lj_ir_kint(J,traceno) : lj_ir_knum_u64(J,traceno);
+  J->maxslot += 2;
+  J->framedepth++;
+
+  lj_record_stop(J, LJ_TRLINK_STITCH, 0);
+
+  /* Undo Lua stack changes. */
+  memmove(&base[-1], &base[1], sizeof(TValue)*(J->maxslot+1));
+  setframe_pc(base-1, pc);
+  L->base -= 2;
+  L->top -= 2;
 }
 
-/* Fallback handler for all fast functions that are not recorded (yet). */
+/* Fallback handler for fast functions that are not recorded (yet). */
 static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
 {
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYIFF);
-  UNUSED(rd);
+  if (J->cur.nins < (IRRef)J->param[JIT_P_minstitch] + REF_BASE) {
+    lj_trace_err_info(J, LJ_TRERR_TRACEUV);
+  } else {
+    /* Can only stitch from Lua call. */
+    if (J->framedepth && frame_islua(J->L->base-1)) {
+      BCOp op = bc_op(*frame_pc(J->L->base-1));
+      /* Stitched trace cannot start with *M op with variable # of args. */
+      if (!(op == BC_CALLM || op == BC_RETM || op == BC_TSETM)) {
+	switch (J->fn->c.ffid) {
+	case FF_error:
+	case FF_debug_sethook:
+	case FF_jit_flush:
+	  break;  /* Don't stitch across special builtins. */
+	default:
+	  recff_stitch(J);  /* Use trace stitching. */
+	  rd->nres = -1;
+	  return;
+	}
+      }
+    }
+    /* Otherwise stop trace and return to interpreter. */
+    lj_record_stop(J, LJ_TRLINK_RETURN, 0);
+    rd->nres = -1;
+  }
 }
 
-/* C functions can have arbitrary side-effects and are not recorded (yet). */
-static void LJ_FASTCALL recff_c(jit_State *J, RecordFFData *rd)
-{
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYICF);
-  UNUSED(rd);
-}
+/* Fallback handler for unsupported variants of fast functions. */
+#define recff_nyiu	recff_nyi
+
+/* Must stop the trace for classic C functions with arbitrary side-effects. */
+#define recff_c		recff_nyi
 
 /* Emit BUFHDR for the global temporary buffer. */
 static TRef recff_bufhdr(jit_State *J)
@@ -268,7 +321,8 @@ static void LJ_FASTCALL recff_select(jit_State *J, RecordFFData *rd)
 	  J->base[i] = J->base[start+i];
       }  /* else: Interpreter will throw. */
     } else {
-      recff_nyiu(J);
+      recff_nyiu(J, rd);
+      return;
     }
   }  /* else: Interpreter will throw. */
 }
@@ -279,14 +333,18 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
   TRef base = J->base[1];
   if (tr && !tref_isnil(base)) {
     base = lj_opt_narrow_toint(J, base);
-    if (!tref_isk(base) || IR(tref_ref(base))->i != 10)
-      recff_nyiu(J);
+    if (!tref_isk(base) || IR(tref_ref(base))->i != 10) {
+      recff_nyiu(J, rd);
+      return;
+    }
   }
   if (tref_isnumber_str(tr)) {
     if (tref_isstr(tr)) {
       TValue tmp;
-      if (!lj_strscan_num(strV(&rd->argv[0]), &tmp))
-	recff_nyiu(J);  /* Would need an inverted STRTO for this case. */
+      if (!lj_strscan_num(strV(&rd->argv[0]), &tmp)) {
+	recff_nyiu(J, rd);  /* Would need an inverted STRTO for this case. */
+	return;
+      }
       tr = emitir(IRTG(IR_STRTO, IRT_NUM), tr, 0);
     }
 #if LJ_HASFFI
@@ -348,7 +406,8 @@ static void LJ_FASTCALL recff_tostring(jit_State *J, RecordFFData *rd)
     } else if (tref_ispri(tr)) {
       J->base[0] = lj_ir_kstr(J, lj_strfmt_obj(J->L, &rd->argv[0]));
     } else {
-      recff_nyiu(J);
+      recff_nyiu(J, rd);
+      return;
     }
   }
 }
@@ -370,14 +429,14 @@ static void LJ_FASTCALL recff_ipairs_aux(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
-static void LJ_FASTCALL recff_ipairs(jit_State *J, RecordFFData *rd)
+static void LJ_FASTCALL recff_xpairs(jit_State *J, RecordFFData *rd)
 {
   if (!(LJ_52 && recff_metacall(J, rd, MM_ipairs))) {
     TRef tab = J->base[0];
     if (tref_istab(tab)) {
       J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
       J->base[1] = tab;
-      J->base[2] = lj_ir_kint(J, 0);
+      J->base[2] = rd->data ? lj_ir_kint(J, 0) : TREF_NIL;
       rd->nres = 3;
     }  /* else: Interpreter will throw. */
   }
@@ -431,8 +490,7 @@ static void LJ_FASTCALL recff_getfenv(jit_State *J, RecordFFData *rd)
     J->base[0] = emitir(IRT(IR_FLOAD, IRT_TAB), trl, IRFL_THREAD_ENV);
     return;
   }
-  recff_nyiu(J);
-  UNUSED(rd);
+  recff_nyiu(J, rd);
 }
 
 /* -- Math library fast functions ----------------------------------------- */
@@ -672,8 +730,7 @@ static void LJ_FASTCALL recff_bit_tohex(jit_State *J, RecordFFData *rd)
   TRef tr = recff_bit64_tohex(J, rd, hdr);
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
 #else
-  UNUSED(rd);
-  recff_nyiu(J);  /* Don't bother working around this NYI. */
+  recff_nyiu(J, rd);  /* Don't bother working around this NYI. */
 #endif
 }
 
@@ -891,7 +948,8 @@ static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
       J->base[0] = TREF_NIL;
     }
   } else {  /* Search for pattern. */
-    recff_nyiu(J);
+    recff_nyiu(J, rd);
+    return;
   }
 }
 
@@ -931,7 +989,8 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
 	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfxint, tr, trsf, tra);
 	lj_needsplit(J);
 #else
-	recff_nyiu(J);  /* Don't bother working around this NYI. */
+	recff_nyiu(J, rd);  /* Don't bother working around this NYI. */
+	return;
 #endif
       }
       break;
@@ -946,8 +1005,10 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       if (LJ_SOFTFP) lj_needsplit(J);
       break;
     case STRFMT_STR:
-      if (!tref_isstr(tra))
-	recff_nyiu(J);  /* NYI: __tostring and non-string types for %s. */
+      if (!tref_isstr(tra)) {
+	recff_nyiu(J, rd);  /* NYI: __tostring and non-string types for %s. */
+	return;
+      }
       if (sf == STRFMT_STR)  /* Shortcut for plain %s. */
 	tr = emitir(IRT(IR_BUFPUT, IRT_P32), tr, tra);
       else if ((sf & STRFMT_T_QUOTED))
@@ -966,8 +1027,8 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
     case STRFMT_PTR:  /* NYI */
     case STRFMT_ERR:
     default:
-      recff_nyiu(J);
-      break;
+      recff_nyiu(J, rd);
+      return;
     }
   }
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
@@ -991,7 +1052,8 @@ static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
       ix.idxchain = 0;
       lj_record_idx(J, &ix);  /* Set new value. */
     } else {  /* Complex case: insert in the middle. */
-      recff_nyiu(J);
+      recff_nyiu(J, rd);
+      return;
     }
   }  /* else: Interpreter will throw. */
 }

@@ -2659,6 +2659,67 @@ static void build_subroutines(BuildCtx *ctx)
   |  add NARGS:RD, 1
   |  jmp RBa
   |
+  |->cont_stitch:			// Trace stitching.
+  |.if JIT
+  |  // BASE = base, RC = result, RB = mbase
+  |  mov RA, [RB-24]			// Save previous trace number.
+  |  mov TMP1, RA
+  |  mov TMP3, DISPATCH			// Need one more register.
+  |  mov DISPATCH, MULTRES
+  |  movzx RA, PC_RA
+  |  lea RA, [BASE+RA*8]		// Call base.
+  |  sub DISPATCH, 1
+  |  jz >2
+  |1:  // Move results down.
+  |.if X64
+  |  mov RBa, [RC]
+  |  mov [RA], RBa
+  |.else
+  |  mov RB, [RC]
+  |  mov [RA], RB
+  |  mov RB, [RC+4]
+  |  mov [RA+4], RB
+  |.endif
+  |  add RC, 8
+  |  add RA, 8
+  |  sub DISPATCH, 1
+  |  jnz <1
+  |2:
+  |  movzx RC, PC_RA
+  |  movzx RB, PC_RB
+  |  add RC, RB
+  |  lea RC, [BASE+RC*8-8]
+  |3:
+  |  cmp RC, RA
+  |  ja >9				// More results wanted?
+  |
+  |  mov DISPATCH, TMP3
+  |  mov RB, TMP1			// Get previous trace number.
+  |  mov RA, [DISPATCH+DISPATCH_J(trace)]
+  |  mov TRACE:RD, [RA+RB*4]
+  |  movzx RD, word TRACE:RD->link
+  |  cmp RD, RB
+  |  je ->cont_nop			// Blacklisted.
+  |  test RD, RD
+  |  jne =>BC_JLOOP			// Jump to stitched trace.
+  |
+  |  // Stitch a new trace to the previous trace.
+  |  mov [DISPATCH+DISPATCH_J(exitno)], RB
+  |  mov L:RB, SAVE_L
+  |  mov L:RB->base, BASE
+  |  mov FCARG2, PC
+  |  lea FCARG1, [DISPATCH+GG_DISP2J]
+  |  mov aword [DISPATCH+DISPATCH_J(L)], L:RBa
+  |  call extern lj_dispatch_stitch@8	// (jit_State *J, const BCIns *pc)
+  |  mov BASE, L:RB->base
+  |  jmp ->cont_nop
+  |
+  |9:  // Fill up results with nil.
+  |  mov dword [RA+4], LJ_TNIL
+  |  add RA, 8
+  |  jmp <3
+  |.endif
+  |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
   |  mov L:RB, SAVE_L
@@ -5382,7 +5443,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_A	// RA = base, RD = target (loop extent)
     |  // Note: RA/RD is only used by trace recorder to determine scope/extent
     |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
-  |.if JIT
+    |.if JIT
     |  hotloop RB
     |.endif
     | // Fall through. Assumes BC_ILOOP follows and ins_A is a no-op.

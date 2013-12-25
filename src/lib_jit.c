@@ -284,7 +284,7 @@ static GCtrace *jit_checktrace(lua_State *L)
 /* Names of link types. ORDER LJ_TRLINK */
 static const char *const jit_trlinkname[] = {
   "none", "root", "loop", "tail-recursion", "up-recursion", "down-recursion",
-  "interpreter", "return"
+  "interpreter", "return", "stitch"
 };
 
 /* local info = jit.util.traceinfo(tr) */

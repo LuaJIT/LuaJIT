@@ -107,6 +107,7 @@ LJ_ASMF void lj_cont_nop(void);  /* Do nothing, just continue execution. */
 LJ_ASMF void lj_cont_condt(void);  /* Branch if result is true. */
 LJ_ASMF void lj_cont_condf(void);  /* Branch if result is false. */
 LJ_ASMF void lj_cont_hook(void);  /* Continue from hook yield. */
+LJ_ASMF void lj_cont_stitch(void);  /* Trace stitching. */
 
 enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 
