@@ -116,6 +116,9 @@ local function dump_trace(what, tr, func, pc, otr, oex)
       if ltype == "interpreter" then
 	out:write(format("[TRACE %3s %s%s -- fallback to interpreter]\n",
 	  tr, startex, startloc))
+      elseif ltype == "stitch" then
+	out:write(format("[TRACE %3s %s%s %s %s]\n",
+	  tr, startex, startloc, ltype, fmtfunc(func, pc)))
       elseif link == tr or link == 0 then
 	out:write(format("[TRACE %3s %s%s %s]\n",
 	  tr, startex, startloc, ltype))

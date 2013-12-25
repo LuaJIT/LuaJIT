@@ -473,6 +473,7 @@ static void trace_stop(jit_State *J)
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "stop"));
     setintV(L->top++, traceno);
+    setfuncV(L, L->top++, J->fn);
   );
 }
 
