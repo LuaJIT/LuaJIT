@@ -125,7 +125,8 @@ static void recff_stitch(jit_State *J)
 #endif
   J->base[0] = trcont | TREF_CONT;
   J->base[-1] = LJ_DUALNUM ? lj_ir_kint(J,traceno) : lj_ir_knum_u64(J,traceno);
-  J->maxslot += 2;
+  J->base += 2;
+  J->baseslot += 2;
   J->framedepth++;
 
   lj_record_stop(J, LJ_TRLINK_STITCH, 0);
