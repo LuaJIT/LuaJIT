@@ -210,6 +210,7 @@ typedef unsigned __int64 U64;
 #else
 typedef unsigned long long U64;
 #endif
+int _CRT_glob = 0;
 ]]}, {}
 
 local function preprocess(src)
