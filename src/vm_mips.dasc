@@ -2043,6 +2043,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  addu TMP2, TMP1, TMP2
   |  lw TRACE:TMP2, 0(TMP2)
+  |  beqz TRACE:TMP2, ->cont_nop
+  |.  nop
   |  lhu RD, TRACE:TMP2->link
   |  beq RD, TMP3, ->cont_nop		// Blacklisted.
   |.  load_got lj_dispatch_stitch
@@ -2144,7 +2146,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   addiu DISPATCH, JGL, -GG_DISP2G-32768
   |  sw BASE, L->base
   |1:
-  |  bltz CRET1, >3			// Check for error from exit.
+  |  bltz CRET1, >9			// Check for error from exit.
   |.  lw LFUNC:RB, FRAME_FUNC(BASE)
   |    lui TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
   |  sll MULTRES, CRET1, 3
@@ -2172,11 +2174,27 @@ static void build_subroutines(BuildCtx *ctx)
   |  jr AT
   |.  decode_RD8b RD
   |2:
+  |  sltiu TMP2, TMP1, (BC_FUNCC+2)*4	// Fast function?
+  |  bnez TMP2, >3
+  |.  lw TMP1, FRAME_PC(BASE)
+  |  // Check frame below fast function.
+  |  andi TMP0, TMP1, FRAME_TYPE
+  |  bnez TMP0, >3			// Trace stitching continuation?
+  |.  nop
+  |  // Otherwise set KBASE for Lua function below fast function.
+  |  lw TMP2, -4(TMP1)
+  |  decode_RA8a TMP0, TMP2
+  |  decode_RA8b TMP0
+  |  subu TMP1, BASE, TMP0
+  |  lw LFUNC:TMP2, -8+FRAME_FUNC(TMP1)
+  |  lw TMP1, LFUNC:TMP2->pc
+  |  lw KBASE, PC2PROTO(k)(TMP1)
+  |3:
   |  addiu RC, MULTRES, -8
   |  jr AT
   |.  addu RA, RA, BASE
   |
-  |3:  // Rethrow error from the right C frame.
+  |9:  // Rethrow error from the right C frame.
   |  load_got lj_err_throw
   |  negu CARG2, CRET1
   |  call_intern lj_err_throw		// (lua_State *L, int errcode)

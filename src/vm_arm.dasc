@@ -2109,6 +2109,8 @@ static void build_subroutines(BuildCtx *ctx)
   |   bhi >9				// More results wanted?
   |
   |  ldr TRACE:RA, [CARG1, CARG3, lsl #2]
+  |  cmp TRACE:RA, #0
+  |  beq ->cont_nop
   |  ldrh RC, TRACE:RA->link
   |  cmp RC, CARG3
   |  beq ->cont_nop			// Blacklisted.
@@ -2193,7 +2195,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr L, SAVE_L
   |1:
   |  cmp CARG1, #0
-  |  blt >3				// Check for error from exit.
+  |  blt >9				// Check for error from exit.
   |   lsl RC, CARG1, #3
   |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
   |   str RC, SAVE_MULTRES
@@ -2209,6 +2211,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldr INS, [PC], #4
   |     lsl MASKR8, MASKR8, #3		// MASKR8 = 255*8.
   |    st_vmstate CARG4
+  |  cmp OP, #BC_FUNCC+2		// Fast function?
+  |  bhs >4
+  |2:
   |  cmp OP, #BC_FUNCF			// Function header?
   |  ldr OP, [DISPATCH, OP, lsl #2]
   |   decode_RA8 RA, INS
@@ -2218,7 +2223,20 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldrhs CARG3, [BASE, FRAME_FUNC]
   |  bx OP
   |
-  |3:  // Rethrow error from the right C frame.
+  |4:  // Check frame below fast function.
+  |  ldr CARG1, [BASE, FRAME_PC]
+  |  ands CARG2, CARG1, #FRAME_TYPE
+  |  bne <2			// Trace stitching continuation?
+  |  // Otherwise set KBASE for Lua function below fast function.
+  |  ldr CARG3, [CARG1, #-4]
+  |  decode_RA8 CARG1, CARG3
+  |  sub CARG2, BASE, CARG1
+  |  ldr LFUNC:CARG3, [CARG2, #-16]
+  |  ldr CARG3, LFUNC:CARG3->field_pc
+  |  ldr KBASE, [CARG3, #PC2PROTO(k)]
+  |  b <2
+  |
+  |9:  // Rethrow error from the right C frame.
   |  rsb CARG2, CARG1, #0
   |  mov CARG1, L
   |  bl extern lj_err_throw		// (lua_State *L, int errcode)

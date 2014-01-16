@@ -2531,6 +2531,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  slwi TMP2, TMP3, 2
   |  lwzx TRACE:TMP2, TMP1, TMP2
+  |  cmpwi TRACE:TMP2, 0
+  |  beq ->cont_nop
   |  lhz RD, TRACE:TMP2->link
   |  cmpw RD, TMP3
   |   cmpwi cr1, RD, 0
@@ -2637,7 +2639,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stp BASE, L->base
   |1:
   |  cmpwi CARG1, 0
-  |  blt >3				// Check for error from exit.
+  |  blt >9				// Check for error from exit.
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
   |   slwi MULTRES, CARG1, 3
   |    li TMP2, 0
@@ -2673,11 +2675,25 @@ static void build_subroutines(BuildCtx *ctx)
   |   decode_RC8 RC, INS
   |  bctr
   |2:
+  |  cmplwi TMP1, (BC_FUNCC+2)*4	// Fast function?
+  |  blt >3
+  |  // Check frame below fast function.
+  |  lwz TMP1, FRAME_PC(BASE)
+  |  andix. TMP0, TMP1, FRAME_TYPE
+  |  bney >3				// Trace stitching continuation?
+  |  // Otherwise set KBASE for Lua function below fast function.
+  |  lwz TMP2, -4(TMP1)
+  |  decode_RA8 TMP0, TMP2
+  |  sub TMP1, BASE, TMP0
+  |  lwz LFUNC:TMP2, -12(TMP1)
+  |  lwz TMP1, LFUNC:TMP2->pc
+  |  lwz KBASE, PC2PROTO(k)(TMP1)
+  |3:
   |   subi RC, MULTRES, 8
   |   add RA, RA, BASE
   |  bctr
   |
-  |3:  // Rethrow error from the right C frame.
+  |9:  // Rethrow error from the right C frame.
   |  neg CARG2, CARG1
   |  mr CARG1, L
   |  bl extern lj_err_throw		// (lua_State *L, int errcode)
