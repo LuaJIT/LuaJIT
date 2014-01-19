@@ -5950,12 +5950,12 @@ static void emit_asm_debug(BuildCtx *ctx)
 #if LJ_64
 	  "\t.byte 0xe\n\t.byte 16\n"		/* def_cfa_offset */
 	  "\t.byte 0x86\n\t.byte 0x2\n"		/* offset rbp */
-	  "\t.byte 0xd\n\t.uleb128 0x6\n"	/* def_cfa_register rbp */
+	  "\t.byte 0xd\n\t.byte 0x6\n"		/* def_cfa_register rbp */
 	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset rbx */
 #else
 	  "\t.byte 0xe\n\t.byte 8\n"		/* def_cfa_offset */
 	  "\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
-	  "\t.byte 0xd\n\t.uleb128 0x4\n"	/* def_cfa_register ebp */
+	  "\t.byte 0xd\n\t.byte 0x4\n"		/* def_cfa_register ebp */
 	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset ebx */
 #endif
 	  "\t.align " BSZPTR "\n"
