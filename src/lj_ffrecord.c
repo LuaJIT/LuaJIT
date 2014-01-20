@@ -148,7 +148,8 @@ static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
     if (J->framedepth && frame_islua(J->L->base-1)) {
       BCOp op = bc_op(*frame_pc(J->L->base-1));
       /* Stitched trace cannot start with *M op with variable # of args. */
-      if (!(op == BC_CALLM || op == BC_RETM || op == BC_TSETM)) {
+      if (!(op == BC_CALLM || op == BC_CALLMT ||
+	    op == BC_RETM || op == BC_TSETM)) {
 	switch (J->fn->c.ffid) {
 	case FF_error:
 	case FF_debug_sethook:
