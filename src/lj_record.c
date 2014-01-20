@@ -2305,7 +2305,7 @@ static const BCIns *rec_setup_root(jit_State *J)
   case BC_RET0:
   case BC_RET1:
     /* No bytecode range check for down-recursive root traces. */
-    J->maxslot = ra + bc_d(ins);
+    J->maxslot = ra + bc_d(ins) - 1;
     break;
   case BC_FUNCF:
     /* No bytecode range check for root traces started by a hot call. */

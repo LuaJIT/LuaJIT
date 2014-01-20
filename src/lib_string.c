@@ -65,7 +65,7 @@ LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
 LJLIB_ASM(string_char)		LJLIB_REC(.)
 {
   int i, nargs = (int)(L->top - L->base);
-  char *buf = lj_buf_tmp(L, (size_t)nargs);
+  char *buf = lj_buf_tmp(L, (MSize)nargs);
   for (i = 1; i <= nargs; i++) {
     int32_t k = lj_lib_checkint(L, i);
     if (!checku8(k))
