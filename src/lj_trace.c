@@ -682,6 +682,7 @@ static void trace_hotside(jit_State *J, const BCIns *pc)
 {
   SnapShot *snap = &traceref(J, J->parent)->snap[J->exitno];
   if (!(J2G(J)->hookmask & (HOOK_GC|HOOK_VMEVENT)) &&
+      isluafunc(curr_func(J->L)) &&
       snap->count != SNAPCOUNT_DONE &&
       ++snap->count >= J->param[JIT_P_hotexit]) {
     lua_assert(J->state == LJ_TRACE_IDLE);
