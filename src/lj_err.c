@@ -197,7 +197,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 typedef struct _Unwind_Exception
 {
   uint64_t exclass;
-  void (*excleanup)(int, struct _Unwind_Exception);
+  void (*excleanup)(int, struct _Unwind_Exception *);
   uintptr_t p1, p2;
 } __attribute__((__aligned__)) _Unwind_Exception;
 
