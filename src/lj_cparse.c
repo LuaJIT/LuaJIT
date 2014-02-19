@@ -1258,7 +1258,7 @@ static void cp_struct_layout(CPState *cp, CTypeID sid, CTInfo sattr)
       sinfo |= (info & (CTF_QUAL|CTF_VLA));  /* Merge pseudo-qualifiers. */
 
       /* Check for size overflow and determine alignment. */
-      if (sz >= 0x20000000u || bofs + csz < bofs) {
+      if (sz >= 0x20000000u || bofs + csz < bofs || (info & CTF_VLA)) {
 	if (!(sz == CTSIZE_INVALID && ctype_isarray(info) &&
 	      !(sinfo & CTF_UNION)))
 	  cp_err(cp, LJ_ERR_FFI_INVSIZE);
