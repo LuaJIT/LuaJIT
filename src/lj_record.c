@@ -701,7 +701,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
        (!frame_islua(frame) ||
 	(J->parent == 0 && !bc_isret(bc_op(J->cur.startins))))) {
     /* NYI: specialize to frame type and return directly, not via RET*. */
-    for (i = -1; i < (ptrdiff_t)rbase; i++)
+    for (i = 0; i < (ptrdiff_t)rbase; i++)
       J->base[i] = 0;  /* Purge dead slots. */
     J->maxslot = rbase + (BCReg)gotresults;
     rec_stop(J, LJ_TRLINK_RETURN, 0);  /* Return to interpreter. */
