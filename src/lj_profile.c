@@ -42,7 +42,12 @@
 #elif LJ_PROFILE_WTHREAD
 
 #define WIN32_LEAN_AND_MEAN
+#if LJ_TARGET_XBOX360
+#include <xtl.h>
+#include <xbox.h>
+#else
 #include <windows.h>
+#endif
 typedef unsigned int (WINAPI *WMM_TPFUNC)(unsigned int);
 #define profile_lock(ps)	EnterCriticalSection(&ps->lock)
 #define profile_unlock(ps)	LeaveCriticalSection(&ps->lock)
