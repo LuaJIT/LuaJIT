@@ -426,7 +426,7 @@ LJLIB_CF(io_popen)
 LJLIB_CF(io_tmpfile)
 {
   IOFileUD *iof = io_file_new(L);
-#if LJ_TARGET_PS3
+#if LJ_TARGET_PS3 || LJ_TARGET_PS4
   iof->fp = NULL; errno = ENOSYS;
 #else
   iof->fp = tmpfile();

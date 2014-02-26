@@ -70,7 +70,7 @@ LJLIB_CF(os_rename)
 
 LJLIB_CF(os_tmpname)
 {
-#if LJ_TARGET_PS3
+#if LJ_TARGET_PS3 || LJ_TARGET_PS4
   lj_err_caller(L, LJ_ERR_OSUNIQF);
   return 0;
 #else
