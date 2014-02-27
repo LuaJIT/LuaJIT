@@ -36,6 +36,7 @@
 --  * m  Dump the generated machine code.
 --    x  Print each taken trace exit.
 --    X  Print each taken trace exit and the contents of all registers.
+--    a  Print the IR of aborted traces, too.
 --
 -- The output format can be set with the following characters:
 --
