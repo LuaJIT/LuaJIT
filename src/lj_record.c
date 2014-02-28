@@ -1508,10 +1508,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
     } else if (dst + nresults > J->maxslot) {
       J->maxslot = dst + (BCReg)nresults;
     }
-    for (i = 0; i < nresults; i++) {
-      J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
-      lua_assert(J->base[dst+i] != 0);
-    }
+    for (i = 0; i < nresults; i++)
+      J->base[dst+i] = i < nvararg ? getslot(J, i - nvararg - 1) : TREF_NIL;
   } else {  /* Unknown number of varargs passed to trace. */
     TRef fr = emitir(IRTI(IR_SLOAD), 0, IRSLOAD_READONLY|IRSLOAD_FRAME);
     int32_t frofs = 8*(1+numparams)+FRAME_VARG;
