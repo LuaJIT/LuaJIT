@@ -547,10 +547,8 @@ local function dump_trace(what, tr, func, pc, otr, oex)
     out:write("---- TRACE ", tr, " ", what)
     if otr then out:write(" ", otr, "/", oex) end
     out:write(" ", fmtfunc(func, pc), "\n")
-    recprefix = ""
   elseif what == "stop" or what == "abort" then
     out:write("---- TRACE ", tr, " ", what)
-    recprefix = nil
     if what == "abort" then
       out:write(" ", fmtfunc(func, pc), " -- ", fmterr(otr, oex), "\n")
     else
