@@ -648,7 +648,10 @@ static TRef rec_call_specialize(jit_State *J, GCfunc *fn, TRef tr)
     case FF_coroutine_wrap_aux:
     case FF_string_gmatch_aux:
       /* NYI: io_file_iter doesn't have an ffid, yet. */
-      /* NYI: specialize to ffid? Not strictly necessary, trace will stop. */
+      {  /* Specialize to the ffid. */
+	TRef trid = emitir(IRT(IR_FLOAD, IRT_U8), tr, IRFL_FUNC_FFID);
+	emitir(IRTG(IR_EQ, IRT_INT), trid, lj_ir_kint(J, fn->c.ffid));
+      }
       return tr;
     default:
       /* NYI: don't specialize to non-monomorphic C functions. */
