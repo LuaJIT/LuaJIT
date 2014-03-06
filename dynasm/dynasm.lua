@@ -695,6 +695,9 @@ map_op[".arch_1"] = function(params)
   if not params then return "name" end
   local err = loadarch(params[1])
   if err then wfatal(err) end
+  wline(format("#if DASM_VERSION != %d", _info.vernum))
+  wline('#error "Version mismatch between DynASM and included encoding engine"')
+  wline("#endif")
 end
 
 -- Dummy .arch pseudo-opcode to improve the error report.
@@ -877,13 +880,9 @@ local function dasmhead(out)
 ** DO NOT EDIT! The original file is in "%s".
 */
 
-#if DASM_VERSION != %d
-#error "Version mismatch between DynASM and included encoding engine"
-#endif
-
 ]], _info.url,
     _info.version, g_arch._info.arch, g_arch._info.version,
-    g_fname, _info.vernum))
+    g_fname))
 end
 
 -- Read input file.
