@@ -37,7 +37,7 @@
 #endif
 #define LUA_LROOT	"/usr/local"
 #define LUA_LUADIR	"/lua/5.1/"
-#define LUA_LJDIR	"/luajit-2.0.2/"
+#define LUA_LJDIR	"/luajit-2.0.3/"
 
 #ifdef LUA_ROOT
 #define LUA_JROOT	LUA_ROOT

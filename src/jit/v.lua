@@ -59,7 +59,7 @@
 
 -- Cache some library functions and objects.
 local jit = require("jit")
-assert(jit.version_num == 20002, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20003, "LuaJIT core/library version mismatch")
 local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
 local funcinfo, traceinfo = jutil.funcinfo, jutil.traceinfo
