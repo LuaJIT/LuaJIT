@@ -278,6 +278,7 @@ typedef struct BPropEntry {
 
 /* Scalar evolution analysis cache. */
 typedef struct ScEvEntry {
+  MRef pc;		/* Bytecode PC of FORI. */
   IRRef1 idx;		/* Index reference. */
   IRRef1 start;		/* Constant start reference. */
   IRRef1 stop;		/* Constant stop reference. */
