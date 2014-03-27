@@ -2198,7 +2198,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |.ffunc_nnr math_fmod
-  |1: ; fprem; fnstsw ax; sahf; jp <1
+  |1: ; fprem; fnstsw ax; and ax, 0x400; jnz <1
   |  fpop1
   |  jmp ->fff_resn
   |
