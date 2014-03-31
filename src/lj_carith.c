@@ -75,7 +75,7 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 	  ok = 1;
 	} else {
 	  ca->ct[1-i] = ct;  /* Use enum to improve error message. */
-	  ca->p[1-i] = NULL;
+	  ca->p[1-i] = (void *)(intptr_t)1;  /* To make it unequal. */
 	  break;
 	}
       }
@@ -236,7 +236,9 @@ static int lj_carith_meta(lua_State *L, CTState *cts, CDArith *ca, MMS mm)
     const char *repr[2];
     int i, isenum = -1, isstr = -1;
     if (mm == MM_eq) {  /* Equality checks never raise an error. */
-      setboolV(L->top-1, 0);
+      int eq = ca->p[0] == ca->p[1];
+      setboolV(L->top-1, eq);
+      setboolV(&G(L)->tmptv2, eq);  /* Remember for trace recorder. */
       return 1;
     }
     for (i = 0; i < 2; i++) {
