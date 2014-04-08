@@ -62,7 +62,7 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
       TValue *o2 = i == 0 ? o+1 : o-1;
       CType *ct = ctype_raw(cts, cdataV(o2)->ctypeid);
       ca->ct[i] = NULL;
-      ca->p[i] = NULL;
+      ca->p[i] = (uint8_t *)strVdata(o);
       ok = 0;
       if (ctype_isenum(ct->info)) {
 	CTSize ofs;
@@ -73,7 +73,7 @@ static int carith_checkarg(lua_State *L, CTState *cts, CDArith *ca)
 	  ok = 1;
 	} else {
 	  ca->ct[1-i] = ct;  /* Use enum to improve error message. */
-	  ca->p[1-i] = (void *)(intptr_t)1;  /* To make it unequal. */
+	  ca->p[1-i] = NULL;
 	  break;
 	}
       }
