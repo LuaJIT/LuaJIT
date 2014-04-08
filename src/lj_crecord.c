@@ -1453,7 +1453,9 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
 	  ct = ctype_child(cts, cct);
 	  tr = lj_ir_kint(J, (int32_t)ofs);
 	}  /* else: interpreter will throw. */
-      }  /* else: interpreter will throw. */
+      } else {
+	tr = emitir(IRT(IR_ADD, IRT_PTR), tr, lj_ir_kintp(J, sizeof(GCstr)));
+      }
     } else if (!tref_isnum(tr)) {
       tr = 0;
     }
