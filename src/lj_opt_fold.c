@@ -585,7 +585,8 @@ LJFOLDF(bufstr_kfold_cse)
     if (fleft->o == IR_BUFHDR) {  /* No put operations? */
       if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
-      fins->op1 = fleft->prev;  /* Relies on checks in bufput_append. */
+      fins->op1 = fleft->op1;
+      fins->op2 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else if (fleft->o == IR_BUFPUT) {
       IRIns *irb = IR(fleft->op1);
