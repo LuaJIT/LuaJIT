@@ -618,6 +618,7 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       }
       lj_opt_split(J);
       lj_opt_sink(J);
+      if (!J->loopref) J->cur.snap[J->cur.nsnap-1].count = SNAPCOUNT_DONE;
       J->state = LJ_TRACE_ASM;
       break;
 

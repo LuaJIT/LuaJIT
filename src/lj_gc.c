@@ -625,6 +625,8 @@ static size_t gc_onestep(lua_State *L)
   case GCSsweep: {
     MSize old = g->gc.total;
     setmref(g->gc.sweep, gc_sweep(g, mref(g->gc.sweep, GCRef), GCSWEEPMAX));
+    lua_assert(old >= g->gc.total);
+    g->gc.estimate -= old - g->gc.total;
     if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
       if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
 	lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
@@ -638,8 +640,6 @@ static size_t gc_onestep(lua_State *L)
 	g->gc.debt = 0;
       }
     }
-    lua_assert(old >= g->gc.total);
-    g->gc.estimate -= old - g->gc.total;
     return GCSWEEPMAX*GCSWEEPCOST;
     }
   case GCSfinalize:
