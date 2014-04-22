@@ -631,6 +631,8 @@ static size_t gc_onestep(lua_State *L)
   case GCSsweep: {
     MSize old = g->gc.total;
     setmref(g->gc.sweep, gc_sweep(g, mref(g->gc.sweep, GCRef), GCSWEEPMAX));
+    lua_assert(old >= g->gc.total);
+    g->gc.estimate -= old - g->gc.total;
     if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
       gc_shrink(g, L);
       if (gcref(g->gc.mmudata)) {  /* Need any finalizations? */
@@ -643,8 +645,6 @@ static size_t gc_onestep(lua_State *L)
 	g->gc.debt = 0;
       }
     }
-    lua_assert(old >= g->gc.total);
-    g->gc.estimate -= old - g->gc.total;
     return GCSWEEPMAX*GCSWEEPCOST;
     }
   case GCSfinalize:
