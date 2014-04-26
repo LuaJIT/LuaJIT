@@ -111,6 +111,11 @@
 #define NULL ((void*)0)
 #endif
 
+#ifdef __psp2__
+#define LJ_TARGET_PSVITA	1
+#define LJ_TARGET_CONSOLE	1
+#endif
+
 #if _XBOX_VER >= 200
 #define LJ_TARGET_XBOX360	1
 #define LJ_TARGET_CONSOLE	1
