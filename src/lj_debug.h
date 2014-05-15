@@ -62,4 +62,15 @@ enum {
   VARNAME__MAX
 };
 
+#ifdef LUA_USE_TRACE_LOGS
+LJ_FUNC void LJ_FASTCALL lj_log_trace_direct_exit(lua_State *L,
+  int vmstate, const BCIns *pc);
+LJ_FUNC void LJ_FASTCALL lj_log_trace_normal_exit(lua_State *L,
+  int vmstate, const BCIns *pc);
+LJ_FUNC void LJ_FASTCALL lj_log_trace_entry(lua_State *L,
+  unsigned traceno, const BCIns *pc);
+LJ_FUNC void LJ_FASTCALL lj_log_trace_start_record(lua_State *L, unsigned traceno,
+  const BCIns *pc, GCfunc *fn);
+#endif
+
 #endif

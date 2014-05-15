@@ -2919,6 +2919,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov r13, TMPa
   |  mov r12, TMPQ
   |.endif
+#ifdef LUA_USE_TRACE_LOGS
+  |  mov FCARG1, SAVE_L
+  |  mov L:FCARG1->base, BASE
+  |  mov RB, RD     // Save RD
+  |  mov TMP1, PC  // Save PC
+  |  mov CARG3d, PC   // CARG3d == BASE
+  |  mov FCARG2, dword [DISPATCH+DISPATCH_GL(vmstate)]
+  |  call extern lj_log_trace_direct_exit@8
+  |  mov PC, TMP1
+  |  mov RD, RB
+  |  mov RB, SAVE_L
+  |  mov BASE, L:RB->base
+#endif
   |  test RD, RD; js >9			// Check for error from exit.
   |  mov L:RB, SAVE_L
   |  mov MULTRES, RD
@@ -5260,6 +5273,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_JLOOP:
     |.if JIT
     |  ins_AD	// RA = base (ignored), RD = traceno
+#ifdef LUA_USE_TRACE_LOGS
+    |  mov L:RB, SAVE_L
+    |  mov L:RB->base, BASE  // Save BASE
+    |  mov TMP1, RD     // Save RD
+    |  mov CARG3d, PC  // CARG3d == BASE
+    |  mov FCARG2, RD
+    |  mov FCARG1, RB
+    |  call extern lj_log_trace_entry@8
+    |  mov RD, TMP1
+    |  mov BASE, L:RB->base
+#endif
     |  mov RA, [DISPATCH+DISPATCH_J(trace)]
     |  mov TRACE:RD, [RA+RD*4]
     |  mov RDa, TRACE:RD->mcode
