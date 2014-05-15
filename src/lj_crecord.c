@@ -794,7 +794,7 @@ again:
     }
   } else if (tref_isstr(idx)) {
     GCstr *name = strV(&rd->argv[1]);
-    if (cd->ctypeid == CTID_CTYPEID)
+    if (cd && cd->ctypeid == CTID_CTYPEID)
       ct = ctype_raw(cts, crec_constructor(J, cd, ptr));
     if (ctype_isstruct(ct->info)) {
       CTSize fofs;
@@ -835,6 +835,7 @@ again:
       CType *cct = ctype_rawchild(cts, ct);
       if (ctype_isstruct(cct->info)) {
 	ct = cct;
+	cd = NULL;
 	if (tref_isstr(idx)) goto again;
       }
     }
