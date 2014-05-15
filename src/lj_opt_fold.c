@@ -497,13 +497,14 @@ LJFOLDF(kfold_strref_snew)
   } else {
     /* Reassociate: strref(snew(strref(str, a), len), b) ==> strref(str, a+b) */
     IRIns *ir = IR(fleft->op1);
-    IRRef1 str = ir->op1;  /* IRIns * is not valid across emitir. */
-    lua_assert(ir->o == IR_STRREF);
-    PHIBARRIER(ir);
-    fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2);  /* Clobbers fins! */
-    fins->op1 = str;
-    fins->ot = IRT(IR_STRREF, IRT_P32);
-    return RETRYFOLD;
+    if (ir->o == IR_STRREF) {
+      IRRef1 str = ir->op1;  /* IRIns * is not valid across emitir. */
+      PHIBARRIER(ir);
+      fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2); /* Clobbers fins! */
+      fins->op1 = str;
+      fins->ot = IRT(IR_STRREF, IRT_P32);
+      return RETRYFOLD;
+    }
   }
   return NEXTFOLD;
 }
