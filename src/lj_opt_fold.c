@@ -1986,7 +1986,8 @@ LJFOLDF(merge_eqne_snew_kgc)
   if (len <= FOLD_SNEW_MAX_LEN) {
     IROp op = (IROp)fins->o;
     IRRef strref = fleft->op1;
-    lua_assert(IR(strref)->o == IR_STRREF);
+    if (IR(strref)->o != IR_STRREF)
+      return NEXTFOLD;
     if (op == IR_EQ) {
       emitir(IRTGI(IR_EQ), fleft->op2, lj_ir_kint(J, len));
       /* Caveat: fins/fleft/fright is no longer valid after emitir. */
