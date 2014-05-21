@@ -2920,6 +2920,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov r12, TMPQ
   |.endif
 #ifdef LUA_USE_TRACE_LOGS
+  |.if X64
   |  mov FCARG1, SAVE_L
   |  mov L:FCARG1->base, BASE
   |  mov RB, RD     // Save RD
@@ -2931,6 +2932,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RD, RB
   |  mov RB, SAVE_L
   |  mov BASE, L:RB->base
+  |.endif
 #endif
   |  test RD, RD; js >9			// Check for error from exit.
   |  mov L:RB, SAVE_L
@@ -5274,6 +5276,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if JIT
     |  ins_AD	// RA = base (ignored), RD = traceno
 #ifdef LUA_USE_TRACE_LOGS
+    |.if X64
     |  mov L:RB, SAVE_L
     |  mov L:RB->base, BASE  // Save BASE
     |  mov TMP1, RD     // Save RD
@@ -5283,6 +5286,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  call extern lj_log_trace_entry@8
     |  mov RD, TMP1
     |  mov BASE, L:RB->base
+    |.endif
 #endif
     |  mov RA, [DISPATCH+DISPATCH_J(trace)]
     |  mov TRACE:RD, [RA+RD*4]
