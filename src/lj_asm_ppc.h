@@ -49,6 +49,8 @@ static void asm_exitstub_setup(ASMState *as, ExitNo nexits)
 {
   ExitNo i;
   MCode *mxp = as->mctop;
+  if (mxp - (nexits + 3 + MCLIM_REDZONE) < as->mclim)
+    asm_mclimit(as);
   /* 1: mflr r0; bl ->vm_exit_handler; li r0, traceno; bl <1; bl <1; ... */
   for (i = nexits-1; (int32_t)i >= 0; i--)
     *--mxp = PPCI_BL|(((-3-i)&0x00ffffffu)<<2);
