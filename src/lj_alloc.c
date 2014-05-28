@@ -179,11 +179,17 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 
 #if defined(MAP_32BIT)
 
+#if defined(__sun__)
+#define MMAP_REGION_START	((uintptr_t)0x1000)
+#else
 /* Actually this only gives us max. 1GB in current Linux kernels. */
+#define MMAP_REGION_START	((uintptr_t)0)
+#endif
+
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
   int olderr = errno;
-  void *ptr = mmap(NULL, size, MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0);
+  void *ptr = mmap((void *)MMAP_REGION_START, size, MMAP_PROT, MAP_32BIT|MMAP_FLAGS, -1, 0);
   errno = olderr;
   return ptr;
 }
