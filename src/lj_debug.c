@@ -760,7 +760,7 @@ lj_debug_top_frame_fn(lua_State *L, const BCIns *pc)
   return frame_func(frame);
 }
 
-void
+LJ_FUNC void LJ_FASTCALL
 lj_log_trace_start_record(lua_State *L, unsigned traceno, const BCIns *pc,
   GCfunc *fn)
 {
@@ -775,7 +775,7 @@ lj_log_trace_start_record(lua_State *L, unsigned traceno, const BCIns *pc,
   lj_trace_log_event(&r);
 }
 
-void
+LJ_FUNC void LJ_FASTCALL
 lj_log_trace_entry(lua_State *L, unsigned traceno, const BCIns *pc)
 {
   lj_trace_event_record_t  r;
@@ -809,13 +809,13 @@ lj_log_trace_exit_helper(lua_State *L, int vmstate, const BCIns *pc, int direct)
   }
 }
 
-void
+LJ_FUNC void LJ_FASTCALL
 lj_log_trace_normal_exit(lua_State *L, int vmstate, const BCIns *pc)
 {
   lj_log_trace_exit_helper(L, vmstate, pc, 0);
 }
 
-void
+LJ_FUNC void LJ_FASTCALL
 lj_log_trace_direct_exit(lua_State *L, int vmstate, const BCIns *pc)
 {
   lj_log_trace_exit_helper(L, vmstate, pc, 1);
