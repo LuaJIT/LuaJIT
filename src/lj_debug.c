@@ -463,7 +463,7 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
 	lj_debug_shortname(ar->short_src, name);
 	ar->linedefined = (int)firstline;
 	ar->lastlinedefined = (int)(firstline + pt->numline);
-	ar->what = firstline ? "Lua" : "main";
+	ar->what = (firstline || !pt->numline) ? "Lua" : "main";
       } else {
 	ar->source = "=[C]";
 	ar->short_src[0] = '[';
