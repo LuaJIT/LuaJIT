@@ -15,6 +15,7 @@
 #include "lj_frame.h"
 #include "lj_bc.h"
 #include "lj_strfmt.h"
+#include "lj_vm.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -87,7 +88,8 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 	if (frame_islua(f)) {
 	  f = frame_prevl(f);
 	} else {
-	  if (frame_isc(f))
+	  if (frame_isc(f) || (LJ_HASFFI && frame_iscont(f) &&
+			       (f-1)->u32.lo == LJ_CONT_FFI_CALLBACK))
 	    cf = cframe_raw(cframe_prev(cf));
 	  f = frame_prevd(f);
 	}
