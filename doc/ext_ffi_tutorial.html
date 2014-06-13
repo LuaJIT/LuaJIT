@@ -566,7 +566,7 @@ Thus it's not helpful and actually counter-productive to cache
 individual C&nbsp;functions like this:
 </p>
 <pre class="code">
-local <b>funca</b>, <b>funcb</b> = ffi.C.funcb, ffi.C.funcb -- <span style="color:#c00000;">Not helpful!</span>
+local <b>funca</b>, <b>funcb</b> = ffi.C.funca, ffi.C.funcb -- <span style="color:#c00000;">Not helpful!</span>
 local function foo(x, n)
   for i=1,n do <b>funcb</b>(<b>funca</b>(x, i), 1) end
 end
