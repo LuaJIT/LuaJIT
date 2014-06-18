@@ -1157,6 +1157,28 @@ static void LJ_FASTCALL recff_io_flush(jit_State *J, RecordFFData *rd)
   J->base[0] = TREF_TRUE;
 }
 
+/* -- Debug library fast functions ---------------------------------------- */
+
+static void LJ_FASTCALL recff_debug_getmetatable(jit_State *J, RecordFFData *rd)
+{
+  GCtab *mt;
+  TRef mtref;
+  TRef tr = J->base[0];
+  if (tref_istab(tr)) {
+    mt = tabref(tabV(&rd->argv[0])->metatable);
+    mtref = emitir(IRT(IR_FLOAD, IRT_TAB), tr, IRFL_TAB_META);
+  } else if (tref_isudata(tr)) {
+    mt = tabref(udataV(&rd->argv[0])->metatable);
+    mtref = emitir(IRT(IR_FLOAD, IRT_TAB), tr, IRFL_UDATA_META);
+  } else {
+    mt = tabref(basemt_obj(J2G(J), &rd->argv[0]));
+    J->base[0] = mt ? lj_ir_ktab(J, mt) : TREF_NIL;
+    return;
+  }
+  emitir(IRTG(mt ? IR_NE : IR_EQ, IRT_TAB), mtref, lj_ir_knull(J, IRT_TAB));
+  J->base[0] = mt ? mtref : TREF_NIL;
+}
+
 /* -- Record calls to fast functions -------------------------------------- */
 
 #include "lj_recdef.h"
