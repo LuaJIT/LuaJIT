@@ -860,8 +860,11 @@ again:
 
   /* Resolve reference for field. */
   ct = ctype_get(cts, sid);
-  if (ctype_isref(ct->info))
+  if (ctype_isref(ct->info)) {
     ptr = emitir(IRT(IR_XLOAD, IRT_PTR), ptr, 0);
+    sid = ctype_cid(ct->info);
+    ct = ctype_get(cts, sid);
+  }
 
   while (ctype_isattrib(ct->info))
     ct = ctype_child(cts, ct);  /* Skip attributes. */
