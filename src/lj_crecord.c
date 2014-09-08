@@ -1466,6 +1466,7 @@ void LJ_FASTCALL recff_cdata_arith(jit_State *J, RecordFFData *rd)
       }
     } else if (!tref_isnum(tr)) {
       tr = 0;
+      ct = ctype_get(cts, CTID_P_VOID);
     }
   ok:
     s[i] = ct;
