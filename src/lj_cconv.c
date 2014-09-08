@@ -702,6 +702,7 @@ static void cconv_substruct_init(CTState *cts, CType *d, uint8_t *dp,
     } else if (ctype_isxattrib(df->info, CTA_SUBTYPE)) {
       cconv_substruct_init(cts, ctype_rawchild(cts, df),
 			   dp+df->size, o, len, ip);
+      if ((d->info & CTF_UNION)) break;
     }  /* Ignore all other entries in the chain. */
   }
 }
