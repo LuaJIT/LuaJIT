@@ -1158,11 +1158,12 @@ static void rec_idx_abc(jit_State *J, TRef asizeref, TRef ikey, uint32_t asize)
 }
 
 /* Record indexed key lookup. */
-static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
+static TRef rec_idx_key(jit_State *J, RecordIndex *ix, IRRef *rbref)
 {
   TRef key;
   GCtab *t = tabV(&ix->tabv);
   ix->oldv = lj_tab_get(J->L, t, &ix->keyv);  /* Lookup previous value. */
+  *rbref = 0;
 
   /* Integer keys are looked up in the array part first. */
   key = ix->key;
@@ -1212,8 +1213,9 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix)
     MSize hslot = (MSize)((char *)ix->oldv - (char *)&noderef(t->node)[0].val);
     if (t->hmask > 0 && hslot <= t->hmask*(MSize)sizeof(Node) &&
 	hslot <= 65535*(MSize)sizeof(Node)) {
-      TRef node, kslot;
-      TRef hm = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_HMASK);
+      TRef node, kslot, hm;
+      *rbref = J->cur.nins;  /* Mark possible rollback point. */
+      hm = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_HMASK);
       emitir(IRTGI(IR_EQ), hm, lj_ir_kint(J, (int32_t)t->hmask));
       node = emitir(IRT(IR_FLOAD, IRT_P32), ix->tab, IRFL_TAB_NODE);
       kslot = lj_ir_kslot(J, key, hslot / sizeof(Node));
@@ -1246,6 +1248,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 {
   TRef xref;
   IROp xrefop, loadop;
+  IRRef rbref;
   cTValue *oldv;
 
   while (!tref_istab(ix->tab)) { /* Handle non-table lookup. */
@@ -1291,7 +1294,7 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   }
 
   /* Record the key lookup. */
-  xref = rec_idx_key(J, ix);
+  xref = rec_idx_key(J, ix, &rbref);
   xrefop = IR(tref_ref(xref))->o;
   loadop = xrefop == IR_AREF ? IR_ALOAD : IR_HLOAD;
   /* The lj_meta_tset() inconsistency is gone, but better play safe. */
@@ -1306,6 +1309,8 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
     } else {
       res = emitir(IRTG(loadop, t), xref, 0);
     }
+    if (tref_ref(res) < rbref)  /* HREFK + load forwarded? */
+      lj_ir_rollback(J, rbref);  /* Rollback to eliminate hmask guard. */
     if (t == IRT_NIL && ix->idxchain && lj_record_mm_lookup(J, ix, MM_index))
       goto handlemm;
     if (irtype_ispri(t)) res = TREF_PRI(t);  /* Canonicalize primitives. */
@@ -1313,6 +1318,8 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   } else {  /* Indexed store. */
     GCtab *mt = tabref(tabV(&ix->tabv)->metatable);
     int keybarrier = tref_isgcv(ix->key) && !tref_isnil(ix->val);
+    if (tref_ref(xref) < rbref)  /* HREFK forwarded? */
+      lj_ir_rollback(J, rbref);  /* Rollback to eliminate hmask guard. */
     if (tvisnil(oldv)) {  /* Previous value was nil? */
       /* Need to duplicate the hasmm check for the early guards. */
       int hasmm = 0;
