@@ -359,6 +359,7 @@ static Reg ra_rematk(ASMState *as, IRRef ref)
 static int32_t ra_spill(ASMState *as, IRIns *ir)
 {
   int32_t slot = ir->s;
+  lua_assert(ir >= as->ir + REF_TRUE);
   if (!ra_hasspill(slot)) {
     if (irt_is64(ir->t)) {
       slot = as->evenspill;
