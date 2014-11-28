@@ -1721,6 +1721,11 @@ static void asm_head_side(ASMState *as)
   int pass3 = 0;
   IRRef i;
 
+  if (as->snapno && as->topslot > as->parent->topslot) {
+    /* Force snap #0 alloc to prevent register overwrite in stack check. */
+    as->snapno = 0;
+    asm_snap_alloc(as);
+  }
   allow = asm_head_side_base(as, irp, allow);
 
   /* Scan all parent SLOADs and collect register dependencies. */
