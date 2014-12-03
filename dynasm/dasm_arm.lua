@@ -923,7 +923,7 @@ local function parse_template(params, template, nparams, pos)
 end
 
 map_op[".template__"] = function(params, template, nparams)
-  if not params then return sub(template, 9) end
+  if not params then return template:gsub("%x%x%x%x%x%x%x%x", "") end
 
   -- Limit number of section buffer positions used by a single dasm_put().
   -- A single opcode needs a maximum of 3 positions.
