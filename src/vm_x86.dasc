@@ -373,7 +373,6 @@
 |  fpop
 |.endmacro
 |
-|.macro fdup; fld st0; .endmacro
 |.macro fpop1; fstp st1; .endmacro
 |
 |// Synthesize SSE FP constants.
@@ -1329,19 +1328,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmp NARGS:RD, 2+1;  jb ->fff_fallback
   |.endmacro
   |
-  |.macro .ffunc_n, name
-  |  .ffunc_1 name
-  |  cmp dword [BASE+4], LJ_TISNUM;  jae ->fff_fallback
-  |  fld qword [BASE]
-  |.endmacro
-  |
-  |.macro .ffunc_n, name, op
-  |  .ffunc_1 name
-  |  cmp dword [BASE+4], LJ_TISNUM;  jae ->fff_fallback
-  |  op
-  |  fld qword [BASE]
-  |.endmacro
-  |
   |.macro .ffunc_nsse, name, op
   |  .ffunc_1 name
   |  cmp dword [BASE+4], LJ_TISNUM;  jae ->fff_fallback
@@ -1350,14 +1336,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_nsse, name
   |  .ffunc_nsse name, movsd
-  |.endmacro
-  |
-  |.macro .ffunc_nn, name
-  |  .ffunc_2 name
-  |  cmp dword [BASE+4], LJ_TISNUM;  jae ->fff_fallback
-  |  cmp dword [BASE+12], LJ_TISNUM;  jae ->fff_fallback
-  |  fld qword [BASE]
-  |  fld qword [BASE+8]
   |.endmacro
   |
   |.macro .ffunc_nnsse, name
@@ -2029,6 +2007,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RAa, -8			// Results start at BASE+RA = BASE-8.
   |  jmp ->vm_return
   |
+  |.if X64
+  |.define fff_resfp, fff_resxmm0
+  |.else
+  |.define fff_resfp, fff_resn
+  |.endif
+  |
   |.macro math_round, func
   |  .ffunc math_ .. func
   |.if DUALNUM
@@ -2061,22 +2045,14 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc math_log
   |  cmp NARGS:RD, 1+1; jne ->fff_fallback	// Exactly one argument.
   |  cmp dword [BASE+4], LJ_TISNUM; jae ->fff_fallback
-  |  fldln2; fld qword [BASE]; fyl2x; jmp ->fff_resn
-  |
-  |.ffunc_n math_log10, fldlg2;	fyl2x;		jmp ->fff_resn
-  |.ffunc_n math_exp;	call ->vm_exp_x87;	jmp ->fff_resn
-  |
-  |.ffunc_n math_sin;	fsin;			jmp ->fff_resn
-  |.ffunc_n math_cos;	fcos;			jmp ->fff_resn
-  |.ffunc_n math_tan;	fptan; fpop;		jmp ->fff_resn
-  |
-  |.ffunc_n math_asin
-  |  fdup; fmul st0; fld1; fsubrp st1; fsqrt; fpatan
-  |  jmp ->fff_resn
-  |.ffunc_n math_acos
-  |  fdup; fmul st0; fld1; fsubrp st1; fsqrt; fxch; fpatan
-  |  jmp ->fff_resn
-  |.ffunc_n math_atan;	fld1; fpatan;		jmp ->fff_resn
+  |  movsd xmm0, qword [BASE]
+  |.if not X64
+  |  movsd FPARG1, xmm0
+  |.endif
+  |  mov RB, BASE
+  |  call extern log
+  |  mov BASE, RB
+  |  jmp ->fff_resfp
   |
   |.macro math_extern, func
   |  .ffunc_nsse math_ .. func
@@ -2086,18 +2062,36 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RB, BASE
   |  call extern func
   |  mov BASE, RB
-  |.if X64
-  |  jmp ->fff_resxmm0
-  |.else
-  |  jmp ->fff_resn
-  |.endif
+  |  jmp ->fff_resfp
   |.endmacro
   |
+  |.macro math_extern2, func
+  |  .ffunc_nnsse math_ .. func
+  |.if not X64
+  |  movsd FPARG1, xmm0
+  |  movsd FPARG3, xmm1
+  |.endif
+  |  mov RB, BASE
+  |  call extern func
+  |  mov BASE, RB
+  |  jmp ->fff_resfp
+  |.endmacro
+  |
+  |  math_extern log10
+  |  math_extern exp
+  |  math_extern sin
+  |  math_extern cos
+  |  math_extern tan
+  |  math_extern asin
+  |  math_extern acos
+  |  math_extern atan
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
+  |  math_extern2 pow
+  |  math_extern2 atan2
+  |  math_extern2 fmod
   |
-  |.ffunc_nn math_atan2;	fpatan;		jmp ->fff_resn
   |.ffunc_nnr math_ldexp;	fscale; fpop1;	jmp ->fff_resn
   |
   |.ffunc_1 math_frexp
@@ -2150,13 +2144,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp <2
   |4:
   |  xorps xmm4, xmm4; jmp <1			// Return +-Inf and +-0.
-  |
-  |.ffunc_nnr math_fmod
-  |1: ; fprem; fnstsw ax; and ax, 0x400; jnz <1
-  |  fpop1
-  |  jmp ->fff_resn
-  |
-  |.ffunc_nnsse math_pow;	call ->vm_pow_sse;	jmp ->fff_resxmm0
   |
   |.macro math_minmax, name, cmovop, sseop
   |  .ffunc name
@@ -2899,7 +2886,16 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// FP value rounding. Called by math.floor/math.ceil fast functions
   |// and from JIT code. arg/ret is xmm0. xmm0-xmm3 and RD (eax) modified.
-  |.macro vm_round, name, mode
+  |.macro vm_round, name, mode, cond
+  |->name:
+  |.if not X64 and cond
+  |  movsd xmm0, qword [esp+4]
+  |  call ->name .. _sse
+  |  movsd qword [esp+4], xmm0  // Overwrite callee-owned arg.
+  |  fld qword [esp+4]
+  |  ret
+  |.endif
+  |
   |->name .. _sse:
   |  sseconst_abs xmm2, RDa
   |  sseconst_2p52 xmm3, RDa
@@ -2936,18 +2932,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  ret
   |.endmacro
   |
-  |->vm_floor:
-  |.if not X64
-  |  movsd xmm0, qword [esp+4]
-  |  call ->vm_floor_sse
-  |  movsd qword [esp+4], xmm0  // Overwrite callee-owned arg.
-  |  fld qword [esp+4]
-  |  ret
-  |.endif
-  |
-  |  vm_round vm_floor, 0
-  |  vm_round vm_ceil,  1
-  |  vm_round vm_trunc, 2
+  |  vm_round vm_floor, 0, 1
+  |  vm_round vm_ceil,  1, JIT
+  |  vm_round vm_trunc, 2, JIT
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
   |->vm_mod:
@@ -2978,65 +2965,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  movaps xmm0, xmm5
   |  subsd xmm0, xmm1
   |  ret
-  |
-  |// FP log2(x). Called by math.log(x, base).
-  |->vm_log2:
-  |.if X64WIN
-  |  movsd qword [rsp+8], xmm0		// Use scratch area.
-  |  fld1
-  |  fld qword [rsp+8]
-  |  fyl2x
-  |  fstp qword [rsp+8]
-  |  movsd xmm0, qword [rsp+8]
-  |.elif X64
-  |  movsd qword [rsp-8], xmm0		// Use red zone.
-  |  fld1
-  |  fld qword [rsp-8]
-  |  fyl2x
-  |  fstp qword [rsp-8]
-  |  movsd xmm0, qword [rsp-8]
-  |.else
-  |  fld1
-  |  fld qword [esp+4]
-  |  fyl2x
-  |.endif
-  |  ret
-  |
-  |// FP exponentiation e^x and 2^x. Called by math.exp fast function and
-  |// from JIT code. Arg/ret on x87 stack. No int/xmm regs modified.
-  |// Caveat: needs 3 slots on x87 stack!
-  |->vm_exp_x87:
-  |  fldl2e; fmulp st1				// e^x ==> 2^(x*log2(e))
-  |->vm_exp2_x87:
-  |  .if X64WIN
-  |    .define expscratch, dword [rsp+8]	// Use scratch area.
-  |  .elif X64
-  |    .define expscratch, dword [rsp-8]	// Use red zone.
-  |  .else
-  |    .define expscratch, dword [esp+4]	// Needs 4 byte scratch area.
-  |  .endif
-  |  fst expscratch				// Caveat: overwrites ARG1.
-  |  cmp expscratch, 0x7f800000; je >1		// Special case: e^+Inf = +Inf
-  |  cmp expscratch, 0xff800000; je >2		// Special case: e^-Inf = 0
-  |->vm_exp2raw:  // Entry point for vm_pow. Without +-Inf check.
-  |  fdup; frndint; fsub st1, st0; fxch		// Split into frac/int part.
-  |  f2xm1; fld1; faddp st1; fscale; fpop1	// ==> (2^frac-1 +1) << int
-  |1:
-  |  ret
-  |2:
-  |  fpop; fldz; ret
-  |
-  |// Generic power function x^y. Called by BC_POW, math.pow fast function,
-  |// and vm_arith.
-  |// Args in xmm0/xmm1. Ret in xmm0. xmm0-xmm2 and RC (eax) modified.
-  |// Needs 16 byte scratch area for x86. Also called from JIT code.
-  |->vm_pow_sse:
-  |  cvttsd2si eax, xmm1
-  |  cvtsi2sd xmm2, eax
-  |  ucomisd xmm1, xmm2
-  |  jnz >8				// Branch for FP exponents.
-  |  jp >9				// Branch for NaN exponent.
-  |  // Fallthrough.
   |
   |// Args in xmm0/eax. Ret in xmm0. xmm0-xmm1 and eax modified.
   |->vm_powi_sse:
@@ -3072,246 +3000,6 @@ static void build_subroutines(BuildCtx *ctx)
   |7:
   |  sseconst_1 xmm0, RDa
   |  ret
-  |
-  |8:  // FP/FP power function x^y.
-  |.if X64
-  |  movd rax, xmm1; shl rax, 1
-  |  rol rax, 12; cmp rax, 0xffe; je >2		// x^+-Inf?
-  |  movd rax, xmm0; shl rax, 1; je >4		// +-0^y?
-  |  rol rax, 12; cmp rax, 0xffe; je >5		// +-Inf^y?
-  |  .if X64WIN
-  |    movsd qword [rsp+16], xmm1		// Use scratch area.
-  |    movsd qword [rsp+8], xmm0
-  |    fld qword [rsp+16]
-  |    fld qword [rsp+8]
-  |  .else
-  |    movsd qword [rsp-16], xmm1		// Use red zone.
-  |    movsd qword [rsp-8], xmm0
-  |    fld qword [rsp-16]
-  |    fld qword [rsp-8]
-  |  .endif
-  |.else
-  |  movsd qword [esp+12], xmm1			// Needs 16 byte scratch area.
-  |  movsd qword [esp+4], xmm0
-  |  cmp dword [esp+12], 0; jne >1
-  |  mov eax, [esp+16]; shl eax, 1
-  |  cmp eax, 0xffe00000; je >2			// x^+-Inf?
-  |1:
-  |  cmp dword [esp+4], 0; jne >1
-  |  mov eax, [esp+8]; shl eax, 1; je >4	// +-0^y?
-  |  cmp eax, 0xffe00000; je >5			// +-Inf^y?
-  |1:
-  |  fld qword [esp+12]
-  |  fld qword [esp+4]
-  |.endif
-  |  fyl2x					// y*log2(x)
-  |  fdup; frndint; fsub st1, st0; fxch		// Split into frac/int part.
-  |  f2xm1; fld1; faddp st1; fscale; fpop1	// ==> (2^frac-1 +1) << int
-  |.if X64WIN
-  |  fstp qword [rsp+8]				// Use scratch area.
-  |  movsd xmm0, qword [rsp+8]
-  |.elif X64
-  |  fstp qword [rsp-8]				// Use red zone.
-  |  movsd xmm0, qword [rsp-8]
-  |.else
-  |  fstp qword [esp+4]				// Needs 8 byte scratch area.
-  |  movsd xmm0, qword [esp+4]
-  |.endif
-  |  ret
-  |
-  |9:  // Handle x^NaN.
-  |  sseconst_1 xmm2, RDa
-  |  ucomisd xmm0, xmm2; je >1			// 1^NaN ==> 1
-  |  movaps xmm0, xmm1				// x^NaN ==> NaN
-  |1:
-  |  ret
-  |
-  |2:  // Handle x^+-Inf.
-  |  sseconst_abs xmm2, RDa
-  |  andpd xmm0, xmm2				// |x|
-  |  sseconst_1 xmm2, RDa
-  |  ucomisd xmm0, xmm2; je <1			// +-1^+-Inf ==> 1
-  |  movmskpd eax, xmm1
-  |  xorps xmm0, xmm0
-  |  mov ah, al; setc al; xor al, ah; jne <1	// |x|<>1, x^+-Inf ==> +Inf/0
-  |3:
-  |  sseconst_hi xmm0, RDa, 7ff00000  // +Inf
-  |  ret
-  |
-  |4:  // Handle +-0^y.
-  |  movmskpd eax, xmm1; test eax, eax; jnz <3	// y < 0, +-0^y ==> +Inf
-  |  xorps xmm0, xmm0				// y >= 0, +-0^y ==> 0
-  |  ret
-  |
-  |5:  // Handle +-Inf^y.
-  |  movmskpd eax, xmm1; test eax, eax; jz <3	// y >= 0, +-Inf^y ==> +Inf
-  |  xorps xmm0, xmm0				// y < 0, +-Inf^y ==> 0
-  |  ret
-  |
-  |// Callable from C: double lj_vm_foldfpm(double x, int fpm)
-  |// Computes fpm(x) for extended math functions. ORDER FPM.
-  |->vm_foldfpm:
-  |.if JIT
-  |.if X64
-  |  .if X64WIN
-  |    .define fpmop, CARG2d
-  |  .else
-  |    .define fpmop, CARG1d
-  |  .endif
-  |  cmp fpmop, 1; jb ->vm_floor_sse; je ->vm_ceil_sse
-  |  cmp fpmop, 3; jb ->vm_trunc_sse; ja >2
-  |  sqrtsd xmm0, xmm0; ret
-  |2:
-  |  .if X64WIN
-  |    movsd qword [rsp+8], xmm0	// Use scratch area.
-  |    fld qword [rsp+8]
-  |  .else
-  |    movsd qword [rsp-8], xmm0	// Use red zone.
-  |    fld qword [rsp-8]
-  |  .endif
-  |  cmp fpmop, 5; ja >2
-  |  .if X64WIN; pop rax; .endif
-  |  je >1
-  |  call ->vm_exp_x87
-  |  .if X64WIN; push rax; .endif
-  |  jmp >7
-  |1:
-  |  call ->vm_exp2_x87
-  |  .if X64WIN; push rax; .endif
-  |  jmp >7
-  |2: ; cmp fpmop, 7; je >1; ja >2
-  |  fldln2; fxch; fyl2x; jmp >7
-  |1: ; fld1; fxch; fyl2x; jmp >7
-  |2: ; cmp fpmop, 9; je >1; ja >2
-  |  fldlg2; fxch; fyl2x; jmp >7
-  |1: ; fsin; jmp >7
-  |2: ; cmp fpmop, 11; je >1; ja >9
-  |   fcos; jmp >7
-  |1: ; fptan; fpop
-  |7:
-  |  .if X64WIN
-  |    fstp qword [rsp+8]		// Use scratch area.
-  |    movsd xmm0, qword [rsp+8]
-  |  .else
-  |    fstp qword [rsp-8]		// Use red zone.
-  |    movsd xmm0, qword [rsp-8]
-  |  .endif
-  |  ret
-  |.else  // x86 calling convention.
-  |  .define fpmop, eax
-  |  mov fpmop, [esp+12]
-  |  movsd xmm0, qword [esp+4]
-  |  cmp fpmop, 1; je >1; ja >2
-  |  call ->vm_floor_sse; jmp >7
-  |1: ; call ->vm_ceil_sse; jmp >7
-  |2: ; cmp fpmop, 3; je >1; ja >2
-  |  call ->vm_trunc_sse; jmp >7
-  |1:
-  |  sqrtsd xmm0, xmm0
-  |7:
-  |  movsd qword [esp+4], xmm0	// Overwrite callee-owned args.
-  |  fld qword [esp+4]
-  |  ret
-  |2: ; fld qword [esp+4]
-  |  cmp fpmop, 5; jb ->vm_exp_x87; je ->vm_exp2_x87
-  |2: ; cmp fpmop, 7; je >1; ja >2
-  |  fldln2; fxch; fyl2x; ret
-  |1: ; fld1; fxch; fyl2x; ret
-  |2: ; cmp fpmop, 9; je >1; ja >2
-  |  fldlg2; fxch; fyl2x; ret
-  |1: ; fsin; ret
-  |2: ; cmp fpmop, 11; je >1; ja >9
-  |   fcos; ret
-  |1: ; fptan; fpop; ret
-  |.endif
-  |9: ; int3					// Bad fpm.
-  |.endif
-  |
-  |// Callable from C: double lj_vm_foldarith(double x, double y, int op)
-  |// Compute x op y for basic arithmetic operators (+ - * / % ^ and unary -)
-  |// and basic math functions. ORDER ARITH
-  |->vm_foldarith:
-  |.if X64
-  |
-  |  .if X64WIN
-  |    .define foldop, CARG3d
-  |  .else
-  |    .define foldop, CARG1d
-  |  .endif
-  |  cmp foldop, 1; je >1; ja >2
-  |  addsd xmm0, xmm1; ret
-  |1: ; subsd xmm0, xmm1; ret
-  |2: ; cmp foldop, 3; je >1; ja >2
-  |  mulsd xmm0, xmm1; ret
-  |1: ; divsd xmm0, xmm1; ret
-  |2: ; cmp foldop, 5; jb ->vm_mod; je ->vm_pow_sse
-  |  cmp foldop, 7; je >1; ja >2
-  |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; ret
-  |1: ; sseconst_abs xmm1, RDa; andps xmm0, xmm1; ret
-  |2: ; cmp foldop, 9; ja >2
-  |.if X64WIN
-  |  movsd qword [rsp+8], xmm0	// Use scratch area.
-  |  movsd qword [rsp+16], xmm1
-  |  fld qword [rsp+8]
-  |  fld qword [rsp+16]
-  |.else
-  |  movsd qword [rsp-8], xmm0	// Use red zone.
-  |  movsd qword [rsp-16], xmm1
-  |  fld qword [rsp-8]
-  |  fld qword [rsp-16]
-  |.endif
-  |  je >1
-  |  fpatan
-  |7:
-  |.if X64WIN
-  |  fstp qword [rsp+8]		// Use scratch area.
-  |  movsd xmm0, qword [rsp+8]
-  |.else
-  |  fstp qword [rsp-8]		// Use red zone.
-  |  movsd xmm0, qword [rsp-8]
-  |.endif
-  |  ret
-  |1: ; fxch; fscale; fpop1; jmp <7
-  |2: ; cmp foldop, 11; je >1; ja >9
-  |  minsd xmm0, xmm1; ret
-  |1: ; maxsd xmm0, xmm1; ret
-  |9: ; int3				// Bad op.
-  |
-  |.else  // x86 calling convention.
-  |
-  |  .define foldop, eax
-  |  mov foldop, [esp+20]
-  |  movsd xmm0, qword [esp+4]
-  |  movsd xmm1, qword [esp+12]
-  |  cmp foldop, 1; je >1; ja >2
-  |  addsd xmm0, xmm1
-  |7:
-  |  movsd qword [esp+4], xmm0	// Overwrite callee-owned args.
-  |  fld qword [esp+4]
-  |  ret
-  |1: ; subsd xmm0, xmm1; jmp <7
-  |2: ; cmp foldop, 3; je >1; ja >2
-  |  mulsd xmm0, xmm1; jmp <7
-  |1: ; divsd xmm0, xmm1; jmp <7
-  |2: ; cmp foldop, 5
-  |  je >1; ja >2
-  |  call ->vm_mod; jmp <7
-  |1: ; pop edx; call ->vm_pow_sse; push edx; jmp <7  // Writes to scratch area.
-  |2: ; cmp foldop, 7; je >1; ja >2
-  |  sseconst_sign xmm1, RDa; xorps xmm0, xmm1; jmp <7
-  |1: ; sseconst_abs xmm1, RDa; andps xmm0, xmm1; jmp <7
-  |2: ; cmp foldop, 9; ja >2
-  |  fld qword [esp+4]		// Reload from stack
-  |  fld qword [esp+12]
-  |  je >1
-  |  fpatan; ret
-  |1: ; fxch; fscale; fpop1; ret
-  |2: ; cmp foldop, 11; je >1; ja >9
-  |  minsd xmm0, xmm1; jmp <7
-  |1: ; maxsd xmm0, xmm1; jmp <7
-  |9: ; int3				// Bad op.
-  |
-  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -4107,8 +3795,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_POW:
     |  ins_arithpre movsd, xmm1
-    |  call ->vm_pow_sse
+    |  mov RB, BASE
+    |.if not X64
+    |  movsd FPARG1, xmm0
+    |  movsd FPARG3, xmm1
+    |.endif
+    |  call extern pow
+    |  movzx RA, PC_RA
+    |  mov BASE, RB
+    |.if X64
     |  ins_arithpost
+    |.else
+    |  fstp qword [BASE+RA*8]
+    |.endif
     |  ins_next
     break;
 

@@ -169,18 +169,18 @@ typedef struct CCallInfo {
   _(FPMATH,	lj_vm_ceil,		1,   N, NUM, XA_FP) \
   _(FPMATH,	lj_vm_trunc,		1,   N, NUM, XA_FP) \
   _(FPMATH,	sqrt,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	exp,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	lj_vm_exp2,		1,   N, NUM, XA_FP) \
-  _(FPMATH,	log,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	lj_vm_log2,		1,   N, NUM, XA_FP) \
-  _(FPMATH,	log10,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	sin,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	cos,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	tan,			1,   N, NUM, XA_FP) \
-  _(FPMATH,	lj_vm_powi,		2,   N, NUM, XA_FP) \
-  _(FPMATH,	pow,			2,   N, NUM, XA2_FP) \
-  _(FPMATH,	atan2,			2,   N, NUM, XA2_FP) \
-  _(FPMATH,	ldexp,			2,   N, NUM, XA_FP) \
+  _(ANY,	exp,			1,   N, NUM, XA_FP) \
+  _(ANY,	lj_vm_exp2,		1,   N, NUM, XA_FP) \
+  _(ANY,	log,			1,   N, NUM, XA_FP) \
+  _(ANY,	lj_vm_log2,		1,   N, NUM, XA_FP) \
+  _(ANY,	log10,			1,   N, NUM, XA_FP) \
+  _(ANY,	sin,			1,   N, NUM, XA_FP) \
+  _(ANY,	cos,			1,   N, NUM, XA_FP) \
+  _(ANY,	tan,			1,   N, NUM, XA_FP) \
+  _(ANY,	lj_vm_powi,		2,   N, NUM, XA_FP) \
+  _(ANY,	pow,			2,   N, NUM, XA2_FP) \
+  _(ANY,	atan2,			2,   N, NUM, XA2_FP) \
+  _(ANY,	ldexp,			2,   N, NUM, XA_FP) \
   _(SOFTFP,	lj_vm_tobit,		2,   N, INT, 0) \
   _(SOFTFP,	softfp_add,		4,   N, NUM, 0) \
   _(SOFTFP,	softfp_sub,		4,   N, NUM, 0) \

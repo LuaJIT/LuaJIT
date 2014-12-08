@@ -426,11 +426,11 @@
 #define LJ_TARGET_UNALIGNED	0
 #endif
 
-/* Various workarounds for embedded operating systems. */
-#if (defined(__ANDROID__) && !defined(LJ_TARGET_X86ORX64)) || defined(__symbian__) || LJ_TARGET_XBOX360
+/* Various workarounds for embedded operating systems or weak C runtimes. */
+#if (defined(__ANDROID__) && !defined(LJ_TARGET_X86ORX64)) || defined(__symbian__) || LJ_TARGET_XBOX360 || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_LOG2
 #endif
-#if defined(__symbian__)
+#if defined(__symbian__) || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_EXP2
 #endif
 

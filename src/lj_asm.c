@@ -1262,9 +1262,6 @@ static void asm_call(ASMState *as, IRIns *ir)
 }
 
 #if !LJ_SOFTFP
-static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref);
-
-#if !LJ_TARGET_X86ORX64
 static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_pow];
@@ -1274,7 +1271,6 @@ static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
   asm_setupresult(as, ir, ci);
   asm_gencall(as, ci, args);
 }
-#endif
 
 static int asm_fpjoin_pow(ASMState *as, IRIns *ir)
 {
