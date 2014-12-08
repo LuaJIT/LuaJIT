@@ -179,6 +179,7 @@ static int build_code(BuildCtx *ctx)
   ctx->nreloc = 0;
 
   ctx->globnames = globnames;
+  ctx->extnames = extnames;
   ctx->relocsym = (const char **)malloc(NRELOCSYM*sizeof(const char *));
   ctx->nrelocsym = 0;
   for (i = 0; i < (int)NRELOCSYM; i++) relocmap[i] = -1;

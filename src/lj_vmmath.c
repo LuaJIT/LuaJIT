@@ -13,14 +13,16 @@
 #include "lj_ir.h"
 #include "lj_vm.h"
 
-/* -- Helper functions for generated machine code ------------------------- */
+/* -- Wrapper functions --------------------------------------------------- */
 
-#if LJ_TARGET_X86ORX64
-/* Wrapper functions to avoid linker issues on OSX. */
-LJ_FUNCA double lj_vm_sinh(double x) { return sinh(x); }
-LJ_FUNCA double lj_vm_cosh(double x) { return cosh(x); }
-LJ_FUNCA double lj_vm_tanh(double x) { return tanh(x); }
+#if LJ_TARGET_X86 && __ELF__ && __PIC__
+/* Wrapper functions to deal with the ELF/x86 PIC disaster. */
+LJ_FUNCA double lj_wrap_sinh(double x) { return sinh(x); }
+LJ_FUNCA double lj_wrap_cosh(double x) { return cosh(x); }
+LJ_FUNCA double lj_wrap_tanh(double x) { return tanh(x); }
 #endif
+
+/* -- Helper functions for generated machine code ------------------------- */
 
 #if !LJ_TARGET_X86ORX64
 double lj_vm_foldarith(double x, double y, int op)

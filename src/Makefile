@@ -439,7 +439,7 @@ BUILDVM_X= $(BUILDVM_T)
 HOST_O= $(MINILUA_O) $(BUILDVM_O)
 HOST_T= $(MINILUA_T) $(BUILDVM_T)
 
-LJVM_S= lj_vm.s
+LJVM_S= lj_vm.S
 LJVM_O= lj_vm.o
 LJVM_BOUT= $(LJVM_S)
 LJVM_MODE= elfasm
@@ -647,7 +647,7 @@ lj_folddef.h: $(BUILDVM_T) lj_opt_fold.c
 	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) -c -o $(@:.o=_dyn.o) $<
 	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) -c -o $@ $<
 
-%.o: %.s
+%.o: %.S
 	$(E) "ASM       $@"
 	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) -c -o $(@:.o=_dyn.o) $<
 	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) -c -o $@ $<

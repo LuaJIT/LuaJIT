@@ -51,8 +51,8 @@ static const char *const jccnames[] = {
   "js", "jns", "jpe", "jpo", "jl", "jge", "jle", "jg"
 };
 
-/* Emit relocation for the incredibly stupid OSX assembler. */
-static void emit_asm_reloc_mach(BuildCtx *ctx, uint8_t *cp, int n,
+/* Emit x86/x64 text relocations. */
+static void emit_asm_reloc_text(BuildCtx *ctx, uint8_t *cp, int n,
 				const char *sym)
 {
   const char *opname = NULL;
@@ -71,6 +71,20 @@ err:
     exit(1);
   }
   emit_asm_bytes(ctx, cp, n);
+  if (strncmp(sym+(*sym == '_'), LABEL_PREFIX, sizeof(LABEL_PREFIX)-1)) {
+    /* Various fixups for external symbols outside of our binary. */
+    if (ctx->mode == BUILD_elfasm) {
+      if (LJ_32)
+	fprintf(ctx->fp, "#if __PIC__\n\t%s lj_wrap_%s\n#else\n", opname, sym);
+      fprintf(ctx->fp, "\t%s %s@PLT\n", opname, sym);
+      if (LJ_32)
+	fprintf(ctx->fp, "#endif\n");
+      return;
+    } else if (LJ_32 && ctx->mode == BUILD_machasm) {
+      fprintf(ctx->fp, "\t%s L%s$stub\n", opname, sym);
+      return;
+    }
+  }
   fprintf(ctx->fp, "\t%s %s\n", opname, sym);
 }
 #else
@@ -254,8 +268,9 @@ void emit_asm(BuildCtx *ctx)
       BuildReloc *r = &ctx->reloc[rel];
       int n = r->ofs - ofs;
 #if LJ_TARGET_X86ORX64
-      if (ctx->mode == BUILD_machasm && r->type != 0) {
-	emit_asm_reloc_mach(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
+      if (r->type != 0 &&
+	  (ctx->mode == BUILD_elfasm || ctx->mode == BUILD_machasm)) {
+	emit_asm_reloc_text(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
       } else {
 	emit_asm_bytes(ctx, ctx->code+ofs, n);
 	emit_asm_reloc(ctx, r->type, ctx->relocsym[r->sym]);

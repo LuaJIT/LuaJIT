@@ -2084,7 +2084,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movsd FPARG1, xmm0
   |.endif
   |  mov RB, BASE
-  |  call extern lj_vm_ .. func
+  |  call extern func
   |  mov BASE, RB
   |.if X64
   |  jmp ->fff_resxmm0
@@ -5962,15 +5962,21 @@ static void emit_asm_debug(BuildCtx *ctx)
 	  "LEFDEY:\n\n", fcsize);
     }
 #endif
-#if LJ_64
-    fprintf(ctx->fp, "\t.subsections_via_symbols\n");
-#else
+#if !LJ_64
     fprintf(ctx->fp,
       "\t.non_lazy_symbol_pointer\n"
       "L_lj_err_unwind_dwarf$non_lazy_ptr:\n"
       ".indirect_symbol _lj_err_unwind_dwarf\n"
-      ".long 0\n");
+      ".long 0\n\n");
+    fprintf(ctx->fp, "\t.section __IMPORT,__jump_table,symbol_stubs,pure_instructions+self_modifying_code,5\n");
+    {
+      const char *const *xn;
+      for (xn = ctx->extnames; *xn; xn++)
+	if (strncmp(*xn, LABEL_PREFIX, sizeof(LABEL_PREFIX)-1))
+	  fprintf(ctx->fp, "L_%s$stub:\n\t.indirect_symbol _%s\n\t.ascii \"\\364\\364\\364\\364\\364\"\n", *xn, *xn);
+    }
 #endif
+    fprintf(ctx->fp, ".subsections_via_symbols\n");
     }
     break;
   default:  /* Difficult for other modes. */
