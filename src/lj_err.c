@@ -499,8 +499,7 @@ static ptrdiff_t finderrfunc(lua_State *L)
 {
   cTValue *frame = L->base-1, *bot = tvref(L->stack);
   void *cf = L->cframe;
-  while (frame > bot) {
-    lua_assert(cf != NULL);
+  while (frame > bot && cf) {
     while (cframe_nres(cframe_raw(cf)) < 0) {  /* cframe without frame? */
       if (frame >= restorestack(L, -cframe_nres(cf)))
 	break;
