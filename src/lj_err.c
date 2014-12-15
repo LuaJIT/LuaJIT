@@ -114,9 +114,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       frame = frame_prevl(frame);
       break;
     case FRAME_C:  /* C frame. */
-#if LJ_HASFFI
     unwind_c:
-#endif
 #if LJ_UNWIND_EXT
       if (errcode) {
 	L->base = frame_prevd(frame) + 1;
@@ -150,10 +148,8 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       }
       return cf;
     case FRAME_CONT:  /* Continuation frame. */
-#if LJ_HASFFI
-      if ((frame-1)->u32.lo == LJ_CONT_FFI_CALLBACK)
+      if (frame_iscont_fficb(frame))
 	goto unwind_c;
-#endif
     case FRAME_VARG:  /* Vararg frame. */
       frame = frame_prevd(frame);
       break;
@@ -522,10 +518,8 @@ static ptrdiff_t finderrfunc(lua_State *L)
       frame = frame_prevd(frame);
       break;
     case FRAME_CONT:
-#if LJ_HASFFI
-      if ((frame-1)->u32.lo == LJ_CONT_FFI_CALLBACK)
+      if (frame_iscont_fficb(frame))
 	cf = cframe_prev(cf);
-#endif
       frame = frame_prevd(frame);
       break;
     case FRAME_CP:
@@ -652,13 +646,10 @@ LJ_NOINLINE void lj_err_callermsg(lua_State *L, const char *msg)
   if (frame_islua(frame)) {
     pframe = frame_prevl(frame);
   } else if (frame_iscont(frame)) {
-#if LJ_HASFFI
-    if ((frame-1)->u32.lo == LJ_CONT_FFI_CALLBACK) {
+    if (frame_iscont_fficb(frame)) {
       pframe = frame;
       frame = NULL;
-    } else
-#endif
-    {
+    } else {
       pframe = frame_prevd(frame);
 #if LJ_HASFFI
       /* Remove frame for FFI metamethods. */

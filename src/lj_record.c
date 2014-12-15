@@ -1627,7 +1627,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	if (nvararg >= nresults)
 	  emitir(IRTGI(IR_GE), fr, lj_ir_kint(J, frofs+8*(int32_t)nresults));
 	else
-	  emitir(IRTGI(IR_EQ), fr, lj_ir_kint(J, frame_ftsz(J->L->base-1)));
+	  emitir(IRTGI(IR_EQ), fr,
+		 lj_ir_kint(J, (int32_t)frame_ftsz(J->L->base-1)));
 	vbase = emitir(IRTI(IR_SUB), REF_BASE, fr);
 	vbase = emitir(IRT(IR_ADD, IRT_P32), vbase, lj_ir_kint(J, frofs-8));
 	for (i = 0; i < nload; i++) {

@@ -432,7 +432,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   o->u32.hi = rid;  /* Return type. x86: +(spadj<<16). */
   o++;
   setframe_gc(o, obj2gco(fn));
-  setframe_ftsz(o, (int)((char *)(o+1) - (char *)L->base) + FRAME_CONT);
+  setframe_ftsz(o, ((char *)(o+1) - (char *)L->base) + FRAME_CONT);
   L->top = L->base = ++o;
   if (!ct)
     lj_err_caller(cts->L, LJ_ERR_FFI_BADCBACK);

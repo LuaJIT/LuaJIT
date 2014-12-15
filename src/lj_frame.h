@@ -22,8 +22,11 @@ enum {
 
 /* Macros to access and modify Lua frames. */
 #define frame_gc(f)		(gcref((f)->fr.func))
-#define frame_func(f)		(&frame_gc(f)->fn)
-#define frame_ftsz(f)		((f)->fr.tp.ftsz)
+#define frame_ftsz(f)		((ptrdiff_t)(f)->fr.tp.ftsz)
+#define frame_pc(f)		(mref((f)->fr.tp.pcr, const BCIns))
+#define setframe_gc(f, p)	(setgcref((f)->fr.func, (p)))
+#define setframe_ftsz(f, sz)	((f)->fr.tp.ftsz = (int32_t)(sz))
+#define setframe_pc(f, pc)	(setmref((f)->fr.tp.pcr, (pc)))
 
 #define frame_type(f)		(frame_ftsz(f) & FRAME_TYPE)
 #define frame_typep(f)		(frame_ftsz(f) & FRAME_TYPEP)
@@ -33,8 +36,14 @@ enum {
 #define frame_isvarg(f)		(frame_typep(f) == FRAME_VARG)
 #define frame_ispcall(f)	((frame_ftsz(f) & 6) == FRAME_PCALL)
 
-#define frame_pc(f)		(mref((f)->fr.tp.pcr, const BCIns))
+#define frame_func(f)		(&frame_gc(f)->fn)
+#define frame_delta(f)		(frame_ftsz(f) >> 3)
+#define frame_sized(f)		(frame_ftsz(f) & ~FRAME_TYPEP)
+
+enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
+
 #define frame_contpc(f)		(frame_pc((f)-1))
+#define frame_contv(f)		(((f)-1)->u32.lo)
 #if LJ_64
 #define frame_contf(f) \
   ((ASMFunction)(void *)((intptr_t)lj_vm_asm_begin + \
@@ -42,17 +51,13 @@ enum {
 #else
 #define frame_contf(f)		((ASMFunction)gcrefp(((f)-1)->gcr, void))
 #endif
-#define frame_delta(f)		(frame_ftsz(f) >> 3)
-#define frame_sized(f)		(frame_ftsz(f) & ~FRAME_TYPEP)
+#define frame_iscont_fficb(f) \
+  (LJ_HASFFI && frame_contv(f) == LJ_CONT_FFI_CALLBACK)
 
 #define frame_prevl(f)		((f) - (1+bc_a(frame_pc(f)[-1])))
 #define frame_prevd(f)		((TValue *)((char *)(f) - frame_sized(f)))
 #define frame_prev(f)		(frame_islua(f)?frame_prevl(f):frame_prevd(f))
 /* Note: this macro does not skip over FRAME_VARG. */
-
-#define setframe_pc(f, pc)	(setmref((f)->fr.tp.pcr, (pc)))
-#define setframe_ftsz(f, sz)	((f)->fr.tp.ftsz = (sz))
-#define setframe_gc(f, p)	(setgcref((f)->fr.func, (p)))
 
 /* -- C stack frame ------------------------------------------------------- */
 

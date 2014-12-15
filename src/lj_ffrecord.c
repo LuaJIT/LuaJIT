@@ -109,7 +109,7 @@ static void recff_stitch(jit_State *J)
 
   /* Move func + args up in Lua stack and insert continuation. */
   memmove(&base[1], &base[-1], sizeof(TValue)*(J->maxslot+1));
-  setframe_ftsz(base+1, (int)((char *)(base+1) - (char *)pframe) + FRAME_CONT);
+  setframe_ftsz(base+1, ((char *)(base+1) - (char *)pframe) + FRAME_CONT);
   setcont(base, cont);
   setframe_pc(base, pc);
   if (LJ_DUALNUM) setintV(base-1, traceno); else base[-1].u64 = traceno;

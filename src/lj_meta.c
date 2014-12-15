@@ -84,7 +84,7 @@ int lj_meta_tailcall(lua_State *L, cTValue *tv)
   top->u32.lo = LJ_CONT_TAILCALL;
   setframe_pc(top, pc);
   setframe_gc(top+1, obj2gco(L));  /* Dummy frame object. */
-  setframe_ftsz(top+1, (int)((char *)(top+2) - (char *)base) + FRAME_CONT);
+  setframe_ftsz(top+1, ((char *)(top+2) - (char *)base) + FRAME_CONT);
   L->base = L->top = top+2;
   /*
   ** before:   [old_mo|PC]    [... ...]

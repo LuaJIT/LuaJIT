@@ -796,7 +796,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
   SnapEntry *flinks = &T->snapmap[snap_nextofs(T, snap)-1];
-  int32_t ftsz0;
+  ptrdiff_t ftsz0;
   TValue *frame;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
   const BCIns *pc = snap_pc(map[nent]);
@@ -838,7 +838,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	o->u32.hi = tmp.u32.lo;
       } else if ((sn & (SNAP_CONT|SNAP_FRAME))) {
 	/* Overwrite tag with frame link. */
-	o->fr.tp.ftsz = snap_slot(sn) != 0 ? (int32_t)*flinks-- : ftsz0;
+	setframe_ftsz(o, snap_slot(sn) != 0 ? (int32_t)*flinks-- : ftsz0);
 	L->base = o+1;
       }
     }
