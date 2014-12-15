@@ -1793,7 +1793,7 @@ void lj_record_ins(jit_State *J)
   if (LJ_UNLIKELY(J->postproc != LJ_POST_NONE)) {
     switch (J->postproc) {
     case LJ_POST_FIXCOMP:  /* Fixup comparison. */
-      pc = frame_pc(&J2G(J)->tmptv);
+      pc = (const BCIns *)(uintptr_t)J2G(J)->tmptv.u64;
       rec_comp_fixup(J, pc, (!tvistruecond(&J2G(J)->tmptv2) ^ (bc_op(*pc)&1)));
       /* fallthrough */
     case LJ_POST_FIXGUARD:  /* Fixup and emit pending guard. */
