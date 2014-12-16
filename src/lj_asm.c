@@ -2088,21 +2088,26 @@ static void asm_setup_regsp(ASMState *as)
       if (inloop)
 	as->modset = RSET_SCRATCH;
       break;
-#if !LJ_TARGET_X86ORX64 && !LJ_SOFTFP
-    case IR_ATAN2: case IR_LDEXP:
+#if !LJ_SOFTFP
+    case IR_ATAN2:
+#if LJ_TARGET_X86
+      if (as->evenspill < 4)  /* Leave room to call atan2(). */
+	as->evenspill = 4;
+#endif
+#if !LJ_TARGET_X86ORX64
+    case IR_LDEXP:
+#endif
 #endif
     case IR_POW:
       if (!LJ_SOFTFP && irt_isnum(ir->t)) {
-#if LJ_TARGET_X86ORX64
-	ir->prev = REGSP_HINT(RID_XMM0);
-	if (inloop)
-	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
-#else
-	ir->prev = REGSP_HINT(RID_FPRET);
 	if (inloop)
 	  as->modset |= RSET_SCRATCH;
-#endif
+#if LJ_TARGET_X86
+	break;
+#else
+	ir->prev = REGSP_HINT(RID_FPRET);
 	continue;
+#endif
       }
       /* fallthrough for integer POW */
     case IR_DIV: case IR_MOD:
@@ -2115,26 +2120,25 @@ static void asm_setup_regsp(ASMState *as)
       break;
     case IR_FPMATH:
 #if LJ_TARGET_X86ORX64
-      if (ir->op2 == IRFPM_EXP2) {  /* May be joined to pow. */
-	ir->prev = REGSP_HINT(RID_XMM0);
-#if !LJ_64
-	if (as->evenspill < 4)  /* Leave room for 16 byte scratch area. */
+      if (ir->op2 <= IRFPM_TRUNC) {
+	if (!(as->flags & JIT_F_SSE4_1)) {
+	  ir->prev = REGSP_HINT(RID_XMM0);
+	  if (inloop)
+	    as->modset |= RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
+	  continue;
+	}
+	break;
+      } else if (ir->op2 == IRFPM_EXP2 && !LJ_64) {
+	if (as->evenspill < 4)  /* Leave room to call pow(). */
 	  as->evenspill = 4;
-#endif
-	if (inloop)
-	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM2+1)|RID2RSET(RID_EAX);
-	continue;
-      } else if (ir->op2 <= IRFPM_TRUNC && !(as->flags & JIT_F_SSE4_1)) {
-	ir->prev = REGSP_HINT(RID_XMM0);
-	if (inloop)
-	  as->modset |= RSET_RANGE(RID_XMM0, RID_XMM3+1)|RID2RSET(RID_EAX);
-	continue;
       }
+#endif
+      if (inloop)
+	as->modset |= RSET_SCRATCH;
+#if LJ_TARGET_X86
       break;
 #else
       ir->prev = REGSP_HINT(RID_FPRET);
-      if (inloop)
-	as->modset |= RSET_SCRATCH;
       continue;
 #endif
 #if LJ_TARGET_X86ORX64
