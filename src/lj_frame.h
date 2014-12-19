@@ -24,7 +24,7 @@ enum {
 #define frame_gc(f)		(gcref((f)->fr.func))
 #define frame_ftsz(f)		((ptrdiff_t)(f)->fr.tp.ftsz)
 #define frame_pc(f)		(mref((f)->fr.tp.pcr, const BCIns))
-#define setframe_gc(f, p)	(setgcref((f)->fr.func, (p)))
+#define setframe_gc(f, p, tp)	(setgcref((f)->fr.func, (p)), UNUSED(tp))
 #define setframe_ftsz(f, sz)	((f)->fr.tp.ftsz = (int32_t)(sz))
 #define setframe_pc(f, pc)	(setmref((f)->fr.tp.pcr, (pc)))
 

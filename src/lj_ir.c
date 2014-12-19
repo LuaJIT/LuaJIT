@@ -392,7 +392,7 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   UNUSED(L);
   lua_assert(ir->o != IR_KSLOT);  /* Common mistake. */
   switch (ir->o) {
-  case IR_KPRI: setitype(tv, irt_toitype(ir->t)); break;
+  case IR_KPRI: setpriV(tv, irt_toitype(ir->t)); break;
   case IR_KINT: setintV(tv, ir->i); break;
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
   case IR_KPTR: case IR_KKPTR: case IR_KNULL:

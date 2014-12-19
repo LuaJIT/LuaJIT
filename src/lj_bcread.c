@@ -192,7 +192,7 @@ static void bcread_ktabk(LexState *ls, TValue *o)
     o->u32.hi = bcread_uleb128(ls);
   } else {
     lua_assert(tp <= BCDUMP_KTAB_TRUE);
-    setitype(o, ~tp);
+    setpriV(o, ~tp);
   }
 }
 

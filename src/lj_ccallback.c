@@ -411,6 +411,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   int gcsteps = 0;
   CType *ct;
   GCfunc *fn;
+  int fntp;
   MSize ngpr = 0, nsp = 0, maxgpr = CCALL_NARG_GPR;
 #if CCALL_NARG_FPR
   MSize nfpr = 0;
@@ -423,15 +424,17 @@ static void callback_conv_args(CTState *cts, lua_State *L)
     ct = ctype_get(cts, id);
     rid = ctype_cid(ct->info);
     fn = funcV(lj_tab_getint(cts->miscmap, (int32_t)slot));
+    fntp = LJ_TFUNC;
   } else {  /* Must set up frame first, before throwing the error. */
     ct = NULL;
     rid = 0;
     fn = (GCfunc *)L;
+    fntp = LJ_TTHREAD;
   }
   o->u32.lo = LJ_CONT_FFI_CALLBACK;  /* Continuation returns from callback. */
   o->u32.hi = rid;  /* Return type. x86: +(spadj<<16). */
   o++;
-  setframe_gc(o, obj2gco(fn));
+  setframe_gc(o, obj2gco(fn), fntp);
   setframe_ftsz(o, ((char *)(o+1) - (char *)L->base) + FRAME_CONT);
   L->top = L->base = ++o;
   if (!ct)

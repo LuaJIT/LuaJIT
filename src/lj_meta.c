@@ -83,7 +83,7 @@ int lj_meta_tailcall(lua_State *L, cTValue *tv)
   copyTV(L, base-1, tv);  /* Replace frame with new object. */
   top->u32.lo = LJ_CONT_TAILCALL;
   setframe_pc(top, pc);
-  setframe_gc(top+1, obj2gco(L));  /* Dummy frame object. */
+  setframe_gc(top+1, obj2gco(L), LJ_TTHREAD);  /* Dummy frame object. */
   setframe_ftsz(top+1, ((char *)(top+2) - (char *)base) + FRAME_CONT);
   L->base = L->top = top+2;
   /*
@@ -355,7 +355,7 @@ TValue * LJ_FASTCALL lj_meta_equal_cd(lua_State *L, BCIns ins)
     o2 = &mref(curr_proto(L)->k, cTValue)[bc_d(ins)];
   } else {
     lua_assert(op == BC_ISEQP);
-    setitype(&tv, ~bc_d(ins));
+    setpriV(&tv, ~bc_d(ins));
     o2 = &tv;
   }
   mo = lj_meta_lookup(L, o1mm, MM_eq);

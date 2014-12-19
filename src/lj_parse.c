@@ -1684,10 +1684,9 @@ static void expr_bracket(LexState *ls, ExpDesc *v)
 static void expr_kvalue(TValue *v, ExpDesc *e)
 {
   if (e->k <= VKTRUE) {
-    setitype(v, ~(uint32_t)e->k);
+    setpriV(v, ~(uint32_t)e->k);
   } else if (e->k == VKSTR) {
-    setgcref(v->gcr, obj2gco(e->u.sval));
-    setitype(v, LJ_TSTR);
+    setgcVraw(v, obj2gco(e->u.sval), LJ_TSTR);
   } else {
     lua_assert(tvisnumber(expr_numtv(e)));
     *v = *expr_numtv(e);

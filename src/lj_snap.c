@@ -613,8 +613,7 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
       o->u64 = *(uint64_t *)sps;
     } else {
       lua_assert(!irt_ispri(t));  /* PRI refs never have a spill slot. */
-      setgcrefi(o->gcr, *sps);
-      setitype(o, irt_toitype(t));
+      setgcV(J->L, o, (GCobj *)(uintptr_t)*(GCSize *)sps, irt_toitype(t));
     }
   } else {  /* Restore from register. */
     Reg r = regsp_reg(rs);
@@ -632,10 +631,10 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
     } else if (LJ_64 && irt_islightud(t)) {
       /* 64 bit lightuserdata which may escape already has the tag bits. */
       o->u64 = ex->gpr[r-RID_MIN_GPR];
+    } else if (irt_ispri(t)) {
+      setpriV(o, irt_toitype(t));
     } else {
-      if (!irt_ispri(t))
-	setgcrefi(o->gcr, ex->gpr[r-RID_MIN_GPR]);
-      setitype(o, irt_toitype(t));
+      setgcV(J->L, o, (GCobj *)ex->gpr[r-RID_MIN_GPR], irt_toitype(t));
     }
   }
 }

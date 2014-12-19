@@ -1891,7 +1891,7 @@ void lj_record_ins(jit_State *J)
   switch (bcmode_c(op)) {
   case BCMvar:
     copyTV(J->L, rcv, &lbase[rc]); ix.key = rc = getslot(J, rc); break;
-  case BCMpri: setitype(rcv, ~rc); ix.key = rc = TREF_PRI(IRT_NIL+rc); break;
+  case BCMpri: setpriV(rcv, ~rc); ix.key = rc = TREF_PRI(IRT_NIL+rc); break;
   case BCMnum: { cTValue *tv = proto_knumtv(J->pt, rc);
     copyTV(J->L, rcv, tv); ix.key = rc = tvisint(tv) ? lj_ir_kint(J, intV(tv)) :
     lj_ir_knumint(J, numV(tv)); } break;

@@ -43,12 +43,10 @@ typedef struct GCRef {
 #define gcref(r)	((GCobj *)(uintptr_t)(r).gcptr32)
 #define gcrefp(r, t)	((t *)(void *)(uintptr_t)(r).gcptr32)
 #define gcrefu(r)	((r).gcptr32)
-#define gcrefi(r)	((int32_t)(r).gcptr32)
 #define gcrefeq(r1, r2)	((r1).gcptr32 == (r2).gcptr32)
 #define gcnext(gc)	(gcref((gc)->gch.nextgc))
 
 #define setgcref(r, gc)	((r).gcptr32 = (uint32_t)(uintptr_t)&(gc)->gch)
-#define setgcrefi(r, i)	((r).gcptr32 = (uint32_t)(i))
 #define setgcrefp(r, p)	((r).gcptr32 = (uint32_t)(uintptr_t)(p))
 #define setgcrefnull(r)	((r).gcptr32 = 0)
 #define setgcrefr(r, v)	((r).gcptr32 = (v).gcptr32)
@@ -720,6 +718,7 @@ typedef union GCobj {
 #define setitype(o, i)		((o)->it = (i))
 #define setnilV(o)		((o)->it = LJ_TNIL)
 #define setboolV(o, x)		((o)->it = LJ_TFALSE-(uint32_t)(x))
+#define setpriV(o, i)		(setitype((o), (i)))
 
 static LJ_AINLINE void setlightudV(TValue *o, void *p)
 {
@@ -744,9 +743,14 @@ static LJ_AINLINE void setlightudV(TValue *o, void *p)
   UNUSED(L), lua_assert(!tvisgcv(o) || \
   ((~itype(o) == gcval(o)->gch.gct) && !isdead(G(L), gcval(o))))
 
-static LJ_AINLINE void setgcV(lua_State *L, TValue *o, GCobj *v, uint32_t itype)
+static LJ_AINLINE void setgcVraw(TValue *o, GCobj *v, uint32_t itype)
 {
-  setgcref(o->gcr, v); setitype(o, itype); tvchecklive(L, o);
+  setgcref(o->gcr, v); setitype(o, itype);
+}
+
+static LJ_AINLINE void setgcV(lua_State *L, TValue *o, GCobj *v, uint32_t it)
+{
+  setgcVraw(o, v, it); tvchecklive(L, o);
 }
 
 #define define_setV(name, type, tag) \
