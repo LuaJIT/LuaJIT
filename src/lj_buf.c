@@ -31,7 +31,7 @@ static void buf_grow(SBuf *sb, MSize sz)
 LJ_NOINLINE char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz)
 {
   lua_assert(sz > sbufsz(sb));
-  if (LJ_UNLIKELY(sz > LJ_MAX_MEM))
+  if (LJ_UNLIKELY(sz > LJ_MAX_BUF))
     lj_err_mem(sbufL(sb));
   buf_grow(sb, sz);
   return sbufB(sb);
@@ -41,7 +41,7 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
 {
   MSize len = sbuflen(sb);
   lua_assert(sz > sbufleft(sb));
-  if (LJ_UNLIKELY(sz > LJ_MAX_MEM || len + sz > LJ_MAX_MEM))
+  if (LJ_UNLIKELY(sz > LJ_MAX_BUF || len + sz > LJ_MAX_BUF))
     lj_err_mem(sbufL(sb));
   buf_grow(sb, len + sz);
   return sbufP(sb);
@@ -178,7 +178,7 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
       char *p;
       if (!o) {
       badtype:  /* Error: bad element type. */
-	setsbufP(sb, (intptr_t)i);  /* Store failing index. */
+	setsbufP(sb, (void *)(intptr_t)i);  /* Store failing index. */
 	return NULL;
       } else if (tvisstr(o)) {
 	MSize len = strV(o)->len;

@@ -15,8 +15,9 @@
 
 /* -- Memory references (32 bit address space) ---------------------------- */
 
-/* Memory size. */
+/* Memory and GC object sizes. */
 typedef uint32_t MSize;
+typedef uint32_t GCSize;
 
 /* Memory reference */
 typedef struct MRef {
@@ -490,8 +491,8 @@ typedef enum {
 #define mmname_str(g, mm)	(strref((g)->gcroot[GCROOT_MMNAME+(mm)]))
 
 typedef struct GCState {
-  MSize total;		/* Memory currently allocated. */
-  MSize threshold;	/* Memory threshold. */
+  GCSize total;		/* Memory currently allocated. */
+  GCSize threshold;	/* Memory threshold. */
   uint8_t currentwhite;	/* Current white color. */
   uint8_t state;	/* GC state. */
   uint8_t nocdatafin;	/* No cdata finalizer called. */
@@ -503,9 +504,9 @@ typedef struct GCState {
   GCRef grayagain;	/* List of objects for atomic traversal. */
   GCRef weak;		/* List of weak tables (to be cleared). */
   GCRef mmudata;	/* List of userdata (to be finalized). */
+  GCSize debt;		/* Debt (how much GC is behind schedule). */
+  GCSize estimate;	/* Estimate of memory actually in use. */
   MSize stepmul;	/* Incremental GC step granularity. */
-  MSize debt;		/* Debt (how much GC is behind schedule). */
-  MSize estimate;	/* Estimate of memory actually in use. */
   MSize pause;		/* Pause between successive GC cycles. */
 } GCState;
 

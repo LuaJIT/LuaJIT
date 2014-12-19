@@ -253,7 +253,7 @@ TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
-  lua_assert(checkptr32(tv));
+  lua_assert(checkptrGC(tv));
   setmref(ir->ptr, tv);
   ir->t.irt = t;
   ir->o = op;

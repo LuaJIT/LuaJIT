@@ -48,7 +48,7 @@ static LJ_NOINLINE void bcread_error(LexState *ls, ErrMsg em)
 static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 {
   lua_assert(len != 0);
-  if (len > LJ_MAX_MEM || ls->c < 0)
+  if (len > LJ_MAX_BUF || ls->c < 0)
     bcread_error(ls, LJ_ERR_BCBAD);
   do {
     const char *buf;

@@ -46,10 +46,12 @@ typedef unsigned int uintptr_t;
 #include <stdlib.h>
 
 /* Various VM limits. */
-#define LJ_MAX_MEM	0x7fffff00	/* Max. total memory allocation. */
+#define LJ_MAX_MEM32	0x7fffff00	/* Max. 32 bit memory allocation. */
+#define LJ_MAX_MEM	LJ_MAX_MEM32	/* Max. total memory allocation. */
 #define LJ_MAX_ALLOC	LJ_MAX_MEM	/* Max. individual allocation length. */
-#define LJ_MAX_STR	LJ_MAX_MEM	/* Max. string length. */
-#define LJ_MAX_UDATA	LJ_MAX_MEM	/* Max. userdata length. */
+#define LJ_MAX_STR	LJ_MAX_MEM32	/* Max. string length. */
+#define LJ_MAX_BUF	LJ_MAX_MEM32	/* Max. buffer length. */
+#define LJ_MAX_UDATA	LJ_MAX_MEM32	/* Max. userdata length. */
 
 #define LJ_MAX_STRTAB	(1<<26)		/* Max. string table size. */
 #define LJ_MAX_HBITS	26		/* Max. hash bits. */
@@ -57,7 +59,7 @@ typedef unsigned int uintptr_t;
 #define LJ_MAX_ASIZE	((1<<(LJ_MAX_ABITS-1))+1)  /* Max. array part size. */
 #define LJ_MAX_COLOSIZE	16		/* Max. elems for colocated array. */
 
-#define LJ_MAX_LINE	LJ_MAX_MEM	/* Max. source code line number. */
+#define LJ_MAX_LINE	LJ_MAX_MEM32	/* Max. source code line number. */
 #define LJ_MAX_XLEVEL	200		/* Max. syntactic nesting level. */
 #define LJ_MAX_BCINS	(1<<26)		/* Max. # of bytecode instructions. */
 #define LJ_MAX_SLOTS	250		/* Max. # of slots in a Lua func. */
@@ -99,6 +101,7 @@ typedef unsigned int uintptr_t;
 #define checki32(x)	((x) == (int32_t)(x))
 #define checku32(x)	((x) == (uint32_t)(x))
 #define checkptr32(x)	((uintptr_t)(x) == (uint32_t)(uintptr_t)(x))
+#define checkptrGC(x)	(checkptr32(x))
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */
 #define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(-(int)(n)&(8*sizeof(x)-1))))

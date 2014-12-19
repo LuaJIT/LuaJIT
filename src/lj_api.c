@@ -1150,7 +1150,7 @@ LUA_API int lua_gc(lua_State *L, int what, int data)
     res = (int)(g->gc.total & 0x3ff);
     break;
   case LUA_GCSTEP: {
-    MSize a = (MSize)data << 10;
+    GCSize a = (GCSize)data << 10;
     g->gc.threshold = (a <= g->gc.total) ? (g->gc.total - a) : 0;
     while (g->gc.total >= g->gc.threshold)
       if (lj_gc_step(L) > 0) {
