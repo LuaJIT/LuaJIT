@@ -1617,7 +1617,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RD, 1+3
   |  jmp ->fff_res
   |
-  |.ffunc_1 ipairs_aux
+  |.ffunc_2 ipairs_aux
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
   |  cmp dword [BASE+12], LJ_TISNUM
   |.if DUALNUM
