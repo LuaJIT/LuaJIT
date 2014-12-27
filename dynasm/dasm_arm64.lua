@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "IMM", "IMM12", "IMM13W", "IMM13X", "IMML",
+  "REL_PC", "LABEL_PC", "IMM", "IMM6", "IMM12", "IMM13W", "IMM13X", "IMML",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -274,10 +274,10 @@ end
 
 local function parse_reg_base(expr)
   if expr == "sp" then return 0x3e0 end
-  local base = parse_reg(expr)
+  local base, tp = parse_reg(expr)
   if parse_reg_type ~= "x" then werror("bad register type") end
   parse_reg_type = false
-  return shl(base, 5)
+  return shl(base, 5), tp
 end
 
 local parse_ctx = {}
@@ -387,7 +387,8 @@ local function parse_imm6(imm)
     end
     werror("out of range immediate `"..imm.."'")
   else
-    werror("NYI imm6 action")
+    waction("IMM6", 0, imm)
+    return 0
   end
 end
 
@@ -460,12 +461,23 @@ local function parse_cond(expr, inv)
 end
 
 local function parse_load(params, nparams, n, op)
-  local pn = params[n]
-  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
-  if not p1 then werror("expected address operand") end
   if params[n+2] then werror("too many operands") end
+  local pn, p2 = params[n], params[n+1]
+  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
+  if not p1 then
+    if not p2 then
+      local reg, tailr = match(pn, "^([%w_:]+)%s*(.*)$")
+      if reg and tailr ~= "" then
+	local base, tp = parse_reg_base(reg)
+	if tp then
+	  waction("IMML", 0, format(tp.ctypefmt, tailr))
+	  return op + base
+	end
+      end
+    end
+    werror("expected address operand")
+  end
   local scale = shr(op, 30)
-  local p2 = params[n+1]
   if p2 then
     if wb == "!" then werror("bad use of '!'") end
     op = op + parse_reg_base(p1) + parse_imm(p2, 9, 12, 0, true) + 0x400
@@ -520,12 +532,23 @@ local function parse_load(params, nparams, n, op)
 end
 
 local function parse_load_pair(params, nparams, n, op)
-  local pn = params[n]
-  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
-  if not p1 then werror("expected address operand") end
   if params[n+2] then werror("too many operands") end
+  local pn, p2 = params[n], params[n+1]
   local scale = shr(op, 30) == 0 and 2 or 3
-  local p2 = params[n+1]
+  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
+  if not p1 then
+    if not p2 then
+      local reg, tailr = match(pn, "^([%w_:]+)%s*(.*)$")
+      if reg and tailr ~= "" then
+	local base, tp = parse_reg_base(reg)
+	if tp then
+	  waction("IMM", 32768+7*32+15+scale*1024, format(tp.ctypefmt, tailr))
+	  return op + base + 0x01000000
+	end
+      end
+    end
+    werror("expected address operand")
+  end
   if p2 then
     if wb == "!" then werror("bad use of '!'") end
     op = op + 0x00800000
@@ -724,7 +747,7 @@ map_op = {
 
   sxtb_2 = "13001c00DNw|93401c00DNx",
   sxth_2 = "13003c00DNw|93403c00DNx",
-  sxtw_2 = "93407c00DNx",
+  sxtw_2 = "93407c00DxNw",
   uxtb_2 = "53001c00DNw",
   uxth_2 = "53003c00DNw",
 
@@ -851,7 +874,7 @@ map_op = {
 }
 
 for cond,c in pairs(map_cond) do
-  map_op["b"..cond.."_1"] = tohex(0x54000000+c)
+  map_op["b"..cond.."_1"] = tohex(0x54000000+c).."B"
 end
 
 ------------------------------------------------------------------------------
@@ -957,13 +980,16 @@ function op_template(params, template, nparams)
   -- A single opcode needs a maximum of 3 positions.
   if secpos+3 > maxsecpos then wflush() end
   local pos = wpos()
-  local apos, spos = #actargs, secpos
+  local lpos, apos, spos = #actlist, #actargs, secpos
 
   local ok, err
   for t in gmatch(template, "[^|]+") do
     ok, err = pcall(parse_template, params, t, nparams, pos)
     if ok then return end
     secpos = spos
+    actlist[lpos+1] = nil
+    actlist[lpos+2] = nil
+    actlist[lpos+3] = nil
     actargs[apos+1] = nil
     actargs[apos+2] = nil
     actargs[apos+3] = nil
