@@ -929,13 +929,16 @@ map_op[".template__"] = function(params, template, nparams)
   -- A single opcode needs a maximum of 3 positions.
   if secpos+3 > maxsecpos then wflush() end
   local pos = wpos()
-  local apos, spos = #actargs, secpos
+  local lpos, apos, spos = #actlist, #actargs, secpos
 
   local ok, err
   for t in gmatch(template, "[^|]+") do
     ok, err = pcall(parse_template, params, t, nparams, pos)
     if ok then return end
     secpos = spos
+    actlist[lpos+1] = nil
+    actlist[lpos+2] = nil
+    actlist[lpos+3] = nil
     actargs[apos+1] = nil
     actargs[apos+2] = nil
     actargs[apos+3] = nil
