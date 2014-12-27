@@ -586,7 +586,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  stp BASE, L->top			// Save current top held in BASE (yes).
   |   mr SAVE0, RD
-  |  mr CARG2, TMP2
+  |  srwi CARG2, TMP2, 3
   |  mr CARG1, L
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |    lwz TMP2, SAVE_NRES
