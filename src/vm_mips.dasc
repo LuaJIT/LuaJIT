@@ -398,7 +398,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  load_got lj_state_growstack
   |   move MULTRES, RD
-  |  move CARG2, TMP2
+  |  srl CARG2, TMP2, 3
   |  call_intern lj_state_growstack	// (lua_State *L, int n)
   |.  move CARG1, L
   |    lw TMP2, SAVE_NRES
