@@ -3241,10 +3241,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    mvn RC, RC
     |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
     |    ldr STR:CARG3, [KBASE, RC, lsl #2]
-    |    mvn CARG4, #~LJ_TSTR
     |  ldrb RB, UPVAL:CARG2->marked
-    |   ldr CARG2, UPVAL:CARG2->v
     |     ldrb RC, UPVAL:CARG2->closed
+    |   ldr CARG2, UPVAL:CARG2->v
+    |    mvn CARG4, #~LJ_TSTR
     |  tst RB, #LJ_GC_BLACK		// isblack(uv)
     |    ldrb RB, STR:CARG3->marked
     |   strd CARG34, [CARG2]
