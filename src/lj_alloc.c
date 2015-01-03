@@ -77,7 +77,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#if LJ_64
+#if LJ_64 && !LJ_GC64
 
 /* Undocumented, but hey, that's what we all love so much about Windows. */
 typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG zbits,
@@ -174,8 +174,10 @@ static LJ_AINLINE int CALL_MUNMAP(void *ptr, size_t size)
 #endif
 #define MMAP_FLAGS		(MAP_PRIVATE|MAP_ANONYMOUS)
 
-#if LJ_64
-/* 64 bit mode needs special support for allocating memory in the lower 2GB. */
+#if LJ_64 && !LJ_GC64
+/* 64 bit mode with 32 bit pointers needs special support for allocating
+** memory in the lower 2GB.
+*/
 
 #if defined(MAP_32BIT)
 
@@ -258,7 +260,7 @@ static LJ_AINLINE void *CALL_MMAP(size_t size)
 
 #else
 
-/* 32 bit mode is easy. */
+/* 32 bit mode and GC64 mode is easy. */
 static LJ_AINLINE void *CALL_MMAP(size_t size)
 {
   int olderr = errno;
@@ -294,7 +296,7 @@ static LJ_AINLINE void *CALL_MREMAP_(void *ptr, size_t osz, size_t nsz,
 #define CALL_MREMAP(addr, osz, nsz, mv) CALL_MREMAP_((addr), (osz), (nsz), (mv))
 #define CALL_MREMAP_NOMOVE	0
 #define CALL_MREMAP_MAYMOVE	1
-#if LJ_64
+#if LJ_64 && !LJ_GC64
 #define CALL_MREMAP_MV		CALL_MREMAP_NOMOVE
 #else
 #define CALL_MREMAP_MV		CALL_MREMAP_MAYMOVE

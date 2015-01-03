@@ -365,11 +365,22 @@
 #endif
 #endif
 
+/* 64 bit GC references. */
+#if LJ_TARGET_GC64
+#define LJ_GC64			1
+#else
+#define LJ_GC64			0
+#endif
+
 /* 2-slot frame info. */
+#if LJ_GC64
+#define LJ_FR2			1
+#else
 #define LJ_FR2			0
+#endif
 
 /* Disable or enable the JIT compiler. */
-#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT) || LJ_FR2
+#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT) || LJ_FR2 || LJ_GC64
 #define LJ_HASJIT		0
 #else
 #define LJ_HASJIT		1

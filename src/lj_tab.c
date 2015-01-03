@@ -29,7 +29,12 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 #define hashlohi(t, lo, hi)	hashmask((t), hashrot((lo), (hi)))
 #define hashnum(t, o)		hashlohi((t), (o)->u32.lo, ((o)->u32.hi << 1))
 #define hashptr(t, p)		hashlohi((t), u32ptr(p), u32ptr(p) + HASH_BIAS)
+#if LJ_GC64
+#define hashgcref(t, r) \
+  hashlohi((t), (uint32_t)gcrefu(r), (uint32_t)(gcrefu(r) >> 32))
+#else
 #define hashgcref(t, r)		hashlohi((t), gcrefu(r), gcrefu(r) + HASH_BIAS)
+#endif
 
 /* Hash an arbitrary key and return its anchor position in the hash table. */
 static Node *hashkey(const GCtab *t, cTValue *key)
@@ -58,8 +63,8 @@ static LJ_AINLINE void newhpart(lua_State *L, GCtab *t, uint32_t hbits)
     lj_err_msg(L, LJ_ERR_TABOV);
   hsize = 1u << hbits;
   node = lj_mem_newvec(L, hsize, Node);
-  setmref(node->freetop, &node[hsize]);
   setmref(t->node, node);
+  setfreetop(t, node, &node[hsize]);
   t->hmask = hsize-1;
 }
 
@@ -98,6 +103,7 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
   GCtab *t;
   /* First try to colocate the array part. */
   if (LJ_MAX_COLOSIZE != 0 && asize > 0 && asize <= LJ_MAX_COLOSIZE) {
+    Node *nilnode;
     lua_assert((sizeof(GCtab) & 7) == 0);
     t = (GCtab *)lj_mem_newgco(L, sizetabcolo(asize));
     t->gct = ~LJ_TTAB;
@@ -107,8 +113,13 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
     setgcrefnull(t->metatable);
     t->asize = asize;
     t->hmask = 0;
-    setmref(t->node, &G(L)->nilnode);
+    nilnode = &G(L)->nilnode;
+    setmref(t->node, nilnode);
+#if LJ_GC64
+    setmref(t->freetop, nilnode);
+#endif
   } else {  /* Otherwise separately allocate the array part. */
+    Node *nilnode;
     t = lj_mem_newobj(L, GCtab);
     t->gct = ~LJ_TTAB;
     t->nomm = (uint8_t)~0;
@@ -117,7 +128,11 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
     setgcrefnull(t->metatable);
     t->asize = 0;  /* In case the array allocation fails. */
     t->hmask = 0;
-    setmref(t->node, &G(L)->nilnode);
+    nilnode = &G(L)->nilnode;
+    setmref(t->node, nilnode);
+#if LJ_GC64
+    setmref(t->freetop, nilnode);
+#endif
     if (asize > 0) {
       if (asize > LJ_MAX_ASIZE)
 	lj_err_msg(L, LJ_ERR_TABOV);
@@ -191,7 +206,7 @@ GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)
     Node *node = noderef(t->node);
     Node *knode = noderef(kt->node);
     ptrdiff_t d = (char *)node - (char *)knode;
-    setmref(node->freetop, (Node *)((char *)noderef(knode->freetop) + d));
+    setfreetop(t, node, (Node *)((char *)getfreetop(kt, knode) + d));
     for (i = 0; i <= hmask; i++) {
       Node *kn = &knode[i];
       Node *n = &node[i];
@@ -210,7 +225,7 @@ void LJ_FASTCALL lj_tab_clear(GCtab *t)
   clearapart(t);
   if (t->hmask > 0) {
     Node *node = noderef(t->node);
-    setmref(node->freetop, &node[t->hmask+1]);
+    setfreetop(t, node, &node[t->hmask+1]);
     clearhpart(t);
   }
 }
@@ -264,6 +279,9 @@ static void resizetab(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
   } else {
     global_State *g = G(L);
     setmref(t->node, &g->nilnode);
+#if LJ_GC64
+    setmref(t->freetop, &g->nilnode);
+#endif
     t->hmask = 0;
   }
   if (asize < oldasize) {  /* Array part shrinks? */
@@ -445,7 +463,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
   Node *n = hashkey(t, key);
   if (!tvisnil(&n->val) || t->hmask == 0) {
     Node *nodebase = noderef(t->node);
-    Node *collide, *freenode = noderef(nodebase->freetop);
+    Node *collide, *freenode = getfreetop(t, nodebase);
     lua_assert(freenode >= nodebase && freenode <= nodebase+t->hmask+1);
     do {
       if (freenode == nodebase) {  /* No free node found? */
@@ -453,7 +471,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
 	return lj_tab_set(L, t, key);  /* Retry key insertion. */
       }
     } while (!tvisnil(&(--freenode)->key));
-    setmref(nodebase->freetop, freenode);
+    setfreetop(t, nodebase, freenode);
     lua_assert(freenode != &G(L)->nilnode);
     collide = hashkey(t, &n->key);
     if (collide != n) {  /* Colliding node not the main node? */

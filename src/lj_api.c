@@ -189,7 +189,7 @@ LUA_API int lua_type(lua_State *L, int idx)
   cTValue *o = index2adr(L, idx);
   if (tvisnumber(o)) {
     return LUA_TNUMBER;
-#if LJ_64
+#if LJ_64 && !LJ_GC64
   } else if (tvislightud(o)) {
     return LUA_TLIGHTUSERDATA;
 #endif
@@ -269,7 +269,7 @@ LUA_API int lua_equal(lua_State *L, int idx1, int idx2)
     return 0;
   } else if (tvispri(o1)) {
     return o1 != niltv(L) && o2 != niltv(L);
-#if LJ_64
+#if LJ_64 && !LJ_GC64
   } else if (tvislightud(o1)) {
     return o1->u64 == o2->u64;
 #endif

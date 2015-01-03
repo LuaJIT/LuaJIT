@@ -196,7 +196,7 @@ static void LJ_FASTCALL recff_type(jit_State *J, RecordFFData *rd)
   uint32_t t;
   if (tvisnumber(&rd->argv[0]))
     t = ~LJ_TNUMX;
-  else if (LJ_64 && tvislightud(&rd->argv[0]))
+  else if (LJ_64 && !LJ_GC64 && tvislightud(&rd->argv[0]))
     t = ~LJ_TLIGHTUD;
   else
     t = ~itype(&rd->argv[0]);

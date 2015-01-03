@@ -47,7 +47,10 @@ LJ_FUNC GCtab *lj_lib_checktabornil(lua_State *L, int narg);
 LJ_FUNC int lj_lib_checkopt(lua_State *L, int narg, int def, const char *lst);
 
 /* Avoid including lj_frame.h. */
-#if LJ_FR2
+#if LJ_GC64
+#define lj_lib_upvalue(L, n) \
+  (&gcval(L->base-2)->fn.c.upvalue[(n)-1])
+#elif LJ_FR2
 #define lj_lib_upvalue(L, n) \
   (&gcref((L->base-2)->gcr)->fn.c.upvalue[(n)-1])
 #else

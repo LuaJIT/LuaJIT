@@ -47,7 +47,9 @@ typedef unsigned int uintptr_t;
 
 /* Various VM limits. */
 #define LJ_MAX_MEM32	0x7fffff00	/* Max. 32 bit memory allocation. */
-#define LJ_MAX_MEM	LJ_MAX_MEM32	/* Max. total memory allocation. */
+#define LJ_MAX_MEM64	((uint64_t)1<<47)  /* Max. 64 bit memory allocation. */
+/* Max. total memory allocation. */
+#define LJ_MAX_MEM	(LJ_GC64 ? LJ_MAX_MEM64 : LJ_MAX_MEM32)
 #define LJ_MAX_ALLOC	LJ_MAX_MEM	/* Max. individual allocation length. */
 #define LJ_MAX_STR	LJ_MAX_MEM32	/* Max. string length. */
 #define LJ_MAX_BUF	LJ_MAX_MEM32	/* Max. buffer length. */
@@ -67,7 +69,7 @@ typedef unsigned int uintptr_t;
 #define LJ_MAX_UPVAL	60		/* Max. # of upvalues. */
 
 #define LJ_MAX_IDXCHAIN	100		/* __index/__newindex chain limit. */
-#define LJ_STACK_EXTRA	5		/* Extra stack space (metamethods). */
+#define LJ_STACK_EXTRA	(5+2*LJ_FR2)	/* Extra stack space (metamethods). */
 
 #define LJ_NUM_CBPAGE	1		/* Number of FFI callback pages. */
 
@@ -101,7 +103,14 @@ typedef unsigned int uintptr_t;
 #define checki32(x)	((x) == (int32_t)(x))
 #define checku32(x)	((x) == (uint32_t)(x))
 #define checkptr32(x)	((uintptr_t)(x) == (uint32_t)(uintptr_t)(x))
-#define checkptrGC(x)	(checkptr32(x))
+#define checkptr47(x)	(((uint64_t)(x) >> 47) == 0)
+#if LJ_GC64
+#define checkptrGC(x)	(checkptr47((x)))
+#elif LJ_64
+#define checkptrGC(x)	(checkptr32((x)))
+#else
+#define checkptrGC(x)	1
+#endif
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */
 #define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(-(int)(n)&(8*sizeof(x)-1))))
