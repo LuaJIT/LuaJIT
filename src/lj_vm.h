@@ -50,7 +50,7 @@ LJ_ASMF void lj_vm_exit_handler(void);
 LJ_ASMF void lj_vm_exit_interp(void);
 
 /* Internal math helper functions. */
-#if LJ_TARGET_PPC
+#if LJ_TARGET_PPC || LJ_TARGET_ARM64
 #define lj_vm_floor	floor
 #define lj_vm_ceil	ceil
 #else
@@ -77,7 +77,7 @@ LJ_ASMF void lj_vm_powi_sse(void);
 #else
 LJ_ASMF double lj_vm_powi(double, int32_t);
 #endif
-#if LJ_TARGET_PPC
+#if LJ_TARGET_PPC || LJ_TARGET_ARM64
 #define lj_vm_trunc	trunc
 #else
 LJ_ASMF double lj_vm_trunc(double);

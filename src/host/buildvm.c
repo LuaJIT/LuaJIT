@@ -59,6 +59,8 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #include "../dynasm/dasm_x86.h"
 #elif LJ_TARGET_ARM
 #include "../dynasm/dasm_arm.h"
+#elif LJ_TARGET_ARM64
+#include "../dynasm/dasm_arm64.h"
 #elif LJ_TARGET_PPC
 #include "../dynasm/dasm_ppc.h"
 #elif LJ_TARGET_PPCSPE

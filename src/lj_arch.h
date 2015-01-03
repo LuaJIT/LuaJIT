@@ -19,12 +19,14 @@
 #define LUAJIT_ARCH_x64		2
 #define LUAJIT_ARCH_ARM		3
 #define LUAJIT_ARCH_arm		3
-#define LUAJIT_ARCH_PPC		4
-#define LUAJIT_ARCH_ppc		4
-#define LUAJIT_ARCH_PPCSPE	5
-#define LUAJIT_ARCH_ppcspe	5
-#define LUAJIT_ARCH_MIPS	6
-#define LUAJIT_ARCH_mips	6
+#define LUAJIT_ARCH_ARM64	4
+#define LUAJIT_ARCH_arm64	4
+#define LUAJIT_ARCH_PPC		5
+#define LUAJIT_ARCH_ppc		6
+#define LUAJIT_ARCH_PPCSPE	6
+#define LUAJIT_ARCH_ppcspe	6
+#define LUAJIT_ARCH_MIPS	7
+#define LUAJIT_ARCH_mips	7
 
 /* Target OS. */
 #define LUAJIT_OS_OTHER		0
@@ -43,6 +45,8 @@
 #define LUAJIT_TARGET	LUAJIT_ARCH_X64
 #elif defined(__arm__) || defined(__arm) || defined(__ARM__) || defined(__ARM)
 #define LUAJIT_TARGET	LUAJIT_ARCH_ARM
+#elif defined(__aarch64__)
+#define LUAJIT_TARGET	LUAJIT_ARCH_ARM64
 #elif defined(__ppc__) || defined(__ppc) || defined(__PPC__) || defined(__PPC) || defined(__powerpc__) || defined(__powerpc) || defined(__POWERPC__) || defined(__POWERPC) || defined(_M_PPC)
 #ifdef __NO_FPRS__
 #define LUAJIT_TARGET	LUAJIT_ARCH_PPCSPE
@@ -191,6 +195,24 @@
 #define LJ_ARCH_VERSION		50
 #endif
 
+#elif LUAJIT_TARGET == LUAJIT_ARCH_ARM64
+
+#define LJ_ARCH_NAME		"arm64"
+#define LJ_ARCH_BITS		64
+#define LJ_ARCH_ENDIAN		LUAJIT_LE
+#define LJ_TARGET_ARM64		1
+#define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
+#define LJ_TARGET_MASKSHIFT	1
+#define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_TARGET_GC64		1
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
+#define LJ_ARCH_NOFFI		1	/* NYI */
+#define LJ_ARCH_NOJIT		1	/* NYI */
+
+#define LJ_ARCH_VERSION		80
+
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
 #define LJ_ARCH_NAME		"ppc"
@@ -326,6 +348,13 @@
 #endif
 #if !(__ARM_EABI__ || LJ_TARGET_IOS)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
+#endif
+#elif LJ_TARGET_ARM64
+#if defined(__AARCH64EB__)
+#error "No support for big-endian ARM64"
+#endif
+#if defined(_ILP32)
+#error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
