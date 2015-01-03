@@ -80,12 +80,16 @@ int lj_meta_tailcall(lua_State *L, cTValue *tv)
   TValue *base = L->base;
   TValue *top = L->top;
   const BCIns *pc = frame_pc(base-1);  /* Preserve old PC from frame. */
-  copyTV(L, base-1, tv);  /* Replace frame with new object. */
-  top->u32.lo = LJ_CONT_TAILCALL;
-  setframe_pc(top, pc);
-  setframe_gc(top+1, obj2gco(L), LJ_TTHREAD);  /* Dummy frame object. */
-  setframe_ftsz(top+1, ((char *)(top+2) - (char *)base) + FRAME_CONT);
-  L->base = L->top = top+2;
+  copyTV(L, base-1-LJ_FR2, tv);  /* Replace frame with new object. */
+  if (LJ_FR2)
+    (top++)->u64 = LJ_CONT_TAILCALL;
+  else
+    top->u32.lo = LJ_CONT_TAILCALL;
+  setframe_pc(top++, pc);
+  if (LJ_FR2) top++;
+  setframe_gc(top, obj2gco(L), LJ_TTHREAD);  /* Dummy frame object. */
+  setframe_ftsz(top, ((char *)(top+1) - (char *)base) + FRAME_CONT);
+  L->base = L->top = top+1;
   /*
   ** before:   [old_mo|PC]    [... ...]
   **                         ^base     ^top
@@ -116,11 +120,13 @@ static TValue *mmcall(lua_State *L, ASMFunction cont, cTValue *mo,
   */
   TValue *top = L->top;
   if (curr_funcisL(L)) top = curr_topL(L);
-  setcont(top, cont);  /* Assembler VM stores PC in upper word. */
-  copyTV(L, top+1, mo);  /* Store metamethod and two arguments. */
-  copyTV(L, top+2, a);
-  copyTV(L, top+3, b);
-  return top+2;  /* Return new base. */
+  setcont(top++, cont);  /* Assembler VM stores PC in upper word or FR2. */
+  if (LJ_FR2) setnilV(top++);
+  copyTV(L, top++, mo);  /* Store metamethod and two arguments. */
+  if (LJ_FR2) setnilV(top++);
+  copyTV(L, top, a);
+  copyTV(L, top+1, b);
+  return top;  /* Return new base. */
 }
 
 /* -- C helpers for some instructions, called from assembler VM ----------- */
@@ -256,10 +262,11 @@ TValue *lj_meta_cat(lua_State *L, TValue *top, int left)
       ** after mm:  [...][CAT stack ...] <--push-- [result]
       ** next step: [...][CAT stack .............]
       */
-      copyTV(L, top+2, top);  /* Careful with the order of stack copies! */
-      copyTV(L, top+1, top-1);
-      copyTV(L, top, mo);
+      copyTV(L, top+2*LJ_FR2+2, top);  /* Carefully ordered stack copies! */
+      copyTV(L, top+2*LJ_FR2+1, top-1);
+      copyTV(L, top+LJ_FR2, mo);
       setcont(top-1, lj_cont_cat);
+      if (LJ_FR2) { setnilV(top); setnilV(top+2); top += 2; }
       return top+1;  /* Trigger metamethod call. */
     } else {
       /* Pick as many strings as possible from the top and concatenate them:
@@ -327,12 +334,14 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
 	return (TValue *)(intptr_t)ne;
     }
     top = curr_top(L);
-    setcont(top, ne ? lj_cont_condf : lj_cont_condt);
-    copyTV(L, top+1, mo);
+    setcont(top++, ne ? lj_cont_condf : lj_cont_condt);
+    if (LJ_FR2) setnilV(top++);
+    copyTV(L, top++, mo);
+    if (LJ_FR2) setnilV(top++);
     it = ~(uint32_t)o1->gch.gct;
-    setgcV(L, top+2, o1, it);
-    setgcV(L, top+3, o2, it);
-    return top+2;  /* Trigger metamethod call. */
+    setgcV(L, top, o1, it);
+    setgcV(L, top+1, o2, it);
+    return top;  /* Trigger metamethod call. */
   }
   return (TValue *)(intptr_t)ne;
 }
@@ -431,7 +440,8 @@ void lj_meta_call(lua_State *L, TValue *func, TValue *top)
   TValue *p;
   if (!tvisfunc(mo))
     lj_err_optype_call(L, func);
-  for (p = top; p > func; p--) copyTV(L, p, p-1);
+  for (p = top; p > func+2*LJ_FR2; p--) copyTV(L, p, p-1);
+  if (LJ_FR2) copyTV(L, func+2, func);
   copyTV(L, func, mo);
 }
 

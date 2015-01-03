@@ -107,6 +107,7 @@ static void recff_stitch(jit_State *J)
   TValue *pframe = frame_prevl(base-1);
   TRef trcont;
 
+  lua_assert(!LJ_FR2);  /* TODO_FR2: handle frame shift. */
   /* Move func + args up in Lua stack and insert continuation. */
   memmove(&base[1], &base[-1], sizeof(TValue)*(J->maxslot+1));
   setframe_ftsz(base+1, ((char *)(base+1) - (char *)pframe) + FRAME_CONT);
@@ -466,6 +467,7 @@ static void LJ_FASTCALL recff_xpcall(jit_State *J, RecordFFData *rd)
     TValue argv0, argv1;
     TRef tmp;
     int errcode;
+    lua_assert(!LJ_FR2);  /* TODO_FR2: handle different frame setup. */
     /* Swap function and traceback. */
     tmp = J->base[0]; J->base[0] = J->base[1]; J->base[1] = tmp;
     copyTV(J->L, &argv0, &rd->argv[0]);

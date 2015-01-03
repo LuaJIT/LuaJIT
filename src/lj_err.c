@@ -106,7 +106,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 	return cf;
       }
     }
-    if (frame <= tvref(L->stack))
+    if (frame <= tvref(L->stack)+LJ_FR2)
       break;
     switch (frame_typep(frame)) {
     case FRAME_LUA:  /* Lua frame. */
@@ -171,7 +171,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
   }
   /* No C frame. */
   if (errcode) {
-    L->base = tvref(L->stack)+1;
+    L->base = tvref(L->stack)+1+LJ_FR2;
     L->cframe = NULL;
     unwindstack(L, L->base);
     if (G(L)->panic)
@@ -494,7 +494,7 @@ LJ_NOINLINE void lj_err_mem(lua_State *L)
 /* Find error function for runtime errors. Requires an extra stack traversal. */
 static ptrdiff_t finderrfunc(lua_State *L)
 {
-  cTValue *frame = L->base-1, *bot = tvref(L->stack);
+  cTValue *frame = L->base-1, *bot = tvref(L->stack)+LJ_FR2;
   void *cf = L->cframe;
   while (frame > bot && cf) {
     while (cframe_nres(cframe_raw(cf)) < 0) {  /* cframe without frame? */
@@ -530,8 +530,8 @@ static ptrdiff_t finderrfunc(lua_State *L)
       break;
     case FRAME_PCALL:
     case FRAME_PCALLH:
-      if (frame_ftsz(frame) >= (ptrdiff_t)(2*sizeof(TValue)))  /* xpcall? */
-	return savestack(L, frame-1);  /* Point to xpcall's errorfunc. */
+      if (frame_func(frame_prevd(frame))->c.ffid == FF_xpcall)
+	return savestack(L, frame_prevd(frame)+1);  /* xpcall's errorfunc. */
       return 0;
     default:
       lua_assert(0);
@@ -554,8 +554,9 @@ LJ_NOINLINE void lj_err_run(lua_State *L)
       lj_err_throw(L, LUA_ERRERR);
     }
     L->status = LUA_ERRERR;
-    copyTV(L, top, top-1);
+    copyTV(L, top+LJ_FR2, top-1);
     copyTV(L, top-1, errfunc);
+    if (LJ_FR2) setnilV(top++);
     L->top = top+1;
     lj_vm_call(L, top, 1+1);  /* Stack: |errfunc|msg| -> |msg| */
   }
@@ -630,6 +631,7 @@ LJ_NOINLINE void lj_err_optype_call(lua_State *L, TValue *o)
   const BCIns *pc = cframe_Lpc(L);
   if (((ptrdiff_t)pc & FRAME_TYPE) != FRAME_LUA) {
     const char *tname = lj_typename(o);
+    if (LJ_FR2) o++;
     setframe_pc(o, pc);
     setframe_gc(o, obj2gco(L), LJ_TTHREAD);
     L->top = L->base = o+1;

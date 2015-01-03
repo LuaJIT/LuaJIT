@@ -309,8 +309,9 @@ static void bcwrite_header(BCWriteCtx *ctx)
   *p++ = BCDUMP_HEAD3;
   *p++ = BCDUMP_VERSION;
   *p++ = (ctx->strip ? BCDUMP_F_STRIP : 0) +
-		       (LJ_BE ? BCDUMP_F_BE : 0) +
-		       ((ctx->pt->flags & PROTO_FFI) ? BCDUMP_F_FFI : 0);
+	 LJ_BE*BCDUMP_F_BE +
+	 ((ctx->pt->flags & PROTO_FFI) ? BCDUMP_F_FFI : 0) +
+	 LJ_FR2*BCDUMP_F_FR2;
   if (!ctx->strip) {
     p = lj_strfmt_wuleb128(p, len);
     p = lj_buf_wmem(p, name, len);

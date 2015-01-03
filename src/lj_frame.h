@@ -11,7 +11,16 @@
 
 /* -- Lua stack frame ----------------------------------------------------- */
 
-/* Frame type markers in callee function slot (callee base-1). */
+/* Frame type markers in LSB of PC (4-byte aligned) or delta (8-byte aligned:
+**
+**    PC  00  Lua frame
+** delta 001  C frame
+** delta 010  Continuation frame
+** delta 011  Lua vararg frame
+** delta 101  cpcall() frame
+** delta 110  ff pcall() frame
+** delta 111  ff pcall() frame with active hook
+*/
 enum {
   FRAME_LUA, FRAME_C, FRAME_CONT, FRAME_VARG,
   FRAME_LUAP, FRAME_CP, FRAME_PCALL, FRAME_PCALLH
@@ -21,12 +30,47 @@ enum {
 #define FRAME_TYPEP		(FRAME_TYPE|FRAME_P)
 
 /* Macros to access and modify Lua frames. */
+#if LJ_FR2
+/* Two-slot frame info, required for 64 bit PC/GCRef:
+**
+**                   base-2  base-1      |  base  base+1 ...
+**                  [func   PC/delta/ft] | [slots ...]
+**                  ^-- frame            | ^-- base   ^-- top
+**
+** Continuation frames:
+**
+**   base-4  base-3  base-2  base-1      |  base  base+1 ...
+**  [cont      PC ] [func   PC/delta/ft] | [slots ...]
+**                  ^-- frame            | ^-- base   ^-- top
+*/
+#define frame_gc(f)		(gcval((f)-1))
+#define frame_ftsz(f)		((ptrdiff_t)(f)->ftsz)
+#define frame_pc(f)		((const BCIns *)frame_ftsz(f))
+#define setframe_gc(f, p, tp)	(setgcVraw((f)-1, (p), (tp)))
+#define setframe_ftsz(f, sz)	((f)->ftsz = (sz))
+#define setframe_pc(f, pc)	((f)->ftsz = (int64_t)(intptr_t)(pc))
+#else
+/* One-slot frame info, sufficient for 32 bit PC/GCRef:
+**
+**              base-1              |  base  base+1 ...
+**              lo     hi           |
+**             [func | PC/delta/ft] | [slots ...]
+**             ^-- frame            | ^-- base   ^-- top
+**
+** Continuation frames:
+**
+**  base-2      base-1              |  base  base+1 ...
+**  lo     hi   lo     hi           |
+** [cont | PC] [func | PC/delta/ft] | [slots ...]
+**             ^-- frame            | ^-- base   ^-- top
+*/
 #define frame_gc(f)		(gcref((f)->fr.func))
 #define frame_ftsz(f)		((ptrdiff_t)(f)->fr.tp.ftsz)
 #define frame_pc(f)		(mref((f)->fr.tp.pcr, const BCIns))
 #define setframe_gc(f, p, tp)	(setgcref((f)->fr.func, (p)), UNUSED(tp))
 #define setframe_ftsz(f, sz)	((f)->fr.tp.ftsz = (int32_t)(sz))
 #define setframe_pc(f, pc)	(setmref((f)->fr.tp.pcr, (pc)))
+#endif
 
 #define frame_type(f)		(frame_ftsz(f) & FRAME_TYPE)
 #define frame_typep(f)		(frame_ftsz(f) & FRAME_TYPEP)
@@ -42,9 +86,16 @@ enum {
 
 enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 
+#if LJ_FR2
+#define frame_contpc(f)		(frame_pc((f)-2))
+#define frame_contv(f)		(((f)-3)->u64)
+#else
 #define frame_contpc(f)		(frame_pc((f)-1))
 #define frame_contv(f)		(((f)-1)->u32.lo)
-#if LJ_64
+#endif
+#if LJ_FR2
+#define frame_contf(f)		((ASMFunction)(uintptr_t)((f)-3)->u64)
+#elif LJ_64
 #define frame_contf(f) \
   ((ASMFunction)(void *)((intptr_t)lj_vm_asm_begin + \
 			 (intptr_t)(int32_t)((f)-1)->u32.lo))
@@ -54,7 +105,7 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define frame_iscont_fficb(f) \
   (LJ_HASFFI && frame_contv(f) == LJ_CONT_FFI_CALLBACK)
 
-#define frame_prevl(f)		((f) - (1+bc_a(frame_pc(f)[-1])))
+#define frame_prevl(f)		((f) - (1+LJ_FR2+bc_a(frame_pc(f)[-1])))
 #define frame_prevd(f)		((TValue *)((char *)(f) - frame_sized(f)))
 #define frame_prev(f)		(frame_islua(f)?frame_prevl(f):frame_prevd(f))
 /* Note: this macro does not skip over FRAME_VARG. */

@@ -138,7 +138,7 @@ static int ffi_index_meta(lua_State *L, CTState *cts, CType *ct, MMS mm)
       }
     }
     copyTV(L, base, L->top);
-    tv = L->top-1;
+    tv = L->top-1-LJ_FR2;
   }
   return lj_meta_tailcall(L, tv);
 }

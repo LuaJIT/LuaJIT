@@ -268,12 +268,12 @@ static MSize gc_traverse_frames(global_State *g, lua_State *th)
 {
   TValue *frame, *top = th->top-1, *bot = tvref(th->stack);
   /* Note: extra vararg frame not skipped, marks function twice (harmless). */
-  for (frame = th->base-1; frame > bot; frame = frame_prev(frame)) {
+  for (frame = th->base-1; frame > bot+LJ_FR2; frame = frame_prev(frame)) {
     GCfunc *fn = frame_func(frame);
     TValue *ftop = frame;
     if (isluafunc(fn)) ftop += funcproto(fn)->framesize;
     if (ftop > top) top = ftop;
-    gc_markobj(g, fn);  /* Need to mark hidden function (or L). */
+    if (!LJ_FR2) gc_markobj(g, fn);  /* Need to mark hidden function (or L). */
   }
   top++;  /* Correct bias of -1 (frame == base-1). */
   if (top > tvref(th->maxstack)) top = tvref(th->maxstack);
@@ -284,7 +284,7 @@ static MSize gc_traverse_frames(global_State *g, lua_State *th)
 static void gc_traverse_thread(global_State *g, lua_State *th)
 {
   TValue *o, *top = th->top;
-  for (o = tvref(th->stack)+1; o < top; o++)
+  for (o = tvref(th->stack)+1+LJ_FR2; o < top; o++)
     gc_marktv(g, o);
   if (g->gc.state == GCSatomic) {
     top = tvref(th->stack) + th->stacksize;
@@ -456,13 +456,14 @@ static void gc_call_finalizer(global_State *g, lua_State *L,
   int errcode;
   TValue *top;
   lj_trace_abort(g);
-  top = L->top;
-  L->top = top+2;
   hook_entergc(g);  /* Disable hooks and new traces during __gc. */
   g->gc.threshold = LJ_MAX_MEM;  /* Prevent GC steps. */
-  copyTV(L, top, mo);
-  setgcV(L, top+1, o, ~o->gch.gct);
-  errcode = lj_vm_pcall(L, top+1, 1+0, -1);  /* Stack: |mo|o| -> | */
+  top = L->top;
+  copyTV(L, top++, mo);
+  if (LJ_FR2) setnilV(top++);
+  setgcV(L, top, o, ~o->gch.gct);
+  L->top = top+1;
+  errcode = lj_vm_pcall(L, top, 1+0, -1);  /* Stack: |mo|o| -> | */
   hook_restore(g, oldh);
   g->gc.threshold = oldt;  /* Restore GC threshold. */
   if (errcode)

@@ -100,6 +100,7 @@ static BCReg snapshot_framelinks(jit_State *J, SnapEntry *map)
   GCfunc *fn = frame_func(frame);
   cTValue *ftop = isluafunc(fn) ? (frame+funcproto(fn)->framesize) : J->L->top;
   MSize f = 0;
+  lua_assert(!LJ_FR2);  /* TODO_FR2: store 64 bit PCs. */
   map[f++] = SNAP_MKPC(J->pc);  /* The current PC is always the first entry. */
   while (frame > lim) {  /* Backwards traversal of all frames above base. */
     if (frame_islua(frame)) {
@@ -241,7 +242,8 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
     case BCMbase:
       if (op >= BC_CALLM && op <= BC_VARG) {
 	BCReg top = (op == BC_CALLM || op == BC_CALLMT || bc_c(ins) == 0) ?
-		    maxslot : (bc_a(ins) + bc_c(ins));
+		    maxslot : (bc_a(ins) + bc_c(ins)+LJ_FR2);
+	if (LJ_FR2) DEF_SLOT(bc_a(ins)+1);
 	s = bc_a(ins) - ((op == BC_ITERC || op == BC_ITERN) ? 3 : 0);
 	for (; s < top; s++) USE_SLOT(s);
 	for (; s < maxslot; s++) DEF_SLOT(s);
@@ -836,6 +838,7 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 	snap_restoreval(J, T, ex, snapno, rfilt, ref+1, &tmp);
 	o->u32.hi = tmp.u32.lo;
       } else if ((sn & (SNAP_CONT|SNAP_FRAME))) {
+	lua_assert(!LJ_FR2);  /* TODO_FR2: store 64 bit PCs. */
 	/* Overwrite tag with frame link. */
 	setframe_ftsz(o, snap_slot(sn) != 0 ? (int32_t)*flinks-- : ftsz0);
 	L->base = o+1;

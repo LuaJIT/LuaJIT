@@ -422,7 +422,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
 
   if (slot < cts->cb.sizeid && (id = cts->cb.cbid[slot]) != 0) {
     ct = ctype_get(cts, id);
-    rid = ctype_cid(ct->info);
+    rid = ctype_cid(ct->info);  /* Return type. x86: +(spadj<<16). */
     fn = funcV(lj_tab_getint(cts->miscmap, (int32_t)slot));
     fntp = LJ_TFUNC;
   } else {  /* Must set up frame first, before throwing the error. */
@@ -431,9 +431,16 @@ static void callback_conv_args(CTState *cts, lua_State *L)
     fn = (GCfunc *)L;
     fntp = LJ_TTHREAD;
   }
-  o->u32.lo = LJ_CONT_FFI_CALLBACK;  /* Continuation returns from callback. */
-  o->u32.hi = rid;  /* Return type. x86: +(spadj<<16). */
-  o++;
+  /* Continuation returns from callback. */
+  if (LJ_FR2) {
+    (o++)->u64 = LJ_CONT_FFI_CALLBACK;
+    (o++)->u64 = rid;
+    o++;
+  } else {
+    o->u32.lo = LJ_CONT_FFI_CALLBACK;
+    o->u32.hi = rid;
+    o++;
+  }
   setframe_gc(o, obj2gco(fn), fntp);
   setframe_ftsz(o, ((char *)(o+1) - (char *)L->base) + FRAME_CONT);
   L->top = L->base = ++o;
@@ -486,8 +493,13 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   L->top = o;
 #if LJ_TARGET_X86
   /* Store stack adjustment for returns from non-cdecl callbacks. */
-  if (ctype_cconv(ct->info) != CTCC_CDECL)
+  if (ctype_cconv(ct->info) != CTCC_CDECL) {
+#if LJ_FR2
+    (L->base-3)->u64 |= (nsp << (16+2));
+#else
     (L->base-2)->u32.hi |= (nsp << (16+2));
+#endif
+  }
 #endif
   while (gcsteps-- > 0)
     lj_gc_check(L);
@@ -496,7 +508,11 @@ static void callback_conv_args(CTState *cts, lua_State *L)
 /* Convert Lua object to callback result. */
 static void callback_conv_result(CTState *cts, lua_State *L, TValue *o)
 {
+#if LJ_FR2
+  CType *ctr = ctype_raw(cts, (uint16_t)(L->base-3)->u64);
+#else
   CType *ctr = ctype_raw(cts, (uint16_t)(L->base-2)->u32.hi);
+#endif
 #if LJ_TARGET_X86
   cts->cb.gpr[2] = 0;
 #endif
@@ -565,7 +581,7 @@ void LJ_FASTCALL lj_ccallback_leave(CTState *cts, TValue *o)
   }
   callback_conv_result(cts, L, o);
   /* Finally drop C frame and continuation frame. */
-  L->top -= 2;
+  L->top -= 2+2*LJ_FR2;
   L->base = obase;
   L->cframe = cframe_prev(L->cframe);
   cts->cb.slot = 0;  /* Blacklist C function that called the callback. */

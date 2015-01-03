@@ -1123,7 +1123,7 @@ static void crec_snap_caller(jit_State *J)
   ptrdiff_t delta;
   if (!frame_islua(base-1) || J->framedepth <= 0)
     lj_trace_err(J, LJ_TRERR_NYICALL);
-  J->pc = frame_pc(base-1); delta = 1+bc_a(J->pc[-1]);
+  J->pc = frame_pc(base-1); delta = 1+LJ_FR2+bc_a(J->pc[-1]);
   L->top = base; L->base = base - delta;
   J->base[-1] = TREF_FALSE;
   J->base -= delta; J->baseslot -= (BCReg)delta;

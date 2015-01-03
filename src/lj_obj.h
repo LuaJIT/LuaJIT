@@ -131,7 +131,7 @@ typedef struct SBuf {
 /* Frame link. */
 typedef union {
   int32_t ftsz;		/* Frame type and size of previous frame. */
-  MRef pcr;		/* Overlaps PC for Lua frames. */
+  MRef pcr;		/* Or PC for Lua frames. */
 } FrameLink;
 
 /* Tagged value. */
@@ -147,12 +147,16 @@ typedef LJ_ALIGN(8) union TValue {
     , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
     )
   };
+#if LJ_FR2
+  int64_t ftsz;		/* Frame type and size of previous frame, or PC. */
+#else
   struct {
     LJ_ENDIAN_LOHI(
       GCRef func;	/* Function for next frame (or dummy L). */
     , FrameLink tp;	/* Link to previous frame. */
     )
   } fr;
+#endif
   struct {
     LJ_ENDIAN_LOHI(
       uint32_t lo;	/* Lower 32 bits of number. */
@@ -584,7 +588,11 @@ struct lua_State {
 #define registry(L)		(&G(L)->registrytv)
 
 /* Macros to access the currently executing (Lua) function. */
+#if LJ_FR2
+#define curr_func(L)		(&gcref((L->base-2)->gcr)->fn)
+#else
 #define curr_func(L)		(&gcref((L->base-1)->fr.func)->fn)
+#endif
 #define curr_funcisL(L)		(isluafunc(curr_func(L)))
 #define curr_proto(L)		(funcproto(curr_func(L)))
 #define curr_topL(L)		(L->base + curr_proto(L)->framesize)
@@ -732,10 +740,16 @@ static LJ_AINLINE void setlightudV(TValue *o, void *p)
 #if LJ_64
 #define checklightudptr(L, p) \
   (((uint64_t)(p) >> 47) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
+#else
+#define checklightudptr(L, p)	(p)
+#endif
+
+#if LJ_FR2
+#define setcont(o, f)		((o)->u64 = (uint64_t)(uintptr_t)(void *)(f))
+#elif LJ_64
 #define setcont(o, f) \
   ((o)->u64 = (uint64_t)(void *)(f) - (uint64_t)lj_vm_asm_begin)
 #else
-#define checklightudptr(L, p)	(p)
 #define setcont(o, f)		setlightudV((o), (void *)(f))
 #endif
 

@@ -33,7 +33,7 @@ static int bit_result64(lua_State *L, CTypeID id, uint64_t x)
 {
   GCcdata *cd = lj_cdata_new_(L, id, 8);
   *(uint64_t *)cdataptr(cd) = x;
-  setcdataV(L, L->base-1, cd);
+  setcdataV(L, L->base-1-LJ_FR2, cd);
   return FFH_RES(1);
 }
 #else
@@ -56,7 +56,7 @@ LJLIB_ASM(bit_tobit)		LJLIB_REC(bit_tobit)
 {
 #if LJ_HASFFI
   CTypeID id = 0;
-  setintV(L->base-1, (int32_t)lj_carith_check64(L, 1, &id));
+  setintV(L->base-1-LJ_FR2, (int32_t)lj_carith_check64(L, 1, &id));
   return FFH_RES(1);
 #else
   lj_lib_checknumber(L, 1);

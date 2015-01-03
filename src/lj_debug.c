@@ -24,7 +24,7 @@
 /* Get frame corresponding to a level. */
 cTValue *lj_debug_frame(lua_State *L, int level, int *size)
 {
-  cTValue *frame, *nextframe, *bot = tvref(L->stack);
+  cTValue *frame, *nextframe, *bot = tvref(L->stack)+LJ_FR2;
   /* Traverse frames backwards. */
   for (nextframe = frame = L->base-1; frame > bot; ) {
     if (frame_gc(frame) == obj2gco(L))
@@ -184,7 +184,7 @@ static TValue *debug_localname(lua_State *L, const lua_Debug *ar,
   TValue *nextframe = size ? frame + size : NULL;
   GCfunc *fn = frame_func(frame);
   BCPos pc = debug_framepc(L, fn, nextframe);
-  if (!nextframe) nextframe = L->top;
+  if (!nextframe) nextframe = L->top+LJ_FR2;
   if ((int)slot1 < 0) {  /* Negative slot number is for varargs. */
     if (pc != NO_BCPOS) {
       GCproto *pt = funcproto(fn);
@@ -194,7 +194,7 @@ static TValue *debug_localname(lua_State *L, const lua_Debug *ar,
 	  nextframe = frame;
 	  frame = frame_prevd(frame);
 	}
-	if (frame + slot1 < nextframe) {
+	if (frame + slot1+LJ_FR2 < nextframe) {
 	  *name = "(*vararg)";
 	  return frame+slot1;
 	}
@@ -205,7 +205,7 @@ static TValue *debug_localname(lua_State *L, const lua_Debug *ar,
   if (pc != NO_BCPOS &&
       (*name = debug_varname(funcproto(fn), pc, slot1-1)) != NULL)
     ;
-  else if (slot1 > 0 && frame + slot1 < nextframe)
+  else if (slot1 > 0 && frame + slot1+LJ_FR2 < nextframe)
     *name = "(*temporary)";
   return frame+slot1;
 }
@@ -268,7 +268,7 @@ restart:
 	*name = strdata(gco2str(proto_kgc(pt, ~(ptrdiff_t)bc_c(ins))));
 	if (ip > proto_bc(pt)) {
 	  BCIns insp = ip[-1];
-	  if (bc_op(insp) == BC_MOV && bc_a(insp) == ra+1 &&
+	  if (bc_op(insp) == BC_MOV && bc_a(insp) == ra+1+LJ_FR2 &&
 	      bc_d(insp) == bc_b(ins))
 	    return "method";
 	}
@@ -290,7 +290,7 @@ const char *lj_debug_funcname(lua_State *L, cTValue *frame, const char **name)
   cTValue *pframe;
   GCfunc *fn;
   BCPos pc;
-  if (frame <= tvref(L->stack))
+  if (frame <= tvref(L->stack)+LJ_FR2)
     return NULL;
   if (frame_isvarg(frame))
     frame = frame_prevd(frame);

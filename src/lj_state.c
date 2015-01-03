@@ -49,6 +49,7 @@
 ** one extra slot if mobj is not a function. Only lj_meta_tset needs 5
 ** slots above top, but then mobj is always a function. So we can get by
 ** with 5 extra slots.
+** LJ_FR2: We need 2 more slots for the frame PC and the continuation PC.
 */
 
 /* Resize stack slots and adjust pointers in state. */
@@ -128,8 +129,9 @@ static void stack_init(lua_State *L1, lua_State *L)
   L1->stacksize = LJ_STACK_START + LJ_STACK_EXTRA;
   stend = st + L1->stacksize;
   setmref(L1->maxstack, stend - LJ_STACK_EXTRA - 1);
-  L1->base = L1->top = st+1;
-  setthreadV(L1, st, L1);  /* Needed for curr_funcisL() on empty stack. */
+  setthreadV(L1, st++, L1);  /* Needed for curr_funcisL() on empty stack. */
+  if (LJ_FR2) setnilV(st++);
+  L1->base = L1->top = st;
   while (st < stend)  /* Clear new slots. */
     setnilV(st++);
 }
@@ -253,7 +255,7 @@ LUA_API void lua_close(lua_State *L)
   for (i = 0;;) {
     hook_enter(g);
     L->status = 0;
-    L->base = L->top = tvref(L->stack) + 1;
+    L->base = L->top = tvref(L->stack) + 1 + LJ_FR2;
     L->cframe = NULL;
     if (lj_vm_cpcall(L, NULL, NULL, cpfinalize) == 0) {
       if (++i >= 10) break;
