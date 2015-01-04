@@ -338,42 +338,6 @@
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     ctr = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */
 
-#elif LJ_TARGET_PPCSPE
-/* -- PPC/SPE calling conventions ----------------------------------------- */
-
-#define CCALL_HANDLE_STRUCTRET \
-  cc->retref = 1;  /* Return all structs by reference. */ \
-  cc->gpr[ngpr++] = (GPRArg)dp;
-
-#define CCALL_HANDLE_COMPLEXRET \
-  /* Complex values are returned in 2 or 4 GPRs. */ \
-  cc->retref = 0;
-
-#define CCALL_HANDLE_COMPLEXRET2 \
-  memcpy(dp, sp, ctr->size);  /* Copy complex from GPRs. */
-
-#define CCALL_HANDLE_STRUCTARG \
-  rp = cdataptr(lj_cdata_new(cts, did, sz)); \
-  sz = CTSIZE_PTR;  /* Pass all structs by reference. */
-
-#define CCALL_HANDLE_COMPLEXARG \
-  /* Pass complex by value in 2 or 4 GPRs. */
-
-/* PPC/SPE has a softfp ABI. */
-#define CCALL_HANDLE_REGARG \
-  if (n > 1) {  /* Doesn't fit in a single GPR? */ \
-    lua_assert(n == 2 || n == 4);  /* int64_t, double or complex (float). */ \
-    if (n == 2) \
-      ngpr = (ngpr + 1u) & ~1u;  /* Only align 64 bit value to regpair. */ \
-    else if (ngpr + n > maxgpr) \
-      ngpr = maxgpr;  /* Prevent reordering. */ \
-  } \
-  if (ngpr + n <= maxgpr) { \
-    dp = &cc->gpr[ngpr]; \
-    ngpr += n; \
-    goto done; \
-  }
-
 #elif LJ_TARGET_MIPS
 /* -- MIPS calling conventions -------------------------------------------- */
 

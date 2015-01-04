@@ -63,8 +63,6 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #include "../dynasm/dasm_arm64.h"
 #elif LJ_TARGET_PPC
 #include "../dynasm/dasm_ppc.h"
-#elif LJ_TARGET_PPCSPE
-#include "../dynasm/dasm_ppc.h"
 #elif LJ_TARGET_MIPS
 #include "../dynasm/dasm_mips.h"
 #else
@@ -115,7 +113,7 @@ static const char *sym_decorate(BuildCtx *ctx,
       name[0] = '@';
     else
       *p = '\0';
-#elif (LJ_TARGET_PPC  || LJ_TARGET_PPCSPE) && !LJ_TARGET_CONSOLE
+#elif LJ_TARGET_PPC && !LJ_TARGET_CONSOLE
     /* Keep @plt. */
 #else
     *p = '\0';

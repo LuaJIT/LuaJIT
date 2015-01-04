@@ -130,7 +130,7 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 	    ins, sym);
     exit(1);
   }
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_PPC
 #if LJ_TARGET_PS3
 #define TOCPREFIX "."
 #else
@@ -313,10 +313,7 @@ void emit_asm(BuildCtx *ctx)
 #if !(LJ_TARGET_PS3 || LJ_TARGET_PSVITA)
     fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\"," ELFASM_PX "progbits\n");
 #endif
-#if LJ_TARGET_PPCSPE
-    /* Soft-float ABI + SPE. */
-    fprintf(ctx->fp, "\t.gnu_attribute 4, 2\n\t.gnu_attribute 8, 3\n");
-#elif LJ_TARGET_PPC && !LJ_TARGET_PS3
+#if LJ_TARGET_PPC && !LJ_TARGET_PS3
     /* Hard-float ABI. */
     fprintf(ctx->fp, "\t.gnu_attribute 4, 1\n");
 #endif

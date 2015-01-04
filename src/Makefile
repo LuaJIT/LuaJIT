@@ -50,7 +50,6 @@ CCOPT_x64=
 CCOPT_arm=
 CCOPT_arm64=
 CCOPT_ppc=
-CCOPT_ppcspe=
 CCOPT_mips=
 #
 CCDEBUG=
@@ -224,9 +223,6 @@ else
 ifneq (,$(findstring LJ_TARGET_PPC ,$(TARGET_TESTARCH)))
   TARGET_LJARCH= ppc
 else
-ifneq (,$(findstring LJ_TARGET_PPCSPE ,$(TARGET_TESTARCH)))
-  TARGET_LJARCH= ppcspe
-else
 ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring MIPSEL ,$(TARGET_TESTARCH)))
     TARGET_ARCH= -D__MIPSEL__=1
@@ -234,7 +230,6 @@ ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   TARGET_LJARCH= mips
 else
   $(error Unsupported target architecture)
-endif
 endif
 endif
 endif

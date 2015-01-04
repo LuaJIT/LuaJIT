@@ -80,16 +80,6 @@ typedef union FPRArg {
 typedef intptr_t GPRArg;
 typedef double FPRArg;
 
-#elif LJ_TARGET_PPCSPE
-
-#define CCALL_NARG_GPR		8
-#define CCALL_NARG_FPR		0
-#define CCALL_NRET_GPR		4	/* For softfp complex double. */
-#define CCALL_NRET_FPR		0
-#define CCALL_SPS_FREE		0	/* NYI */
-
-typedef intptr_t GPRArg;
-
 #elif LJ_TARGET_MIPS
 
 #define CCALL_NARG_GPR		4

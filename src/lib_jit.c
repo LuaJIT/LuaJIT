@@ -706,8 +706,6 @@ static uint32_t jit_cpudetect(lua_State *L)
   flags |= JIT_F_ROUND;
 #endif
 #endif
-#elif LJ_TARGET_PPCSPE
-  /* Nothing to do. */
 #elif LJ_TARGET_MIPS
 #if LJ_HASJIT
   /* Compile-time MIPS CPU detection. */

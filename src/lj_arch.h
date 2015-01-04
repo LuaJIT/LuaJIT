@@ -22,11 +22,9 @@
 #define LUAJIT_ARCH_ARM64	4
 #define LUAJIT_ARCH_arm64	4
 #define LUAJIT_ARCH_PPC		5
-#define LUAJIT_ARCH_ppc		6
-#define LUAJIT_ARCH_PPCSPE	6
-#define LUAJIT_ARCH_ppcspe	6
-#define LUAJIT_ARCH_MIPS	7
-#define LUAJIT_ARCH_mips	7
+#define LUAJIT_ARCH_ppc		5
+#define LUAJIT_ARCH_MIPS	6
+#define LUAJIT_ARCH_mips	6
 
 /* Target OS. */
 #define LUAJIT_OS_OTHER		0
@@ -48,11 +46,7 @@
 #elif defined(__aarch64__)
 #define LUAJIT_TARGET	LUAJIT_ARCH_ARM64
 #elif defined(__ppc__) || defined(__ppc) || defined(__PPC__) || defined(__PPC) || defined(__powerpc__) || defined(__powerpc) || defined(__POWERPC__) || defined(__POWERPC) || defined(_M_PPC)
-#ifdef __NO_FPRS__
-#define LUAJIT_TARGET	LUAJIT_ARCH_PPCSPE
-#else
 #define LUAJIT_TARGET	LUAJIT_ARCH_PPC
-#endif
 #elif defined(__mips__) || defined(__mips) || defined(__MIPS__) || defined(__MIPS)
 #define LUAJIT_TARGET	LUAJIT_ARCH_MIPS
 #else
@@ -260,26 +254,6 @@
 #define LJ_ARCH_XENON		1
 #endif
 
-#elif LUAJIT_TARGET == LUAJIT_ARCH_PPCSPE
-
-#error "The PPC/e500 port is broken and will be abandoned with LuaJIT 2.1"
-#define LJ_ARCH_NAME		"ppcspe"
-#define LJ_ARCH_BITS		32
-#define LJ_ARCH_ENDIAN		LUAJIT_BE
-#ifndef LJ_ABI_SOFTFP
-#define LJ_ABI_SOFTFP		1
-#endif
-#define LJ_ABI_EABI		1
-#define LJ_TARGET_PPCSPE	1
-#define LJ_TARGET_EHRETREG	3
-#define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
-#define LJ_TARGET_MASKSHIFT	0
-#define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
-#define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
-#define LJ_ARCH_NOJIT		1
-
 #elif LUAJIT_TARGET == LUAJIT_ARCH_MIPS
 
 #if defined(__MIPSEL__) || defined(__MIPSEL) || defined(_MIPSEL)
@@ -356,7 +330,7 @@
 #if defined(_ILP32)
 #error "No support for ILP32 model on ARM64"
 #endif
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_PPC
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif
@@ -365,6 +339,9 @@
 #endif
 #if defined(_LP64)
 #error "No support for PowerPC 64 bit mode"
+#endif
+#ifdef __NO_FPRS__
+#error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS
 #if defined(__mips_soft_float)

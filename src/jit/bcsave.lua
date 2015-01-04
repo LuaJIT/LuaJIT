@@ -63,7 +63,7 @@ local map_type = {
 }
 
 local map_arch = {
-  x86 = true, x64 = true, arm = true, ppc = true, ppcspe = true,
+  x86 = true, x64 = true, arm = true, ppc = true,
   mips = true, mipsel = true,
 }
 
@@ -202,7 +202,7 @@ typedef struct {
   local is64, isbe = false, false
   if ctx.arch == "x64" then
     is64 = true
-  elseif ctx.arch == "ppc" or ctx.arch == "ppcspe" or ctx.arch == "mips" then
+  elseif ctx.arch == "ppc" or ctx.arch == "mips" then
     isbe = true
   end
 
@@ -237,7 +237,7 @@ typedef struct {
   hdr.eendian = isbe and 2 or 1
   hdr.eversion = 1
   hdr.type = f16(1)
-  hdr.machine = f16(({ x86=3, x64=62, arm=40, ppc=20, ppcspe=20, mips=8, mipsel=8 })[ctx.arch])
+  hdr.machine = f16(({ x86=3, x64=62, arm=40, ppc=20, mips=8, mipsel=8 })[ctx.arch])
   if ctx.arch == "mips" or ctx.arch == "mipsel" then
     hdr.flags = 0x50001006
   end

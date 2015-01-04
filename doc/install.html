@@ -141,13 +141,6 @@ operating systems, CPUs and compilers:
 <td class="compatos">XEDK (<a href="#xbox360">Xbox 360</a>)</td>
 </tr>
 <tr class="odd">
-<td class="compatcpu"><a href="#cross2">PPC/e500v2</a></td>
-<td class="compatos">GCC 4.3+</td>
-<td class="compatos">GCC 4.3+</td>
-<td class="compatos compatno">&nbsp;</td>
-<td class="compatos compatno">&nbsp;</td>
-</tr>
-<tr class="even">
 <td class="compatcpu"><a href="#cross2">MIPS</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
@@ -387,8 +380,6 @@ make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabihf-
 
 # PPC
 make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
-# PPC/e500v2 (fast interpreter only)
-make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
 
 # MIPS big-endian
 make HOST_CC="gcc -m32" CROSS=mips-linux-
