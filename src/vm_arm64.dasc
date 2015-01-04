@@ -3594,7 +3594,8 @@ static void emit_asm_debug(BuildCtx *ctx)
     for (i = 19; i <= 28; i++)  /* offset x19-x28 */
       fprintf(ctx->fp, "\t.byte 0x%x\n\t.uleb128 %d\n", 0x80+i, cf-i+17);
     for (i = 8; i <= 15; i++)  /* offset d8-d15 */
-      fprintf(ctx->fp, "\t.byte 5\n\t.uleb128 0x%x, %d\n", 64+i, cf-i-4);
+      fprintf(ctx->fp, "\t.byte 5\n\t.uleb128 0x%x\n\t.uleb128 %d\n",
+	      64+i, cf-i-4);
     fprintf(ctx->fp,
 	"\t.align 3\n"
 	".LEFDE0:\n\n");
@@ -3634,7 +3635,8 @@ static void emit_asm_debug(BuildCtx *ctx)
     for (i = 19; i <= 28; i++)  /* offset x19-x28 */
       fprintf(ctx->fp, "\t.byte 0x%x\n\t.uleb128 %d\n", 0x80+i, cf-i+17);
     for (i = 8; i <= 15; i++)  /* offset d8-d15 */
-      fprintf(ctx->fp, "\t.byte 5\n\t.uleb128 0x%x, %d\n", 64+i, cf-i-4);
+      fprintf(ctx->fp, "\t.byte 5\n\t.uleb128 0x%x\n\t.uleb128 %d\n",
+	      64+i, cf-i-4);
     fprintf(ctx->fp,
 	"\t.align 3\n"
 	".LEFDE2:\n\n");
