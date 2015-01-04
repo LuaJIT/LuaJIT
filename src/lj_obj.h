@@ -175,18 +175,23 @@ typedef LJ_ALIGN(8) union TValue {
 #if LJ_GC64
   GCRef gcr;		/* GCobj reference with tag. */
   int64_t it64;
-#endif
+  struct {
+    LJ_ENDIAN_LOHI(
+      int32_t i;	/* Integer value. */
+    , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
+    )
+  };
+#else
   struct {
     LJ_ENDIAN_LOHI(
       union {
-#if !LJ_GC64
 	GCRef gcr;	/* GCobj reference (if any). */
-#endif
 	int32_t i;	/* Integer value. */
       };
     , uint32_t it;	/* Internal object tag. Must overlap MSW of number. */
     )
   };
+#endif
 #if LJ_FR2
   int64_t ftsz;		/* Frame type and size of previous frame, or PC. */
 #else
