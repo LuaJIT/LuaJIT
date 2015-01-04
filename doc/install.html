@@ -134,13 +134,20 @@ operating systems, CPUs and compilers:
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
+<td class="compatcpu"><a href="#cross2">ARM64</a></td>
+<td class="compatos">GCC 4.8+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos">Clang 3.5+</td>
+<td class="compatos compatno">&nbsp;</td>
+</tr>
+<tr class="odd">
 <td class="compatcpu"><a href="#cross2">PPC</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+<br>GCC 4.1 (<a href="#ps3">PS3</a>)</td>
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos">XEDK (<a href="#xbox360">Xbox 360</a>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td class="compatcpu"><a href="#cross2">MIPS</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
@@ -377,6 +384,9 @@ make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
 
 # ARM hard-float ABI with VFP (armhf, requires recent toolchain)
 make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabihf-
+
+# ARM64 (requires x64 host)
+make CROSS=aarch64-linux-
 
 # PPC
 make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
