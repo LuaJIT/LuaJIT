@@ -4649,8 +4649,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jnz <4
     |  movzx RA, PC_RA
     |  not RAa
-    |  lea RA, [BASE+RA*8]
-    |  mov LFUNC:KBASE, [RA-8]		// Need to prepare KBASE.
+    |  mov LFUNC:KBASE, [BASE+RA*8-8]	// Need to prepare KBASE.
     |  mov KBASE, LFUNC:KBASE->pc
     |  mov KBASE, [KBASE+PC2PROTO(k)]
     |  jmp <4

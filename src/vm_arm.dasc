@@ -543,9 +543,8 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  beq ->cont_ffi_callback		// cont = 1: return from FFI callback.
   |  // cont = 0: tailcall from C function.
-  |  ldr CARG3, [BASE, FRAME_FUNC]
-  |   sub CARG4, CARG4, #16
-  |   sub RC, CARG4, BASE
+  |  sub CARG4, CARG4, #16
+  |  sub RC, CARG4, BASE
   |  b ->vm_call_tail
   |.endif
   |
@@ -3749,7 +3748,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_TSETR:
     |  decode_RB8 RB, INS
     |   decode_RC8 RC, INS
-    |  // RA = dst*8, RB = table*8, RC = key*8
+    |  // RA = src*8, RB = table*8, RC = key*8
     |  ldr TAB:CARG2, [BASE, RB]
     |   ldr CARG3, [BASE, RC]
     |     ldrb INS, TAB:CARG2->marked
