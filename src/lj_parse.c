@@ -685,10 +685,12 @@ static BCPos bcemit_jmp(FuncState *fs)
   BCPos j = fs->pc - 1;
   BCIns *ip = &fs->bcbase[j].ins;
   fs->jpc = NO_JMP;
-  if ((int32_t)j >= (int32_t)fs->lasttarget && bc_op(*ip) == BC_UCLO)
+  if ((int32_t)j >= (int32_t)fs->lasttarget && bc_op(*ip) == BC_UCLO) {
     setbc_j(ip, NO_JMP);
-  else
+    fs->lasttarget = j+1;
+  } else {
     j = bcemit_AJ(fs, BC_JMP, fs->freereg, NO_JMP);
+  }
   jmp_append(fs, &j, jpc);
   return j;
 }
