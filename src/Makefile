@@ -313,6 +313,9 @@ ifeq (iOS,$(TARGET_SYS))
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
+  ifeq (arm64,$(TARGET_LJARCH))
+    TARGET_XCFLAGS+= -fno-omit-frame-pointer
+  endif
 else
   ifneq (SunOS,$(TARGET_SYS))
     ifneq (PS3,$(TARGET_SYS))
