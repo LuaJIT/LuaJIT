@@ -290,6 +290,75 @@
 #define CCALL_HANDLE_RET \
   if ((ct->info & CTF_VARARG)) sp = (uint8_t *)&cc->gpr[0];
 
+#elif LJ_TARGET_ARM64
+/* -- ARM64 calling conventions ------------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  cc->retref = !ccall_classify_struct(cts, ctr); \
+  if (cc->retref) cc->retp = dp;
+
+#define CCALL_HANDLE_STRUCTRET2 \
+  unsigned int cl = ccall_classify_struct(cts, ctr); \
+  if ((cl & 4)) { /* Combine float HFA from separate registers. */ \
+    CTSize i = (cl >> 8) - 1; \
+    do { ((uint32_t *)dp)[i] = cc->fpr[i].u32; } while (i--); \
+  } else { \
+    if (cl > 1) sp = (uint8_t *)&cc->fpr[0]; \
+    memcpy(dp, sp, ctr->size); \
+  }
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in one or two FPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPRs. */ \
+    ((float *)dp)[0] = cc->fpr[0].f; \
+    ((float *)dp)[1] = cc->fpr[1].f; \
+  } else {  /* Copy complex double from FPRs. */ \
+    ((double *)dp)[0] = cc->fpr[0].d; \
+    ((double *)dp)[1] = cc->fpr[1].d; \
+  }
+
+#define CCALL_HANDLE_STRUCTARG \
+  unsigned int cl = ccall_classify_struct(cts, d); \
+  if (cl == 0) {  /* Pass struct by reference. */ \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  } else if (cl > 1) {  /* Pass struct in FPRs or on stack. */ \
+    isfp = (cl & 4) ? 2 : 1; \
+  }  /* else: Pass struct in GPRs or on stack. */
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex by value in separate (!) FPRs or on stack. */ \
+  isfp = ctr->size == 2*sizeof(float) ? 2 : 1;
+
+#define CCALL_HANDLE_REGARG \
+  if (LJ_TARGET_IOS && isva) { \
+    /* IOS: All variadic arguments are on the stack. */ \
+  } else if (isfp) {  /* Try to pass argument in FPRs. */ \
+    int n2 = ctype_isvector(d->info) ? 1 : n*isfp; \
+    if (nfpr + n2 <= CCALL_NARG_FPR) { \
+      dp = &cc->fpr[nfpr]; \
+      nfpr += n2; \
+      goto done; \
+    } else { \
+      nfpr = CCALL_NARG_FPR;  /* Prevent reordering. */ \
+      if (LJ_TARGET_IOS && d->size < 8) goto err_nyi; \
+    } \
+  } else {  /* Try to pass argument in GPRs. */ \
+    if (!LJ_TARGET_IOS && (d->info & CTF_ALIGN) > CTALIGN_PTR) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+    if (ngpr + n <= maxgpr) { \
+      dp = &cc->gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } else { \
+      ngpr = maxgpr;  /* Prevent reordering. */ \
+      if (LJ_TARGET_IOS && d->size < 8) goto err_nyi; \
+    } \
+  }
+
 #elif LJ_TARGET_PPC
 /* -- PPC calling conventions --------------------------------------------- */
 
@@ -584,6 +653,52 @@ noth:  /* Not a homogeneous float/double aggregate. */
 
 #endif
 
+/* -- ARM64 ABI struct classification ------------------------------------- */
+
+#if LJ_TARGET_ARM64
+
+/* Classify a struct based on its fields. */
+static unsigned int ccall_classify_struct(CTState *cts, CType *ct)
+{
+  CTSize sz = ct->size;
+  unsigned int r = 0, n = 0, isu = (ct->info & CTF_UNION);
+  while (ct->sib) {
+    CType *sct;
+    ct = ctype_get(cts, ct->sib);
+    if (ctype_isfield(ct->info)) {
+      sct = ctype_rawchild(cts, ct);
+      if (ctype_isfp(sct->info)) {
+	r |= sct->size;
+	if (!isu) n++; else if (n == 0) n = 1;
+      } else if (ctype_iscomplex(sct->info)) {
+	r |= (sct->size >> 1);
+	if (!isu) n += 2; else if (n < 2) n = 2;
+      } else if (ctype_isstruct(sct->info)) {
+	goto substruct;
+      } else {
+	goto noth;
+      }
+    } else if (ctype_isbitfield(ct->info)) {
+      goto noth;
+    } else if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
+      sct = ctype_rawchild(cts, ct);
+    substruct:
+      if (sct->size > 0) {
+	unsigned int s = ccall_classify_struct(cts, sct);
+	if (s <= 1) goto noth;
+	r |= (s & 255);
+	if (!isu) n += (s >> 8); else if (n < (s >>8)) n = (s >> 8);
+      }
+    }
+  }
+  if ((r == 4 || r == 8) && n <= 4)
+    return r + (n << 8);
+noth:  /* Not a homogeneous float/double aggregate. */
+  return (sz <= 16);  /* Return structs of size <= 16 in GPRs. */
+}
+
+#endif
+
 /* -- Common C call handling ---------------------------------------------- */
 
 /* Infer the destination CTypeID for a vararg argument. */
@@ -765,6 +880,12 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     if (isfp == 2 && n == 2 && (uint8_t *)dp == (uint8_t *)&cc->fpr[nfpr-2]) {
       cc->fpr[nfpr-1].d[0] = cc->fpr[nfpr-2].d[1];  /* Split complex double. */
       cc->fpr[nfpr-2].d[1] = 0;
+    }
+#elif LJ_TARGET_ARM64
+    if (isfp == 2 && (uint8_t *)dp < (uint8_t *)cc->stack) {
+      /* Split float HFA or complex float into separate registers. */
+      CTSize i = (sz >> 2) - 1;
+      do { ((uint64_t *)dp)[i] = ((uint32_t *)dp)[i]; } while (i--);
     }
 #else
     UNUSED(isfp);

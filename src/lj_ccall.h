@@ -68,6 +68,21 @@ typedef union FPRArg {
   float f[2];
 } FPRArg;
 
+#elif LJ_TARGET_ARM64
+
+#define CCALL_NARG_GPR		8
+#define CCALL_NRET_GPR		2
+#define CCALL_NARG_FPR		8
+#define CCALL_NRET_FPR		4
+#define CCALL_SPS_FREE		0
+
+typedef intptr_t GPRArg;
+typedef union FPRArg {
+  double d;
+  float f;
+  uint32_t u32;
+} FPRArg;
+
 #elif LJ_TARGET_PPC
 
 #define CCALL_NARG_GPR		8
@@ -135,6 +150,8 @@ typedef LJ_ALIGN(CCALL_ALIGN_CALLSTATE) struct CCallState {
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #elif LJ_TARGET_X86
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
+#elif LJ_TARGET_ARM64
+  void *retp;			/* Aggregate return pointer in x8. */
 #elif LJ_TARGET_PPC
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #endif

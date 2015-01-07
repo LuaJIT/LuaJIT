@@ -27,7 +27,7 @@
 
 #if LJ_OS_NOJIT
 
-/* Disabled callback support. */
+/* Callbacks disabled. */
 #define CALLBACK_SLOT2OFS(slot)	(0*(slot))
 #define CALLBACK_OFS2SLOT(ofs)	(0*(ofs))
 #define CALLBACK_MAX_SLOT	0
@@ -54,23 +54,18 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #elif LJ_TARGET_ARM
 
 #define CALLBACK_MCODE_HEAD		32
-#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
-#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
-#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
+
+#elif LJ_TARGET_ARM64
+
+#define CALLBACK_MCODE_HEAD		32
 
 #elif LJ_TARGET_PPC
 
 #define CALLBACK_MCODE_HEAD		24
-#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
-#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
-#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
 
 #elif LJ_TARGET_MIPS
 
 #define CALLBACK_MCODE_HEAD		24
-#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
-#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
-#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
 
 #else
 
@@ -79,6 +74,12 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #define CALLBACK_OFS2SLOT(ofs)	(0*(ofs))
 #define CALLBACK_MAX_SLOT	0
 
+#endif
+
+#ifndef CALLBACK_SLOT2OFS
+#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
+#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
+#define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
 #endif
 
 /* Convert callback slot number to callback function pointer. */
@@ -153,6 +154,26 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
   for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
     *p++ = ARMI_MOV|ARMF_D(RID_R12)|ARMF_M(RID_PC);
     *p = ARMI_B | ((page-p-2) & 0x00ffffffu);
+    p++;
+  }
+  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+}
+#elif LJ_TARGET_ARM64
+static void callback_mcode_init(global_State *g, uint32_t *page)
+{
+  uint32_t *p = page;
+  void *target = (void *)lj_vm_ffi_callback;
+  MSize slot;
+  *p++ = A64I_LDRLx | A64F_D(RID_X11) | A64F_S19(4);
+  *p++ = A64I_LDRLx | A64F_D(RID_X10) | A64F_S19(5);
+  *p++ = A64I_BR | A64F_N(RID_X11);
+  *p++ = A64I_NOP;
+  ((void **)p)[0] = target;
+  ((void **)p)[1] = g;
+  p += 4;
+  for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+    *p++ = A64I_MOVZw | A64F_D(RID_X9) | A64F_U16(slot);
+    *p = A64I_B | A64F_S26((page-p) & 0x03ffffffu);
     p++;
   }
   lua_assert(p - page <= CALLBACK_MCODE_SIZE);
@@ -350,6 +371,29 @@ void lj_ccallback_mcode_free(CTState *cts)
     ngpr += n; \
     goto done; \
   } CALLBACK_HANDLE_REGARG_FP2
+
+#elif LJ_TARGET_ARM64
+
+#define CALLBACK_HANDLE_REGARG \
+  if (isfp) { \
+    if (nfpr + n <= CCALL_NARG_FPR) { \
+      sp = &cts->cb.fpr[nfpr]; \
+      nfpr += n; \
+      goto done; \
+    } else { \
+      nfpr = CCALL_NARG_FPR;  /* Prevent reordering. */ \
+    } \
+  } else { \
+    if (!LJ_TARGET_IOS && n > 1) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+    if (ngpr + n <= maxgpr) { \
+      sp = &cts->cb.gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } else { \
+      ngpr = CCALL_NARG_GPR;  /* Prevent reordering. */ \
+    } \
+  }
 
 #elif LJ_TARGET_PPC
 

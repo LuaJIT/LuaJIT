@@ -853,7 +853,8 @@ static void build_subroutines(BuildCtx *ctx)
   |   str PC, SAVE_PC
   |  add CARG3, RA, NARGS8:RC
   |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
-  |  ldp LFUNC:CARG3, PC, [RA, FRAME_FUNC]  // Guaranteed to be a function here.
+  |  ldr LFUNC:CARG3, [RA, FRAME_FUNC]	// Guaranteed to be a function here.
+  |   ldr PC, [BASE, FRAME_PC]
   |   add NARGS8:RC, NARGS8:RC, #8	// Got one more argument now.
   |  and LFUNC:CARG3, CARG3, #LJ_GCVMASK
   |  b ->BC_CALLT2_Z
@@ -1859,18 +1860,89 @@ static void build_subroutines(BuildCtx *ctx)
   |// Saveregs already performed. Callback slot number in [sp], g in r12.
   |->vm_ffi_callback:
   |.if FFI
-  |  NYI
+  |.type CTSTATE, CTState, PC
+  |  saveregs
+  |  ldr CTSTATE, GL:x10->ctype_state
+  |  mov GL, x10
+  |    add x10, sp, # CFRAME_SPACE
+  |  str w9, CTSTATE->cb.slot
+  |  stp x0, x1, CTSTATE->cb.gpr[0]
+  |   stp d0, d1, CTSTATE->cb.fpr[0]
+  |  stp x2, x3, CTSTATE->cb.gpr[2]
+  |   stp d2, d3, CTSTATE->cb.fpr[2]
+  |  stp x4, x5, CTSTATE->cb.gpr[4]
+  |   stp d4, d5, CTSTATE->cb.fpr[4]
+  |  stp x6, x7, CTSTATE->cb.gpr[6]
+  |   stp d6, d7, CTSTATE->cb.fpr[6]
+  |    str x10, CTSTATE->cb.stack
+  |  mov CARG1, CTSTATE
+  |   str CTSTATE, SAVE_PC		// Any value outside of bytecode is ok.
+  |  mov CARG2, sp
+  |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
+  |  // Returns lua_State *.
+  |  ldp BASE, RC, L:CRET1->base
+  |   movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
+  |   movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |   movn TISNIL, #0
+  |   mov L, CRET1
+  |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
+  |  sub RC, RC, BASE
+  |   st_vmstate ST_INTERP
+  |  and LFUNC:CARG3, CARG3, #LJ_GCVMASK
+  |  ins_callt
   |.endif
   |
   |->cont_ffi_callback:			// Return from FFI callback.
   |.if FFI
-  |  NYI
+  |  ldr CTSTATE, GL->ctype_state
+  |   stp BASE, CARG4, L->base
+  |  str L, CTSTATE->L
+  |  mov CARG1, CTSTATE
+  |  mov CARG2, RA
+  |  bl extern lj_ccallback_leave       // (CTState *cts, TValue *o)
+  |  ldp x0, x1, CTSTATE->cb.gpr[0]
+  |   ldp d0, d1, CTSTATE->cb.fpr[0]
+  |  b ->vm_leave_unw
   |.endif
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
   |.if FFI
-  |  NYI
+  |  .type CCSTATE, CCallState, x19
+  |  stp fp, lr, [sp, #-32]!
+  |  add fp, sp, #0
+  |  str CCSTATE, [sp, #16]
+  |  mov CCSTATE, x0
+  |  ldr TMP0w, CCSTATE:x0->spadj
+  |   ldrb TMP1w, CCSTATE->nsp
+  |    add TMP2, CCSTATE, #offsetof(CCallState, stack)
+  |   subs TMP1, TMP1, #1
+  |    ldr TMP3, CCSTATE->func
+  |  sub sp, fp, TMP0
+  |   bmi >2
+  |1:  // Copy stack slots
+  |  ldr TMP0, [TMP2, TMP1, lsl #3]
+  |  str TMP0, [sp, TMP1, lsl #3]
+  |  subs TMP1, TMP1, #1
+  |  bpl <1
+  |2:
+  |  ldp x0, x1, CCSTATE->gpr[0]
+  |   ldp d0, d1, CCSTATE->fpr[0]
+  |  ldp x2, x3, CCSTATE->gpr[2]
+  |   ldp d2, d3, CCSTATE->fpr[2]
+  |  ldp x4, x5, CCSTATE->gpr[4]
+  |   ldp d4, d5, CCSTATE->fpr[4]
+  |  ldp x6, x7, CCSTATE->gpr[6]
+  |   ldp d6, d7, CCSTATE->fpr[6]
+  |  ldr x8, CCSTATE->retp
+  |  blr TMP3
+  |  mov sp, fp
+  |  stp x0, x1, CCSTATE->gpr[0]
+  |   stp d0, d1, CCSTATE->fpr[0]
+  |   stp d2, d3, CCSTATE->fpr[2]
+  |  ldr CCSTATE, [sp, #16]
+  |  ldp fp, lr, [sp], #32
+  |  ret
   |.endif
   |// Note: vm_ffi_call must be the last function in this object file!
   |
@@ -2087,7 +2159,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |.if FFI
     |7:
-    |  asr ITYPE, TMP0, #47
+    |  asr ITYPE, CARG1, #47
     |  cmn ITYPE, #-LJ_TCDATA
     |  bne <2
     |  b ->vmeta_equal_cd
@@ -3600,7 +3672,19 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 3\n"
 	".LEFDE0:\n\n");
 #if LJ_HASFFI
-#error "NYI"
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .Lframe0\n"
+	"\t.quad lj_vm_ffi_call\n"
+	"\t.quad %d\n"
+	"\t.byte 0xe\n\t.uleb128 32\n"		/* def_cfa_offset */
+	"\t.byte 0x9d\n\t.uleb128 4\n"		/* offset fp */
+	"\t.byte 0x9e\n\t.uleb128 3\n"		/* offset lr */
+	"\t.byte 0x93\n\t.uleb128 2\n"		/* offset x19 */
+	"\t.align 3\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
 #endif
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",%%progbits\n");
     fprintf(ctx->fp,
@@ -3615,7 +3699,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 30\n"				/* Return address is in lr. */
 	"\t.uleb128 6\n"			/* augmentation length */
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-        "\t.long lj_err_unwind_dwarf-.\n"
+	"\t.long lj_err_unwind_dwarf-.\n"
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
 	"\t.byte 0xc\n\t.uleb128 31\n\t.uleb128 0\n"	/* def_cfa sp */
 	"\t.align 3\n"
@@ -3627,7 +3711,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .LASFDE2-.Lframe1\n"
 	"\t.long .Lbegin-.\n"
 	"\t.long %d\n"
-        "\t.uleb128 0\n"			/* augmentation length */
+	"\t.uleb128 0\n"			/* augmentation length */
 	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
 	"\t.byte 0x9d\n\t.uleb128 %d\n"		/* offset fp */
 	"\t.byte 0x9e\n\t.uleb128 %d\n",	/* offset lr */
@@ -3641,7 +3725,35 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 3\n"
 	".LEFDE2:\n\n");
 #if LJ_HASFFI
-#error "NYI"
+    fprintf(ctx->fp,
+	".Lframe2:\n"
+	"\t.long .LECIE2-.LSCIE2\n"
+	".LSCIE2:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -8\n"
+	"\t.byte 30\n"				/* Return address is in lr. */
+	"\t.uleb128 1\n"                        /* augmentation length */
+	"\t.byte 0x1b\n"                        /* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 31\n\t.uleb128 0\n"	/* def_cfa sp */
+	"\t.align 3\n"
+	".LECIE2:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE3:\n"
+	"\t.long .LEFDE3-.LASFDE3\n"
+	".LASFDE3:\n"
+	"\t.long .LASFDE3-.Lframe2\n"
+	"\t.long lj_vm_ffi_call-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"                        /* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 32\n"		/* def_cfa_offset */
+	"\t.byte 0x9d\n\t.uleb128 4\n"		/* offset fp */
+	"\t.byte 0x9e\n\t.uleb128 3\n"		/* offset lr */
+	"\t.byte 0x93\n\t.uleb128 2\n"		/* offset x19 */
+	"\t.align 3\n"
+	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
 #endif
     break;
   default:
