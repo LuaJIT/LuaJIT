@@ -886,7 +886,7 @@ LUA_API void lua_settable(lua_State *L, int idx)
     copyTV(L, o, L->top+1);
   } else {
     TValue *base = L->top;
-    copyTV(L, base+2, base-3-LJ_FR2);
+    copyTV(L, base+2, base-3-2*LJ_FR2);
     L->top = base+3;
     lj_vm_call(L, base, 0+1);
     L->top -= 3+LJ_FR2;
@@ -907,7 +907,7 @@ LUA_API void lua_setfield(lua_State *L, int idx, const char *k)
     copyTV(L, o, --L->top);
   } else {
     TValue *base = L->top;
-    copyTV(L, base+2, base-3-LJ_FR2);
+    copyTV(L, base+2, base-3-2*LJ_FR2);
     L->top = base+3;
     lj_vm_call(L, base, 0+1);
     L->top -= 2+LJ_FR2;
