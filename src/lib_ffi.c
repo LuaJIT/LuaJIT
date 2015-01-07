@@ -751,6 +751,9 @@ LJLIB_CF(ffi_abi)	LJLIB_REC(.)
   case H_(4ab624a8,4ab624a8): b = 1; break;  /* win */
 #endif
   case H_(3af93066,1f001464): b = 1; break;  /* le/be */
+#if LJ_GC64
+  case H_(9e89d2c9,13c83c92): b = 1; break;  /* gc64 */
+#endif
   default:
     break;
   }
