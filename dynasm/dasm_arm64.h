@@ -281,8 +281,9 @@ void dasm_put(Dst_DECL, int start, ...)
 	b[pos++] = ofs;  /* Store pass1 offset estimate. */
 	break;
       case DASM_IMM:
-#ifdef DASM_CHECKS
 	CK((n & ((1<<((ins>>10)&31))-1)) == 0, RANGE_I);
+	n >>= ((ins>>10)&31);
+#ifdef DASM_CHECKS
 	if ((ins & 0x8000))
 	  CK(((n + (1<<(((ins>>5)&31)-1)))>>((ins>>5)&31)) == 0, RANGE_I);
 	else
@@ -451,7 +452,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  break;
 	case DASM_LABEL_PC: break;
 	case DASM_IMM:
-	  cp[-1] |= ((n>>((ins>>10)&31)) & ((1<<((ins>>5)&31))-1)) << (ins&31);
+	  cp[-1] |= (n & ((1<<((ins>>5)&31))-1)) << (ins&31);
 	  break;
 	case DASM_IMM6:
 	  cp[-1] |= ((n&31) << 19) | ((n&32) << 26);
