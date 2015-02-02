@@ -378,6 +378,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->vtop = 0;
   ls->bcstack = NULL;
   ls->sizebcstack = 0;
+  ls->token = 0;
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
