@@ -670,8 +670,8 @@ static void bcemit_method(FuncState *fs, ExpDesc *e, ExpDesc *key)
     bcemit_ABC(fs, BC_TGETS, func, obj, idx);
   } else {
     bcreg_reserve(fs, 3+LJ_FR2);
-    bcemit_AD(fs, BC_KSTR, func+2, idx);
-    bcemit_ABC(fs, BC_TGETV, func, obj, func+2);
+    bcemit_AD(fs, BC_KSTR, func+2+LJ_FR2, idx);
+    bcemit_ABC(fs, BC_TGETV, func, obj, func+2+LJ_FR2);
     fs->freereg--;
   }
   e->u.s.info = func;
