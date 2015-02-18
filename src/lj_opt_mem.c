@@ -808,6 +808,7 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
   IRRef ref = *refp;
   if (J->chain[IR_CALLXS] > lim) lim = J->chain[IR_CALLXS];
   if (J->chain[IR_XBAR] > lim) lim = J->chain[IR_XBAR];
+  if (J->chain[IR_XSNEW] > lim) lim = J->chain[IR_XSNEW];
   while (ref > lim) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
     switch (aa_xref(J, xr, fins, store)) {
