@@ -199,7 +199,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       *xip++ = d + ((*p != '.' ? *p : *++p) & 15); p++;
     }
     /* Scan and realign trailing digit. */
-    if (i) *xip++ = 10 * ((*p != '.' ? *p : *++p) & 15), ex10--, p++;
+    if (i) *xip++ = 10 * ((*p != '.' ? *p : *++p) & 15), ex10--, dig++, p++;
 
     /* Summarize rounding-effect of excess digits. */
     if (dig > STRSCAN_MAXDIG) {
