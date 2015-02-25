@@ -179,7 +179,9 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
-#if __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__
+#if __ARM_ARCH____ARM_ARCH_8__ || __ARM_ARCH_8A__
+#define LJ_ARCH_VERSION		80
+#elif __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
 #define LJ_ARCH_VERSION		70
 #elif __ARM_ARCH_6T2__
 #define LJ_ARCH_VERSION		61
@@ -355,6 +357,9 @@
 #elif LJ_TARGET_MIPS
 #if defined(__mips_soft_float)
 #error "No support for MIPS CPUs without FPU"
+#endif
+#if defined(_LP64)
+#error "No support for MIPS64"
 #endif
 #endif
 #endif
