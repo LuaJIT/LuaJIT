@@ -340,6 +340,9 @@
 #if defined(__mips_soft_float)
 #error "No support for MIPS CPUs without FPU"
 #endif
+#if defined(_LP64)
+#error "No support for MIPS64"
+#endif
 #endif
 #endif
 
