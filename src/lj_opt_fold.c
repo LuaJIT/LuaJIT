@@ -1167,11 +1167,16 @@ LJFOLDF(simplify_conv_flt_num)
 LJFOLD(TOBIT CONV KNUM)
 LJFOLDF(simplify_tobit_conv)
 {
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT ||
-      (fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
-    /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  /* Fold even across PHI to avoid expensive num->int conversions in loop. */
+  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT) {
     lua_assert(irt_isnum(fleft->t));
     return fleft->op1;
+  } else if ((fleft->op2 & IRCONV_SRCMASK) == IRT_U32) {
+    lua_assert(irt_isnum(fleft->t));
+    fins->o = IR_CONV;
+    fins->op1 = fleft->op1;
+    fins->op2 = (IRT_INT<<5)|IRT_U32;
+    return RETRYFOLD;
   }
   return NEXTFOLD;
 }
