@@ -114,7 +114,7 @@ static const char *sym_decorate(BuildCtx *ctx,
     else
       *p = '\0';
 #elif LJ_TARGET_PPC && !LJ_TARGET_CONSOLE
-    /* Keep @plt. */
+    /* Keep @plt etc. */
 #else
     *p = '\0';
 #endif

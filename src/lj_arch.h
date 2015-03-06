@@ -210,13 +210,24 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
-#define LJ_ARCH_NAME		"ppc"
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+#define LJ_ARCH_ENDIAN		LUAJIT_LE
+#else
+#define LJ_ARCH_ENDIAN		LUAJIT_BE
+#endif
+
 #if _LP64
 #define LJ_ARCH_BITS		64
+#if LJ_ARCH_ENDIAN == LUAJIT_LE
+#define LJ_ARCH_NAME		"ppc64le"
+#else
+#define LJ_ARCH_NAME		"ppc64"
+#endif
 #else
 #define LJ_ARCH_BITS		32
+#define LJ_ARCH_NAME		"ppc"
 #endif
-#define LJ_ARCH_ENDIAN		LUAJIT_BE
+
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_EHRETREG	3
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
@@ -224,6 +235,15 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
+
+#if LJ_TARGET_CONSOLE
+#define LJ_ARCH_PPC32ON64	1
+#define LJ_ARCH_NOFFI		1
+#elif LJ_ARCH_BITS == 64
+#define LJ_ARCH_PPC64		1
+#define LJ_TARGET_GC64		1
+#define LJ_ARCH_NOJIT		1	/* NYI */
+#endif
 
 #if _ARCH_PWR7
 #define LJ_ARCH_VERSION		70
@@ -237,10 +257,6 @@
 #define LJ_ARCH_VERSION		40
 #else
 #define LJ_ARCH_VERSION		0
-#endif
-#if __PPC64__ || __powerpc64__ || LJ_TARGET_CONSOLE
-#define LJ_ARCH_PPC64		1
-#define LJ_ARCH_NOFFI		1
 #endif
 #if _ARCH_PPCSQ
 #define LJ_ARCH_SQRT		1
@@ -345,11 +361,11 @@
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif
-#if defined(_LITTLE_ENDIAN)
-#error "No support for little-endian PowerPC"
+#if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
+#error "No support for little-endian PPC32"
 #endif
-#if defined(_LP64)
-#error "No support for PowerPC 64 bit mode"
+#if LJ_ARCH_PPC64
+#error "No support for PowerPC 64 bit mode (yet)"
 #endif
 #ifdef __NO_FPRS__
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"

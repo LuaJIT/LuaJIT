@@ -1,4 +1,4 @@
-|// Low-level VM code for PowerPC CPUs.
+|// Low-level VM code for PowerPC 32 bit or 32on64 bit mode.
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 |
@@ -18,7 +18,7 @@
 |// DynASM defines used by the PPC port:
 |//
 |// P64     64 bit pointers (only for GPR64 testing).
-|//         Note: a full PPC64 _LP64 port is not planned.
+|//         Note: see vm_ppc64.dasc for a full PPC64 _LP64 port.
 |// GPR64   64 bit registers (but possibly 32 bit pointers, e.g. PS3).
 |//         Affects reg saves, stack layout, carry/overflow/dot flags etc.
 |// FRAME32 Use 32 bit frame layout, even with GPR64 (Xbox 360).
