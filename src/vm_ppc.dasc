@@ -4289,13 +4289,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwz TAB:CARG2, 4(RB)
     |.if DUALNUM
     |  add RC, BASE, RC
-    |    lbz TMP3, TAB:RB->marked
+    |    lbz TMP3, TAB:CARG2->marked
     |  lwz TMP0, TAB:CARG2->asize
     |  lwz CARG3, 4(RC)
     |   lwz TMP1, TAB:CARG2->array
     |.else
     |  lfdx f0, BASE, RC
-    |    lbz TMP3, TAB:RB->marked
+    |    lbz TMP3, TAB:CARG2->marked
     |  lwz TMP0, TAB:CARG2->asize
     |  toint CARG3, f0
     |   lwz TMP1, TAB:CARG2->array
