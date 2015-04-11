@@ -41,7 +41,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "IMM",
+  "REL_PC", "LABEL_PC", "IMM", "IMMSH"
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -1482,8 +1482,8 @@ local function parse_shiftmask(imm, isshift)
   local n = tonumber(imm)
   if n then
     if shr(n, 6) == 0 then
-      local lsb = band(imm, 31)
-      local msb = imm - lsb
+      local lsb = band(n, 31)
+      local msb = n - lsb
       return isshift and (shl(lsb, 11)+shr(msb, 4)) or (shl(lsb, 6)+msb)
     end
     werror("out of range immediate `"..imm.."'")
@@ -1491,7 +1491,8 @@ local function parse_shiftmask(imm, isshift)
 	 match(imm, "^([%w_]+):(r[1-3]?[0-9])$") then
     werror("expected immediate operand, got register")
   else
-    werror("NYI: parameterized 64 bit shift/mask")
+    waction("IMMSH", isshift and 1 or 0, imm)
+    return 0;
   end
 end
 
