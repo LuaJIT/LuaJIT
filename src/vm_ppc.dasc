@@ -320,13 +320,6 @@
 |
 |//-----------------------------------------------------------------------
 |
-|// These basic macros should really be part of DynASM.
-|.macro srwi, rx, ry, n; rlwinm rx, ry, 32-n, n, 31; .endmacro
-|.macro slwi, rx, ry, n; rlwinm rx, ry, n, 0, 31-n; .endmacro
-|.macro rotlwi, rx, ry, n; rlwinm rx, ry, n, 0, 31; .endmacro
-|.macro rotlw, rx, ry, rn; rlwnm rx, ry, rn, 0, 31; .endmacro
-|.macro subi, rx, ry, i; addi rx, ry, -i; .endmacro
-|
 |// Trap for not-yet-implemented parts.
 |.macro NYI; tw 4, sp, sp; .endmacro
 |
