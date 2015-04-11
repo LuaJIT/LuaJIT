@@ -210,10 +210,12 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
+#ifndef LJ_ARCH_ENDIAN
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
 #else
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
+#endif
 #endif
 
 #if _LP64

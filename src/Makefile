@@ -221,6 +221,11 @@ ifneq (,$(findstring LJ_TARGET_ARM64 ,$(TARGET_TESTARCH)))
   TARGET_LJARCH= arm64
 else
 ifneq (,$(findstring LJ_TARGET_PPC ,$(TARGET_TESTARCH)))
+  ifneq (,$(findstring LJ_LE 1,$(TARGET_TESTARCH)))
+    TARGET_ARCH= -DLJ_ARCH_ENDIAN=LUAJIT_LE
+  else
+    TARGET_ARCH= -DLJ_ARCH_ENDIAN=LUAJIT_BE
+  endif
   TARGET_LJARCH= ppc
 else
 ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
