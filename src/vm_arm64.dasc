@@ -1309,6 +1309,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   blo ->fff_fallback
   |  cmp TISNUMhi, CARG1, lsr #32
   |  beq ->fff_restv
+  |  blo ->fff_fallback
   |  round d0, d0
   |  b ->fff_resn
   |.endmacro
