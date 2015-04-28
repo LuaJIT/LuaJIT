@@ -96,6 +96,13 @@ static ptrdiff_t results_wanted(jit_State *J)
     return -1;
 }
 
+#ifdef LUAJIT_TRACE_STITCHING
+/* This feature is disabled for now due to a design mistake. Sorry.
+**
+** It causes unpredictable behavior and crashes when a full trace flush
+** happens with a stitching continuation still in the stack somewhere.
+*/
+
 /* Trace stitching: add continuation below frame to start a new trace. */
 static void recff_stitch(jit_State *J)
 {
@@ -174,6 +181,31 @@ static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
 
 /* Must stop the trace for classic C functions with arbitrary side-effects. */
 #define recff_c		recff_nyi
+#else
+/* Fallback handler for fast functions that are not recorded (yet). */
+LJ_NORET static void recff_nyi(jit_State *J, RecordFFData *rd)
+{
+  setfuncV(J->L, &J->errinfo, J->fn);
+  lj_trace_err_info(J, LJ_TRERR_NYIFF);
+  UNUSED(rd);
+}
+
+/* Throw error for unsupported variant of fast function. */
+LJ_NORET static void recff_nyiu(jit_State *J, RecordFFData *rd)
+{
+  setfuncV(J->L, &J->errinfo, J->fn);
+  lj_trace_err_info(J, LJ_TRERR_NYIFFU);
+  UNUSED(rd);
+}
+
+/* Must abort the trace for classic C functions with arbitrary side-effects. */
+LJ_NORET static void recff_c(jit_State *J, RecordFFData *rd)
+{
+  setfuncV(J->L, &J->errinfo, J->fn);
+  lj_trace_err_info(J, LJ_TRERR_NYICF);
+  UNUSED(rd);
+}
+#endif
 
 /* Emit BUFHDR for the global temporary buffer. */
 static TRef recff_bufhdr(jit_State *J)
