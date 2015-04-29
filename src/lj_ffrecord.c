@@ -183,7 +183,7 @@ static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
 #define recff_c		recff_nyi
 #else
 /* Fallback handler for fast functions that are not recorded (yet). */
-LJ_NORET static void recff_nyi(jit_State *J, RecordFFData *rd)
+static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
 {
   setfuncV(J->L, &J->errinfo, J->fn);
   lj_trace_err_info(J, LJ_TRERR_NYIFF);
@@ -199,7 +199,7 @@ LJ_NORET static void recff_nyiu(jit_State *J, RecordFFData *rd)
 }
 
 /* Must abort the trace for classic C functions with arbitrary side-effects. */
-LJ_NORET static void recff_c(jit_State *J, RecordFFData *rd)
+static void LJ_FASTCALL recff_c(jit_State *J, RecordFFData *rd)
 {
   setfuncV(J->L, &J->errinfo, J->fn);
   lj_trace_err_info(J, LJ_TRERR_NYICF);
