@@ -2564,8 +2564,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).
   |
-  |.macro .ffunc_bit, name, kind
-  |  .ffunc_1 name
+  |.macro .ffunc_bit, name, kind, fdef
+  |  fdef name
   |.if kind == 2
   |.if SSE
   |  sseconst_tobit xmm1, RBa
@@ -2606,6 +2606,10 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |.endif
   |2:
+  |.endmacro
+  |
+  |.macro .ffunc_bit, name, kind
+  |  .ffunc_bit name, kind, .ffunc_1
   |.endmacro
   |
   |.ffunc_bit bit_tobit, 0
@@ -2681,7 +2685,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit_sh, name, ins
   |.if DUALNUM
-  |  .ffunc_bit name, 1
+  |  .ffunc_bit name, 1, .ffunc_2
   |  // Note: no inline conversion from number for 2nd argument!
   |  cmp dword [BASE+12], LJ_TISNUM; jne ->fff_fallback
   |  mov RA, dword [BASE+8]
