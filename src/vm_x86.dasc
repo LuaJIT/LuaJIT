@@ -2348,8 +2348,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Bit library --------------------------------------------------------
   |
-  |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).
-  |
   |.macro .ffunc_bit, name, kind, fdef
   |  fdef name
   |.if kind == 2
