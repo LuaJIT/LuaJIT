@@ -394,6 +394,7 @@ static void trace_start(jit_State *J)
   J->guardemit.irt = 0;
   J->postproc = LJ_POST_NONE;
   lj_resetsplit(J);
+  J->retryrec = 0;
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
   L = J->L;
@@ -510,10 +511,15 @@ static int trace_abort(jit_State *J)
   }
   /* Penalize or blacklist starting bytecode instruction. */
   if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins))) {
-    if (J->exitno == 0)
-      penalty_pc(J, &gcref(J->cur.startpt)->pt, mref(J->cur.startpc, BCIns), e);
-    else
+    if (J->exitno == 0) {
+      BCIns *startpc = mref(J->cur.startpc, BCIns);
+      if (e == LJ_TRERR_RETRY)
+	hotcount_set(J2GG(J), startpc+1, 1);  /* Immediate retry. */
+      else
+	penalty_pc(J, &gcref(J->cur.startpt)->pt, startpc, e);
+    } else {
       traceref(J, J->exitno)->link = J->exitno;  /* Self-link is blacklisted. */
+    }
   }
 
   /* Is there anything to abort? */

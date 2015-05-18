@@ -290,6 +290,15 @@ typedef struct ScEvEntry {
   uint8_t dir;		/* Direction. 1: +, 0: -. */
 } ScEvEntry;
 
+/* Reverse bytecode map (IRRef -> PC). Only for selected instructions. */
+typedef struct RBCHashEntry {
+  MRef pc;		/* Bytecode PC. */
+  IRRef ref;		/* IR reference. */
+} RBCHashEntry;
+
+/* Number of slots in the reverse bytecode hash table. Must be a power of 2. */
+#define RBCHASH_SLOTS	8
+
 /* 128 bit SIMD constants. */
 enum {
   LJ_KSIMD_ABS,
@@ -364,8 +373,9 @@ typedef struct jit_State {
 
   PostProc postproc;	/* Required post-processing after execution. */
 #if LJ_SOFTFP || (LJ_32 && LJ_HASFFI)
-  int needsplit;	/* Need SPLIT pass. */
+  uint8_t needsplit;	/* Need SPLIT pass. */
 #endif
+  uint8_t retryrec;	/* Retry recording. */
 
   GCRef *trace;		/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */
@@ -381,6 +391,8 @@ typedef struct jit_State {
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
   uint32_t prngstate;	/* PRNG state. */
+
+  RBCHashEntry rbchash[RBCHASH_SLOTS];  /* Reverse bytecode map. */
 
   BPropEntry bpropcache[BPROP_SLOTS];  /* Backpropagation cache slots. */
   uint32_t bpropslot;	/* Round-robin index into bpropcache slots. */

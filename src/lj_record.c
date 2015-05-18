@@ -235,6 +235,8 @@ static void canonicalize_slots(jit_State *J)
 /* Stop recording. */
 void lj_record_stop(jit_State *J, TraceLink linktype, TraceNo lnk)
 {
+  if (J->retryrec)
+    lj_trace_err(J, LJ_TRERR_RETRY);
   lj_trace_end(J);
   J->cur.linktype = (uint8_t)linktype;
   J->cur.link = (uint16_t)lnk;
@@ -1127,6 +1129,60 @@ static void rec_mm_comp_cdata(jit_State *J, RecordIndex *ix, int op, MMS mm)
 
 /* -- Indexed access ------------------------------------------------------ */
 
+/* Bump table allocations in bytecode when they grow during recording. */
+static void rec_idx_bump(jit_State *J, RecordIndex *ix)
+{
+  RBCHashEntry *rbc = &J->rbchash[(ix->tab & (RBCHASH_SLOTS-1))];
+  if (tref_ref(ix->tab) == rbc->ref) {
+    const BCIns *pc = mref(rbc->pc, const BCIns);
+    GCtab *tb = tabV(&ix->tabv);
+    uint32_t nhbits;
+    IRIns *ir;
+    if (!tvisnil(&ix->keyv))
+      (void)lj_tab_set(J->L, tb, &ix->keyv);  /* Grow table right now. */
+    nhbits = tb->hmask > 0 ? lj_fls(tb->hmask)+1 : 0;
+    ir = IR(tref_ref(ix->tab));
+    if (ir->o == IR_TNEW) {
+      uint32_t ah = bc_d(*pc);
+      uint32_t asize = ah & 0x7ff, hbits = ah >> 11;
+      if (nhbits > hbits) hbits = nhbits;
+      if (tb->asize > asize) {
+	asize = tb->asize <= 0x7ff ? tb->asize : 0x7ff;
+      }
+      if ((asize | (hbits<<11)) != ah) {  /* Has the size changed? */
+	/* Patch bytecode, but continue recording (for more patching). */
+	setbc_d(pc, (asize | (hbits<<11)));
+	/* Patching TNEW operands is only safe if the trace is aborted. */
+	ir->op1 = asize; ir->op2 = hbits;
+	J->retryrec = 1;  /* Abort the trace at the end of recording. */
+      }
+    } else if (ir->o == IR_TDUP) {
+      GCtab *tpl = gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)bc_d(*pc)));
+      /* Grow template table, but preserve keys with nil values. */
+      if (tb->asize > tpl->asize || (1u << nhbits)-1 > tpl->hmask) {
+	Node *node = noderef(tpl->node);
+	uint32_t i, hmask = tpl->hmask;
+	for (i = 0; i <= hmask; i++) {
+	  if (!tvisnil(&node[i].key) && tvisnil(&node[i].val))
+	    settabV(J->L, &node[i].val, tpl);
+	}
+	if (!tvisnil(&ix->keyv) && tref_isk(ix->key)) {
+	  TValue *o = lj_tab_set(J->L, tpl, &ix->keyv);
+	  if (tvisnil(o)) settabV(J->L, o, tpl);
+	}
+	lj_tab_resize(J->L, tpl, tb->asize, nhbits);
+	hmask = tpl->hmask;
+	for (i = 0; i <= hmask; i++) {
+	  /* This is safe, since template tables only hold immutable values. */
+	  if (tvistab(&node[i].val))
+	    setnilV(&node[i].val);
+	}
+	J->retryrec = 1;  /* Abort the trace at the end of recording. */
+      }
+    }
+  }
+}
+
 /* Record bounds-check. */
 static void rec_idx_abc(jit_State *J, TRef asizeref, TRef ikey, uint32_t asize)
 {
@@ -1352,6 +1408,8 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 	  key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
 	xref = emitir(IRT(IR_NEWREF, IRT_P32), ix->tab, key);
 	keybarrier = 0;  /* NEWREF already takes care of the key barrier. */
+	if ((J->flags & JIT_F_OPT_SINK))  /* Avoid a separate flag. */
+	  rec_idx_bump(J, ix);
       }
     } else if (!lj_opt_fwd_wasnonnil(J, loadop, tref_ref(xref))) {
       /* Cannot derive that the previous value was non-nil, must do checks. */
@@ -1390,9 +1448,16 @@ static void rec_tsetm(jit_State *J, BCReg ra, BCReg rn, int32_t i)
 {
   RecordIndex ix;
   cTValue *basev = J->L->base;
-  copyTV(J->L, &ix.tabv, &basev[ra-1]);
+  GCtab *t = tabV(&basev[ra-1]);
+  settabV(J->L, &ix.tabv, t);
   ix.tab = getslot(J, ra-1);
   ix.idxchain = 0;
+  if ((J->flags & JIT_F_OPT_SINK)) {
+    if (t->asize < i+rn-ra)
+      lj_tab_reasize(J->L, t, i+rn-ra);
+    setnilV(&ix.keyv);
+    rec_idx_bump(J, &ix);
+  }
   for (; ra < rn; i++, ra++) {
     setintV(&ix.keyv, i);
     ix.key = lj_ir_kint(J, i);
@@ -1712,8 +1777,12 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
 {
   uint32_t asize = ah & 0x7ff;
   uint32_t hbits = ah >> 11;
+  TRef tr;
   if (asize == 0x7ff) asize = 0x801;
-  return emitir(IRTG(IR_TNEW, IRT_TAB), asize, hbits);
+  tr = emitir(IRTG(IR_TNEW, IRT_TAB), asize, hbits);
+  J->rbchash[(tr & (RBCHASH_SLOTS-1))].ref = tref_ref(tr);
+  setmref(J->rbchash[(tr & (RBCHASH_SLOTS-1))].pc, J->pc);
+  return tr;
 }
 
 /* -- Concatenation ------------------------------------------------------- */
@@ -2139,6 +2208,8 @@ void lj_record_ins(jit_State *J)
   case BC_TDUP:
     rc = emitir(IRTG(IR_TDUP, IRT_TAB),
 		lj_ir_ktab(J, gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)rc))), 0);
+    J->rbchash[(rc & (RBCHASH_SLOTS-1))].ref = tref_ref(rc);
+    setmref(J->rbchash[(rc & (RBCHASH_SLOTS-1))].pc, pc);
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
@@ -2352,6 +2423,7 @@ void lj_record_setup(jit_State *J)
   /* Initialize state related to current trace. */
   memset(J->slot, 0, sizeof(J->slot));
   memset(J->chain, 0, sizeof(J->chain));
+  memset(J->rbchash, 0, sizeof(J->rbchash));
   memset(J->bpropcache, 0, sizeof(J->bpropcache));
   J->scev.idx = REF_NIL;
   setmref(J->scev.pc, NULL);

@@ -44,6 +44,7 @@ LJ_FUNC void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t);
 #if LJ_HASFFI
 LJ_FUNC void lj_tab_rehash(lua_State *L, GCtab *t);
 #endif
+LJ_FUNC void lj_tab_resize(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits);
 LJ_FUNCA void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize);
 
 /* Caveat: all getters except lj_tab_get() can return NULL! */

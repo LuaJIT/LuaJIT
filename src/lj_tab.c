@@ -246,7 +246,7 @@ void LJ_FASTCALL lj_tab_free(global_State *g, GCtab *t)
 /* -- Table resizing ------------------------------------------------------ */
 
 /* Resize a table to fit the new array/hash part sizes. */
-static void resizetab(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
+void lj_tab_resize(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
 {
   Node *oldnode = noderef(t->node);
   uint32_t oldasize = t->asize;
@@ -383,7 +383,7 @@ static void rehashtab(lua_State *L, GCtab *t, cTValue *ek)
   asize += countint(ek, bins);
   na = bestasize(bins, &asize);
   total -= na;
-  resizetab(L, t, asize, hsize2hbits(total));
+  lj_tab_resize(L, t, asize, hsize2hbits(total));
 }
 
 #if LJ_HASFFI
@@ -395,7 +395,7 @@ void lj_tab_rehash(lua_State *L, GCtab *t)
 
 void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize)
 {
-  resizetab(L, t, nasize+1, t->hmask > 0 ? lj_fls(t->hmask)+1 : 0);
+  lj_tab_resize(L, t, nasize+1, t->hmask > 0 ? lj_fls(t->hmask)+1 : 0);
 }
 
 /* -- Table getters ------------------------------------------------------- */
