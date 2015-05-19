@@ -1171,6 +1171,7 @@ static void rec_idx_bump(jit_State *J, RecordIndex *ix)
 	  if (tvisnil(o)) settabV(J->L, o, tpl);
 	}
 	lj_tab_resize(J->L, tpl, tb->asize, nhbits);
+	node = noderef(tpl->node);
 	hmask = tpl->hmask;
 	for (i = 0; i <= hmask; i++) {
 	  /* This is safe, since template tables only hold immutable values. */
