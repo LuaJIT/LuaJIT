@@ -119,7 +119,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       if (errcode) {
 	L->base = frame_prevd(frame) + 1;
 	L->cframe = cframe_prev(cf);
-	unwindstack(L, frame);
+	unwindstack(L, frame - LJ_FR2);
       } else if (cf != stopcf) {
 	cf = cframe_prev(cf);
 	frame = frame_prevd(frame);
@@ -144,7 +144,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       if (errcode) {
 	L->base = frame_prevd(frame) + 1;
 	L->cframe = cframe_prev(cf);
-	unwindstack(L, frame);
+	unwindstack(L, frame - LJ_FR2);
       }
       return cf;
     case FRAME_CONT:  /* Continuation frame. */
