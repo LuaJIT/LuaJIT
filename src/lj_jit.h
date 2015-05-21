@@ -293,6 +293,7 @@ typedef struct ScEvEntry {
 /* Reverse bytecode map (IRRef -> PC). Only for selected instructions. */
 typedef struct RBCHashEntry {
   MRef pc;		/* Bytecode PC. */
+  GCRef pt;		/* Prototype. */
   IRRef ref;		/* IR reference. */
 } RBCHashEntry;
 

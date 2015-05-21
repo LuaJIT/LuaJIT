@@ -1157,7 +1157,7 @@ static void rec_idx_bump(jit_State *J, RecordIndex *ix)
 	J->retryrec = 1;  /* Abort the trace at the end of recording. */
       }
     } else if (ir->o == IR_TDUP) {
-      GCtab *tpl = gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)bc_d(*pc)));
+      GCtab *tpl = gco2tab(proto_kgc(&gcref(rbc->pt)->pt, ~(ptrdiff_t)bc_d(*pc)));
       /* Grow template table, but preserve keys with nil values. */
       if (tb->asize > tpl->asize || (1u << nhbits)-1 > tpl->hmask) {
 	Node *node = noderef(tpl->node);
@@ -1783,6 +1783,7 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
   tr = emitir(IRTG(IR_TNEW, IRT_TAB), asize, hbits);
   J->rbchash[(tr & (RBCHASH_SLOTS-1))].ref = tref_ref(tr);
   setmref(J->rbchash[(tr & (RBCHASH_SLOTS-1))].pc, J->pc);
+  setgcref(J->rbchash[(tr & (RBCHASH_SLOTS-1))].pt, obj2gco(J->pt));
   return tr;
 }
 
@@ -2211,6 +2212,7 @@ void lj_record_ins(jit_State *J)
 		lj_ir_ktab(J, gco2tab(proto_kgc(J->pt, ~(ptrdiff_t)rc))), 0);
     J->rbchash[(rc & (RBCHASH_SLOTS-1))].ref = tref_ref(rc);
     setmref(J->rbchash[(rc & (RBCHASH_SLOTS-1))].pc, pc);
+    setgcref(J->rbchash[(rc & (RBCHASH_SLOTS-1))].pt, obj2gco(J->pt));
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
