@@ -1247,9 +1247,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  checktab TAB:RB, ->fff_fallback
   |  // Fast path: no mt for table yet and not clearing the mt.
   |  cmp aword TAB:RB->metatable, 0; jne ->fff_fallback
-  |  mov TAB:RC, [BASE+8]
-  |  checktab TAB:RC, ->fff_fallback
-  |  mov TAB:RB->metatable, TAB:RC
+  |  mov TAB:RA, [BASE+8]
+  |  checktab TAB:RA, ->fff_fallback
+  |  mov TAB:RB->metatable, TAB:RA
   |  mov PC, [BASE-8]
   |  mov [BASE-16], TAB:TMPR			// Return original table.
   |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
