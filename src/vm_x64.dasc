@@ -3412,9 +3412,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     |
     |2:  // Upvalue is black. Check if new value is collectable and white.
-    |  sub RD, LJ_TISGCV
-    |  cmp RD, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
+    |  mov RD, RA
+    |  sar RD, 47
+    |  sub RDd, LJ_TISGCV
+    |  cmp RDd, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
     |  jbe <1
+    |  cleartp GCOBJ:RA
     |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
     |  jz <1
     |  // Crossed a write barrier. Move the barrier forward.
@@ -3437,8 +3440,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov UPVAL:RB, [LFUNC:RB+RA*8+offsetof(GCfuncL, uvptr)]
     |  mov STR:RA, [KBASE+RD*8]
     |  mov RD, UPVAL:RB->v
-    |  settp STR:RA, LJ_TSTR
-    |  mov [RD], STR:RA
+    |  settp STR:ITYPE, STR:RA, LJ_TSTR
+    |  mov [RD], STR:ITYPE
     |  test byte UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
     |  jnz >2
     |1:
@@ -3824,7 +3827,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov L:CARG1, SAVE_L
     |  mov BASE, L:CARG1->base
     |  mov TMPR, rax
-    |  movzx RA, PC_RA
+    |  movzx RAd, PC_RA
     |  jmp <2				// Must check write barrier for value.
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
