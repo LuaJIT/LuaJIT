@@ -61,7 +61,11 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 
 #elif LJ_TARGET_PPC
 
+#if LJ_ARCH_PPC64
+#define CALLBACK_MCODE_HEAD		40
+#else  /* PPC 32bits */
 #define CALLBACK_MCODE_HEAD		24
+#endif
 
 #elif LJ_TARGET_MIPS
 
@@ -189,10 +193,21 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
   uint32_t *p = page;
   void *target = (void *)lj_vm_ffi_callback;
   MSize slot;
+#if LJ_ARCH_PPC64
+  *p++ = PPCI_LI | PPCF_T(RID_TMP) | ((((intptr_t)target) >> 32) & 0xffff);
+  *p++ = PPCI_LI | PPCF_T(RID_R12) | ((((intptr_t)g) >> 32) & 0xffff);
+  *p++ = PPCI_RLDICR | PPCF_T(RID_TMP) | PPCF_A(RID_TMP) | PPCF_SH(32) | PPCF_M6(63-32);  /* sldi */
+  *p++ = PPCI_RLDICR | PPCF_T(RID_R12) | PPCF_A(RID_R12) | PPCF_SH(32) | PPCF_M6(63-32);  /* sldi */
+  *p++ = PPCI_ORIS | PPCF_A(RID_TMP) | PPCF_T(RID_TMP) | ((((intptr_t)target) >> 16) & 0xffff);
+  *p++ = PPCI_ORIS | PPCF_A(RID_R12) | PPCF_T(RID_R12) | ((((intptr_t)g) >> 16) & 0xffff);
+  *p++ = PPCI_ORI | PPCF_A(RID_TMP) | PPCF_T(RID_TMP) | (((intptr_t)target) & 0xffff);
+  *p++ = PPCI_ORI | PPCF_A(RID_R12) | PPCF_T(RID_R12) | (((intptr_t)g) & 0xffff);
+#else  /* PPC 32bits */
   *p++ = PPCI_LIS | PPCF_T(RID_TMP) | (u32ptr(target) >> 16);
   *p++ = PPCI_LIS | PPCF_T(RID_R12) | (u32ptr(g) >> 16);
   *p++ = PPCI_ORI | PPCF_A(RID_TMP)|PPCF_T(RID_TMP) | (u32ptr(target) & 0xffff);
   *p++ = PPCI_ORI | PPCF_A(RID_R12)|PPCF_T(RID_R12) | (u32ptr(g) & 0xffff);
+#endif
   *p++ = PPCI_MTCTR | PPCF_T(RID_TMP);
   *p++ = PPCI_BCTR;
   for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {

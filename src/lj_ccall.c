@@ -380,6 +380,37 @@
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex by value in 2 or 4 GPRs. */
 
+#if LJ_ARCH_PPC64
+#define CCALL_HANDLE_REGARG \
+  if (isva) {  /* only GPRs will be used on C ellipsis operator */ \
+    goto gpr; \
+  } \
+  else { \
+    if (isfp) {  /* Try to pass argument in FPRs. */ \
+      if (nfpr + 1 <= CCALL_NARG_FPR) { \
+	dp = &cc->fpr[nfpr]; \
+	nfpr += 1; \
+	ngpr += 1;  /* align GPRs */ \
+	d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
+	goto done; \
+      } \
+    } else {  /* Try to pass argument in GPRs. */ \
+  gpr: \
+      if (n > 1) { \
+	lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
+	if (ctype_isinteger(d->info)) \
+	  ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+	else if (ngpr + n > maxgpr) \
+	  ngpr = maxgpr;  /* Prevent reordering. */ \
+      } \
+      if (ngpr + n <= maxgpr) { \
+	dp = &cc->gpr[ngpr]; \
+	ngpr += n; \
+	goto done; \
+      } \
+    } \
+  }
+#else	/* 32 bits */
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
     if (nfpr + 1 <= CCALL_NARG_FPR) { \
@@ -402,6 +433,7 @@
       goto done; \
     } \
   }
+#endif
 
 #define CCALL_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
