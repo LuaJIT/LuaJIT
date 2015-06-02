@@ -139,6 +139,16 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
   if ((ins >> 26) == 16) {
     fprintf(ctx->fp, "\t%s %d, %d, " TOCPREFIX "%s\n",
 	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
+#if LJ_ARCH_PPC64
+  } else if ((ins >> 26) == 14) {
+    if (strcmp(sym, "TOC") < 0) {
+      fprintf(ctx->fp, "\taddi 2,2,%s\n", sym);
+    }
+  } else if ((ins >> 26) == 15) {
+    if (strcmp(sym, "TOC") < 0) {
+      fprintf(ctx->fp, "\taddis 2,12,%s\n", sym);
+    }
+#endif
   } else if ((ins >> 26) == 18) {
 #if LJ_ARCH_PPC64
     char *suffix = strchr(sym, '@');
