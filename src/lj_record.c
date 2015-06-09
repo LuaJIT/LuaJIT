@@ -1159,7 +1159,8 @@ static void rec_idx_bump(jit_State *J, RecordIndex *ix)
     } else if (ir->o == IR_TDUP) {
       GCtab *tpl = gco2tab(proto_kgc(&gcref(rbc->pt)->pt, ~(ptrdiff_t)bc_d(*pc)));
       /* Grow template table, but preserve keys with nil values. */
-      if (tb->asize > tpl->asize || (1u << nhbits)-1 > tpl->hmask) {
+      if ((tb->asize > tpl->asize && (1u << nhbits)-1 == tpl->hmask) ||
+	  (tb->asize == tpl->asize && (1u << nhbits)-1 > tpl->hmask)) {
 	Node *node = noderef(tpl->node);
 	uint32_t i, hmask = tpl->hmask;
 	for (i = 0; i <= hmask; i++) {
