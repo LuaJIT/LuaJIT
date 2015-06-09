@@ -158,7 +158,11 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_OFS_NRES		(4*4)
 #define CFRAME_OFS_MULTRES	(1*4)
 #endif
+#if LJ_NO_UNWIND
+#define CFRAME_SIZE		(12*8)
+#else
 #define CFRAME_SIZE		(10*8)
+#endif
 #define CFRAME_SIZE_JIT		(CFRAME_SIZE + 16)
 #define CFRAME_SHIFT_MULTRES	0
 #endif

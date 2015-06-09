@@ -27,11 +27,11 @@ if exist minilua.exe.manifest^
 @minilua
 @if not errorlevel 8 goto :FAIL
 
-@set DASMFLAGS=-D P64
+@set DASMFLAGS=-D P64 -D NO_UNWIND
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
 @if errorlevel 1 goto :BAD
 
-%LJCOMPILE% /I "." /I %DASMDIR% -DLUAJIT_TARGET=LUAJIT_ARCH_X64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI host\buildvm*.c
+%LJCOMPILE% /I "." /I %DASMDIR% -DLUAJIT_TARGET=LUAJIT_ARCH_X64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
