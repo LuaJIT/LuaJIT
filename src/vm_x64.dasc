@@ -1435,9 +1435,16 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_res2
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  cmp dword TAB:RB->hmask, 0; je ->fff_res0
+  |.if X64WIN
+  |  mov TMPR, BASE
+  |  mov CARG2d, RAd
+  |  mov CARG1, TAB:RB
+  |  mov RB, TMPR
+  |.else
   |  mov CARG1, TAB:RB
   |  mov RB, BASE			// Save BASE.
   |  mov CARG2d, RAd			// Caveat: CARG2 == BASE
+  |.endif
   |  call extern lj_tab_getinth		// (GCtab *t, int32_t key)
   |  // cTValue * or NULL returned in eax (RD).
   |  mov BASE, RB
