@@ -1162,7 +1162,8 @@ static void rec_idx_bump(jit_State *J, RecordIndex *ix)
       if ((tb->asize > tpl->asize && (1u << nhbits)-1 == tpl->hmask) ||
 	  (tb->asize == tpl->asize && (1u << nhbits)-1 > tpl->hmask)) {
 	Node *node = noderef(tpl->node);
-	uint32_t i, hmask = tpl->hmask;
+	uint32_t i, hmask = tpl->hmask, asize;
+	TValue *array;
 	for (i = 0; i <= hmask; i++) {
 	  if (!tvisnil(&node[i].key) && tvisnil(&node[i].val))
 	    settabV(J->L, &node[i].val, tpl);
@@ -1178,6 +1179,13 @@ static void rec_idx_bump(jit_State *J, RecordIndex *ix)
 	  /* This is safe, since template tables only hold immutable values. */
 	  if (tvistab(&node[i].val))
 	    setnilV(&node[i].val);
+	}
+	/* The shape of the table may have changed. Clean up array part, too. */
+	asize = tpl->asize;
+	array = tvref(tpl->array);
+	for (i = 0; i < asize; i++) {
+	  if (tvistab(&array[i]))
+	    setnilV(&array[i]);
 	}
 	J->retryrec = 1;  /* Abort the trace at the end of recording. */
       }
