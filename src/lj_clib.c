@@ -172,9 +172,17 @@ LJ_NORET LJ_NOINLINE static void clib_error(lua_State *L, const char *fmt,
 					    const char *name)
 {
   DWORD err = GetLastError();
+#if LJ_TARGET_XBOXONE
+  wchar_t wbuf[128];
+  char buf[128*2];
+  if (!FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_SYSTEM,
+		      NULL, err, 0, buf, sizeof(wbuf)/sizeof(wchar_t), NULL) ||
+      !WideCharToMultiByte(CP_ACP, 0, wbuf, 128, buf, 128*2, NULL, NULL))
+#else
   char buf[128];
   if (!FormatMessageA(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_SYSTEM,
 		      NULL, err, 0, buf, sizeof(buf), NULL))
+#endif
     buf[0] = '\0';
   lj_err_callermsg(L, lj_strfmt_pushf(L, fmt, name, buf));
 }

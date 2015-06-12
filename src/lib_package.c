@@ -96,9 +96,17 @@ static void setprogdir(lua_State *L)
 static void pusherror(lua_State *L)
 {
   DWORD error = GetLastError();
+#if LJ_TARGET_XBOXONE
+  wchar_t wbuffer[128];
+  char buffer[128*2];
+  if (FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
+      NULL, error, 0, buffer, sizeof(wbuffer)/sizeof(wchar_t), NULL) &&
+      WideCharToMultiByte(CP_ACP, 0, wbuffer, 128, buffer, 128*2, NULL, NULL))
+#else
   char buffer[128];
   if (FormatMessageA(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
       NULL, error, 0, buffer, sizeof(buffer), NULL))
+#endif
     lua_pushstring(L, buffer);
   else
     lua_pushfstring(L, "system error %d\n", error);

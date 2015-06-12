@@ -124,7 +124,7 @@ operating systems, CPUs and compilers:
 <td class="compatos">GCC 4.x</td>
 <td class="compatos">ORBIS (<a href="#ps4">PS4</a>)</td>
 <td class="compatos">GCC 4.x</td>
-<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
+<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0<br>Durango (<a href="#xboxone">Xbox One</a>)</td>
 </tr>
 <tr class="odd">
 <td class="compatcpu"><a href="#cross2">ARMv5+<br>ARM9E+</a></td>
@@ -515,6 +515,16 @@ the following commands:
 <pre class="code">
 cd src
 xedkbuild
+</pre>
+<p>
+To cross-compile for <b id="xboxone">Xbox One</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and run
+the following commands:
+</p>
+<pre class="code">
+cd src
+xb1build
 </pre>
 
 <h2 id="embed">Embedding LuaJIT</h2>
