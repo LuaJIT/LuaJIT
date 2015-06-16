@@ -124,7 +124,6 @@
 #define LJ_TARGET_XBOXONE	1
 #define LJ_TARGET_CONSOLE	1
 #define LJ_TARGET_GC64		1
-#define LoadLibraryA(name)      LoadLibraryExA((name), NULL, 0)
 #endif
 
 #define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */

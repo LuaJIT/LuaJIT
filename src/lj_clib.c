@@ -176,7 +176,7 @@ LJ_NORET LJ_NOINLINE static void clib_error(lua_State *L, const char *fmt,
   wchar_t wbuf[128];
   char buf[128*2];
   if (!FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_FROM_SYSTEM,
-		      NULL, err, 0, buf, sizeof(wbuf)/sizeof(wchar_t), NULL) ||
+		      NULL, err, 0, wbuf, sizeof(wbuf)/sizeof(wchar_t), NULL) ||
       !WideCharToMultiByte(CP_ACP, 0, wbuf, 128, buf, 128*2, NULL, NULL))
 #else
   char buf[128];
@@ -208,7 +208,7 @@ static const char *clib_extname(lua_State *L, const char *name)
 static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   DWORD oldwerr = GetLastError();
-  void *h = (void *)LoadLibraryA(clib_extname(L, name));
+  void *h = (void *)LoadLibraryExA(clib_extname(L, name), NULL, 0);
   if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", name);
   SetLastError(oldwerr);
   UNUSED(global);
@@ -249,9 +249,9 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 			     (const char *)&_fmode, &h);
 	  break;
-	case CLIB_HANDLE_KERNEL32: h = LoadLibraryA("kernel32.dll"); break;
-	case CLIB_HANDLE_USER32: h = LoadLibraryA("user32.dll"); break;
-	case CLIB_HANDLE_GDI32: h = LoadLibraryA("gdi32.dll"); break;
+	case CLIB_HANDLE_KERNEL32: h = LoadLibraryExA("kernel32.dll", NULL, 0); break;
+	case CLIB_HANDLE_USER32: h = LoadLibraryExA("user32.dll", NULL, 0); break;
+	case CLIB_HANDLE_GDI32: h = LoadLibraryExA("gdi32.dll", NULL, 0); break;
 	}
 	if (!h) continue;
 	clib_def_handle[i] = (void *)h;

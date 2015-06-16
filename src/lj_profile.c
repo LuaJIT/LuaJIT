@@ -266,7 +266,7 @@ static void profile_timer_start(ProfileState *ps)
 {
 #if LJ_TARGET_WINDOWS
   if (!ps->wmm) {  /* Load WinMM library on-demand. */
-    ps->wmm = LoadLibraryA("winmm.dll");
+    ps->wmm = LoadLibraryExA("winmm.dll", NULL, 0);
     if (ps->wmm) {
       ps->wmm_tbp = (WMM_TPFUNC)GetProcAddress(ps->wmm, "timeBeginPeriod");
       ps->wmm_tep = (WMM_TPFUNC)GetProcAddress(ps->wmm, "timeEndPeriod");

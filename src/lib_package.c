@@ -100,7 +100,7 @@ static void pusherror(lua_State *L)
   wchar_t wbuffer[128];
   char buffer[128*2];
   if (FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
-      NULL, error, 0, buffer, sizeof(wbuffer)/sizeof(wchar_t), NULL) &&
+      NULL, error, 0, wbuffer, sizeof(wbuffer)/sizeof(wchar_t), NULL) &&
       WideCharToMultiByte(CP_ACP, 0, wbuffer, 128, buffer, 128*2, NULL, NULL))
 #else
   char buffer[128];
@@ -119,7 +119,7 @@ static void ll_unloadlib(void *lib)
 
 static void *ll_load(lua_State *L, const char *path, int gl)
 {
-  HINSTANCE lib = LoadLibraryA(path);
+  HINSTANCE lib = LoadLibraryExA(path, NULL, 0);
   if (lib == NULL) pusherror(L);
   UNUSED(gl);
   return lib;
