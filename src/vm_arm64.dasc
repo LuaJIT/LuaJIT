@@ -853,10 +853,10 @@ static void build_subroutines(BuildCtx *ctx)
   |   str PC, SAVE_PC
   |  add CARG3, RA, NARGS8:RC
   |  bl extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
-  |  ldr LFUNC:CARG3, [RA, FRAME_FUNC]	// Guaranteed to be a function here.
+  |  ldr TMP1, [RA, FRAME_FUNC]		// Guaranteed to be a function here.
   |   ldr PC, [BASE, FRAME_PC]
   |   add NARGS8:RC, NARGS8:RC, #8	// Got one more argument now.
-  |  and LFUNC:CARG3, CARG3, #LJ_GCVMASK
+  |  and LFUNC:CARG3, TMP1, #LJ_GCVMASK
   |  b ->BC_CALLT2_Z
   |
   |//-- Argument coercion for 'for' statement ------------------------------
