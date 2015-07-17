@@ -784,6 +784,10 @@ static void cp_push_type(CPDecl *decl, CTypeID id)
     cp_push(decl, info & ~CTMASK_CID, size);  /* Copy type. */
     break;
   case CT_ARRAY:
+    if ((ct->info & (CTF_VECTOR|CTF_COMPLEX))) {
+      info |= (decl->attr & CTF_QUAL);
+      decl->attr &= ~CTF_QUAL;
+    }
     cp_push_type(decl, ctype_cid(info));  /* Unroll. */
     cp_push(decl, info & ~CTMASK_CID, size);  /* Copy type. */
     decl->stack[decl->pos].sib = 1;  /* Mark as already checked and sized. */
