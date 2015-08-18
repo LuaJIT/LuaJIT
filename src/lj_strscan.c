@@ -59,17 +59,17 @@
 */
 
 /* Definitions for circular decimal digit buffer (base 100 = 2 digits/byte). */
-#define STRSCAN_DIG	1024
-#define STRSCAN_MAXDIG	800		/* 772 + extra are sufficient. */
-#define STRSCAN_DDIG	(STRSCAN_DIG/2)
-#define STRSCAN_DMASK	(STRSCAN_DDIG-1)
+#define STRSCAN_DIG    1024
+#define STRSCAN_MAXDIG 800             /* 772 + extra are sufficient. */
+#define STRSCAN_DDIG   (STRSCAN_DIG/2)
+#define STRSCAN_DMASK  (STRSCAN_DDIG-1)
 
 /* Helpers for circular buffer. */
-#define DNEXT(a)	(((a)+1) & STRSCAN_DMASK)
-#define DPREV(a)	(((a)-1) & STRSCAN_DMASK)
-#define DLEN(lo, hi)	((int32_t)(((lo)-(hi)) & STRSCAN_DMASK))
+#define DNEXT(a)       (((a)+1) & STRSCAN_DMASK)
+#define DPREV(a)       (((a)-1) & STRSCAN_DMASK)
+#define DLEN(lo, hi)   ((int32_t)(((lo)-(hi)) & STRSCAN_DMASK))
 
-#define casecmp(c, k)	(((c) | 0x20) == k)
+#define casecmp(c, k)  (((c) | 0x20) == k)
 
 /* Final conversion to double. */
 static void strscan_double(uint64_t x, TValue *o, int32_t ex2, int32_t neg)
@@ -83,7 +83,7 @@ static void strscan_double(uint64_t x, TValue *o, int32_t ex2, int32_t neg)
     int32_t b = (int32_t)(__builtin_clzll(x)^63);
 #else
     int32_t b = (x>>32) ? 32+(int32_t)lj_fls((uint32_t)(x>>32)) :
-			  (int32_t)lj_fls((uint32_t)x);
+                          (int32_t)lj_fls((uint32_t)x);
 #endif
     if ((int32_t)b + ex2 <= -1023 && (int32_t)b + ex2 >= -1075) {
       uint64_t rb = (uint64_t)1 << (-1075-ex2);
@@ -102,8 +102,8 @@ static void strscan_double(uint64_t x, TValue *o, int32_t ex2, int32_t neg)
 
 /* Parse hexadecimal number. */
 static StrScanFmt strscan_hex(const uint8_t *p, TValue *o,
-			      StrScanFmt fmt, uint32_t opt,
-			      int32_t ex2, int32_t neg, uint32_t dig)
+                              StrScanFmt fmt, uint32_t opt,
+                              int32_t ex2, int32_t neg, uint32_t dig)
 {
   uint64_t x = 0;
   uint32_t i;
@@ -148,7 +148,7 @@ static StrScanFmt strscan_hex(const uint8_t *p, TValue *o,
 
 /* Parse octal number. */
 static StrScanFmt strscan_oct(const uint8_t *p, TValue *o,
-			      StrScanFmt fmt, int32_t neg, uint32_t dig)
+                              StrScanFmt fmt, int32_t neg, uint32_t dig)
 {
   uint64_t x = 0;
 
@@ -179,8 +179,8 @@ static StrScanFmt strscan_oct(const uint8_t *p, TValue *o,
 
 /* Parse decimal number. */
 static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
-			      StrScanFmt fmt, uint32_t opt,
-			      int32_t ex10, int32_t neg, uint32_t dig)
+                              StrScanFmt fmt, uint32_t opt,
+                              int32_t ex10, int32_t neg, uint32_t dig)
 {
   uint8_t xi[STRSCAN_DDIG], *xip = xi;
 
@@ -204,8 +204,8 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
     /* Summarize rounding-effect of excess digits. */
     if (dig > STRSCAN_MAXDIG) {
       do {
-	if ((*p != '.' ? *p : *++p) != '0') { xip[-1] |= 1; break; }
-	p++;
+        if ((*p != '.' ? *p : *++p) != '0') { xip[-1] |= 1; break; }
+        p++;
       } while (--dig > STRSCAN_MAXDIG);
       dig = STRSCAN_MAXDIG;
     } else {  /* Simplify exponent. */
@@ -226,27 +226,27 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       /* Format-specific handling. */
       switch (fmt) {
       case STRSCAN_INT:
-	if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
-	  o->i = neg ? -(int32_t)x : (int32_t)x;
-	  return STRSCAN_INT;  /* Fast path for 32 bit integers. */
-	}
-	if (!(opt & STRSCAN_OPT_C)) { fmt = STRSCAN_NUM; goto plainnumber; }
-	/* fallthrough */
+        if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
+          o->i = neg ? -(int32_t)x : (int32_t)x;
+          return STRSCAN_INT;  /* Fast path for 32 bit integers. */
+        }
+        if (!(opt & STRSCAN_OPT_C)) { fmt = STRSCAN_NUM; goto plainnumber; }
+        /* fallthrough */
       case STRSCAN_U32:
-	if ((x >> 32) != 0) return STRSCAN_ERROR;
-	o->i = neg ? -(int32_t)x : (int32_t)x;
-	return STRSCAN_U32;
+        if ((x >> 32) != 0) return STRSCAN_ERROR;
+        o->i = neg ? -(int32_t)x : (int32_t)x;
+        return STRSCAN_U32;
       case STRSCAN_I64:
       case STRSCAN_U64:
-	o->u64 = neg ? (uint64_t)-(int64_t)x : x;
-	return fmt;
+        o->u64 = neg ? (uint64_t)-(int64_t)x : x;
+        return fmt;
       default:
       plainnumber:  /* Fast path for plain numbers < 2^63. */
-	if ((int64_t)x < 0) break;
-	n = (double)(int64_t)x;
-	if (neg) n = -n;
-	o->n = n;
-	return fmt;
+        if ((int64_t)x < 0) break;
+        n = (double)(int64_t)x;
+        if (neg) n = -n;
+        o->n = n;
+        return fmt;
       }
     }
   }
@@ -273,17 +273,17 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       uint32_t i, cy = 0;
       ex2 -= 6;
       for (i = DPREV(lo); ; i = DPREV(i)) {
-	uint32_t d = (xi[i] << 6) + cy;
-	cy = (((d >> 2) * 5243) >> 17); d = d - cy * 100;  /* Div/mod 100. */
-	xi[i] = (uint8_t)d;
-	if (i == hi) break;
-	if (d == 0 && i == DPREV(lo)) lo = i;
+        uint32_t d = (xi[i] << 6) + cy;
+        cy = (((d >> 2) * 5243) >> 17); d = d - cy * 100;  /* Div/mod 100. */
+        xi[i] = (uint8_t)d;
+        if (i == hi) break;
+        if (d == 0 && i == DPREV(lo)) lo = i;
       }
       if (cy) {
-	hi = DPREV(hi);
-	if (xi[DPREV(lo)] == 0) lo = DPREV(lo);
-	else if (hi == lo) { lo = DPREV(lo); xi[DPREV(lo)] |= xi[lo]; }
-	xi[hi] = (uint8_t)cy; idig++;
+        hi = DPREV(hi);
+        if (xi[DPREV(lo)] == 0) lo = DPREV(lo);
+        else if (hi == lo) { lo = DPREV(lo); xi[DPREV(lo)] |= xi[lo]; }
+        xi[hi] = (uint8_t)cy; idig++;
       }
     }
 
@@ -292,16 +292,16 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       uint32_t i = hi, cy = 0;
       ex2 += 6;
       do {
-	cy += xi[i];
-	xi[i] = (cy >> 6);
-	cy = 100 * (cy & 0x3f);
-	if (xi[i] == 0 && i == hi) hi = DNEXT(hi), idig--;
-	i = DNEXT(i);
+        cy += xi[i];
+        xi[i] = (cy >> 6);
+        cy = 100 * (cy & 0x3f);
+        if (xi[i] == 0 && i == hi) hi = DNEXT(hi), idig--;
+        i = DNEXT(i);
       } while (i != lo);
       while (cy) {
-	if (hi == lo) { xi[DPREV(lo)] |= 1; break; }
-	xi[lo] = (cy >> 6); lo = DNEXT(lo);
-	cy = 100 * (cy & 0x3f);
+        if (hi == lo) { xi[DPREV(lo)] |= 1; break; }
+        xi[lo] = (cy >> 6); lo = DNEXT(lo);
+        cy = 100 * (cy & 0x3f);
       }
     }
 
@@ -310,15 +310,15 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       uint64_t x = xi[hi];
       uint32_t i;
       for (i = DNEXT(hi); --idig > 0 && i != lo; i = DNEXT(i))
-	x = x * 100 + xi[i];
+        x = x * 100 + xi[i];
       if (i == lo) {
-	while (--idig >= 0) x = x * 100;
+        while (--idig >= 0) x = x * 100;
       } else {  /* Gather round bit from remaining digits. */
-	x <<= 1; ex2--;
-	do {
-	  if (xi[i]) { x |= 1; break; }
-	  i = DNEXT(i);
-	} while (i != lo);
+        x <<= 1; ex2--;
+        do {
+          if (xi[i]) { x |= 1; break; }
+          i = DNEXT(i);
+        } while (i != lo);
       }
       strscan_double(x, o, ex2, neg);
     }
@@ -339,12 +339,12 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
       TValue tmp;
       setnanV(&tmp);
       if (casecmp(p[0],'i') && casecmp(p[1],'n') && casecmp(p[2],'f')) {
-	if (neg) setminfV(&tmp); else setpinfV(&tmp);
-	p += 3;
-	if (casecmp(p[0],'i') && casecmp(p[1],'n') && casecmp(p[2],'i') &&
-	    casecmp(p[3],'t') && casecmp(p[4],'y')) p += 5;
+        if (neg) setminfV(&tmp); else setpinfV(&tmp);
+        p += 3;
+        if (casecmp(p[0],'i') && casecmp(p[1],'n') && casecmp(p[2],'i') &&
+            casecmp(p[3],'t') && casecmp(p[4],'y')) p += 5;
       } else if (casecmp(p[0],'n') && casecmp(p[1],'a') && casecmp(p[2],'n')) {
-	p += 3;
+        p += 3;
       }
       while (lj_char_isspace(*p)) p++;
       if (*p) return STRSCAN_ERROR;
@@ -365,29 +365,29 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     /* Determine base and skip leading zeros. */
     if (LJ_UNLIKELY(*p <= '0')) {
       if (*p == '0' && casecmp(p[1], 'x'))
-	base = 16, cmask = LJ_CHAR_XDIGIT, p += 2;
+        base = 16, cmask = LJ_CHAR_XDIGIT, p += 2;
       for ( ; ; p++) {
-	if (*p == '0') {
-	  hasdig = 1;
-	} else if (*p == '.') {
-	  if (dp) return STRSCAN_ERROR;
-	  dp = p;
-	} else {
-	  break;
-	}
+        if (*p == '0') {
+          hasdig = 1;
+        } else if (*p == '.') {
+          if (dp) return STRSCAN_ERROR;
+          dp = p;
+        } else {
+          break;
+        }
       }
     }
 
     /* Preliminary digit and decimal point scan. */
     for (sp = p; ; p++) {
       if (LJ_LIKELY(lj_char_isa(*p, cmask))) {
-	x = x * 10 + (*p & 15);  /* For fast path below. */
-	dig++;
+        x = x * 10 + (*p & 15);  /* For fast path below. */
+        dig++;
       } else if (*p == '.') {
-	if (dp) return STRSCAN_ERROR;
-	dp = p;
+        if (dp) return STRSCAN_ERROR;
+        dp = p;
       } else {
-	break;
+        break;
       }
     }
     if (!(hasdig | dig)) return STRSCAN_ERROR;
@@ -396,9 +396,9 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     if (dp) {
       fmt = STRSCAN_NUM;
       if (dig) {
-	ex = (int32_t)(dp-(p-1)); dp = p-1;
-	while (ex < 0 && *dp-- == '0') ex++, dig--;  /* Skip trailing zeros. */
-	if (base == 16) ex *= 4;
+        ex = (int32_t)(dp-(p-1)); dp = p-1;
+        while (ex < 0 && *dp-- == '0') ex++, dig--;  /* Skip trailing zeros. */
+        if (base == 16) ex *= 4;
       }
     }
 
@@ -411,8 +411,8 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
       if (!lj_char_isdigit(*p)) return STRSCAN_ERROR;
       xx = (*p++ & 15);
       while (lj_char_isdigit(*p)) {
-	if (xx < 65536) xx = xx * 10 + (*p & 15);
-	p++;
+        if (xx < 65536) xx = xx * 10 + (*p & 15);
+        p++;
       }
       ex += negx ? -(int32_t)xx : (int32_t)xx;
     }
@@ -422,21 +422,21 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
       /* I (IMAG), U (U32), LL (I64), ULL/LLU (U64), L (long), UL/LU (ulong). */
       /* NYI: f (float). Not needed until cp_number() handles non-integers. */
       if (casecmp(*p, 'i')) {
-	if (!(opt & STRSCAN_OPT_IMAG)) return STRSCAN_ERROR;
-	p++; fmt = STRSCAN_IMAG;
+        if (!(opt & STRSCAN_OPT_IMAG)) return STRSCAN_ERROR;
+        p++; fmt = STRSCAN_IMAG;
       } else if (fmt == STRSCAN_INT) {
-	if (casecmp(*p, 'u')) p++, fmt = STRSCAN_U32;
-	if (casecmp(*p, 'l')) {
-	  p++;
-	  if (casecmp(*p, 'l')) p++, fmt += STRSCAN_I64 - STRSCAN_INT;
-	  else if (!(opt & STRSCAN_OPT_C)) return STRSCAN_ERROR;
-	  else if (sizeof(long) == 8) fmt += STRSCAN_I64 - STRSCAN_INT;
-	}
-	if (casecmp(*p, 'u') && (fmt == STRSCAN_INT || fmt == STRSCAN_I64))
-	  p++, fmt += STRSCAN_U32 - STRSCAN_INT;
-	if ((fmt == STRSCAN_U32 && !(opt & STRSCAN_OPT_C)) ||
-	    (fmt >= STRSCAN_I64 && !(opt & STRSCAN_OPT_LL)))
-	  return STRSCAN_ERROR;
+        if (casecmp(*p, 'u')) p++, fmt = STRSCAN_U32;
+        if (casecmp(*p, 'l')) {
+          p++;
+          if (casecmp(*p, 'l')) p++, fmt += STRSCAN_I64 - STRSCAN_INT;
+          else if (!(opt & STRSCAN_OPT_C)) return STRSCAN_ERROR;
+          else if (sizeof(long) == 8) fmt += STRSCAN_I64 - STRSCAN_INT;
+        }
+        if (casecmp(*p, 'u') && (fmt == STRSCAN_INT || fmt == STRSCAN_I64))
+          p++, fmt += STRSCAN_U32 - STRSCAN_INT;
+        if ((fmt == STRSCAN_U32 && !(opt & STRSCAN_OPT_C)) ||
+            (fmt >= STRSCAN_I64 && !(opt & STRSCAN_OPT_LL)))
+          return STRSCAN_ERROR;
       }
       while (lj_char_isspace(*p)) p++;
       if (*p) return STRSCAN_ERROR;
@@ -444,14 +444,14 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
 
     /* Fast path for decimal 32 bit integers. */
     if (fmt == STRSCAN_INT && base == 10 &&
-	(dig < 10 || (dig == 10 && *sp <= '2' && x < 0x80000000u+neg))) {
+        (dig < 10 || (dig == 10 && *sp <= '2' && x < 0x80000000u+neg))) {
       int32_t y = neg ? -(int32_t)x : (int32_t)x;
       if ((opt & STRSCAN_OPT_TONUM)) {
-	o->n = (double)y;
-	return STRSCAN_NUM;
+        o->n = (double)y;
+        return STRSCAN_NUM;
       } else {
-	o->i = y;
-	return STRSCAN_INT;
+        o->i = y;
+        return STRSCAN_INT;
       }
     }
 
@@ -476,7 +476,7 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
 int LJ_FASTCALL lj_strscan_num(GCstr *str, TValue *o)
 {
   StrScanFmt fmt = lj_strscan_scan((const uint8_t *)strdata(str), o,
-				   STRSCAN_OPT_TONUM);
+                                   STRSCAN_OPT_TONUM);
   lua_assert(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM);
   return (fmt != STRSCAN_ERROR);
 }
@@ -485,7 +485,7 @@ int LJ_FASTCALL lj_strscan_num(GCstr *str, TValue *o)
 int LJ_FASTCALL lj_strscan_number(GCstr *str, TValue *o)
 {
   StrScanFmt fmt = lj_strscan_scan((const uint8_t *)strdata(str), o,
-				   STRSCAN_OPT_TOINT);
+                                   STRSCAN_OPT_TOINT);
   lua_assert(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM || fmt == STRSCAN_INT);
   if (fmt == STRSCAN_INT) setitype(o, LJ_TISNUM);
   return (fmt != STRSCAN_ERROR);
@@ -495,4 +495,3 @@ int LJ_FASTCALL lj_strscan_number(GCstr *str, TValue *o)
 #undef DNEXT
 #undef DPREV
 #undef DLEN
-
