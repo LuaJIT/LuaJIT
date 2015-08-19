@@ -183,7 +183,7 @@ in <tt>"-inf"</tt>.
 <h3 id="tonumber"><tt>tonumber()</tt> etc. use builtin string to number conversion</h3>
 <p>
 All string-to-number conversions consistently convert integer and
-floating-point inputs in decimal and hexadecimal on all platforms.
+floating-point inputs in decimal, hexadecimal and binary on all platforms.
 <tt>strtod()</tt> is <em>not</em> used anymore, which avoids numerous
 problems with poor C library implementations. The builtin conversion
 function provides full precision according to the IEEE-754 standard, it
