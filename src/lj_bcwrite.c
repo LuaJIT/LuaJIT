@@ -6,6 +6,10 @@
 #define lj_bcwrite_c
 #define LUA_CORE
 
+#ifndef LUAJIT_NO_COMPRESS
+#include <lzf.h>
+#endif
+
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_buf.h"
@@ -29,6 +33,9 @@ typedef struct BCWriteCtx {
   void *wdata;			/* Writer callback data. */
   int strip;			/* Strip debug info. */
   int status;			/* Status from writer callback. */
+#ifndef LUAJIT_DISABLE_COMPRESS
+  compression_algorithms should_compress;	/* Should I compress? */
+#endif
 } BCWriteCtx;
 
 /* -- Bytecode writer ----------------------------------------------------- */
@@ -311,7 +318,11 @@ static void bcwrite_header(BCWriteCtx *ctx)
   *p++ = (ctx->strip ? BCDUMP_F_STRIP : 0) +
 	 LJ_BE*BCDUMP_F_BE +
 	 ((ctx->pt->flags & PROTO_FFI) ? BCDUMP_F_FFI : 0) +
-	 LJ_FR2*BCDUMP_F_FR2;
+	 LJ_FR2*BCDUMP_F_FR2
+#ifndef LUAJIT_DISABLE_COMPRESS
+	 + (ctx->should_compress ? BCDUMP_F_COMPRESS : 0)
+#endif
+	 ;
   if (!ctx->strip) {
     p = lj_strfmt_wuleb128(p, len);
     p = lj_buf_wmem(p, name, len);
@@ -329,6 +340,25 @@ static void bcwrite_footer(BCWriteCtx *ctx)
   }
 }
 
+#ifndef LUAJIT_DISABLE_COMPRESS
+typedef struct extraWriterData {
+  BCWriteCtx * context;
+  SBuf buffer;
+  lua_Writer writer;
+  void *ud;
+} extraWriterData;
+
+static int lj_push_data(lua_State *L, const void *p, size_t sz, void *ud)
+{
+  extraWriterData *datum = (extraWriterData*)ud;
+  (void)L;
+  lua_assert(datum->context->wdata == datum);
+  lua_assert(datum->context->wfunc == lj_push_data);
+  lj_buf_putmem(&datum->buffer, p, sz);
+  return 0;
+}
+#endif /* !defined LUAJIT_DISABLE_COMPRESS */
+
 /* Protected callback for bytecode writer. */
 static TValue *cpwriter(lua_State *L, lua_CFunction dummy, void *ud)
 {
@@ -336,14 +366,63 @@ static TValue *cpwriter(lua_State *L, lua_CFunction dummy, void *ud)
   UNUSED(L); UNUSED(dummy);
   lj_buf_need(&ctx->sb, 1024);  /* Avoids resize for most prototypes. */
   bcwrite_header(ctx);
-  bcwrite_proto(ctx, ctx->pt);
-  bcwrite_footer(ctx);
+#ifndef LUAJIT_DISABLE_COMPRESS
+  if (ctx->should_compress) {
+    extraWriterData data;
+    lj_buf_init(L, &data.buffer);
+    data.context = ctx;
+    data.ud = ctx->wdata;
+    data.writer = ctx->wfunc;
+    ctx->wdata = &data;
+    ctx->wfunc = lj_push_data;
+    bcwrite_proto(ctx, ctx->pt);
+    bcwrite_footer(ctx);
+    {
+      const MSize buflen = sbuflen(&data.buffer);
+      char *compressed_buf = lj_mem_new(L, buflen);
+      size_t compressed_size = 0;
+      switch (ctx->should_compress) {
+      case BCDUMP_COMPRESS_MEMCPY: lua_assert(0 &&
+	  "Tried to use null compression algorithm"); abort();
+      case BCDUMP_COMPRESS_LZF:
+	compressed_size = lzf_compress(sbufB(&data.buffer), buflen,
+	    compressed_buf, buflen);
+	break;
+      default:
+	/* Invalid compression algorithm */
+	ctx->status = 1;
+	return NULL;
+      }
+      if (compressed_size) {
+	char sizes[6];
+	char *ptr = lj_strfmt_wuleb128(sizes + 1, buflen);
+	sizes[0] = ctx->should_compress;
+	ctx->status = data.writer(L, sizes, ptr - sizes, data.ud);
+	if (!ctx->status) {
+	  ctx->status = data.writer(L, compressed_buf, compressed_size, data.ud);
+	}
+      } else {
+	int zero = BCDUMP_COMPRESS_MEMCPY;
+	ctx->status = data.writer(L, &zero, 1, data.ud);
+	if (!ctx->status) data.writer(L, sbufB(&data.buffer), buflen, data.ud);
+      }
+      lj_buf_free(G(L), &data.buffer);
+      lj_mem_free(G(L), compressed_buf, buflen);
+      ctx->wfunc = data.writer;
+      ctx->wdata = data.ud;
+    }
+  } else
+#endif
+  {
+    bcwrite_proto(ctx, ctx->pt);
+    bcwrite_footer(ctx);
+  }
   return NULL;
 }
 
 /* Write bytecode for a prototype. */
 int lj_bcwrite(lua_State *L, GCproto *pt, lua_Writer writer, void *data,
-	      int strip)
+	      int strip, compression_algorithms compress)
 {
   BCWriteCtx ctx;
   int status;
@@ -352,6 +431,9 @@ int lj_bcwrite(lua_State *L, GCproto *pt, lua_Writer writer, void *data,
   ctx.wdata = data;
   ctx.strip = strip;
   ctx.status = 0;
+#ifndef LUAJIT_DISABLE_COMPRESS
+  ctx.should_compress = compress;
+#endif
   lj_buf_init(L, &ctx.sb);
   status = lj_vm_cpcall(L, NULL, &ctx, cpwriter);
   if (status == 0) status = ctx.status;

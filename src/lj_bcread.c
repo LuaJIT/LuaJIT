@@ -6,6 +6,10 @@
 #define lj_bcread_c
 #define LUA_CORE
 
+#ifndef LUAJIT_DISABLE_COMPRESS
+#include <lzf.h>
+#endif
+#include "lauxlib.h"
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
@@ -47,7 +51,7 @@ static LJ_NOINLINE void bcread_error(LexState *ls, ErrMsg em)
 /* Refill buffer. */
 static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
 {
-  lua_assert(len != 0);
+  lua_assert(len > 0);
   if (len > LJ_MAX_BUF || ls->c < 0)
     bcread_error(ls, LJ_ERR_BCBAD);
   do {
@@ -384,14 +388,36 @@ GCproto *lj_bcread_proto(LexState *ls)
   return pt;
 }
 
-/* Read and check header of bytecode dump. */
+#ifndef LUAJIT_DISABLE_COMPRESS
+typedef MSize (*lj_decompressor)(char const *src, MSize srclen, char *dst, MSize dstlen);
+#if 0
+static char const *null_reader(lua_State *_ignored1, void *_ignored2, size_t *size)
+{
+  (void)_ignored1;
+  (void)_ignored2;
+  return (char const *)(*size = 0);
+}
+#endif
+static LJ_AINLINE unsigned int lj_lzf_decompress(char const *src, MSize srclen, char *dst, MSize dstlen)
+{
+  lua_assert(srclen <= UINT_MAX);
+  lua_assert(dstlen <= UINT_MAX);
+  unsigned int val = lzf_decompress(src, srclen, dst, dstlen);
+  return val;
+}
+
+#endif /* !defined LUAJIT_DISABLE_COMPRESS */
+/*
+** Read and check header of bytecode dump.
+** Decompress if necessary.
+*/
 static int bcread_header(LexState *ls)
 {
   uint32_t flags;
   bcread_want(ls, 3+5+5);
   if (bcread_byte(ls) != BCDUMP_HEAD2 ||
       bcread_byte(ls) != BCDUMP_HEAD3 ||
-      bcread_byte(ls) != BCDUMP_VERSION) return 0;
+      bcread_byte(ls) != BCDUMP_VERSION) return 0; /* Wrong magic number */
   bcread_flags(ls) = flags = bcread_uleb128(ls);
   if ((flags & ~(BCDUMP_F_KNOWN)) != 0) return 0;
   if ((flags & BCDUMP_F_FR2) != LJ_FR2*BCDUMP_F_FR2) return 0;
@@ -407,6 +433,7 @@ static int bcread_header(LexState *ls)
     return 0;
 #endif
   }
+
   if ((flags & BCDUMP_F_STRIP)) {
     ls->chunkname = lj_str_newz(ls->L, ls->chunkarg);
   } else {
@@ -414,6 +441,66 @@ static int bcread_header(LexState *ls)
     bcread_need(ls, len);
     ls->chunkname = lj_str_new(ls->L, (const char *)bcread_mem(ls, len), len);
   }
+
+  if (flags & BCDUMP_F_COMPRESS) {
+#ifndef LUAJIT_DISABLE_COMPRESS
+    /*
+    ** The bytecode is compressed. We must decompress the file
+    ** before doing anything.
+    **
+    ** This is tricky.  We need to do this transparently to C code using the
+    ** Lua/C API.  The solution is to interpose a decompression function
+    ** between the C callback and the bytecode reader.
+    */
+    lj_decompressor decompressor;
+    MSize uncompressed_size, compressed_size;
+    uint8_t byte;
+    bcread_want(ls, 1+5+5);
+    byte = bcread_byte(ls);
+    switch (byte) {
+    case BCDUMP_COMPRESS_MEMCPY: return 1; /* No compression */
+    case BCDUMP_COMPRESS_LZF: decompressor = lj_lzf_decompress; break;
+    default: /* Bad compression algorithm */ bcread_error(ls, LJ_ERR_BCBAD);
+    }
+    /* Read to end of chunk */
+    while (-1 != ls->c) { bcread_want(ls, 1ULL<<16); }
+    uncompressed_size = bcread_uleb128(ls);
+
+    compressed_size = ls->pe - ls->p;
+    /*
+    ** We never compress data if the compressed data is longer than 
+    ** the uncompressed data, so a file with too little uncompressed
+    ** data is invalid.
+    */
+    if (compressed_size > uncompressed_size) return 0;
+
+    /*
+    ** Store the compressed data in a temporary buffer in the lexer.
+    ** This ensures that the decompressor does not need to decompress
+    ** in-place and the temporary buffer can be freed even in the event
+    ** of errors.
+    */
+    ls->tempbuf = lj_mem_new(ls->L, compressed_size);
+    memcpy(ls->tempbuf, ls->p, compressed_size);
+    ls->sizetempbuf = compressed_size;
+
+    /*
+    **  Reallocate the memory buffer used by the reader
+    **  and do the actual decompression.
+    */
+    ls->p = lj_buf_need(&ls->sb, uncompressed_size);;
+    ls->pe = ls->p + uncompressed_size;
+
+    if (decompressor(ls->tempbuf, compressed_size, sbufB(&ls->sb),
+                     uncompressed_size) != uncompressed_size) {
+      /* Either the compressed data is invalid or its size is wrong */ 
+      bcread_error(ls, LJ_ERR_BCBAD);
+    }
+#else /* !defined LUAJIT_DISABLE_LZF */
+    return 0;
+#endif /* !defined LUAJIT_DISABLE_LZF */
+  }
+
   return 1;  /* Ok. */
 }
 
@@ -427,6 +514,7 @@ GCproto *lj_bcread(LexState *ls)
   /* Check for a valid bytecode dump header. */
   if (!bcread_header(ls))
     bcread_error(ls, LJ_ERR_BCFMT);
+
   for (;;) {  /* Process all prototypes in the bytecode dump. */
     GCproto *pt;
     MSize len;

@@ -108,6 +108,10 @@ XCFLAGS=
 #XCFLAGS+= -DLUAJIT_NUMMODE=1
 #XCFLAGS+= -DLUAJIT_NUMMODE=2
 #
+# Disable LZF-compressed bytecode.  LZF is a very small library and
+# saves more space than it uses even with small files, so it is
+# enabled by default.
+#XCFLAGS+= -DLUAJIT_DISABLE_COMPRESS
 ##############################################################################
 
 ##############################################################################
@@ -165,6 +169,9 @@ XCFLAGS=
 ASOPTIONS= $(CCOPT) $(CCWARN) $(XCFLAGS) $(CFLAGS)
 CCOPTIONS= $(CCDEBUG) $(ASOPTIONS)
 LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
+ifeq (,$(findstring -DLUAJIT_DISABLE_COMPRESS ,$(XCFLAGS)))
+  LDOPTIONS+= -llzf
+endif
 
 HOST_CC= $(CC)
 HOST_RM= rm -f

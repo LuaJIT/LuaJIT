@@ -72,6 +72,8 @@ typedef struct LexState {
   MSize vtop;		/* Top of variable stack. */
   BCInsLine *bcstack;	/* Stack for bytecode instructions/line numbers. */
   MSize sizebcstack;	/* Size of bytecode stack. */
+  char *tempbuf;	/* Temporary buffer for decompression */
+  MSize sizetempbuf;	/* Size of temporary buffer */
   uint32_t level;	/* Syntactical nesting level. */
 } LexState;
 
@@ -82,5 +84,4 @@ LJ_FUNC LexToken lj_lex_lookahead(LexState *ls);
 LJ_FUNC const char *lj_lex_token2str(LexState *ls, LexToken tok);
 LJ_FUNC_NORET void lj_lex_error(LexState *ls, LexToken tok, ErrMsg em, ...);
 LJ_FUNC void lj_lex_init(lua_State *L);
-
 #endif
