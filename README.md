@@ -11,3 +11,5 @@ See full Copyright Notice in the COPYRIGHT file or in luajit.h.
 
 Documentation for LuaJIT is available in HTML format.
 Please point your favorite browser to `doc/luajit.html`.
+
+[![Build Status](https://travis-ci.org/LuaJIT/LuaJIT.svg)](https://travis-ci.org/LuaJIT/LuaJIT)
