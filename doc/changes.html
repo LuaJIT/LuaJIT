@@ -74,6 +74,59 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.1.0-beta1">LuaJIT 2.1.0-beta1 &mdash; 2015-08-25</h2>
+<p>
+This is a brief summary of the major changes in LuaJIT 2.1 compared to 2.0.
+Please take a look at the commit history for more details.
+</p>
+<ul>
+<li>Changes to the VM core:
+<ul>
+<li>Add low-overhead profiler (<tt>-jp</tt>).</li>
+<li>Add <tt>LJ_GC64</tt> mode: 64 bit GC object references (really: 47 bit). Interpreter-only for now.</li>
+<li>Add <tt>LJ_FR2</tt> mode: Two-slot frame info. Required by <tt>LJ_GC64</tt> mode.</li>
+<li>Add <tt>table.new()</tt> and <tt>table.clear()</tt>.</li>
+<li>Parse binary number literals (<tt>0bxxx</tt>).</li>
+</ul></li>
+<li>Improvements to the JIT compiler:
+<ul>
+<li>Add trace stitching (disabled for now).</li>
+<li>Compile various builtins: <tt>string.char()</tt>, <tt>string.reverse()</tt>, <tt>string.lower()</tt>, <tt>string.upper()</tt>, <tt>string.rep()</tt>, <tt>string.format()</tt>, <tt>table.concat()</tt>, <tt>bit.tohex()</tt>, <tt>getfenv(0)</tt>, <tt>debug.getmetatable()</tt>.</li>
+<li>Compile <tt>string.find()</tt> for fixed string searches (no patterns).</li>
+<li>Compile <tt>BC_TSETM</tt>, e.g. <tt>{1,2,3,f()}</tt>.</li>
+<li>Compile string concatenations (<tt>BC_CAT</tt>).</li>
+<li>Compile <tt>__concat</tt> metamethod.</li>
+<li>Various minor optimizations.</li>
+</ul></li>
+<li>Internal Changes:
+<ul>
+<li>Add support for embedding LuaJIT bytecode for builtins.</li>
+<li>Replace various builtins with embedded bytecode.</li>
+<li>Refactor string buffers and string formatting.</li>
+<li>Remove obsolete non-truncating number to integer conversions.</li>
+</ul></li>
+<li>Ports:
+<ul>
+<li>Add Xbox One port (<tt>LJ_GC64</tt> mode).</li>
+<li>ARM64: Add port of the interpreter (<tt>LJ_GC64</tt> mode).</li>
+<li>x64: Add separate port of the interpreter to <tt>LJ_GC64</tt> mode.</li>
+<li>x86/x64: Drop internal x87 math functions. Use libm functions.</li>
+<li>x86: Remove x87 support from interpreter. SSE2 is mandatory now.</li>
+<li>PPC/e500: Drop support for this architecture.</li>
+</ul></li>
+<li>FFI library:
+<ul>
+<li>FFI: Add 64 bit bitwise operations.</li>
+<li>FFI: Compile VLA/VLS and large cdata allocations with default initialization.</li>
+<li>FFI: Compile conversions from functions to function pointers.</li>
+<li>FFI: Compile lightuserdata to <tt>void *</tt> conversion.</li>
+<li>FFI: Compile <tt>ffi.gc(cdata, nil)</tt>, too.</li>
+<li>FFI: Add <tt>ffi.typeinfo()</tt>.</li>
+</ul></li>
+</ul>
+</div>
+
+<div class="major" style="background: #ffffd0;">
 <h2 id="LuaJIT-2.0.4">LuaJIT 2.0.4 &mdash; 2015-05-14</h2>
 <ul>
 <li>Fix stack check in narrowing optimization.</li>
