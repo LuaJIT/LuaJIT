@@ -390,14 +390,7 @@ GCproto *lj_bcread_proto(LexState *ls)
 
 #ifndef LUAJIT_DISABLE_COMPRESS
 typedef MSize (*lj_decompressor)(char const *src, MSize srclen, char *dst, MSize dstlen);
-#if 0
-static char const *null_reader(lua_State *_ignored1, void *_ignored2, size_t *size)
-{
-  (void)_ignored1;
-  (void)_ignored2;
-  return (char const *)(*size = 0);
-}
-#endif
+
 static LJ_AINLINE unsigned int lj_lzf_decompress(char const *src, MSize srclen, char *dst, MSize dstlen)
 {
   lua_assert(srclen <= UINT_MAX);
