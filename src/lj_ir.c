@@ -209,13 +209,45 @@ void lj_ir_k64_freeall(jit_State *J)
     lj_mem_free(J2G(J), k, sizeof(K64Array));
     k = next;
   }
+  setmref(J->k64, NULL);
+}
+
+/* Add 64 bit constant to the last K64Array or add a new array. */
+static TValue *ir_k64_add(jit_State *J, K64Array *kl, uint64_t u64)
+{
+  TValue *ntv;
+  if (!(kl && kl->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
+    K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
+    setmref(kn->next, NULL);
+    kn->numk = 0;
+    if (kl)
+      setmref(kl->next, kn);  /* Chain to the end of the list. */
+    else
+      setmref(J->k64, kn);  /* Link first array. */
+    kl = kn;
+  }
+  ntv = &kl->k[kl->numk++];  /* Add to current array. */
+  ntv->u64 = u64;
+  return ntv;
+}
+
+/* Reserve space for a 64 bit constant in chained array. */
+TValue *lj_ir_k64_reserve(jit_State *J)
+{
+  K64Array *k, *kl = NULL;
+  /* Intern 0 to ensure that no code can by mistake reuse mutable slot. */
+  lj_ir_k64_find(J, 0);
+  /* Search for the last element in the chain of arrays. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
+    kl = k;
+  }
+  return ir_k64_add(J, kl, 0);
 }
 
 /* Find 64 bit constant in chained array or add it. */
 cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
 {
   K64Array *k, *kp = NULL;
-  TValue *ntv;
   MSize idx;
   /* Search for the constant in the whole chain of arrays. */
   for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
@@ -226,20 +258,7 @@ cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
 	return tv;
     }
   }
-  /* Constant was not found, need to add it. */
-  if (!(kp && kp->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
-    K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
-    setmref(kn->next, NULL);
-    kn->numk = 0;
-    if (kp)
-      setmref(kp->next, kn);  /* Chain to the end of the list. */
-    else
-      setmref(J->k64, kn);  /* Link first array. */
-    kp = kn;
-  }
-  ntv = &kp->k[kp->numk++];  /* Add to current array. */
-  ntv->u64 = u64;
-  return ntv;
+  return ir_k64_add(J, kp, u64);
 }
 
 /* Intern 64 bit constant, given by its address. */

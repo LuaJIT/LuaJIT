@@ -274,7 +274,7 @@ int lj_trace_flushall(lua_State *L)
       if (T->root == 0)
 	trace_flushroot(J, T);
       lj_gdbjit_deltrace(J, T);
-      T->traceno = 0;
+      T->traceno = T->link = 0;  /* Blacklist the link for cont_stitch. */
       setgcrefnull(J->trace[i]);
     }
   }
@@ -284,6 +284,7 @@ int lj_trace_flushall(lua_State *L)
   memset(J->penalty, 0, sizeof(J->penalty));
   /* Free the whole machine code and invalidate all exit stub groups. */
   lj_mcode_free(J);
+  lj_ir_k64_freeall(J);
   memset(J->exitstubgroup, 0, sizeof(J->exitstubgroup));
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "flush"));
@@ -403,6 +404,7 @@ static void trace_start(jit_State *J)
   lj_resetsplit(J);
   J->retryrec = 0;
   setgcref(J->cur.startpt, obj2gco(J->pt));
+  J->selfref = NULL;
 
   L = J->L;
   lj_vmevent_send(L, TRACE,
@@ -426,7 +428,7 @@ static void trace_stop(jit_State *J)
   GCproto *pt = &gcref(J->cur.startpt)->pt;
   TraceNo traceno = J->cur.traceno;
   GCtrace *T = trace_save_alloc(J);  /* Do this first. May throw OOM. */
-  lua_State *L;
+  lua_State *L = J->L;
 
   switch (op) {
   case BC_FORL:
@@ -477,8 +479,10 @@ static void trace_stop(jit_State *J)
   lj_mcode_commit(J, J->cur.mcode);
   J->postproc = LJ_POST_NONE;
   trace_save(J, T);
+  if (J->cur.linktype == LJ_TRLINK_STITCH) {
+    setgcV(L, J->selfref, obj2gco(T), LJ_TTRACE);
+  }
 
-  L = J->L;
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "stop"));
     setintV(L->top++, traceno);

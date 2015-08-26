@@ -69,6 +69,10 @@ static void gc_mark(global_State *g, GCobj *o)
       gray2black(o);  /* Closed upvalues are never gray. */
   } else if (gct != ~LJ_TSTR && gct != ~LJ_TCDATA) {
     lua_assert(gct == ~LJ_TFUNC || gct == ~LJ_TTAB ||
+#if LJ_HASJIT
+               /* Can occur as a part of trace stitching continuation. */
+               gct == ~LJ_TTRACE ||
+#endif
 	       gct == ~LJ_TTHREAD || gct == ~LJ_TPROTO);
     setgcrefr(o->gch.gclist, g->gc.gray);
     setgcref(g->gc.gray, o);
