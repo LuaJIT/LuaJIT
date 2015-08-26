@@ -127,6 +127,7 @@ static void recff_stitch(jit_State *J)
   selfrefptr = lj_ir_kptr(J, &J->selfref->gcr);
 #endif
   J->base[0] = trcont | TREF_CONT;
+  lua_assert(irt_toitype_(IRT_P64) == LJ_TTRACE);
   J->base[-1] = emitir(IRT(IR_XLOAD, IRT_P64), selfrefptr, 0);
   J->base += 2;
   J->baseslot += 2;
