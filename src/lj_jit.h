@@ -418,7 +418,7 @@ typedef struct jit_State {
 
   TValue errinfo;	/* Additional info element for trace errors. */
 
-  TValue* selfref;  /* Slot for the trace self reference. */
+  TValue* selfref;      /* Slot for the trace self reference. */
 
 #if LJ_HASPROFILE
   GCproto *prev_pt;	/* Previous prototype. */
