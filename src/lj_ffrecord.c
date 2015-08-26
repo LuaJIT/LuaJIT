@@ -96,18 +96,10 @@ static ptrdiff_t results_wanted(jit_State *J)
     return -1;
 }
 
-#ifdef LUAJIT_TRACE_STITCHING
-/* This feature is disabled for now due to a design mistake. Sorry.
-**
-** It causes unpredictable behavior and crashes when a full trace flush
-** happens with a stitching continuation still in the stack somewhere.
-*/
-
 /* Trace stitching: add continuation below frame to start a new trace. */
 static void recff_stitch(jit_State *J)
 {
   ASMFunction cont = lj_cont_stitch;
-  TraceNo traceno = J->cur.traceno;
   lua_State *L = J->L;
   TValue *base = L->base;
   const BCIns *pc = frame_pc(base-1);
@@ -120,7 +112,7 @@ static void recff_stitch(jit_State *J)
   setframe_ftsz(base+1, ((char *)(base+1) - (char *)pframe) + FRAME_CONT);
   setcont(base, cont);
   setframe_pc(base, pc);
-  if (LJ_DUALNUM) setintV(base-1, traceno); else base[-1].u64 = traceno;
+  setnilV(base-1);
   L->base += 2;
   L->top += 2;
 
@@ -131,8 +123,9 @@ static void recff_stitch(jit_State *J)
 #else
   trcont = lj_ir_kptr(J, (void *)cont);
 #endif
+  J->selfref = lj_ir_k64_reserve(J);
   J->base[0] = trcont | TREF_CONT;
-  J->base[-1] = LJ_DUALNUM ? lj_ir_kint(J,traceno) : lj_ir_knum_u64(J,traceno);
+  J->base[-1] = emitir(IRT(IR_XLOAD, IRT_P64), lj_ir_kptr(J, J->selfref), 0);
   J->base += 2;
   J->baseslot += 2;
   J->framedepth++;
@@ -181,31 +174,6 @@ static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
 
 /* Must stop the trace for classic C functions with arbitrary side-effects. */
 #define recff_c		recff_nyi
-#else
-/* Fallback handler for fast functions that are not recorded (yet). */
-static void LJ_FASTCALL recff_nyi(jit_State *J, RecordFFData *rd)
-{
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYIFF);
-  UNUSED(rd);
-}
-
-/* Throw error for unsupported variant of fast function. */
-LJ_NORET static void recff_nyiu(jit_State *J, RecordFFData *rd)
-{
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYIFFU);
-  UNUSED(rd);
-}
-
-/* Must abort the trace for classic C functions with arbitrary side-effects. */
-static void LJ_FASTCALL recff_c(jit_State *J, RecordFFData *rd)
-{
-  setfuncV(J->L, &J->errinfo, J->fn);
-  lj_trace_err_info(J, LJ_TRERR_NYICF);
-  UNUSED(rd);
-}
-#endif
 
 /* Emit BUFHDR for the global temporary buffer. */
 static TRef recff_bufhdr(jit_State *J)
