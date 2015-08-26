@@ -216,7 +216,6 @@ void lj_ir_k64_freeall(jit_State *J)
 static TValue *ir_k64_add(jit_State *J, K64Array *kl, uint64_t u64)
 {
   TValue *ntv;
-  /* Constant was not found, need to add it. */
   if (!(kl && kl->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
     K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
     setmref(kn->next, NULL);
