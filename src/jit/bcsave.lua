@@ -200,7 +200,7 @@ typedef struct {
 ]]
   local symname = LJBC_PREFIX..ctx.modname
   local is64, isbe = false, false
-  if ctx.arch == "x64" then
+  if ctx.arch == "x64" or ctx.arch == "arm64" then
     is64 = true
   elseif ctx.arch == "ppc" or ctx.arch == "mips" then
     isbe = true
