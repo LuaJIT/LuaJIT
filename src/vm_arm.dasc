@@ -2086,7 +2086,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // RA = resultptr, CARG4 = meta base
   |   ldr RB, SAVE_MULTRES
   |  ldr INS, [PC, #-4]
-  |    ldr CARG3, [CARG4, #-24]		// Save previous trace number.
+  |    ldr TRACE:CARG3, [CARG4, #-24]	// Save previous trace.
   |   subs RB, RB, #8
   |  decode_RA8 RC, INS			// Call base.
   |   beq >2
@@ -2101,23 +2101,20 @@ static void build_subroutines(BuildCtx *ctx)
   |   decode_RA8 RA, INS
   |   decode_RB8 RB, INS
   |   add RA, RA, RB
-  |  ldr CARG1, [DISPATCH, #DISPATCH_J(trace)]
   |3:
   |   cmp RA, RC
   |  mvn CARG2, #~LJ_TNIL
   |   bhi >9				// More results wanted?
   |
-  |  ldr TRACE:RA, [CARG1, CARG3, lsl #2]
-  |  cmp TRACE:RA, #0
-  |  beq ->cont_nop
-  |  ldrh RC, TRACE:RA->link
-  |  cmp RC, CARG3
+  |  ldrh RA, TRACE:CARG3->traceno
+  |  ldrh RC, TRACE:CARG3->link
+  |  cmp RC, RA
   |  beq ->cont_nop			// Blacklisted.
   |  cmp RC, #0
   |  bne =>BC_JLOOP			// Jump to stitched trace.
   |
   |  // Stitch a new trace to the previous trace.
-  |  str CARG3, [DISPATCH, #DISPATCH_J(exitno)]
+  |  str RA, [DISPATCH, #DISPATCH_J(exitno)]
   |  str L, [DISPATCH, #DISPATCH_J(L)]
   |  str BASE, L->base
   |  sub CARG1, DISPATCH, #-GG_DISP2J

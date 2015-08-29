@@ -631,8 +631,8 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
     } else if (irt_isnum(t)) {
       setnumV(o, ex->fpr[r-RID_MIN_FPR]);
 #endif
-    } else if (LJ_64 && irt_islightud(t)) {
-      /* 64 bit lightuserdata which may escape already has the tag bits. */
+    } else if (LJ_64 && irt_is64(t)) {
+      /* 64 bit values that already have the tag bits. */
       o->u64 = ex->gpr[r-RID_MIN_GPR];
     } else if (irt_ispri(t)) {
       setpriV(o, irt_toitype(t));

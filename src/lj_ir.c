@@ -209,24 +209,13 @@ void lj_ir_k64_freeall(jit_State *J)
     lj_mem_free(J2G(J), k, sizeof(K64Array));
     k = next;
   }
+  setmref(J->k64, NULL);
 }
 
-/* Find 64 bit constant in chained array or add it. */
-cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
+/* Get new 64 bit constant slot. */
+static TValue *ir_k64_add(jit_State *J, K64Array *kp, uint64_t u64)
 {
-  K64Array *k, *kp = NULL;
   TValue *ntv;
-  MSize idx;
-  /* Search for the constant in the whole chain of arrays. */
-  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
-    kp = k;  /* Remember previous element in list. */
-    for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
-      TValue *tv = &k->k[idx];
-      if (tv->u64 == u64)  /* Needed for +-0/NaN/absmask. */
-	return tv;
-    }
-  }
-  /* Constant was not found, need to add it. */
   if (!(kp && kp->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
     K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
     setmref(kn->next, NULL);
@@ -240,6 +229,33 @@ cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
   ntv = &kp->k[kp->numk++];  /* Add to current array. */
   ntv->u64 = u64;
   return ntv;
+}
+
+/* Find 64 bit constant in chained array or add it. */
+cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
+{
+  K64Array *k, *kp = NULL;
+  MSize idx;
+  /* Search for the constant in the whole chain of arrays. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
+    kp = k;  /* Remember previous element in list. */
+    for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
+      TValue *tv = &k->k[idx];
+      if (tv->u64 == u64)  /* Needed for +-0/NaN/absmask. */
+	return tv;
+    }
+  }
+  /* Otherwise add a new constant. */
+  return ir_k64_add(J, kp, u64);
+}
+
+TValue *lj_ir_k64_reserve(jit_State *J)
+{
+  K64Array *k, *kp = NULL;
+  lj_ir_k64_find(J, 0);  /* Intern dummy 0 to protect the reserved slot. */
+  /* Find last K64Array, if any. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) kp = k;
+  return ir_k64_add(J, kp, 0);  /* Set to 0. Final value is set later. */
 }
 
 /* Intern 64 bit constant, given by its address. */

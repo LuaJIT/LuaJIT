@@ -2667,8 +2667,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->cont_stitch:			// Trace stitching.
   |.if JIT
   |  // BASE = base, RC = result, RB = mbase
-  |  mov RA, [RB-24]			// Save previous trace number.
-  |  mov TMP1, RA
+  |  mov TRACE:RA, [RB-24]		// Save previous trace.
+  |  mov TMP1, TRACE:RA
   |  mov TMP3, DISPATCH			// Need one more register.
   |  mov DISPATCH, MULTRES
   |  movzx RA, PC_RA
@@ -2699,11 +2699,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  ja >9				// More results wanted?
   |
   |  mov DISPATCH, TMP3
-  |  mov RB, TMP1			// Get previous trace number.
-  |  mov RA, [DISPATCH+DISPATCH_J(trace)]
-  |  mov TRACE:RD, [RA+RB*4]
-  |  test TRACE:RD, TRACE:RD
-  |  jz ->cont_nop
+  |  mov TRACE:RD, TMP1			// Get previous trace.
+  |  movzx RB, word TRACE:RD->traceno
   |  movzx RD, word TRACE:RD->link
   |  cmp RD, RB
   |  je ->cont_nop			// Blacklisted.

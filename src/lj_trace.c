@@ -274,7 +274,7 @@ int lj_trace_flushall(lua_State *L)
       if (T->root == 0)
 	trace_flushroot(J, T);
       lj_gdbjit_deltrace(J, T);
-      T->traceno = 0;
+      T->traceno = T->link = 0;  /* Blacklist the link for cont_stitch. */
       setgcrefnull(J->trace[i]);
     }
   }
@@ -284,6 +284,7 @@ int lj_trace_flushall(lua_State *L)
   memset(J->penalty, 0, sizeof(J->penalty));
   /* Free the whole machine code and invalidate all exit stub groups. */
   lj_mcode_free(J);
+  lj_ir_k64_freeall(J);
   memset(J->exitstubgroup, 0, sizeof(J->exitstubgroup));
   lj_vmevent_send(L, TRACE,
     setstrV(L, L->top++, lj_str_newlit(L, "flush"));
@@ -402,6 +403,7 @@ static void trace_start(jit_State *J)
   J->postproc = LJ_POST_NONE;
   lj_resetsplit(J);
   J->retryrec = 0;
+  J->ktracep = NULL;
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
   L = J->L;
@@ -477,6 +479,9 @@ static void trace_stop(jit_State *J)
   lj_mcode_commit(J, J->cur.mcode);
   J->postproc = LJ_POST_NONE;
   trace_save(J, T);
+  if (J->ktracep) {  /* Patch K64Array slot with the final GCtrace pointer. */
+    setgcV(J->L, J->ktracep, obj2gco(T), LJ_TTRACE);
+  }
 
   L = J->L;
   lj_vmevent_send(L, TRACE,
