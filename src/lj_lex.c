@@ -214,6 +214,33 @@ static void lex_string(LexState *ls, TValue *tv)
 	  c += 9;
 	}
 	break;
+      case 'u':  /* Unicode escape '\u{XX...}'. */
+	if (lex_next(ls) != '{') goto err_xesc;
+	lex_next(ls);
+	c = 0;
+	do {
+	  c = (c << 4) | (ls->c & 15u);
+	  if (!lj_char_isdigit(ls->c)) {
+	    if (!lj_char_isxdigit(ls->c)) goto err_xesc;
+	    c += 9;
+	  }
+	  if (c >= 0x110000) goto err_xesc;  /* Out of Unicode range. */
+	} while (lex_next(ls) != '}');
+	if (c < 0x800) {
+	  if (c < 0x80) break;
+	  lex_save(ls, 0xc0 | (c >> 6));
+	} else {
+	  if (c >= 0x10000) {
+	    lex_save(ls, 0xf0 | (c >> 18));
+	    lex_save(ls, 0x80 | ((c >> 12) & 0x3f));
+	  } else {
+	    if (c >= 0xd800 && c < 0xe000) goto err_xesc;  /* No surrogates. */
+	    lex_save(ls, 0xe0 | (c >> 12));
+	  }
+	  lex_save(ls, 0x80 | ((c >> 6) & 0x3f));
+	}
+	c = 0x80 | (c & 0x3f);
+	break;
       case 'z':  /* Skip whitespace. */
 	lex_next(ls);
 	while (lj_char_isspace(ls->c))

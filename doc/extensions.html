@@ -344,6 +344,13 @@ Lua&nbsp;5.1, which prevents implementing features that would otherwise
 break the Lua/C API and ABI (e.g. <tt>_ENV</tt>).
 </p>
 
+<h2 id="lua53">Extensions from Lua 5.3</h2>
+<p>
+LuaJIT supports some extensions from Lua&nbsp;5.3:
+<ul>
+<li>Unicode escape <tt>'\u{XX...}'</tt> embeds the UTF-8 encoding in string literals.</li>
+</ul>
+
 <h2 id="exceptions">C++ Exception Interoperability</h2>
 <p>
 LuaJIT has built-in support for interoperating with C++&nbsp;exceptions.
