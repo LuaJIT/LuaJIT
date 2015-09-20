@@ -183,7 +183,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if defined(__GNUC__) && !LJ_NO_UNWIND && !LJ_TARGET_WINDOWS
+#if defined(__GNUC__) && !LJ_NO_UNWIND && !LJ_ABI_WIN
 
 /*
 ** We have to use our own definitions instead of the mandatory (!) unwind.h,
@@ -349,7 +349,7 @@ LJ_FUNCA int lj_err_unwind_arm(int state, void *ucb, _Unwind_Context *ctx)
 
 #endif
 
-#elif LJ_TARGET_X64 && LJ_TARGET_WINDOWS
+#elif LJ_TARGET_X64 && LJ_ABI_WIN
 
 /*
 ** Someone in Redmond owes me several days of my life. A lot of this is
@@ -414,7 +414,9 @@ LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win64(EXCEPTION_RECORD *rec,
     if (cf2) {  /* We catch it, so start unwinding the upper frames. */
       if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
 	  rec->ExceptionCode == LJ_GCC_EXCODE) {
+#if LJ_TARGET_WINDOWS
 	__DestructExceptionObject(rec, 1);
+#endif
 	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
       } else if (!LJ_EXCODE_CHECK(rec->ExceptionCode)) {
 	/* Don't catch access violations etc. */
