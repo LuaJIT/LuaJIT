@@ -38,6 +38,8 @@
   _("uint64_t",			UINT64) \
   _("intptr_t",			INT_PSZ) \
   _("uintptr_t",		UINT_PSZ) \
+  /* From POSIX. */ \
+  _("ssize_t",			INT_PSZ) \
   /* End of typedef list. */
 
 /* Keywords (only the ones we actually care for). */
