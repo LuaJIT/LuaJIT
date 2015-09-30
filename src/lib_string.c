@@ -27,6 +27,14 @@
 #include "lj_strfmt.h"
 #include "lj_lib.h"
 
+static SBuf *check_bufarg(lua_State *L)
+{
+  if (!(L->base < L->top && tvissbuf(L->base)))
+    lj_err_argtype(L, 1, "string buffer");
+
+  return sbufV(L->base);
+}
+
 /* ------------------------------------------------------------------------ */
 
 #define LJLIB_MODULE_string
@@ -728,6 +736,287 @@ again:
   return 1;
 }
 
+LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment to string buffer mt. */
+
+LJLIB_CF(string_createbuffer)
+{
+  int32_t initsz = lj_lib_optint(L, 1, LJ_MIN_SBUF); /* default allocate the buffer */
+  SBuf *sb = (SBuf *)lua_newuserdata(L, sizeof(SBuf));
+  GCudata *ud = udataV(L->top - 1);
+  ud->udtype = UDTYPE_STRING_BUF;
+  /* NOBARRIER: The GCudata is new (marked white). */
+  setgcrefr(ud->metatable, curr_func(L)->c.env);
+  
+  lj_buf_init(L, sb);
+  lj_buf_more(sb, initsz);
+  return 1;
+}
+
+#include "lj_libdef.h"
+
+/* -- string buffer methods ------------------------------------------------ */
+
+#define LJLIB_MODULE_stringbuf
+
+static SBuf *writevalue_default(SBuf *sb, cTValue *o)
+{
+  char *p;
+  lj_buf_putmem(sb, lj_typename(o), (MSize)strlen(lj_typename(o)));
+  p = lj_buf_more(sb, 8 + 2 + 2 + 16);
+  *p++ = ':'; *p++ = ' ';
+  if (tvisfunc(o) && isffunc(funcV(o))) {
+    p = lj_buf_wmem(p, "builtin#", 8);
+    p = lj_strfmt_wint(p, funcV(o)->c.ffid);
+  } else {
+    p = lj_strfmt_wptr(p, lj_obj_ptr(o));
+  }
+  setsbufP(sb, p);
+  return sb;
+}
+
+static cTValue *writevalue(SBuf *sb, cTValue *o, int checkmt)
+{
+  if (tvisstr(o)) {
+    lj_buf_putstr(sb, strV(o));
+  } else if (tvisnumber(o)) {
+    if (tvisint(o))
+      lj_strfmt_putint(sb, intV(o));
+    else
+      lj_strfmt_putfnum(sb, STRFMT_G14, o->n);
+  } else if (tvisnil(o)) {
+    lj_buf_putmem(sb, "nil", 3);
+  } else if (tvisfalse(o)) {
+    lj_buf_putmem(sb, "false", 5);
+  } else if (tvistrue(o)) {
+    lj_buf_putmem(sb, "true", 4);
+  } else if (tvissbuf(o)) {
+    lj_buf_putbuf(sb, sbufV(o));
+  } else if (!checkmt) {
+    writevalue_default(sb, o);
+  } else {
+    cTValue *mo = lj_meta_lookup(sbufL(sb), o, MM_tostring);
+
+    if (tvisnil(mo)) {
+      writevalue_default(sb, o);
+      return NULL;
+    } else {
+      return mo;
+    }
+  }
+
+  return NULL;
+}
+
+static void writevalue_tostring(SBuf *sb, cTValue *mo, int arg)
+{
+  lua_State *L = sbufL(sb);
+  TValue *o = L->base + arg;
+  lua_assert(o < L->top);  /* Caller already checks for existence. */
+
+  copyTV(L, L->top++, mo);
+  copyTV(L, L->top++, o);
+  lua_call(L, 1, 1);
+  /* Stack may of been reallocated */
+  writevalue(sb, L->top - 1, 0);
+  L->top--;
+}
+
+static SBuf *stringbuf_write(lua_State *L)
+{
+  SBuf *sb = check_bufarg(L);
+  int arg, nargs = (int)(L->top - L->base);
+
+  for (arg = 1; arg < nargs; arg++) {
+    cTValue *mo = writevalue(sb, L->base+arg, 1);
+
+    if (mo) {
+      writevalue_tostring(sb, mo, arg);
+    }
+  }
+  return sb;
+}
+
+LJLIB_CF(stringbuf_write)
+{
+  stringbuf_write(L);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_writeln)
+{
+  SBuf *sb = stringbuf_write(L);
+  lj_buf_putb(sb, '\n');
+  return 0;
+}
+
+LJLIB_CF(stringbuf_writesub)
+{
+  MSize len;
+  SBuf *sb = check_bufarg(L);
+  const char *s = lj_lib_checkstrorsbuf(L, 2, &len);
+  int32_t start = lj_lib_checkint(L, 3);
+  int32_t end = lj_lib_optint(L, 4, -1);
+
+  lj_buf_putrang(sb, s, len, start, end);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_byte)
+{
+  SBuf *sb = check_bufarg(L);
+  int32_t pos = lj_lib_checkint(L, 2);
+
+  if (pos < 0) {
+    pos += sbuflen(sb) + 1;
+  }
+
+  pos--;
+
+  if (pos < 0 || pos >= (int32_t)sbuflen(sb))
+      lj_err_arg(L, 2, LJ_ERR_IDXRNG);
+
+  setintV(L->top++, sbufB(sb)[pos]);
+  return 1;
+}
+
+LJLIB_CF(stringbuf_setbyte)
+{
+  SBuf *sb = check_bufarg(L);
+  int32_t pos = lj_lib_checkint(L, 2);
+  TValue *bytev = lj_lib_checkany(L, 3);
+  int b;
+
+  if (pos < 0) {
+    pos += sbuflen(sb);
+  } else {
+    pos--;
+  }
+
+  if (pos < 0 || pos >= (int32_t)sbuflen(sb))
+    lj_err_arg(L, 2, LJ_ERR_IDXRNG);
+
+  if (tvisnumber(bytev)) {
+    b = numberVint(bytev);
+  } else if(tvisstr(bytev)) {
+    if (strV(bytev)->len == 0)
+      lj_err_arg(L, 3, LJ_ERR_BADVAL);
+    b = *strdata(strV(bytev));
+  } else {
+    lj_err_argtype(L, 3, "string or number");
+  }
+
+  sbufB(sb)[pos] = b;
+  return 0;
+}
+
+LJLIB_CF(stringbuf_len)
+{
+  SBuf *sb = check_bufarg(L);
+  setintV(L->top - 1, sbuflen(sb));
+  return 1;
+}
+
+LJLIB_CF(stringbuf_setlength)
+{
+  SBuf *sb = check_bufarg(L);
+  int32_t size = lj_lib_checkint(L, 2);
+  TValue* fillval = (L->base + 2 < L->top) ? L->base + 2 : NULL;
+  int32_t extra = size - sbuflen(sb);
+
+  if (size < 0 || (MSize)size > sbufsz(sb))
+    lj_err_arg(L, 2, LJ_ERR_BADVAL);
+
+  setsbuflen(sb, size);
+
+  if (extra > 0) {
+    uint8_t fill = 0;
+    if (fillval) {
+      if (tvisbool(fillval) && !boolV(fillval) && LJ_HASFFI) {
+        /* Leave uninitialized if passed false as the fill value */
+        return 0;
+      }
+      fill = (uint8_t)lj_lib_checkint(L, 3);
+    }
+
+    memset(sbufP(sb) - extra, fill, extra);
+  }
+
+  return 0;
+}
+
+LJLIB_CF(stringbuf_capacity)
+{
+  SBuf *sb = check_bufarg(L);
+  setintV(L->top - 1, sbufsz(sb));
+  return 1;
+}
+
+LJLIB_CF(stringbuf_reserve)
+{
+  SBuf *sb = check_bufarg(L);
+  int more = lj_lib_checkint(L, 2);
+
+  if (more < 0) {
+    lj_err_arg(L, 1, LJ_ERR_BADVAL);
+  }
+
+  lj_buf_more(sb, more);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_equals)
+{
+  MSize len;
+  SBuf *sb = check_bufarg(L);
+  const char* s = lj_lib_checkstrorsbuf(L, 2, &len);
+
+  int eq = len == sbuflen(sb) && strncmp(s, sbufB(sb), len) == 0;
+  setboolV(L->top - 1, eq);
+  return 1;
+}
+
+LJLIB_CF(stringbuf_reset)
+{
+  SBuf *sb = check_bufarg(L);
+  lj_buf_reset(sb);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_tostring)
+{
+  SBuf *sb = check_bufarg(L);
+  setstrV(L, L->top - 1, lj_buf_str(L, sb));
+  return 1;
+}
+
+LJLIB_CF(stringbuf___tostring)
+{
+  SBuf *sb = check_bufarg(L);
+  setstrV(L, L->top - 1, lj_buf_str(L, sb));
+  return 1;
+}
+
+LJLIB_CF(stringbuf___len)
+{
+  SBuf *sb = check_bufarg(L);
+  setintptrV(L->top - 1, sbuflen(sb));
+  return 1;
+}
+
+LJLIB_CF(stringbuf___gc)
+{
+  SBuf *sb = check_bufarg(L);
+  
+  if (sbufB(sb) != NULL) {
+    lj_buf_free(G(L), sb);
+    /* prevent double free if were somehow directly called */
+    setmref(sb->p, NULL); setmref(sb->e, NULL); setmref(sb->b, NULL);
+  }
+  return 0;
+}
+
+LJLIB_PUSH(top-1) LJLIB_SET(__index)
+
 /* ------------------------------------------------------------------------ */
 
 #include "lj_libdef.h"
@@ -736,6 +1025,10 @@ LUALIB_API int luaopen_string(lua_State *L)
 {
   GCtab *mt;
   global_State *g;
+  LJ_LIB_REG(L, NULL, stringbuf);
+  copyTV(L, L->top, L->top - 1); L->top++;
+  lua_setfield(L, LUA_REGISTRYINDEX, "stringbuffer");
+
   LJ_LIB_REG(L, LUA_STRLIBNAME, string);
   mt = lj_tab_new(L, 0, 1);
   /* NOBARRIER: basemt is a GC root. */

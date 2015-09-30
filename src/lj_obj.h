@@ -319,6 +319,7 @@ typedef struct GCudata {
 enum {
   UDTYPE_USERDATA,	/* Regular userdata. */
   UDTYPE_IO_FILE,	/* I/O library FILE. */
+  UDTYPE_STRING_BUF,    /* String buffer */
   UDTYPE_FFI_CLIB,	/* FFI C library namespace. */
   UDTYPE__MAX
 };
@@ -766,6 +767,7 @@ typedef union GCobj {
 #define tvispri(o)	(itype(o) >= LJ_TISPRI)
 #define tvistabud(o)	(itype(o) <= LJ_TISTABUD)  /* && !tvisnum() */
 #define tvisgcv(o)	((itype(o) - LJ_TISGCV) > (LJ_TNUMX - LJ_TISGCV))
+#define tvissbuf(o)     (tvisudata(o) && udataV(o)->udtype == UDTYPE_STRING_BUF)
 
 /* Special macros to test numbers for NaN, +0, -0, +1 and raw equality. */
 #define tvisnan(o)	((o)->n != (o)->n)
@@ -808,6 +810,7 @@ typedef union GCobj {
 #define cdataV(o)	check_exp(tviscdata(o), &gcval(o)->cd)
 #define tabV(o)		check_exp(tvistab(o), &gcval(o)->tab)
 #define udataV(o)	check_exp(tvisudata(o), &gcval(o)->ud)
+#define sbufV(o)        check_exp(tvissbuf(o), (SBuf *)uddata(&gcval(o)->ud))
 #define numV(o)		check_exp(tvisnum(o), (o)->n)
 #define intV(o)		check_exp(tvisint(o), (int32_t)(o)->i)
 

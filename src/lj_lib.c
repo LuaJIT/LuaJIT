@@ -19,6 +19,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_buf.h"
 #include "lj_lex.h"
 #include "lj_bcdump.h"
 #include "lj_lib.h"
@@ -202,6 +203,26 @@ GCstr *lj_lib_checkstr(lua_State *L, int narg)
     }
   }
   lj_err_argt(L, narg, LUA_TSTRING);
+  return NULL;  /* unreachable */
+}
+
+const char *lj_lib_checkstrorsbuf(lua_State *L, int narg, MSize *len)
+{
+  TValue *o = L->base + narg - 1;
+  if (o < L->top) {
+    if (tvisstr(o)) {
+      *len = strV(o)->len;
+      return strVdata(o);
+    } else if (tvissbuf(o)) {
+      SBuf *sb = sbufV(o);
+      *len = sbuflen(sb);
+      if (sbufB(sb) == NULL)
+        return "";
+      else
+        return sbufB(sb);
+    }
+  }
+  lj_err_argtype(L, narg, "string or stringbuffer");
   return NULL;  /* unreachable */
 }
 

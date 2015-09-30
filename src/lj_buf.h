@@ -19,6 +19,7 @@
 #define sbuflen(sb)	((MSize)(sbufP((sb)) - sbufB((sb))))
 #define sbufleft(sb)	((MSize)(sbufE((sb)) - sbufP((sb))))
 #define setsbufP(sb, q)	(setmref((sb)->p, (q)))
+#define setsbuflen(sb, len) (setmref((sb)->p, (sbufB(sb)+len)))
 #define setsbufL(sb, l)	(setmref((sb)->L, (l)))
 
 /* Buffer management */
@@ -86,6 +87,8 @@ static LJ_AINLINE void lj_buf_putb(SBuf *sb, int c)
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putbuf(SBuf *sb, SBuf *sb2);
+LJ_FUNCA SBuf *lj_buf_putrang(SBuf *sb, const char *s, MSize len, int32_t start, int32_t end);
 LJ_FUNC SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep);
 LJ_FUNC SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep,
 			    int32_t i, int32_t e);
