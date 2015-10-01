@@ -590,6 +590,23 @@ typedef struct GCState {
   MSize pause;		/* Pause between successive GC cycles. */
 } GCState;
 
+/* Match state for pattern captures. */
+typedef struct MatchState {
+  const char *src_init; /* Start of source string. */
+  const char *src_end;  /* End (`\0') of source string. */
+  lua_State *L;
+  int level; 		/* Total number of captures (finished or unfinished). */
+  int depth;
+  uint32_t findret1;
+  uint32_t findret2; 	/* Return indices of string.find(). */
+  struct {
+    MRef init;
+    MSize len;
+  } capture[LUA_MAXCAPTURES];
+} MatchState;
+#define CAP_UNFINISHED	((MSize)(-1))
+#define CAP_POSITION	((MSize)(-2))
+
 /* Global state, shared by all threads of a Lua universe. */
 typedef struct global_State {
   GCRef *strhash;	/* String hash table (hash chain anchors). */
@@ -621,6 +638,7 @@ typedef struct global_State {
   MRef jit_base;	/* Current JIT code L->base or NULL. */
   MRef ctype_state;	/* Pointer to C type state. */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
+  MatchState ms; 	/* Capture buffer for JIT mcode. */
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
