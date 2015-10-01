@@ -1188,6 +1188,9 @@ LUA_API int lua_gc(lua_State *L, int what, int data)
     res = (int)(g->gc.stepmul);
     g->gc.stepmul = (MSize)data;
     break;
+  case LUA_GCISRUNNING:
+    res = (g->gc.threshold != LJ_MAX_MEM);
+    break;
   default:
     res = -1;  /* Invalid option. */
   }
