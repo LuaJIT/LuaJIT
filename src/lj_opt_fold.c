@@ -577,7 +577,8 @@ LJFOLD(FLOAD any IRFL_SBUF_E)
 LJFOLDF(buf_fload)
 {
   lua_assert(fleft->o == IR_BUFHDR && 
-             (fleft->op2&IRBUFHDR_MODEMASK) == IRBUFHDR_MODIFY);
+             ((fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_MODIFY || 
+              (fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESIZE));
 
   if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
     /* CSE limited up to our header for now */

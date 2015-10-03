@@ -28,6 +28,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_buf.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -1194,14 +1195,64 @@ static void LJ_FASTCALL recff_stringbuf_tostring(jit_State *J, RecordFFData *rd)
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, hdr);
 }
 
+static TRef stringbuf_getsize(jit_State *J, TRef buf, int sizeorcap)
+{
+  TRef base = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_B);
+  TRef pos = emitir(IRT(IR_FLOAD, IRT_PGC), buf, sizeorcap ? IRFL_SBUF_E : IRFL_SBUF_P);
+  return emitir(IRTI(IR_SUB), pos, base);
+}
+
 static void LJ_FASTCALL recff_stringbuf_info(jit_State *J, RecordFFData *rd)
 {
   TRef buf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_MODIFY);
-  TRef base = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_B);
-  TRef pos = emitir(IRT(IR_FLOAD, IRT_PGC), buf, rd->data == 0 ? IRFL_SBUF_P : IRFL_SBUF_E);
-
-  J->base[0] = emitir(IRT(IR_SUB, IRT_INT), pos, base);
+  J->base[0] = stringbuf_getsize(J, buf, rd->data);
 }
+
+static void LJ_FASTCALL recff_stringbuf_setlength(jit_State *J, RecordFFData *rd)
+{
+  TRef buf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_RESIZE);
+  TRef trnewlen = lj_opt_narrow_toint(J, J->base[1]);
+  int32_t newlen = argv2int(J, &rd->argv[1]);
+  TRef trfill = J->base[2];
+  SBuf* sb = sbufV(&rd->argv[0]);
+  TRef base = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_B);
+  
+  emitir(IRTGI(IR_GE), trnewlen, lj_ir_kint(J, 0));
+  emitir(IRTGI(IR_LT), trnewlen, stringbuf_getsize(J, buf, 1));
+  
+  if (trfill) {
+    if (tref_isfalse(trfill) && LJ_HASFFI) {
+      /* could maybe just directly set the buffer pointer for this case */
+      trfill = lj_ir_kint(J, -1);
+    } else {
+      trfill = lj_opt_narrow_toint(J, trfill);
+
+      emitir(IRTGI(IR_GE), trfill, lj_ir_kint(J, 0));
+      emitir(IRTGI(IR_LT), trfill, lj_ir_kint(J, 256));
+    }
+  } else {
+    trfill = lj_ir_kint(J, 0);
+  }
+
+  lj_ir_call(J, IRCALL_lj_buf_setlen, buf, trnewlen, trfill);
+  J->needsnap = 1;
+}
+
+static void LJ_FASTCALL recff_stringbuf_reserve(jit_State *J, RecordFFData *rd)
+{
+  TRef buf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_RESIZE);
+  TRef trmore = lj_opt_narrow_toint(J, J->base[1]);
+  TRef size = stringbuf_getsize(J, buf, 0);
+
+  emitir(IRTGI(IR_GE), trmore, lj_ir_kint(J, 0));
+  /* exit to the interpreter to throw the memory error so we don't endup in the panic error handler */
+  size = emitir(IRT(IR_ADD, IRT_U32), size, trmore);
+  emitir(IRTG(IR_ULT, IRT_U32), trmore, lj_ir_kint(J, LJ_MAX_BUF));
+
+  lj_ir_call(J, IRCALL_lj_buf_reserve, buf, trmore);
+  J->needsnap = 1;
+}
+
 
 static void LJ_FASTCALL recff_stringbuf_byte(jit_State *J, RecordFFData *rd)
 {
@@ -1361,7 +1412,7 @@ static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
       buf = emitir(IRT(IR_STRREF, IRT_PGC), str, zero);
       len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
     } else {
-      TRef trsb = recff_stringbufhdr(J, rd, i, IRBUFHDR_MODIFY);
+      TRef trsb = recff_stringbufhdr(J, rd, (int)i, IRBUFHDR_MODIFY);
       buf = emitir(IRT(IR_FLOAD, IRT_PGC), trsb, IRFL_SBUF_B);
       len = emitir(IRTI(IR_SUB), emitir(IRT(IR_FLOAD, IRT_PGC), trsb, IRFL_SBUF_P), buf);
     }

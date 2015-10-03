@@ -102,7 +102,7 @@ function testjit(expected, func, ...)
     if (result ~= expected) then
       local jitted, anyjited = tracker.isjited(func)
       tracker.print_savedevevents()
-      trerror2("expected '%s' but got '%s' - %s", tostring(expected), tostring(result), (jitted and "JITed") or "Interpreted")
+      trerror2("expected %q but got %q - %s", tostring(expected), tostring(result), (jitted and "JITed") or "Interpreted")
     end
   end
 
@@ -187,7 +187,7 @@ local function testjit2(func, config1, config2)
     
     if not shoulderror and result ~= expected then
       tracker.print_savedevevents()
-      error(string.format("expected '%s' but got '%s' - %s", tostring(expected), tostring(result), (jitted and "JITed") or "Interpreted"), 2)
+      error(string.format("expected %q but got %q - %s", tostring(expected), tostring(result), (jitted and "JITed") or "Interpreted"), 2)
     end
     
     if state == 3 then
@@ -343,26 +343,32 @@ function tests.len()
   testjit(3, bufsizechange, buf, "foo")
 end
 
+local function bufsetlength(buf, s, length, fill)
+  buf:reset()
+  buf:write(s)
+  
+  if fill == nil then
+    buf:setlength(length)
+  else
+    buf:setlength(length, fill)
+  end
+  
+  return (buf:tostring())
+end
+
 function tests.setlength()
+  
+  buf:write("a")
+  buf:reset()
   
   buf:setlength(1)
   asserteq(buf:len(), 1)
-  
+
   buf:setlength(0)
   asserteq(buf:len(), 0)
-
-  --setting size larger than the buffer should throw an error
-  assert(not pcall(buf.setlength, buf, buf:capacity()+1))
-  assert(not pcall(buf.setlength, buf, -1))
-
-  --check truncating contents in the buffer
-  buf:write("foobar1")
-  asserteq(buf:len(), 7)
-  buf:setlength(6)
-  asserteq(buf:len(), 6)
-  asserteq(buf:tostring(), "foobar")
   
   --Check setting size to capacity
+  reset_write(buf, "foobar")
   local minsize = buf:capacity()
   buf:setlength(buf:capacity())
   buf:write("a")
@@ -370,10 +376,53 @@ function tests.setlength()
   
   buf:setlength(6)
   asserteq(buf:tostring(), "foobar")
+  
+  --setting size larger than the buffer should throw an error
+  assert(not pcall(buf.setlength, buf, buf:capacity()+1))
+  assert(not pcall(buf.setlength, buf, -1))
+  -- check passing true for the fill value should error
+  assert(not pcall(buf.setlength, buf, 3, true))
+
+  --check default filled with zeros 
+  testjit("a\000\000", bufsetlength, buf, "a", 3)
+  
+  --check fill value override
+  testjit("\001", bufsetlength, buf, "", 1, 1)
+  --check truncating contents in the buffer
+  testjit("b", bufsetlength, buf, "bar", 1)
+
+  --check disabled fill mode
+  reset_write(buf, "1234")
+  testjit("123", bufsetlength, buf, "", 3, false)
+  
+  local start = {args = {buf, "foo", 4}, expected = "foo\000"}
+  --check guard on negative length
+  testjit2(bufsetlength, start, {args = {buf, "foo", -1}, shoulderror = true})
+  --check new length can't be larger than capacity
+  testjit2(bufsetlength, start, {args = {buf, "", buf:capacity()+1}, shoulderror = true})
+  
+  --negative values for fill value most be guarded against
+  testjit2(bufsetlength, {args = {buf, "foo", 4, 1}, expected = "foo\001"}, 
+                         {args = {buf, "foo", 1, -1}, shoulderror = true})
+end
+
+local function testreserve(buf, more)
+  buf:reserve(more)
+  return (buf:capacity())
 end
 
 function tests.reserve()
   local capacity = buf:capacity()
+  
+  testjit(capacity, testreserve, buf, 0)
+  testjit(capacity, testreserve, buf, 1)
+  
+  testjit2(testreserve, {args = {buf, 1}, expected = capacity}, 
+                        {args = {buf, -1}, shoulderror = true})
+
+  --Check buffer size limit
+  testjit2(testreserve, {args = {buf, 1}, expected = capacity}, 
+                        {args = {buf, 2147483647}, shoulderror = true})
   
   buf:setlength(buf:capacity()-1)
   
@@ -802,7 +851,6 @@ collectgarbage("stop")
 
 skip = {
   setcapacity = true,
-  setlength = true,
 }
 
 if singletest then

@@ -999,30 +999,31 @@ LJLIB_CF(stringbuf_len)  LJLIB_REC(stringbuf_info 0)
   return 1;
 }
 
-LJLIB_CF(stringbuf_setlength)
+LJLIB_CF(stringbuf_setlength) LJLIB_REC(.)
 {
   SBuf *sb = check_bufarg(L);
   int32_t size = lj_lib_checkint(L, 2);
   TValue* fillval = (L->base + 2 < L->top) ? L->base + 2 : NULL;
-  int32_t extra = size - sbuflen(sb);
+  int fill = 0;
 
   if (size < 0 || (MSize)size > sbufsz(sb))
     lj_err_arg(L, 2, LJ_ERR_BADVAL);
 
-  setsbuflen(sb, size);
-
-  if (extra > 0) {
-    uint8_t fill = 0;
-    if (fillval) {
-      if (tvisbool(fillval) && !boolV(fillval) && LJ_HASFFI) {
-        /* Leave uninitialized if passed false as the fill value */
-        return 0;
-      }
-      fill = (uint8_t)lj_lib_checkint(L, 3);
+  if (fillval) {
+    if (tvisbool(fillval) && !boolV(fillval) && LJ_HASFFI) {
+      /* Leave uninitialized if passed false as the fill value */
+      fill = -1;
+    } else {
+      int32_t filarg = lj_lib_checkint(L, 3);
+      
+      if(filarg < 0)
+        lj_err_arg(L, 3, LJ_ERR_BADVAL);
+      
+      fill = (int)(uint8_t)filarg;
     }
-
-    memset(sbufP(sb) - extra, fill, extra);
-  }
+  } 
+ 
+  lj_buf_setlen(sb, size, fill);
 
   return 0;
 }
@@ -1034,7 +1035,7 @@ LJLIB_CF(stringbuf_capacity)  LJLIB_REC(stringbuf_info 1)
   return 1;
 }
 
-LJLIB_CF(stringbuf_reserve)
+LJLIB_CF(stringbuf_reserve) LJLIB_REC(.)
 {
   SBuf *sb = check_bufarg(L);
   int more = lj_lib_checkint(L, 2);

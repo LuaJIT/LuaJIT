@@ -47,6 +47,14 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
   return sbufP(sb);
 }
 
+SBuf *LJ_FASTCALL lj_buf_reserve(SBuf *sb, MSize sz)
+{
+  if (sz > sbufleft(sb)) {
+    lj_buf_more2(sb, sz);
+  }
+  return sb;
+}
+
 void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
 {
   char *b = sbufB(sb);
@@ -58,6 +66,20 @@ void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
     setmref(sb->p, b + n);
     setmref(sb->e, b + (osz >> 1));
   }
+}
+
+SBuf* lj_buf_setlen(SBuf *sb, MSize len, int fill)
+{
+  MSize oldlen = sbuflen(sb);
+  lua_assert(len <= sbufsz(sb));
+
+  setsbuflen(sb, len);
+
+  if (len > oldlen && fill != -1) {
+    memset(sbufB(sb) + oldlen, fill, len-oldlen);
+  }
+
+  return sb;
 }
 
 char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
