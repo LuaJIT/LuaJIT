@@ -901,12 +901,18 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_string_rep(jit_State *J, RecordFFData *rd)
 {
-  TRef str = lj_ir_tostr(J, J->base[0]);
-  TRef rep = lj_opt_narrow_toint(J, J->base[1]);
-  TRef hdr, tr, str2 = 0;
-  if (!tref_isnil(J->base[2])) {
-    TRef sep = lj_ir_tostr(J, J->base[2]);
-    int32_t vrep = argv2int(J, &rd->argv[1]);
+  int arg = rd->data ? 1 : 0; /* adjust the arguments slots if were writing to a string buffer*/
+  TRef str = lj_ir_tostr(J, J->base[arg]);
+  TRef rep = lj_opt_narrow_toint(J, J->base[arg+1]);
+  TRef hdr = 0, tr = 0, str2 = 0;
+
+  if (rd->data) {
+    tr = hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_APPEND);
+  }
+
+  if (!tref_isnil(J->base[arg+2])) {
+    TRef sep = lj_ir_tostr(J, J->base[arg+2]);
+    int32_t vrep = argv2int(J, &rd->argv[arg+1]);
     emitir(IRTGI(vrep > 1 ? IR_GT : IR_LE), rep, lj_ir_kint(J, 1));
     if (vrep > 1) {
       TRef hdr2 = recff_bufhdr(J);
@@ -915,14 +921,23 @@ static void LJ_FASTCALL recff_string_rep(jit_State *J, RecordFFData *rd)
       str2 = emitir(IRT(IR_BUFSTR, IRT_STR), tr2, hdr2);
     }
   }
-  tr = hdr = recff_bufhdr(J);
+
+  if (!rd->data)
+    tr = hdr = recff_bufhdr(J);
+
   if (str2) {
     tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, str);
     str = str2;
     rep = emitir(IRTI(IR_ADD), rep, lj_ir_kint(J, -1));
   }
   tr = lj_ir_call(J, IRCALL_lj_buf_putstr_rep, tr, str, rep);
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+
+  if (rd->data) {
+    emitir(IRT(IR_BUFTL, IRT_PGC), tr, hdr);
+    J->needsnap = 1;
+  } else {
+    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  }
 }
 
 static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
@@ -1002,20 +1017,28 @@ static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
 {
-  TRef trfmt = lj_ir_tostr(J, J->base[0]);
-  GCstr *fmt = argv2str(J, &rd->argv[0]);
-  int arg = 1;
+  int isstrbuf = rd->data;
+  int arg = isstrbuf ? 2 : 1;
+  TRef trfmt = lj_ir_tostr(J, J->base[arg - 1]);
+  GCstr *fmt = argv2str(J, &rd->argv[arg - 1]);
   TRef hdr, tr;
   FormatState fs;
   SFormat sf;
   /* Specialize to the format string. */
   emitir(IRTG(IR_EQ, IRT_STR), trfmt, lj_ir_kstr(J, fmt));
-  tr = hdr = recff_bufhdr(J);
+
+  if (isstrbuf) {
+    tr = hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_APPEND);
+  } else {
+    tr = hdr = recff_bufhdr(J);
+  }
+
   lj_strfmt_init(&fs, strdata(fmt), fmt->len);
   while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {  /* Parse format. */
     TRef tra = sf == STRFMT_LIT ? 0 : J->base[arg++];
     TRef trsf = lj_ir_kint(J, (int32_t)sf);
     IRCallID id;
+    int bufarg = 0;
     switch (STRFMT_TYPE(sf)) {
     case STRFMT_LIT:
       tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr,
@@ -1052,16 +1075,28 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       if (LJ_SOFTFP32) lj_needsplit(J);
       break;
     case STRFMT_STR:
-      if (!tref_isstr(tra)) {
+      if (tref_isudata(tra) && udataV(&rd->argv[arg-1])->udtype == UDTYPE_STRING_BUF) {
+        tra = loadstringbuf(J, rd, arg - 1);
+        bufarg = 1;
+      }else if (!tref_isstr(tra) ) {
 	recff_nyiu(J, rd);  /* NYI: __tostring and non-string types for %s. */
 	return;
       }
-      if (sf == STRFMT_STR)  /* Shortcut for plain %s. */
-	tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, tra);
-      else if ((sf & STRFMT_T_QUOTED))
-	tr = lj_ir_call(J, IRCALL_lj_strfmt_putquotedstr, tr, tra);
-      else
-	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfstr, tr, trsf, tra);
+      if (sf == STRFMT_STR) {  /* Shortcut for plain %s. */
+        if (bufarg) {
+          tr = lj_ir_call(J, IRCALL_lj_buf_putbuf, tr, tra);
+        } else {
+          tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, tra);
+        }
+      } else if ((sf & STRFMT_T_QUOTED)) {
+        if (!tref_isstr(tra)) {
+          recff_nyiu(J, rd); /* NYI: Quoting buffers since they need tobe null terminated */
+          return;
+        }
+        tr = lj_ir_call(J, IRCALL_lj_strfmt_putquotedstr, tr, tra);
+      } else {
+        tr = lj_ir_call(J, IRCALL_lj_strfmt_putfstr + bufarg, tr, trsf, tra);
+      }
       break;
     case STRFMT_CHAR:
       tra = lj_opt_narrow_toint(J, tra);
@@ -1078,7 +1113,13 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       return;
     }
   }
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+
+  if (!isstrbuf){
+    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  } else {
+    emitir(IRT(IR_BUFTL, IRT_PGC), tr, hdr);
+    J->needsnap = 1;
+  }
 }
 
 static void LJ_FASTCALL recff_stringbuf_write(jit_State *J, RecordFFData *rd)

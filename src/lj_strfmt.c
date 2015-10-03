@@ -264,6 +264,11 @@ SBuf *lj_strfmt_putfstr(SBuf *sb, SFormat sf, GCstr *str)
   return lj_strfmt_putf(sb, sf, strdata(str), str->len);
 }
 
+SBuf *lj_strfmt_putfbuf(SBuf *sb, SFormat sf, SBuf *sb2)
+{
+  return lj_strfmt_putf(sb, sf, sbufB(sb2), sbuflen(sb2));
+}
+
 /* Add formatted signed/unsigned integer to buffer. */
 SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k)
 {

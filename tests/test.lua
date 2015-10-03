@@ -779,8 +779,6 @@ collectgarbage("stop")
 skip = {
   setcapacity = true,
   apibuffersupport = true,
-  format = true,
-  rep = true,
   byte = true,
   setbyte = true,
   capacity = true,
