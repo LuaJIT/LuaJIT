@@ -747,49 +747,51 @@ function tests.apibuffersupport()
   asserteq(f()(1), 2)
 end
 
+function tmpstr_fold(a1, a2, tail) 
+    local tempstr = a1.."_".. a2
+    return tempstr.."_"..tail
+end
+
+function tmpstr_nofold(a1, a2, tail) 
+    local tempstr = a1.."_".. a2
+    temp2 = tail.."_"..a2 
+    return tempstr.."_"..tail
+end
+
+function tmpstr_cse(a1, a2, tail) 
+    local tempstr = a1.."_".. a2
+    local tempstrdup = a1.."_".. a2
+    return tempstr.."_"..tempstrdup
+end
+
+function tests.fold_tmpbufstr()
+  --test the existing fold for temp buffer only 'bufput_append' LJFOLD(BUFPUT BUFHDR BUFSTR)
+  testjit("foo_1234_5678", tmpstr_fold, "foo", "1234", "5678")
+  testjit("foo_123_456", tmpstr_nofold, "foo", "123", "456")
+  asserteq(temp2,  "456_123")
+  testjit("123_456_123_456", tmpstr_cse, "123", "456")
+end
+
 tracker.start()
 --tracker.setprintevents(true)
 collectgarbage("stop")
 
-function testjit(expected, func, ...)
-
-  local result = func(...)
-
-  if (result ~= expected) then 
-    error("expected \""..tostring(expected).."\" but got \""..tostring(result).."\"", 2)
-  end
-end
-
-testjit2 = function(func, config1, config2)
-
-  local config, expected, shoulderror = config1, config1.expected, config1.shoulderror 
-  local state = 1
-  
-  for i=1, 3 do
-    local status, result
-    
-    if not shoulderror then
-      result = func(unpack(config.args))
-    else
-      status, result = pcall(func, unpack(config.args))
-      
-      if(status) then
-        trerror2("expected call to trigger error but didn't "..tostring(i))
-      end
-    end
-    
-    if not shoulderror and result ~= expected then
-      trerror2("expected '%s' but got '%s' - %s", tostring(expected), tostring(result), (jitted and "JITed") or "Interpreted")
-    end
-    
-    config = config2
-    expected = config2.expected
-    shoulderror = config2.shoulderror 
-  end
-end
-
 skip = {
   setcapacity = true,
+  write = true,
+  writeln = true,
+  writesub = true,
+  lower = true,
+  upper = true,
+  reverse = true,
+  apibuffersupport = true,
+  format = true,
+  rep = true,
+  byte = true,
+  setbyte = true,
+  capacity = true,
+  len = true,
+  setlength = true,
 }
 
 if singletest then

@@ -557,7 +557,8 @@ LJFOLDF(bufput_append)
 {
   /* New buffer, no other buffer op inbetween and same buffer? */
   if ((J->flags & JIT_F_OPT_FWD) &&
-      !(fleft->op2 & IRBUFHDR_APPEND) &&
+      !(fleft->op2 & IRBUFHDR_STRBUF) &&
+      (fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET &&
       fleft->prev == fright->op2 &&
       fleft->op1 == IR(fright->op2)->op1) {
     IRRef ref = fins->op1;
@@ -593,17 +594,22 @@ LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {
   lua_assert(fleft->o == IR_BUFHDR || fleft->o == IR_BUFPUT ||
-	     fleft->o == IR_CALLL);
+	     fleft->o == IR_CALLL || (fright->op2 & IRBUFHDR_STRBUF));
+
+  if ((fright->op2 & IRBUFHDR_STRBUF)) {
+    return EMITFOLD; /* tostring called on string buffer */
+  }
+
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fleft->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      if ((fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET)  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
       fins->op1 = fleft->op1;
       fins->op2 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else if (fleft->o == IR_BUFPUT) {
       IRIns *irb = IR(fleft->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+      if (irb->o == IR_BUFHDR && (irb->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET)
 	return fleft->op2;  /* Shortcut for a single put operation. */
     }
   }
@@ -615,7 +621,7 @@ LJFOLDF(bufstr_kfold_cse)
       while (ira->o == irb->o && ira->op2 == irb->op2) {
 	lua_assert(ira->o == IR_BUFHDR || ira->o == IR_BUFPUT ||
 		   ira->o == IR_CALLL || ira->o == IR_CARG);
-	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
+	if (ira->o == IR_BUFHDR && (ira->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET && !(ira->op2 & IRBUFHDR_STRBUF))
 	  return ref;  /* CSE succeeded. */
 	if (ira->o == IR_CALLL && ira->op2 == IRCALL_lj_buf_puttab)
 	  break;
