@@ -626,6 +626,43 @@ LJFOLDF(bufput_kgc)
   return EMITFOLD;  /* Always emit, CSE later. */
 }
 
+LJFOLD(BUFPUT any BUFSTR)
+LJFOLDF(bufput_fromtempbuf)
+{
+  IRRef ref, limit;
+
+  /* Only try to fold the string allocation if its from the temp buffer */
+  if ((IR(fright->op2)->op2 & IRBUFHDR_STRBUF) || LJ_UNLIKELY((J->flags & JIT_F_OPT_FWD) == 0)) {
+    return EMITFOLD;
+  }
+
+  ref = fins->op1;
+
+  while (IR(ref)->o != IR_BUFHDR) {
+    ref = IR(ref)->op1;
+  }
+
+  /* destination buffer needs tobe a string buffer */
+  if (!(IR(ref)->op2 & IRBUFHDR_STRBUF)) {
+    return EMITFOLD;
+  }
+  
+  limit = fins->op2;
+  ref = J->chain[IR_BUFHDR];
+ 
+  /* Try to find another interfering temp buffer use after the BUFSTR */
+  while (ref > limit) {
+    IRIns *ir = IR(ref);
+
+    if (!(ir->op2 & IRBUFHDR_STRBUF)) {
+      return EMITFOLD;
+    }
+    ref = ir->prev;
+  }
+
+  return lj_ir_call(J, IRCALL_lj_buf_putbuf, fins->op1, fright->op1); 
+}
+
 LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {

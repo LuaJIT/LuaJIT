@@ -764,12 +764,36 @@ function tmpstr_cse(a1, a2, tail)
     return tempstr.."_"..tempstrdup
 end
 
+-- Test folding a BUFSTR with the target being the tmp buffer LJFOLD(BUFPUT any BUFSTR)
+function tmpstrtosbuf_fold(base, a1, a2) 
+    local tempstr = a1.."_".. a2
+    buf:reset()
+    buf:write(base, tempstr)
+    
+    return (buf:tostring())
+end
+
+function tmpstrtosbuf_nofold(base, a1, a2)
+    local temp1 = a1.."_".. a2
+    --second temp buffer use should act as a barrier to the fold
+    temp3 = a2.."_"..a1
+    
+    buf:reset()
+    buf:write(base, temp1)
+    
+    return (buf:tostring())
+end
+
 function tests.fold_tmpbufstr()
   --test the existing fold for temp buffer only 'bufput_append' LJFOLD(BUFPUT BUFHDR BUFSTR)
   testjit("foo_1234_5678", tmpstr_fold, "foo", "1234", "5678")
   testjit("foo_123_456", tmpstr_nofold, "foo", "123", "456")
   asserteq(temp2,  "456_123")
   testjit("123_456_123_456", tmpstr_cse, "123", "456")
+
+  testjit("foo1234_5678", tmpstrtosbuf_fold, "foo", "1234", "5678")
+  testjit("foo123_456", tmpstrtosbuf_nofold, "foo", "123", "456")
+  asserteq(temp3,  "456_123")
 end
 
 tracker.start()
