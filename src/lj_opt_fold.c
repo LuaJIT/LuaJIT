@@ -631,7 +631,7 @@ LJFOLDF(bufstr_kfold_cse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_reverse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_upper)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_lower)
-LJFOLD(CALLL CARG IRCALL_lj_strfmt_putquoted)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putquotedstr)
 LJFOLDF(bufput_kfold_op)
 {
   if (irref_isk(fleft->op2)) {

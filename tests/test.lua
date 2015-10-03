@@ -612,6 +612,17 @@ function tests.format()
   
   --check __tostring is called on objects
   asserteq(testformat("%s %s", "foo", tostringobj), "foo tostring_result")
+  
+  --test using a buff in place of string for a string format entry
+  reset_write(buf2, "foo")
+  testjit(" foo ", testformat, " %s ", buf2)
+  testjit("fo", testformat, "%.2s", buf2)
+  testjit("_foo  ", testformat, "_%-5s", buf2)
+  testjit("foo _foo_  foo", testformat, "%-4s_%s_%5s", buf2, buf2, buf2)
+  
+  reset_write(buf2, "\0bar\0")
+  --NYI testjit("\"\\0bar\\0\"", testformat, "%q", buf2)
+  asserteq(testformat("%q", buf2), "\"\\0bar\\0\"")
 end
 
 local function testrep(s, rep, sep)
@@ -687,6 +698,53 @@ function tests.reverse()
   testjit("21", reverse, buf, "12")
   testjit("321", reverse, buf, "123")
   testjit("dcba", reverse, buf, "abcd")
+end
+
+local function strformat(s, arg)
+  return (string.format(s, arg))
+end
+
+local function iowrite(file, buf, s)
+  return (file:write(buf, s))
+end
+
+function tests.apibuffersupport()
+  reset_write(buf, "buff test")
+  print("print", buf)
+  io.write("file.write ", buf, "\n")
+  
+  --write a buffer to a temp file and read it back
+  local file = io.tmpfile()
+  testjit(true, iowrite, file, buf, " ")
+  
+  buf2:reset()
+  buf2:rep("buff test", 1, " ")
+  buf2:write(" ") 
+  file:seek("set", 0)
+  asserteq(file:read("*a"), buf2:tostring())
+
+  reset_write(buf2, "foo")
+  testjit(" foo ", strformat, " %s ", buf2)
+  testjit("_foo  ", strformat, "_%-5s", buf2)
+  testjit("_  foo", strformat, "_%5s", buf2)
+  reset_write(buf2, "foo\\\0")
+  asserteq(string.format("bar%q", buf2), 'bar"foo\\\\\\0"')
+  
+  --check the existing api still works
+  testjit(" foo ", strformat, " %s ", "foo")
+  testjit("_foo  ", strformat, "_%-5s", "foo")
+  testjit("_  foo", strformat, "_%5s", "foo")
+  testjit('bar"foo\\\\\\0"', strformat, "bar%q", "foo\\\0")
+  asserteq(string.format("bar%q", "foo\\\0"), 'bar"foo\\\\\\0"')
+  
+  --test buffer support added to loadstring
+  buf:reset()
+  buf:write("return function(a) return a+1 end")
+  local f, err = loadstring(buf)
+  asserteq(f()(1), 2)
+
+  f, err = loadstring("return function(a) return a+1 end")
+  asserteq(f()(1), 2)
 end
 
 tracker.start()

@@ -94,7 +94,8 @@ LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putint(SBuf *sb, int32_t k);
 LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putnum(SBuf *sb, cTValue *o);
 #endif
 LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putptr(SBuf *sb, const void *v);
-LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str);
+LJ_FUNC SBuf * lj_strfmt_putquoted(SBuf *sb, const char *s, MSize len);
+LJ_FUNC SBuf * LJ_FASTCALL lj_strfmt_putquotedstr(SBuf *sb, GCstr *str);
 
 /* Formatted conversions to buffer. */
 LJ_FUNC SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k);
@@ -102,6 +103,7 @@ LJ_FUNC SBuf *lj_strfmt_putfnum_int(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putfnum_uint(SBuf *sb, SFormat sf, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putfnum(SBuf *sb, SFormat, lua_Number n);
 LJ_FUNC SBuf *lj_strfmt_putfchar(SBuf *sb, SFormat, int32_t c);
+LJ_FUNC SBuf *lj_strfmt_putf(SBuf *sb, SFormat, const char *s, MSize len);
 LJ_FUNC SBuf *lj_strfmt_putfstr(SBuf *sb, SFormat, GCstr *str);
 
 /* Conversions to strings. */

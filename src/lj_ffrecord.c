@@ -1022,7 +1022,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       if (sf == STRFMT_STR)  /* Shortcut for plain %s. */
 	tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, tra);
       else if ((sf & STRFMT_T_QUOTED))
-	tr = lj_ir_call(J, IRCALL_lj_strfmt_putquoted, tr, tra);
+	tr = lj_ir_call(J, IRCALL_lj_strfmt_putquotedstr, tr, tra);
       else
 	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfstr, tr, trsf, tra);
       break;

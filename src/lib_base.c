@@ -33,6 +33,7 @@
 #include "lj_dispatch.h"
 #include "lj_char.h"
 #include "lj_strscan.h"
+#include "lj_buf.h"
 #include "lj_strfmt.h"
 #include "lj_lib.h"
 
@@ -404,10 +405,23 @@ LJLIB_CF(load)
   GCstr *name = lj_lib_optstr(L, 2);
   GCstr *mode = lj_lib_optstr(L, 3);
   int status;
-  if (L->base < L->top && (tvisstr(L->base) || tvisnumber(L->base))) {
-    GCstr *s = lj_lib_checkstr(L, 1);
+  if (L->base < L->top && (tvisstr(L->base) || tvisnumber(L->base) || tvissbuf(L->base))) {
+    const char *p;
+    MSize len;
+
+    if (tvissbuf(L->base)) {
+      SBuf *sb = sbufV(L->base);
+      lj_buf_nullterm(sb);/* add a null terminator in case were used for the name */
+      p = sbufB(sb);
+      len = sbuflen(sb);
+    } else {
+      GCstr *s = lj_lib_checkstr(L, 1);
+      p = strdata(s);
+      len = s->len;
+    }
+
     lua_settop(L, 4);  /* Ensure env arg exists. */
-    status = luaL_loadbufferx(L, strdata(s), s->len, strdata(name ? name : s),
+    status = luaL_loadbufferx(L, p, len, name ? strdata(name) : p,
 			      mode ? strdata(mode) : NULL);
   } else {
     lj_lib_checkfunc(L, 1);

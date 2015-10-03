@@ -71,6 +71,13 @@ LJ_FUNC SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s);
 
+/* add a temporary null terminator after the last character in the buffer without advancing the position */
+static LJ_AINLINE SBuf *lj_buf_nullterm(SBuf *sb)
+{
+  *lj_buf_more(sb, 1) = 0;
+  return sb;
+}
+
 static LJ_AINLINE char *lj_buf_wmem(char *p, const void *q, MSize len)
 {
   return (char *)memcpy(p, q, len) + len;

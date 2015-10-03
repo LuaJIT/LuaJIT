@@ -737,15 +737,30 @@ again:
 	lj_strfmt_putfnum(sb, sf, lj_lib_checknum(L, arg));
 	break;
       case STRFMT_STR: {
-	GCstr *str = string_fmt_tostring(L, arg, retry);
-	if (str == NULL)
-	  retry = 1;
-	else if ((sf & STRFMT_T_QUOTED))
-	  lj_strfmt_putquoted(sb, str);  /* No formatting. */
-	else
-	  lj_strfmt_putfstr(sb, sf, str);
-	break;
-	}
+        const char *s;
+        MSize len;
+
+        if (!tvissbuf(L->base+arg-1)) {
+          GCstr *str = string_fmt_tostring(L, arg, retry);
+          if (str == NULL) {
+            retry = 1;
+            break;
+          }
+          s = strdata(str);
+          len = str->len;
+        } else {
+          SBuf *sbsrc = sbufV(L->base+arg-1);
+          len = sbuflen(sbsrc);
+          lj_buf_nullterm(sbsrc); /* add fake null terminator since lj_strfmt_putquoted relies on it */
+          s = sbufB(sbsrc);
+        }
+
+        if ((sf & STRFMT_T_QUOTED))
+          lj_strfmt_putquoted(sb, s, len);  /* No formatting. */
+        else
+          lj_strfmt_putf(sb, sf, s, len);
+        break;
+      }
       case STRFMT_CHAR:
 	lj_strfmt_putfchar(sb, sf, lj_lib_checkint(L, arg));
 	break;

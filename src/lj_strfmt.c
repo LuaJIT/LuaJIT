@@ -165,6 +165,10 @@ const char *lj_strfmt_wstrnum(lua_State *L, cTValue *o, MSize *lenp)
     sb = lj_strfmt_putint(lj_buf_tmp_(L), intV(o));
   } else if (tvisnum(o)) {
     sb = lj_strfmt_putfnum(lj_buf_tmp_(L), STRFMT_G14, o->n);
+  } else if (tvissbuf(o)) {
+    SBuf *sb = sbufV(o);
+    *lenp = sbuflen(sb);
+    return sbufB(sb);
   } else {
     return NULL;
   }
@@ -196,10 +200,9 @@ SBuf * LJ_FASTCALL lj_strfmt_putptr(SBuf *sb, const void *v)
 }
 
 /* Add quoted string to buffer. */
-SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str)
+SBuf * lj_strfmt_putquoted(SBuf *sb, const char *s, MSize len)
 {
-  const char *s = strdata(str);
-  MSize len = str->len;
+ 
   lj_buf_putb(sb, '"');
   while (len--) {
     uint32_t c = (uint32_t)(uint8_t)*s++;
@@ -225,6 +228,10 @@ SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str)
   return sb;
 }
 
+SBuf * LJ_FASTCALL lj_strfmt_putquotedstr(SBuf *sb, GCstr *str)
+{
+  return lj_strfmt_putquoted(sb, strdata(str), str->len);
+}
 /* -- Formatted conversions to buffer ------------------------------------- */
 
 /* Add formatted char to buffer. */
@@ -240,16 +247,21 @@ SBuf *lj_strfmt_putfchar(SBuf *sb, SFormat sf, int32_t c)
 }
 
 /* Add formatted string to buffer. */
-SBuf *lj_strfmt_putfstr(SBuf *sb, SFormat sf, GCstr *str)
+SBuf *lj_strfmt_putf(SBuf *sb, SFormat sf, const char *str, MSize slen)
 {
-  MSize len = str->len <= STRFMT_PREC(sf) ? str->len : STRFMT_PREC(sf);
+  MSize len = slen <= STRFMT_PREC(sf) ? slen : STRFMT_PREC(sf);
   MSize width = STRFMT_WIDTH(sf);
   char *p = lj_buf_more(sb, width > len ? width : len);
-  if ((sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, strdata(str), len);
+  if ((sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, str, len);
   while (width-- > len) *p++ = ' ';
-  if (!(sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, strdata(str), len);
+  if (!(sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, str, len);
   setsbufP(sb, p);
   return sb;
+}
+
+SBuf *lj_strfmt_putfstr(SBuf *sb, SFormat sf, GCstr *str)
+{
+  return lj_strfmt_putf(sb, sf, strdata(str), str->len);
 }
 
 /* Add formatted signed/unsigned integer to buffer. */
