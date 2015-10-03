@@ -944,7 +944,7 @@ LJLIB_CF(stringbuf_upper) LJLIB_REC(stringbuf_op IRCALL_lj_buf_upper)
   return 0;
 }
 
-LJLIB_CF(stringbuf_byte)
+LJLIB_CF(stringbuf_byte) LJLIB_REC(stringbuf_byte 0)
 {
   SBuf *sb = check_bufarg(L);
   int32_t pos = lj_lib_checkint(L, 2);
@@ -962,7 +962,7 @@ LJLIB_CF(stringbuf_byte)
   return 1;
 }
 
-LJLIB_CF(stringbuf_setbyte)
+LJLIB_CF(stringbuf_setbyte) LJLIB_REC(stringbuf_byte 1)
 {
   SBuf *sb = check_bufarg(L);
   int32_t pos = lj_lib_checkint(L, 2);
@@ -992,7 +992,7 @@ LJLIB_CF(stringbuf_setbyte)
   return 0;
 }
 
-LJLIB_CF(stringbuf_len)
+LJLIB_CF(stringbuf_len)  LJLIB_REC(stringbuf_info 0)
 {
   SBuf *sb = check_bufarg(L);
   setintV(L->top - 1, sbuflen(sb));
@@ -1027,7 +1027,7 @@ LJLIB_CF(stringbuf_setlength)
   return 0;
 }
 
-LJLIB_CF(stringbuf_capacity)
+LJLIB_CF(stringbuf_capacity)  LJLIB_REC(stringbuf_info 1)
 {
   SBuf *sb = check_bufarg(L);
   setintV(L->top - 1, sbufsz(sb));

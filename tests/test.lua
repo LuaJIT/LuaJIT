@@ -718,7 +718,7 @@ function tests.apibuffersupport()
   testjit(true, iowrite, file, buf, " ")
   
   buf2:reset()
-  buf2:rep("buff test", 1, " ")
+  buf2:rep("buff test", testloopcount, " ")
   buf2:write(" ") 
   file:seek("set", 0)
   asserteq(file:read("*a"), buf2:tostring())
@@ -778,11 +778,6 @@ collectgarbage("stop")
 
 skip = {
   setcapacity = true,
-  apibuffersupport = true,
-  byte = true,
-  setbyte = true,
-  capacity = true,
-  len = true,
   setlength = true,
 }
 

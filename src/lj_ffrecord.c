@@ -1194,6 +1194,69 @@ static void LJ_FASTCALL recff_stringbuf_tostring(jit_State *J, RecordFFData *rd)
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, hdr);
 }
 
+static void LJ_FASTCALL recff_stringbuf_info(jit_State *J, RecordFFData *rd)
+{
+  TRef buf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_MODIFY);
+  TRef base = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_B);
+  TRef pos = emitir(IRT(IR_FLOAD, IRT_PGC), buf, rd->data == 0 ? IRFL_SBUF_P : IRFL_SBUF_E);
+
+  J->base[0] = emitir(IRT(IR_SUB, IRT_INT), pos, base);
+}
+
+static void LJ_FASTCALL recff_stringbuf_byte(jit_State *J, RecordFFData *rd)
+{
+  TRef buf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_MODIFY);
+  TRef trpos = lj_opt_narrow_toint(J, J->base[1]);
+  int32_t pos = argv2int(J, &rd->argv[1]);
+  TRef trbyte = J->base[2], base = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_B);
+  TRef tr, end;
+  TRef zero = lj_ir_kint(J, 0);
+  
+  if (rd->data) {/* setbyte */
+     if(tref_isstr(trbyte)){
+      /* use the first char of the string as the byte */
+      tr = emitir(IRTI(IR_FLOAD), trbyte, IRFL_STR_LEN);
+      emitir(IRTGI(IR_UGT), tr, zero);
+      trbyte = emitir(IRT(IR_STRREF, IRT_PGC), trbyte, zero);
+      trbyte = emitir(IRT(IR_XLOAD, IRT_U8), trbyte, IRXLOAD_READONLY);
+    } else {
+      trbyte = lj_opt_narrow_toint(J, trbyte);
+    }
+  }
+
+  if (pos < 0) {
+    emitir(IRTGI(IR_LT), trpos, zero);
+    end = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_P);
+
+#if LJ_64
+    /* sb.b + sb.p-sb.b + pos */
+    tr = emitir(IRT(IR_SUB, IRT_INT), end, base);
+    trpos = emitir(IRT(IR_ADD, IRT_INT), tr, trpos);
+    tr = emitir(IRTI(IR_ADD), base, trpos);
+
+    /* trpos = emitir(IRT(IR_CONV, IRT_INTP), trpos, IRT_INT | (IRT_INTP << 5) | IRCONV_SEXT); */
+#else
+    /* sb.p+pos */
+    tr = emitir(IRT(IR_ADD, IRT_INT), end, trpos);
+#endif
+  } else {
+    emitir(IRTGI(IR_GT), trpos, zero);
+    tr = emitir(IRTI(IR_SUB), base, lj_ir_kint(J, 1));
+    tr = emitir(IRTI(IR_ADD), tr, trpos);
+  }
+
+  emitir(IRTGI(IR_UGE), tr, base);
+  end = emitir(IRT(IR_FLOAD, IRT_PGC), buf, IRFL_SBUF_P);
+  emitir(IRTGI(IR_ULT), tr, end);
+
+  if (rd->data) {/* setbyte */
+   emitir(IRT(IR_XSTORE, IRT_U8), tr, trbyte);
+   J->needsnap = 1;
+  } else {
+    J->base[0] = emitir(IRT(IR_XLOAD, IRT_U8), tr, 0);
+  }
+}
+
 /* -- Table library fast functions ---------------------------------------- */
 
 static void LJ_FASTCALL recff_table_insert(jit_State *J, RecordFFData *rd)
@@ -1291,10 +1354,19 @@ static void LJ_FASTCALL recff_io_write(jit_State *J, RecordFFData *rd)
   TRef one = lj_ir_kint(J, 1);
   ptrdiff_t i = rd->data == 0 ? 1 : 0;
   for (; J->base[i]; i++) {
-    TRef str = lj_ir_tostr(J, J->base[i]);
-    TRef buf = emitir(IRT(IR_STRREF, IRT_PGC), str, zero);
-    TRef len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
-    if (tref_isk(len) && IR(tref_ref(len))->i == 1) {
+    TRef str = 0, buf, len;
+
+    if (!tvissbuf(&rd->argv[i])) {
+      str = lj_ir_tostr(J, J->base[i]);
+      buf = emitir(IRT(IR_STRREF, IRT_PGC), str, zero);
+      len = emitir(IRTI(IR_FLOAD), str, IRFL_STR_LEN);
+    } else {
+      TRef trsb = recff_stringbufhdr(J, rd, i, IRBUFHDR_MODIFY);
+      buf = emitir(IRT(IR_FLOAD, IRT_PGC), trsb, IRFL_SBUF_B);
+      len = emitir(IRTI(IR_SUB), emitir(IRT(IR_FLOAD, IRT_PGC), trsb, IRFL_SBUF_P), buf);
+    }
+
+    if (str && tref_isk(len) && IR(tref_ref(len))->i == 1) {
       IRIns *irs = IR(tref_ref(str));
       TRef tr = (irs->o == IR_TOSTR && irs->op2 == IRTOSTR_CHAR) ?
 		irs->op1 :
