@@ -92,23 +92,37 @@ LJLIB_ASM(string_sub)		LJLIB_REC(string_range 1)
   return FFH_RETRY;
 }
 
-LJLIB_CF(string_rep)		LJLIB_REC(.)
+static int string_rep(lua_State *L, int isstrbuf)
 {
-  GCstr *s = lj_lib_checkstr(L, 1);
-  int32_t rep = lj_lib_checkint(L, 2);
-  GCstr *sep = lj_lib_optstr(L, 3);
-  SBuf *sb = lj_buf_tmp_(L);
+  SBuf *sb = isstrbuf ? check_bufarg(L) : NULL;
+  GCstr *s = lj_lib_checkstr(L, isstrbuf + 1);
+  int32_t rep = lj_lib_checkint(L, isstrbuf + 2);
+  GCstr *sep = lj_lib_optstr(L, isstrbuf + 3);
+
+  if (!isstrbuf)
+    sb = lj_buf_tmp_(L);
+
   if (sep && rep > 1) {
     GCstr *s2 = lj_buf_cat2str(L, sep, s);
-    lj_buf_reset(sb);
+    if (!isstrbuf) {
+      lj_buf_reset(sb);
+    }
     lj_buf_putstr(sb, s);
     s = s2;
     rep--;
   }
   sb = lj_buf_putstr_rep(sb, s, rep);
-  setstrV(L, L->top-1, lj_buf_str(L, sb));
+  if (isstrbuf) {
+    return 0;
+  }
+  setstrV(L, L->top - 1, lj_buf_str(L, sb));
   lj_gc_check(L);
   return 1;
+}
+
+LJLIB_CF(string_rep)		LJLIB_REC(string_rep)
+{
+  return string_rep(L, 0);
 }
 
 LJLIB_ASM(string_reverse)  LJLIB_REC(string_op IRCALL_lj_buf_putstr_reverse)
@@ -661,12 +675,19 @@ static GCstr *string_fmt_tostring(lua_State *L, int arg, int retry)
     copyTV(L, L->top++, o);
     lua_call(L, 1, 1);
     copyTV(L, L->base+arg-1, --L->top);
-    return NULL;  /* Buffer may be overwritten, retry. */
+    o = L->base+arg-1;
+
+    if (retry != -1)
+      return NULL;  /* Buffer may be overwritten, retry. */
+
+    /* Caller is not using the temp buffer so we can keep going */
+    if (tvisstr(o))
+      return strV(o);
   }
   return lj_strfmt_obj(L, o);
 }
 
-LJLIB_CF(string_format)		LJLIB_REC(.)
+static int string_format(lua_State *L, int isstrbuf)
 {
   int arg, top = (int)(L->top - L->base);
   GCstr *fmt;
@@ -675,8 +696,15 @@ LJLIB_CF(string_format)		LJLIB_REC(.)
   SFormat sf;
   int retry = 0;
 again:
-  arg = 1;
-  sb = lj_buf_tmp_(L);
+  if (isstrbuf) {
+    arg = 2;
+    sb = check_bufarg(L);
+    /* Were not writing to temp buffer so can ignore it being used by tostring metacalls */
+    retry = -1;
+  } else {
+    arg = 1;
+    sb = lj_buf_tmp_(L);
+  }
   fmt = lj_lib_checkstr(L, arg);
   lj_strfmt_init(&fs, strdata(fmt), fmt->len);
   while ((sf = lj_strfmt_parse(&fs)) != STRFMT_EOF) {
@@ -730,10 +758,19 @@ again:
       }
     }
   }
+
+  if (isstrbuf)
+    return 0;
+
   if (retry++ == 1) goto again;
   setstrV(L, L->top-1, lj_buf_str(L, sb));
   lj_gc_check(L);
   return 1;
+}
+
+LJLIB_CF(string_format)		LJLIB_REC(.)
+{
+  return string_format(L, 0);
 }
 
 LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment to string buffer mt. */
@@ -757,6 +794,11 @@ LJLIB_CF(string_createbuffer)
 /* -- string buffer methods ------------------------------------------------ */
 
 #define LJLIB_MODULE_stringbuf
+
+LJLIB_CF(stringbuf_format)
+{
+  return string_format(L, 1);
+}
 
 static SBuf *writevalue_default(SBuf *sb, cTValue *o)
 {
@@ -859,6 +901,11 @@ LJLIB_CF(stringbuf_writesub)
 
   lj_buf_putrang(sb, s, len, start, end);
   return 0;
+}
+
+LJLIB_CF(stringbuf_rep)
+{
+  return string_rep(L, 1);
 }
 
 LJLIB_CF(stringbuf_byte)

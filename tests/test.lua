@@ -583,6 +583,68 @@ function tests.writesub()
   testjit("n12345",   testwritesub, "n", buf2,  2, -3)
 end
 
+function testformat(a1, a2, a3, a4)
+  buf:reset()
+  
+  if(a2 == nil) then
+    buf:format(a1)
+  elseif(a3 == nil) then
+    buf:format(a1, a2)
+  elseif(a4 == nil) then
+    buf:format(a1, a2, a3)
+  else
+    buf:format(a1, a2, a3, a4)
+  end
+    
+  return (buf:tostring())
+end
+
+function tests.format()
+  testjit("foo", testformat, "foo")
+  testjit("", testformat, "")
+  testjit("bar", testformat, "%s", "bar")
+  testjit("_bar_", testformat, "_%s_", "bar")  
+  testjit("120, foo, 123.75", testformat, "%d, %s, %g", 120, "foo", 123.75)
+
+  testjit("ba", testformat, "%.2s", "bar")
+  testjit("foo _  bar", testformat, "%-4s_%5s", "foo", "bar") 
+  testjit("\"\\0bar\\0\"", testformat, "%q", "\0bar\0")
+  
+  --check __tostring is called on objects
+  asserteq(testformat("%s %s", "foo", tostringobj), "foo tostring_result")
+end
+
+local function testrep(s, rep, sep)
+  buf:reset()
+  
+  if(sep == nil) then
+    buf:rep(s, rep)
+  else
+    buf:rep(s, rep, sep)
+  end
+  
+  return (buf:tostring())
+end
+
+local function teststringrep(s, rep, sep)
+
+  if(sep == nil) then
+    return (string.rep(s, rep))
+  else
+    return (string.rep(s, rep, sep))
+  end
+end
+
+function tests.rep()
+  testjit("aaa", testrep, "a", 3)
+  testjit("a,a,a", testrep, "a", 3, ",")
+  testjit("a", testrep, "a", 1, ",")
+  --check string.rep still works
+  testjit("aaa", teststringrep, "a", 3)
+  testjit("a,a,a", teststringrep, "a", 3, ",")
+  testjit("a", teststringrep, "a", 1, ",")
+end
+
 tracker.start()
 --tracker.setprintevents(true)
 collectgarbage("stop")
