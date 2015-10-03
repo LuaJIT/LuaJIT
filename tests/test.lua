@@ -645,6 +645,50 @@ function tests.rep()
   testjit("a", teststringrep, "a", 1, ",")
 end
 
+local function lower(buf, s)
+  buf:reset()
+  buf:write(s)
+  buf:lower()
+  
+  return (buf:tostring()) 
+end
+
+function tests.lower()
+  testjit("bar", lower, buf, "BaR")
+  testjit(" ", lower, buf, " ")
+  testjit("", lower, buf, "")
+end
+
+local function upper(buf, s)
+  buf:reset()
+  buf:write(s)
+  buf:upper()
+  
+  return (buf:tostring()) 
+end
+
+function tests.upper()
+  testjit("BAR", upper, buf, "bAr")
+  testjit(" ", upper, buf, " ")
+  testjit("", upper, buf, "")
+end
+
+local function reverse(buf, s)
+  buf:reset()
+  buf:write(s)
+  buf:reverse()
+  
+  return (buf:tostring()) 
+end
+
+function tests.reverse()
+  testjit("a", reverse, buf, "a")
+  testjit("", upper, buf, "")
+  testjit("21", reverse, buf, "12")
+  testjit("321", reverse, buf, "123")
+  testjit("dcba", reverse, buf, "abcd")
+end
+
 tracker.start()
 --tracker.setprintevents(true)
 collectgarbage("stop")

@@ -908,6 +908,27 @@ LJLIB_CF(stringbuf_rep)
   return string_rep(L, 1);
 }
 
+LJLIB_CF(stringbuf_reverse)
+{
+  SBuf *sb = check_bufarg(L);
+  lj_buf_reverse(sb);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_lower)
+{
+  SBuf *sb = check_bufarg(L);
+  lj_buf_lower(sb);
+  return 0;
+}
+
+LJLIB_CF(stringbuf_upper)
+{
+  SBuf *sb = check_bufarg(L);
+  lj_buf_upper(sb);
+  return 0;
+}
+
 LJLIB_CF(stringbuf_byte)
 {
   SBuf *sb = check_bufarg(L);

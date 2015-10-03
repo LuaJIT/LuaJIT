@@ -83,6 +83,11 @@ static LJ_AINLINE void lj_buf_putb(SBuf *sb, int c)
   setsbufP(sb, p);
 }
 
+/* In-place buffer operations */
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_upper(SBuf *sb);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_lower(SBuf *sb);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_reverse(SBuf *sb);
+
 /* High-level buffer put operations */
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);

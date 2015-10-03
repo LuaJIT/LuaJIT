@@ -67,6 +67,56 @@ char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
   return lj_buf_need(sb, sz);
 }
 
+/* -- In-place buffer operations ------------------------------------- */
+
+SBuf * LJ_FASTCALL lj_buf_lower(SBuf *sb)
+{
+  char *p = sbufB(sb), *e = sbufP(sb);
+  for (; p < e; p++) {
+    uint32_t c = *(unsigned char *)p;
+#if LJ_TARGET_PPC
+    *p = c + ((c >= 'A' && c <= 'Z') << 5);
+#else
+    if (c >= 'A' && c <= 'Z') c += 0x20;
+    *p = c;
+#endif
+  }
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_upper(SBuf *sb)
+{
+  char *p = sbufB(sb), *e = sbufP(sb);
+  for (; p < e; p++) {
+    uint32_t c = *(unsigned char *)p;
+#if LJ_TARGET_PPC
+    *p = c - ((c >= 'a' && c <= 'z') << 5);
+#else
+    if (c >= 'a' && c <= 'z') c -= 0x20;
+    *p = c;
+#endif
+  }
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_reverse(SBuf *sb)
+{
+  char *start = sbufB(sb), *end = sbufP(sb)-1;
+
+  if (sbuflen(sb) <= 1) {
+    return sb;
+  }
+
+  while (start < end) {
+    int temp = *start;
+    *start = *end;
+    *end = temp;
+    start++;
+    end--;
+  }
+  return sb;
+}
+
 /* -- Low-level buffer put operations ------------------------------------- */
 
 SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len)
