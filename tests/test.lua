@@ -778,12 +778,6 @@ collectgarbage("stop")
 
 skip = {
   setcapacity = true,
-  write = true,
-  writeln = true,
-  writesub = true,
-  lower = true,
-  upper = true,
-  reverse = true,
   apibuffersupport = true,
   format = true,
   rep = true,

@@ -152,8 +152,14 @@ typedef struct CCallInfo {
   _(ANY,	lj_strfmt_putfnum,	3,   L, PGC, XA_FP) \
   _(ANY,	lj_strfmt_putfstr,	3,   L, PGC, 0) \
   _(ANY,	lj_strfmt_putfchar,	3,   L, PGC, 0) \
+  _(ANY,	lj_buf_lower,		1,  FL, PGC, 0) \
+  _(ANY,	lj_buf_upper,		1,  FL, PGC, 0) \
+  _(ANY,	lj_buf_reverse,		1,  FL, PGC, 0) \
   _(ANY,	lj_buf_putmem,		3,   S, PGC, 0) \
-  _(ANY,	lj_buf_putstr,		2,  FL, PGC, 0) \
+  _(ANY,	lj_buf_putstr_range,	4,   L, PGC, 0) \
+  _(ANY,	lj_buf_putbuf_range,	4,   L, PGC, 0) \
+  _(ANY,	lj_buf_putstr,          2,  FL, PGC, 0) \
+  _(ANY,	lj_buf_putbuf,		2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putchar,		2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putstr_reverse,	2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putstr_lower,	2,  FL, PGC, 0) \

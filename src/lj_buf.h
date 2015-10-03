@@ -100,6 +100,8 @@ LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putbuf(SBuf *sb, SBuf *sb2);
+LJ_FUNCA SBuf *lj_buf_putbuf_range(SBuf *sb, SBuf *sbsrc, int32_t start, int32_t end);
+LJ_FUNCA SBuf *lj_buf_putstr_range(SBuf *sb, GCstr *s, int32_t start, int32_t end);
 LJ_FUNCA SBuf *lj_buf_putrang(SBuf *sb, const char *s, MSize len, int32_t start, int32_t end);
 LJ_FUNC SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep);
 LJ_FUNC SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep,

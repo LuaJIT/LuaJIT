@@ -182,6 +182,35 @@ static TRef recff_bufhdr(jit_State *J)
 		lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
 }
 
+static TRef loadstringbuf(jit_State *J, RecordFFData *rd, int slot)
+{
+  TValue* o = &rd->argv[slot];
+  TRef tr = J->base[slot];
+
+  if (!tvissbuf(o)) {
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  }
+
+  tr = emitir(IRT(IR_FLOAD, IRT_U8), J->base[slot], IRFL_UDATA_UDTYPE);
+  emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_STRING_BUF));
+
+  tr = emitir(IRT(IR_ADD, IRT_PTR), J->base[slot], lj_ir_kint(J, sizeof(GCudata)));
+
+  return tr;
+}
+
+static TRef recff_stringbufhdr(jit_State *J, RecordFFData *rd, int slot, int mode)
+{
+  TRef tr = loadstringbuf(J, rd, slot);
+  tr = emitir(IRT(IR_BUFHDR, IRT_PGC), tr, IRBUFHDR_STRBUF | mode);
+
+  if (mode == IRBUFHDR_RESET) {
+    J->needsnap = 1;
+  }
+
+  return tr;
+}
+
 /* -- Base library fast functions ----------------------------------------- */
 
 static void LJ_FASTCALL recff_assert(jit_State *J, RecordFFData *rd)
@@ -904,6 +933,14 @@ static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
 }
 
+static void LJ_FASTCALL recff_stringbuf_op(jit_State *J, RecordFFData *rd)
+{
+  TRef hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_MODIFY);
+  TRef tr = lj_ir_call(J, rd->data, hdr);
+  emitir(IRT(IR_BUFTL, IRT_PGC), tr, hdr);
+  J->needsnap = 1;
+}
+
 static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
 {
   TRef trstr = lj_ir_tostr(J, J->base[0]);
@@ -1042,6 +1079,78 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
     }
   }
   J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+}
+
+static void LJ_FASTCALL recff_stringbuf_write(jit_State *J, RecordFFData *rd)
+{
+  TRef tr, hdr;
+  int i = 1;
+  tr = hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_APPEND);
+
+  for (; J->base[i]; i++) {
+    TRef arg = J->base[i];
+
+    if (tref_isstr(arg)) {
+      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, arg);
+    } else if (tref_isnumber(arg)) {
+      arg = emitir(IRT(IR_TOSTR, IRT_STR), arg, tref_isnum(arg) ? IRTOSTR_NUM : IRTOSTR_INT);
+      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, arg);
+    } else if (tref_ispri(arg)) {
+      arg = lj_ir_kstr(J, lj_strfmt_obj(J->L, &rd->argv[i]));
+      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, arg);
+    } else if (tref_isudata(arg)) {
+      arg = loadstringbuf(J, rd, i);
+      tr = lj_ir_call(J, IRCALL_lj_buf_putbuf, tr, arg);
+    }else{
+      /* NYI calling meta tostring */
+      lj_trace_err(J, LJ_TRERR_BADTYPE);
+    }
+  }
+
+  /* append a newline when recording for writeln */
+  if (rd->data == 1) {
+    tr = lj_ir_call(J, IRCALL_lj_buf_putchar, tr, lj_ir_kint(J, (int)'\n'));
+  }
+
+  emitir(IRT(IR_BUFTL, IRT_PGC), tr, hdr);
+  J->needsnap = 1;
+}
+
+static void LJ_FASTCALL recff_stringbuf_writerange(jit_State *J, RecordFFData *rd)
+{
+  TRef hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_APPEND);
+  TRef str = J->base[1];
+  TRef trstart = lj_opt_narrow_toint(J, J->base[2]);
+  TRef trend = J->base[3];
+  TRef tr;
+
+  if (!tref_isnil(trend)) {
+    trend = lj_opt_narrow_toint(J, trend);
+  } else {
+    trend = lj_ir_kint(J, -1);
+  }
+
+  if (tref_isstr(str)) {
+    tr = lj_ir_call(J, IRCALL_lj_buf_putstr_range, hdr, str, trstart, trend);
+  } else {
+    str = loadstringbuf(J, rd, 1);
+    tr = lj_ir_call(J, IRCALL_lj_buf_putbuf_range, hdr, str, trstart, trend);
+  }
+
+  emitir(IRT(IR_BUFTL, IRT_PGC), tr, hdr);
+  J->needsnap = 1;
+}
+
+static void LJ_FASTCALL recff_stringbuf_reset(jit_State *J, RecordFFData *rd)
+{
+  TRef hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_RESET);
+  emitir(IRT(IR_BUFTL, IRT_PGC), hdr, hdr);
+}
+
+static void LJ_FASTCALL recff_stringbuf_tostring(jit_State *J, RecordFFData *rd)
+{
+  TRef hdr = recff_stringbufhdr(J, rd, 0, IRBUFHDR_APPEND);
+  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), hdr, hdr);
 }
 
 /* -- Table library fast functions ---------------------------------------- */

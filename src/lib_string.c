@@ -893,20 +893,20 @@ static SBuf *stringbuf_write(lua_State *L)
   return sb;
 }
 
-LJLIB_CF(stringbuf_write)
+LJLIB_CF(stringbuf_write)  LJLIB_REC(stringbuf_write 0)
 {
   stringbuf_write(L);
   return 0;
 }
 
-LJLIB_CF(stringbuf_writeln)
+LJLIB_CF(stringbuf_writeln)  LJLIB_REC(stringbuf_write 1)
 {
   SBuf *sb = stringbuf_write(L);
   lj_buf_putb(sb, '\n');
   return 0;
 }
 
-LJLIB_CF(stringbuf_writesub)
+LJLIB_CF(stringbuf_writesub)  LJLIB_REC(stringbuf_writerange)
 {
   MSize len;
   SBuf *sb = check_bufarg(L);
@@ -923,21 +923,21 @@ LJLIB_CF(stringbuf_rep)
   return string_rep(L, 1);
 }
 
-LJLIB_CF(stringbuf_reverse)
+LJLIB_CF(stringbuf_reverse) LJLIB_REC(stringbuf_op IRCALL_lj_buf_reverse)
 {
   SBuf *sb = check_bufarg(L);
   lj_buf_reverse(sb);
   return 0;
 }
 
-LJLIB_CF(stringbuf_lower)
+LJLIB_CF(stringbuf_lower)  LJLIB_REC(stringbuf_op IRCALL_lj_buf_lower)
 {
   SBuf *sb = check_bufarg(L);
   lj_buf_lower(sb);
   return 0;
 }
 
-LJLIB_CF(stringbuf_upper)
+LJLIB_CF(stringbuf_upper) LJLIB_REC(stringbuf_op IRCALL_lj_buf_upper)
 {
   SBuf *sb = check_bufarg(L);
   lj_buf_upper(sb);
@@ -1058,21 +1058,21 @@ LJLIB_CF(stringbuf_equals)
   return 1;
 }
 
-LJLIB_CF(stringbuf_reset)
+LJLIB_CF(stringbuf_reset)  LJLIB_REC(.)
 {
   SBuf *sb = check_bufarg(L);
   lj_buf_reset(sb);
   return 0;
 }
 
-LJLIB_CF(stringbuf_tostring)
+LJLIB_CF(stringbuf_tostring)  LJLIB_REC(.)
 {
   SBuf *sb = check_bufarg(L);
   setstrV(L, L->top - 1, lj_buf_str(L, sb));
   return 1;
 }
 
-LJLIB_CF(stringbuf___tostring)
+LJLIB_CF(stringbuf___tostring)  LJLIB_REC(stringbuf_tostring)
 {
   SBuf *sb = check_bufarg(L);
   setstrV(L, L->top - 1, lj_buf_str(L, sb));

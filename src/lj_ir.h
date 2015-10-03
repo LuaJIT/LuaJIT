@@ -124,6 +124,7 @@
   \
   /* Buffer operations. */ \
   _(BUFHDR,	L , ref, lit) \
+  _(BUFTL,      S , ref, ref) \
   _(BUFPUT,	L , ref, ref) \
   _(BUFSTR,	A , ref, ref) \
   \

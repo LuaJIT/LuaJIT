@@ -174,6 +174,19 @@ SBuf *lj_buf_putrang(SBuf *sb, const char* s, MSize len, int32_t start, int32_t 
 
   return sb;
 }
+
+SBuf *lj_buf_putbuf_range(SBuf *sb, SBuf *sbsrc, int32_t start, int32_t end)
+{
+  lj_buf_putrang(sb, sbufB(sbsrc), sbuflen(sbsrc), start, end);
+  return sb;
+}
+
+SBuf *lj_buf_putstr_range(SBuf *sb, GCstr *s, int32_t start, int32_t end)
+{
+  lj_buf_putrang(sb, strdata(s), s->len, start, end);
+  return sb;
+}
+
 /* -- High-level buffer put operations ------------------------------------ */
 
 SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s)
