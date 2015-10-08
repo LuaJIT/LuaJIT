@@ -1245,7 +1245,9 @@ static void LJ_FASTCALL recff_stringbuf_reserve(jit_State *J, RecordFFData *rd)
   TRef size = stringbuf_getsize(J, buf, 0);
 
   emitir(IRTGI(IR_GE), trmore, lj_ir_kint(J, 0));
-  /* exit to the interpreter to throw the memory error so we don't endup in the panic error handler */
+  /* Exit to the interpreter to throw the memory error so we don't end up in
+     the panic error handler 
+ */
   size = emitir(IRT(IR_ADD, IRT_U32), size, trmore);
   emitir(IRTG(IR_ULT, IRT_U32), trmore, lj_ir_kint(J, LJ_MAX_BUF));
 
@@ -1253,6 +1255,26 @@ static void LJ_FASTCALL recff_stringbuf_reserve(jit_State *J, RecordFFData *rd)
   J->needsnap = 1;
 }
 
+static void LJ_FASTCALL recff_stringbuf_equals(jit_State *J, RecordFFData *rd)
+{
+  TRef trbuf = recff_stringbufhdr(J, rd, 0, IRBUFHDR_RESIZE);
+  TRef trother = J->base[1];
+  TRef result;
+  SBuf *sb = sbufV(&rd->argv[0]);
+  int eq;
+
+  if (tref_isstr(trother)) {
+    result = lj_ir_call(J, IRCALL_lj_str_eqbuf, trother, trbuf);
+    eq = lj_str_eqbuf(strV(&rd->argv[1]), sb);
+  } else {
+    TRef buf2 = loadstringbuf(J, rd, 1);
+    result = lj_ir_call(J, IRCALL_lj_buf_eq, trbuf, buf2);
+    eq = lj_buf_eq(sb, sbufV(&rd->argv[1]));
+  }
+
+  emitir(IRTGI(eq ? IR_NE : IR_EQ), result, lj_ir_kint(J, 0));
+  J->base[0] = eq ? TREF_TRUE : TREF_FALSE;
+}
 
 static void LJ_FASTCALL recff_stringbuf_byte(jit_State *J, RecordFFData *rd)
 {

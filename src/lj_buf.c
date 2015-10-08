@@ -321,6 +321,47 @@ GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
 }
 
+static int fastcmp(const char *a, const char *b, MSize len)
+{
+  MSize i;
+  lua_assert(len > 0);
+
+  for (i = 0; i < len; i += 4) {
+    /* Note: innocuous access up to end of buffers + 3. */
+    uint32_t va = *(const uint32_t *)(a+i);
+    uint32_t vb = *(const uint32_t *)(b+i);
+    if (va != vb) {
+#if LJ_LE
+      va = lj_bswap(va); vb = lj_bswap(vb);
+#endif
+      i -= len;
+      if ((int32_t)i >= -3) {
+        va >>= 32+(i<<3); vb >>= 32+(i<<3);
+        if (va == vb) break;
+      }
+      return va < vb ? -1 : 1;
+    }
+  }
+
+  return 0;
+}
+
+int LJ_FASTCALL lj_buf_eq(SBuf *sb1, SBuf *sb2)
+{
+
+  if ((sbuflen(sb1)+sbuflen(sb2)) == 0){
+    return 1;
+  }else if (sbuflen(sb1) != sbuflen(sb2)) {
+    return 0;
+  }
+
+  if (sbufleft(sb1) >= 4 && sbufleft(sb2) >= 4) {
+    return fastcmp(sbufB(sb1), sbufB(sb2), sbuflen(sb1)) == 0;
+  } else {
+    return memcmp(sbufB(sb1), sbufB(sb2), sbuflen(sb1)) == 0;
+  }
+}
+
 /* Concatenate two strings. */
 GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
 {

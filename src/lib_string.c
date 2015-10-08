@@ -1048,14 +1048,23 @@ LJLIB_CF(stringbuf_reserve) LJLIB_REC(.)
   return 0;
 }
 
-LJLIB_CF(stringbuf_equals)
+LJLIB_CF(stringbuf_equals) LJLIB_REC(.)
 {
   MSize len;
   SBuf *sb = check_bufarg(L);
   const char* s = lj_lib_checkstrorsbuf(L, 2, &len);
 
-  int eq = len == sbuflen(sb) && strncmp(s, sbufB(sb), len) == 0;
-  setboolV(L->top - 1, eq);
+  int b = 0;
+
+  if (len == sbuflen(sb)) {
+    if (tvisstr(L->base+1)) {
+      b = lj_str_eqbuf(strV(L->base+1), sb);
+    } else {
+      b = lj_buf_eq(sb, sbufV(L->base+1));
+    }
+  }
+
+  setboolV(L->top - 1, b);
   return 1;
 }
 

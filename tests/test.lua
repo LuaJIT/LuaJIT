@@ -438,23 +438,44 @@ function tests.reserve()
   assert(not pcall(buf.reserve, buf, -1))
 end
 
+local function equalstest(buf, other)
+  return (buf:equals(other))
+end
+
 function tests.equals()
 
-  assert(buf_a:equals("a"))
-  assert(not buf_a:equals("b"))
-  assert(not buf_a:equals("aa"))
+  reset_write(buf, "a")
+
+  testjit(true, equalstest, buf, "a")
+  testjit(false, equalstest, buf, "b")
+  testjit(false, equalstest, buf, "aa")
   
-  assert(buf_empty:equals(""))
-  assert(not buf_empty:equals("a"))
+  testjit(true, equalstest, buf_empty, "")
+  testjit(false, equalstest, buf_empty, "a")
+  testjit(false, equalstest, buf_empty, "\0")
+
+  --Check the guard fails for changing strings
+  reset_write(buf, "abcd")
+  local start = {args = {buf, "abcd"}, expected = true}
+  testjit2(equalstest, start, {args = {buf, "bbbb"}, expected = false})
+  testjit2(equalstest, start, {args = {buf, "abca"}, expected = false})
+  testjit2(equalstest, start, {args = {buf, "abc\0"}, expected = false})
+
+  --check when the first trace is for not equal strings
+  local start = {args = {buf, "abca"}, expected = false}
+  testjit2(equalstest, start, {args = {buf, "abcd"}, expected = true})
+  --testjit2(equalstest, start, {args = {buf, "abc"}, expected = false})
+  --testjit2(equalstest, start, {args = {buf, "\0\0\0\0"}, expected = false})
+
+  --Check comparing buffer to buffer
+  reset_write(buf, "abc")
   
-  --compare buffer to buffer
-  reset_write(buf, "foo")
-  assert(buf:equals(buf))
-  assert(buf_empty:equals(buf_empty))
-  assert(not buf:equals(buf_empty))
+  local start = {args = {buf, buf_abc}, expected = true}
+  testjit2(equalstest, start, {args = {buf, buf_a}, expected = false})
+  testjit2(equalstest, start, {args = {buf, buf_empty}, expected = false})
   
-  reset_write(buf2, "foo")
-  assert(buf:equals(buf2))
+  testjit(true, equalstest, buf_empty, string.createbuffer())
+  testjit(true, equalstest, buf_empty, buf_empty)
 end
 
 local function getbyte(buf, i)
@@ -466,11 +487,6 @@ function tests.byte()
   local a = string.byte("a")
   local b = string.byte("b")
   local c = string.byte("c")
-  
-  assert(not pcall(getbyte, buf_a, 0))
-  assert(not pcall(getbyte, buf_empty, 0))
-  assert(not pcall(getbyte, buf_empty, 1))
-  assert(not pcall(getbyte, buf_empty, -1))
   
   testjit(a, getbyte, buf_a, 1)
   testjit(b, getbyte, buf_abc, 2)
@@ -496,7 +512,12 @@ function tests.byte()
   start = {args = {buf_a, -1}, expected = a}
   testjit2(getbyte, start, {args = {buf_empty, 0}, shoulderror = true})
   testjit2(getbyte, start, {args = {buf_empty, 1}, shoulderror = true})
-  testjit2(getbyte, start, {args = {buf_empty, -1}, shoulderror = true})
+  testjit2(getbyte, start, {args = {buf_empty, -1}, shoulderror = true}) 
+
+  assert(not pcall(getbyte, buf_a, 0))
+  assert(not pcall(getbyte, buf_empty, 0))
+  assert(not pcall(getbyte, buf_empty, 1))
+  assert(not pcall(getbyte, buf_empty, -1))
 end
 --tracker.setprintevents(true)
 --singletest = tests.byte

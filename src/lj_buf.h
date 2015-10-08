@@ -111,6 +111,7 @@ LJ_FUNC SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep,
 
 /* Miscellaneous buffer operations */
 LJ_FUNCA GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
+LJ_FUNCA int LJ_FASTCALL lj_buf_eq(SBuf *sb1, SBuf *sb2);
 LJ_FUNC GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2);
 LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 
