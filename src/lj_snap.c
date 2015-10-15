@@ -518,7 +518,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 	    op2 = emitir_raw(IRT(IR_HIOP, IRT_I64), op2,
 			     snap_pref(J, T, map, nent, seen, (ir+1)->op2));
 	  }
-	  J->slot[snap_slot(sn)] = emitir(ir->ot, op1, op2);
+	  J->slot[snap_slot(sn)] = emitir(ir->ot & ~(IRT_MARK|IRT_ISPHI), op1, op2);
 	} else {
 	  IRIns *irs;
 	  TRef tr = emitir(ir->ot, op1, op2);
