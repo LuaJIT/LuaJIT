@@ -498,7 +498,7 @@
 #if defined(__symbian__) || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_EXP2
 #endif
-#if LJ_TARGET_CONSOLE || (LJ_TARGET_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_8_0)
+#if LJ_TARGET_CONSOLE || (LJ_TARGET_IOS && __IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_8_0)
 /* system() is deprecated starting from iOS 8.0 */
 #define LJ_NO_SYSTEM		1
 #endif
