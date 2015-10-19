@@ -39,7 +39,7 @@
 
 LJLIB_CF(os_execute)
 {
-#if LJ_TARGET_CONSOLE
+#if LJ_NO_SYSTEM
 #if LJ_52
   errno = ENOSYS;
   return luaL_fileresult(L, 0, NULL);
