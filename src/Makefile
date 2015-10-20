@@ -17,6 +17,33 @@ ABIVER=  5.1
 NODOTABIVER= 51
 
 ##############################################################################
+################################  HOST SYSTEM  ###############################
+##############################################################################
+
+ifeq (Windows,$(findstring Windows,$(OS))$(MSYSTEM)$(TERM))
+  HOST_SYS= Windows
+  HOST_RM= del
+else
+  HOST_SYS:= $(shell uname -s)
+  ifneq (,$(findstring MINGW,$(HOST_SYS)))
+    HOST_SYS= Windows
+    HOST_MSYS= mingw
+  endif
+  ifneq (,$(findstring CYGWIN,$(HOST_SYS)))
+    HOST_SYS= Windows
+    HOST_MSYS= cygwin
+  endif
+endif
+
+# We default to GCC on all platforms except Mac OS where the default compiler is
+# clang starting with XCode 5.0.
+ifneq (Darwin,$(HOST_SYS))
+  DEFAULT_CC= gcc
+else
+  DEFAULT_CC= clang
+endif
+
+##############################################################################
 #############################  COMPILER OPTIONS  #############################
 ##############################################################################
 # These options mainly affect the speed of the JIT compiler itself, not the
@@ -25,10 +52,10 @@ NODOTABIVER= 51
 # with "make clean", followed by "make" if you change any options.
 #
 # LuaJIT builds as a native 32 or 64 bit binary by default.
-CC= gcc
+CC= $(DEFAULT_CC)
 #
 # Use this if you want to force a 32 bit build on a 64 bit multilib OS.
-#CC= gcc -m32
+# CC= $(DEFAULT_CC) -m32
 #
 # Since the assembler part does NOT maintain a frame pointer, it's pointless
 # to slow down the C part by not omitting it. Debugging, tracebacks and
@@ -268,23 +295,8 @@ ifneq (,$(LMULTILIB))
 endif
 
 ##############################################################################
-# System detection.
+# Target system features.
 ##############################################################################
-
-ifeq (Windows,$(findstring Windows,$(OS))$(MSYSTEM)$(TERM))
-  HOST_SYS= Windows
-  HOST_RM= del
-else
-  HOST_SYS:= $(shell uname -s)
-  ifneq (,$(findstring MINGW,$(HOST_SYS)))
-    HOST_SYS= Windows
-    HOST_MSYS= mingw
-  endif
-  ifneq (,$(findstring CYGWIN,$(HOST_SYS)))
-    HOST_SYS= Windows
-    HOST_MSYS= cygwin
-  endif
-endif
 
 TARGET_SYS?= $(HOST_SYS)
 ifeq (Windows,$(TARGET_SYS))
