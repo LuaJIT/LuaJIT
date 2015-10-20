@@ -453,13 +453,18 @@ much slower than the JIT compiler. Please complain to Apple, not me.
 Or use Android. :-p
 </p>
 <pre class="code">
-IXCODE=`xcode-select -print-path`
-ISDK=$IXCODE/Platforms/iPhoneOS.platform/Developer
-ISDKVER=iPhoneOS6.0.sdk
-ISDKP=$ISDK/usr/bin/
-ISDKF="-arch armv7 -isysroot $ISDK/SDKs/$ISDKVER"
-make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
-     TARGET_SYS=iOS
+# Cross-compile for a 32bit ARM.
+ISDKP=`xcrun --sdk iphoneos --show-sdk-path`
+ICC=`xcrun --sdk iphoneos --find clang`
+ISDKF="-arch armv7 -isysroot $ISDKP"
+make HOST_CC="clang -m32 -arch i386" CROSS="$(dirname $ICC)/" \
+     TARGET_FLAGS="$ISDKF" TARGET_SYS=iOS
+
+# Cross-compile for an ARM64.
+ISDKP=`xcrun --sdk iphoneos --show-sdk-path`
+ICC=`xcrun --sdk iphoneos --find clang`
+ISDKF="-arch arm64 -isysroot $ISDKP"
+make CROSS="$(dirname $ICC)/" TARGET_FLAGS="$ISDKF" TARGET_SYS=iOS
 </pre>
 
 <h3 id="consoles">Cross-compiling for consoles</h3>
