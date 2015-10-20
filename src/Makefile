@@ -55,7 +55,7 @@ endif
 CC= $(DEFAULT_CC)
 #
 # Use this if you want to force a 32 bit build on a 64 bit multilib OS.
-# CC= $(DEFAULT_CC) -m32
+#CC= $(DEFAULT_CC) -m32
 #
 # Since the assembler part does NOT maintain a frame pointer, it's pointless
 # to slow down the C part by not omitting it. Debugging, tracebacks and
