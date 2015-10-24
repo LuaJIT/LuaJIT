@@ -391,7 +391,12 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_IMM_D: wd: dasmd(n); break;
 	case DASM_IMM_WB: if (((n+128)&-256) == 0) goto db; else mark = NULL;
 	case DASM_IMM_W: dasmw(n); break;
-	case DASM_VREG: { int t = *p++; if (t >= 2) n<<=3; cp[-1] |= n; break; }
+	case DASM_VREG: {
+	  int t = *p++;
+	  if (t >= 5) n <<= 4; else if (t >= 2) n <<= 3;
+	  cp[-1] ^= n;
+	  break;
+	}
 	case DASM_REL_LG: p++; if (n >= 0) goto rel_pc;
 	  b++; n = (int)(ptrdiff_t)D->globals[-n];
 	case DASM_REL_A: rel_a: n -= (int)(ptrdiff_t)(cp+4); goto wd; /* !x64 */

@@ -27,9 +27,9 @@ local assert, unpack, setmetatable = assert, unpack or table.unpack, setmetatabl
 local _s = string
 local sub, format, byte, char = _s.sub, _s.format, _s.byte, _s.char
 local find, match, gmatch, gsub = _s.find, _s.match, _s.gmatch, _s.gsub
-local concat, sort = table.concat, table.sort
+local concat, sort, remove = table.concat, table.sort, table.remove
 local bit = bit or require("bit")
-local band, shl, shr = bit.band, bit.lshift, bit.rshift
+local band, bxor, shl, shr = bit.band, bit.bxor, bit.lshift, bit.rshift
 
 -- Inherited tables and callbacks.
 local g_opt, g_arch
@@ -299,7 +299,7 @@ local function mkrmap(sz, cl, names)
     local iname = format("@%s%x%s", sz, i, needrex and "R" or "")
     if needrex then map_reg_needrex[iname] = true end
     local name
-    if sz == "o" then name = format("xmm%d", i)
+    if sz == "o" or sz == "y" then name = format("%s%d", cl, i)
     elseif sz == "f" then name = format("st%d", i)
     else name = format("r%d%s", i, sz == addrsize and "" or sz) end
     map_archdef[name] = iname
@@ -334,21 +334,24 @@ mkrmap("f", "Rf")
 -- SSE registers (oword sized, but qword and dword accessible).
 mkrmap("o", "xmm")
 
+-- AVX registers (yword sized, but oword, qword and dword accessible).
+mkrmap("y", "ymm")
+
 -- Operand size prefixes to codes.
 local map_opsize = {
-  byte = "b", word = "w", dword = "d", qword = "q", oword = "o", tword = "t",
-  aword = addrsize,
+  byte = "b", word = "w", dword = "d", qword = "q", oword = "o", yword = "y",
+  tword = "t", aword = addrsize,
 }
 
 -- Operand size code to number.
 local map_opsizenum = {
-  b = 1, w = 2, d = 4, q = 8, o = 16, t = 10,
+  b = 1, w = 2, d = 4, q = 8, o = 16, y = 32, t = 10,
 }
 
 -- Operand size code to name.
 local map_opsizename = {
-  b = "byte", w = "word", d = "dword", q = "qword", o = "oword", t = "tword",
-  f = "fpword",
+  b = "byte", w = "word", d = "dword", q = "qword", o = "oword", y = "yword",
+  t = "tword", f = "fpword",
 }
 
 -- Valid index register scale factors.
@@ -460,7 +463,29 @@ local function wputszarg(sz, n)
 end
 
 -- Put multi-byte opcode with operand-size dependent modifications.
-local function wputop(sz, op, rex)
+local function wputop(sz, op, rex, vex)
+  if vex then
+    local tail
+    if vex.m == 1 and band(rex, 11) == 0 then
+      wputb(0xc5)
+      tail = shl(bxor(band(rex, 4), 4), 5)
+    else
+      wputb(0xc4)
+      wputb(shl(bxor(band(rex, 7), 7), 5) + vex.m)
+      tail = shl(band(rex, 8), 4)
+    end
+    local reg, vreg = 0, nil
+    if vex.v then
+      reg = vex.v.reg
+      if not reg then werror("bad vex operand") end
+      if reg < 0 then reg = 0; vreg = vex.v.vreg end
+    end
+    if sz == "y" or vex.l then tail = tail + 4 end
+    wputb(tail + shl(bxor(reg, 15), 3) + vex.p)
+    if vreg then waction("VREG", vreg); wputxb(4) end
+    rex = 0
+    if op >= 256 then werror("bad vex opcode") end
+  end
   local r
   if rex ~= 0 and not x64 then werror("bad operand size") end
   if sz == "w" then wputb(102) end
@@ -881,9 +906,15 @@ end
 --   "m"/"M"   generates ModRM/SIB from the 1st/2nd operand.
 --             The spare 3 bits are either filled with the last hex digit or
 --             the result from a previous "r"/"R". The opcode is restored.
+--   "u"       Use VEX encoding, vvvv unused.
+--   "v"/"V"   Use VEX encoding, vvvv from 1st/2nd operand (the operand is
+--             removed from the list used by future characters).
+--   "L"       Force VEX.L
 --
 -- All of the following characters force a flush of the opcode:
 --   "o"/"O"   stores a pure 32 bit disp (offset) from the 1st/2nd operand.
+--   "s"       stores a 4 bit immediate from the last register operand,
+--             followed by 4 zero bits.
 --   "S"       stores a signed 8 bit immediate from the last operand.
 --   "U"       stores an unsigned 8 bit immediate from the last operand.
 --   "W"       stores an unsigned 16 bit immediate from the last operand.
@@ -1225,46 +1256,14 @@ local map_op = {
   movups_2 =	"rmo:0F10rM|mro:0F11Rm",
   orpd_2 =	"rmo:660F56rM",
   orps_2 =	"rmo:0F56rM",
-  packssdw_2 =	"rmo:660F6BrM",
-  packsswb_2 =	"rmo:660F63rM",
-  packuswb_2 =	"rmo:660F67rM",
-  paddb_2 =	"rmo:660FFCrM",
-  paddd_2 =	"rmo:660FFErM",
-  paddq_2 =	"rmo:660FD4rM",
-  paddsb_2 =	"rmo:660FECrM",
-  paddsw_2 =	"rmo:660FEDrM",
-  paddusb_2 =	"rmo:660FDCrM",
-  paddusw_2 =	"rmo:660FDDrM",
-  paddw_2 =	"rmo:660FFDrM",
-  pand_2 =	"rmo:660FDBrM",
-  pandn_2 =	"rmo:660FDFrM",
   pause_0 =	"F390",
-  pavgb_2 =	"rmo:660FE0rM",
-  pavgw_2 =	"rmo:660FE3rM",
-  pcmpeqb_2 =	"rmo:660F74rM",
-  pcmpeqd_2 =	"rmo:660F76rM",
-  pcmpeqw_2 =	"rmo:660F75rM",
-  pcmpgtb_2 =	"rmo:660F64rM",
-  pcmpgtd_2 =	"rmo:660F66rM",
-  pcmpgtw_2 =	"rmo:660F65rM",
   pextrw_3 =	"rri/do:660FC5rMU|xri/wo:660F3A15nRmU", -- Mem op: SSE4.1 only.
   pinsrw_3 =	"rri/od:660FC4rMU|rxi/ow:",
-  pmaddwd_2 =	"rmo:660FF5rM",
-  pmaxsw_2 =	"rmo:660FEErM",
-  pmaxub_2 =	"rmo:660FDErM",
-  pminsw_2 =	"rmo:660FEArM",
-  pminub_2 =	"rmo:660FDArM",
   pmovmskb_2 =	"rr/do:660FD7rM",
-  pmulhuw_2 =	"rmo:660FE4rM",
-  pmulhw_2 =	"rmo:660FE5rM",
-  pmullw_2 =	"rmo:660FD5rM",
-  pmuludq_2 =	"rmo:660FF4rM",
-  por_2 =	"rmo:660FEBrM",
   prefetchnta_1 = "xb:n0F180m",
   prefetcht0_1 = "xb:n0F181m",
   prefetcht1_1 = "xb:n0F182m",
   prefetcht2_1 = "xb:n0F183m",
-  psadbw_2 =	"rmo:660FF6rM",
   pshufd_3 =	"rmio:660F70rMU",
   pshufhw_3 =	"rmio:F30F70rMU",
   pshuflw_3 =	"rmio:F20F70rMU",
@@ -1278,23 +1277,6 @@ local map_op = {
   psrldq_2 =	"rio:660F733mU",
   psrlq_2 =	"rmo:660FD3rM|rio:660F732mU",
   psrlw_2 =	"rmo:660FD1rM|rio:660F712mU",
-  psubb_2 =	"rmo:660FF8rM",
-  psubd_2 =	"rmo:660FFArM",
-  psubq_2 =	"rmo:660FFBrM",
-  psubsb_2 =	"rmo:660FE8rM",
-  psubsw_2 =	"rmo:660FE9rM",
-  psubusb_2 =	"rmo:660FD8rM",
-  psubusw_2 =	"rmo:660FD9rM",
-  psubw_2 =	"rmo:660FF9rM",
-  punpckhbw_2 =	"rmo:660F68rM",
-  punpckhdq_2 =	"rmo:660F6ArM",
-  punpckhqdq_2 = "rmo:660F6DrM",
-  punpckhwd_2 =	"rmo:660F69rM",
-  punpcklbw_2 =	"rmo:660F60rM",
-  punpckldq_2 =	"rmo:660F62rM",
-  punpcklqdq_2 = "rmo:660F6CrM",
-  punpcklwd_2 =	"rmo:660F61rM",
-  pxor_2 =	"rmo:660FEFrM",
   rcpps_2 =	"rmo:0F53rM",
   rcpss_2 =	"rro:F30F53rM|rx/od:",
   rsqrtps_2 =	"rmo:0F52rM",
@@ -1421,6 +1403,223 @@ local map_op = {
   aesimc_2 =	"rmo:660F38DBrM",
   aeskeygenassist_3 = "rmio:660F3ADFrMU",
   pclmulqdq_3 =	"rmio:660F3A44rMU",
+
+   -- AVX FP ops
+  vaddsubpd_3 =	"rrmoy:660FVD0rM",
+  vaddsubps_3 =	"rrmoy:F20FVD0rM",
+  vandpd_3 =	"rrmoy:660FV54rM",
+  vandps_3 =	"rrmoy:0FV54rM",
+  vandnpd_3 =	"rrmoy:660FV55rM",
+  vandnps_3 =	"rrmoy:0FV55rM",
+  vblendpd_4 =	"rrmioy:660F3AV0DrMU",
+  vblendps_4 =	"rrmioy:660F3AV0CrMU",
+  vblendvpd_4 =	"rrmroy:660F3AV4BrMs",
+  vblendvps_4 =	"rrmroy:660F3AV4ArMs",
+  vbroadcastf128_2 = "rx/yo:660F38u1ArM",
+  vcmppd_4 =	"rrmioy:660FVC2rMU",
+  vcmpps_4 =	"rrmioy:0FVC2rMU",
+  vcmpsd_4 =	"rrrio:F20FVC2rMU|rrxi/ooq:",
+  vcmpss_4 =	"rrrio:F30FVC2rMU|rrxi/ood:",
+  vcomisd_2 =	"rro:660Fu2FrM|rx/oq:",
+  vcomiss_2 =	"rro:0Fu2FrM|rx/od:",
+  vcvtdq2pd_2 =	"rro:F30FuE6rM|rx/oq:|rm/yo:",
+  vcvtdq2ps_2 =	"rmoy:0Fu5BrM",
+  vcvtpd2dq_2 =	"rmoy:F20FuE6rM",
+  vcvtpd2ps_2 =	"rmoy:660Fu5ArM",
+  vcvtps2dq_2 =	"rmoy:660Fu5BrM",
+  vcvtps2pd_2 =	"rro:0Fu5ArM|rx/oq:|rm/yo:",
+  vcvtsd2si_2 =	"rr/do:F20Fu2DrM|rx/dq:|rr/qo:|rxq:",
+  vcvtsd2ss_3 =	"rrro:F20FV5ArM|rrx/ooq:",
+  vcvtsi2sd_3 =	"rrm/ood:F20FV2ArM|rrm/ooq:F20FVX2ArM",
+  vcvtsi2ss_3 =	"rrm/ood:F30FV2ArM|rrm/ooq:F30FVX2ArM",
+  vcvtss2sd_3 =	"rrro:F30FV5ArM|rrx/ood:",
+  vcvtss2si_2 =	"rr/do:F30Fu2DrM|rxd:|rr/qo:|rx/qd:",
+  vcvttpd2dq_2 = "rmo:660FuE6rM|rm/oy:660FuLE6rM",
+  vcvttps2dq_2 = "rmoy:F30Fu5BrM",
+  vcvttsd2si_2 = "rr/do:F20Fu2CrM|rx/dq:|rr/qo:|rxq:",
+  vcvttss2si_2 = "rr/do:F30Fu2CrM|rxd:|rr/qo:|rx/qd:",
+  vdppd_4 =	"rrmio:660F3AV41rMU",
+  vdpps_4 =	"rrmioy:660F3AV40rMU",
+  vextractf128_3 = "mri/oy:660F3AuL19RmU",
+  vextractps_3 = "mri/do:660F3Au17RmU",
+  vhaddpd_3 =	"rrmoy:660FV7CrM",
+  vhaddps_3 =	"rrmoy:F20FV7CrM",
+  vhsubpd_3 =	"rrmoy:660FV7DrM",
+  vhsubps_3 =	"rrmoy:F20FV7DrM",
+  vinsertf128_4 = "rrmi/yyo:660F3AV18rMU",
+  vinsertps_4 =	"rrrio:660F3AV21rMU|rrxi/ood:",
+  vldmxcsr_1 =	"xd:0FuAE2m",
+  vmaskmovps_3 = "rrxoy:660F38V2CrM|xrroy:660F38V2ERm",
+  vmaskmovpd_3 = "rrxoy:660F38V2DrM|xrroy:660F38V2FRm",
+  vmovapd_2 =	"rmoy:660Fu28rM|mroy:660Fu29Rm",
+  vmovaps_2 =	"rmoy:0Fu28rM|mroy:0Fu29Rm",
+  vmovd_2 =	"rm/od:660Fu6ErM|rm/oq:660FuX6ErM|mr/do:660Fu7ERm|mr/qo:",
+  vmovq_2 =	"rro:F30Fu7ErM|rx/oq:|xr/qo:660FuD6Rm",
+  vmovddup_2 =	"rmy:F20Fu12rM|rro:|rx/oq:",
+  vmovhlps_3 =	"rrro:0FV12rM",
+  vmovhpd_2 =	"xr/qo:660Fu17Rm",
+  vmovhpd_3 =	"rrx/ooq:660FV16rM",
+  vmovhps_2 =	"xr/qo:0Fu17Rm",
+  vmovhps_3 =	"rrx/ooq:0FV16rM",
+  vmovlhps_3 =	"rrro:0FV16rM",
+  vmovlpd_2 =	"xr/qo:660Fu13Rm",
+  vmovlpd_3 =	"rrx/ooq:660FV12rM",
+  vmovlps_2 =	"xr/qo:0Fu13Rm",
+  vmovlps_3 =	"rrx/ooq:0FV12rM",
+  vmovmskpd_2 =	"rr/do:660Fu50rM|rr/dy:660FuL50rM",
+  vmovmskps_2 =	"rr/do:0Fu50rM|rr/dy:0FuL50rM",
+  vmovntpd_2 =	"xroy:660Fu2BRm",
+  vmovntps_2 =	"xroy:0Fu2BRm",
+  vmovsd_2 =	"rx/oq:F20Fu10rM|xr/qo:F20Fu11Rm",
+  vmovsd_3 =	"rrro:F20FV10rM",
+  vmovshdup_2 =	"rmoy:F30Fu16rM",
+  vmovsldup_2 =	"rmoy:F30Fu12rM",
+  vmovss_2 =	"rx/od:F30Fu10rM|xr/do:F30Fu11Rm",
+  vmovss_3 =	"rrro:F30FV10rM",
+  vmovupd_2 =	"rmoy:660Fu10rM|mroy:660Fu11Rm",
+  vmovups_2 =	"rmoy:0Fu10rM|mroy:0Fu11Rm",
+  vorpd_3 =	"rrmoy:660FV56rM",
+  vorps_3 =	"rrmoy:0FV56rM",
+  vpermilpd_3 =	"rrmoy:660F38V0DrM|rmioy:660F3Au05rMU",
+  vpermilps_3 =	"rrmoy:660F38V0CrM|rmioy:660F3Au04rMU",
+  vperm2f128_4 = "rrmiy:660F3AV06rMU",
+  vptestpd_2 =	"rmoy:660F38u0FrM",
+  vptestps_2 =	"rmoy:660F38u0ErM",
+  vrcpps_2 =	"rmoy:0Fu53rM",
+  vrcpss_3 =	"rrro:F30FV53rM|rrx/ood:",
+  vrsqrtps_2 =	"rmoy:0Fu52rM",
+  vrsqrtss_3 =	"rrro:F30FV52rM|rrx/ood:",
+  vroundpd_3 =	"rmioy:660F3AV09rMU",
+  vroundps_3 =	"rmioy:660F3AV08rMU",
+  vroundsd_4 =	"rrrio:660F3AV0BrMU|rrxi/ooq:",
+  vroundss_4 =	"rrrio:660F3AV0ArMU|rrxi/ood:",
+  vshufpd_4 =	"rrmioy:660FVC6rMU",
+  vshufps_4 =	"rrmioy:0FVC6rMU",
+  vsqrtps_2 =	"rmoy:0Fu51rM",
+  vsqrtss_2 =	"rro:F30Fu51rM|rx/od:",
+  vsqrtpd_2 =	"rmoy:660Fu51rM",
+  vsqrtsd_2 =	"rro:F20Fu51rM|rx/oq:",
+  vstmxcsr_1 =	"xd:0FuAE3m",
+  vucomisd_2 =	"rro:660Fu2ErM|rx/oq:",
+  vucomiss_2 =	"rro:0Fu2ErM|rx/od:",
+  vunpckhpd_3 =	"rrmoy:660FV15rM",
+  vunpckhps_3 =	"rrmoy:0FV15rM",
+  vunpcklpd_3 =	"rrmoy:660FV14rM",
+  vunpcklps_3 =	"rrmoy:0FV14rM",
+  vxorpd_3 =	"rrmoy:660FV57rM",
+  vxorps_3 =	"rrmoy:0FV57rM",
+  vzeroall_0 =	"0FuL77",
+  vzeroupper_0 = "0Fu77",
+
+  -- AVX2 FP ops
+  vbroadcastss_2 = "rx/od:660F38u18rM|rx/yd:|rro:|rr/yo:",
+  vbroadcastsd_2 = "rx/yq:660F38u19rM|rr/yo:",
+  -- *vgather* (!vsib)
+  vpermpd_3 =	"rmiy:660F3AuX01rMU",
+  vpermps_3 =	"rrmy:660F38V16rM",
+
+  -- AVX, AVX2 integer ops
+  -- In general, xmm requires AVX, ymm requires AVX2.
+  vlddqu_2 =	"rxoy:F20FuF0rM",
+  vmaskmovdqu_2 = "rro:660FuF7rM",
+  vmovdqa_2 =	"rmoy:660Fu6FrM|mroy:660Fu7FRm",
+  vmovdqu_2 =	"rmoy:F30Fu6FrM|mroy:F30Fu7FRm",
+  vmovntdq_2 =	"xroy:660FuE7Rm",
+  vmovntdqa_2 =	"rxoy:660F38u2ArM",
+  vmpsadbw_4 =	"rrmioy:660F3AV42rMU",
+  vpabsb_2 =	"rmoy:660F38u1CrM",
+  vpabsd_2 =	"rmoy:660F38u1ErM",
+  vpabsw_2 =	"rmoy:660F38u1DrM",
+  vpackusdw_3 =	"rrmoy:660F38V2BrM",
+  vpalignr_4 =	"rrmioy:660F3AV0FrMU",
+  vpblendvb_4 =	"rrmroy:660F3AV4CrMs",
+  vpblendw_4 =	"rrmioy:660F3AV0ErMU",
+  vpclmulqdq_4 = "rrmio:660F3AV44rMU",
+  vpcmpeqq_3 =	"rrmoy:660F38V29rM",
+  vpcmpestri_3 = "rmio:660F3Au61rMU",
+  vpcmpestrm_3 = "rmio:660F3Au60rMU",
+  vpcmpgtq_3 =	"rrmoy:660F38V37rM",
+  vpcmpistri_3 = "rmio:660F3Au63rMU",
+  vpcmpistrm_3 = "rmio:660F3Au62rMU",
+  vpextrb_3 =	"rri/do:660F3Au14nRmU|rri/qo:|xri/bo:",
+  vpextrw_3 =	"rri/do:660FuC5rMU|xri/wo:660F3Au15nRmU",
+  vpextrd_3 =	"mri/do:660F3Au16RmU",
+  vpextrq_3 =	"mri/qo:660F3Au16RmU",
+  vphaddw_3 =	"rrmoy:660F38V01rM",
+  vphaddd_3 =	"rrmoy:660F38V02rM",
+  vphaddsw_3 =	"rrmoy:660F38V03rM",
+  vphminposuw_2 = "rmo:660F38u41rM",
+  vphsubw_3 =	"rrmoy:660F38V05rM",
+  vphsubd_3 =	"rrmoy:660F38V06rM",
+  vphsubsw_3 =	"rrmoy:660F38V07rM",
+  vpinsrb_4 =	"rrri/ood:660F3AV20rMU|rrxi/oob:",
+  vpinsrw_4 =	"rrri/ood:660FVC4rMU|rrxi/oow:",
+  vpinsrd_4 =	"rrmi/ood:660F3AV22rMU",
+  vpinsrq_4 =	"rrmi/ooq:660F3AVX22rMU",
+  vpmaddubsw_3 = "rrmoy:660F38V04rM",
+  vpmaxsb_3 =	"rrmoy:660F38V3CrM",
+  vpmaxsd_3 =	"rrmoy:660F38V3DrM",
+  vpmaxuw_3 =	"rrmoy:660F38V3ErM",
+  vpmaxud_3 =	"rrmoy:660F38V3FrM",
+  vpminsb_3 =	"rrmoy:660F38V38rM",
+  vpminsd_3 =	"rrmoy:660F38V39rM",
+  vpminuw_3 =	"rrmoy:660F38V3ArM",
+  vpminud_3 =	"rrmoy:660F38V3BrM",
+  vpmovmskb_2 =	"rr/do:660FuD7rM|rr/dy:660FuLD7rM",
+  vpmovsxbw_2 =	"rroy:660F38u20rM|rx/oq:|rx/yo:",
+  vpmovsxbd_2 =	"rroy:660F38u21rM|rx/od:|rx/yq:",
+  vpmovsxbq_2 =	"rroy:660F38u22rM|rx/ow:|rx/yd:",
+  vpmovsxwd_2 =	"rroy:660F38u23rM|rx/oq:|rx/yo:",
+  vpmovsxwq_2 =	"rroy:660F38u24rM|rx/od:|rx/yq:",
+  vpmovsxdq_2 =	"rroy:660F38u25rM|rx/oq:|rx/yo:",
+  vpmovzxbw_2 =	"rroy:660F38u30rM|rx/oq:|rx/yo:",
+  vpmovzxbd_2 =	"rroy:660F38u31rM|rx/od:|rx/yq:",
+  vpmovzxbq_2 =	"rroy:660F38u32rM|rx/ow:|rx/yd:",
+  vpmovzxwd_2 =	"rroy:660F38u33rM|rx/oq:|rx/yo:",
+  vpmovzxwq_2 =	"rroy:660F38u34rM|rx/od:|rx/yq:",
+  vpmovzxdq_2 =	"rroy:660F38u35rM|rx/oq:|rx/yo:",
+  vpmuldq_3 =	"rrmoy:660F38V28rM",
+  vpmulhrsw_3 =	"rrmoy:660F38V0BrM",
+  vpmulld_3 =	"rrmoy:660F38V40rM",
+  vpshufb_3 =	"rrmoy:660F38V00rM",
+  vpshufd_3 =	"rmioy:660Fu70rMU",
+  vpshufhw_3 =	"rmioy:F30Fu70rMU",
+  vpshuflw_3 =	"rmioy:F20Fu70rMU",
+  vpsignb_3 =	"rrmoy:660F38V08rM",
+  vpsignw_3 =	"rrmoy:660F38V09rM",
+  vpsignd_3 =	"rrmoy:660F38V0ArM",
+  vpslldq_3 =	"rrioy:660Fv737mU",
+  vpsllw_3 =	"rrmoy:660FVF1rM|rrioy:660Fv716mU",
+  vpslld_3 =	"rrmoy:660FVF2rM|rrioy:660Fv726mU",
+  vpsllq_3 =	"rrmoy:660FVF3rM|rrioy:660Fv736mU",
+  vpsraw_3 =	"rrmoy:660FVE1rM|rrioy:660Fv714mU",
+  vpsrad_3 =	"rrmoy:660FVE2rM|rrioy:660Fv724mU",
+  vpsrldq_3 =	"rrioy:660Fv733mU",
+  vpsrlw_3 =	"rrmoy:660FVD1rM|rrioy:660Fv712mU",
+  vpsrld_3 =	"rrmoy:660FVD2rM|rrioy:660Fv722mU",
+  vpsrlq_3 =	"rrmoy:660FVD3rM|rrioy:660Fv732mU",
+  vptest_2 =	"rmoy:660F38u17rM",
+
+  -- AVX2 integer ops
+  vbroadcasti128_2 = "rx/yo:660F38u5ArM",
+  vinserti128_4 = "rrmi/yyo:660F3AV38rMU",
+  vextracti128_3 = "mri/oy:660F3AuL39RmU",
+  vpblendd_4 =	"rrmioy:660F3AV02rMU",
+  vpbroadcastb_2 = "rro:660F38u78rM|rx/ob:|rr/yo:|rx/yb:",
+  vpbroadcastw_2 = "rro:660F38u79rM|rx/ow:|rr/yo:|rx/yw:",
+  vpbroadcastd_2 = "rro:660F38u58rM|rx/od:|rr/yo:|rx/yd:",
+  vpbroadcastq_2 = "rro:660F38u59rM|rx/oq:|rr/yo:|rx/yq:",
+  vpermd_3 =	"rrmy:660F38V36rM",
+  vpermq_3 =	"rmiy:660F3AuX00rMU",
+  -- *vpgather* (!vsib)
+  vperm2i128_4 = "rrmiy:660F3AV46rMU",
+  vpmaskmovd_3 = "rrxoy:660F38V8CrM|xrroy:660F38V8ERm",
+  vpmaskmovq_3 = "rrxoy:660F38VX8CrM|xrroy:660F38VX8ERm",
+  vpsllvd_3 =	"rrmoy:660F38V47rM",
+  vpsllvq_3 =	"rrmoy:660F38VX47rM",
+  vpsravd_3 =	"rrmoy:660F38V46rM",
+  vpsrlvd_3 =	"rrmoy:660F38V45rM",
+  vpsrlvq_3 =	"rrmoy:660F38VX45rM",
 }
 
 ------------------------------------------------------------------------------
@@ -1471,28 +1670,58 @@ for cc,n in pairs{ b=0, e=1, be=2, u=3, nb=4, ne=5, nbe=6, nu=7 } do
   map_op["fcmov"..cc.."_2"] = format("Fff:%04XR", nc) -- P6+
 end
 
--- SSE FP arithmetic ops.
+-- SSE / AVX FP arithmetic ops.
 for name,n in pairs{ sqrt = 1, add = 8, mul = 9,
 		     sub = 12, min = 13, div = 14, max = 15 } do
   map_op[name.."ps_2"] = format("rmo:0F5%XrM", n)
   map_op[name.."ss_2"] = format("rro:F30F5%XrM|rx/od:", n)
   map_op[name.."pd_2"] = format("rmo:660F5%XrM", n)
   map_op[name.."sd_2"] = format("rro:F20F5%XrM|rx/oq:", n)
+  if n ~= 1 then
+    map_op["v"..name.."ps_3"] = format("rrmoy:0FV5%XrM", n)
+    map_op["v"..name.."ss_3"] = format("rrro:F30FV5%XrM|rrx/ood:", n)
+    map_op["v"..name.."pd_3"] = format("rrmoy:660FV5%XrM", n)
+    map_op["v"..name.."sd_3"] = format("rrro:F20FV5%XrM|rrx/ooq:", n)
+  end
+end
+
+-- SSE2 / AVX / AVX2 integer arithmetic ops (66 0F leaf).
+for name,n in pairs{
+  paddb = 0xFC, paddw = 0xFD, paddd = 0xFE, paddq = 0xD4,
+  paddsb = 0xEC, paddsw = 0xED, packssdw = 0x6B,
+  packsswb = 0x63, packuswb = 0x67, paddusb = 0xDC,
+  paddusw = 0xDD, pand = 0xDB, pandn = 0xDF, pavgb = 0xE0,
+  pavgw = 0xE3, pcmpeqb = 0x74, pcmpeqd = 0x76,
+  pcmpeqw = 0x75, pcmpgtb = 0x64, pcmpgtd = 0x66,
+  pcmpgtw = 0x65, pmaddwd = 0xF5, pmaxsw = 0xEE,
+  pmaxub = 0xDE, pminsw = 0xEA, pminub = 0xDA,
+  pmulhuw = 0xE4, pmulhw = 0xE5, pmullw = 0xD5,
+  pmuludq = 0xF4, por = 0xEB, psadbw = 0xF6, psubb = 0xF8,
+  psubw = 0xF9, psubd = 0xFA, psubq = 0xFB, psubsb = 0xE8,
+  psubsw = 0xE9, psubusb = 0xD8, psubusw = 0xD9,
+  punpckhbw = 0x68, punpckhwd = 0x69, punpckhdq = 0x6A,
+  punpckhqdq = 0x6D, punpcklbw = 0x60, punpcklwd = 0x61,
+  punpckldq = 0x62, punpcklqdq = 0x6C, pxor = 0xEF
+} do
+  map_op[name.."_2"] = format("rmo:660F%02XrM", n)
+  map_op["v"..name.."_3"] = format("rrmoy:660FV%02XrM", n)
 end
 
 ------------------------------------------------------------------------------
 
+local map_vexarg = { u = false, v = 1, V = 2 }
+
 -- Process pattern string.
 local function dopattern(pat, args, sz, op, needrex)
-  local digit, addin
+  local digit, addin, vex
   local opcode = 0
   local szov = sz
   local narg = 1
   local rex = 0
 
   -- Limit number of section buffer positions used by a single dasm_put().
-  -- A single opcode needs a maximum of 5 positions.
-  if secpos+5 > maxsecpos then wflush() end
+  -- A single opcode needs a maximum of 6 positions.
+  if secpos+6 > maxsecpos then wflush() end
 
   -- Process each character.
   for c in gmatch(pat.."|", ".") do
@@ -1506,6 +1735,8 @@ local function dopattern(pat, args, sz, op, needrex)
       szov = nil
     elseif c == "X" then	-- Force REX.W.
       rex = 8
+    elseif c == "L" then	-- Force VEX.L.
+      vex.l = true
     elseif c == "r" then	-- Merge 1st operand regno. into opcode.
       addin = args[1]; opcode = opcode + (addin.reg % 8)
       if narg < 2 then narg = 2 end
@@ -1529,21 +1760,41 @@ local function dopattern(pat, args, sz, op, needrex)
       if t.xreg and t.xreg > 7 then rex = rex + 2 end
       if s > 7 then rex = rex + 4 end
       if needrex then rex = rex + 16 end
-      wputop(szov, opcode, rex); opcode = nil
+      wputop(szov, opcode, rex, vex); opcode = nil
       local imark = sub(pat, -1) -- Force a mark (ugly).
       -- Put ModRM/SIB with regno/last digit as spare.
       wputmrmsib(t, imark, s, addin and addin.vreg)
       addin = nil
+    elseif map_vexarg[c] ~= nil then -- Encode using VEX prefix
+      local b = band(opcode, 255); opcode = shr(opcode, 8)
+      local m = 1
+      if b == 0x38 then m = 2
+      elseif b == 0x3a then m = 3 end
+      if m ~= 1 then b = band(opcode, 255); opcode = shr(opcode, 8) end
+      if b ~= 0x0f then
+	werror("expected `0F', `0F38', or `0F3A' to precede `"..c..
+	  "' in pattern `"..pat.."' for `"..op.."'")
+      end
+      local v = map_vexarg[c]
+      if v then v = remove(args, v) end
+      b = band(opcode, 255)
+      local p = 0
+      if b == 0x66 then p = 1
+      elseif b == 0xf3 then p = 2
+      elseif b == 0xf2 then p = 3 end
+      if p ~= 0 then opcode = shr(opcode, 8) end
+      if opcode ~= 0 then wputop(nil, opcode, 0); opcode = 0 end
+      vex = { m = m, p = p, v = v }
     else
       if opcode then -- Flush opcode.
 	if szov == "q" and rex == 0 then rex = rex + 8 end
 	if needrex then rex = rex + 16 end
 	if addin and addin.reg == -1 then
-	  wputop(szov, opcode - 7, rex)
+	  wputop(szov, opcode - 7, rex, vex)
 	  waction("VREG", addin.vreg); wputxb(0)
 	else
 	  if addin and addin.reg > 7 then rex = rex + 1 end
-	  wputop(szov, opcode, rex)
+	  wputop(szov, opcode, rex, vex)
 	end
 	opcode = nil
       end
@@ -1579,6 +1830,14 @@ local function dopattern(pat, args, sz, op, needrex)
 	    waction("REL_A", imm) -- !x64 (secpos)
 	  else
 	    wputlabel("REL_", imm, 2)
+	  end
+	elseif c == "s" then
+	  local reg = a.reg
+	  if reg < 0 then
+	    wputb(0)
+	    waction("VREG", a.vreg); wputxb(5)
+	  else
+	    wputb(shl(reg, 4))
 	  end
 	else
 	  werror("bad char `"..c.."' in pattern `"..pat.."' for `"..op.."'")
@@ -1656,11 +1915,14 @@ map_op[".template__"] = function(params, template, nparams)
     if pat == "" then pat = lastpat else lastpat = pat end
     if matchtm(tm, args) then
       local prefix = sub(szm, 1, 1)
-      if prefix == "/" then -- Match both operand sizes.
-	if args[1].opsize == sub(szm, 2, 2) and
-	   args[2].opsize == sub(szm, 3, 3) then
-	  dopattern(pat, args, sz, params.op, needrex) -- Process pattern.
-	  return
+      if prefix == "/" then -- Exactly match leading operand sizes.
+        for i = #szm, 1, -1 do
+	  if i == 1 then
+	    dopattern(pat, args, sz, params.op, needrex) -- Process pattern.
+	    return
+	  elseif args[i-1].opsize ~= sub(szm, i, i) then
+	    break
+	  end
 	end
       else -- Match common operand size.
 	local szp = sz
