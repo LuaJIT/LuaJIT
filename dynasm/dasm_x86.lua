@@ -1081,8 +1081,8 @@ local map_op = {
   btr_2 =	"mrqdw:0FB3Rm|miqdw:0FBA6mU",
   bts_2 =	"mrqdw:0FABRm|miqdw:0FBA5mU",
 
-  shld_3 =	"mriqdw:0FA4RmU|mrCqdw:0FA5Rm",
-  shrd_3 =	"mriqdw:0FACRmU|mrCqdw:0FADRm",
+  shld_3 =	"mriqdw:0FA4RmU|mrC/qq:0FA5Rm|mrC/dd:|mrC/ww:",
+  shrd_3 =	"mriqdw:0FACRmU|mrC/qq:0FADRm|mrC/dd:|mrC/ww:",
 
   rdtsc_0 =	"0F31", -- P1+
   cpuid_0 =	"0FA2", -- P1+
