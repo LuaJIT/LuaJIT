@@ -437,7 +437,7 @@ static void LJ_FASTCALL recff_xpairs(jit_State *J, RecordFFData *rd)
 {
   TRef tr = J->base[0];
   if (!((LJ_52 || (LJ_HASFFI && tref_iscdata(tr))) &&
-	recff_metacall(J, rd, MM_ipairs))) {
+	recff_metacall(J, rd, MM_pairs + rd->data))) {
     if (tref_istab(tr)) {
       J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
       J->base[1] = tr;
