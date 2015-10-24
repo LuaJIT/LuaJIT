@@ -366,11 +366,12 @@ static void LJ_FASTCALL recff_ipairs_aux(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_ipairs(jit_State *J, RecordFFData *rd)
 {
-  if (!(LJ_52 && recff_metacall(J, rd, MM_ipairs))) {
-    TRef tab = J->base[0];
-    if (tref_istab(tab)) {
+  TRef tr = J->base[0];
+  if (!((LJ_52 || (LJ_HASFFI && tref_iscdata(tr))) &&
+	recff_metacall(J, rd, MM_ipairs))) {
+    if (tref_istab(tr)) {
       J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
-      J->base[1] = tab;
+      J->base[1] = tr;
       J->base[2] = lj_ir_kint(J, 0);
       rd->nres = 3;
     }  /* else: Interpreter will throw. */
