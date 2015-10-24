@@ -1916,7 +1916,7 @@ map_op[".template__"] = function(params, template, nparams)
     if matchtm(tm, args) then
       local prefix = sub(szm, 1, 1)
       if prefix == "/" then -- Exactly match leading operand sizes.
-        for i = #szm, 1, -1 do
+	for i = #szm,1,-1 do
 	  if i == 1 then
 	    dopattern(pat, args, sz, params.op, needrex) -- Process pattern.
 	    return
