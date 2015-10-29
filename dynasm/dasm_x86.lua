@@ -1116,6 +1116,7 @@ local map_op = {
   shrd_3 =	"mriqdw:0FACRmU|mrC/qq:0FADRm|mrC/dd:|mrC/ww:",
 
   rdtsc_0 =	"0F31", -- P1+
+  rdpmc_0 =	"0F33",
   cpuid_0 =	"0FA2", -- P1+
 
   -- floating point ops
