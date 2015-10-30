@@ -5,7 +5,7 @@
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 
-local x64 = x64
+local x64 = rawget(_G, "x64") --rawget so it works with strict.lua
 
 -- Module information:
 local _info = {
@@ -32,8 +32,11 @@ local bit = bit or require("bit")
 local band, bxor, shl, shr = bit.band, bit.bxor, bit.lshift, bit.rshift
 
 -- Inherited tables and callbacks.
-local g_opt, g_arch
+local g_opt, g_arch, g_map_def
 local wline, werror, wfatal, wwarn
+
+-- Global flag to generate Lua code instead of C code.
+local luamode
 
 -- Action name list.
 -- CHECK: Keep this in sync with the C code!
@@ -74,14 +77,20 @@ local map_action = {}
 local actfirst = 256-#action_names
 
 -- Action list buffer and string (only used to remove dupes).
-local actlist = {}
-local actstr = ""
+local actlist, actstr
 
--- Argument list for next dasm_put(). Start with offset 0 into action list.
-local actargs = { 0 }
+-- Argument list for next dasm_put().
+local actargs
 
 -- Current number of section buffer positions for dasm_put().
-local secpos = 1
+local secpos
+
+local function init_actionlist()
+  actlist = {}
+  actstr = ""
+  actargs = { 0 } -- Start with offset 0 into the action list.
+  secpos = 1
+end
 
 ------------------------------------------------------------------------------
 
@@ -107,7 +116,11 @@ local function writeactions(out, name)
   local last = actlist[nn] or 255
   actlist[nn] = nil -- Remove last byte.
   if nn == 0 then nn = 1 end
-  out:write("static const unsigned char ", name, "[", nn, "] = {\n")
+  if luamode then
+    out:write("local ", name, " = ffi.new('const uint8_t[", nn, "]', {\n")
+  else
+    out:write("static const unsigned char ", name, "[", nn, "] = {\n")
+  end
   local s = "  "
   for n,b in ipairs(actlist) do
     s = s..b..","
@@ -116,7 +129,11 @@ local function writeactions(out, name)
       s = "  "
     end
   end
-  out:write(s, last, "\n};\n\n") -- Add last byte back.
+  if luamode then
+    out:write(s, last, "\n})\n\n") -- Add last byte back.
+  else
+    out:write(s, last, "\n};\n\n") -- Add last byte back.
+  end
 end
 
 ------------------------------------------------------------------------------
@@ -136,7 +153,11 @@ end
 
 -- Add call to embedded DynASM C code.
 local function wcall(func, args)
-  wline(format("dasm_%s(Dst, %s);", func, concat(args, ", ")), true)
+  if luamode then
+    wline(format("dasm.%s(Dst, %s)", func, concat(args, ", ")), true)
+  else
+    wline(format("dasm_%s(Dst, %s);", func, concat(args, ", ")), true)
+  end
 end
 
 -- Delete duplicate action list chunks. A tad slow, but so what.
@@ -172,15 +193,21 @@ end
 ------------------------------------------------------------------------------
 
 -- Global label name -> global label number. With auto assignment on 1st use.
-local next_global = 10
-local map_global = setmetatable({}, { __index = function(t, name)
+local next_global, map_global
+
+local globals_meta = { __index = function(t, name)
   if not match(name, "^[%a_][%w_@]*$") then werror("bad global label") end
   local n = next_global
   if n > 246 then werror("too many global labels") end
   next_global = n + 1
   t[name] = n
   return n
-end})
+end}
+
+local function init_map_global()
+  next_global = 10
+  map_global = setmetatable({}, globals_meta)
+end
 
 -- Dump global labels.
 local function dumpglobals(out, lvl)
@@ -197,36 +224,60 @@ end
 local function writeglobals(out, prefix)
   local t = {}
   for name, n in pairs(map_global) do t[n] = name end
-  out:write("enum {\n")
-  for i=10,next_global-1 do
-    out:write("  ", prefix, gsub(t[i], "@.*", ""), ",\n")
+  if luamode then
+    local n = 0
+    for i=10,next_global-1 do
+      out:write("local ", prefix, gsub(t[i], "@.*", ""), "\t= ", n, "\n")
+      n = n + 1
+    end
+    out:write("local ", prefix, "_MAX\t= ", n, "\n") --for compatibility with the C protocol
+    out:write("local DASM_MAXGLOBAL\t= ", n, "\n")
+  else
+    out:write("enum {\n")
+    for i=10,next_global-1 do
+      out:write("  ", prefix, gsub(t[i], "@.*", ""), ",\n")
+    end
+    out:write("  ", prefix, "_MAX\n};\n")
   end
-  out:write("  ", prefix, "_MAX\n};\n")
 end
 
 -- Write global label names.
 local function writeglobalnames(out, name)
   local t = {}
   for name, n in pairs(map_global) do t[n] = name end
-  out:write("static const char *const ", name, "[] = {\n")
-  for i=10,next_global-1 do
-    out:write("  \"", t[i], "\",\n")
+  if luamode then
+    out:write("local ", name, " = {\n")
+    for i=10,next_global-1 do
+      out:write("  ", i == 10 and "[0] = " or "", "\"", t[i], "\",\n")
+    end
+    out:write("}\n")
+  else
+    out:write("static const char *const ", name, "[] = {\n")
+    for i=10,next_global-1 do
+      out:write("  \"", t[i], "\",\n")
+    end
+    out:write("  (const char *)0\n};\n")
   end
-  out:write("  (const char *)0\n};\n")
 end
 
 ------------------------------------------------------------------------------
 
 -- Extern label name -> extern label number. With auto assignment on 1st use.
-local next_extern = -1
-local map_extern = setmetatable({}, { __index = function(t, name)
+local next_extern, map_extern
+
+local extern_meta = { __index = function(t, name)
   -- No restrictions on the name for now.
   local n = next_extern
   if n < -256 then werror("too many extern labels") end
   next_extern = n - 1
   t[name] = n
   return n
-end})
+end}
+
+local function init_map_extern()
+  next_extern = -1
+  map_extern = setmetatable({}, extern_meta)
+end
 
 -- Dump extern labels.
 local function dumpexterns(out, lvl)
@@ -243,11 +294,19 @@ end
 local function writeexternnames(out, name)
   local t = {}
   for name, n in pairs(map_extern) do t[-n] = name end
-  out:write("static const char *const ", name, "[] = {\n")
-  for i=1,-next_extern-1 do
-    out:write("  \"", t[i], "\",\n")
+  if luamode then
+    out:write("local ", name, " = {\n")
+    for i=1,-next_extern-1 do
+	   out:write(i==1 and "[0] = " or "", "\"", t[i], "\",\n")
+	end
+    out:write("}\n")
+  else
+	 out:write("static const char *const ", name, "[] = {\n")
+    for i=1,-next_extern-1 do
+      out:write("  \"", t[i], "\",\n")
+    end
+    out:write("  (const char *)0\n};\n")
   end
-  out:write("  (const char *)0\n};\n")
 end
 
 ------------------------------------------------------------------------------
@@ -262,8 +321,13 @@ local map_reg_valid_index = {}	-- Int. register name -> valid index register?
 local map_reg_needrex = {}	-- Int. register name -> need rex vs. no rex.
 local reg_list = {}		-- Canonical list of int. register names.
 
-local map_type = {}		-- Type name -> { ctype, reg }
-local ctypenum = 0		-- Type number (for _PTx macros).
+local map_type			-- Type name -> { ctype, reg }
+local ctypenum			-- Type number (for _PTx macros).
+
+local function init_map_type()
+  map_type = {}
+  ctypenum = 0
+end
 
 local addrsize = x64 and "q" or "d"	-- Size for address operands.
 
@@ -631,7 +695,7 @@ end
 local function immexpr(expr)
   -- &expr (pointer)
   if sub(expr, 1, 1) == "&" then
-    return "iPJ", format("(ptrdiff_t)(%s)", sub(expr,2))
+    return "iPJ", format(luamode and "(%s)" or "(ptrdiff_t)(%s)", sub(expr,2))
   end
 
   local prefix = sub(expr, 1, 2)
@@ -837,7 +901,11 @@ local function parseoperand(param)
 	-- type[idx], type[idx].field, type->field -> [reg+offset_expr]
 	if not tp then werror("bad operand `"..param.."'") end
 	t.mode = "xm"
-	t.disp = format(tp.ctypefmt, tailr)
+	if luamode then
+	  t.disp = tp.ctypefmt(tailr)
+	else
+	  t.disp = format(tp.ctypefmt, tailr)
+	end
       else
 	t.mode, t.imm = immexpr(expr)
 	if sub(t.mode, -1) == "J" then
@@ -1202,6 +1270,8 @@ local map_op = {
   andnps_2 =	"rmo:0F55rM",
   andpd_2 =	"rmo:660F54rM",
   andps_2 =	"rmo:0F54rM",
+  fxsave_1 =	"x.:0FAE0m",
+  fxrstor_1 =	"x.:0FAE1m",
   clflush_1 =	"x.:0FAE7m",
   cmppd_3 =	"rmio:660FC2rMU",
   cmpps_3 =	"rmio:0FC2rMU",
@@ -1990,8 +2060,13 @@ if x64 then
     end
     wputop(sz, opcode, rex)
     if vreg then waction("VREG", vreg); wputxb(0) end
-    waction("IMM_D", format("(unsigned int)(%s)", op64))
-    waction("IMM_D", format("(unsigned int)((%s)>>32)", op64))
+    if luamode then
+      waction("IMM_D", format("ffi.cast(\"uintptr_t\", %s) %% 2^32", op64))
+      waction("IMM_D", format("ffi.cast(\"uintptr_t\", %s) / 2^32", op64))
+    else
+      waction("IMM_D", format("(unsigned int)(%s)", op64))
+      waction("IMM_D", format("(unsigned int)((%s)>>32)", op64))
+    end
   end
 end
 
@@ -2137,16 +2212,41 @@ map_op[".type_3"] = function(params, nparams)
   if reg and not map_reg_valid_base[reg] then
     werror("bad base register `"..(map_reg_rev[reg] or reg).."'")
   end
-  -- Add #type to defines. A bit unclean to put it in map_archdef.
-  map_archdef["#"..name] = "sizeof("..ctype..")"
+  -- Add #type to current defines table.
+  g_map_def["#"..name] = luamode and "ffi.sizeof(\""..ctype.."\")" or "sizeof("..ctype..")"
   -- Add new type and emit shortcut define.
   local num = ctypenum + 1
+  local ctypefmt
+  if luamode then
+    ctypefmt = function(tailr)
+      local index, field
+      index, field = match(tailr, "^(%b[])(.*)")
+      index = index and sub(index, 2, -2)
+      field = field or tailr
+      field = match(field, "^%->(.*)") or match(field, "^%.(.*)")
+      if not (index or field) then
+	werror("invalid syntax `"..tailr.."`")
+      end
+      local Da = index and format("Da%X(%s)", num, index)
+      local Dt = field and format("Dt%X(\"%s\")", num, field)
+      return Da and Dt and Da.."+"..Dt or Da or Dt
+    end
+  else
+    ctypefmt = format("Dt%X(%%s)", num)
+  end
   map_type[name] = {
     ctype = ctype,
-    ctypefmt = format("Dt%X(%%s)", num),
+    ctypefmt = ctypefmt,
     reg = reg,
   }
-  wline(format("#define Dt%X(_V) (int)(ptrdiff_t)&(((%s *)0)_V)", num, ctype))
+  if luamode then
+    wline(format("local Dt%X; do local ct=ffi.typeof(\"%s\"); function Dt%X(f) return ffi.offsetof(ct,f) or error(string.format(\"'struct %s' has no member named '%%s'\", f)) end; end",
+      num, ctype, num, ctype))
+    wline(format("local Da%X; do local sz=ffi.sizeof(\"%s\"); function Da%X(i) return i*sz end; end",
+      num, ctype, num))
+  else
+    wline(format("#define Dt%X(_V) (int)(ptrdiff_t)&(((%s *)0)_V)", num, ctype))
+  end
   ctypenum = num
 end
 map_op[".type_2"] = map_op[".type_3"]
@@ -2202,12 +2302,19 @@ end
 -- Setup the arch-specific module.
 function _M.setup(arch, opt)
   g_arch, g_opt = arch, opt
+  luamode = g_opt.lang == "lua"
+  init_actionlist()
+  init_map_global()
+  init_map_extern()
+  init_map_type()
 end
 
 -- Merge the core maps and the arch-specific maps.
 function _M.mergemaps(map_coreop, map_def)
   setmetatable(map_op, { __index = map_coreop })
   setmetatable(map_def, { __index = map_archdef })
+  -- Hold a ref. to map_def to store `#type` defines in.
+  g_map_def = map_def
   return map_op, map_def
 end
 

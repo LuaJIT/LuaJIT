@@ -45,6 +45,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -- Cache library functions.
 local type, pairs, ipairs = type, pairs, ipairs
 local pcall, error, assert = pcall, error, assert
+local select, tostring = select, tostring
 local _s = string
 local sub, match, gmatch, gsub = _s.sub, _s.match, _s.gmatch, _s.gsub
 local format, rep, upper = _s.format, _s.rep, _s.upper
@@ -54,17 +55,69 @@ local exit = os.exit
 local io = io
 local stdin, stdout, stderr = io.stdin, io.stdout, io.stderr
 
+-- Helper to update a table with the elements another table.
+local function update(dst, src)
+  if src then
+    for k,v in pairs(src) do
+      dst[k] = v
+    end
+  end
+  return dst
+end
+
 ------------------------------------------------------------------------------
 
 -- Program options.
-local g_opt = {}
+local g_opt
 
 -- Global state for current file.
 local g_fname, g_curline, g_indent, g_lineno, g_synclineno, g_arch
-local g_errcount = 0
+local g_errcount
 
 -- Write buffer for output file.
 local g_wbuffer, g_capbuffer
+
+-- Map for defines (initially empty, chains to arch-specific map).
+local map_def
+
+-- Sections names.
+local map_sections
+
+-- The opcode map. Begins as an empty map set to inherit from map_initop,
+-- It's later changed to inherit from the arch-specific map, which itself is set
+-- to inherit from map_coreop.
+local map_op
+
+-- The initial opcode map to initialize map_op with on each global reset.
+local map_initop = {}
+
+-- Dummy action flush function. Replaced with arch-specific function later.
+local function dummy_wflush(term) end
+local wflush
+
+-- Init/reset the global state for processing a new file.
+local function reset()
+  g_opt = {}
+  g_opt.dumpdef = 0
+  g_opt.include = { "" }
+  g_opt.lang = nil
+  g_opt.comment = "//|"
+  g_opt.endcomment = ""
+  g_opt.cpp = true -- Write `#line` directives
+  g_fname = nil
+  g_curline = nil
+  g_indent = ""
+  g_lineno = 0
+  g_synclineno = -1
+  g_errcount = 0
+  g_arch = nil
+  g_wbuffer = {}
+  g_capbuffer = nil
+  map_def = {}
+  map_sections = {}
+  map_op = setmetatable({}, { __index = map_initop })
+  wflush = dummy_wflush
+end
 
 ------------------------------------------------------------------------------
 
@@ -85,13 +138,11 @@ end
 -- Resync CPP line numbers.
 local function wsync()
   if g_synclineno ~= g_lineno and g_opt.cpp then
-    wline("#line "..g_lineno..' "'..g_fname..'"')
+    if not g_opt.lang == "lua" then
+      wline("#line "..g_lineno..' "'..g_fname..'"')
+    end
     g_synclineno = g_lineno
   end
-end
-
--- Dummy action flush function. Replaced with arch-specific function later.
-local function wflush(term)
 end
 
 -- Dump all buffered output lines.
@@ -171,17 +222,12 @@ end
 
 -- Core pseudo-opcodes.
 local map_coreop = {}
--- Dummy opcode map. Replaced by arch-specific map.
-local map_op = {}
 
 -- Forward declarations.
 local dostmt
 local readfile
 
 ------------------------------------------------------------------------------
-
--- Map for defines (initially empty, chains to arch-specific map).
-local map_def = {}
 
 -- Pseudo-opcode to define a substitution.
 map_coreop[".define_2"] = function(params, nparams)
@@ -379,11 +425,11 @@ map_coreop[".include_1"] = function(params)
 end
 
 -- Make .include and conditionals initially available, too.
-map_op[".include_1"] = map_coreop[".include_1"]
-map_op[".if_1"] = map_coreop[".if_1"]
-map_op[".elif_1"] = map_coreop[".elif_1"]
-map_op[".else_0"] = map_coreop[".else_0"]
-map_op[".endif_0"] = map_coreop[".endif_0"]
+map_initop[".include_1"] = map_coreop[".include_1"]
+map_initop[".if_1"] = map_coreop[".if_1"]
+map_initop[".elif_1"] = map_coreop[".elif_1"]
+map_initop[".else_0"] = map_coreop[".else_0"]
+map_initop[".endif_0"] = map_coreop[".endif_0"]
 
 ------------------------------------------------------------------------------
 
@@ -583,9 +629,6 @@ end
 
 ------------------------------------------------------------------------------
 
--- Sections names.
-local map_sections = {}
-
 -- Pseudo-opcode to define code sections.
 -- TODO: Data sections, BSS sections. Needs extra C code and API.
 map_coreop[".section_*"] = function(params)
@@ -599,10 +642,18 @@ map_coreop[".section_*"] = function(params)
       werror("bad section name `"..name.."'")
     end
     map_sections[#map_sections+1] = name
-    wline(format("#define DASM_SECTION_%s\t%d", upper(name), sn-1))
+    if g_opt.lang == "lua" then
+      wline(format("local DASM_SECTION_%s\t= %d", upper(name), sn-1))
+    else
+      wline(format("#define DASM_SECTION_%s\t%d", upper(name), sn-1))
+    end
     map_op[opname] = function(params) g_arch.section(sn-1) end
   end
-  wline(format("#define DASM_MAXSECTION\t\t%d", #map_sections))
+  if g_opt.lang == "lua" then
+    wline(format("local DASM_MAXSECTION\t= %d", #map_sections))
+  else
+    wline(format("#define DASM_MAXSECTION\t\t%d", #map_sections))
+  end
 end
 
 -- Dump all sections.
@@ -635,7 +686,9 @@ local function loadarch(arch)
   g_arch = m_arch
   wflush = m_arch.passcb(wline, werror, wfatal, wwarn)
   m_arch.setup(arch, g_opt)
-  map_op, map_def = m_arch.mergemaps(map_coreop, map_def)
+  local arch_map_op
+  arch_map_op, map_def = m_arch.mergemaps(map_coreop, map_def)
+  map_op = setmetatable(map_op, { __index = arch_map_op })
 end
 
 -- Dump architecture description.
@@ -691,19 +744,27 @@ end
 
 -- Pseudo-opcode to set the architecture.
 -- Only initially available (map_op is replaced when called).
-map_op[".arch_1"] = function(params)
+map_initop[".arch_1"] = function(params)
   if not params then return "name" end
   local err = loadarch(params[1])
   if err then wfatal(err) end
-  wline(format("#if DASM_VERSION != %d", _info.vernum))
-  wline('#error "Version mismatch between DynASM and included encoding engine"')
-  wline("#endif")
+  if g_opt.lang == "lua" then
+    wline(format("if dasm._VERSION ~= %d then", _info.vernum))
+    wline('  error("Version mismatch between DynASM and included encoding engine")')
+    wline("end")
+  else
+    wline(format("#if DASM_VERSION != %d", _info.vernum))
+    wline('#error "Version mismatch between DynASM and included encoding engine"')
+    wline("#endif")
+  end
 end
 
 -- Dummy .arch pseudo-opcode to improve the error report.
 map_coreop[".arch_1"] = function(params)
   if not params then return "name" end
-  wfatal("duplicate .arch statement")
+  if g_arch._info.arch ~= params[1] then
+    wfatal("invalid .arch statement. arch already loaded: `", g_arch._info.arch, "`.")
+  end
 end
 
 ------------------------------------------------------------------------------
@@ -859,6 +920,9 @@ local function doline(line)
 
   -- Strip assembler comments.
   aline = gsub(aline, "//.*$", "")
+  if g_opt.lang == "lua" then
+    aline = gsub(aline, "%-%-.*$", "")
+  end
 
   -- Split line into statements at semicolons.
   if match(aline, ";") then
@@ -872,7 +936,21 @@ end
 
 -- Write DynASM header.
 local function dasmhead(out)
-  out:write(format([[
+  if not g_opt.comment then return end
+  if g_opt.lang == "lua" then
+    out:write(format([[
+--
+-- This file has been pre-processed with DynASM.
+-- %s
+-- DynASM version %s, DynASM %s version %s
+-- DO NOT EDIT! The original file is in "%s".
+--
+
+]], _info.url,
+    _info.version, g_arch._info.arch, g_arch._info.version,
+    g_fname))
+  else
+    out:write(format([[
 /*
 ** This file has been pre-processed with DynASM.
 ** %s
@@ -883,14 +961,11 @@ local function dasmhead(out)
 ]], _info.url,
     _info.version, g_arch._info.arch, g_arch._info.version,
     g_fname))
+  end
 end
 
 -- Read input file.
 readfile = function(fin)
-  g_indent = ""
-  g_lineno = 0
-  g_synclineno = -1
-
   -- Process all lines.
   for line in fin:lines() do
     g_lineno = g_lineno + 1
@@ -911,8 +986,10 @@ local function writefile(outfile)
   -- Open output file.
   if outfile == nil or outfile == "-" then
     fout = stdout
-  else
+  elseif type(outfile) == "string" then
     fout = assert(io.open(outfile, "w"))
+  else
+    fout = outfile
   end
 
   -- Write all buffered lines
@@ -927,10 +1004,6 @@ end
 
 -- Translate an input file to an output file.
 local function translate(infile, outfile)
-  g_wbuffer = {}
-  g_indent = ""
-  g_lineno = 0
-  g_synclineno = -1
 
   -- Put header.
   wline(dasmhead)
@@ -940,9 +1013,12 @@ local function translate(infile, outfile)
   if infile == "-" then
     g_fname = "(stdin)"
     fin = stdin
-  else
+  elseif type(infile) == "string" then
     g_fname = infile
     fin = assert(io.open(infile, "r"))
+  else
+    g_fname = "=(translate)"
+    fin = infile
   end
   readfile(fin)
 
@@ -974,13 +1050,15 @@ function opt_map.help()
   stdout:write("DynASM ", _info.version, " ", _info.release, "  ", _info.url, "\n")
   stdout:write[[
 
-Usage: dynasm [OPTION]... INFILE.dasc|-
+Usage: dynasm [OPTION]... INFILE.dasc|INFILE.dasl|-
 
   -h, --help           Display this help text.
   -V, --version        Display version and copyright information.
 
   -o, --outfile FILE   Output file name (default is stdout).
   -I, --include DIR    Add directory to the include search path.
+
+  -l, --lang C|Lua     Generate C or Lua code (default C for dasc, Lua for dasl).
 
   -c, --ccomment       Use /* */ comments for assembler lines.
   -C, --cppcomment     Use // comments for assembler lines (default).
@@ -1007,6 +1085,7 @@ function opt_map.version()
 end
 
 -- Misc. options.
+function opt_map.lang(args) g_opt.lang = optparam(args):lower() end
 function opt_map.outfile(args) g_opt.outfile = optparam(args) end
 function opt_map.include(args) insert(g_opt.include, 1, optparam(args)) end
 function opt_map.ccomment() g_opt.comment = "/*|"; g_opt.endcomment = " */" end
@@ -1023,6 +1102,7 @@ function opt_map.dumpdef() g_opt.dumpdef = g_opt.dumpdef + 1 end
 local opt_alias = {
   h = "help", ["?"] = "help", V = "version",
   o = "outfile", I = "include",
+  l = "lang",
   c = "ccomment", C = "cppcomment", N = "nocomment", M = "maccomment",
   L = "nolineno", F = "flushline",
   P = "dumpdef", A = "dumparch",
@@ -1038,14 +1118,43 @@ local function parseopt(opt, args)
   f(args)
 end
 
+local languages = {c = true, lua = true}
+local langext = {dasc = "c", dasl = "lua"}
+
+--Set language options (Lua or C code gen) based on file extension.
+local function setlang(infile)
+
+  -- Infer language from file extension, if `lang` not set.
+  if not g_opt.lang and type(infile) == "string" then
+    g_opt.lang = langext[match(infile, "%.([^%.]+)$")] or "c"
+  end
+
+  -- Check that the `lang` option is valid.
+  if not languages[g_opt.lang] then
+    opterror("invalid language `", tostring(g_opt.lang), "`.")
+  end
+
+  -- Adjust comment options for Lua mode.
+  if g_opt.lang == "lua" then
+    if g_opt.comment then
+      g_opt.cpp = false
+      g_opt.comment = "--|"
+      g_opt.endcomment = ""
+    end
+    -- Set initial defines only available in Lua mode.
+    local ffi = require("ffi")
+    map_def.ARCH = ffi.arch          --for `.arch ARCH`
+    map_def[upper(ffi.arch)] = 1     --for `.if X86 ...`
+    map_def.OS = ffi.os              --for `.if OS == 'Windows'`
+    map_def[upper(ffi.os)] = 1       --for `.if WINDOWS ...`
+  end
+end
+
 -- Parse arguments.
 local function parseargs(args)
-  -- Default options.
-  g_opt.comment = "//|"
-  g_opt.endcomment = ""
-  g_opt.cpp = true
-  g_opt.dumpdef = 0
-  g_opt.include = { "" }
+
+  --Reset globals.
+  reset()
 
   -- Process all option arguments.
   args.argn = 1
@@ -1073,22 +1182,140 @@ local function parseargs(args)
     opt_map.help()
   end
 
+  local infile = args[args.argn]
+
+  -- Set language options.
+  setlang(infile)
+
   -- Translate a single input file to a single output file
   -- TODO: Handle multiple files?
-  translate(args[args.argn], g_opt.outfile)
+  translate(infile, g_opt.outfile)
 end
 
 ------------------------------------------------------------------------------
 
--- Add the directory dynasm.lua resides in to the Lua module search path.
-local arg = arg
-if arg and arg[0] then
-  prefix = match(arg[0], "^(.*[/\\])")
-  if package and prefix then package.path = prefix.."?.lua;"..package.path end
+if ... == "dynasm" then -- use as module
+
+  -- Make a reusable translate() function with support for setting options.
+  local translate = function(infile, outfile, opt)
+    reset()
+    update(g_opt, opt)
+    setlang(infile)
+    if g_opt.subst then
+      for name, subst in pairs(g_opt.subst) do
+	map_def[name] = tostring(subst)
+      end
+    end
+    translate(infile, outfile)
+  end
+
+  -- Dummy file:close() method.
+  local function dummyclose()
+    return true
+  end
+
+  -- Create a pseudo-file object that implements the file:lines() method
+  -- which reads data from a string.
+  local function string_infile(s)
+    local lines = function()
+      local term =
+	match(s, "\r\n") and "\r\n" or
+	match(s, "\r") and "\r" or
+	match(s, "\n") and "\n" or ""
+      return gmatch(s, "([^\n\r]*)"..term)
+    end
+    return {lines = lines, close = dummyclose}
+  end
+
+  -- Create a pseudo-file object that implements the file:write() method
+  -- which forwards each non-empty value to a function.
+  local function func_outfile(func)
+    local function write(_, ...)
+      for i = 1, select('#', ...) do
+	local v = select(i, ...)
+	assert(type(v) == "string" or type(v) == "number", "invalid value")
+	local s = tostring(v)
+	if #s > 0 then
+	  func(s)
+	end
+      end
+      return true
+    end
+    return {write = write, close = dummyclose}
+  end
+
+  -- Create a pseudo-file object that accumulates writes to a table.
+  local function table_outfile(t)
+    return func_outfile(function(s)
+      t[#t+1] = s
+    end)
+  end
+
+  -- Translate an input file to a string.
+  local function translate_tostring(infile, opt)
+    local t = {}
+    translate(infile, table_outfile(t), opt)
+    return table.concat(t)
+  end
+
+  -- Create an iterator that translates an input file
+  -- and returns the translated file in chunks.
+  local function translate_toiter(infile, opt)
+    return coroutine.wrap(function()
+      translate(infile, func_outfile(coroutine.yield), opt)
+    end)
+  end
+
+  -- Load a dasl file and return it as a Lua chunk.
+  local function dasl_loadfile(infile, opt)
+    local opt = update({lang = "lua"}, opt)
+    local read = translate_toiter(infile, opt)
+    local filename = type(infile) == "string" and infile or "=(load)"
+    return load(read, filename)
+  end
+
+  -- Load a dasl string and return it as a Lua chunk.
+  local function dasl_loadstring(s, opt)
+    return dasl_loadfile(string_infile(s), opt)
+  end
+
+  -- Register a module loader for *.dasl files.
+  insert(package.loaders, function(modname)
+    local daslpath = gsub(gsub(package.path, "%.lua;", ".dasl;"), "%.lua$", ".dasl")
+    local path, reason = package.searchpath(modname, daslpath)
+    if not path then return reason end
+    return function()
+      local chunk = assert(dasl_loadfile(path, {comment = false}))
+      return chunk(modname)
+    end
+  end)
+
+  -- Make and return the DynASM API.
+  return {
+    --low-level intf.
+    translate = translate,
+    string_infile = string_infile,
+    func_outfile = func_outfile,
+    table_outfile = table_outfile,
+    translate_tostring = translate_tostring,
+    translate_toiter = translate_toiter,
+    --hi-level intf.
+    loadfile = dasl_loadfile,
+    loadstring = dasl_loadstring,
+  }
+
+else -- use as standalone script
+
+  -- Add the directory dynasm.lua resides in to the Lua module search path.
+  local arg = arg
+  if arg and arg[0] then
+    prefix = match(arg[0], "^(.*[/\\])")
+    if package and prefix then package.path = prefix.."?.lua;"..package.path end
+  end
+
+  -- Start DynASM.
+  parseargs{...}
+
 end
 
--- Start DynASM.
-parseargs{...}
-
 ------------------------------------------------------------------------------
-
