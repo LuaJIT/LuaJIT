@@ -531,7 +531,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp >2
   |
   |->vm_growstack_v:			// Grow stack for vararg Lua function.
-  |  sub RD, 8
+  |  sub RD, 16				// LJ_FR2
   |  jmp >1
   |
   |->vm_growstack_f:			// Grow stack for fixarg Lua function.
