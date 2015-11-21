@@ -188,17 +188,12 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 #if defined(__GNUC__) && !LJ_NO_UNWIND && !LJ_ABI_WIN
 
+#if !LJ_TARGET_ARM
+
 /*
 ** We have to use our own definitions instead of the mandatory (!) unwind.h,
 ** since various OS, distros and compilers mess up the header installation.
 */
-
-typedef struct _Unwind_Exception
-{
-  uint64_t exclass;
-  void (*excleanup)(int, struct _Unwind_Exception *);
-  uintptr_t p1, p2;
-} __attribute__((__aligned__)) _Unwind_Exception;
 
 typedef struct _Unwind_Context _Unwind_Context;
 
@@ -209,7 +204,12 @@ typedef struct _Unwind_Context _Unwind_Context;
 #define _URC_CONTINUE_UNWIND	8
 #define _URC_FAILURE		9
 
-#if !LJ_TARGET_ARM
+typedef struct _Unwind_Exception
+{
+  uint64_t exclass;
+  void (*excleanup)(int, struct _Unwind_Exception *);
+  uintptr_t p1, p2;
+} __attribute__((__aligned__)) _Unwind_Exception;
 
 extern uintptr_t _Unwind_GetCFA(_Unwind_Context *);
 extern void _Unwind_SetGR(_Unwind_Context *, int, uintptr_t);
@@ -305,52 +305,257 @@ static void err_raise_ext(int errcode)
 }
 #endif
 
-#else
+#else /* !LJ_TARGET_ARM (i.e. this is ARM) */
 
-extern void _Unwind_DeleteException(void *);
-extern int __gnu_unwind_frame (void *, _Unwind_Context *);
-extern int _Unwind_VRS_Set(_Unwind_Context *, int, uint32_t, int, void *);
-extern int _Unwind_VRS_Get(_Unwind_Context *, int, uint32_t, int, void *);
+/*
+** We have to use our own definitions instead of the mandatory (!) unwind.h,
+** since various OS, distros and compilers mess up the header installation.
+*/
 
-static inline uint32_t _Unwind_GetGR(_Unwind_Context *ctx, int r)
+typedef uint32_t _Unwind_Word;
+
+typedef enum
 {
-  uint32_t v;
-  _Unwind_VRS_Get(ctx, 0, r, 0, &v);
-  return v;
+  _URC_OK = 0,
+  _URC_FOREIGN_EXCEPTION_CAUGHT = 1,
+  _URC_END_OF_STACK = 5,
+  _URC_HANDLER_FOUND = 6,
+  _URC_INSTALL_CONTEXT = 7,
+  _URC_CONTINUE_UNWIND = 8,
+  _URC_FAILURE = 9
 }
+_Unwind_Reason_Code;
 
-static inline void _Unwind_SetGR(_Unwind_Context *ctx, int r, uint32_t v)
+typedef enum
 {
-  _Unwind_VRS_Set(ctx, 0, r, 0, &v);
+  _US_VIRTUAL_UNWIND_FRAME = 0,
+  _US_UNWIND_FRAME_STARTING = 1,
+  _US_UNWIND_FRAME_RESUME = 2,
+  _US_ACTION_MASK = 3,
+  _US_FORCE_UNWIND = 8,
+  _US_END_OF_STACK = 16
 }
+_Unwind_State;
 
-#define _US_VIRTUAL_UNWIND_FRAME	0
-#define _US_UNWIND_FRAME_STARTING	1
-#define _US_ACTION_MASK			3
-#define _US_FORCE_UNWIND		8
+typedef struct _Unwind_Control_Block _Unwind_Control_Block;
+typedef struct _Unwind_Context _Unwind_Context;
+typedef _Unwind_Word _Unwind_EHT_Header;
+
+struct _Unwind_Control_Block
+{
+  char exception_class[8];
+  void (*exception_cleanup)(_Unwind_Reason_Code, _Unwind_Control_Block *);
+  /* Unwinder cache, private fields for the unwinder's use */
+  struct
+  {
+    _Unwind_Word reserved1;  /* Forced unwind stop fn, 0 if not forced */
+    _Unwind_Word reserved2;  /* Personality routine address */
+    _Unwind_Word reserved3;  /* Saved callsite address */
+    _Unwind_Word reserved4;  /* Forced unwind stop arg */
+    _Unwind_Word reserved5;
+  }
+  unwinder_cache;
+  /* Propagation barrier cache (valid after phase 1): */
+  struct
+  {
+    _Unwind_Word sp;
+    _Unwind_Word bitpattern[5];
+  }
+  barrier_cache;
+  /* Cleanup cache (preserved over cleanup): */
+  struct
+  {
+    _Unwind_Word bitpattern[4];
+  }
+  cleanup_cache;
+  /* Pr cache (for pr's benefit): */
+  struct
+  {
+    _Unwind_Word fnstart;    /* function start address */
+    _Unwind_EHT_Header *ehtp; /* pointer to EHT entry header word */
+    _Unwind_Word additional; /* additional data */
+    _Unwind_Word reserved1;
+  }
+  pr_cache;
+  long long int :0; /* Force alignment to 8-byte boundary */
+};
+
+/* Virtual Register Set*/
+
+typedef enum
+{
+  _UVRSC_CORE = 0,      /* integer register */
+  _UVRSC_VFP = 1,       /* vfp */
+  _UVRSC_FPA = 2,       /* fpa */
+  _UVRSC_WMMXD = 3,     /* Intel WMMX data register */
+  _UVRSC_WMMXC = 4      /* Intel WMMX control register */
+}
+_Unwind_VRS_RegClass;
+
+typedef enum
+{
+  _UVRSD_UINT32 = 0,
+  _UVRSD_VFPX = 1,
+  _UVRSD_FPAX = 2,
+  _UVRSD_UINT64 = 3,
+  _UVRSD_FLOAT = 4,
+  _UVRSD_DOUBLE = 5,
+  _UVRSD_WORD = _UVRSD_UINT32
+}
+_Unwind_VRS_DataRepresentation;
+
+typedef enum
+{
+  _UVRSR_OK = 0,
+  _UVRSR_NOT_IMPLEMENTED = 1,
+  _UVRSR_FAILED = 2
+}
+_Unwind_VRS_Result;
+
+_Unwind_VRS_Result _Unwind_VRS_Set(_Unwind_Context *, _Unwind_VRS_RegClass,
+                                   _Unwind_Word, _Unwind_VRS_DataRepresentation,
+                                   void *);
+
+_Unwind_VRS_Result _Unwind_VRS_Get(_Unwind_Context *, _Unwind_VRS_RegClass,
+                                   _Unwind_Word, _Unwind_VRS_DataRepresentation,
+                                   void *);
+
+_Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Control_Block *);
+
+void _Unwind_Complete(_Unwind_Control_Block *);
+
+void _Unwind_DeleteException(_Unwind_Control_Block *);
+
+int __gnu_unwind_frame (_Unwind_Control_Block *, _Unwind_Context *);
+
+static const char LJ_UEXCLASS[8] = {'L','U','A','J','I','T','2','0'};
+
+struct lj_uex
+{
+  _Unwind_Control_Block ucb;
+  int errcode;
+  int in_use;
+};
+
+extern void lj_err_unwind_done ();
 
 /* ARM unwinder personality handler referenced from interpreter .ARM.extab. */
-LJ_FUNCA int lj_err_unwind_arm(int state, void *ucb, _Unwind_Context *ctx)
+LJ_FUNCA int lj_err_unwind_arm(int state,
+                               _Unwind_Control_Block *ucb, _Unwind_Context *ctx)
 {
-  void *cf = (void *)_Unwind_GetGR(ctx, 13);
-  lua_State *L = cframe_L(cf);
-  if ((state & _US_ACTION_MASK) == _US_VIRTUAL_UNWIND_FRAME) {
-    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+  /* borrowing from PERSONALITY_FUNCTION (libgcc_s) */
+  int forced_unwind = state & _US_FORCE_UNWIND;
+  int errcode;
+  void *cf;
+  lua_State *L;
+  _Unwind_Word uw;
+
+  _Unwind_VRS_Get(ctx, _UVRSC_CORE, 13, _UVRSD_WORD, &uw);
+  cf = (void *)uw;
+  L = cframe_L(cf);
+
+  switch (state & _US_ACTION_MASK) {
+  case _US_VIRTUAL_UNWIND_FRAME:
+    /* 'Vitual' unwind - only regs in ctx are updated but not the actual
+     * stack. Note: unwind machinery depends on virtual unwind to
+     * traverse the stack. Unwind walks the stack at least twice:
+     * in phase1 - searching for the matching 'catch' site,
+     * in phase2 - actually removing stack frames. */
+    if (forced_unwind) {
+      if (__gnu_unwind_frame(ucb, ctx) != _URC_OK)
+        return _URC_FAILURE;
+      return _URC_CONTINUE_UNWIND;
+    }
     return _URC_HANDLER_FOUND;
-  }
-  if ((state&(_US_ACTION_MASK|_US_FORCE_UNWIND)) == _US_UNWIND_FRAME_STARTING) {
-    _Unwind_DeleteException(ucb);
-    _Unwind_SetGR(ctx, 15, (uint32_t)(void *)lj_err_throw);
-    _Unwind_SetGR(ctx, 0, (uint32_t)L);
-    _Unwind_SetGR(ctx, 1, (uint32_t)LUA_ERRRUN);
+  case _US_UNWIND_FRAME_STARTING:
+    if (memcmp(ucb->exception_class, LJ_UEXCLASS, 8) == 0) {
+      errcode = ((struct lj_uex *)ucb)->errcode;
+    } else {
+      errcode = LUA_ERRRUN;
+      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+    }
+    /* unwind Lua stack */
+    cf = err_unwind(L, cf, errcode);
+    if (forced_unwind || cf == NULL) {
+      if (__gnu_unwind_frame(ucb, ctx) != _URC_OK)
+        return _URC_FAILURE;
+      return _URC_CONTINUE_UNWIND;
+    }
+    /* set regs */
+    uw = (_Unwind_Word)lj_err_unwind_done;
+    _Unwind_VRS_Set(ctx, _UVRSC_CORE, 15, _UVRSD_WORD, &uw);
+    uw = (_Unwind_Word)ucb;
+    _Unwind_VRS_Set(ctx, _UVRSC_CORE, 1, _UVRSD_WORD, &uw);
+    if (cframe_unwind_ff(cf))
+      uw = (_Unwind_Word)lj_vm_unwind_ff_eh;
+    else
+      uw = (_Unwind_Word)lj_vm_unwind_c_eh;
+    _Unwind_VRS_Set(ctx, _UVRSC_CORE, 2, _UVRSD_WORD, &uw);
+    uw = errcode;
+    _Unwind_VRS_Set(ctx, _UVRSC_CORE, 3, _UVRSD_WORD, &uw);
     return _URC_INSTALL_CONTEXT;
-  }
-  if (__gnu_unwind_frame(ucb, ctx) != _URC_OK)
+  case _US_UNWIND_FRAME_RESUME:
+  default:
     return _URC_FAILURE;
-  return _URC_CONTINUE_UNWIND;
+  }
 }
 
-#endif
+/* lj_err_unwind_done() - resume thunk
+ *
+ * Calls _Unwind_Complete and _Unwind_DeleteException as EABI mandates
+ * and transfers control to a landing pad in luajit vm.
+ * Must manage regs explicitly, hence asm.
+ *
+ * r1: ucb (_Unwind_Control_Block)
+ * r2: luajit landing pad (lj_vm_unwind_ff_eh or lj_vm_unwind_c_eh)
+ * r3: luajit error code
+ */
+asm (
+  "\t.text\n"
+  "\t.align 2\n"
+  "\t.globl lj_err_unwind_done\n"
+  "\t.hidden lj_err_unwind_done\n"
+  "\t.arm\n"
+  "\t.type lj_err_unwind_done, %function\n"
+  "lj_err_unwind_done:\n"
+
+  "\tstmfd sp!, {r1-r3, lr}\n"
+  "\tbl _Unwind_Complete\n"
+  "\tldr r1, [sp]\n"
+  "\tbl _Unwind_DeleteException\n"
+  "\tldmfd sp!, {r1-r3, lr}\n"
+  "\tmov r1, r3\n"
+  "\tbx r2\n"
+
+  "\t.size lj_err_unwind_done, .-lj_err_unwind_done\n"
+);
+
+static __thread struct lj_uex static_uex;
+
+static void err_uex_cleanup(_Unwind_Reason_Code reason,
+                            _Unwind_Control_Block *ucb)
+{
+  (void)reason;
+  ((struct lj_uex *)ucb)->in_use = 0;
+}
+
+#include <stdio.h>
+
+static void err_raise_ext(int errcode)
+{
+  if (static_uex.in_use) {
+    fputs("PANIC: error during error recovery\n", stderr);
+    abort();
+  }
+  memset(&static_uex, 0, sizeof static_uex);
+  memcpy(static_uex.ucb.exception_class, LJ_UEXCLASS, 8);
+  static_uex.ucb.exception_cleanup = err_uex_cleanup;
+  static_uex.errcode = errcode;
+  static_uex.in_use = 1;
+  _Unwind_RaiseException(&static_uex.ucb);
+}
+
+#endif /* LJ_TARGET_ARM */
 
 #elif LJ_TARGET_X64 && LJ_ABI_WIN
 
