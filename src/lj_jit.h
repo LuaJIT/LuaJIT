@@ -484,6 +484,9 @@ typedef struct jit_State {
   BCIns patchins;	/* Instruction for pending re-patch. */
 
   MCodeArea mcarea;     /* JIT mcode area */
+#if LJ_HASINTRINSICS
+  MCodeArea mcarea_intrins; /* Intrinsic mcode area used for interpreter wrappers */
+#endif
   MCodeArea *curmcarea; /* Current mcode area by default is mcarea */
 
   TValue errinfo;	/* Additional info element for trace errors. */

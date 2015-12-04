@@ -32,6 +32,7 @@
 #include "lj_crecord.h"
 #include "lj_dispatch.h"
 #include "lj_strfmt.h"
+#include "lj_intrinsic.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -41,6 +42,14 @@
 
 #define emitconv(a, dt, st, flags) \
   emitir(IRT(IR_CONV, (dt)), (a), (st)|((dt) << 5)|(flags))
+
+
+#define MKREGKIND_IT(name, it, ct) it,
+
+uint8_t regkind_it[16] = {
+  RKDEF_GPR(MKREGKIND_IT)
+  RKDEF_FPR(MKREGKIND_IT)
+};
 
 /* -- C type checks ------------------------------------------------------- */
 
@@ -1202,7 +1211,9 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     tp = (LJ_64 && ct->size == 8) ? IRT_P64 : IRT_P32;
     ct = ctype_rawchild(cts, ct);
   }
-  if (ctype_isfunc(ct->info)) {
+  if (ctype_isintrinsic(ct->info)) {
+    lj_trace_err(J, LJ_TRERR_NYICALL);
+  }else if (ctype_isfunc(ct->info)) {
     TRef func = emitir(IRT(IR_FLOAD, tp), J->base[0], IRFL_CDATA_PTR);
     CType *ctr = ctype_rawchild(cts, ct);
     IRType t = crec_ct2irt(cts, ctr);

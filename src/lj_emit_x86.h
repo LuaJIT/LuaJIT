@@ -422,6 +422,26 @@ static void emit_loadk64(ASMState *as, Reg r, IRIns *ir)
   }
 }
 
+static void emit_push(ASMState *as, Reg r)
+{
+  if (r < 8) {
+    *--as->mcp = XI_PUSH + r;
+  } else {
+    *--as->mcp = XI_PUSH + r;
+    *--as->mcp = 0x41;
+  }
+}
+
+static void emit_pop(ASMState *as, Reg r)
+{
+  if (r < 8) {
+    *--as->mcp = XI_POP + r;
+  } else {
+    *--as->mcp = XI_POP + r;
+    *--as->mcp = 0x41;
+  }
+}
+
 /* -- Emit control-flow instructions -------------------------------------- */
 
 /* Label for short jumps. */
@@ -498,14 +518,15 @@ static void emit_jmp(ASMState *as, MCode *target)
 }
 
 /* call target */
-static void emit_call_(ASMState *as, MCode *target)
+static void emit_call_(ASMState *as, MCode *target, Reg temp)
 {
   MCode *p = as->mcp;
 #if LJ_64
   if (target-p != (int32_t)(target-p)) {
     /* Assumes RID_RET is never an argument to calls and always clobbered. */
-    emit_rr(as, XO_GROUP5, XOg_CALL, RID_RET);
-    emit_loadu64(as, RID_RET, (uint64_t)target);
+    if (temp == RID_NONE) temp = RID_RET;
+    emit_rr(as, XO_GROUP5, XOg_CALL, temp);
+    emit_loadu64(as, temp, (uint64_t)target);
     return;
   }
 #endif
@@ -514,7 +535,7 @@ static void emit_call_(ASMState *as, MCode *target)
   as->mcp = p - 5;
 }
 
-#define emit_call(as, f)	emit_call_(as, (MCode *)(void *)(f))
+#define emit_call(as, f)	emit_call_(as, (MCode *)(void *)(f), RID_NONE)
 
 /* -- Emit generic operations --------------------------------------------- */
 
@@ -537,22 +558,32 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
     emit_rr(as, XO_MOVAPS, dst, src);
 }
 
+#define emit_loadofs(as, ir, r, base, ofs) \
+    emit_loadofsirt(as, irt_type(ir->t), r, base, ofs)
+
 /* Generic load of register with base and (small) offset address. */
-static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
+static void emit_loadofsirt(ASMState *as, IRType irt, Reg r, Reg base, int32_t ofs)
 {
-  if (r < RID_MAX_GPR)
-    emit_rmro(as, XO_MOV, REX_64IR(ir, r), base, ofs);
-  else
-    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSD : XO_MOVSS, r, base, ofs);
+  if (r < RID_MAX_GPR) {
+    emit_rmro(as, XO_MOV, r | ((LJ_64 && ((IRT_IS64 >> irt) & 1)) ? REX_64 : 0),
+              base, ofs);
+  } else {
+    emit_rmro(as, irt == IRT_NUM ? XO_MOVSD : XO_MOVSS, r, base, ofs);
+  }
 }
 
+#define emit_storeofs(as, ir, r, base, ofs) \
+    emit_storeofsirt(as, irt_type(ir->t), r, base, ofs)
+
 /* Generic store of register with base and (small) offset address. */
-static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
+static void emit_storeofsirt(ASMState *as, IRType irt, Reg r, Reg base, int32_t ofs)
 {
-  if (r < RID_MAX_GPR)
-    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), base, ofs);
-  else
-    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto, r, base, ofs);
+  if (r < RID_MAX_GPR) {
+    emit_rmro(as, XO_MOVto, r | ((LJ_64 && ((IRT_IS64 >> irt) & 1)) ? REX_64 : 0),
+              base, ofs);
+  } else {
+    emit_rmro(as, irt == IRT_NUM ? XO_MOVSDto : XO_MOVSSto, r, base, ofs);
+  }
 }
 
 /* Add offset to pointer. */
@@ -570,4 +601,259 @@ static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 
 /* Prefer rematerialization of BASE/L from global_State over spills. */
 #define emit_canremat(ref)	((ref) <= REF_BASE)
+
+#if LJ_HASINTRINSICS
+
+#if LJ_64
+#define NEEDSFP 0
+#else
+#define NEEDSFP 1
+#endif
+
+#define SPILLSTART (2*sizeof(intptr_t))
+#define TEMPSPILL (1*sizeof(intptr_t))
+#define CONTEXTSPILL (0)
+
+static int lj_popcnt(uint32_t i)
+{
+  i = i - ((i >> 1) & 0x55555555);
+  i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+  return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
+
+#define align16(n) ((n + 16) & ~(16 - 1))
+
+static int32_t alignsp(int32_t spadj, RegSet savereg) {
+  int32_t gprsave = lj_popcnt(savereg & RSET_GPR) * sizeof(intptr_t);
+
+  if (NEEDSFP && rset_test(savereg, RID_EBP)) {
+    gprsave -= sizeof(intptr_t);
+  }
+/* TODO: use shadow space/red zone on x64 to skip setting stack frame */
+  spadj += gprsave;
+
+#if LJ_64
+#if LJ_ABI_WIN
+  if (savereg & RSET_FPR) {
+    spadj += lj_popcnt(savereg & RSET_FPR) * 16;
+    /* Add some slack in case the starting fpr save offset needs rounding up */
+    spadj += 8;
+  }
+#endif
+  if (spadj == 0)
+    return 0;
+
+  spadj = align16(spadj);
+  /* No ebp pushed so the stack starts aligned to 8 bytes */
+  if (!NEEDSFP)spadj += 8;
+#endif
+
+  return spadj;
+}
+
+static void emit_prologue(ASMState *as, int spadj, RegSet modregs)
+{
+  int32_t offset, i;
+  RegSet savereg = modregs & ~RSET_SCRATCH;
+
+  /* Save volatile registers after requested stack space */
+  offset = spadj;
+
+  /* save non scratch registers */
+  for (i = RID_MIN_GPR; i < RID_MAX_GPR; i++) {
+    if (rset_test(savereg, i) && (i != RID_EBP || !NEEDSFP)) {
+      emit_rmro(as, XO_MOVto, i|REX_64, RID_SP, offset);
+      checkmclim(as);
+      offset += sizeof(intptr_t);
+    }
+  }
+
+#if LJ_ABI_WIN && LJ_64
+  offset = align16(offset);
+  for (i = RID_MIN_FPR; i < RID_MAX_FPR; i++) {
+    if (rset_test(savereg, i)) {
+      emit_rmro(as, XO_MOVAPSto, i|REX_64, RID_SP, offset);
+      checkmclim(as);
+      offset += 16;
+    }
+  }
+#endif
+  spadj = alignsp(spadj, savereg);
+
+  if (spadj) {
+    emit_spsub(as, spadj);
+  }
+
+  if (NEEDSFP) {
+    emit_rr(as, XO_MOV, RID_EBP|REX_64, RID_ESP);
+    emit_push(as, RID_EBP);
+  }
+}
+
+static void emit_epilogue(ASMState *as, int spadj, RegSet modregs, int32_t ret)
+{
+  int32_t offset, i;
+  RegSet savereg = modregs & ~RSET_SCRATCH;
+  checkmclim(as);
+
+  *--as->mcp = XI_RET;
+  if (NEEDSFP)
+    emit_pop(as, RID_EBP);
+  /* Save volatile registers after requested stack space */
+  offset = spadj;
+  
+  spadj = alignsp(spadj, savereg);
+
+  if (spadj != 0) {
+    emit_spsub(as, -spadj);
+  }
+ 
+  as->mcp -= 4;
+  *(int32_t *)as->mcp = ret;
+  *--as->mcp = XI_MOVri + RID_RET;
+
+  if (savereg == RSET_EMPTY) {
+    return;
+  }
+
+  /* Restore non scratch registers */
+  for (i = RID_MIN_GPR; i < RID_MAX_GPR; i++) {
+    if (rset_test(savereg, i) && (i != RID_EBP || !NEEDSFP)) {
+      emit_rmro(as, XO_MOV, i|REX_64, RID_SP, offset);
+      checkmclim(as);
+      offset += sizeof(intptr_t);
+    }
+  }
+
+#if LJ_ABI_WIN && LJ_64
+  offset = align16(offset);
+  for (i = RID_MIN_FPR; i < RID_MAX_FPR; i++) {
+    if (rset_test(savereg, i)) {
+      emit_rmro(as, XO_MOVAPS, i|REX_64, RID_SP, offset);
+      checkmclim(as);
+      offset += 16;
+    }
+  }
+#endif
+}
+
+/* Trys to pick free register from the scratch or modified set first 
+ * before resorting to register that will need tobe saved. 
+ */
+static Reg intrinsic_scratch(ASMState *as, RegSet allow)
+{
+  RegSet pick = (as->freeset & allow) & (as->modset|RSET_SCRATCH);
+  Reg r;
+
+  if (!pick) {
+    pick = as->freeset & allow;
+    
+    if (pick == 0) {
+      /* No free registers */
+      lj_trace_err(as->J, LJ_TRERR_BADRA);
+    }
+    
+    r = rset_pickbot(pick);
+    as->modset |= RID2RSET(r);
+  } else {
+    r = rset_pickbot(pick);
+  }
+
+  /* start from the bottom where most of the non spilled registers are */
+  return r;
+}
+
+static void emit_savegpr(ASMState *as, Reg reg, Reg base, int ofs)
+{
+  Reg temp, r = reg_rid(reg);
+  uint32_t kind = reg_kind(reg);
+  lua_assert(r < RID_NUM_GPR);
+
+  if (kind == REGKIND_GPRI32) {
+#if LJ_DUALNUM
+    emit_i32(as, LJ_TISNUM);
+    emit_rmro(as, XO_MOVmi, 0, base, ofs+4);
+    emit_rmro(as, XO_MOVto, r, base, ofs);
+#else
+    temp = intrinsic_scratch(as, RSET_FPR);
+    emit_rmro(as, XO_MOVSDto, temp, base, ofs);
+    emit_mrm(as, XO_CVTSI2SD, temp, r);
+#endif
+    return;
+  }
+
+  if (kind == REGKIND_GPR64) {
+    r |= REX_64;
+  }
+
+  temp = intrinsic_scratch(as, RSET_GPR);
+  /* Save the register into a cdata who's pointer is inside a TValue on the Lua stack */
+  emit_rmro(as, XO_MOVto, r, temp, sizeof(GCcdata));
+  emit_rmro(as, XO_MOV, temp, base, ofs);
+}
+
+static void emit_loadfpr(ASMState *as, uint32_t reg, Reg base, int ofs)
+{
+  x86Op op = XO_MOVSD;
+  Reg r = reg_rid(reg)-RID_MIN_FPR;
+  uint32_t kind = reg_kind(reg);
+  lua_assert(r < RID_NUM_FPR);
+
+  switch (kind) {
+  case REGKIND_FPR64:
+    op = XO_MOVSD;
+    break;
+  case REGKIND_FPR32:
+    op = XO_MOVSS;
+    break;
+  case REGKIND_V128:
+    op = XO_MOVUPS;
+    break;
+  }
+
+  if (!rk_isvec(kind)) {
+    emit_rmro(as, op, r, base, ofs);
+  } else {
+    Reg temp = intrinsic_scratch(as, RSET_GPR);
+    emit_rmro(as, op, r, temp, 0);
+
+    /* Load a pointer to the vector out of the input context */
+    emit_rmro(as, XO_MOV, temp|REX_64, base, ofs);
+  }
+}
+
+static void emit_savefpr(ASMState *as, Reg reg, Reg base, int ofs)
+{
+  x86Op op;
+  Reg r = reg_rid(reg)-RID_MIN_FPR;
+  uint32_t kind = reg_kind(reg) & 3;
+  lua_assert(r < RID_NUM_FPR);
+
+  switch (kind) {
+  case REGKIND_FPR64:
+    op = XO_MOVSDto;
+    break;
+  case REGKIND_FPR32:
+    op = XO_MOVSDto;
+    break;
+  case REGKIND_V128:
+    op = XO_MOVUPSto;
+    break;
+  }
+
+  if (!rk_isvec(kind)) {
+    emit_rmro(as, op, r, base, ofs);
+    if (kind == REGKIND_FPR32) {
+      emit_mrm(as, XO_CVTSS2SD, r, r);
+    }
+  } else {
+    Reg temp = intrinsic_scratch(as, RSET_GPR);
+
+    /* Save the register into a cdata who's pointer is inside a TValue on the Lua stack */
+    emit_rmro(as, op, r, temp, sizeof(GCcdata));
+    emit_rmro(as, XO_MOV, temp, base, ofs);
+  }
+}
+
+#endif
 

@@ -33,6 +33,8 @@
 #include "lj_ff.h"
 #include "lj_lib.h"
 
+#include "lj_intrinsic.h"
+
 /* -- C type checks ------------------------------------------------------- */
 
 /* Check first argument for a C type and returns its ID. */
@@ -849,6 +851,7 @@ LUALIB_API int luaopen_ffi(lua_State *L)
 {
   CTState *cts = lj_ctype_init(L);
   settabV(L, L->top++, (cts->miscmap = lj_tab_new(L, 0, 1)));
+  lj_intrinsic_init(L);
   cts->finalizer = ffi_finalizer(L);
   LJ_LIB_REG(L, NULL, ffi_meta);
   /* NOBARRIER: basemt is a GC root. */

@@ -15,6 +15,7 @@
 #include "lj_ctype.h"
 #include "lj_ccallback.h"
 #include "lj_buf.h"
+#include "lj_intrinsic.h"
 
 /* -- C type definitions -------------------------------------------------- */
 
@@ -93,6 +94,8 @@
   _("asm",		0,	CTOK_ASM) \
   _("__asm",		0,	CTOK_ASM) \
   _("__asm__",		0,	CTOK_ASM) \
+  _("__mcode",		0,	CTOK_MCODE) \
+  _("__reglist",	0,	CTOK_REGLIST) \
   /* MSVC Attributes. */ \
   _("__declspec",	0,	CTOK_DECLSPEC) \
   _("__cdecl",		CTCC_CDECL,	CTOK_CCDECL) \
@@ -141,6 +144,14 @@ CTKWDEF(CTKWNAMEDEF)
 #else
 #define CTTYPETAB_MIN		128
 #endif
+
+#define MKREGKIND_CT(name, it, ct) ct,
+
+/* Default ctypes for each register kinds */
+CTypeID1 regkind_ct[16] = {
+  RKDEF_GPR(MKREGKIND_CT)
+  RKDEF_FPR(MKREGKIND_CT)
+};
 
 /* -- C type interning ---------------------------------------------------- */
 
@@ -522,10 +533,14 @@ static void ctype_repr(CTRepr *ctr, CTypeID id)
       }
       break;
     case CT_FUNC:
+      if (ctype_isintrinsic(info))
+        ctype_preplit(ctr, "Intrinsic ");
       ctr->needsp = 1;
       if (ptrto) { ptrto = 0; ctype_prepc(ctr, '('); ctype_appc(ctr, ')'); }
       ctype_appc(ctr, '(');
       ctype_appc(ctr, ')');
+      if (ctype_isintrinsic(info))
+        return;
       break;
     default:
       lua_assert(0);
@@ -618,6 +633,7 @@ CTState *lj_ctype_init(lua_State *L)
       if (!ctype_isenum(info)) ctype_addtype(cts, ct, id);
     }
   }
+
   setmref(G(L)->ctype_state, cts);
   return cts;
 }
@@ -630,6 +646,7 @@ void lj_ctype_freestate(global_State *g)
     lj_ccallback_mcode_free(cts);
     lj_mem_freevec(g, cts->tab, cts->sizetab, CType);
     lj_mem_freevec(g, cts->cb.cbid, cts->cb.sizeid, CTypeID1);
+    lj_mem_freevec(g, cts->intr.tab, cts->intr.sizetab, CIntrinsic);
     lj_mem_freet(g, cts);
   }
 }

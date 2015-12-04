@@ -17,6 +17,7 @@
 #include "lj_char.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_intrinsic.h"
 
 /*
 ** Important note: this is NOT a validating C parser! This is a minimal
@@ -877,9 +878,31 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
       sib = ct->sib;  /* Next line may reallocate the C type table. */
       fid = lj_ctype_new(cp->cts, &fct);
       csize = CTSIZE_INVALID;
-      fct->info = cinfo = info + id;
+      fct->info = info;
       fct->size = size;
       fct->sib = sib;
+
+      if (ctype_isintrinsic(info)) {
+#if LJ_HASINTRINSICS
+        CTypeID1 cid;
+        /* Don't overwrite the any attached register lists */
+        if (ctype_cid(info) == 0) {
+          fct->info = info + id;
+        }
+
+        cid = lj_intrinsic_fromcdef(cp->L, fid, decl->redir, decl->bits);
+        if (cid == 0)
+          cp_err(cp, LJ_ERR_FFI_INVTYPE);
+        decl->redir = NULL;
+        fct = ctype_get(cp->cts, fid);
+        fct->info = (info&0xffff0000) + cid;
+#else
+        decl->redir = NULL;
+#endif
+      } else {
+        fct->info = info + id;
+      }
+      cinfo = fct->info;
       id = fid;
     } else if (ctype_isattrib(info)) {
       if (ctype_isxattrib(info, CTA_QUAL))
@@ -1179,6 +1202,117 @@ static void cp_decl_msvcattribute(CPState *cp, CPDecl *decl)
   cp_check(cp, ')');
 }
 
+#if LJ_HASINTRINSICS
+
+static void cp_decl_mcode(CPState *cp, CPDecl *decl)
+{
+  /* Check were declared after a function definition */
+  if (decl->top == 0) {
+    cp_err(cp, LJ_ERR_FFI_INVTYPE);
+  } else {
+    CTInfo info = decl->stack[decl->top-1].info;
+    if (!ctype_isfunc(info) || (info & CTF_VARARG)) {
+      cp_err(cp, LJ_ERR_FFI_INVTYPE);
+    }
+  }
+  cp_next(cp);
+  cp_check(cp, '(');
+
+  if (cp->tok != CTOK_STRING)
+    cp_err_token(cp, CTOK_STRING);
+  /* Save the opcode/mode string for later parsing and validation */
+  decl->redir = cp->str;
+
+  cp_next(cp);
+  cp_check(cp, ')');
+  /* Mark the function as an intrinsic */
+  decl->stack[decl->top-1].info |= CTF_INTRINS;
+}
+
+static void cp_reglist(CPState *cp, CPDecl *decl)
+{
+  cp_next(cp);
+  cp_check(cp, '(');
+  CTypeID lastid = 0, anchor = 0;
+  CType *ct;
+  int listid = 0;
+
+  if (cp->tok != CTOK_IDENT)
+    cp_err_token(cp, CTOK_IDENT);
+
+  if (strcmp(strdata(cp->str), "mod") == 0) {
+    listid = 1;
+  } else if (strcmp(strdata(cp->str), "out") == 0) {
+    listid = 2;
+  } else {
+    cp_errmsg(cp, CTOK_STRING, LJ_ERR_FFI_INVTYPE);
+  }
+
+  cp_next(cp);
+  cp_check(cp, ',');
+  
+  if (listid == 1) {
+    uint32_t rset = 0;
+    do {
+      if (cp->tok != CTOK_IDENT)
+        cp_err_token(cp, CTOK_IDENT);
+
+      int reg = lj_intrinsic_getreg(cp->cts, cp->str);
+
+      if (reg == -1) {
+        /* TODO: register error */
+        cp_errmsg(cp, 0, LJ_ERR_FFI_INVTYPE);
+      }
+
+      rset |= 1 << reg_rid(reg);
+      cp_next(cp);
+    } while (cp_opt(cp, ','));
+
+    lastid = lj_ctype_new(cp->cts, &ct);
+    ct->info = CTINFO(CT_ATTRIB, 0);
+    ct->size = rset;
+    
+    decl->stack[decl->top-1].size |= lastid << 16;
+  } else {
+    do {
+      CPDecl decl;
+      CTypeID ctypeid = 0, fieldid;
+
+      cp_decl_spec(cp, &decl, CDF_REGISTER);
+      decl.mode = CPARSE_MODE_DIRECT|CPARSE_MODE_ABSTRACT;
+      cp_declarator(cp, &decl);
+      ctypeid = cp_decl_intern(cp, &decl);
+      ct = ctype_raw(cp->cts, ctypeid);
+
+      if (ctype_isvoid(ct->info) || ctype_isstruct(ct->info) || ctype_isfunc(ct->info)) {
+        cp_errmsg(cp, 0, LJ_ERR_FFI_INVTYPE);
+      } else if (ctype_isrefarray(ct->info)) {
+        ctypeid = lj_ctype_intern(cp->cts,
+          CTINFO(CT_PTR, CTALIGN_PTR|ctype_cid(ct->info)), CTSIZE_PTR);
+      }
+
+      /* Add new parameter. */
+      fieldid = lj_ctype_new(cp->cts, &ct);
+      /* Type must have a register name after it */
+      if (!decl.name) cp_err_token(cp, CTOK_IDENT);
+      ctype_setname(ct, decl.name);
+      ct->info = CTINFO(CT_FIELD, ctypeid);
+      ct->size = 0;
+
+      if (anchor)
+        ctype_get(cp->cts, lastid)->sib = fieldid;
+      else
+        anchor = fieldid;
+      lastid = fieldid;
+    } while (cp_opt(cp, ','));
+    
+    decl->stack[decl->top-1].info = (decl->stack[decl->top-1].info & 0xffff0000) | anchor;
+  }
+
+  cp_check(cp, ')');
+}
+#endif
+
 /* Parse declaration attributes (and common qualifiers). */
 static void cp_decl_attributes(CPState *cp, CPDecl *decl)
 {
@@ -1190,6 +1324,10 @@ static void cp_decl_attributes(CPState *cp, CPDecl *decl)
     case CTOK_EXTENSION: break;  /* Ignore. */
     case CTOK_ATTRIBUTE: cp_decl_gccattribute(cp, decl); continue;
     case CTOK_ASM: cp_decl_asm(cp, decl); continue;
+#if LJ_HASINTRINSICS
+    case CTOK_REGLIST: cp_reglist(cp, decl); continue;
+    case CTOK_MCODE: cp_decl_mcode(cp, decl); continue;
+#endif
     case CTOK_DECLSPEC: cp_decl_msvcattribute(cp, decl); continue;
     case CTOK_CCDECL:
 #if LJ_TARGET_X86
