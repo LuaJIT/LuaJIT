@@ -218,6 +218,7 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_SHIFT_MULTRES	3
 #endif
 #elif LJ_TARGET_MIPS
+#if LJ_ARCH_HASFPU
 #define CFRAME_OFS_ERRF		124
 #define CFRAME_OFS_NRES		120
 #define CFRAME_OFS_PREV		116
@@ -226,6 +227,16 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_OFS_MULTRES	16
 #define CFRAME_SIZE		112
 #define CFRAME_SHIFT_MULTRES	3
+#else
+#define CFRAME_OFS_ERRF		100
+#define CFRAME_OFS_NRES		96
+#define CFRAME_OFS_PREV		92
+#define CFRAME_OFS_L		88
+#define CFRAME_OFS_PC		44
+#define CFRAME_OFS_MULTRES	16
+#define CFRAME_SIZE		88
+#define CFRAME_SHIFT_MULTRES	3
+#endif
 #else
 #error "Missing CFRAME_* definitions for this architecture"
 #endif

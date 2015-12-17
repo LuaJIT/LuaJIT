@@ -304,6 +304,13 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
 
+#if !defined(LJ_ARCH_HASFPU) && defined(__mips_soft_float)
+#define LJ_ARCH_HASFPU		0
+#endif
+#if !defined(LJ_ABI_SOFTFP) && defined(__mips_soft_float)
+#define LJ_ABI_SOFTFP		1
+#endif
+
 #if _MIPS_ARCH_MIPS32R2
 #define LJ_ARCH_VERSION		20
 #else
@@ -386,9 +393,6 @@
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS
-#if defined(__mips_soft_float)
-#error "No support for MIPS CPUs without FPU"
-#endif
 #if defined(_LP64)
 #error "No support for MIPS64"
 #endif

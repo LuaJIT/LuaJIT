@@ -14,6 +14,21 @@
 
 #if LJ_TARGET_MIPS
 /* Need our own global offset table for the dreaded MIPS calling conventions. */
+#if LJ_SOFTFP
+extern double __adddf3(double a, double b);
+extern double __subdf3(double a, double b);
+extern double __muldf3(double a, double b);
+extern double __divdf3(double a, double b);
+extern void __ledf2(double a, double b);
+extern double __floatsidf(int32_t a);
+extern int32_t __fixdfsi(double a);
+
+#define SFGOTDEF(_) \
+  _(lj_num2bit) _(sqrt) _(__adddf3) _(__subdf3) _(__muldf3) _(__divdf3) _(__ledf2) \
+  _(__floatsidf) _(__fixdfsi)
+#else
+#define SFGOTDEF(_)
+#endif
 #if LJ_HASJIT
 #define JITGOTDEF(_)	_(lj_trace_exit) _(lj_trace_hot)
 #else
@@ -39,7 +54,8 @@
   _(lj_str_new) _(lj_tab_dup) _(lj_tab_get) _(lj_tab_getinth) _(lj_tab_len) \
   _(lj_tab_new) _(lj_tab_newkey) _(lj_tab_next) _(lj_tab_reasize) \
   _(lj_tab_setinth) _(lj_buf_putstr_reverse) _(lj_buf_putstr_lower) \
-  _(lj_buf_putstr_upper) _(lj_buf_tostr) JITGOTDEF(_) FFIGOTDEF(_)
+  _(lj_buf_putstr_upper) _(lj_buf_tostr) \
+  JITGOTDEF(_) FFIGOTDEF(_) SFGOTDEF(_)
 
 enum {
 #define GOTENUM(name) LJ_GOT_##name,

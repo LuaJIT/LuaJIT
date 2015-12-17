@@ -1,6 +1,9 @@
 |// Low-level VM code for MIPS CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
+|//
+|// MIPS soft-float support contributed by Djordje Kovacevic and
+|// Stefan Pejic from RT-RK.com, sponsored by Cisco Systems, Inc.
 |
 |.arch mips
 |.section code_op, code_sub
@@ -18,6 +21,12 @@
 |// Fixed register assignments for the interpreter.
 |// Don't use: r0 = 0, r26/r27 = reserved, r28 = gp, r29 = sp, r31 = ra
 |
+|.macro .FPU, a, b
+|.if FPU
+|  a, b
+|.endif
+|.endmacro
+|
 |// The following must be C callee-save (but BASE is often refetched).
 |.define BASE,		r16	// Base of current Lua stack frame.
 |.define KBASE,		r17	// Constants of current Lua function.
@@ -31,7 +40,9 @@
 |
 |// Constants for type-comparisons, stores and conversions. C callee-save.
 |.define TISNIL,	r30
+|.if FPU
 |.define TOBIT,		f30	// 2^52 + 2^51.
+|.endif
 |
 |// The following temporaries are not saved across C calls, except for RA.
 |.define RA,		r23	// Callee-save.
@@ -46,6 +57,13 @@
 |.define TMP2,		r14
 |.define TMP3,		r15
 |
+|.if not FPU
+|.define SFT1,		r2
+|.define SFT2,		r3
+|.define SFT3,		r4
+|.define SFT4,		r5
+|.endif
+|
 |// Calling conventions.
 |.define CFUNCADDR,	r25
 |.define CARG1,		r4
@@ -56,13 +74,16 @@
 |.define CRET1,		r2
 |.define CRET2,		r3
 |
+|.if FPU
 |.define FARG1,		f12
 |.define FARG2,		f14
 |
 |.define FRET1,		f0
 |.define FRET2,		f2
+|.endif
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
+|.if FPU		// MIPS32 hard-float.
 |.define CFRAME_SPACE,	112	// Delta for sp.
 |
 |.define SAVE_ERRF,	124(sp)	// 32 bit C frame info.
@@ -83,43 +104,76 @@
 |.define ARG5_OFS,	16
 |.define SAVE_MULTRES,	ARG5
 |
+|//-----------------------------------------------------------------------
+|.else				// MIPS32 soft-float.
+|
+|.define CFRAME_SPACE,	88	// Delta for sp.
+|
+|.define SAVE_ERRF,	100(sp)	// 32 bit C frame info.
+|.define SAVE_NRES,	96(sp)
+|.define SAVE_CFRAME,	92(sp)
+|.define SAVE_L,	88(sp)
+|//----- 8 byte aligned, ^^^^ 16 byte register save area, owned by interpreter.
+|.define SAVE_GPR_,	48	// .. 48+10*4: 32 bit GPR saves.
+|.define SAVE_PC,	44(sp)
+|.define TEMP_SAVE_6,	40(sp)
+|.define TEMP_SAVE_5,	36(sp)
+|.define TEMP_SAVE_4,	32(sp)
+|.define TEMP_SAVE_3,	28(sp)
+|.define TEMP_SAVE_2,	24(sp)
+|.define TEMP_SAVE_1,	20(sp)
+|//----- 8 byte aligned, ^^^^ 24 byte register save area, owned by caller.
+|.define ARG5,		16(sp)
+|.define CSAVE_4,	12(sp)
+|.define CSAVE_3,	8(sp)
+|.define CSAVE_2,	4(sp)
+|.define CSAVE_1,	0(sp)
+|//----- 8 byte aligned, ^^^^ 16 byte register save area, owned by callee.
+|
+|.define ARG5_OFS,	16
+|.define SAVE_MULTRES,	ARG5
+|
+|.endif
+|
+|//-----------------------------------------------------------------------
+|
 |.macro saveregs
 |  addiu sp, sp, -CFRAME_SPACE
 |  sw ra, SAVE_GPR_+9*4(sp)
 |  sw r30, SAVE_GPR_+8*4(sp)
-|   sdc1 f30, SAVE_FPR_+5*8(sp)
+|   .FPU sdc1 f30, SAVE_FPR_+5*8(sp)
 |  sw r23, SAVE_GPR_+7*4(sp)
 |  sw r22, SAVE_GPR_+6*4(sp)
-|   sdc1 f28, SAVE_FPR_+4*8(sp)
+|   .FPU sdc1 f28, SAVE_FPR_+4*8(sp)
 |  sw r21, SAVE_GPR_+5*4(sp)
 |  sw r20, SAVE_GPR_+4*4(sp)
-|   sdc1 f26, SAVE_FPR_+3*8(sp)
+|   .FPU sdc1 f26, SAVE_FPR_+3*8(sp)
 |  sw r19, SAVE_GPR_+3*4(sp)
 |  sw r18, SAVE_GPR_+2*4(sp)
-|   sdc1 f24, SAVE_FPR_+2*8(sp)
+|   .FPU sdc1 f24, SAVE_FPR_+2*8(sp)
 |  sw r17, SAVE_GPR_+1*4(sp)
 |  sw r16, SAVE_GPR_+0*4(sp)
-|   sdc1 f22, SAVE_FPR_+1*8(sp)
-|   sdc1 f20, SAVE_FPR_+0*8(sp)
+|   .FPU sdc1 f22, SAVE_FPR_+1*8(sp)
+|   .FPU sdc1 f20, SAVE_FPR_+0*8(sp)
 |.endmacro
 |
 |.macro restoreregs_ret
 |  lw ra, SAVE_GPR_+9*4(sp)
 |  lw r30, SAVE_GPR_+8*4(sp)
-|   ldc1 f30, SAVE_FPR_+5*8(sp)
+|   .FPU ldc1 f30, SAVE_FPR_+5*8(sp)
 |  lw r23, SAVE_GPR_+7*4(sp)
 |  lw r22, SAVE_GPR_+6*4(sp)
-|   ldc1 f28, SAVE_FPR_+4*8(sp)
+|   .FPU ldc1 f28, SAVE_FPR_+4*8(sp)
 |  lw r21, SAVE_GPR_+5*4(sp)
 |  lw r20, SAVE_GPR_+4*4(sp)
-|   ldc1 f26, SAVE_FPR_+3*8(sp)
+|   .FPU ldc1 f26, SAVE_FPR_+3*8(sp)
 |  lw r19, SAVE_GPR_+3*4(sp)
 |  lw r18, SAVE_GPR_+2*4(sp)
-|   ldc1 f24, SAVE_FPR_+2*8(sp)
+|   .FPU ldc1 f24, SAVE_FPR_+2*8(sp)
 |  lw r17, SAVE_GPR_+1*4(sp)
 |  lw r16, SAVE_GPR_+0*4(sp)
-|   ldc1 f22, SAVE_FPR_+1*8(sp)
-|   ldc1 f20, SAVE_FPR_+0*8(sp)
+|   .FPU ldc1 f22, SAVE_FPR_+1*8(sp)
+|   .FPU ldc1 f20, SAVE_FPR_+0*8(sp)
 |  jr ra
 |  addiu sp, sp, CFRAME_SPACE
 |.endmacro
@@ -270,6 +324,61 @@
 |.macro call_extern; jalr CFUNCADDR; .endmacro
 |.macro jmp_extern; jr CFUNCADDR; .endmacro
 |
+|// Converts int from given reg to double, result in CRET1 and CRET2 regs.
+|.if not FPU
+|.macro cvti2d, arg
+|   load_got __floatsidf
+|   call_extern
+|.  move CARG1, arg
+|.endmacro
+|.endif
+|
+|// Loads a double-word floating-point value.
+|.macro load_double, fpr, gpr1, gpr2, src
+|.if FPU
+|  ldc1 fpr, src
+|.else
+|  lw gpr1, src
+|  lw gpr2, 4+src
+|.endif
+|.endmacro
+|
+|// Stores a double-word floating-point value.
+|.macro store_double, fpr, gpr1, gpr2, dst
+|.if FPU
+|  sdc1 fpr, dst
+|.else
+|  sw gpr1, dst
+|  sw gpr2, 4+dst
+|.endif
+|.endmacro
+|
+|// Loads the first double-word floating-point argument.
+|.macro load_farg1, src
+|  load_double FARG1, CARG1, CARG2, src
+|.endmacro
+|
+|// Loads the second double-word floating-point argument.
+|.macro load_farg2, src
+|  load_double FARG2, CARG3, CARG4, src
+|.endmacro
+|
+|.macro load_double1, src
+|  load_double f0, SFT1, SFT2, src
+|.endmacro
+|
+|.macro store_double1, dst
+|  store_double f0, SFT1, SFT2, dst
+|.endmacro
+|
+|.macro load_double2, src
+|  load_double f2, SFT3, SFT4, src
+|.endmacro
+|
+|.macro store_double2, dst
+|  store_double f2, SFT3, SFT4, dst
+|.endmacro
+|
 |.macro hotcheck, delta, target
 |  srl TMP1, PC, 1
 |  andi TMP1, TMP1, 126
@@ -354,9 +463,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.   sll TMP2, TMP2, 3
   |1:
   |  addiu TMP1, TMP1, -8
-  |   ldc1 f0, 0(RA)
+  |   load_double1 0(RA)
   |    addiu RA, RA, 8
-  |   sdc1 f0, 0(BASE)
+  |   store_double1 0(BASE)
   |  bnez TMP1, <1
   |.  addiu BASE, BASE, 8
   |
@@ -425,15 +534,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  and sp, CARG1, AT
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  lw L, SAVE_L
-  |     lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |     .FPU lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |     li TISNIL, LJ_TNIL
   |  lw BASE, L->base
   |   lw DISPATCH, L->glref		// Setup pointer to dispatch table.
-  |     mtc1 TMP3, TOBIT
+  |     .FPU mtc1 TMP3, TOBIT
   |  li TMP1, LJ_TFALSE
   |    li_vmstate INTERP
   |  lw PC, FRAME_PC(BASE)		// Fetch PC of previous frame.
-  |     cvt.d.s TOBIT, TOBIT
+  |     .FPU cvt.d.s TOBIT, TOBIT
   |  addiu RA, BASE, -8			// Results start at BASE-8.
   |   addiu DISPATCH, DISPATCH, GG_G2DISP
   |  sw TMP1, HI(RA)			// Prepend false to error message.
@@ -498,11 +607,11 @@ static void build_subroutines(BuildCtx *ctx)
   |   lw BASE, L->base
   |   lw TMP1, L->top
   |  lw PC, FRAME_PC(BASE)
-  |     lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |     .FPU  lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |   subu RD, TMP1, BASE
-  |     mtc1 TMP3, TOBIT
+  |     .FPU  mtc1 TMP3, TOBIT
   |    sb r0, L->status
-  |     cvt.d.s TOBIT, TOBIT
+  |     .FPU  cvt.d.s TOBIT, TOBIT
   |    li_vmstate INTERP
   |   addiu RD, RD, 8
   |    st_vmstate
@@ -540,13 +649,13 @@ static void build_subroutines(BuildCtx *ctx)
   |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
   |  sw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  lw TMP2, L->base			// TMP2 = old base (used in vmeta_call).
-  |     lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |     .FPU lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |   lw TMP1, L->top
-  |     mtc1 TMP3, TOBIT
+  |     .FPU mtc1 TMP3, TOBIT
   |  addu PC, PC, BASE
   |   subu NARGS8:RC, TMP1, BASE
   |  subu PC, PC, TMP2			// PC = frame delta + frame type
-  |     cvt.d.s TOBIT, TOBIT
+  |     .FPU cvt.d.s TOBIT, TOBIT
   |    li_vmstate INTERP
   |     li TISNIL, LJ_TNIL
   |    st_vmstate
@@ -628,7 +737,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  lw INS, -4(PC)
   |   addiu CARG2, RB, -16
-  |   ldc1 f0, 0(RA)
+  |   load_double1 0(RA)
   |  decode_RB8a MULTRES, INS
   |   decode_RA8a RA, INS
   |  decode_RB8b MULTRES
@@ -636,11 +745,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  addu TMP1, BASE, MULTRES
   |   sw BASE, L->base
   |   subu CARG3, CARG2, TMP1
+  |.if FPU
   |  bne TMP1, CARG2, ->BC_CAT_Z
   |.  sdc1 f0, 0(CARG2)
   |  addu RA, BASE, RA
   |  b ->cont_nop
   |.  sdc1 f0, 0(RA)
+  |.else
+  |  sw SFT1, 0(CARG2)
+  |  bne TMP1, CARG2, ->BC_CAT_Z
+  |.  sw SFT2, 4(CARG2)
+  |  addu RA, BASE, RA
+  |  sw SFT1, 0(RA)
+  |  b ->cont_nop
+  |.  sw SFT2, 4(RA)
+  |.endif
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
@@ -663,10 +782,19 @@ static void build_subroutines(BuildCtx *ctx)
   |.  sw TMP1, HI(CARG3)
   |
   |->vmeta_tgetb:			// TMP0 = index
+  |.if FPU
   |  mtc1 TMP0, f0
   |  cvt.d.w f0, f0
   |  addiu CARG3, DISPATCH, DISPATCH_GL(tmptv)
   |  sdc1 f0, 0(CARG3)
+  |.else
+  |  sw CARG2, TEMP_SAVE_1 //needed to be saved because it's used later in lj_meta_tget
+  |  cvti2d TMP0
+  |  addiu CARG3, DISPATCH, DISPATCH_GL(tmptv)
+  |  sw CRET1, 0(CARG3)
+  |  sw CRET2, 4(CARG3)
+  |  lw CARG2, TEMP_SAVE_1
+  |.endif
   |
   |->vmeta_tgetv:
   |1:
@@ -678,9 +806,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns TValue * (finished) or NULL (metamethod).
   |  beqz CRET1, >3
   |.  addiu TMP1, BASE, -FRAME_CONT
-  |  ldc1 f0, 0(CRET1)
+  |  load_double2 0(CRET1)
   |  ins_next1
-  |   sdc1 f0, 0(RA)
+  |   store_double2 0(RA)
   |  ins_next2
   |
   |3:  // Call __index metamethod.
@@ -699,8 +827,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns cTValue * or NULL.
   |  beqz CRET1, >1
   |.  nop
+  |.if FPU
   |  b ->BC_TGETR_Z
   |.  ldc1 f0, 0(CRET1)
+  |.else
+  |  lw SFT1, 0(CRET1)
+  |  b ->BC_TGETR_Z
+  |.  lw SFT2, 4(CRET1)
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |
@@ -723,10 +857,19 @@ static void build_subroutines(BuildCtx *ctx)
   |.  sw TMP1, HI(CARG3)
   |
   |->vmeta_tsetb:			// TMP0 = index
+  |.if  FPU
   |  mtc1 TMP0, f0
   |  cvt.d.w f0, f0
   |  addiu CARG3, DISPATCH, DISPATCH_GL(tmptv)
   |  sdc1 f0, 0(CARG3)
+  |.else
+  |  sw CARG2, TEMP_SAVE_1
+  |  cvti2d TMP0
+  |  addiu CARG3, DISPATCH, DISPATCH_GL(tmptv)
+  |  sw CRET1, 0(CARG3)
+  |  sw CRET2, 4(CARG3)
+  |  lw CARG2, TEMP_SAVE_1
+  |.endif
   |
   |->vmeta_tsetv:
   |1:
@@ -736,11 +879,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  call_intern lj_meta_tset		// (lua_State *L, TValue *o, TValue *k)
   |.  move CARG1, L
   |  // Returns TValue * (finished) or NULL (metamethod).
+  |.if FPU
   |  beqz CRET1, >3
-  |.  ldc1 f0, 0(RA)
+  |.  ldc1 f2, 0(RA)
+  |.else
+  |  lw SFT3, 0(RA)
+  |  beqz CRET1, >3
+  |.  lw SFT4, 4(RA)
+  |.endif
   |  // NOBARRIER: lj_meta_tset ensures the table is not black.
   |  ins_next1
-  |   sdc1 f0, 0(CRET1)
+  |   store_double2 0(CRET1)
   |  ins_next2
   |
   |3:  // Call __newindex metamethod.
@@ -750,7 +899,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sw PC, -16+HI(BASE)		// [cont|PC]
   |   subu PC, BASE, TMP1
   |  lw LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
-  |  sdc1 f0, 16(BASE)			// Copy value to third argument.
+  |  store_double2 16(BASE)			// Copy value to third argument.
   |  b ->vm_call_dispatch_f
   |.  li NARGS8:RC, 24			// 3 args for func(t, k, v)
   |
@@ -793,11 +942,17 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_ra:				// RA = resultptr
   |  lbu TMP1, -4+OFS_RA(PC)
-  |   ldc1 f0, 0(RA)
+  |   load_double1 0(RA)
   |  sll TMP1, TMP1, 3
   |  addu TMP1, BASE, TMP1
+  |.if FPU
   |  b ->cont_nop
   |.  sdc1 f0, 0(TMP1)
+  |.else
+  |   sw SFT1, 0(TMP1)
+  |  b ->cont_nop
+  |.  sw SFT2, 4(TMP1)
+  |.endif
   |
   |->cont_condt:			// RA = resultptr
   |  lw TMP0, HI(RA)
@@ -852,7 +1007,22 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_unm:
-  |  move CARG4, CARG3
+  |  b ->vmeta_arith
+  |.  move CARG4, CARG3
+  |
+  |->vmeta_arith_vn:
+  |  addu CARG3, BASE, RB
+  |  b ->vmeta_arith
+  |.  addu CARG4, KBASE, RC
+  |
+  |->vmeta_arith_nv:
+  |  addu CARG4, BASE, RB
+  |  b ->vmeta_arith
+  |.  addu CARG3, KBASE, RC
+  |
+  |->vmeta_arith_vv:
+  |  addu CARG3, BASE, RB
+  |   addu CARG4, BASE, RC
   |
   |->vmeta_arith:
   |  load_got lj_meta_arith
@@ -985,9 +1155,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro .ffunc_n, name	// Caveat: has delay slot!
   |->ff_ .. name:
   |  lw CARG3, HI(BASE)
+  |   load_farg1 0(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
-  |.  ldc1 FARG1, 0(BASE)
-  |  sltiu AT, CARG3, LJ_TISNUM
+  |.  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.endmacro
   |
@@ -997,10 +1167,10 @@ static void build_subroutines(BuildCtx *ctx)
   |   lw CARG3, HI(BASE)
   |  bnez AT, ->fff_fallback
   |.  lw CARG4, 8+HI(BASE)
-  |  ldc1 FARG1, 0(BASE)
-  |  ldc1 FARG2, 8(BASE)
   |  sltiu TMP0, CARG3, LJ_TISNUM
   |  sltiu TMP1, CARG4, LJ_TISNUM
+  |  load_farg1 0(BASE)
+  |  load_farg2 8(BASE)
   |  and TMP0, TMP0, TMP1
   |  beqz TMP0, ->fff_fallback
   |.endmacro
@@ -1027,8 +1197,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  beq BASE, TMP2, ->fff_res		// Done if exactly 1 argument.
   |.  sw CARG1, LO(RA)
   |1:
-  |  ldc1 f0, 0(TMP1)
-  |  sdc1 f0, -8(TMP1)
+  |  load_double1 0(TMP1)
+  |  store_double1 -8(TMP1)
   |  bne TMP1, TMP2, <1
   |.  addiu TMP1, TMP1, 8
   |  b ->fff_res
@@ -1043,8 +1213,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  not TMP1, TMP1
   |  sll TMP1, TMP1, 3
   |  addu TMP1, CFUNC:RB, TMP1
+  |.if HFABI
   |  b ->fff_resn
   |.  ldc1 FRET1, CFUNC:TMP1->upvalue
+  |.else
+  |  lw CRET1, CFUNC:TMP1->upvalue[0].u32.hi
+  |  b ->fff_resn
+  |.  lw CRET2, CFUNC:TMP1->upvalue[0].u32.lo
+  |.endif
   |
   |//-- Base library: getters and setters ---------------------------------
   |
@@ -1125,8 +1301,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  call_intern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
   |.  move CARG1, L
   |  // Returns cTValue *.
+  |.if HFABI
   |  b ->fff_resn
   |.  ldc1 FRET1, 0(CRET1)
+  |.else
+  |  lw CRET2, 4(CRET1)
+  |  b ->fff_resn
+  |.  lw CRET1, 0(CRET1)
+  |.endif
   |
   |//-- Base library: conversions ------------------------------------------
   |
@@ -1136,8 +1318,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  xori AT, NARGS8:RC, 8
   |  sltiu CARG1, CARG1, LJ_TISNUM
   |  movn CARG1, r0, AT
+  |.if HFABI
   |  beqz CARG1, ->fff_fallback		// Exactly one number argument.
   |.  ldc1 FRET1, 0(BASE)
+  |.else
+  |  lw CRET1, 0(BASE)
+  |  beqz CARG1, ->fff_fallback		// Exactly one number argument.
+  |.  lw CRET2, 4(BASE)
+  |.endif
   |  b ->fff_resn
   |.  nop
   |
@@ -1185,13 +1373,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns 0 at end of traversal.
   |  beqz CRET1, ->fff_restv		// End of traversal: return nil.
   |.  li CARG3, LJ_TNIL
-  |  ldc1 f0, 8(BASE)			// Copy key and value to results.
+  |  load_double1 8(BASE)
   |    addiu RA, BASE, -8
-  |   ldc1 f2, 16(BASE)
-  |    li RD, (2+1)*8
-  |  sdc1 f0, 0(RA)
+  |   load_double2 16(BASE)
+  |  store_double1 0(RA)
+  |   store_double2 8(RA)
   |  b ->fff_res
-  |.  sdc1 f2, 8(RA)
+  |.  li RD, (2+1)*8
   |
   |.ffunc_1 pairs
   |  li AT, LJ_TTAB
@@ -1199,16 +1387,32 @@ static void build_subroutines(BuildCtx *ctx)
   |.  lw PC, FRAME_PC(BASE)
 #if LJ_52
   |  lw TAB:TMP2, TAB:CARG1->metatable
+  |.if FPU
   |   ldc1 f0, CFUNC:RB->upvalue[0]
+  |.else
+  |  lw SFT1, CFUNC:RB->upvalue[0].u32.hi
+  |   lw SFT2, CFUNC:RB->upvalue[0].u32.lo
+  |.endif
   |  bnez TAB:TMP2, ->fff_fallback
 #else
+  |.if FPU
   |  ldc1 f0, CFUNC:RB->upvalue[0]
+  |.else
+  |  lw SFT1, CFUNC:RB->upvalue[0].u32.hi
+  |   lw SFT2, CFUNC:RB->upvalue[0].u32.lo
+  |.endif
 #endif
   |.  addiu RA, BASE, -8
   |   sw TISNIL, 8+HI(BASE)
   |  li RD, (3+1)*8
+  |.if FPU
   |  b ->fff_res
   |.  sdc1 f0, 0(RA)
+  |.else
+  |  sw SFT1, 0(RA)
+  |  b ->fff_res
+  |.  sw SFT2, 4(RA)
+  |.endif
   |
   |.ffunc ipairs_aux
   |  sltiu AT, NARGS8:RC, 16
@@ -1216,35 +1420,55 @@ static void build_subroutines(BuildCtx *ctx)
   |    lw TAB:CARG1, LO(BASE)
   |   lw CARG4, 8+HI(BASE)
   |  bnez AT, ->fff_fallback
-  |.  ldc1 FARG2, 8(BASE)
-  |   addiu CARG3, CARG3, -LJ_TTAB
+  |.  addiu CARG3, CARG3, -LJ_TTAB
   |  sltiu AT, CARG4, LJ_TISNUM
   |   li TMP0, 1
   |  movn AT, r0, CARG3
-  |   mtc1 TMP0, FARG1
   |  beqz AT, ->fff_fallback
   |.  lw PC, FRAME_PC(BASE)
+  |.if FPU
+  |   ldc1 FARG2, 8(BASE)
+  |   mtc1 TMP0, FARG1
   |   trunc.w.d FRET1, FARG2
   |  cvt.d.w FARG1, FARG1
+  |  mfc1 TMP2, FRET1
+  |  add.d FARG2, FARG2, FARG1
+  |.else
+  |  sw CARG1, TEMP_SAVE_1
+  |  cvti2d TMP0
+  |  sw CRET1, TEMP_SAVE_2	// Store result CRET1/CRET2=1 (double).
+  |  sw CRET2, TEMP_SAVE_3
+  |  lw CARG2, 8+4(BASE)
+  |  load_got __fixdfsi
+  |  call_extern
+  |.  lw CARG1, 8(BASE)
+  |  sw CRET1, TEMP_SAVE_4
+  |  load_got __adddf3
+  |  lw CARG2, TEMP_SAVE_3
+  |  lw CARG3, 8(BASE)
+  |  lw CARG4, 8+4(BASE)
+  |  call_extern
+  |.  lw CARG1, TEMP_SAVE_2
+  |  lw TMP2, TEMP_SAVE_4
+  |  lw CARG1, TEMP_SAVE_1
+  |.endif
   |   lw TMP0, TAB:CARG1->asize
   |   lw TMP1, TAB:CARG1->array
-  |  mfc1 TMP2, FRET1
-  |   addiu RA, BASE, -8
-  |  add.d FARG2, FARG2, FARG1
   |  addiu TMP2, TMP2, 1
   |  sltu AT, TMP2, TMP0
+  |  beqz AT, >2			// Not in array part?
+  |.  addiu RA, BASE, -8
+  |  store_double FARG2, CRET1, CRET2, 0(RA)
   |   sll TMP3, TMP2, 3
   |   addu TMP3, TMP1, TMP3
-  |  beqz AT, >2			// Not in array part?
-  |.  sdc1 FARG2, 0(RA)
   |  lw TMP2, HI(TMP3)
-  |  ldc1 f0, 0(TMP3)
+  |  load_double1 0(TMP3)
   |1:
   |  beq TMP2, TISNIL, ->fff_res	// End of iteration, return 0 results.
   |.  li RD, (0+1)*8
-  |   li RD, (2+1)*8
+  |   store_double1 8(RA)
   |  b ->fff_res
-  |.  sdc1 f0, 8(RA)
+  |.  li RD, (2+1)*8
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  lw TMP0, TAB:CARG1->hmask
   |  load_got lj_tab_getinth
@@ -1256,8 +1480,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  beqz CRET1, ->fff_res
   |.  li RD, (0+1)*8
   |  lw TMP2, HI(CRET1)
+  |.if FPU
   |  b <1
   |.  ldc1 f0, 0(CRET1)
+  |.else
+  |  lw SFT2, 4(CRET1)
+  |  b <1
+  |.  lw SFT1, 0(CRET1)
+  |.endif
   |
   |.ffunc_1 ipairs
   |  li AT, LJ_TTAB
@@ -1265,17 +1495,33 @@ static void build_subroutines(BuildCtx *ctx)
   |.  lw PC, FRAME_PC(BASE)
 #if LJ_52
   |  lw TAB:TMP2, TAB:CARG1->metatable
+  |.if FPU
   |   ldc1 f0, CFUNC:RB->upvalue[0]
+  |.else
+  |  lw SFT1, CFUNC:RB->upvalue[0].u32.hi
+  |   lw SFT2, CFUNC:RB->upvalue[0].u32.lo
+  |.endif
   |  bnez TAB:TMP2, ->fff_fallback
 #else
+  |.if FPU
   |  ldc1 f0, CFUNC:RB->upvalue[0]
+  |.else
+  |  lw SFT1, CFUNC:RB->upvalue[0].u32.hi
+  |   lw SFT2, CFUNC:RB->upvalue[0].u32.lo
+  |.endif
 #endif
   |.  addiu RA, BASE, -8
   |   sw r0, 8+HI(BASE)
   |   sw r0, 8+LO(BASE)
   |  li RD, (3+1)*8
+  |.if FPU
   |  b ->fff_res
   |.  sdc1 f0, 0(RA)
+  |.else
+  |  sw SFT1, 0(RA)
+  |  b ->fff_res
+  |.  sw SFT2, 4(RA)
+  |.endif
   |
   |//-- Base library: catch errors ----------------------------------------
   |
@@ -1295,8 +1541,12 @@ static void build_subroutines(BuildCtx *ctx)
   |    sltiu AT, NARGS8:RC, 16
   |  lw CARG4, 8+HI(BASE)
   |    bnez AT, ->fff_fallback
+  |.if FPU
   |.  ldc1 FARG2, 8(BASE)
-  |   ldc1 FARG1, 0(BASE)
+  |.else
+  |.  lw CARG3, 8+LO(BASE)
+  |.endif
+  |   load_double FARG1, CARG1, CARG2, 0(BASE)
   |    lbu TMP1, DISPATCH_GL(hookmask)(DISPATCH)
   |  li AT, LJ_TFUNC
   |   move TMP2, BASE
@@ -1304,9 +1554,14 @@ static void build_subroutines(BuildCtx *ctx)
   |   addiu BASE, BASE, 16
   |  // Remember active hook before pcall.
   |  srl TMP3, TMP3, HOOK_ACTIVE_SHIFT
+  |.if FPU
   |   sdc1 FARG2, 0(TMP2)		// Swap function and traceback.
+  |.else
+  |   sw CARG3, LO(TMP2)
+  |   sw CARG4, HI(TMP2)
+  |.endif
   |  andi TMP3, TMP3, 1
-  |   sdc1 FARG1, 8(TMP2)
+  |   store_double FARG1, CARG1, CARG2, 8(TMP2)
   |  addiu PC, TMP3, 16+FRAME_PCALL
   |  b ->vm_call_dispatch
   |.  addiu NARGS8:RC, NARGS8:RC, -16
@@ -1350,11 +1605,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  move CARG3, CARG2
   |  sw BASE, L->top
   |2:  // Move args to coroutine.
-  |   ldc1 f0, 0(BASE)
+  |   load_double1 0(BASE)
   |  sltu AT, BASE, TMP1
   |  beqz AT, >3
   |.  addiu BASE, BASE, 8
-  |   sdc1 f0, 0(CARG3)
+  |   store_double1 0(CARG3)
   |  b <2
   |.  addiu CARG3, CARG3, 8
   |3:
@@ -1380,10 +1635,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  sw TMP2, L:RA->top			// Clear coroutine stack.
   |  move TMP1, BASE
   |5:  // Move results from coroutine.
-  |   ldc1 f0, 0(TMP2)
+  |   load_double1 0(TMP2)
   |  addiu TMP2, TMP2, 8
   |  sltu AT, TMP2, TMP3
-  |   sdc1 f0, 0(TMP1)
+  |   store_double1 0(TMP1)
   |  bnez AT, <5
   |.  addiu TMP1, TMP1, 8
   |6:
@@ -1408,12 +1663,12 @@ static void build_subroutines(BuildCtx *ctx)
   |.if resume
   |  addiu TMP3, TMP3, -8
   |   li TMP1, LJ_TFALSE
-  |  ldc1 f0, 0(TMP3)
+  |  load_double1 0(TMP3)
   |   sw TMP3, L:RA->top		// Remove error from coroutine stack.
   |    li RD, (2+1)*8
   |   sw TMP1, -8+HI(BASE)		// Prepend false to results.
   |    addiu RA, BASE, -8
-  |  sdc1 f0, 0(BASE)			// Copy error message.
+  |   store_double1 0(BASE)			// Copy error message.
   |  b <7
   |.  andi TMP0, PC, FRAME_TYPE
   |.else
@@ -1449,13 +1704,33 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Math library -------------------------------------------------------
   |
-  |.ffunc_n math_abs
+  |.ffunc_1 math_abs
+  |   load_farg1 0(BASE)
+  |   sltiu AT, CARG3, LJ_TISNUM
+  |  beqz AT, ->fff_fallback
+  |.  nop
+  |.if FPU
   |.  abs.d FRET1, FARG1
+  |.else
+  |.  lui TMP1, 0x8000
+  |   and AT, CARG1, TMP1
+  |   move CRET2, CARG2
+  |   beqz AT, ->fff_resn
+  |.  move CRET1, CARG1
+  |   xor CRET1, CARG1, TMP1
+  |.endif
+  |
   |->fff_resn:
   |  lw PC, FRAME_PC(BASE)
   |  addiu RA, BASE, -8
+  |.if HFABI
   |  b ->fff_res1
   |.  sdc1 FRET1, -8(BASE)
+  |.else
+  |  sw CRET1, -8(BASE)
+  |  b ->fff_res1
+  |.  sw CRET2, -8+4(BASE)
+  |.endif
   |
   |->fff_restv:
   |  // CARG3/CARG1 = TValue result.
@@ -1498,8 +1773,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  nop
+  |.if HFABI
   |  call_extern
   |.  ldc1 FARG1, 0(BASE)
+  |.else
+  |  lw CARG1, 0(BASE)
+  |  call_extern
+  |.  lw CARG2, 4(BASE)
+  |.endif
   |  b ->fff_resn
   |.  nop
   |.endmacro
@@ -1526,15 +1807,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_round ceil
   |
   |.ffunc math_log
-  |  lw CARG3, HI(BASE)
   |  li AT, 8
   |  bne NARGS8:RC, AT, ->fff_fallback	// Exactly 1 argument.
-  |.  load_got log
+  |.  lw CARG3, HI(BASE)
   |  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
-  |.  nop
+  |.  load_got log
+  |.if HFABI
   |  call_extern
   |.  ldc1 FARG1, 0(BASE)
+  |.else
+  |  lw CARG1, 0(BASE)
+  |  call_extern
+  |.  lw CARG2, 4(BASE)
+  |.endif
   |  b ->fff_resn
   |.  nop
   |
@@ -1553,17 +1839,40 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
+  |.if FPU
   |.ffunc_n math_sqrt
   |.  sqrt.d FRET1, FARG1
   |  b ->fff_resn
   |.  nop
+  |.else
+  |  math_extern sqrt
+  |.endif
   |
-  |.ffunc_nn math_ldexp
-  |  trunc.w.d FARG2, FARG2
+  |.ffunc_2 math_ldexp
+  |  sltiu TMP0, CARG3, LJ_TISNUM
+  |  sltiu TMP1, CARG4, LJ_TISNUM
+  |   load_farg1 0(BASE)
+  |   load_farg2 8(BASE)
+  |  and TMP0, TMP0, TMP1
+  |  beqz TMP0, ->fff_fallback
+  |.if FPU
   |  load_got ldexp
-  |  mfc1 CARG3, FARG2
+  |  trunc.w.d FARG2, FARG2
   |  call_extern
-  |.  nop
+  |.  mfc1 CARG3, FARG2
+  |.else
+  |  sw CARG1, TEMP_SAVE_1
+  |  sw CARG2, TEMP_SAVE_2
+  |  load_got __fixdfsi
+  |   move CARG1, CARG3
+  |  call_extern
+  |.  move CARG2, CARG4
+  |  lw CARG1, TEMP_SAVE_1
+  |  load_got ldexp
+  |  lw CARG2, TEMP_SAVE_2
+  |  call_extern
+  |.  move CARG3, CRET1
+  |.endif
   |  b ->fff_resn
   |.  nop
   |
@@ -1574,10 +1883,14 @@ static void build_subroutines(BuildCtx *ctx)
   |.  addiu CARG3, DISPATCH, DISPATCH_GL(tmptv)
   |   lw TMP1, DISPATCH_GL(tmptv)(DISPATCH)
   |  addiu RA, BASE, -8
+  |  store_double FRET1, CRET1, CRET2, 0(RA)
+  |.if FPU
   |   mtc1 TMP1, FARG2
-  |  sdc1 FRET1, 0(RA)
   |   cvt.d.w FARG2, FARG2
-  |   sdc1 FARG2, 8(RA)
+  |.else
+  |   cvti2d TMP1
+  |.endif
+  |  store_double FARG2, CRET1, CRET2, 8(RA)
   |  b ->fff_res
   |.  li RD, (2+1)*8
   |
@@ -1587,7 +1900,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  call_extern
   |.  addiu CARG3, BASE, -8
   |  addiu RA, BASE, -8
+  |.if HFABI
   |  sdc1 FRET1, 0(BASE)
+  |.else
+  |  sw CRET1, 0(BASE)
+  |  sw CRET2, 4(BASE)
+  |.endif
   |  b ->fff_res
   |.  li RD, (2+1)*8
   |
@@ -1595,25 +1913,73 @@ static void build_subroutines(BuildCtx *ctx)
   |->ff_ .. name:
   |  lw CARG3, HI(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
-  |.  ldc1 FRET1, 0(BASE)
-  |  sltiu AT, CARG3, LJ_TISNUM
+  |.  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  addu TMP2, BASE, NARGS8:RC
   |  addiu TMP1, BASE, 8
+  |.if HFABI
+  |  ldc1 FRET1, 0(BASE)
   |  beq TMP1, TMP2, ->fff_resn
+  |.else
+  |  lw CRET1, 0(BASE)
+  |  lw CRET2, 4(BASE)
+  |  beq TMP1, TMP2, ->fff_resn
+  |.endif
   |1:
   |.  lw CARG3, HI(TMP1)
+  |.if HFABI
   |  ldc1 FARG1, 0(TMP1)
-  |   addiu TMP1, TMP1, 8
+  |.else
+  |  lw CARG1, 0(TMP1)
+  |  lw CARG2, 4(TMP1)
+  |.endif
   |  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
+  |. addiu TMP1, TMP1, 8
+  |.if FPU
   |.if ismax
-  |.  c.olt.d FARG1, FRET1
+  |  c.olt.d FARG1, FRET1
   |.else
-  |.  c.olt.d FRET1, FARG1
+  |  c.olt.d FRET1, FARG1
   |.endif
   |  bne TMP1, TMP2, <1
   |.  movf.d FRET1, FARG1
+  |.else
+  |  load_got __ledf2
+  |  sw TMP1, TEMP_SAVE_1
+  |  sw TMP2, TEMP_SAVE_2
+  |  sw CARG1, TEMP_SAVE_3
+  |  sw CARG2, TEMP_SAVE_4
+  |  sw CRET1, TEMP_SAVE_5
+  |  sw CRET2, TEMP_SAVE_6
+  |  move CARG3, CRET1
+  |  call_extern
+  |.  move CARG4, CRET2
+  |  lw CARG4, TEMP_SAVE_6
+  |  lw CARG3, TEMP_SAVE_5
+  |  lw CARG2, TEMP_SAVE_4
+  |  lw CARG1, TEMP_SAVE_3
+  |  lw TMP2, TEMP_SAVE_2
+  |  lw TMP1, TEMP_SAVE_1
+  |.if ismax
+  |  beqz CRET1, >2		// farg1==fret1
+  |.  li TMP3, 1
+  |  beq CRET1, TMP3, >2	// farg1>fret1
+  |.  nop
+  |.else
+  |  blez CRET1, >2
+  |.  nop
+  |.endif
+  |  move CRET1, CARG3		// Keep the value.
+  |  b >3
+  |.  move CRET2, CARG4
+  |2:
+  |  move CRET1, CARG1		// Set new value.
+  |  move CRET2, CARG2
+  |3:
+  |  bne TMP1, TMP2, <1
+  |.  nop
+  |.endif
   |  b ->fff_resn
   |.  nop
   |.endmacro
@@ -1632,32 +1998,52 @@ static void build_subroutines(BuildCtx *ctx)
   |  bnez AT, ->fff_fallback		// Need exactly 1 string argument.
   |.  nop
   |  lw TMP0, STR:CARG1->len
-  |   lbu TMP1, STR:CARG1[1]		// Access is always ok (NUL at end).
   |    addiu RA, BASE, -8
   |  sltu RD, r0, TMP0
-  |   mtc1 TMP1, f0
-  |  addiu RD, RD, 1
-  |   cvt.d.w f0, f0
   |  lw PC, FRAME_PC(BASE)
-  |  sll RD, RD, 3			// RD = ((str->len != 0)+1)*8
+  |  addiu RD, RD, 1
+  |   lbu TMP1, STR:CARG1[1]		// Access is always ok (NUL at end).
+  |.if FPU
+  |   mtc1 TMP1, f0
+  |   cvt.d.w f0, f0
+  |   sdc1 f0, 0(RA)
+  |.else
+  |   sw RD, TEMP_SAVE_1
+  |   cvti2d TMP1
+  |  sw CRET1, 0(RA)
+  |  sw CRET2, 4(RA)
+  |   lw RD, TEMP_SAVE_1
+  |.endif
   |  b ->fff_res
-  |.  sdc1 f0, 0(RA)
+  |.  sll RD, RD, 3		// RD = ((str->len != 0)+1)*8
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
   |  ffgccheck
   |  lw CARG3, HI(BASE)
-  |   ldc1 FARG1, 0(BASE)
   |  li AT, 8
   |  bne NARGS8:RC, AT, ->fff_fallback	// Exactly 1 argument.
   |.  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  li CARG3, 1
-  |   trunc.w.d FARG1, FARG1
-  |  addiu CARG2, sp, ARG5_OFS
   |  sltiu AT, TMP0, 256
-  |   mfc1 TMP0, FARG1
   |  beqz AT, ->fff_fallback
-  |.  sw TMP0, ARG5
+  |  load_farg1 0(BASE)
+  |.if FPU
+  |   trunc.w.d FARG1, FARG1
+  |   mfc1 TMP0, FARG1
+  |.else
+  |   load_got __fixdfsi
+  |   sw RB, TEMP_SAVE_1
+  |   sw RC, TEMP_SAVE_2
+  |   call_extern
+  |.   sw CARG3, TEMP_SAVE_3
+  |   lw CARG3, TEMP_SAVE_3
+  |   lw RC, TEMP_SAVE_2
+  |   lw RB, TEMP_SAVE_1
+  |   move TMP0, CRET1
+  |.endif
+  |  addiu CARG2, sp, ARG5_OFS
+  |  sw TMP0, ARG5
   |->fff_newstr:
   |  load_got lj_str_new
   |   sw BASE, L->base
@@ -1674,27 +2060,52 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc string_sub
   |  ffgccheck
   |  addiu AT, NARGS8:RC, -16
+  |.if FPU
+  |   ldc1 f0, 16(BASE)
+  |   trunc.w.d f0, f0
+  |.else
+  |   lw CARG1, 16(BASE)
+  |   load_got __fixdfsi
+  |   sw AT, TEMP_SAVE_1
+  |   call_extern
+  |.   lw CARG2, 16+4(BASE)
+  |   lw AT, TEMP_SAVE_1
+  |.endif
   |   lw CARG3, 16+HI(BASE)
-  |    ldc1 f0, 16(BASE)
   |   lw TMP0, HI(BASE)
   |    lw STR:CARG1, LO(BASE)
   |  bltz AT, ->fff_fallback
-  |   lw CARG2, 8+HI(BASE)
-  |    ldc1 f2, 8(BASE)
+  |.  lw CARG2, 8+HI(BASE)
   |  beqz AT, >1
   |.  li CARG4, -1
-  |   trunc.w.d f0, f0
   |  sltiu AT, CARG3, LJ_TISNUM
   |  beqz AT, ->fff_fallback
+  |.if FPU
   |.  mfc1 CARG4, f0
+  |.else
+  |.  move CARG4, CRET1
+  |.endif
   |1:
   |  sltiu AT, CARG2, LJ_TISNUM
   |  beqz AT, ->fff_fallback
   |.  li AT, LJ_TSTR
-  |  trunc.w.d f2, f2
   |  bne TMP0, AT, ->fff_fallback
-  |.  lw CARG2, STR:CARG1->len
+  |.if FPU
+  |.  ldc1 f2, 8(BASE)
+  |  trunc.w.d f2, f2
   |  mfc1 CARG3, f2
+  |.else
+  |.   sw CARG1, TEMP_SAVE_1
+  |   sw CARG4, TEMP_SAVE_2
+  |   lw CARG2, 8+4(BASE)
+  |   load_got __fixdfsi
+  |   call_extern
+  |.   lw CARG1, 8(BASE)
+  |   lw CARG1, TEMP_SAVE_1
+  |   lw CARG4, TEMP_SAVE_2
+  |   move CARG3, CRET1
+  |.endif
+  |  lw CARG2, STR:CARG1->len
   |  // STR:CARG1 = str, CARG2 = str->len, CARG3 = start, CARG4 = end
   |  slt AT, CARG4, r0
   |  addiu TMP0, CARG2, 1
@@ -1749,10 +2160,58 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Bit library --------------------------------------------------------
   |
+  |.if not FPU
+  |// FP number to bit conversion for soft-float.
+  |->vm_tobit:
+  |  sll TMP0, CARG1, 1
+  |  lui TMP3, 0x0020
+  |  addu TMP0, TMP0, TMP3
+  |  slt TMP3, TMP0, r0
+  |  movz CARG2, r0, TMP3
+  |  beqz TMP3, >2
+  |.  li CARG4, 0x3e0
+  |  not CARG4, CARG4
+  |  sra TMP0, TMP0, 21
+  |  subu TMP0, CARG4, TMP0
+  |  slt TMP3, TMP0, r0
+  |  bnez TMP3, >1
+  |.  sll CARG4, CARG1, 11
+  |  lui TMP3, 0x8000
+  |  or CARG4, CARG4, TMP3
+  |  srl TMP3, CARG2, 21
+  |  or CARG4, CARG4, TMP3
+  |  slt TMP3, CARG1, r0
+  |  beqz TMP3, >2
+  |.  srlv CARG2, CARG4, TMP0
+  |  subu CARG2, r0, CARG2
+  |2:
+  |  jr ra
+  |.  move CRET1, CARG2
+  |1:
+  |  addiu TMP0, TMP0, 21
+  |  srlv CARG4, CARG2, TMP0
+  |  li TMP3, 20
+  |  subu TMP0, TMP3, TMP0
+  |  sll CARG2, CARG1, 12
+  |  sllv TMP3, CARG2, TMP0
+  |  or CARG2, CARG4, TMP3
+  |  slt TMP3, CARG1, r0
+  |  beqz TMP3, <2
+  |.  nop
+  |  jr ra
+  |.  subu CRET1, r0, CARG2
+  |.endif
+  |
   |.macro .ffunc_bit, name
   |  .ffunc_n bit_..name
+  |.if FPU
   |.  add.d FARG1, FARG1, TOBIT
   |  mfc1 CRET1, FARG1
+  |.else
+  |.  nop
+  |  bal ->vm_tobit
+  |.  nop
+  |.endif
   |.endmacro
   |
   |.macro .ffunc_bit_op, name, ins
@@ -1760,14 +2219,27 @@ static void build_subroutines(BuildCtx *ctx)
   |  addiu TMP1, BASE, 8
   |  addu TMP2, BASE, NARGS8:RC
   |1:
+  |  move CRET2, CRET1
   |  lw CARG4, HI(TMP1)
+  |.if FPU
   |  beq TMP1, TMP2, ->fff_resi
   |.  ldc1 FARG1, 0(TMP1)
+  |.else
+  |  lw CARG1, 0(TMP1)
+  |  beq TMP1, TMP2, ->fff_resi
+  |.  lw CARG2, 4(TMP1)
+  |.endif
   |  sltiu AT, CARG4, LJ_TISNUM
   |  beqz AT, ->fff_fallback
-  |  add.d FARG1, FARG1, TOBIT
-  |  mfc1 CARG2, FARG1
-  |  ins CRET1, CRET1, CARG2
+  |.if FPU
+  |.  add.d FARG1, FARG1, TOBIT
+  |  mfc1 CRET1, FARG1
+  |.else
+  |.  nop
+  |  bal ->vm_tobit
+  |.  nop
+  |.endif
+  |  ins CRET1, CRET2, CRET1
   |  b <1
   |.  addiu TMP1, TMP1, 8
   |.endmacro
@@ -1794,10 +2266,22 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit_sh, name, ins, shmod
   |  .ffunc_nn bit_..name
+  |.if FPU
   |.  add.d FARG1, FARG1, TOBIT
   |  add.d FARG2, FARG2, TOBIT
   |  mfc1 CARG1, FARG1
   |  mfc1 CARG2, FARG2
+  |.else
+  |.  sw CARG4, TEMP_SAVE_1
+  |  bal ->vm_tobit
+  |.  nop
+  |  move CRET2, CRET1
+  |  lw CARG2, TEMP_SAVE_1
+  |  bal ->vm_tobit
+  |.  move CARG1, CARG3
+  |  move CARG2, CRET1
+  |  move CARG1, CRET2
+  |.endif
   |.if shmod == 1
   |  li AT, 32
   |  subu TMP0, AT, CARG2
@@ -1822,9 +2306,19 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc_bit tobit
   |->fff_resi:
+  |  lw PC, FRAME_PC(BASE)
+  |  addiu RA, BASE, -8
+  |.if HFABI
   |  mtc1 CRET1, FRET1
-  |  b ->fff_resn
-  |.  cvt.d.w FRET1, FRET1
+  |  cvt.d.w FRET1, FRET1
+  |  b ->fff_res1
+  |.  sdc1 FRET1, -8(BASE)
+  |.else		// Result already in CRET1.
+  |  cvti2d CRET1
+  |  sw CRET1, -8(BASE)
+  |  b ->fff_res1
+  |.  sw CRET2, -8+4(BASE)
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |
@@ -2082,14 +2576,23 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |.macro savex_, a, b
+  |.if FPU
   |  sdc1 f..a, 16+a*8(sp)
   |  sw r..a, 16+32*8+a*4(sp)
   |  sw r..b, 16+32*8+b*4(sp)
+  |.else
+  |  sw r..a, 16+a*4(sp)
+  |  sw r..b, 16+b*4(sp)
+  |.endif
   |.endmacro
   |
   |->vm_exit_handler:
   |.if JIT
+  |.if FPU
   |  addiu sp, sp, -(16+32*8+32*4)
+  |.else
+  |  addiu sp, sp, -(16+32*4)
+  |.endif
   |  savex_ 0, 1
   |  savex_ 2, 3
   |  savex_ 4, 5
@@ -2104,17 +2607,25 @@ static void build_subroutines(BuildCtx *ctx)
   |  savex_ 22, 23
   |  savex_ 24, 25
   |  savex_ 26, 27
+  |.if FPU
   |  sdc1 f28, 16+28*8(sp)
-  |  sw r28, 16+32*8+28*4(sp)
   |  sdc1 f30, 16+30*8(sp)
+  |  sw r28, 16+32*8+28*4(sp)
   |  sw r30, 16+32*8+30*4(sp)
   |  sw r0, 16+32*8+31*4(sp)		// Clear RID_TMP.
+  |  addiu TMP2, sp, 16+32*8+32*4	// Recompute original value of sp.
+  |  sw TMP2, 16+32*8+29*4(sp)		// Store sp in RID_SP
+  |.else
+  |  sw r28, 16+28*4(sp)
+  |  sw r30, 16+30*4(sp)
+  |  sw r0, 16+31*4(sp)			// Clear RID_TMP.
+  |  addiu TMP2, sp, 16+32*4		// Recompute original value of sp.
+  |  sw TMP2, 16+29*4(sp)		// Store sp in RID_SP
+  |.endif
   |  li_vmstate EXIT
-  |   addiu TMP2, sp, 16+32*8+32*4	// Recompute original value of sp.
   |  addiu DISPATCH, JGL, -GG_DISP2G-32768
   |  lw TMP1, 0(TMP2)			// Load exit number.
   |  st_vmstate
-  |   sw TMP2, 16+32*8+29*4(sp)		// Store sp in RID_SP.
   |  lw L, DISPATCH_GL(cur_L)(DISPATCH)
   |   lw BASE, DISPATCH_GL(jit_base)(DISPATCH)
   |  load_got lj_trace_exit
@@ -2144,15 +2655,15 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  bltz CRET1, >9			// Check for error from exit.
   |.  lw LFUNC:RB, FRAME_FUNC(BASE)
-  |    lui TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
+  |    .FPU lui TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
   |  sll MULTRES, CRET1, 3
   |    li TISNIL, LJ_TNIL
   |  sw MULTRES, SAVE_MULTRES
-  |    mtc1 TMP3, TOBIT
+  |    .FPU mtc1 TMP3, TOBIT
   |  lw TMP1, LFUNC:RB->pc
   |   sw r0, DISPATCH_GL(jit_base)(DISPATCH)
   |  lw KBASE, PC2PROTO(k)(TMP1)
-  |    cvt.d.s TOBIT, TOBIT
+  |    .FPU cvt.d.s TOBIT, TOBIT
   |  // Modified copy of ins_next which handles function header dispatch, too.
   |  lw INS, 0(PC)
   |   addiu PC, PC, 4
@@ -2160,7 +2671,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    sw TISNIL, DISPATCH_GL(vmstate)(DISPATCH)
   |  decode_OP4a TMP1, INS
   |  decode_OP4b TMP1
-  |    sltiu TMP2, TMP1, BC_FUNCF*4	// Function header?
+  |    sltiu TMP2, TMP1, BC_FUNCF*4
   |  addu TMP0, DISPATCH, TMP1
   |   decode_RD8a RD, INS
   |  lw AT, 0(TMP0)
@@ -2202,7 +2713,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |// Modifies AT, TMP0, FRET1, FRET2, f4. Keeps all others incl. FARG1.
-  |.macro vm_round, func
+  |.macro vm_round_hf, func
   |  lui TMP0, 0x4330			// Hiword of 2^52 (double).
   |  mtc1 r0, f4
   |  mtc1 TMP0, f5
@@ -2244,6 +2755,25 @@ static void build_subroutines(BuildCtx *ctx)
   |.  mov.d FRET1, FARG1
   |.endmacro
   |
+  |.macro vm_round_sf, func
+  |  addiu sp, sp, -8
+  |  load_got func
+  |  sw ra, 0(sp)
+  |  call_extern
+  |.   nop
+  |  lw ra, 0(sp)
+  |  jr ra
+  |.  addiu sp, sp, 8
+  |.endmacro
+  |
+  |.macro vm_round, func
+  |.if FPU
+  |  vm_round_hf, func
+  |.else
+  |  vm_round_sf, func
+  |.endif
+  |.endmacro
+  |
   |->vm_floor:
   |  vm_round floor
   |->vm_ceil:
@@ -2272,10 +2802,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  sw r1, CTSTATE->cb.slot
   |  sw CARG1, CTSTATE->cb.gpr[0]
   |  sw CARG2, CTSTATE->cb.gpr[1]
-  |   sdc1 FARG1, CTSTATE->cb.fpr[0]
+  |   .FPU sdc1 FARG1, CTSTATE->cb.fpr[0]
   |  sw CARG3, CTSTATE->cb.gpr[2]
   |  sw CARG4, CTSTATE->cb.gpr[3]
-  |   sdc1 FARG2, CTSTATE->cb.fpr[1]
+  |   .FPU sdc1 FARG2, CTSTATE->cb.fpr[1]
   |  addiu TMP0, sp, CFRAME_SPACE+16
   |  sw TMP0, CTSTATE->cb.stack
   |  sw r0, SAVE_PC			// Any value outside of bytecode is ok.
@@ -2286,14 +2816,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw BASE, L:CRET1->base
   |  lw RC, L:CRET1->top
   |   move L, CRET1
-  |     lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |     .FPU lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |  lw LFUNC:RB, FRAME_FUNC(BASE)
-  |     mtc1 TMP3, TOBIT
+  |     .FPU mtc1 TMP3, TOBIT
   |    li_vmstate INTERP
   |     li TISNIL, LJ_TNIL
   |  subu RC, RC, BASE
   |    st_vmstate
-  |     cvt.d.s TOBIT, TOBIT
+  |     .FPU cvt.d.s TOBIT, TOBIT
   |  ins_callt
   |.endif
   |
@@ -2307,11 +2837,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  move CARG2, RA
   |  call_intern lj_ccallback_leave	// (CTState *cts, TValue *o)
   |.  move CARG1, CTSTATE
+  |   .FPU ldc1 FRET1, CTSTATE->cb.fpr[0]
   |  lw CRET1, CTSTATE->cb.gpr[0]
-  |   ldc1 FRET1, CTSTATE->cb.fpr[0]
-  |  lw CRET2, CTSTATE->cb.gpr[1]
+  |   .FPU ldc1 FRET2, CTSTATE->cb.fpr[1]
   |  b ->vm_leave_unw
-  |.  ldc1 FRET2, CTSTATE->cb.fpr[1]
+  |.  lw CRET2, CTSTATE->cb.gpr[1]
   |.endif
   |
   |->vm_ffi_call:			// Call C function via FFI.
@@ -2343,8 +2873,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw CARG2, CCSTATE->gpr[1]
   |  lw CARG3, CCSTATE->gpr[2]
   |  lw CARG4, CCSTATE->gpr[3]
-  |  ldc1 FARG1, CCSTATE->fpr[0]
-  |  ldc1 FARG2, CCSTATE->fpr[1]
+  |  .FPU ldc1 FARG1, CCSTATE->fpr[0]
+  |  .FPU ldc1 FARG2, CCSTATE->fpr[1]
   |  jalr CFUNCADDR
   |.  lw CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
   |  lw CCSTATE:TMP1, -12(r16)
@@ -2352,8 +2882,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  lw ra, -4(r16)
   |  sw CRET1, CCSTATE:TMP1->gpr[0]
   |  sw CRET2, CCSTATE:TMP1->gpr[1]
-  |  sdc1 FRET1, CCSTATE:TMP1->fpr[0]
-  |  sdc1 FRET2, CCSTATE:TMP1->fpr[1]
+  |  .FPU sdc1 FRET1, CCSTATE:TMP1->fpr[0]
+  |  .FPU sdc1 FRET2, CCSTATE:TMP1->fpr[1]
+  |  sw CARG1, CCSTATE:TMP1->gpr[2]	// MIPS32 soft-float.
+  |  sw CARG2, CCSTATE:TMP1->gpr[3]	// Complex doubles are returned in v0, v1, a0, a1.
   |  move sp, r16
   |  jr ra
   |.  move r16, TMP2
@@ -2381,8 +2913,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addu CARG3, BASE, RD
     |  lw TMP0, HI(CARG2)
     |   lw TMP1, HI(CARG3)
-    |   ldc1 f0, 0(CARG2)
-    |   ldc1 f2, 0(CARG3)
     |  sltiu TMP0, TMP0, LJ_TISNUM
     |   sltiu TMP1, TMP1, LJ_TISNUM
     |    lhu TMP2, OFS_RD(PC)
@@ -2390,8 +2920,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    addiu PC, PC, 4
     |  beqz TMP0, ->vmeta_comp
     |.   lui TMP1, (-(BCBIAS_J*4 >> 16) & 65535)
+    |   load_double f0, CARG1, CARG2, 0(CARG2)
+    |.if FPU
+    |   ldc1 f2, 0(CARG3)
+    |.else
+    |   lw CARG4, 4(CARG3)
+    |   lw CARG3, 0(CARG3)
+    |.endif
     |    decode_RD4b TMP2
     |    addu TMP2, TMP2, TMP1
+    |.if FPU
     if (op == BC_ISLT || op == BC_ISGE) {
       |  c.olt.d f0, f2
     } else {
@@ -2402,8 +2940,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     } else {
       |  movt TMP2, r0
     }
-    |  addu PC, PC, TMP2
+    |.else
+    |  load_got __ledf2
+    |  sw RD, TEMP_SAVE_1
+    |  sw TMP1, TEMP_SAVE_2
+    |  call_extern              //CRET1 = f0<=f2
+    |.  sw TMP2, TEMP_SAVE_3
+    |  lw TMP2, TEMP_SAVE_3
+    |  lw TMP1, TEMP_SAVE_2
+    if (op == BC_ISLT) {
+      |  bltz CRET1, >1
+    } else if (op == BC_ISLE) {
+      |  blez CRET1, >1
+    }  else if (op == BC_ISGT) {
+      |  bgtz CRET1, >1
+    }  else {
+      |  bgez CRET1, >1
+    }
+    |.  lw RD, TEMP_SAVE_1
+    |  move TMP2, r0
     |1:
+    |.endif
+    |  addu PC, PC, TMP2
     |  ins_next
     break;
 
@@ -2413,24 +2971,43 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addu RA, BASE, RA
     |   addiu PC, PC, 4
     |  lw TMP0, HI(RA)
-    |   ldc1 f0, 0(RA)
     |  addu RD, BASE, RD
     |    lhu TMP2, -4+OFS_RD(PC)
-    |   lw TMP1, HI(RD)
-    |   ldc1 f2, 0(RD)
     |    lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
+    |   lw TMP1, HI(RD)
+    |    decode_RD4b TMP2
     |  sltiu AT, TMP0, LJ_TISNUM
     |  sltiu CARG1, TMP1, LJ_TISNUM
-    |    decode_RD4b TMP2
+    |   load_double f2, CARG3, CARG4, 0(RD)
+    |    lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
     |  and AT, AT, CARG1
+    |   load_double f0, CARG1, CARG2, 0(RA)
     |  beqz AT, >5
     |.   addu TMP2, TMP2, TMP3
+    |.if FPU
     |  c.eq.d f0, f2
     if (vk) {
       |  movf TMP2, r0
     } else {
       |  movt TMP2, r0
     }
+    |.else
+    |  load_got __ledf2
+    |  sw RD, TEMP_SAVE_1
+    |  call_extern
+    |.  sw TMP2, TEMP_SAVE_2
+    |  lw RD, TEMP_SAVE_1
+    |  lw TMP2, TEMP_SAVE_2
+    if (vk) {
+      |  beqz CRET1, >4
+      |.  nop
+    } else {
+      |  bnez CRET1, >4
+      |.  nop
+    }
+    |  move TMP2, r0
+    |4:
+    |.endif
     |1:
     |  addu PC, PC, TMP2
     |  ins_next
@@ -2507,10 +3084,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addu RA, BASE, RA
     |   addiu PC, PC, 4
     |  lw TMP0, HI(RA)
-    |   ldc1 f0, 0(RA)
+    |   load_double f0, CARG1, CARG2, 0(RA)
     |  addu RD, KBASE, RD
     |    lhu TMP2, -4+OFS_RD(PC)
-    |   ldc1 f2, 0(RD)
+    |   load_double f2, CARG3, CARG4, 0(RD)
     |    lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
     |  sltiu AT, TMP0, LJ_TISNUM
     |    decode_RD4b TMP2
@@ -2520,6 +3097,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  beqz AT, >1
     |.endif
     |.   addu TMP2, TMP2, TMP3
+    |.if FPU
     |   c.eq.d f0, f2
     if (vk) {
       |  movf TMP2, r0
@@ -2530,6 +3108,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |1:
       |  addu PC, PC, TMP2
     }
+    |.else
+    |  load_got __ledf2
+    |   sw RD, TEMP_SAVE_1
+    |  call_extern
+    |.  sw TMP2, TEMP_SAVE_2
+    |  lw RD, TEMP_SAVE_1
+    |  lw TMP2, TEMP_SAVE_2
+    if (vk) {
+      |  beqz CRET1, >4
+      |.  nop
+      |  move TMP2, r0
+      |4:
+      |  addu PC, PC, TMP2
+      |1:
+    } else {
+      |  bnez CRET1, >1
+      |.  nop
+      |  move TMP2, r0
+      |1:
+      |  addu PC, PC, TMP2
+    }
+    |.endif
     |  ins_next
     |.if FFI
     |5:
@@ -2588,7 +3188,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  addu PC, PC, TMP2
     } else {
       |  sltiu TMP0, TMP0, LJ_TISTRUECOND
-      |  ldc1 f0, 0(RD)
+      |  load_double1 0(RD)
       if (op == BC_ISTC) {
 	|  beqz TMP0, >1
       } else {
@@ -2598,7 +3198,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |   decode_RD4b TMP2
       |   lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
       |   addu TMP2, TMP2, TMP3
-      |  sdc1 f0, 0(RA)
+      |  store_double1 0(RA)
       |   addu PC, PC, TMP2
       |1:
     }
@@ -2631,9 +3231,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = dst*8, RD = src*8
     |  addu RD, BASE, RD
     |  addu RA, BASE, RA
-    |  ldc1 f0, 0(RD)
+    |  load_double1 0(RD)
     |  ins_next1
-    |  sdc1 f0, 0(RA)
+    |  store_double1 0(RA)
     |  ins_next2
     break;
   case BC_NOT:
@@ -2653,12 +3253,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addu CARG3, BASE, RD
     |   addu RA, BASE, RA
     |  lw TMP0, HI(CARG3)
-    |   ldc1 f0, 0(CARG3)
     |  sltiu AT, TMP0, LJ_TISNUM
+    |   load_double f0, CARG1, CARG2, 0(CARG3)
+    |.if FPU
     |  beqz AT, ->vmeta_unm
     |.  neg.d f0, f0
+    |.else
+    |   lui TMP1, 0x8000
+    |   xor CRET1, TMP1, CARG1
+    |  beqz AT, ->vmeta_unm
+    |.   move CRET2, CARG2
+    |.endif
     |  ins_next1
-    |   sdc1 f0, 0(RA)
+    |   store_double f0, CRET1, CRET2, 0(RA)
     |  ins_next2
     break;
   case BC_LEN:
@@ -2672,10 +3279,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.  li AT, LJ_TTAB
     |  lw CRET1, STR:CARG1->len
     |1:
+    |.if FPU
     |  mtc1 CRET1, f0
     |  cvt.d.w f0, f0
+    |.else
+    |  cvti2d CRET1
+    |.endif
     |  ins_next1
-    |  sdc1 f0, 0(RA)
+    |   store_double f0, CRET1, CRET2, 0(RA)
     |  ins_next2
     |2:
     |  bne TMP0, AT, ->vmeta_len
@@ -2717,72 +3328,142 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addu CARG3, BASE, RB
     |    addu CARG4, KBASE, RC
     |   lw TMP1, HI(CARG3)
-    |   ldc1 f20, 0(CARG3)
-    |    ldc1 f22, 0(CARG4)
-    |   sltiu AT, TMP1, LJ_TISNUM
+    |  sltiu AT, TMP1, LJ_TISNUM
+    |   load_double f20, CARG1, CARG2, 0(CARG3)
+    |   load_double f22, CARG3, CARG4, 0(CARG4)
+    |.if FPU
+    |   beqz AT, ->vmeta_arith
+    |.else
+    |   beqz AT, ->vmeta_arith_vn
+    |.endif
+    |.   addu RA, BASE, RA
     ||  break;
     ||case 1:
     |   addu CARG4, BASE, RB
     |    addu CARG3, KBASE, RC
     |   lw TMP1, HI(CARG4)
-    |   ldc1 f22, 0(CARG4)
-    |    ldc1 f20, 0(CARG3)
-    |   sltiu AT, TMP1, LJ_TISNUM
+    |  sltiu AT, TMP1, LJ_TISNUM
+    |  load_double f20, CARG1, CARG2, 0(CARG3)
+    |   load_double f22, CARG3, CARG4, 0(CARG4)
+    |.if FPU
+    |   beqz AT, ->vmeta_arith
+    |.else
+    |   beqz AT, ->vmeta_arith_nv
+    |.endif
+    |.   addu RA, BASE, RA
     ||  break;
     ||default:
     |   addu CARG3, BASE, RB
     |    addu CARG4, BASE, RC
     |   lw TMP1, HI(CARG3)
     |    lw TMP2, HI(CARG4)
-    |   ldc1 f20, 0(CARG3)
-    |    ldc1 f22, 0(CARG4)
-    |   sltiu AT, TMP1, LJ_TISNUM
-    |   sltiu TMP0, TMP2, LJ_TISNUM
-    |   and AT, AT, TMP0
+    |  sltiu AT, TMP1, LJ_TISNUM
+    |  sltiu TMP0, TMP2, LJ_TISNUM
+    |  and AT, AT, TMP0
+    |  load_double f20, CARG1, CARG2, 0(CARG3)
+    |   load_double f22, CARG3, CARG4, 0(CARG4)
+    |.if FPU
+    |   beqz AT, ->vmeta_arith
+    |.else
+    |   beqz AT, ->vmeta_arith_vv
+    |.endif
+    |.   addu RA, BASE, RA
     ||  break;
     ||}
-    |  beqz AT, ->vmeta_arith
-    |.  addu RA, BASE, RA
     |.endmacro
     |
+    |.macro ins_arithfallback
+    ||switch (vk) {
+    ||case 0:
+    |   b ->vmeta_arith_vn
+    |.  nop
+    ||  break;
+    ||case 1:
+    |   b ->vmeta_arith_nv
+    |.  nop
+    ||  break;
+    ||default:
+    |   b ->vmeta_arith_vv
+    |.  nop
+    ||  break;
+    ||}
+    |.endmacro
+    |
+    |.if FPU
     |.macro fpmod, a, b, c
     |->BC_MODVN_Z:
-    |  bal ->vm_floor			// floor(b/c)
+    |  bal ->vm_floor     // floor(b/c)
     |.  div.d FARG1, b, c
     |  mul.d a, FRET1, c
-    |  sub.d a, b, a			// b - floor(b/c)*c
+    |  sub.d a, b, a      // b - floor(b/c)*c
     |.endmacro
+    |.else
     |
-    |.macro ins_arith, ins
+    |.macro sfpmod
+    |->BC_MODVN_Z:
+    |  load_got __divdf3
+    |  sw CARG1, TEMP_SAVE_1
+    |  sw CARG2, TEMP_SAVE_2
+    |  sw CARG3, TEMP_SAVE_3
+    |  call_extern
+    |.  sw CARG4, TEMP_SAVE_4
+    |  move CARG1, CRET1
+    |  bal ->vm_floor
+    |.  move CARG2, CRET2
+    |  load_got __muldf3
+    |  move CARG1, CRET1
+    |  move CARG2, CRET2
+    |  lw CARG3, TEMP_SAVE_3
+    |  call_extern
+    |.  lw CARG4, TEMP_SAVE_4
+    |  load_got __subdf3
+    |  lw CARG1, TEMP_SAVE_1
+    |  lw CARG2, TEMP_SAVE_2
+    |  move CARG3, CRET1
+    |  call_extern
+    |.  move CARG4, CRET2
+    |.endmacro
+    |.endif
+    |
+    |.macro ins_arith, intins, fpins, fpcall
     |  ins_arithpre
-    |.if "ins" == "fpmod_"
-    |  b ->BC_MODVN_Z			// Avoid 3 copies. It's slow anyway.
+    |.if "fpins" == "fpmod_"
+    |  b ->BC_MODVN_Z     // Avoid 3 copies. It's slow anyway.
     |.  nop
     |.else
-    |  ins f0, f20, f22
+    |.if FPU
+    |  fpins f0, f20, f22
+    |.else
+    |.if "fpcall" == "sfpmod"
+    |  sfpmod
+    |.else
+    |  load_got fpcall
+    |  call_extern
+    |.  nop
+    |.endif
+    |.endif
     |  ins_next1
-    |  sdc1 f0, 0(RA)
+    |  store_double1 0(RA)
     |  ins_next2
     |.endif
     |.endmacro
 
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
-    |  ins_arith add.d
+    |  ins_arith addu, add.d, __adddf3
     break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
-    |  ins_arith sub.d
+    |  ins_arith subu, sub.d, __subdf3
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
-    |  ins_arith mul.d
+    |  ins_arith mult, mul.d, __muldf3
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
-    |  ins_arith div.d
+    |  ins_arith div, div.d, __divdf3
     break;
   case BC_MODVN:
-    |  ins_arith fpmod
-    break;
+    |  ins_arith modi, fpmod, sfpmod
   case BC_MODNV: case BC_MODVV:
-    |  ins_arith fpmod_
+    |  ins_arith modi, fpmod_, sfpmod
     break;
   case BC_POW:
     |  decode_RB8a RB, INS
@@ -2792,18 +3473,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addu CARG4, BASE, RC
     |  lw TMP1, HI(CARG3)
     |   lw TMP2, HI(CARG4)
-    |  ldc1 FARG1, 0(CARG3)
-    |   ldc1 FARG2, 0(CARG4)
     |  sltiu AT, TMP1, LJ_TISNUM
     |  sltiu TMP0, TMP2, LJ_TISNUM
     |  and AT, AT, TMP0
     |  load_got pow
     |  beqz AT, ->vmeta_arith
     |.  addu RA, BASE, RA
+    |  load_farg1 0(CARG3)
+    |   load_farg2 0(CARG4)
     |  call_extern
     |.  nop
     |  ins_next1
+    |.if HFABI
     |  sdc1 FRET1, 0(RA)
+    |.else
+    |  sw CRET1, 0(RA)
+    |  sw CRET2, 4(RA)
+    |.endif
     |  ins_next2
     break;
 
@@ -2826,10 +3512,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bnez CRET1, ->vmeta_binop
     |.  lw BASE, L->base
     |  addu RB, BASE, MULTRES
-    |  ldc1 f0, 0(RB)
+    |  load_double1 0(RB)
     |   addu RA, BASE, RA
     |  ins_next1
-    |   sdc1 f0, 0(RA)			// Copy result from RB to RA.
+    |   store_double1 0(RA)
     |  ins_next2
     break;
 
@@ -2864,20 +3550,24 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
     |  sra RD, INS, 16
-    |  mtc1 RD, f0
     |  addu RA, BASE, RA
+    |.if FPU
+    |  mtc1 RD, f0
     |  cvt.d.w f0, f0
+    |.else
+    |  cvti2d RD
+    |.endif
     |  ins_next1
-    |  sdc1 f0, 0(RA)
+    |   store_double f0, CRET1, CRET2, 0(RA)
     |  ins_next2
     break;
   case BC_KNUM:
     |  // RA = dst*8, RD = num_const*8
     |  addu RD, KBASE, RD
     |   addu RA, BASE, RA
-    |  ldc1 f0, 0(RD)
+    |  load_double1 0(RD)
     |  ins_next1
-    |   sdc1 f0, 0(RA)
+    |   store_double1 0(RA)
     |  ins_next2
     break;
   case BC_KPRI:
@@ -2913,9 +3603,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw UPVAL:RB, LFUNC:RD->uvptr
     |  ins_next1
     |  lw TMP1, UPVAL:RB->v
-    |  ldc1 f0, 0(TMP1)
+    |  load_double1 0(TMP1)
     |  addu RA, BASE, RA
-    |  sdc1 f0, 0(RA)
+    |  store_double1 0(RA)
     |  ins_next2
     break;
   case BC_USETV:
@@ -2924,14 +3614,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    srl RA, RA, 1
     |   addu RD, BASE, RD
     |    addu RA, RA, LFUNC:RB
-    |   ldc1 f0, 0(RD)
+    |   load_double1 0(RD)
     |  lw UPVAL:RB, LFUNC:RA->uvptr
     |  lbu TMP3, UPVAL:RB->marked
     |   lw CARG2, UPVAL:RB->v
     |  andi TMP3, TMP3, LJ_GC_BLACK	// isblack(uv)
     |  lbu TMP0, UPVAL:RB->closed
     |   lw TMP2, HI(RD)
-    |   sdc1 f0, 0(CARG2)
+    |   store_double1 0(CARG2)
     |  li AT, LJ_GC_BLACK|1
     |  or TMP3, TMP3, TMP0
     |  beq TMP3, AT, >2			// Upvalue is closed and black?
@@ -2991,11 +3681,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   srl RA, RA, 1
     |    addu RD, KBASE, RD
     |   addu RA, RA, LFUNC:RB
-    |    ldc1 f0, 0(RD)
+    |    load_double1 0(RD)
     |  lw UPVAL:RB, LFUNC:RA->uvptr
     |  ins_next1
     |  lw TMP1, UPVAL:RB->v
-    |  sdc1 f0, 0(TMP1)
+    |  store_double1 0(TMP1)
     |  ins_next2
     break;
   case BC_USETP:
@@ -3126,13 +3816,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   lw TMP2, HI(CARG3)
     |    lw TAB:RB, LO(CARG2)
     |  li AT, LJ_TTAB
-    |   ldc1 f0, 0(CARG3)
     |  bne TMP1, AT, ->vmeta_tgetv
     |.  addu RA, BASE, RA
     |  sltiu AT, TMP2, LJ_TISNUM
     |  beqz AT, >5
     |.  li AT, LJ_TSTR
-    |
+    |.if FPU
+    |   ldc1 f0, 0(CARG3)
     |  // Convert number key to integer, check for integerness and range.
     |  cvt.w.d f2, f0
     |   lw TMP0, TAB:RB->asize
@@ -3148,9 +3838,51 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw TMP0, HI(TMP2)
     |  beq TMP0, TISNIL, >2
     |.  ldc1 f0, 0(TMP2)
+    |.else
+    |   sw RB, TEMP_SAVE_1
+    |   sw CARG2, TEMP_SAVE_3
+    |  load_got __fixdfsi
+    |   lw CARG1, 0(CARG3)
+    |   lw CARG2, 4(CARG3)
+    |  call_extern			// cvt.w.d f2, f0
+    |.  sw RC, TEMP_SAVE_2
+    |  sw CRET1, TEMP_SAVE_4
+    |  cvti2d CRET1			// cvt.d.w f4, f2
+    |  load_got __ledf2
+    |  lw RC, TEMP_SAVE_2
+    |   addu CARG3, BASE, RC
+    |  lw CARG1, 0(CARG3)
+    |  lw CARG2, 4(CARG3)
+    |   move CARG3, CRET1
+    |   move CARG4, CRET2
+    |  call_extern			// c.eq.d f0, f4
+    |.  nop
+    |  lw CARG3, TEMP_SAVE_3
+    |  lw RC, TEMP_SAVE_2
+    |  lw RB, TEMP_SAVE_1
+    |   lw TMP0, TAB:RB->asize
+    |   lw TMP1, TAB:RB->array
+    |  lw TMP2, TEMP_SAVE_4
+    |  lw CARG2, TEMP_SAVE_3		// Restore old CARG2 and CARG3.
+    |   addu CARG3, BASE, RC
+    |  bnez CRET1, >3
+    |.  sltu AT, TMP2, TMP0
+    |  b >4
+    |.  nop
+    |3:
+    |  move AT, r0
+    |4:
+    |   sll TMP2, TMP2, 3
+    |  beqz AT, ->vmeta_tgetv		// Integer key and in array part?
+    |.  addu TMP2, TMP1, TMP2
+    |  lw TMP0, HI(TMP2)
+    |  lw SFT2, 4(TMP2)
+    |  beq TMP0, TISNIL, >2
+    |.  lw SFT1, 0(TMP2)
+    |.endif
     |1:
     |  ins_next1
-    |   sdc1 f0, 0(RA)
+    |   store_double1 0(RA)
     |  ins_next2
     |
     |2:  // Check for __index if table value is nil.
@@ -3246,10 +3978,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.  addu RC, TMP2, RC
     |  lw TMP1, HI(RC)
     |  beq TMP1, TISNIL, >5
-    |.  ldc1 f0, 0(RC)
+    |.  nop
     |1:
+    |  load_double1 0(RC)
     |  ins_next1
-    |   sdc1 f0, 0(RA)
+    |   store_double1 0(RA)
     |  ins_next2
     |
     |5:  // Check for __index if table value is nil.
@@ -3271,20 +4004,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addu CARG2, BASE, RB
     |   addu CARG3, BASE, RC
     |    lw TAB:CARG1, LO(CARG2)
+    |   lw TMP0, TAB:CARG1->asize
+    |   lw TMP1, TAB:CARG1->array
+    |.if FPU
     |   ldc1 f0, 0(CARG3)
     |  trunc.w.d f2, f0
-    |   lw TMP0, TAB:CARG1->asize
     |  mfc1 CARG2, f2
-    |   lw TMP1, TAB:CARG1->array
+    |.else
+    |  load_got __fixdfsi
+    |  lw CARG1, 0(CARG3)
+    |  call_extern
+    |.  lw CARG2, 4(CARG3)
+    |  move CARG2, CRET1
+    |.endif
     |  sltu AT, CARG2, TMP0
     |   sll TMP2, CARG2, 3
     |  beqz AT, ->vmeta_tgetr		// In array part?
     |.  addu TMP2, TMP1, TMP2
-    |   ldc1 f0, 0(TMP2)
+    |   load_double1 0(TMP2)
     |->BC_TGETR_Z:
     |   addu RA, BASE, RA
     |  ins_next1
-    |   sdc1 f0, 0(RA)
+    |   store_double1 0(RA)
     |  ins_next2
     break;
 
@@ -3299,13 +4040,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   lw TMP2, HI(CARG3)
     |    lw TAB:RB, LO(CARG2)
     |  li AT, LJ_TTAB
-    |   ldc1 f0, 0(CARG3)
     |  bne TMP1, AT, ->vmeta_tsetv
     |.  addu RA, BASE, RA
     |  sltiu AT, TMP2, LJ_TISNUM
     |  beqz AT, >5
     |.  li AT, LJ_TSTR
-    |
+    |.if FPU
+    |   ldc1 f0, 0(CARG3)
     |  // Convert number key to integer, check for integerness and range.
     |  cvt.w.d f2, f0
     |   lw TMP0, TAB:RB->asize
@@ -3326,6 +4067,52 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
     |   bnez AT, >7
     |.  sdc1 f0, 0(TMP1)
+    |.else
+    |  sw RB, TEMP_SAVE_1
+    |  sw RC, TEMP_SAVE_2
+    |  sw CARG2, TEMP_SAVE_3
+    |  load_got __fixdfsi
+    |  lw CARG1, 0(CARG3)
+    |  call_extern			// cvt.w.d f2, f0
+    |.  lw CARG2, 4(CARG3)
+    |  sw CRET1, TEMP_SAVE_4
+    |  cvti2d CRET1			// cvt.d.w f4, f2
+    |  load_got __ledf2
+    |  lw RC, TEMP_SAVE_2
+    |   addu CARG3, BASE, RC
+    |  lw CARG1, 0(CARG3)
+    |  lw CARG2, 4(CARG3)
+    |  move CARG3, CRET1
+    |  call_extern			// c.eq.d f0, f4
+    |.  move CARG4, CRET2
+    |  lw RC, TEMP_SAVE_2
+    |  lw RB, TEMP_SAVE_1
+    |   lw TMP0, TAB:RB->asize
+    |   lw TMP1, TAB:RB->array
+    |  lw TMP2, TEMP_SAVE_4
+    |  lw CARG2, TEMP_SAVE_3		// Restore old CARG2 and CARG3.
+    |   addu CARG3, BASE, RC
+    |  bnez CRET1, >4			// NaN?
+    |.  sltu AT, TMP2, TMP0
+    |  b >6
+    |.  nop
+    |4:
+    |  move AT, r0
+    |6:
+    |   sll TMP2, TMP2, 3
+    |  beqz AT, ->vmeta_tsetv		// Integer key and in array part?
+    |.  addu TMP1, TMP1, TMP2
+    |   lbu TMP3, TAB:RB->marked
+    |  lw TMP0, HI(TMP1)
+    |   lw SFT1, 0(RA)
+    |  beq TMP0, TISNIL, >3
+    |.  lw SFT2, 4(RA)
+    |1:
+    |   andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
+    |   sw SFT1, 0(TMP1)
+    |   bnez AT, >7
+    |.  sw SFT2, 4(TMP1)
+    |.endif
     |2:
     |  ins_next
     |
@@ -3374,7 +4161,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sll TMP1, TMP1, 3
     |  subu TMP1, TMP0, TMP1
     |  addu NODE:TMP2, NODE:TMP2, TMP1	// node = tab->node + (idx*32-idx*8)
-    |   ldc1 f20, 0(RA)
+    |   load_double f20, SFT1, SFT2, 0(RA)
     |1:
     |  lw CARG1, offsetof(Node, key)+HI(NODE:TMP2)
     |   lw TMP0, offsetof(Node, key)+LO(NODE:TMP2)
@@ -3388,8 +4175,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.    lw TAB:TMP0, TAB:RB->metatable
     |2:
     |  andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
+    |.if FPU
     |  bnez AT, >7
     |.  sdc1 f20, NODE:TMP2->val
+    |.else
+    |  sw SFT1, NODE:TMP2->val.u32.hi
+    |  bnez AT, >7
+    |.  sw SFT2, NODE:TMP2->val.u32.lo
+    |.endif
     |3:
     |  ins_next
     |
@@ -3417,6 +4210,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  beqz TMP0, ->vmeta_tsets		// 'no __newindex' flag NOT set: check.
     |.  li AT, LJ_TSTR
     |6:
+    |.if not FPU
+    |  sw SFT1, TEMP_SAVE_1
+    |  sw SFT2, TEMP_SAVE_2
+    |.endif
     |  load_got lj_tab_newkey
     |  sw STR:RC, LO(CARG3)
     |  sw AT, HI(CARG3)
@@ -3427,8 +4224,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.  move CARG1, L
     |  // Returns TValue *.
     |  lw BASE, L->base
+    |.if FPU
     |  b <3				// No 2nd write barrier needed.
     |.  sdc1 f20, 0(CRET1)
+    |.else
+    |  lw SFT2, TEMP_SAVE_1
+    |  lw SFT3, TEMP_SAVE_2
+    |  sw SFT2, 0(CRET1)
+    |  b <3
+    |.  sw SFT3, 4(CRET1)
+    |.endif
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
     |  barrierback TAB:RB, TMP3, TMP0, <3
@@ -3453,11 +4258,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw TMP1, HI(RC)
     |   lbu TMP3, TAB:RB->marked
     |  beq TMP1, TISNIL, >5
-    |.  ldc1 f0, 0(RA)
     |1:
-    |  andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
+    |.  andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
+    |  load_double1 0(RA)
+    |.if FPU
     |  bnez AT, >7
     |.  sdc1 f0, 0(RC)
+    |.else
+    |  sw SFT1, 0(RC)
+    |  bnez AT, >7
+    |.  sw SFT2, 4(RC)
+    |.endif
     |2:
     |  ins_next
     |
@@ -3482,12 +4293,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   decode_RDtoRC8 RC, RD
     |  addu CARG1, BASE, RB
     |   addu CARG3, BASE, RC
-    |    lw TAB:CARG2, LO(CARG1)
+    |.if FPU
     |   ldc1 f0, 0(CARG3)
     |  trunc.w.d f2, f0
+    |  mfc1 CARG3, f2
+    |.else
+    |  load_got __fixdfsi
+    |  sw CARG1, TEMP_SAVE_1
+    |   lw CARG1, 0(CARG3)
+    |  call_extern
+    |.   lw CARG2, 4(CARG3)
+    |  lw CARG1, TEMP_SAVE_1
+    |  move CARG3, CRET1
+    |.endif
+    |    lw TAB:CARG2, LO(CARG1)
     |    lbu TMP3, TAB:CARG2->marked
     |   lw TMP0, TAB:CARG2->asize
-    |  mfc1 CARG3, f2
     |   lw TMP1, TAB:CARG2->array
     |  andi AT, TMP3, LJ_GC_BLACK	// isblack(table)
     |  bnez AT, >7
@@ -3495,12 +4316,24 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  sltu AT, CARG3, TMP0
     |   sll TMP2, CARG3, 3
+    |.if FPU
     |  beqz AT, ->vmeta_tsetr		// In array part?
     |.  ldc1 f20, 0(RA)
     |   addu CRET1, TMP1, TMP2
     |->BC_TSETR_Z:
+    |.else
+    |   lw TMP0, 0(RA)
+    |   lw TMP3, 4(RA)
+    |   sw TMP0, TEMP_SAVE_1
+    |  beqz AT, ->vmeta_tsetr		// In array part?
+    |.   sw TMP3, TEMP_SAVE_2
+    |  addu CRET1, TMP1, TMP2
+    |->BC_TSETR_Z:
+    |   lw TMP0, TEMP_SAVE_1
+    |   lw TMP3, TEMP_SAVE_2
+    |.endif
     |  ins_next1
-    |   sdc1 f20, 0(CRET1)
+    |   store_double f20, TMP0, TMP3, 0(CRET1)
     |  ins_next2
     |
     |7:  // Possible table write barrier for the value. Skip valiswhite check.
@@ -3529,10 +4362,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addu TMP1, TMP1, CARG1
     |  andi TMP0, TMP3, LJ_GC_BLACK	// isblack(table)
     |3:  // Copy result slots to table.
-    |   ldc1 f0, 0(RA)
+    |   load_double1 0(RA)
     |    addiu RA, RA, 8
     |  sltu AT, RA, TMP2
-    |   sdc1 f0, 0(TMP1)
+    |   store_double1 0(TMP1)
     |  bnez AT, <3
     |.   addiu TMP1, TMP1, 8
     |  bnez TMP0, >7
@@ -3607,10 +4440,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  beqz NARGS8:RC, >3
     |.  move TMP3, NARGS8:RC
     |2:
-    |   ldc1 f0, 0(RA)
+    |   load_double1 0(RA)
     |    addiu RA, RA, 8
     |  addiu TMP3, TMP3, -8
-    |   sdc1 f0, 0(TMP2)
+    |   store_double1 0(TMP2)
     |  bnez TMP3, <2
     |.   addiu TMP2, TMP2, 8
     |3:
@@ -3647,12 +4480,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   li AT, LJ_TFUNC
     |  lw TMP1, -24+HI(BASE)
     |   lw LFUNC:RB, -24+LO(BASE)
-    |    ldc1 f2, -8(BASE)
-    |    ldc1 f0, -16(BASE)
+    |    load_double1 -8(BASE)
+    |    load_double2 -16(BASE)
     |  sw TMP1, HI(BASE)		// Copy callable.
     |   sw LFUNC:RB, LO(BASE)
-    |    sdc1 f2, 16(BASE)		// Copy control var.
-    |    sdc1 f0, 8(BASE)		// Copy state.
+    |    store_double1 16(BASE)		// Copy control var.
+    |    store_double2 8(BASE)		// Copy state.
     |   addiu BASE, BASE, 8
     |  bne TMP1, AT, ->vmeta_call
     |.  li NARGS8:RC, 16		// Iterators get 2 arguments.
@@ -3676,19 +4509,29 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.  sll TMP3, RC, 3
     |  addu TMP3, TMP1, TMP3
     |  lw TMP2, HI(TMP3)
-    |   ldc1 f0, 0(TMP3)
+    |   load_double1 0(TMP3)
+    |.if FPU
     |    mtc1 RC, f2
+    |.else
+    |    move CARG1, RC
+    |.endif
     |     lhu RD, -4+OFS_RD(PC)
     |  beq TMP2, TISNIL, <1		// Skip holes in array part.
     |.  addiu RC, RC, 1
+    |   store_double1 8(RA)
+    |.if FPU
     |    cvt.d.w f2, f2
+    |.else
+    |   load_got __floatsidf
+    |   call_extern
+    |.   nop
+    |.endif
     |     lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
-    |   sdc1 f0, 8(RA)
+    |   store_double f2, CRET1, CRET2, 0(RA)
     |     decode_RD4b RD
     |     addu RD, RD, TMP3
     |   sw RC, -8+LO(RA)		// Update control var.
     |     addu PC, PC, RD
-    |    sdc1 f2, 0(RA)
     |3:
     |  ins_next
     |
@@ -3704,17 +4547,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   subu TMP3, TMP3, RB
     |  addu NODE:TMP3, TMP3, TMP2
     |  lw RB, HI(NODE:TMP3)
-    |  ldc1 f0, 0(NODE:TMP3)
+    |  load_double1 0(NODE:TMP3)
     |     lhu RD, -4+OFS_RD(PC)
     |  beq RB, TISNIL, <6		// Skip holes in hash part.
     |.  addiu RC, RC, 1
+    |.if FPU
     |   ldc1 f2, NODE:TMP3->key
+    |.else
+    |   lw SFT3, NODE:TMP3->key.u32.hi
+    |   lw SFT4, NODE:TMP3->key.u32.lo
+    |.endif
     |     lui TMP3, (-(BCBIAS_J*4 >> 16) & 65535)
-    |  sdc1 f0, 8(RA)
+    |  store_double1 8(RA)
     |    addu RC, RC, TMP0
     |     decode_RD4b RD
     |     addu RD, RD, TMP3
-    |   sdc1 f2, 0(RA)
+    |   store_double2 0(RA)
     |     addu PC, PC, RD
     |  b <3
     |.  sw RC, -8+LO(RA)		// Update control var.
@@ -3794,9 +4642,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bnez AT, >7
     |.  addiu MULTRES, TMP1, 8
     |6:
-    |  ldc1 f0, 0(RC)
+    |  load_double1 0(RC)
     |   addiu RC, RC, 8
-    |  sdc1 f0, 0(RA)
+    |  store_double1 0(RA)
     |  sltu AT, RC, TMP3
     |  bnez AT, <6			// More vararg slots?
     |.  addiu RA, RA, 8
@@ -3852,10 +4700,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  beqz RC, >3
     |.  subu BASE, TMP2, TMP0
     |2:
-    |   ldc1 f0, 0(RA)
+    |   load_double1 0(RA)
     |    addiu RA, RA, 8
     |  addiu RC, RC, -8
-    |   sdc1 f0, 0(TMP2)
+    |   store_double1 0(TMP2)
     |  bnez RC, <2
     |.   addiu TMP2, TMP2, 8
     |3:
@@ -3896,14 +4744,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lw INS, -4(PC)
     |   addiu TMP2, BASE, -8
     if (op == BC_RET1) {
-      |  ldc1 f0, 0(RA)
+      |  load_double1 0(RA)
     }
     |  decode_RB8a RB, INS
     |   decode_RA8a RA, INS
     |  decode_RB8b RB
     |   decode_RA8b RA
     if (op == BC_RET1) {
-      |  sdc1 f0, 0(TMP2)
+      |  store_double1 0(TMP2)
     }
     |   subu BASE, TMP2, RA
     |5:
@@ -3928,6 +4776,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   /* -- Loops and branches ------------------------------------------------ */
 
+    |.macro cmp_res, gt
+    |.if gt == 1
+    |.if FPU
+    |  movf TMP1, r0, 0		// f0>f2: TMP1=0
+    |  movf TMP2, r0, 1		// f2>f0: TMP2=0
+    |.else
+    |  li SFT2, 1
+    |  bne CRET1, SFT2, >1
+    |.  nop
+    |  b >2
+    |.  move TMP1, r0
+    |1:
+    |  li SFT2, -1
+    |  bne CRET1, SFT2, >2
+    |.  nop
+    |  move TMP2, r0
+    |2:
+    |.endif
+    |.else
+    |.if FPU
+    |  movt TMP1, r0, 0		// f0<=f2: TMP1=0
+    |  movt TMP2, r0, 1		// f2<=f0: TMP2=0
+    |.else
+    |  bltz CRET1, >3		// f0<f2: TMP1=0
+    |.  nop
+    |  beqz CRET1, >2		// f0==f2: TMP1=TMP2=0
+    |.  li SFT2, 1
+    |  bne SFT2, CRET1, >4	// f0>f2: TMP2=0
+    |.  nop
+    |  b >4
+    |2:
+    |.  move TMP2, r0
+    |3:
+    |  move TMP1, r0
+    |4:
+    |.endif
+    |.endif
+    |.endmacro
+
   case BC_FORL:
     |.if JIT
     |  hotloop
@@ -3946,12 +4833,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     vk = (op == BC_IFORL || op == BC_JFORL);
     |  addu RA, BASE, RA
     if (vk) {
+      |.if FPU
       |  ldc1 f0, FORL_IDX*8(RA)
       |  ldc1 f4, FORL_STEP*8(RA)
       |  ldc1 f2, FORL_STOP*8(RA)
       |   lw TMP3, FORL_STEP*8+HI(RA)
       |  add.d f0, f0, f4
       |  sdc1 f0, FORL_IDX*8(RA)
+      |.else
+      |  load_got __adddf3
+      |  load_farg1 FORL_IDX*8(RA)
+      |  load_farg2 FORL_STEP*8(RA)
+      |  call_extern
+      |.  sw RD, TEMP_SAVE_1  //save RD
+      |  sw CRET1, FORL_IDX*8(RA)
+      |  sw CRET2, FORL_IDX*8+4(RA)
+      |  load_farg1 FORL_IDX*8(RA)
+      |  load_farg2 FORL_STOP*8(RA)		// f0 and f2
+      |  lw TMP3, FORL_STEP*8+HI(RA)
+      |  lw RD, TEMP_SAVE_1
+      |.endif
     } else {
       |  lw TMP1, FORL_IDX*8+HI(RA)
       |  lw TMP3, FORL_STEP*8+HI(RA)
@@ -3961,25 +4862,41 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  sltiu TMP2, TMP2, LJ_TISNUM
       |  and TMP1, TMP1, TMP0
       |  and TMP1, TMP1, TMP2
+      |.if FPU
       |   ldc1 f0, FORL_IDX*8(RA)
       |  beqz TMP1, ->vmeta_for
       |.  ldc1 f2, FORL_STOP*8(RA)
+      |.else
+      |  beqz TMP1, ->vmeta_for
+      |  load_farg1 FORL_IDX*8(RA)
+      |  load_farg2 FORL_STOP*8(RA)
+      |.endif
     }
     if (op != BC_JFORL) {
       |  srl RD, RD, 1
       |  lui TMP0, (-(BCBIAS_J*4 >> 16) & 65535)
     }
+    |  store_double f0, CARG1, CARG2, FORL_EXT*8(RA)
+    |.if FPU
     |  c.le.d 0, f0, f2
     |  c.le.d 1, f2, f0
-    |  sdc1 f0, FORL_EXT*8(RA)
+    |.else
+    |  sw RD, TEMP_SAVE_1
+    |  load_got __ledf2				// f0<=f2
+    |  call_extern
+    |.  sw TMP0, TEMP_SAVE_2
+    |  lw TMP0, TEMP_SAVE_2
+    |  lw RD, TEMP_SAVE_1
+    |  lw TMP3, FORL_STEP*8+HI(RA)		// Restored step.
+    |.endif
+    |
     if (op == BC_JFORI) {
       |  li TMP1, 1
       |  li TMP2, 1
       |   addu TMP0, RD, TMP0
       |  slt TMP3, TMP3, r0
-      |  movf TMP1, r0, 0
+      |  cmp_res 1
       |   addu PC, PC, TMP0
-      |  movf TMP2, r0, 1
       |   lhu RD, -4+OFS_RD(PC)
       |  movn TMP1, TMP2, TMP3
       |  bnez TMP1, =>BC_JLOOP
@@ -3988,8 +4905,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  li TMP1, 1
       |  li TMP2, 1
       |  slt TMP3, TMP3, r0
-      |  movf TMP1, r0, 0
-      |  movf TMP2, r0, 1
+      |  cmp_res 1
       |  movn TMP1, TMP2, TMP3
       |  bnez TMP1, =>BC_JLOOP
       |.  nop
@@ -3998,11 +4914,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  slt TMP3, TMP3, r0
       |  move TMP2, TMP1
       if (op == BC_FORI) {
-	|  movt TMP1, r0, 0
-	|  movt TMP2, r0, 1
+	| cmp_res 0
       } else {
-	|  movf TMP1, r0, 0
-	|  movf TMP2, r0, 1
+	| cmp_res 1
       }
       |  movn TMP1, TMP2, TMP3
       |  addu PC, PC, TMP1
@@ -4256,8 +5170,10 @@ static void emit_asm_debug(BuildCtx *ctx)
 	fcofs, CFRAME_SIZE);
     for (i = 23; i >= 16; i--)
       fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+i, 26-i);
+#if !LJ_SOFTFP
     for (i = 30; i >= 20; i -= 2)
       fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+32+i, 42-i);
+#endif
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
@@ -4275,6 +5191,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 2\n"
 	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
 #endif
+#if !LJ_NO_UNWIND
     fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
     fprintf(ctx->fp,
 	"\t.globl lj_err_unwind_dwarf\n"
@@ -4342,6 +5259,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0xd\n\t.uleb128 0x10\n"
 	"\t.align 2\n"
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
 #endif
     break;
   default:

@@ -270,6 +270,22 @@ LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
 #define fp64_f2l __aeabi_f2lz
 #define fp64_f2ul __aeabi_f2ulz
 #endif
+#elif LJ_TARGET_MIPS
+#define softfp_add __adddf3
+#define softfp_sub __subdf3
+#define softfp_mul __muldf3
+#define softfp_div __divdf3
+#define softfp_cmp __ledf2
+#define softfp_i2d __floatsidf
+#define softfp_d2i __fixdfsi
+#define softfp_ui2d __floatunsidf
+#define softfp_f2d __extendsfdf2
+#define softfp_d2ui __fixunsdfsi
+#define softfp_d2f __truncdfsf2
+#define softfp_i2f __floatsisf
+#define softfp_ui2f __floatunsisf
+#define softfp_f2i __fixsfsi
+#define softfp_f2ui __fixunssfsi
 #else
 #error "Missing soft-float definitions for target architecture"
 #endif
