@@ -418,6 +418,18 @@
   /* Complex values are returned in 1 or 2 FPRs. */ \
   cc->retref = 0;
 
+#if LJ_ABI_SOFTFP
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from GPRs. */ \
+    ((intptr_t *)dp)[0] = cc->gpr[0]; \
+    ((intptr_t *)dp)[1] = cc->gpr[1]; \
+  } else {  /* Copy complex double from GPRs. */ \
+    ((intptr_t *)dp)[0] = cc->gpr[0]; \
+    ((intptr_t *)dp)[1] = cc->gpr[1]; \
+    ((intptr_t *)dp)[2] = cc->gpr[2]; \
+    ((intptr_t *)dp)[3] = cc->gpr[3]; \
+  }
+#else
 #define CCALL_HANDLE_COMPLEXRET2 \
   if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPRs. */ \
     ((float *)dp)[0] = cc->fpr[0].f; \
@@ -426,6 +438,7 @@
     ((double *)dp)[0] = cc->fpr[0].d; \
     ((double *)dp)[1] = cc->fpr[1].d; \
   }
+#endif
 
 #define CCALL_HANDLE_STRUCTARG \
   /* Pass all structs by value in registers and/or on the stack. */
@@ -433,6 +446,22 @@
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex by value in 2 or 4 GPRs. */
 
+#define CCALL_HANDLE_GPR \
+  if ((d->info & CTF_ALIGN) > CTALIGN_PTR) \
+    ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+  if (ngpr < maxgpr) { \
+    dp = &cc->gpr[ngpr]; \
+    if (ngpr + n > maxgpr) { \
+     nsp += ngpr + n - maxgpr;  /* Assumes contiguous gpr/stack fields. */ \
+     if (nsp > CCALL_MAXSTACK) goto err_nyi;  /* Too many arguments. */ \
+     ngpr = maxgpr; \
+    } else { \
+     ngpr += n; \
+    } \
+    goto done; \
+  }
+
+#if !LJ_ABI_SOFTFP	/* MIPS32 hard-float */
 #define CCALL_HANDLE_REGARG \
   if (isfp && nfpr < CCALL_NARG_FPR && !(ct->info & CTF_VARARG)) { \
     /* Try to pass argument in FPRs. */ \
@@ -441,24 +470,18 @@
     goto done; \
   } else {  /* Try to pass argument in GPRs. */ \
     nfpr = CCALL_NARG_FPR; \
-    if ((d->info & CTF_ALIGN) > CTALIGN_PTR) \
-      ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
-    if (ngpr < maxgpr) { \
-      dp = &cc->gpr[ngpr]; \
-      if (ngpr + n > maxgpr) { \
-	nsp += ngpr + n - maxgpr;  /* Assumes contiguous gpr/stack fields. */ \
-	if (nsp > CCALL_MAXSTACK) goto err_nyi;  /* Too many arguments. */ \
-	ngpr = maxgpr; \
-      } else { \
-	ngpr += n; \
-      } \
-      goto done; \
-    } \
+    CCALL_HANDLE_GPR \
   }
+#else			/* MIPS32 soft-float */
+#define CCALL_HANDLE_REGARG CCALL_HANDLE_GPR
+#endif
 
+#if !LJ_ABI_SOFTFP
+/* On MIPS64 soft-float, position of float return values is endian-dependant. */
 #define CCALL_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     sp = (uint8_t *)&cc->fpr[0].f;
+#endif
 
 #else
 #error "Missing calling convention definitions for this architecture"

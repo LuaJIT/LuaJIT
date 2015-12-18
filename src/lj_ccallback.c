@@ -427,6 +427,15 @@ void lj_ccallback_mcode_free(CTState *cts)
 
 #elif LJ_TARGET_MIPS
 
+#define CALLBACK_HANDLE_GPR \
+  if (n > 1) ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
+  if (ngpr + n <= maxgpr) { \
+    sp = &cts->cb.gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  }
+
+#if !LJ_ABI_SOFTFP	/* MIPS32 hard-float */
 #define CALLBACK_HANDLE_REGARG \
   if (isfp && nfpr < CCALL_NARG_FPR) {  /* Try to pass argument in FPRs. */ \
     sp = (void *)((uint8_t *)&cts->cb.fpr[nfpr] + ((LJ_BE && n==1) ? 4 : 0)); \
@@ -434,13 +443,13 @@ void lj_ccallback_mcode_free(CTState *cts)
     goto done; \
   } else {  /* Try to pass argument in GPRs. */ \
     nfpr = CCALL_NARG_FPR; \
-    if (n > 1) ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
-    if (ngpr + n <= maxgpr) { \
-      sp = &cts->cb.gpr[ngpr]; \
-      ngpr += n; \
-      goto done; \
-    } \
+    CALLBACK_HANDLE_GPR \
   }
+#else			/* MIPS32 soft-float */
+#define CALLBACK_HANDLE_REGARG \
+  CALLBACK_HANDLE_GPR \
+  UNUSED(isfp);
+#endif
 
 #define CALLBACK_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \

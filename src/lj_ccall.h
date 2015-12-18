@@ -98,9 +98,9 @@ typedef double FPRArg;
 #elif LJ_TARGET_MIPS
 
 #define CCALL_NARG_GPR		4
-#define CCALL_NARG_FPR		2
+#define CCALL_NARG_FPR		(LJ_ABI_SOFTFP ? 0 : 2)
 #define CCALL_NRET_GPR		2
-#define CCALL_NRET_FPR		2
+#define CCALL_NRET_FPR		(LJ_ABI_SOFTFP ? 0 : 2)
 #define CCALL_SPS_EXTRA		7
 #define CCALL_SPS_FREE		1
 
