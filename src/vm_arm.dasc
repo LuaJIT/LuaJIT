@@ -373,6 +373,17 @@ static void build_subroutines(BuildCtx *ctx)
   |   st_vmstate CARG2
   |  b ->vm_returnc
   |
+  |->vm_unwind_ext:			// Complete external unwind.
+#if !LJ_NO_UNWIND
+  |  push {r0, r1, r2, lr}
+  |  bl extern _Unwind_Complete
+  |  ldr r0, [sp]
+  |  bl extern _Unwind_DeleteException
+  |  pop {r0, r1, r2, lr}
+  |  mov r0, r1
+  |  bx r2
+#endif
+  |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------
   |//-----------------------------------------------------------------------

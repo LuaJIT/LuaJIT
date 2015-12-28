@@ -190,13 +190,6 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 ** since various OS, distros and compilers mess up the header installation.
 */
 
-typedef struct _Unwind_Exception
-{
-  uint64_t exclass;
-  void (*excleanup)(int, struct _Unwind_Exception *);
-  uintptr_t p1, p2;
-} __attribute__((__aligned__)) _Unwind_Exception;
-
 typedef struct _Unwind_Context _Unwind_Context;
 
 #define _URC_OK			0
@@ -206,7 +199,19 @@ typedef struct _Unwind_Context _Unwind_Context;
 #define _URC_CONTINUE_UNWIND	8
 #define _URC_FAILURE		9
 
+#define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
+#define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (uint64_t)(c))
+#define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
+#define LJ_UEXCLASS_ERRCODE(cl)	((int)((cl) & 0xff))
+
 #if !LJ_TARGET_ARM
+
+typedef struct _Unwind_Exception
+{
+  uint64_t exclass;
+  void (*excleanup)(int, struct _Unwind_Exception *);
+  uintptr_t p1, p2;
+} __attribute__((__aligned__)) _Unwind_Exception;
 
 extern uintptr_t _Unwind_GetCFA(_Unwind_Context *);
 extern void _Unwind_SetGR(_Unwind_Context *, int, uintptr_t);
@@ -218,11 +223,6 @@ extern int _Unwind_RaiseException(_Unwind_Exception *);
 #define _UA_CLEANUP_PHASE	2
 #define _UA_HANDLER_FRAME	4
 #define _UA_FORCE_UNWIND	8
-
-#define LJ_UEXCLASS		0x4c55414a49543200ULL	/* LUAJIT2\0 */
-#define LJ_UEXCLASS_MAKE(c)	(LJ_UEXCLASS | (uint64_t)(c))
-#define LJ_UEXCLASS_CHECK(cl)	(((cl) ^ LJ_UEXCLASS) <= 0xff)
-#define LJ_UEXCLASS_ERRCODE(cl)	((int)((cl) & 0xff))
 
 /* DWARF2 personality handler referenced from interpreter .eh_frame. */
 LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
@@ -302,10 +302,23 @@ static void err_raise_ext(int errcode)
 }
 #endif
 
-#else
+#else /* LJ_TARGET_ARM */
 
-extern void _Unwind_DeleteException(void *);
-extern int __gnu_unwind_frame (void *, _Unwind_Context *);
+#define _US_VIRTUAL_UNWIND_FRAME	0
+#define _US_UNWIND_FRAME_STARTING	1
+#define _US_ACTION_MASK			3
+#define _US_FORCE_UNWIND		8
+
+typedef struct _Unwind_Control_Block _Unwind_Control_Block;
+typedef struct _Unwind_Context _Unwind_Context;
+
+struct _Unwind_Control_Block {
+  uint64_t exclass;
+  uint32_t misc[20];
+};
+
+extern int _Unwind_RaiseException(_Unwind_Control_Block *);
+extern int __gnu_unwind_frame(_Unwind_Control_Block *, _Unwind_Context *);
 extern int _Unwind_VRS_Set(_Unwind_Context *, int, uint32_t, int, void *);
 extern int _Unwind_VRS_Get(_Unwind_Context *, int, uint32_t, int, void *);
 
@@ -321,33 +334,56 @@ static inline void _Unwind_SetGR(_Unwind_Context *ctx, int r, uint32_t v)
   _Unwind_VRS_Set(ctx, 0, r, 0, &v);
 }
 
-#define _US_VIRTUAL_UNWIND_FRAME	0
-#define _US_UNWIND_FRAME_STARTING	1
-#define _US_ACTION_MASK			3
-#define _US_FORCE_UNWIND		8
+extern void lj_vm_unwind_ext(void);
 
 /* ARM unwinder personality handler referenced from interpreter .ARM.extab. */
-LJ_FUNCA int lj_err_unwind_arm(int state, void *ucb, _Unwind_Context *ctx)
+LJ_FUNCA int lj_err_unwind_arm(int state, _Unwind_Control_Block *ucb,
+			       _Unwind_Context *ctx)
 {
   void *cf = (void *)_Unwind_GetGR(ctx, 13);
   lua_State *L = cframe_L(cf);
-  if ((state & _US_ACTION_MASK) == _US_VIRTUAL_UNWIND_FRAME) {
-    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+  int errcode;
+
+  switch ((state & _US_ACTION_MASK)) {
+  case _US_VIRTUAL_UNWIND_FRAME:
+    if ((state & _US_FORCE_UNWIND)) break;
     return _URC_HANDLER_FOUND;
-  }
-  if ((state&(_US_ACTION_MASK|_US_FORCE_UNWIND)) == _US_UNWIND_FRAME_STARTING) {
-    _Unwind_DeleteException(ucb);
-    _Unwind_SetGR(ctx, 15, (uint32_t)(void *)lj_err_throw);
-    _Unwind_SetGR(ctx, 0, (uint32_t)L);
-    _Unwind_SetGR(ctx, 1, (uint32_t)LUA_ERRRUN);
+  case _US_UNWIND_FRAME_STARTING:
+    if (LJ_UEXCLASS_CHECK(ucb->exclass)) {
+      errcode = LJ_UEXCLASS_ERRCODE(ucb->exclass);
+    } else {
+      errcode = LUA_ERRRUN;
+      setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+    }
+    cf = err_unwind(L, cf, errcode);
+    if ((state & _US_FORCE_UNWIND) || cf == NULL) break;
+    _Unwind_SetGR(ctx, 15, (uint32_t)lj_vm_unwind_ext);
+    _Unwind_SetGR(ctx, 0, (uint32_t)ucb);
+    _Unwind_SetGR(ctx, 1, (uint32_t)errcode);
+    _Unwind_SetGR(ctx, 2, cframe_unwind_ff(cf) ?
+			    (uint32_t)lj_vm_unwind_ff_eh :
+			    (uint32_t)lj_vm_unwind_c_eh);
     return _URC_INSTALL_CONTEXT;
+  default:
+    return _URC_FAILURE;
   }
   if (__gnu_unwind_frame(ucb, ctx) != _URC_OK)
     return _URC_FAILURE;
   return _URC_CONTINUE_UNWIND;
 }
 
+#if LJ_UNWIND_EXT
+static __thread _Unwind_Control_Block static_uex;
+
+static void err_raise_ext(int errcode)
+{
+  memset(&static_uex, 0, sizeof(static_uex));
+  static_uex.exclass = LJ_UEXCLASS_MAKE(errcode);
+  _Unwind_RaiseException(&static_uex);
+}
 #endif
+
+#endif /* LJ_TARGET_ARM */
 
 #elif LJ_TARGET_X64 && LJ_ABI_WIN
 
