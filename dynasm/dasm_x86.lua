@@ -1567,6 +1567,12 @@ local map_op = {
 
   -- AVX, AVX2 integer ops
   -- In general, xmm requires AVX, ymm requires AVX2.
+  vaesdec_3 =  "rrmo:660F38VDErM",
+  vaesdeclast_3 = "rrmo:660F38VDFrM",
+  vaesenc_3 =  "rrmo:660F38VDCrM",
+  vaesenclast_3 = "rrmo:660F38VDDrM",
+  vaesimc_2 =  "rmo:660F38uDBrM",
+  vaeskeygenassist_3 = "rmio:660F3AuDFrMU",
   vlddqu_2 =	"rxoy:F20FuF0rM",
   vmaskmovdqu_2 = "rro:660FuF7rM",
   vmovdqa_2 =	"rmoy:660Fu6FrM|mroy:660Fu7FRm",
