@@ -158,8 +158,8 @@ local map_opc2 = {
 "||punpcklqdqXrvm","||punpckhqdqXrvm",
 "movPrVSm","movqMrm|movdquXrm|movdqaXrm",
 --7x
-"pshufwMrmu|pshufhwXrmu|pshufdXrmu|pshuflwXrmu","pshiftw!Pmu",
-"pshiftd!Pmu","pshiftq!Mmu||pshiftdq!Xmu",
+"pshufwMrmu|pshufhwXrmu|pshufdXrmu|pshuflwXrmu","pshiftw!Pvmu",
+"pshiftd!Pvmu","pshiftq!Mvmu||pshiftdq!Xvmu",
 "pcmpeqbPrvm","pcmpeqwPrvm","pcmpeqdPrvm","emms*|",
 "vmreadUmr||extrqXmuu$|insertqXrmuu$","vmwriteUrm||extrqXrm$|insertqXrm$",
 nil,nil,
