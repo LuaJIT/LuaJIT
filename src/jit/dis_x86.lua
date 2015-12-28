@@ -239,6 +239,9 @@ nil,"||psrlvVSXrvm","||psravdXrvm","||psllvVSXrvm",
 --8x
 [0x8c] = "||pmaskmovXrvVSm",
 [0x8e] = "||pmaskmovVSmXvr",
+--Dx
+[0xdc] = "||aesencXrvm", [0xdd] = "||aesenclastXrvm",
+[0xde] = "||aesdecXrvm", [0xdf] = "||aesdeclastXrvm",
 --Fx
 [0xf0] = "|||crc32TrBmt",[0xf1] = "|||crc32TrVmt",
 },
@@ -262,12 +265,14 @@ nil,nil,nil,nil,
 [0x40] = "||dppsXrvmu",
 [0x41] = "||dppdXrvmu",
 [0x42] = "||mpsadbwXrvmu",
+[0x44] = "||pclmulqdqXrvmu",
 [0x46] = "||perm2i128Xrvmu",
 [0x4a] = "||blendvpsXrvmb",[0x4b] = "||blendvpdXrvmb",
 [0x4c] = "||pblendvbXrvmb",
 --6x
 [0x60] = "||pcmpestrmXrmu",[0x61] = "||pcmpestriXrmu",
 [0x62] = "||pcmpistrmXrmu",[0x63] = "||pcmpistriXrmu",
+[0xdf] = "||aeskeygenassistXrmu",
 },
 }
 
