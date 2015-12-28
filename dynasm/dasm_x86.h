@@ -403,6 +403,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  unsigned char *ex = cp - (t&7);
 	  if ((n & 8) && t < 0xa0) {
 	    if (*ex & 0x80) ex[1] ^= 0x20 << (t>>6); else *ex ^= 1 << (t>>6);
+	    n &= 7;
 	  } else if (n & 0x10) {
 	    if (*ex & 0x80) {
 	      *ex = 0xc5; ex[1] = (ex[1] & 0x80) | ex[2]; ex += 2;
@@ -410,8 +411,8 @@ int dasm_encode(Dst_DECL, void *buffer)
 	    while (++ex < cp) ex[-1] = *ex;
 	    if (mark) mark--;
 	    cp--;
+	    n &= 7;
 	  }
-	  n &= 7;
 	  if (t >= 0xc0) n <<= 4;
 	  else if (t >= 0x40) n <<= 3;
 	  else if (n == 4 && t < 0x20) { cp[-1] ^= n; *cp++ = 0x20; }
