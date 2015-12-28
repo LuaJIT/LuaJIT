@@ -505,10 +505,7 @@ LJLIB_CF(ffi_new)	LJLIB_REC(.)
   }
   if (sz == CTSIZE_INVALID)
     lj_err_arg(L, 1, LJ_ERR_FFI_INVSIZE);
-  if (!(info & CTF_VLA) && ctype_align(info) <= CT_MEMALIGN)
-    cd = lj_cdata_new(cts, id, sz);
-  else
-    cd = lj_cdata_newv(L, id, sz, ctype_align(info));
+  cd = lj_cdata_newx(cts, id, sz, info);
   setcdataV(L, o-1, cd);  /* Anchor the uninitialized cdata. */
   lj_cconv_ct_init(cts, ct, sz, cdataptr(cd),
 		   o, (MSize)(L->top - o));  /* Initialize cdata. */

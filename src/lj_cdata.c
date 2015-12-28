@@ -49,6 +49,15 @@ GCcdata *lj_cdata_newv(lua_State *L, CTypeID id, CTSize sz, CTSize align)
   return cd;
 }
 
+/* Allocate arbitrary C data object. */
+GCcdata *lj_cdata_newx(CTState *cts, CTypeID id, CTSize sz, CTInfo info)
+{
+  if (!(info & CTF_VLA) && ctype_align(info) <= CT_MEMALIGN)
+    return lj_cdata_new(cts, id, sz);
+  else
+    return lj_cdata_newv(cts->L, id, sz, ctype_align(info));
+}
+
 /* Free a C data object. */
 void LJ_FASTCALL lj_cdata_free(global_State *g, GCcdata *cd)
 {

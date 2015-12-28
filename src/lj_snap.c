@@ -711,8 +711,9 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
   if (ir->o == IR_CNEW || ir->o == IR_CNEWI) {
     CTState *cts = ctype_cts(J->L);
     CTypeID id = (CTypeID)T->ir[ir->op1].i;
-    CTSize sz = lj_ctype_size(cts, id);
-    GCcdata *cd = lj_cdata_new(cts, id, sz);
+    CTSize sz;
+    CTInfo info = lj_ctype_info(cts, id, &sz);
+    GCcdata *cd = lj_cdata_newx(cts, id, sz, info);
     setcdataV(J->L, o, cd);
     if (ir->o == IR_CNEWI) {
       uint8_t *p = (uint8_t *)cdataptr(cd);
