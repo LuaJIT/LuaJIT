@@ -267,6 +267,18 @@ LJLIB_CF(jit_util_funcuvname)
   return 0;
 }
 
+LJLIB_CF(jit_util_funcbcline)
+{
+  GCproto *pt = check_Lproto(L, 0);
+  uint32_t idx = (uint32_t)lj_lib_checkint(L, 2);
+  BCLine line = lj_debug_line(pt, idx);
+  if (line != 0) {
+    setintV(L->top-1, line);
+    return 1;
+  }
+  return 0;
+}
+
 /* -- Reflection API for traces ------------------------------------------- */
 
 #if LJ_HASJIT
