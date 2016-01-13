@@ -651,8 +651,14 @@ void lj_record_tailcall(jit_State *J, BCReg func, ptrdiff_t nargs)
   memmove(&J->base[-1], &J->base[func], sizeof(TRef)*(J->maxslot+1));
   /* Note: the new TREF_FRAME is now at J->base[-1] (even for slot #0). */
   /* Tailcalls can form a loop, so count towards the loop unroll limit. */
-  if (++J->tailcalled > J->loopunroll)
-    lj_trace_err(J, LJ_TRERR_LUNROLL);
+
+  J->tailcalled++;
+
+  /* Although it's true that tail calls can form a loop, the Lua programming
+  ** idiom does not encourage this.  Instead of counting tail calls towards the
+  ** unroll limit and potentially causing important traces without loops to
+  ** abort, eventually blacklist, and fall back to the interpreter, just rely on
+  ** JIT_P_maxrecord to catch runaway tail-call loops. */
 }
 
 /* Check unroll limits for down-recursion. */
