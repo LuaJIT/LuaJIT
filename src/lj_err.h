@@ -38,4 +38,8 @@ LJ_FUNC_NORET void lj_err_argv(lua_State *L, int narg, ErrMsg em, ...);
 LJ_FUNC_NORET void lj_err_argtype(lua_State *L, int narg, const char *xname);
 LJ_FUNC_NORET void lj_err_argt(lua_State *L, int narg, int tt);
 
+#if LJ_HASJIT && LJ_ABI_WIN && LJ_TARGET_X64
+LJ_FUNC int lj_err_unwind_trace_win64(void* r, void* tcf, void* ctx, void* d);
+#endif
+
 #endif
