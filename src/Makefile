@@ -388,6 +388,11 @@ DASM_XFLAGS=
 DASM_AFLAGS=
 DASM_ARCH= $(TARGET_LJARCH)
 
+ifneq (,$(findstring LJ_LE 1,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D ENDIAN_LE
+else
+  DASM_AFLAGS+= -D ENDIAN_BE
+endif
 ifneq (,$(findstring LJ_ARCH_BITS 64,$(TARGET_TESTARCH)))
   DASM_AFLAGS+= -D P64
 endif

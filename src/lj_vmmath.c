@@ -57,6 +57,20 @@ double lj_vm_foldarith(double x, double y, int op)
   }
 }
 
+#if (LJ_HASJIT && !(LJ_TARGET_ARM || LJ_TARGET_ARM64 || LJ_TARGET_PPC)) || LJ_TARGET_MIPS
+int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b)
+{
+  uint32_t y, ua, ub;
+  lua_assert(b != 0);  /* This must be checked before using this function. */
+  ua = a < 0 ? (uint32_t)-a : (uint32_t)a;
+  ub = b < 0 ? (uint32_t)-b : (uint32_t)b;
+  y = ua % ub;
+  if (y != 0 && (a^b) < 0) y = y - ub;
+  if (((int32_t)y^b) < 0) y = (uint32_t)-(int32_t)y;
+  return (int32_t)y;
+}
+#endif
+
 #if LJ_HASJIT
 
 #ifdef LUAJIT_NO_LOG2
@@ -70,20 +84,6 @@ double lj_vm_log2(double a)
 double lj_vm_exp2(double a)
 {
   return exp(a * 0.6931471805599453);
-}
-#endif
-
-#if !(LJ_TARGET_ARM || LJ_TARGET_ARM64 || LJ_TARGET_PPC)
-int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b)
-{
-  uint32_t y, ua, ub;
-  lua_assert(b != 0);  /* This must be checked before using this function. */
-  ua = a < 0 ? (uint32_t)-a : (uint32_t)a;
-  ub = b < 0 ? (uint32_t)-b : (uint32_t)b;
-  y = ua % ub;
-  if (y != 0 && (a^b) < 0) y = y - ub;
-  if (((int32_t)y^b) < 0) y = (uint32_t)-(int32_t)y;
-  return (int32_t)y;
 }
 #endif
 

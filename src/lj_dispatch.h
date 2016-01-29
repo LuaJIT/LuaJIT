@@ -14,18 +14,19 @@
 
 #if LJ_TARGET_MIPS
 /* Need our own global offset table for the dreaded MIPS calling conventions. */
+
+#ifndef _LJ_VM_H
+LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b);
+#endif
+
 #if LJ_SOFTFP
+#ifndef _LJ_IRCALL_H
 extern double __adddf3(double a, double b);
 extern double __subdf3(double a, double b);
 extern double __muldf3(double a, double b);
 extern double __divdf3(double a, double b);
-extern void __ledf2(double a, double b);
-extern double __floatsidf(int32_t a);
-extern int32_t __fixdfsi(double a);
-
-#define SFGOTDEF(_) \
-  _(lj_num2bit) _(sqrt) _(__adddf3) _(__subdf3) _(__muldf3) _(__divdf3) _(__ledf2) \
-  _(__floatsidf) _(__fixdfsi)
+#endif
+#define SFGOTDEF(_)	_(sqrt) _(__adddf3) _(__subdf3) _(__muldf3) _(__divdf3)
 #else
 #define SFGOTDEF(_)
 #endif
@@ -43,14 +44,14 @@ extern int32_t __fixdfsi(double a);
 #define GOTDEF(_) \
   _(floor) _(ceil) _(trunc) _(log) _(log10) _(exp) _(sin) _(cos) _(tan) \
   _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
-  _(pow) _(fmod) _(ldexp) \
+  _(pow) _(fmod) _(ldexp) _(lj_vm_modi) \
   _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_dispatch_stitch) \
   _(lj_dispatch_profile) _(lj_err_throw) \
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \
   _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) \
   _(lj_meta_call) _(lj_meta_cat) _(lj_meta_comp) _(lj_meta_equal) \
   _(lj_meta_for) _(lj_meta_istype) _(lj_meta_len) _(lj_meta_tget) \
-  _(lj_meta_tset) _(lj_state_growstack) _(lj_strfmt_num) \
+  _(lj_meta_tset) _(lj_state_growstack) _(lj_strfmt_number) \
   _(lj_str_new) _(lj_tab_dup) _(lj_tab_get) _(lj_tab_getinth) _(lj_tab_len) \
   _(lj_tab_new) _(lj_tab_newkey) _(lj_tab_next) _(lj_tab_reasize) \
   _(lj_tab_setinth) _(lj_buf_putstr_reverse) _(lj_buf_putstr_lower) \
