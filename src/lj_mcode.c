@@ -275,22 +275,189 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 typedef struct MCLink {
   MCode *next;		/* Next area. */
   size_t size;		/* Size of current area. */
+#if LJ_ABI_WIN && LJ_TARGET_X64
+  char ehandler[6];	/* Stub which jumps to exception handler. */
+  uint16_t numunwind;	/* Length of MCUnwind chain. */
+  struct MCUnwind *unwind; /* Head of MCUnwind chain, one per trace. */
+#endif
 } MCLink;
+
+#if LJ_ABI_WIN && LJ_TARGET_X64
+
+typedef struct MCUnwind {
+  RUNTIME_FUNCTION rf;	  /* Specifies range of code and pointer to xdata */
+  uint16_t xdata[4];	  /* Unwind data for this code range */
+  RUNTIME_FUNCTION chain; /* Pointer to remainder of xdata (UnwindInfoAddress)
+                             and to next MCUnwind in chain (EndAddress) */
+} MCUnwind;
+
+#if LUA_BUILD_AS_DLL
+
+/* Taken from CoreCLR's clrnt.h: */
+typedef struct UndocumentedDynamicFunctionTable {
+  LIST_ENTRY Links;
+  PRUNTIME_FUNCTION FunctionTable;
+  LARGE_INTEGER Timestamp;
+  ULONG64 MinimumAddress;
+  ULONG64 MaximumAddress;
+  ULONG64 BaseAddress;
+  PGET_RUNTIME_FUNCTION_CALLBACK Callback;
+  PVOID Context;
+} UndocumentedDynamicFunctionTable;
+
+/* Used by out-of-process debuggers to get unwind data for mcode regions.
+   Registered via RtlInstallFunctionTableCallback.
+   Can require a KnownFunctionTableDlls registry entry in order to be called
+   (see src/dlls/mscordac/mscordac.vrg in CoreCLR) */
+LUA_API DWORD OutOfProcessFunctionTableCallback(HANDLE process,
+  UndocumentedDynamicFunctionTable *dftable, PDWORD outnumfuncs,
+  PRUNTIME_FUNCTION *outfuncs)
+{
+  char *mc;
+  MCLink link;
+
+  if (!outnumfuncs) return (DWORD)0xC00000F1L;
+  if (!outfuncs) return (DWORD)0xC00000F2L;
+  *outnumfuncs = 0;
+  *outfuncs = NULL;
+
+#define read(src, dst) \
+  if (!ReadProcessMemory(process, (src), &(dst), sizeof((dst)), NULL)) \
+    return (DWORD)0xC0000001L
+
+  read(&dftable->Context, mc);
+  read(mc, link);
+
+  if (link.numunwind) {
+    uint32_t numunwind = link.numunwind;
+    uint32_t i = 0;
+    MCUnwind unwind;
+    PRUNTIME_FUNCTION funcs = (PRUNTIME_FUNCTION)HeapAlloc(GetProcessHeap(),
+				     0, sizeof(RUNTIME_FUNCTION) * numunwind);
+    if (!funcs) return (DWORD)0xC0000017L;
+    *outfuncs = funcs;
+    read(link.unwind, unwind);
+    for (;;) {
+      funcs[i] = unwind.rf;
+      if (++i == numunwind) {
+	break;
+      }
+      read(mc + unwind.chain.EndAddress, unwind);
+    }
+    *outnumfuncs = numunwind;
+  }
+
+#undef read
+  return 0;
+}
+
+static const wchar_t* mcode_our_dll_name()
+{
+  extern IMAGE_DOS_HEADER __ImageBase;
+  static const wchar_t* result;
+  if (!result) {
+    static wchar_t buf[MAX_PATH];
+    DWORD n = GetModuleFileNameW((HMODULE)&__ImageBase, buf, MAX_PATH);
+    if (n == 0 || n == MAX_PATH) {
+      result = L"";
+    } else {
+      result = buf;
+    }
+  }
+  return result;
+}
+
+#else
+
+#define mcode_our_dll_name() NULL
+
+#endif
+
+static PRUNTIME_FUNCTION mcode_find_win64_unwind_data(DWORD64 pc, PVOID mc)
+{
+  MCLink *link = (MCLink *)mc;
+  MCUnwind *unwind = link->unwind;
+  uint32_t numunwind = link->numunwind;
+  uint32_t i;
+  DWORD off = (DWORD)(pc - (DWORD64)mc);
+  for (i = 0; i < numunwind; ++i) {
+    if (unwind->rf.BeginAddress <= off && off < unwind->rf.EndAddress) {
+      return &unwind->rf;
+    }
+    unwind = (MCUnwind *)((char *)mc + unwind->chain.EndAddress);
+  }
+  return NULL;
+}
+
+/* Common tail of xdata for traces. */
+static const uint16_t mcode_win64tracexdata[] = {
+  0x01|0x08|0x10,  /* Ver. 1, [eu]handler, prolog size 0. */
+  0x0023,  /* Number of unwind codes, no frame pointer. */
+  0xF800,  2,  /* Save xmm15 */
+  0xE800,  3,  /* Save xmm14 */
+  0xD800,  4,  /* Save xmm13 */
+  0xC800,  5,  /* Save xmm12 */
+  0xB800,  6,  /* Save xmm11 */
+  0xA800,  7,  /* Save xmm10 */
+  0x9800,  8,  /* Save xmm9 */
+  0x8800,  9,  /* Save xmm8 */
+  0x7800, 10,  /* Save xmm7 */
+  0x6800, 11,  /* Save xmm6 */
+  0x0100, 22,  /* Sub rsp, 9*16+4*8 */
+  0xE400,  2,  /* Mov CSAVE_3, r15 */
+  0xE400,  3,  /* Mov CSAVE_4, r14 */
+  0xD400,  4,  /* Mov TMPa, r13 */
+  0xC400, 10,  /* Mov TMPQ, r12 */
+  0x4200,  /* Stack offset 4*8+8 = aword*5. */
+  0x3000,  /* Push rbx. */
+  0x6000,  /* Push rsi. */
+  0x7000,  /* Push rdi. */
+  0x5000,  /* Push rbp. */
+  0,  /* Alignment. */
+  offsetof(MCLink, ehandler), 0 /* Handler. */
+};
+#endif
 
 /* Allocate a new MCode area. */
 static void mcode_allocarea(jit_State *J)
 {
   MCode *oldarea = J->mcarea;
   size_t sz = (size_t)J->param[JIT_P_sizemcode] << 10;
+  MCLink *link;
   sz = (sz + LJ_PAGESIZE-1) & ~(size_t)(LJ_PAGESIZE - 1);
   J->mcarea = (MCode *)mcode_alloc(J, sz);
   J->szmcarea = sz;
   J->mcprot = MCPROT_GEN;
   J->mctop = (MCode *)((char *)J->mcarea + J->szmcarea);
   J->mcbot = (MCode *)((char *)J->mcarea + sizeof(MCLink));
-  ((MCLink *)J->mcarea)->next = oldarea;
-  ((MCLink *)J->mcarea)->size = sz;
+  link = (MCLink *)J->mcarea;
+  link->next = oldarea;
+  link->size = sz;
   J->szallmcarea += sz;
+#if LJ_ABI_WIN && LJ_TARGET_X64
+  if (J->mcarea > J->win64tracexdata) {
+    /* The xdata tail must be within [0, 4G) of J->mcarea, else it cannot be
+       referred to. As all mcode areas are within [-2G, +2G] of each other, it
+       sufficies to ensure that the mcode area with the highest address
+       contains a copy of the xdata tail. */ 
+    J->mctop -= sizeof(mcode_win64tracexdata);
+    memcpy(J->mctop, mcode_win64tracexdata, sizeof(mcode_win64tracexdata));
+    J->win64tracexdata = J->mctop;
+  }
+  /* Stub which jumps to lj_err_unwind_trace_win64 (the offset to the landing
+     pad code is relative to the base of the mcode area, and is specified in
+     the xdata tail - so it has to be the same offset for every mcode area) */
+  link->ehandler[0] = 0xE9;
+  *(int32_t*)(link->ehandler + 1) = (int32_t)
+    ((char*)&lj_err_unwind_trace_win64 - link->ehandler - 5);
+  link->ehandler[5] = 0xCC;
+  
+  link->numunwind = 0;
+  link->unwind = (MCUnwind *)J->mctop;
+  RtlInstallFunctionTableCallback(3|(DWORD64)link, (DWORD64)link, (DWORD)sz,
+				  mcode_find_win64_unwind_data, link,
+				  mcode_our_dll_name());
+#endif
 }
 
 /* Free all MCode areas. */
@@ -301,6 +468,9 @@ void lj_mcode_free(jit_State *J)
   J->szallmcarea = 0;
   while (mc) {
     MCode *next = ((MCLink *)mc)->next;
+#if LJ_ABI_WIN && LJ_TARGET_X64
+    RtlDeleteFunctionTable((PRUNTIME_FUNCTION)(3|(DWORD64)mc));
+#endif
     mcode_free(J, mc, ((MCLink *)mc)->size);
     mc = next;
   }
@@ -316,12 +486,45 @@ MCode *lj_mcode_reserve(jit_State *J, MCode **lim)
   else
     mcode_protect(J, MCPROT_GEN);
   *lim = J->mcbot;
+#if LJ_ABI_WIN && LJ_TARGET_X64
+  return J->mctop - sizeof(MCUnwind);
+#else
   return J->mctop;
+#endif
 }
 
 /* Commit the top part of the current MCode area. */
 void lj_mcode_commit(jit_State *J, MCode *top)
 {
+#if LJ_ABI_WIN && LJ_TARGET_X64
+  MCLink *link = (MCLink *)J->mcarea;
+  MCUnwind *unwind = (MCUnwind *)(J->mctop - sizeof(MCUnwind));
+  uint16_t spadj = J->cur.spadjust;
+  unwind->rf.BeginAddress = (DWORD)(top - J->mcarea);
+  unwind->rf.EndAddress = (DWORD)(J->mctop - J->mcarea);
+  if (spadj) {
+    /* Stack is adjusted - encode adjustment in local xdata, and then chain
+       onto the common xdata tail. The chain.BeginAddress and chain.EndAddress
+       fields will end up specifying a superset of the range specified in
+       rf.BeginAddress and rf.EndAddress, which seems to suffice. */
+    unwind->rf.UnwindInfoAddress = (DWORD)((MCode *)&unwind->xdata - J->mcarea);
+    unwind->xdata[0] = 0x01|0x20;  /* Ver. 1, chained, prolog size 0. */
+    unwind->xdata[1] = 0x0002;  /* Number of unwind codes, no frame pointer. */
+    unwind->xdata[2] = 0x0100;  /* Sub rsp, xdata[3] * 8 */
+    unwind->xdata[3] = spadj / 8; /* NB: Used by lj_err_unwind_trace_win64 */
+    unwind->chain.BeginAddress = 0;
+    unwind->chain.UnwindInfoAddress = (DWORD)(J->win64tracexdata - J->mcarea);
+  } else {
+    /* No stack adjustment - don't use chained unwind data (the in-process
+       unwinder is fine with chained unwind data, but the VS out-of-process
+       unwinder doesn't seem to like it, so we avoid it when possible) */
+    unwind->rf.UnwindInfoAddress = (DWORD)(J->win64tracexdata - J->mcarea);
+  }
+  unwind->chain.EndAddress = (DWORD)((MCode *)link->unwind - J->mcarea);
+  link->unwind = unwind;
+  ++link->numunwind;
+  top -= (uintptr_t)top & 3;
+#endif
   J->mctop = top;
   mcode_protect(J, MCPROT_RUN);
 }

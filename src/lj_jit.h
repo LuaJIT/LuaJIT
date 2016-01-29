@@ -416,6 +416,9 @@ typedef struct jit_State {
   MCode *mcbot;		/* Bottom of current mcode area. */
   size_t szmcarea;	/* Size of current mcode area. */
   size_t szallmcarea;	/* Total size of all allocated mcode areas. */
+#if LJ_ABI_WIN && LJ_TARGET_X64
+  MCode *win64tracexdata;
+#endif
 
   TValue errinfo;	/* Additional info element for trace errors. */
 

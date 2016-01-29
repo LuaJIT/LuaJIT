@@ -478,6 +478,51 @@ static void err_raise_ext(int errcode)
   RaiseException(LJ_EXCODE_MAKE(errcode), 1 /* EH_NONCONTINUABLE */, 0, NULL);
 }
 
+#if LJ_HASJIT
+
+LJ_FUNC int lj_err_unwind_trace_win64(void *r, void *tcf, void *ctx, void *d)
+{
+  EXCEPTION_RECORD *rec = (EXCEPTION_RECORD *)r;
+  UndocumentedDispatcherContext *udc = (UndocumentedDispatcherContext *)d;
+  uint16_t *xdata = (uint16_t *)(udc->FunctionEntry->UnwindInfoAddress +
+			 (char *)udc->ImageBase);
+  intptr_t spadj = (CFRAME_SIZE_JIT - CFRAME_SIZE) +
+		   (xdata[2] == 0x0100 ? (xdata[3] * 8) : 0);
+  void *cf = (char *)tcf + spadj;
+  lua_State *L = cframe_L(cf);
+  if ((rec->ExceptionFlags & 6)) {  /* EH_UNWINDING|EH_EXIT_UNWIND */
+    /* Unwind internal frames. */
+    global_State *g = G(L);
+    lj_trace_abort(g);
+    setmref(g->jit_base, NULL);
+    err_unwind(L, cf, LUA_ERRRUN);
+  } else {
+    void *cf2 = err_unwind(L, cf, 0);
+    if (cf2) {  /* We catch it, so start unwinding the upper frames. */
+      if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
+	rec->ExceptionCode == LJ_GCC_EXCODE) {
+#if LJ_TARGET_WINDOWS
+	__DestructExceptionObject(rec, 1);
+#endif
+	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+      } else {
+	/* Don't catch access violations etc. */
+	return ExceptionContinueSearch;
+      }
+      /* Unwind the stack and call all handlers for all lower C frames
+      ** (including ourselves) again with EH_UNWINDING set. Then set
+      ** rsp = tcf, rax = spadj|kind and jump to the landing pad.
+      */
+      RtlUnwindEx(tcf, (void *)lj_vm_unwind_trace_eh, rec,
+	(void *)(spadj | cframe_unwind_ff(cf2)), ctx, udc->HistoryTable);
+      /* RtlUnwindEx should never return. */
+    }
+  }
+  return ExceptionContinueSearch;
+}
+
+#endif
+
 #endif
 
 /* -- Error handling ------------------------------------------------------ */
