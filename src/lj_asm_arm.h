@@ -520,8 +520,6 @@ static void asm_tobit(ASMState *as, IRIns *ir)
   emit_dn(as, ARMI_VMOV_R_S, dest, (tmp & 15));
   emit_dnm(as, ARMI_VADD_D, (tmp & 15), (left & 15), (right & 15));
 }
-#else
-#define asm_tobit(as, ir)	lua_assert(0)
 #endif
 
 static void asm_conv(ASMState *as, IRIns *ir)
@@ -1372,8 +1370,6 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
   else
     asm_callid(as, ir, IRCALL_lj_vm_floor + ir->op2);
 }
-#else
-#define asm_fpmath(as, ir)	lua_assert(0)
 #endif
 
 static int asm_swapops(ASMState *as, IRRef lref, IRRef rref)
@@ -1492,13 +1488,7 @@ static void asm_mul(ASMState *as, IRIns *ir)
 #define asm_subov(as, ir)	asm_sub(as, ir)
 #define asm_mulov(as, ir)	asm_mul(as, ir)
 
-#if LJ_SOFTFP
-#define asm_div(as, ir)		lua_assert(0)
-#define asm_pow(as, ir)		lua_assert(0)
-#define asm_abs(as, ir)		lua_assert(0)
-#define asm_atan2(as, ir)	lua_assert(0)
-#define asm_ldexp(as, ir)	lua_assert(0)
-#else
+#if !LJ_SOFTFP
 #define asm_div(as, ir)		asm_fparith(as, ir, ARMI_VDIV_D)
 #define asm_pow(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_powi)
 #define asm_abs(as, ir)		asm_fpunary(as, ir, ARMI_VABS_D)
