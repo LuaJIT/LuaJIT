@@ -389,6 +389,15 @@ typedef struct FoldState {
   IRIns right[2];	/* Instruction referenced by right operand. */
 } FoldState;
 
+typedef struct MCodeArea {
+  int prot;	/* Protection of current mcode area. */
+  MCode *base;	/* Base of current mcode area. */
+  MCode *top;	/* Top of current mcode area. */
+  MCode *bot;	/* Bottom of current mcode area. */
+  size_t sz;	/* Size of current mcode area. */
+  size_t szall;	/* Total size of all allocated mcode areas in this chain. */
+} MCodeArea;
+
 /* JIT compiler state. */
 typedef struct jit_State {
   GCtrace cur;		/* Current trace. */
@@ -474,12 +483,8 @@ typedef struct jit_State {
   BCIns *patchpc;	/* PC for pending re-patch. */
   BCIns patchins;	/* Instruction for pending re-patch. */
 
-  int mcprot;		/* Protection of current mcode area. */
-  MCode *mcarea;	/* Base of current mcode area. */
-  MCode *mctop;		/* Top of current mcode area. */
-  MCode *mcbot;		/* Bottom of current mcode area. */
-  size_t szmcarea;	/* Size of current mcode area. */
-  size_t szallmcarea;	/* Total size of all allocated mcode areas. */
+  MCodeArea mcarea;     /* JIT mcode area */
+  MCodeArea *curmcarea; /* Current mcode area by default is mcarea */
 
   TValue errinfo;	/* Additional info element for trace errors. */
 
