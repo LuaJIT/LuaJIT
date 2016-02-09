@@ -492,6 +492,16 @@ LJLIB_CF(ffi_cdef)
   return 0;
 }
 
+LJLIB_CF(ffi_intrinsic)
+{
+#if LJ_HASINTRINSICS
+  lj_intrinsic_create(L);
+  return 1;
+#else
+  lj_err_callermsg(L, "Intrinsics disabled");
+#endif
+}
+
 LJLIB_CF(ffi_new)	LJLIB_REC(.)
 {
   CTState *cts = ctype_cts(L);

@@ -614,6 +614,24 @@ static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 #define TEMPSPILL (1*sizeof(intptr_t))
 #define CONTEXTSPILL (0)
 
+
+static MCode* emit_intrins(ASMState *as, CIntrinsic *intrins, Reg r1, 
+                           uintptr_t r2)
+{
+  if (intrins->flags & INTRINSFLAG_CALLED) {
+    lua_assert(r2);
+    emit_call_(as, (MCode*)r2, r1);
+    return NULL;
+  } else {
+    AsmHeader *hdr = ((AsmHeader*)r2)-1;
+    lua_assert((hdr->asmofs != 0 || hdr->asmofs < hdr->totalzs));
+
+    /* Directly copy the unmodified machine code of the intrinsic in */
+    asm_mcode(as, ((char*)r2)+hdr->asmofs, hdr->asmsz);
+  }
+  return as->mcp;
+}
+
 static int lj_popcnt(uint32_t i)
 {
   i = i - ((i >> 1) & 0x55555555);

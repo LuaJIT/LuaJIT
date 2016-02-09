@@ -83,6 +83,16 @@ static CTypeID register_intrinsic(lua_State *L, CIntrinsic* src, CType *func)
   return id;
 }
 
+static void lj_intrinsic_new(lua_State *L, CTypeID id, void* wrapmc)
+{
+  CTState *cts = ctype_cts(L);
+  GCcdata *cd;
+  lua_assert(ctype_isintrinsic(ctype_get(cts, id)->info));
+  cd = lj_cdata_new(cts, id, CTSIZE_PTR);
+  *(void **)cdataptr(cd) = wrapmc;
+  setcdataV(L, L->top++, cd);
+}
+
 static int parse_fprreg(const char *name, uint32_t len)
 {
   uint32_t rid = 0, kind = REGKIND_FPR64;
@@ -282,27 +292,33 @@ static void setopcode(lua_State *L, CIntrinsic *intrins, uint32_t opcode)
   intrins->opcode = opcode;
 }
 
-static int parse_opstr(lua_State *L, GCstr *opstr)
+static int parse_opstr(lua_State *L, GCstr *opstr, CIntrinsic *intrins, int* buildflags)
 {
   const char *op = strdata(opstr);
   uint32_t opcode = 0;
   uint32_t i;
 
-  /* Find the end of the opcode number */
-  for (i = 0; i < opstr->len && lj_char_isxdigit((uint8_t)op[i]); i++) {
-  }
+  /* Parse the opcode number if this is not a template */
+  if (op[0] != '?') {
+    for (i = 0; i < opstr->len && lj_char_isxdigit((uint8_t)op[i]); i++) {
+    }
 
-  if (i == 0 || i > 8) {
-    /* invalid or no hex number */
-    lj_err_callerv(L, LJ_ERR_FFI_BADOPSTR, op, "invalid opcode number");
-  }
+    if (i == 0 || i > 8) {
+      /* invalid or no hex number */
+      lj_err_callerv(L, LJ_ERR_FFI_BADOPSTR, op, "invalid opcode number");
+    }
 
-  /* Scan hex digits. */
-  for (; i; i--, op++) {
-    uint32_t d = *op; if (d > '9') d += 9;
-    opcode = (opcode << 4) + (d & 15);
-  }
+    /* Scan hex digits. */
+    for (; i; i--, op++) {
+      uint32_t d = *op; if (d > '9') d += 9;
+      opcode = (opcode << 4) + (d & 15);
+    }
 
+  } else {
+    *buildflags |= INTRINSFLAG_TEMPLATE;
+    op++;
+  }
+  
   return opcode;
 }
 
@@ -337,6 +353,54 @@ static IntrinsicWrapper lj_intrinsic_buildwrap(lua_State *L, CIntrinsic *intrins
   return (IntrinsicWrapper)state.wrapper;
 }
 
+CTypeID lj_intrinsic_template(lua_State *L, int narg)
+{
+  CTState *cts = ctype_cts(L);
+  CType *ct;
+  CTypeID id;
+  CIntrinsic* intrins;
+  GCstr *name = lj_lib_checkstr(L, narg);
+
+  id = lj_ctype_getname(cts, &ct, name, 1u << CT_FUNC);
+
+  if (!id) {
+    lj_err_argv(L, narg, LJ_ERR_FFI_NODECL, name);
+  } else if (!ctype_isintrinsic(ct->info)) {
+    lj_err_arg(L, narg, LJ_ERR_FFI_INVTYPE);
+  }
+
+  intrins = lj_intrinsic_get(cts, ct->size);
+
+  /* Can't be a template if it an opcode */
+  if ((intrins->opcode && intrins->outsz <= 4) || intrins->wrapped)
+    lj_err_arg(L, narg, LJ_ERR_FFI_INVTYPE);
+
+  return id;
+}
+
+int lj_intrinsic_create(lua_State *L)
+{
+  CTState *cts = ctype_cts(L);  
+  CTypeID id = lj_intrinsic_template(L, 1);
+  void *intrinsmc;
+  MSize asmsz;
+  CIntrinsic* intrins = lj_intrinsic_get(cts, ctype_get(cts, id)->size);
+  
+  lj_cconv_ct_tv(cts, ctype_get(cts, CTID_P_CVOID), (uint8_t *)&intrinsmc,
+                 L->base+1, CCF_ARG(2));
+
+  asmsz = lj_lib_checkint(L, 3);
+  if (asmsz <= 0 || asmsz > 0xffff ||
+      asmsz > (MSize)(L2J(L)->param[JIT_P_sizemcode] << 10)) {
+    lj_err_callermsg(L, "bad code size");
+  }
+
+  intrinsmc = lj_intrinsic_buildwrap(L, intrins, intrinsmc, asmsz, 
+                                     intrin_getmodrset(cts, intrins));
+  lj_intrinsic_new(L, id, intrinsmc);
+  return 1;
+}
+
 GCcdata *lj_intrinsic_createffi(CTState *cts, CType *func)
 {
   GCcdata *cd;
@@ -345,6 +409,10 @@ GCcdata *lj_intrinsic_createffi(CTState *cts, CType *func)
   RegSet mod = intrin_getmodrset(cts, intrins);
   uint32_t op = intrins->opcode;
   void* mcode = ((char*)&op) + (4-intrin_oplen(intrins));
+  
+  if (intrins->opcode == 0) {
+    lj_err_callermsg(cts->L, "expected non template intrinsic");
+  }
 
   intrins->wrapped = lj_intrinsic_buildwrap(cts->L, intrins, mcode,
                                             intrin_oplen(intrins), mod);
@@ -360,13 +428,14 @@ int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
   CType *func = ctype_get(cts, fid);
   CTypeID sib = func->sib, retid = ctype_cid(func->info);
   uint32_t opcode;
+  int buildflags = 0;
   CIntrinsic _intrins;
   CIntrinsic* intrins = &_intrins;
   memset(intrins, 0, sizeof(CIntrinsic));
   
-  opcode = parse_opstr(L, opstr);
+  opcode = parse_opstr(L, opstr, intrins, &buildflags);
 
-  if (!opcode) {
+  if (!opcode && !(buildflags & INTRINSFLAG_TEMPLATE)) {
     return 0;
   }
 
@@ -387,7 +456,10 @@ int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
     sib = retid;
   }
 
-  setopcode(L, intrins, opcode);
+  /* If were a template theres no opcode to set */
+  if (opcode) {
+    setopcode(L, intrins, opcode);
+  } 
   register_intrinsic(L, intrins, ctype_get(cts, fid));
 
   lua_assert(sib > 0 && sib < cts->top);

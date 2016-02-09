@@ -26,6 +26,10 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_CALLED = 0x20,
   /* MODRM should always be set as indirect mode */
   INTRINSFLAG_INDIRECT = 0x40,
+  /* Intrinsic is a template with no machine code set until instantiate at runtime with
+  ** user supplied code.
+  */
+  INTRINSFLAG_TEMPLATE    = 0x40000,
 
   INTRINSFLAG_CALLEDIND = INTRINSFLAG_CALLED | INTRINSFLAG_INDIRECT
 } INTRINSFLAGS;
@@ -97,6 +101,7 @@ CTypeID1 regkind_ct[16];
 #define rk_ctype(rid, kind) ((rid) < RID_MAX_GPR ? rk_ctypegpr(kind) : rk_ctypefpr(kind))
 
 LJ_FUNC void lj_intrinsic_init(lua_State *L);
+LJ_FUNC int lj_intrinsic_create(lua_State *L);
 LJ_FUNC GCcdata *lj_intrinsic_createffi(CTState *cts, CType *func);
 LJ_FUNC int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opcode, uint32_t imm);
 LJ_FUNC int lj_intrinsic_call(CTState *cts, CType *ct);

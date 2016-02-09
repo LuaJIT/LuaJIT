@@ -2569,6 +2569,7 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
   IntrinBuildState info;
   AsmHeader *hdr;
   MCode *asmofs = NULL, *origtop;
+  void* target = state->target;
   int spadj = 0;
 
   lj_asm_setup_intrins(J, as);
@@ -2585,6 +2586,12 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
   if (intrins->outsz > 0) {
     info.contexspill = rset_test(as->modset, info.outcontext);
     ra_modified(as, info.outcontext);
+  }
+
+  /* Embed the mcode after the wrapper */
+  if ((intrins->flags & INTRINSFLAG_CALLED) && state->targetsz) {
+    *--as->mcp = XI_RET;
+    target = asmofs = asm_mcode(as, target, state->targetsz);
   }
 
 restart:
@@ -2630,8 +2637,20 @@ restart:
     emit_storeofsirt(as, IRT_INTP, info.outcontext, RID_SP, TEMPSPILL);
   }
 
-  /* Append the user supplied machine code */
-  asmofs = asm_mcode(as, state->target, state->targetsz);
+  if (intrins->flags & INTRINSFLAG_CALLED) {
+    Reg rin = 0;
+#if LJ_64
+    /* Pick a scratch register in case the relative distance for the call is
+    ** larger than a signed 32bit value
+    */
+    rin = intrinsic_scratch(as, RSET_GPR);
+#endif
+    /* emit a call to the target which may be collocated after us */
+    emit_intrins(as, intrins, rin, (uintptr_t)target);
+  } else {
+    /* Append the user supplied machine code */
+    asmofs = asm_mcode(as, state->target, state->targetsz);
+  }
   
   /* Move values out the context into there respective input registers */
   intrins_loadregs(as, intrins, &info);
@@ -2657,9 +2676,14 @@ restart:
   memset(hdr, 0, sizeof(AsmHeader));
   hdr->totalzs = (uint32_t)(origtop-as->mcp);
 
-  lua_assert((asmofs-as->mcp) < 0xffff);
-  hdr->asmofs = (uint16_t)(asmofs-as->mcp);
-  hdr->asmsz = state->targetsz;
+  /* Embed info before the code to support multiple versions of a user intrinsic intrinsic */
+  if ((intrins->flags & INTRINSFLAG_CALLEDIND) == INTRINSFLAG_CALLEDIND) {
+    hdr->target = (uintptr_t)target;
+  } else if (asmofs){
+    lua_assert((asmofs-as->mcp) < 0xffff);
+    hdr->asmofs = (uint16_t)(asmofs-as->mcp);
+    hdr->asmsz = state->targetsz;
+  }
 
   as->mcp = (MCode*)hdr;
 
