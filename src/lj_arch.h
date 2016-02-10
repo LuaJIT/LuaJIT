@@ -305,9 +305,6 @@
 #endif
 
 /* Temporarily disable features until the code has been merged. */
-#if !LJ_ARCH_HASFPU
-#define LJ_ARCH_NOJIT		1
-#endif
 #if !defined(LUAJIT_NO_UNWIND) && __GNU_COMPACT_EH__
 #define LUAJIT_NO_UNWIND	1
 #endif

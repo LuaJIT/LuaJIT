@@ -192,7 +192,7 @@ static IRRef split_ptr(jit_State *J, IRIns *oir, IRRef ref)
     nref = ir->op1;
     if (ofs == 0) return nref;
   }
-  return split_emit(J, IRTI(IR_ADD), nref, lj_ir_kint(J, ofs));
+  return split_emit(J, IRT(IR_ADD, IRT_PTR), nref, lj_ir_kint(J, ofs));
 }
 
 #if LJ_HASFFI
@@ -452,11 +452,15 @@ static void split_ir(jit_State *J)
 	IRIns inslo = *nir;  /* Save/undo the emit of the lo XLOAD. */
 	J->cur.nins--;
 	hi = split_ptr(J, oir, ir->op1);  /* Insert the hiref ADD. */
+#if LJ_BE
+	hi = split_emit(J, IRT(IR_XLOAD, IRT_INT), hi, ir->op2);
+	inslo.t.irt = IRT_SOFTFP | (inslo.t.irt & IRT_GUARD);
+#endif
 	nref = lj_ir_nextins(J);
 	nir = IR(nref);
-	*nir = inslo;  /* Re-emit lo XLOAD immediately before hi XLOAD. */
-	hi = split_emit(J, IRT(IR_XLOAD, IRT_SOFTFP), hi, ir->op2);
+	*nir = inslo;  /* Re-emit lo XLOAD. */
 #if LJ_LE
+	hi = split_emit(J, IRT(IR_XLOAD, IRT_SOFTFP), hi, ir->op2);
 	ir->prev = nref;
 #else
 	ir->prev = hi; hi = nref;

@@ -152,16 +152,18 @@ static void emit_jmp(ASMState *as, MCode *target)
   emit_branch(as, MIPSI_B, RID_ZERO, RID_ZERO, (target));
 }
 
-static void emit_call(ASMState *as, void *target)
+static void emit_call(ASMState *as, void *target, int needcfa)
 {
   MCode *p = as->mcp;
   *--p = MIPSI_NOP;
-  if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0)
+  if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0) {
     *--p = MIPSI_JAL | (((uintptr_t)target >>2) & 0x03ffffffu);
-  else  /* Target out of range: need indirect call. */
+  } else {  /* Target out of range: need indirect call. */
     *--p = MIPSI_JALR | MIPSF_S(RID_CFUNCADDR);
+    needcfa = 1;
+  }
   as->mcp = p;
-  ra_allockreg(as, i32ptr(target), RID_CFUNCADDR);
+  if (needcfa) ra_allockreg(as, i32ptr(target), RID_CFUNCADDR);
 }
 
 /* -- Emit generic operations --------------------------------------------- */

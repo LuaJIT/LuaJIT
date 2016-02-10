@@ -2731,6 +2731,25 @@ static void build_subroutines(BuildCtx *ctx)
   |.  li CRET1, 0
   |.endif
   |
+  |.macro sfmin_max, name, intins
+  |->vm_sf .. name:
+  |.if JIT and not FPU
+  |  move TMP2, ra
+  |  bal ->vm_sfcmpolt
+  |.  nop
+  |  move TMP0, CRET1
+  |  move SFRETHI, SFARG1HI
+  |   move SFRETLO, SFARG1LO
+  |  move ra, TMP2
+  |  intins SFRETHI, SFARG2HI, TMP0
+  |  jr ra
+  |.  intins SFRETLO, SFARG2LO, TMP0
+  |.endif
+  |.endmacro
+  |
+  |  sfmin_max min, movz
+  |  sfmin_max max, movn
+  |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------
@@ -4882,8 +4901,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |   move SFARG1LO, SFRETLO
       |  bal ->vm_sfcmpolex
       |.  lw TMP3, FORL_STEP*8+HI(RA)
-      |  b <1
-      |.  lw TMP2, ARG5
+      if ( op == BC_JFORL ) {
+	|   lhu RD, -4+OFS_RD(PC)
+	|  lw TMP2, ARG5
+	|  b <1
+	|.  decode_RD8b RD
+      } else {
+	|  b <1
+	|.  lw TMP2, ARG5
+      }
     }
     |.endif
     break;
