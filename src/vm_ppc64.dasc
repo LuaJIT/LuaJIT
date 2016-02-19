@@ -59,7 +59,7 @@
 |.define RA,		r20	// Callee-save.
 |.define RB,		r10
 |.define RC,		r11
-|.define RD,		r12
+|.define RD,		r12	// Also used as function linkage register
 |.define INS,		r7	// Overlaps CARG5.
 |
 |.define TMP0,		r0
@@ -696,7 +696,8 @@ static void build_subroutines(BuildCtx *ctx)
   |    std TMP1, SAVE_CFRAME
   |    std sp, L->cframe		// Add our C frame to cframe chain.
   |     std L, DISPATCH_GL(cur_L)(DISPATCH)
-  |  mtctr CARG4
+  |  mr r12, CARG4			// keep r12 for function linkage.
+  |  mtctr r12
   |  bctrl			// (lua_State *L, lua_CFunction func, void *ud)
   |  mr. BASE, CRET1
   |   li PC, FRAME_CP
@@ -2059,7 +2060,8 @@ static void build_subroutines(BuildCtx *ctx)
   |    std TMP1, L->top
   |   mr CARG1, L
   |  bgt >5				// Need to grow stack.
-  |  mtctr TMP3
+  |  mr r12, TMP3			// keep r12 for function linkage.
+  |  mtctr r12
   |  bctrl				// (lua_State *L)
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  ld BASE, L->base
@@ -4326,7 +4328,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   cmpld TMP1, TMP2
     |    std RC, L->top
     |     li_vmstate C
-    |  mtctr RD
+    |  mtctr RD				// RD is r12, the function linkage register
     if (op == BC_FUNCCW) {
       |  ld CARG2, CFUNC:RB->f
     }
