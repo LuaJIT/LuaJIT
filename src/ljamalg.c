@@ -46,6 +46,7 @@
 #include "lj_vmmath.c"
 #include "lj_strscan.c"
 #include "lj_strfmt.c"
+#include "lj_strfmt_num.c"
 #include "lj_api.c"
 #include "lj_profile.c"
 #include "lj_lex.c"
