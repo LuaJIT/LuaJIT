@@ -77,7 +77,6 @@ SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len)
   return sb;
 }
 
-#if LJ_HASJIT
 SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
 {
   char *p = lj_buf_more(sb, 1);
@@ -85,7 +84,6 @@ SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
   setsbufP(sb, p);
   return sb;
 }
-#endif
 
 SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
 {
