@@ -611,7 +611,12 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  lwz L, SAVE_L
   |  .toc ld TOCREG, SAVE_TOC
+  |.if P64
+  |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
+  |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
+  |.else
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
+  |.endif
   |  lp BASE, L->base
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
@@ -687,7 +692,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  mr RA, BASE
   |   lp BASE, L->base
+  |.if P64
+  |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
+  |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
+  |.else
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
+  |.endif
   |   lp TMP1, L->top
   |  lwz PC, FRAME_PC(BASE)
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
@@ -737,7 +747,12 @@ static void build_subroutines(BuildCtx *ctx)
   |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
   |  stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  lp TMP2, L->base			// TMP2 = old base (used in vmeta_call).
+  |.if P64
+  |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
+  |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
+  |.else
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
+  |.endif
   |   lp TMP1, L->top
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |  add PC, PC, BASE
@@ -818,8 +833,14 @@ static void build_subroutines(BuildCtx *ctx)
   |   subi TMP2, RD, 8
   |    lwz TMP1, LFUNC:TMP1->pc
   |   stwx TISNIL, RA, TMP2		// Ensure one valid arg.
+  |.if P64
+  |   ld TMP3, 0(DISPATCH)
+  |.endif
   |.if FFI
   |  ble >1
+  |.endif
+  |.if P64
+  |  add TMP0, TMP0, TMP3
   |.endif
   |    lwz KBASE, PC2PROTO(k)(TMP1)
   |  // BASE = base, RA = resultptr, RB = meta base
@@ -1298,14 +1319,33 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz CARG1, 0(BASE)
   |  blt ->fff_fallback
   |  .gpr64 extsw CARG1, CARG1
+  |.if P64
+  |  li TMP0, LJ_TNUMX
+  |    srawi TMP3, CARG1, 15
+  |  subfc TMP1, TMP0, CARG1
+  |.else
   |  subfc TMP0, TISNUM, CARG1
-  |  subfe TMP2, CARG1, CARG1
+  |.endif
+  |    subfe TMP2, CARG1, CARG1
+  |.if P64
+  |  cmpwi TMP3, -2
+  |    orc TMP1, TMP2, TMP1
+  |    subf TMP1, TMP0, TMP1
+  |  beq >1
+  |.else
   |  orc TMP1, TMP2, TMP0
-  |  addi TMP1, TMP1, ~LJ_TISNUM+1
+  |  subf TMP1, TISNUM, TMP1
+  |.endif
   |  slwi TMP1, TMP1, 3
+  |2:
   |   la TMP2, CFUNC:RB->upvalue
   |  lfdx FARG1, TMP2, TMP1
   |  b ->fff_resn
+  |.if P64
+  |1:
+  |  li TMP1, ~LJ_TLIGHTUD<<3
+  |  b <2
+  |.endif
   |
   |//-- Base library: getters and setters ---------------------------------
   |
@@ -1349,14 +1389,33 @@ static void build_subroutines(BuildCtx *ctx)
   |6:
   |  cmpwi CARG3, LJ_TUDATA; beq <1
   |  .gpr64 extsw CARG3, CARG3
+  |.if P64
+  |  li TMP0, LJ_TNUMX
+  |    srawi TMP3, CARG1, 15
+  |  subfc TMP1, TMP0, CARG1
+  |.else
   |  subfc TMP0, TISNUM, CARG3
+  |.endif
   |  subfe TMP2, CARG3, CARG3
+  |.if P64
+  |  cmpwi TMP3, -2
+  |    orc TMP1, TMP2, TMP1
+  |    subf TMP1, TMP0, TMP1
+  |  beq >7
+  |.else
   |  orc TMP1, TMP2, TMP0
-  |  addi TMP1, TMP1, ~LJ_TISNUM+1
+  |  subf TMP1, TISNUM, TMP1
+  |.endif
   |  slwi TMP1, TMP1, 2
+  |8:
   |   la TMP2, DISPATCH_GL(gcroot[GCROOT_BASEMT])(DISPATCH)
   |  lwzx TAB:CARG1, TMP2, TMP1
   |  b <2
+  |.if P64
+  |7:
+  |  li TMP1, ~LJ_TLIGHTUD<<2
+  |  b <8
+  |.endif
   |
   |.ffunc_2 setmetatable
   |  // Fast path: no mt for table yet and not clearing the mt.
@@ -2660,7 +2719,12 @@ static void build_subroutines(BuildCtx *ctx)
   |    stw TMP2, DISPATCH_GL(jit_base)(DISPATCH)
   |  lwz KBASE, PC2PROTO(k)(TMP1)
   |  // Setup type comparison constants.
+  |.if P64
+  |  lus TISNUM, LJ_TISNUM >> 16
+  |  ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
+  |.else
   |  li TISNUM, LJ_TISNUM
+  |.endif
   |  lus TMP3, 0x59c0			// TOBIT = 2^52 + 2^51 (float).
   |  stw TMP3, TMPD
   |  li ZERO, 0
@@ -2806,7 +2870,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
   |  // Returns lua_State *.
   |  lp BASE, L:CRET1->base
+  |.if P64
+  |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
+  |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
+  |.else
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
+  |.endif
   |  lp RC, L:CRET1->top
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |     li ZERO, 0
@@ -3074,10 +3143,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if FFI
     |  beq cr7, ->vmeta_equal_cd
     |.endif
+    |.if P64
+    |   cmplwi cr7, TMP3, ~LJ_TUDATA		// Avoid 64 bit lightuserdata.
+    |.endif
     |    cmplw cr5, CARG2, CARG3
     |  crandc 4*cr0+gt, 4*cr0+eq, 4*cr1+gt	// 2: Same type and primitive.
     |  crorc 4*cr0+lt, 4*cr5+eq, 4*cr0+eq	// 1: Same tv or different type.
     |  crand 4*cr0+eq, 4*cr0+eq, 4*cr5+eq	// 0: Same type and same tv.
+    |.if P64
+    |   cror 4*cr6+lt, 4*cr6+lt, 4*cr7+gt
+    |.endif
     |   mr SAVE0, PC
     |  cror 4*cr0+eq, 4*cr0+eq, 4*cr0+gt	// 0 or 2.
     |  cror 4*cr0+lt, 4*cr0+lt, 4*cr0+gt	// 1 or 2.
