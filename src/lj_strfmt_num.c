@@ -1,6 +1,6 @@
 /*
 ** String formatting for floating-point numbers.
-** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
 ** Contributed by Peter Cawley.
 */
 
