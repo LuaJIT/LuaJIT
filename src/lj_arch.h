@@ -263,10 +263,19 @@
 #if LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOFFI		1
+#if LJ_TARGET_PS3
+#define LJ_ARCH_PPC_TOC		1
+#endif
 #elif LJ_ARCH_BITS == 64
-#define LJ_ARCH_PPC64		1
-#define LJ_TARGET_GC64		1
+#define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOJIT		1	/* NYI */
+#define LJ_ARCH_NOFFI		1	/* NYI */
+#if _CALL_ELF == 2
+#define LJ_ARCH_PPC_ELFV2	1
+#else
+#define LJ_ARCH_PPC_TOC		1
+#define LJ_ARCH_PPC_TOCENV	1
+#endif
 #endif
 
 #if _ARCH_PWR7
@@ -418,11 +427,11 @@
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif
-#if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
-#error "No support for little-endian PPC32"
+#if LJ_ARCH_ENDIAN == LUAJIT_LE
+#error "No support for little-endian PPC"
 #endif
-#if LJ_ARCH_PPC64
-#error "No support for PowerPC 64 bit mode (yet)"
+#if LJ_ARCH_PPC_ELFV2
+#error "No support for PPC ELFv2"
 #endif
 #ifdef __NO_FPRS__
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"

@@ -25,12 +25,11 @@
 |// TOC     Need table of contents (64 bit or 32 bit variant, e.g. PS3).
 |//         Function pointers are really a struct: code, TOC, env (optional).
 |// TOCENV  Function pointers have an environment pointer, too (not on PS3).
+|// ELFV2   The 64-bit ELF V2 ABI is in use.
 |// PPE     Power Processor Element of Cell (PS3) or Xenon (Xbox 360).
 |//         Must avoid (slow) micro-coded instructions.
 |
 |.if P64
-|.define TOC, 1
-|.define TOCENV, 1
 |.macro lpx, a, b, c; ldx a, b, c; .endmacro
 |.macro lp, a, b; ld a, b; .endmacro
 |.macro stp, a, b; std a, b; .endmacro
@@ -49,7 +48,7 @@
 |// Convenience macros for TOC handling.
 |.if TOC
 |// Linker needs a TOC patch area for every external call relocation.
-|.macro blex, target; bl extern target@plt; nop; .endmacro
+|.macro blex, target; bl extern target; nop; .endmacro
 |.macro .toc, a, b; a, b; .endmacro
 |.if P64
 |.define TOC_OFS,	 8
