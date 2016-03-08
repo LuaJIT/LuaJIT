@@ -191,6 +191,7 @@
 |.define SAVE_MULTRES,	456(sp) // |
 |.define SAVE_CFRAME,	448(sp) // / 64 bit C frame chain.
 |.define SAVE_LR,	416(sp)
+|.define SAVE_CR,	408(sp)  // 64 bit CR save.
 |.define CFRAME_SPACE,	400     // Delta for sp.
 |// Back chain for sp:	400(sp) <-- sp entering interpreter
 |.define SAVE_FPR_,	256     // .. 256+18*8: 64 bit FPR saves.
@@ -202,7 +203,7 @@
 |.define TONUM_LO,	28(sp)  // \ Compiler temp (ABI mandated).
 |.define TONUM_HI,	24(sp)  // /
 |// Next frame lr:	16(sp)
-|.define SAVE_CR,	8(sp)  // 64 bit CR save.
+|// Next frame cr:	8(sp)
 |// Back chain for sp:	0(sp)	<-- sp while in interpreter
 |
 |.define TMPD_BLO,	39(sp)
