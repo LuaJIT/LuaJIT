@@ -46,17 +46,22 @@ INSTALL_PKGCONFIG= $(INSTALL_LIB)/pkgconfig
 INSTALL_TNAME= luajit-$(VERSION)
 INSTALL_TSYMNAME= luajit
 INSTALL_ANAME= libluajit-$(ABIVER).a
-INSTALL_SONAME= libluajit-$(ABIVER).so.$(MAJVER).$(MINVER).$(RELVER)
-INSTALL_SOSHORT= libluajit-$(ABIVER).so
-INSTALL_DYLIBNAME= libluajit-$(ABIVER).$(MAJVER).$(MINVER).$(RELVER).dylib
-INSTALL_DYLIBSHORT1= libluajit-$(ABIVER).dylib
-INSTALL_DYLIBSHORT2= libluajit-$(ABIVER).$(MAJVER).dylib
+INSTALL_SOEXT= so
+ifndef TARGET_SYS
+	TARGET_SYS= $(shell uname -s)
+endif
+ifeq (Darwin,$(TARGET_SYS))
+	INSTALL_SOEXT= dylib
+endif
+INSTALL_SOSHORT1= libluajit-$(ABIVER).$(INSTALL_SOEXT)
+INSTALL_SOSHORT2= libluajit-$(ABIVER).$(MAJVER).$(INSTALL_SOEXT)
+INSTALL_SONAME= $(INSTALL_SOSHORT1).$(MAJVER).$(MINVER).$(RELVER)
 INSTALL_PCNAME= luajit.pc
 
 INSTALL_STATIC= $(INSTALL_LIB)/$(INSTALL_ANAME)
 INSTALL_DYN= $(INSTALL_LIB)/$(INSTALL_SONAME)
-INSTALL_SHORT1= $(INSTALL_LIB)/$(INSTALL_SOSHORT)
-INSTALL_SHORT2= $(INSTALL_LIB)/$(INSTALL_SOSHORT)
+INSTALL_SHORT1= $(INSTALL_LIB)/$(INSTALL_SOSHORT1)
+INSTALL_SHORT2= $(INSTALL_LIB)/$(INSTALL_SOSHORT2)
 INSTALL_T= $(INSTALL_BIN)/$(INSTALL_TNAME)
 INSTALL_TSYM= $(INSTALL_BIN)/$(INSTALL_TSYMNAME)
 INSTALL_PC= $(INSTALL_PKGCONFIG)/$(INSTALL_PCNAME)
@@ -88,24 +93,22 @@ FILES_JITLIB= bc.lua v.lua dump.lua dis_x86.lua dis_x64.lua dis_arm.lua \
 
 ifeq (,$(findstring Windows,$(OS)))
   ifeq (Darwin,$(shell uname -s))
-    INSTALL_SONAME= $(INSTALL_DYLIBNAME)
-    INSTALL_SHORT1= $(INSTALL_LIB)/$(INSTALL_DYLIBSHORT1)
-    INSTALL_SHORT2= $(INSTALL_LIB)/$(INSTALL_DYLIBSHORT2)
     LDCONFIG= :
   endif
 endif
+
 
 ##############################################################################
 
 INSTALL_DEP= src/luajit
 
 default all $(INSTALL_DEP):
-	@echo "==== Building LuaJIT $(VERSION) ===="
+	@echo "==== Building LuaJIT $(VERSION) for target $(TARGET_SYS) ===="
 	$(MAKE) -C src
 	@echo "==== Successfully built LuaJIT $(VERSION) ===="
 
 install: $(INSTALL_DEP)
-	@echo "==== Installing LuaJIT $(VERSION) to $(PREFIX) ===="
+	@echo "==== Installing LuaJIT $(VERSION) to $(PREFIX) for target $(TARGET_SYS) ===="
 	$(MKDIR) $(INSTALL_DIRS)
 	cd src && $(INSTALL_X) $(FILE_T) $(INSTALL_T)
 	cd src && test -f $(FILE_A) && $(INSTALL_F) $(FILE_A) $(INSTALL_STATIC) || :
