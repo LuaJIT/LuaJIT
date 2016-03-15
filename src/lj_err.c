@@ -310,7 +310,6 @@ static void err_raise_ext(int errcode)
 #define _US_FORCE_UNWIND		8
 
 typedef struct _Unwind_Control_Block _Unwind_Control_Block;
-typedef struct _Unwind_Context _Unwind_Context;
 
 struct _Unwind_Control_Block {
   uint64_t exclass;
