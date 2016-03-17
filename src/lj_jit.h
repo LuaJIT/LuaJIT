@@ -166,7 +166,11 @@ typedef struct SnapShot {
 #define SNAPCOUNT_DONE	255	/* Already compiled and linked a side trace. */
 
 /* Compressed snapshot entry. */
+#ifdef LJ_GC64
+typedef uint64_t SnapEntry;
+#else
 typedef uint32_t SnapEntry;
+#endif
 
 #define SNAP_FRAME		0x010000	/* Frame slot. */
 #define SNAP_CONT		0x020000	/* Continuation slot. */
@@ -178,7 +182,7 @@ LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 #define SNAP(slot, flags, ref)	(((SnapEntry)(slot) << 24) + (flags) + (ref))
 #define SNAP_TR(slot, tr) \
   (((SnapEntry)(slot) << 24) + ((tr) & (TREF_CONT|TREF_FRAME|TREF_REFMASK)))
-#define SNAP_MKPC(pc)		((SnapEntry)u32ptr(pc))
+#define SNAP_MKPC(pc)		((SnapEntry)(pc))
 #define SNAP_MKFTSZ(ftsz)	((SnapEntry)(ftsz))
 #define snap_ref(sn)		((sn) & 0xffff)
 #define snap_slot(sn)		((BCReg)((sn) >> 24))

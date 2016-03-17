@@ -529,6 +529,11 @@ typedef uint32_t TRef;
 */
 
 typedef union IRIns {
+#if LJ_GC64
+#error not yet implemented
+  struct {
+    uint32_t padding;   /* Ensures that gcr/ptr overlap with the proper fields */
+#endif
   struct {
     LJ_ENDIAN_LOHI(
       IRRef1 op1;	/* IR operand 1. */
@@ -549,6 +554,9 @@ typedef union IRIns {
     )
   };
   int32_t i;		/* 32 bit signed integer literal (overlaps op12). */
+#if LJ_GC64
+  };
+#endif
   GCRef gcr;		/* GCobj constant (overlaps op12). */
   MRef ptr;		/* Pointer constant (overlaps op12). */
 } IRIns;

@@ -599,9 +599,9 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
   }
   if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
     rs = snap_renameref(T, snapno, ref, rs);
-  lua_assert(!LJ_GC64);  /* TODO_GC64: handle 64 bit references. */
+  // lua_assert(!LJ_GC64);  /* TODO_GC64: handle 64 bit references. */
   if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
-    int32_t *sps = &ex->spill[regsp_spill(rs)];
+    SnapEntry *sps = &ex->spill[regsp_spill(rs)];
     if (irt_isinteger(t)) {
       setintV(o, *sps);
 #if !LJ_SOFTFP

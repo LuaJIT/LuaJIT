@@ -323,7 +323,7 @@ TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
-  lua_assert(!LJ_GC64);  /* TODO_GC64: major changes required. */
+  //lua_assert(!LJ_GC64);  /* TODO_GC64: major changes required. */
   lua_assert(!isdead(J2G(J), o));
   for (ref = J->chain[IR_KGC]; ref; ref = cir[ref].prev)
     if (ir_kgc(&cir[ref]) == o)
