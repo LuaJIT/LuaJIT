@@ -530,25 +530,30 @@ typedef uint32_t TRef;
 
 typedef union IRIns {
   struct {
-    LJ_ENDIAN_LOHI(
-      IRRef1 op1;	/* IR operand 1. */
-    , IRRef1 op2;	/* IR operand 2. */
-    )
-    IROpT ot;		/* IR opcode and type (overlaps t and o). */
-    IRRef1 prev;	/* Previous ins in same chain (overlaps r and s). */
+#ifdef LJ_GC64
+    uint32_t padding;   /* Ensures that gcr/ptr overlap with the proper fields */
+#endif
+    struct {
+      LJ_ENDIAN_LOHI(
+        IRRef1 op1;	/* IR operand 1. */
+      , IRRef1 op2;	/* IR operand 2. */
+      )
+      IROpT ot;		/* IR opcode and type (overlaps t and o). */
+      IRRef1 prev;	/* Previous ins in same chain (overlaps r and s). */
+    };
+    struct {
+      IRRef2 op12;	/* IR operand 1 and 2 (overlaps op1 and op2). */
+      LJ_ENDIAN_LOHI(
+        IRType1 t;	/* IR type. */
+      , IROp1 o;		/* IR opcode. */
+      )
+      LJ_ENDIAN_LOHI(
+        uint8_t r;	/* Register allocation (overlaps prev). */
+      , uint8_t s;	/* Spill slot allocation (overlaps prev). */
+      )
+    };
+    int32_t i;		/* 32 bit signed integer literal (overlaps op12). */
   };
-  struct {
-    IRRef2 op12;	/* IR operand 1 and 2 (overlaps op1 and op2). */
-    LJ_ENDIAN_LOHI(
-      IRType1 t;	/* IR type. */
-    , IROp1 o;		/* IR opcode. */
-    )
-    LJ_ENDIAN_LOHI(
-      uint8_t r;	/* Register allocation (overlaps prev). */
-    , uint8_t s;	/* Spill slot allocation (overlaps prev). */
-    )
-  };
-  int32_t i;		/* 32 bit signed integer literal (overlaps op12). */
   GCRef gcr;		/* GCobj constant (overlaps op12). */
   MRef ptr;		/* Pointer constant (overlaps op12). */
 } IRIns;
