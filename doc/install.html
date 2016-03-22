@@ -346,9 +346,12 @@ target OS differ, or you'll get assembler or linker errors. E.g. if
 you're compiling on a Windows or OSX host for embedded Linux or Android,
 you need to add <tt>TARGET_SYS=Linux</tt> to the examples below. For a
 minimal target OS, you may need to disable the built-in allocator in
-<tt>src/Makefile</tt> and use <tt>TARGET_SYS=Other</tt>. The examples
-below only show some popular targets &mdash; please check the comments
-in <tt>src/Makefile</tt> for more details.
+<tt>src/Makefile</tt> and use <tt>TARGET_SYS=Other</tt>. Don't forget to
+specify the same <tt>TARGET_SYS</tt> for the install step, too.
+</p>
+<p>
+The examples below only show some popular targets &mdash; please check
+the comments in <tt>src/Makefile</tt> for more details.
 </p>
 <pre class="code">
 # Cross-compile to a 32 bit binary on a multilib x64 OS
