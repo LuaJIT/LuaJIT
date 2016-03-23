@@ -364,6 +364,7 @@ static char *lj_strfmt_wfnum(SBuf *sb, SFormat sf, lua_Number n, char *p)
       /* Precision is sufficiently low that rescaling will probably work. */
       if ((ndebias = rescale_e[e >> 6])) {
 	t.n = n * rescale_n[e >> 6];
+	if (LJ_UNLIKELY(!e)) t.n *= 1e10, ndebias -= 10;
 	t.u64 -= 2; /* Convert 2ulp below (later we convert 2ulp above). */
 	nd[0] = 0x100000 | (t.u32.hi & 0xfffff);
 	e = ((t.u32.hi >> 20) & 0x7ff) - 1075 - (ND_MUL2K_MAX_SHIFT < 29);
