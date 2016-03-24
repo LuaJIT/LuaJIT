@@ -32,8 +32,10 @@ FILE *_lua_freopen(const char *filename, const char *mode, FILE * oldfile)
     wchar_t path[MAX_PATH];
     wchar_t wmode[MAX_PATH];
     int new_Len1 = MultiByteToWideChar(CP_UTF8, 0, filename, fn_len_s, path, fn_len_s);
+    if(new_Len1>=MAX_PATH) return NULL;
     path[new_Len1] = L'\0';
     int new_Len2 = MultiByteToWideChar(CP_UTF8, 0, mode, m_len_s, wmode, m_len_s);
+    if(new_Len2>=MAX_PATH) return NULL;
     wmode[new_Len2] = L'\0';
     FILE *f = _wfreopen(path, wmode, oldfile);
     LocalFree(path);
