@@ -16,6 +16,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_lib.h"
+#include "lj_fopen.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -262,7 +263,7 @@ static int lj_cf_package_unloadlib(lua_State *L)
 
 static int readable(const char *filename)
 {
-  FILE *f = fopen(filename, "r");  /* try to open file */
+  FILE *f = _lua_fopen(filename, "r");  /* try to open file */
   if (f == NULL) return 0;  /* open failed */
   fclose(f);
   return 1;

@@ -16,6 +16,7 @@
 #include "lj_cconv.h"
 #include "lj_cdata.h"
 #include "lj_clib.h"
+#include "lj_fopen.h"
 
 /* -- OS-specific functions ----------------------------------------------- */
 
@@ -93,7 +94,7 @@ static const char *clib_check_lds(lua_State *L, const char *buf)
 /* Quick and dirty solution to resolve shared library name from ld script. */
 static const char *clib_resolve_lds(lua_State *L, const char *name)
 {
-  FILE *fp = fopen(name, "r");
+  FILE *fp = _lua_fopen(name, "r");
   const char *p = NULL;
   if (fp) {
     char buf[256];
