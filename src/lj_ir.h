@@ -318,9 +318,10 @@ IRTDEF(IRTENUM)
 
   /* Native pointer type and the corresponding integer type. */
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
+  IRT_PGC = LJ_GC64 ? IRT_P64 : IRT_P32,
+  IRT_IGC = LJ_GC64 ? IRT_I64 : IRT_INT,
   IRT_INTP = LJ_64 ? IRT_I64 : IRT_INT,
   IRT_UINTP = LJ_64 ? IRT_U64 : IRT_U32,
-  /* TODO_GC64: major changes required for all uses of IRT_P32. */
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
