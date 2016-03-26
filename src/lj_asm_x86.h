@@ -348,7 +348,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       if (!(ir->op2 & (IRSLOAD_PARENT|IRSLOAD_CONVERT)) &&
 	  noconflict(as, ref, IR_RETF, 0)) {
 	as->mrm.base = (uint8_t)ra_alloc1(as, REF_BASE, xallow);
-	as->mrm.ofs = 8*((int32_t)ir->op1-1) + ((ir->op2&IRSLOAD_FRAME)?4:0);
+	as->mrm.ofs = 8*((int32_t)ir->op1-1) + (!LJ_FR2&&(ir->op2&IRSLOAD_FRAME)?4:0);
 	as->mrm.idx = RID_NONE;
 	return RID_MRM;
       }
@@ -655,6 +655,9 @@ static void asm_callx(ASMState *as, IRIns *ir)
 static void asm_retf(ASMState *as, IRIns *ir)
 {
   Reg base = ra_alloc1(as, REF_BASE, RSET_GPR);
+#if LJ_FR2
+  Reg rpc = ra_scratch(as, rset_exclude(RSET_GPR, base));
+#endif
   void *pc = ir_kptr(IR(ir->op2));
   int32_t delta = 1+LJ_FR2+bc_a(*((const BCIns *)pc - 1));
   as->topslot -= (BCReg)delta;
@@ -663,7 +666,12 @@ static void asm_retf(ASMState *as, IRIns *ir)
   emit_setgl(as, base, jit_base);
   emit_addptr(as, base, -8*delta);
   asm_guardcc(as, CC_NE);
+#if LJ_FR2
+  emit_rmro(as, XO_CMP, rpc, base, -8);
+  emit_loadu64(as, rpc, u64ptr(pc));
+#else
   emit_gmroi(as, XG_ARITHi(XOg_CMP), base, -4, ptr2addr(pc));
+#endif
 }
 
 /* -- Type conversions ---------------------------------------------------- */
@@ -1400,7 +1408,11 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
 
 static void asm_sload(ASMState *as, IRIns *ir)
 {
-  int32_t ofs = 8*((int32_t)ir->op1-1) + ((ir->op2 & IRSLOAD_FRAME) ? 4 : 0);
+#if LJ_FR2
+  int32_t ofs = 8*((int32_t)ir->op1-2);
+#else
+  int32_t ofs = 8*((int32_t)ir->op1-1) + ((ir->op2&IRSLOAD_FRAME)?4:0);
+#endif
   IRType1 t = ir->t;
   Reg base;
   lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
@@ -2386,13 +2398,13 @@ static void asm_stack_check(ASMState *as, BCReg topslot,
 static void asm_stack_restore(ASMState *as, SnapShot *snap)
 {
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  SnapEntry *flinks = &as->T->snapmap[snap_nextofs(as->T, snap)-1];
+  SnapEntry *flinks = &as->T->snapmap[snap_nextofs(as->T, snap)-1-LJ_FR2];
   MSize n, nent = snap->nent;
   /* Store the value of all modified slots to the Lua stack. */
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
     BCReg s = snap_slot(sn);
-    int32_t ofs = 8*((int32_t)s-1);
+    int32_t ofs = 8*((int32_t)s-1-LJ_FR2);
     IRRef ref = snap_ref(sn);
     IRIns *ir = IR(ref);
     if ((sn & SNAP_NORESTORE))
@@ -2410,8 +2422,10 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 	emit_movmroi(as, RID_BASE, ofs, ir->i);
       }
       if ((sn & (SNAP_CONT|SNAP_FRAME))) {
+#if !LJ_FR2
 	if (s != 0)  /* Do not overwrite link to previous frame. */
 	  emit_movmroi(as, RID_BASE, ofs+4, (int32_t)(*flinks--));
+#endif
       } else {
 	if (!(LJ_64 && irt_islightud(ir->t)))
 	  emit_movmroi(as, RID_BASE, ofs+4, irt_toitype(ir->t));

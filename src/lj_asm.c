@@ -1893,7 +1893,7 @@ static BCReg asm_baseslot(ASMState *as, SnapShot *snap, int *gotframe)
     SnapEntry sn = map[n-1];
     if ((sn & SNAP_FRAME)) {
       *gotframe = 1;
-      return snap_slot(sn);
+      return snap_slot(sn) - LJ_FR2;
     }
   }
   return 0;
@@ -1913,8 +1913,15 @@ static void asm_tail_link(ASMState *as)
 
   if (as->T->link == 0) {
     /* Setup fixed registers for exit to interpreter. */
-    const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
     int32_t mres;
+#if LJ_FR2
+    uint64_t pcbase;
+    const BCIns *pc;
+    memcpy(&pcbase, &as->T->snapmap[snap->mapofs + snap->nent], 8);
+    pc = (const BCIns *)(pcbase >> 8);
+#else
+    const BCIns *pc = snap_pc(as->T->snapmap[snap->mapofs + snap->nent]);
+#endif
     if (bc_op(*pc) == BC_JLOOP) {  /* NYI: find a better way to do this. */
       BCIns *retpc = &traceref(as->J, bc_d(*pc))->startins;
       if (bc_isret(bc_op(*retpc)))
@@ -1922,7 +1929,7 @@ static void asm_tail_link(ASMState *as)
     }
     ra_allockreg(as, i32ptr(J2GG(as->J)->dispatch), RID_DISPATCH);
     ra_allockreg(as, i32ptr(pc), RID_LPC);
-    mres = (int32_t)(snap->nslots - baseslot);
+    mres = (int32_t)(snap->nslots - baseslot - LJ_FR2);
     switch (bc_op(*pc)) {
     case BC_CALLM: case BC_CALLMT:
       mres -= (int32_t)(1 + LJ_FR2 + bc_a(*pc) + bc_c(*pc)); break;
