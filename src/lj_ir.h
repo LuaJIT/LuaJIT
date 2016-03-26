@@ -412,7 +412,7 @@ static LJ_AINLINE IRType itype2irt(const TValue *tv)
 
 static LJ_AINLINE uint32_t irt_toitype_(IRType t)
 {
-  lua_assert(!LJ_64 || t != IRT_LIGHTUD);
+  lua_assert(!LJ_64 || LJ_GC64 || t != IRT_LIGHTUD);
   if (LJ_DUALNUM && t > IRT_NUM) {
     return LJ_TISNUM;
   } else {

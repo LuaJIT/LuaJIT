@@ -1114,8 +1114,12 @@ static TRef recff_io_fp(jit_State *J, TRef *udp, int32_t id)
 {
   TRef tr, ud, fp;
   if (id) {  /* io.func() */
+#if LJ_GC64
+    ud = lj_ir_ggfload(J, IRT_UDATA, GG_OFS(g.gcroot[id]));
+#else
     tr = lj_ir_kptr(J, &J2G(J)->gcroot[id]);
     ud = emitir(IRT(IR_XLOAD, IRT_UDATA), tr, 0);
+#endif
   } else {  /* fp:method() */
     ud = J->base[0];
     if (!tref_isudata(ud))

@@ -630,7 +630,6 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
   }
   if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
     rs = snap_renameref(T, snapno, ref, rs);
-  lua_assert(!LJ_GC64);  /* TODO_GC64: handle 64 bit references. */
   if (ra_hasspill(regsp_spill(rs))) {  /* Restore from spill slot. */
     int32_t *sps = &ex->spill[regsp_spill(rs)];
     if (irt_isinteger(t)) {
@@ -639,9 +638,11 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
     } else if (irt_isnum(t)) {
       o->u64 = *(uint64_t *)sps;
 #endif
-    } else if (LJ_64 && irt_islightud(t)) {
+#if LJ_64 && !LJ_GC64
+    } else if (irt_islightud(t)) {
       /* 64 bit lightuserdata which may escape already has the tag bits. */
       o->u64 = *(uint64_t *)sps;
+#endif
     } else {
       lua_assert(!irt_ispri(t));  /* PRI refs never have a spill slot. */
       setgcV(J->L, o, (GCobj *)(uintptr_t)*(GCSize *)sps, irt_toitype(t));
@@ -659,9 +660,11 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
     } else if (irt_isnum(t)) {
       setnumV(o, ex->fpr[r-RID_MIN_FPR]);
 #endif
-    } else if (LJ_64 && irt_is64(t)) {
+#if LJ_64 && !LJ_GC64
+    } else if (irt_is64(t)) {
       /* 64 bit values that already have the tag bits. */
       o->u64 = ex->gpr[r-RID_MIN_GPR];
+#endif
     } else if (irt_ispri(t)) {
       setpriV(o, irt_toitype(t));
     } else {
