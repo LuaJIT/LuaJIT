@@ -2639,6 +2639,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov eax, CARG1d
   |  .if X64WIN; push rsi; mov rsi, CARG2; .endif
   |  push rbx
+  |  xor ecx, ecx
   |  cpuid
   |  mov [rsi], eax
   |  mov [rsi+4], ebx

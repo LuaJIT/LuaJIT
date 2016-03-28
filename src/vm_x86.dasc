@@ -3026,6 +3026,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov eax, CARG1d
   |  .if X64WIN; push rsi; mov rsi, CARG2; .endif
   |  push rbx
+  |  xor ecx, ecx
   |  cpuid
   |  mov [rsi], eax
   |  mov [rsi+4], ebx
@@ -3049,6 +3050,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov eax, [esp+4]			// Argument 1 is function number.
   |  push edi
   |  push ebx
+  |  xor ecx, ecx
   |  cpuid
   |  mov edi, [esp+16]			// Argument 2 is result area.
   |  mov [edi], eax

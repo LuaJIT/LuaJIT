@@ -668,6 +668,11 @@ static uint32_t jit_cpudetect(lua_State *L)
       if (fam >= 0x00000f00)  /* K8, K10. */
 	flags |= JIT_F_PREFER_IMUL;
     }
+    if (vendor[0] >= 7) {
+      uint32_t xfeatures[4];
+      lj_vm_cpuid(7, xfeatures);
+      flags |= ((xfeatures[1] >> 8)&1) * JIT_F_BMI2;
+    }
 #endif
   }
   /* Check for required instruction set support on x86 (unnecessary on x64). */

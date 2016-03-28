@@ -19,10 +19,11 @@
 #define JIT_F_SSE4_1		0x00000040
 #define JIT_F_PREFER_IMUL	0x00000080
 #define JIT_F_LEA_AGU		0x00000100
+#define JIT_F_BMI2		0x00000200
 
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_SSE2
-#define JIT_F_CPUSTRING		"\4SSE2\4SSE3\6SSE4.1\3AMD\4ATOM"
+#define JIT_F_CPUSTRING		"\4SSE2\4SSE3\6SSE4.1\3AMD\4ATOM\4BMI2"
 #elif LJ_TARGET_ARM
 #define JIT_F_ARMV6_		0x00000010
 #define JIT_F_ARMV6T2_		0x00000020
