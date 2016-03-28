@@ -250,11 +250,11 @@
 |// Macros to clear or set tags.
 |.macro cleartp, reg; shl reg, 17; shr reg, 17; .endmacro
 |.macro settp, reg, tp
-|  mov64 ITYPE, ((int64_t)tp<<47)
+|  mov64 ITYPE, ((uint64_t)tp<<47)
 |  or reg, ITYPE
 |.endmacro
 |.macro settp, dst, reg, tp
-|  mov64 dst, ((int64_t)tp<<47)
+|  mov64 dst, ((uint64_t)tp<<47)
 |  or dst, reg
 |.endmacro
 |.macro setint, reg

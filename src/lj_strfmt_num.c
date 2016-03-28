@@ -480,7 +480,7 @@ static char *lj_strfmt_wfnum(SBuf *sb, SFormat sf, lua_Number n, char *p)
       if ((prec | (sf & STRFMT_F_ALT))) {
 	/* Emit fractional part. */
 	p[1] = '.'; p += 2;
-	prec -= (q - p); p = q; /* Account for the digits already emitted. */
+	prec -= (MSize)(q - p); p = q; /* Account for digits already emitted. */
 	/* Then emit chunks of 9 digits (this may emit 8 digits too many). */
 	for (i = ndhi; (int32_t)prec > 0 && i != ndlo; prec -= 9) {
 	  i = (i - 1) & 0x3f;
