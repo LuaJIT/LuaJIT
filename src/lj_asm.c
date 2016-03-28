@@ -2150,7 +2150,10 @@ static void asm_setup_regsp(ASMState *as)
 #endif
 #if LJ_TARGET_X86ORX64
     /* Non-constant shift counts need to be in RID_ECX on x86/x64. */
-    case IR_BSHL: case IR_BSHR: case IR_BSAR: case IR_BROL: case IR_BROR:
+    case IR_BSHL: case IR_BSHR: case IR_BSAR:
+      if ((as->flags & JIT_F_BMI2))  /* Except if BMI2 is available. */
+	break;
+    case IR_BROL: case IR_BROR:
       if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r)) {
 	IR(ir->op2)->r = REGSP_HINT(RID_ECX);
 	if (inloop)

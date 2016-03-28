@@ -13,10 +13,12 @@
       if (rex != 0x40) *--(p) = rex; }
 #define FORCE_REX		0x200
 #define REX_64			(FORCE_REX|0x080000)
+#define VEX_64			0x800000
 #else
 #define REXRB(p, rr, rb)	((void)0)
 #define FORCE_REX		0
 #define REX_64			0
+#define VEX_64			0
 #endif
 
 #define emit_i8(as, i)		(*--as->mcp = (MCode)(i))
@@ -31,6 +33,13 @@ static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
 				 MCode *p, int delta)
 {
   int n = (int8_t)xo;
+  if (n == -60) {  /* VEX-encoded instruction */
+#if LJ_64
+    xo ^= (((rr>>1)&4)+((rx>>2)&2)+((rb>>3)&1))<<13;
+#endif
+    *(uint32_t *)(p+delta-5) = (uint32_t)xo;
+    return p+delta-5;
+  }
 #if defined(__GNUC__)
   if (__builtin_constant_p(xo) && n == -2)
     p[delta-2] = (MCode)(xo >> 24);
@@ -412,8 +421,10 @@ static void emit_call_(ASMState *as, MCode *target)
 /* Use 64 bit operations to handle 64 bit IR types. */
 #if LJ_64
 #define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
+#define VEX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? VEX_64 : 0))
 #else
 #define REX_64IR(ir, r)		(r)
+#define VEX_64IR(ir, r)		(r)
 #endif
 
 /* Generic move between two regs. */

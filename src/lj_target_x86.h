@@ -189,6 +189,11 @@ typedef struct {
 #define XO_f20f(o)	((uint32_t)(0x0ff2fc + (0x##o<<24)))
 #define XO_f30f(o)	((uint32_t)(0x0ff3fc + (0x##o<<24)))
 
+#define XV_660f38(o)	((uint32_t)(0x79e2c4 + (0x##o<<24)))
+#define XV_f20f38(o)	((uint32_t)(0x7be2c4 + (0x##o<<24)))
+#define XV_f20f3a(o)	((uint32_t)(0x7be3c4 + (0x##o<<24)))
+#define XV_f30f38(o)	((uint32_t)(0x7ae2c4 + (0x##o<<24)))
+
 /* This list of x86 opcodes is not intended to be complete. Opcodes are only
 ** included when needed. Take a look at DynASM or jit.dis_x86 to see the
 ** whole mess.
@@ -230,6 +235,12 @@ typedef enum {
   XI_FPATAN =	0xf3d9,
   XI_FSCALE =	0xfdd9,
   XI_FYL2X =	0xf1d9,
+
+  /* VEX-encoded instructions. XV_* prefix. */
+  XV_RORX =	XV_f20f3a(f0),
+  XV_SARX =	XV_f30f38(f7),
+  XV_SHLX =	XV_660f38(f7),
+  XV_SHRX =	XV_f20f38(f7),
 
   /* Variable-length opcodes. XO_* prefix. */
   XO_MOV =	XO_(8b),

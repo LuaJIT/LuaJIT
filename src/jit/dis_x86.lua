@@ -244,6 +244,7 @@ nil,"||psrlvVSXrvm","||psravdXrvm","||psllvVSXrvm",
 [0xde] = "||aesdecXrvm", [0xdf] = "||aesdeclastXrvm",
 --Fx
 [0xf0] = "|||crc32TrBmt",[0xf1] = "|||crc32TrVmt",
+[0xf7] = "|sarxVrmv|shlxVrmv|shrxVrmv",
 },
 
 ["3a"] = { -- [66] 0f 3a xx
@@ -273,6 +274,8 @@ nil,nil,nil,nil,
 [0x60] = "||pcmpestrmXrmu",[0x61] = "||pcmpestriXrmu",
 [0x62] = "||pcmpistrmXrmu",[0x63] = "||pcmpistriXrmu",
 [0xdf] = "||aeskeygenassistXrmu",
+--Fx
+[0xf0] = "|||rorxVrmu",
 },
 }
 

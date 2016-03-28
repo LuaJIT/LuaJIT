@@ -1956,7 +1956,7 @@ static void asm_bswap(ASMState *as, IRIns *ir)
 #define asm_bor(as, ir)		asm_intarith(as, ir, XOg_OR)
 #define asm_bxor(as, ir)	asm_intarith(as, ir, XOg_XOR)
 
-static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
+static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs, x86Op xv)
 {
   IRRef rref = ir->op2;
   IRIns *irr = IR(rref);
@@ -1965,11 +1965,27 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
     int shift;
     dest = ra_dest(as, ir, RSET_GPR);
     shift = irr->i & (irt_is64(ir->t) ? 63 : 31);
+    if (!xv && shift && (as->flags & JIT_F_BMI2)) {
+      Reg left = asm_fuseloadm(as, ir->op1, RSET_GPR, irt_is64(ir->t));
+      if (left != dest) {  /* BMI2 rotate right by constant. */
+	emit_i8(as, xs == XOg_ROL ? -shift : shift);
+	emit_mrm(as, VEX_64IR(ir, XV_RORX), dest, left);
+	return;
+      }
+    }
     switch (shift) {
     case 0: break;
     case 1: emit_rr(as, XO_SHIFT1, REX_64IR(ir, xs), dest); break;
     default: emit_shifti(as, REX_64IR(ir, xs), dest, shift); break;
     }
+  } else if ((as->flags & JIT_F_BMI2) && xv) {	/* BMI2 variable shifts. */
+    Reg left, right;
+    dest = ra_dest(as, ir, RSET_GPR);
+    right = ra_alloc1(as, rref, RSET_GPR);
+    left = asm_fuseloadm(as, ir->op1, rset_exclude(RSET_GPR, right),
+			 irt_is64(ir->t));
+    emit_mrm(as, VEX_64IR(ir, xv) ^ (right << 19), dest, left);
+    return;
   } else {  /* Variable shifts implicitly use register cl (i.e. ecx). */
     Reg right;
     dest = ra_dest(as, ir, rset_exclude(RSET_GPR, RID_ECX));
@@ -1995,11 +2011,11 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs)
   */
 }
 
-#define asm_bshl(as, ir)	asm_bitshift(as, ir, XOg_SHL)
-#define asm_bshr(as, ir)	asm_bitshift(as, ir, XOg_SHR)
-#define asm_bsar(as, ir)	asm_bitshift(as, ir, XOg_SAR)
-#define asm_brol(as, ir)	asm_bitshift(as, ir, XOg_ROL)
-#define asm_bror(as, ir)	asm_bitshift(as, ir, XOg_ROR)
+#define asm_bshl(as, ir)	asm_bitshift(as, ir, XOg_SHL, XV_SHLX)
+#define asm_bshr(as, ir)	asm_bitshift(as, ir, XOg_SHR, XV_SHRX)
+#define asm_bsar(as, ir)	asm_bitshift(as, ir, XOg_SAR, XV_SARX)
+#define asm_brol(as, ir)	asm_bitshift(as, ir, XOg_ROL, 0)
+#define asm_bror(as, ir)	asm_bitshift(as, ir, XOg_ROR, 0)
 
 /* -- Comparisons --------------------------------------------------------- */
 
