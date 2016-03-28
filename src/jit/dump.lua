@@ -331,7 +331,7 @@ local function formatk(tr, idx)
       s = format("userdata:%p", k)
     else
       s = format("[%p]", k)
-      if s == "[0x00000000]" then s = "NULL" end
+      if s == "[NULL]" then s = "NULL" end
     end
   elseif t == 21 then -- int64_t
     s = sub(tostring(k), 1, -3)
