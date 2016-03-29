@@ -26,6 +26,8 @@
 #define REX_GC64		0
 #endif
 
+#define OP4B 0x4000
+
 #define VEX_256 0x40000
 
 /* msb is also set to c5 so we can spot a vex op in op_emit */
@@ -76,6 +78,8 @@ static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
   int n = (int8_t)xo;
   if ((n + 58) <= 0) { /* VEX-encoded instruction */
     return emit_vop(xo, rr, rb, rx, p, delta);
+  } else if (rr & OP4B) {
+    n = -5;
   }
 #if defined(__GNUC__)
   if (__builtin_constant_p(xo) && n == -2)
@@ -92,6 +96,7 @@ static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
     if (rex != 0x40) {
       rex |= (rr >> 16);
       if (n == -4) { *p = (MCode)rex; rex = (MCode)(xo >> 8); }
+      else if (n == -5) { *p = (MCode)rex; rex = (MCode)(xo); }
       else if ((xo & 0xffffff) == 0x6600fd) { *p = (MCode)rex; rex = 0x66; }
       *--p = (MCode)rex;
     }
