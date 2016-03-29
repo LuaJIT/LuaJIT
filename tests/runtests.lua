@@ -4,22 +4,10 @@ local telescope = require("telescope")
 local ffi = require("ffi")
 local C = ffi.C
 
-local function check(expect, func, ...)
-  local result = func(...)
-  assert(result == expect, tostring(result)) 
-  return true 
-end
-
-telescope.make_assertion("jit", "", check)
-telescope.make_assertion("exit", "", check)
-telescope.make_assertion("noexit", "", check)
-
-telescope.make_assertion("jitchecker", "", function(checker, func, ...)
-
-  local expected, value = checker(1, func(1, ...))
-  assert(expected == value) 
-  return true 
-end)
+telescope.make_assertion("jit", "", tester.testsingle)
+telescope.make_assertion("jitchecker", "", tester.testwithchecker)
+telescope.make_assertion("noexit", "", tester.testnoexit)
+telescope.make_assertion("exit", "", tester.testexit)
 
 telescope.make_assertion("cdef", "", function(cdef, name) 
   assert(not name or type(name) == "string")

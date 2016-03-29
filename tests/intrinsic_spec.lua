@@ -334,6 +334,15 @@ context("__mcode", function()
     --xmm register number too large
     assert_cdeferr([[void badreg_fpr1(float xmm20) __mcode("90_E");]], "invalid")
   end)
+
+  it("invalid commutative mode registers", function()
+    assert_cdef([[int4 valid_comm(int4 v1, int4 v2) __mcode("90rMc");]], "valid_comm")
+    --must have 1+ input argument
+    assert_cdeferr([[int4 invalid_comm1(int4 v1) __mcode("90rMc");]])
+    -- input register types must match
+    assert_cdeferr([[void invalid_comm2(int32_t i, int4 v1) __mcode("90rMc");]])
+    assert_cdeferr([[void invalid_comm3(int4 v1, int32_t i) __mcode("90rMc");]])
+  end)
   
   it("multidef rollback", function()
   

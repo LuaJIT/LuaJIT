@@ -313,6 +313,9 @@ static int parse_opmode(const char *op, MSize len)
       case 'C':
         flags |= INTRINSFLAG_CALLED;
         break;
+      case 'c':
+        flags |= INTRINSFLAG_ISCOMM;
+        break;
       case 'X':
         flags |= INTRINSFLAG_REXW;
         break;
@@ -681,6 +684,13 @@ int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
   if (opcode) {
     setopcode(L, intrins, opcode);
   } 
+
+  if (intrin_iscomm(intrins) && 
+      (intrins->insz < 2 || intrins->in[0] != intrins->in[1])) {
+    lj_err_callerv(L, LJ_ERR_FFI_BADOPSTR, strdata(opstr), 
+                   "bad registers for commutative mode");
+  }
+  
   if (intrin_regmode(intrins) == DYNREG_FIXED) {
     /* dyninsz is overlapped by input registers 6/7/8 */
     if ((intrins->insz < 6 && intrins->dyninsz > 0) || dynout) {
@@ -837,7 +847,7 @@ int lj_intrinsic_call(CTState *cts, CType *ct)
   }
 
   /* Swap input values around to match the platform ordering the wrapper expects */
-  if (intrin_regmode(intrins) >= DYNREG_SWAPREGS &&
+  if (intrin_regmode(intrins) >= DYNREG_SWAPREGS && !intrin_iscomm(intrins) &&
       reg_isgpr(intrins->in[0]) == reg_isgpr(intrins->in[1])) {
     if (reg_isgpr(intrins->in[0])) {
       intptr_t temp = context.gpr[0];

@@ -59,6 +59,8 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_IMMB     = 0x400,
   /* Opcode is larger than the emit system normally handles x86/x64(4 bytes) */
   INTRINSFLAG_LARGEOP  = 0x800,
+  /* Opcode is commutative allowing the input registers to be swapped to allow better fusing */
+  INTRINSFLAG_ISCOMM = 0x1000,
  
   /* Opcode uses ymm registers */
   INTRINSFLAG_VEX256   = 0x4000,
@@ -86,6 +88,7 @@ typedef struct AsmHeader {
 #define intrin_regmode(intrins) ((intrins)->flags & INTRINSFLAG_REGMODEMASK)
 #define intrin_setregmode(intrins, mode) \
   (intrins)->flags = ((intrins)->flags & ~INTRINSFLAG_REGMODEMASK)|(mode)
+#define intrin_iscomm(intrins) ((intrins)->flags & INTRINSFLAG_ISCOMM)
 
 #define intrin_getopextb(intrins) ((intrins)->out[3])
 #define intrin_setopextb(intrins, opext) \
@@ -140,6 +143,7 @@ CTypeID1 regkind_ct[16];
 #define reg_isfp(reg) (reg_rid(reg) >= RID_MIN_FPR)
 #define reg_isvec(reg) (reg_rid(reg) >= RID_MIN_FPR && reg_kind(reg) >= REGKIND_VEC_START)
 #define reg_isdyn(reg) (reg_rid(reg) == RID_DYN_GPR || reg_rid(reg) == RID_DYN_FPR)
+#define reg_torset(reg) (reg_isgpr(reg) ? RSET_GPR : RSET_FPR)
 
 #define reg_irt(reg) (reg_isgpr(reg) ? rk_irtgpr(reg_kind(reg)) : rk_irtfpr(reg_kind(reg)))
 #define rk_irtgpr(kind) ((IRType)regkind_it[(kind)])
