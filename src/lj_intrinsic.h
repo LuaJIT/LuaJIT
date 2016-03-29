@@ -26,6 +26,8 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_CALLED = 0x20,
   /* MODRM should always be set as indirect mode */
   INTRINSFLAG_INDIRECT = 0x40,
+  /* Opcode uses ymm registers */
+  INTRINSFLAG_VEX256   = 0x4000,
   /* Intrinsic is a template with no machine code set until instantiate at runtime with
   ** user supplied code.
   */
@@ -54,7 +56,7 @@ typedef struct AsmHeader {
   _(FPR64, IRT_NUM,   CTID_DOUBLE) \
   _(FPR32, IRT_FLOAT, CTID_FLOAT) \
   _(V128,  0,         0) \
-  _(FPR5,  0,         0) \
+  _(V256,  0,         0) \
   _(FPR6,  0,         0) \
   _(FPR7,  0,         0) \
 

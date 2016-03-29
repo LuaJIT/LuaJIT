@@ -214,10 +214,24 @@ typedef struct IntrinWrapState {
 #define XO_f20f(o)	((uint32_t)(0x0ff2fc + (0x##o<<24)))
 #define XO_f30f(o)	((uint32_t)(0x0ff3fc + (0x##o<<24)))
 
+#define XV_0f(o)	((uint32_t)(0xf8c5c5 + (0x##o<<24)))
 #define XV_660f38(o)	((uint32_t)(0x79e2c4 + (0x##o<<24)))
 #define XV_f20f38(o)	((uint32_t)(0x7be2c4 + (0x##o<<24)))
 #define XV_f20f3a(o)	((uint32_t)(0x7be3c4 + (0x##o<<24)))
 #define XV_f30f38(o)	((uint32_t)(0x7ae2c4 + (0x##o<<24)))
+
+typedef enum VEXPP {
+  VEXPP_0f = 0,
+  VEXPP_66 = 1,
+  VEXPP_f3 = 2,
+  VEXPP_f2 = 3,
+} VEXPP;
+
+typedef enum VEXMAP {
+  VEXMAP_0F = 1,
+  VEXMAP_0F38 = 2,
+  VEXMAP_0F3A = 3,
+} VEXMAP;
 
 /* This list of x86 opcodes is not intended to be complete. Opcodes are only
 ** included when needed. Take a look at DynASM or jit.dis_x86 to see the
@@ -270,6 +284,10 @@ typedef enum {
   XV_SARX =	XV_f30f38(f7),
   XV_SHLX =	XV_660f38(f7),
   XV_SHRX =	XV_f20f38(f7),
+
+  XV_MOVUPS =    XV_0f(10),
+  XV_MOVUPSto =  XV_0f(11),
+  XV_VZEROUPPER = XV_0f(77),
 
   /* Variable-length opcodes. XO_* prefix. */
   XO_OR =	XO_(0b),

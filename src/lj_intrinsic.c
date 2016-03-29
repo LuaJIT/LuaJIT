@@ -97,8 +97,9 @@ static int parse_fprreg(const char *name, uint32_t len)
 {
   uint32_t rid = 0, kind = REGKIND_FPR64;
   uint32_t pos = 3;
+  int flags = 0;
 
-  if (len < 3 || name[0] != 'x' || 
+  if (len < 3 || (name[0] != 'x' && name[0] != 'y') || 
       name[1] != 'm' || name[2] != 'm')
     return -1;
 
@@ -120,15 +121,20 @@ static int parse_fprreg(const char *name, uint32_t len)
     return -1;
   }
 
-  if (pos < len) {
-    if (name[pos] == 'f') {
-      kind = REGKIND_FPR32;
-      pos++;
-    } else if (name[pos] == 'v') {
-      kind = REGKIND_V128;
-      pos++;
-    } else {
-      kind = REGKIND_FPR64;
+  if (name[0] == 'y') {
+    kind = REGKIND_V256;
+    flags |= INTRINSFLAG_VEX256;
+  } else {
+    if (pos < len) {
+      if (name[pos] == 'f') {
+        kind = REGKIND_FPR32;
+        pos++;
+      } else if (name[pos] == 'v') {
+        kind = REGKIND_V128;
+        pos++;
+      } else {
+        kind = REGKIND_FPR64;
+      }
     }
   }
 
@@ -136,12 +142,12 @@ static int parse_fprreg(const char *name, uint32_t len)
     return -1;
   }
 
-  return reg_make(rid, kind);
+  return reg_make(rid, kind) | flags;
 }
 
 int lj_intrinsic_getreg(CTState *cts, GCstr *name) {
 
-  if (strdata(name)[0] == 'x') {
+  if (strdata(name)[0] == 'x' || strdata(name)[0] == 'y') {
     return parse_fprreg(strdata(name), name->len);
   } else {
     cTValue *reginfotv = lj_tab_getstr(cts->miscmap, name);
