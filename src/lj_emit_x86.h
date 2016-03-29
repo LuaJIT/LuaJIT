@@ -26,6 +26,18 @@
 #define REX_GC64		0
 #endif
 
+#define VEX_256 0x40000
+
+/* msb is also set to c5 so we can spot a vex op in op_emit */
+#define VEX2 0xc5c5
+
+/* vvvv bits in the opcode are assumed to be set */
+#define VEXOP_SETVVVV(o, rid) ((o) ^ (((rid < RID_MIN_FPR ? \
+                                        rid : (rid)-RID_MIN_FPR)) << 19))
+
+/* extract and merge the opcode,vvv,L,pp, W and set VEXMAP_0F */
+#define VEX2TO3(op) ((op & 0xff7f0000) | 0xe1c4 | ((op & 0x800000) >> 8))
+
 #define emit_i8(as, i)		(*--as->mcp = (MCode)(i))
 #define emit_i32(as, i)		(*(int32_t *)(as->mcp-4) = (i), as->mcp -= 4)
 #define emit_u32(as, u)		(*(uint32_t *)(as->mcp-4) = (u), as->mcp -= 4)
@@ -33,17 +45,37 @@
 #define emit_x87op(as, xo) \
   (*(uint16_t *)(as->mcp-2) = (uint16_t)(xo), as->mcp -= 2)
 
+/* VEX encoded op */
+static MCode *emit_vop(x86Op xo, Reg rr, Reg rb, Reg rx,
+                        MCode *p, int delta)
+{
+  int n = ((int8_t)xo)+55;
+#if LJ_64
+  if ((uint8_t)xo == 0xc5 && !((rb|rx) & 8)) {
+    xo ^= (rr & 8) << 20;
+  } else {
+    if ((uint8_t)xo == 0xc5) {
+      xo = VEX2TO3(xo);
+      n--;
+    }
+    xo ^= (((rr>>1)&4)+((rx>>2)&2)+((rb>>3)&1))<<13;
+  }
+#else
+  UNUSED(rb); UNUSED(rx);
+#endif
+  xo |= rr & VEX_256;
+  *(uint32_t *)(p+delta-5) = (uint32_t)xo;
+  p += n + delta;
+  return p;
+}
+
 /* op */
 static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
 				 MCode *p, int delta)
 {
   int n = (int8_t)xo;
-  if (n == -60) {  /* VEX-encoded instruction */
-#if LJ_64
-    xo ^= (((rr>>1)&4)+((rx>>2)&2)+((rb>>3)&1))<<13;
-#endif
-    *(uint32_t *)(p+delta-5) = (uint32_t)xo;
-    return p+delta-5;
+  if ((n + 58) <= 0) { /* VEX-encoded instruction */
+    return emit_vop(xo, rr, rb, rx, p, delta);
   }
 #if defined(__GNUC__)
   if (__builtin_constant_p(xo) && n == -2)
