@@ -2701,7 +2701,7 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
   uint8_t *in = info.in, *out = info.out;
   int spadj = 0;
   int dynreg = intrin_regmode(intrins);
-  Reg rout = RID_NONE, rin = RID_NONE;
+  Reg rout = RID_NONE, rin = RID_NONE, r3 = RID_NONE;
 
   lj_asm_setup_intrins(J, as);
   origtop = as->mctop;
@@ -2735,6 +2735,9 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
       info.inset |= pickdynlist(in+inofs, intrins->dyninsz-inofs, scatch);
     }
 
+    if (dynreg == DYNREG_VEX3)
+      r3 = reg_rid(in[1]);
+
     if (rin == RID_NONE)
       rin = reg_rid(in[0]);
 
@@ -2746,6 +2749,9 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
       } else if (dynreg == DYNREG_OPEXT) {
         /* Destructive single register opcode */
         rout = out[0] = reg_setrid(out[0], rin);
+        /* Becomes non destructive in vex form*/
+        if (intrins->flags & INTRINSFLAG_VEX)
+          r3 = reg_rid(rout);
       } else {
         scatch = RSET_INIT & ~info.outset;
         rset_clear(scatch, info.outcontext);
@@ -2868,10 +2874,10 @@ restart:
 
   if (intrins->flags & INTRINSFLAG_CALLED) {
     /* emit a call to the target which may be collocated after us */
-    emit_intrins(as, intrins, rin, (uintptr_t)target);
+    emit_intrins(as, intrins, rin, (uintptr_t)target, 0);
   } else if (dynreg) {
     /* Write an opcode to the wrapper */
-    asmofs = emit_intrins(as, intrins, rin, rout);
+    asmofs = emit_intrins(as, intrins, rin, rout, r3);
   } else {
     /* Append the user supplied machine code */
     asmofs = asm_mcode(as, state->target, state->targetsz);

@@ -236,6 +236,8 @@ typedef enum VEXMAP {
   VEXMAP_0F3A = 3,
 } VEXMAP;
 
+#define VEX_256 0x40000
+
 /* This list of x86 opcodes is not intended to be complete. Opcodes are only
 ** included when needed. Take a look at DynASM or jit.dis_x86 to see the
 ** whole mess.

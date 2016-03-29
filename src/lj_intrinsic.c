@@ -333,6 +333,12 @@ static int parse_opmode(const char *op, MSize len)
       case 'E':
         flags |= INTRINSFLAG_EXPLICTREGS;
         break;
+      case 'V':
+        flags |= INTRINSFLAG_AVXREQ;
+      case 'v':
+        /* Use vex encoding of the op if avx/xv2 is supported */
+        flags |= INTRINSFLAG_VEX;
+        break;
 
       default:
         /* return index of invalid flag */
@@ -588,7 +594,12 @@ GCcdata *lj_intrinsic_createffi(CTState *cts, CType *func)
   RegSet mod = intrin_getmodrset(cts, intrins);
 
   if (intrins->opcode == 0) {
-    lj_err_callermsg(cts->L, "expected non template intrinsic");
+    if (intrin_regmode(intrins) == DYNREG_FIXED) {
+      lj_err_callermsg(cts->L, "expected non template intrinsic");
+    } else {
+      /* Opcode gets set to 0 during parsing if the cpu feature missing */
+      lj_err_callermsg(cts->L, "Intrinsic not support by cpu");
+    }
   }
 
   /* Build the interpreter wrapper */
@@ -605,6 +616,8 @@ GCcdata *lj_intrinsic_createffi(CTState *cts, CType *func)
   *(void **)cdataptr(cd) = intrins->wrapped;
   return cd;
 }
+
+extern uint32_t sse2vex(uint32_t op, uint32_t len, uint32_t vex_w);
 
 int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
 {
@@ -734,6 +747,39 @@ int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
   if (intrin_regmode(intrins) >= DYNREG_SWAPREGS) {
     uint8_t temp = intrins->in[0];
     intrins->in[0] = intrins->in[1]; intrins->in[1] = temp;
+  }
+
+  if (intrins->flags & INTRINSFLAG_VEX) {
+    int vex_w = 0;
+  
+    /* Set the VEX.W/E bit if the X flag is set */
+    if (intrins->flags & INTRINSFLAG_REXW) {
+      vex_w = 1;
+      intrins->flags &= ~INTRINSFLAG_REXW;
+    }
+
+    if (L2J(L)->flags & JIT_F_AVX1) {
+      intrins->opcode = sse2vex(intrins->opcode, intrin_oplen(intrins), vex_w);
+      intrins->flags &= ~INTRINSFLAG_LARGEOP;
+      /* Switch to non destructive source if the sse reg mode is destructive */
+      if (intrin_regmode(intrins) == DYNREG_INOUT) {
+        intrin_setregmode(intrins, DYNREG_VEX3);
+      }
+      /* Set the VEX.L bit if the opcode has any 256 bit registers declared */
+      if (intrins->flags & INTRINSFLAG_VEX256) {
+        intrins->opcode |= VEX_256;
+      }
+    } else if(buildflags & INTRINSFLAG_AVXREQ) {
+      /* Disable instantiation of the intrinsic since AVX is not support by CPU */
+      intrins->opcode = 0;
+    } else {
+      /* Vex encoding is not optional with these flags */
+      if ((intrins->flags & INTRINSFLAG_VEX256) || vex_w) {
+        return 0;
+      }
+      /* Use opcode unmodified in its SSE form */
+      intrins->flags &= ~INTRINSFLAG_VEX;
+    }
   }
 #endif
 

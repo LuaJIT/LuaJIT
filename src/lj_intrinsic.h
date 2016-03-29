@@ -34,6 +34,8 @@ typedef enum REGMODE {
   DYNREG_OPEXT,
   /* Two input register and one output same register that's same RID the second input */ 
   DYNREG_INOUT,
+  /* 2 in, 1 out */
+  DYNREG_VEX3,
   /* Two input registers with M dynamic output register */
   DYNREG_TWOIN,
 
@@ -44,7 +46,8 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_REGMODEMASK = 7,
 
   INTRINSFLAG_MEMORYSIDE   = 0x08, /* has memory side effects so needs an IR memory barrier */
-
+  /* Vex encoded opcode, vvvv may be unused though */
+  INTRINSFLAG_VEX     = 0x10,
   /* Intrinsic should be emitted as a naked function that is called */
   INTRINSFLAG_CALLED = 0x20,
   /* MODRM should always be set as indirect mode */
@@ -72,6 +75,8 @@ typedef enum INTRINSFLAGS {
   ** user supplied code.
   */
   INTRINSFLAG_TEMPLATE    = 0x40000,
+  /* Opcode is only supported if the CPU supports AVX */
+  INTRINSFLAG_AVXREQ = 0x80000,
 
   INTRINSFLAG_CALLEDIND = INTRINSFLAG_CALLED | INTRINSFLAG_INDIRECT
 } INTRINSFLAGS;

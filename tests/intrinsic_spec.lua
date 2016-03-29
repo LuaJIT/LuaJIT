@@ -6,6 +6,7 @@ typedef float float4 __attribute__((__vector_size__(16)));
 typedef float float8 __attribute__((__vector_size__(32)));
 typedef int int4 __attribute__((__vector_size__(16)));
 typedef uint8_t byte16 __attribute__((__vector_size__(16)));
+typedef int64_t long2 __attribute__((__vector_size__(16)));
 ]]
 
 local float4 = ffi.new("float[4]")
@@ -862,7 +863,7 @@ it("popcnt", function()
 end)
 
 it("addsd", function()
-  assert_cdef([[double addsd(double n1, double n2) __mcode("F20F58rM");]], "addsd")
+  assert_cdef([[double addsd(double n1, double n2) __mcode("F20F58rMv");]], "addsd")
   local addsd = ffi.C.addsd
   
   function test_addsd(n1, n2)
@@ -890,7 +891,7 @@ it("addsd", function()
   assert_equal(6, test_addsd2(3))
   
   --check unfused
-  ffi.cdef([[double addsduf(double n1, double n2) __mcode("F20F58rR");]])
+  ffi.cdef([[double addsduf(double n1, double n2) __mcode("F20F58rRv");]])
   addsd = ffi.C.addsduf
   
   assert_equal(3, addsd(1, 2))
@@ -898,7 +899,7 @@ it("addsd", function()
 end)
 
 it("addss", function()
-  assert_cdef([[float addss(float n1, float n2) __mcode("F30F58rM");]], "addss")
+  assert_cdef([[float addss(float n1, float n2) __mcode("F30F58rMv");]], "addss")
   local addsd = ffi.C.addss
    
   function test_addsd(n1, n2)
@@ -922,7 +923,7 @@ it("addss", function()
   assert_noexit(3, test_addss2, 1.5)
   
   --check unfused
-  ffi.cdef[[float addssuf(float n1, float n2) __mcode("F30F58rR");]]
+  ffi.cdef[[float addssuf(float n1, float n2) __mcode("F30F58rRv");]]
   addsd = ffi.C.addssuf
   
   assert_equal(3, addsd(1, 2))
@@ -956,6 +957,48 @@ it("shufps", function()
   assert_equal(vout[2], 2.25)
   assert_equal(vout[3], 1.5)
 end)
+
+it("vpermilps(avx)", function()
+  assert_cdef([[float4 vpermilps(float4 v1, int4 control) __mcode("660F380CrMV");]], "vpermilps")
+
+  local v1, v2 = ffi.new("float4", 1, 2, 3, 4)
+  v2 = ffi.new("int4", 0, 0, 0, 0)
+  assert_v4eq(ffi.C.vpermilps(v1, v2), 1, 1, 1, 1)
+
+  -- Revese the vector
+  v2 = ffi.new("int4", 3, 2, 1, 0)
+  assert_v4eq(ffi.C.vpermilps(v1, v2), 4, 3, 2, 1)
+end)
+
+it("vpslldq(avx)", function()
+  assert_cdef([[int4 vpslldq_4(int4 v1) __mcode("660F737mUV", 4);]], "vpslldq_4")
+
+  local v = ffi.new("int4", 1, 2, 3, 4)
+  assert_v4eq(ffi.C.vpslldq_4(v), 0, 1, 2, 3)
+end)
+
+it("vaddps(avx, ymm)", function()
+  assert_cdef([[float8 vaddps(float8 v1, float8 v2) __mcode("0F58rMV");]], "vaddps")
+
+  local v1 = ffi.new("float8", 1, 2, 3, 4, 5, 6, 7, 8)
+  local v2 = ffi.new("float8", 1, 1, 1, 1, 1, 1, 1, 1)
+  
+  local vout = ffi.C.vaddps(v1, v2)
+  
+  for i=0,7 do
+    assert_equal(vout[i], i+2)
+  end 
+end)
+
+if ffi.arch == "x64" then  
+  --Check VEX.L bit is correcly set when the X opcode flag is specifed on vex opcodes
+  it("vmovd VEX.L bit(avx)", function()
+    assert_cdef([[long2 vmovd(int64_t n) __mcode("660F6ErMVX");]], "vmovd")
+  
+    local v = ffi.C.vmovd(-1LL)
+    assert_equal(v[0], -1LL)
+  end)
+end
 
 it("phaddd 4byte opcode", function()
 
