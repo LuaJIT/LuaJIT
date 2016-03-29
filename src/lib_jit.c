@@ -661,6 +661,7 @@ static uint32_t jit_cpudetect(lua_State *L)
 #if LJ_HASJIT
     flags |= ((features[2] >> 0)&1) * JIT_F_SSE3;
     flags |= ((features[2] >> 19)&1) * JIT_F_SSE4_1;
+    flags |= ((features[2] >> 28)&1) * JIT_F_AVX1;
     if (vendor[2] == 0x6c65746e) {  /* Intel. */
       if ((features[0] & 0x0fff0ff0) == 0x000106c0)  /* Atom. */
 	flags |= JIT_F_LEA_AGU;
