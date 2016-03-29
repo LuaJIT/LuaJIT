@@ -2743,7 +2743,7 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
 
     /* Allocate the dynamic output register */
     if (intrins->outsz > 0 && intrin_dynrout(intrins)) {
-      if (dynreg == DYNREG_INOUT) {
+      if (dynreg == DYNREG_INOUT || dynreg == DYNREG_TWOSTORE) {
         rout = reg_rid(in[1]);
         out[0] = reg_setrid(out[0], rout);
       } else if (dynreg == DYNREG_OPEXT) {

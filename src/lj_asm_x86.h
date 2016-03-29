@@ -868,7 +868,7 @@ static void asm_intrin_opcode(ASMState *as, IRIns *ir, IntrinsInfo *ininfo)
   lua_assert(ra_hasreg(right) && (ra_hasreg(dest) || intrins->dyninsz < 2));
   emit_intrins(as, intrins, right, dest, vvvv);
   
-  if (dynreg == DYNREG_INOUT) {
+  if (dynreg == DYNREG_INOUT || (dynreg == DYNREG_TWOSTORE && dynrout)) {
     lua_assert(lref);
     ra_left(as, dest, lref);
     /* no need to load the register since ra_left already did */

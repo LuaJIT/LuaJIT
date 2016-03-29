@@ -28,7 +28,7 @@ typedef enum REGMODE {
   DYNREG_ONE,
   /* 1(R) register in, 1 out(M) which can be a memory address to store the value */
   DYNREG_ONESTORE,
-  /* 2 in 0 out first must always be treated as indirect */
+  /* 2 in with R optionally being destructive out. first must always be treated as indirect */
   DYNREG_TWOSTORE,
   /* one input(M) register and the second is part of part of the opcode */
   DYNREG_OPEXT,
