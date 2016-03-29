@@ -712,6 +712,27 @@ end
     
     assert_jit(brand, testcpuid_brand)
   end)
+  
+  it("no dse between intrinsic", function() 
+    assert_cdef([[int32_t volatileload(int32_t* iptr) __mcode("8brMI");]], "volatileload")
+    
+    local numptr = ffi.new("int32_t[1]", 0)
+    
+    local volatileload = ffi.C.volatileload
+    
+    local function testdse()
+      assert(volatileload)
+      local sum = 0
+      numptr[0] = 0
+      numptr[0] = 1
+      sum = volatileload(numptr)
+      numptr[0] = 2
+      sum = sum + volatileload(numptr)
+      return sum
+    end
+    
+    assert_jit(3, testdse)
+  end)
 end)
 
 context("__reglist", function()
