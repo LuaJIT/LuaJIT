@@ -1116,6 +1116,98 @@ context("mixed register type opcodes", function()
   end)
 end)
 
+context("Intrinsic CSE", function()
+
+  it("cse 1 input, same arg", function()
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    
+    local function add3mul2(a)
+      return ffi.C.add3(a)+ffi.C.add3(a)
+    end
+    
+    assert_jit(10, add3mul2, 2)
+  end)
+  
+  it("cse 1 input, diff args", function()
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    
+    local function add3mul2(a, b)
+      return ffi.C.add3(a)+ffi.C.add3(b)
+    end
+    
+    assert_jit(11, add3mul2, 2, 3)
+    assert_noexit(12, add3mul2, 3, 3)
+  end)
+  
+  
+  it("cse 1 input, same and diff args", function()
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    
+    local function add3mul2(a, b)
+      return ffi.C.add3(a)+ffi.C.add3(b)+ffi.C.add3(a)
+    end
+    
+    assert_jit(16, add3mul2, 2, 3)
+    assert_noexit(10, add3mul2, -1, 3)
+  end)
+  
+  it("no cse, indirect ModRM", function()
+    assert_cdef([[int32_t xadd(int32_t* nptr, int32_t n) __mcode("0FC1mRI");]], "xadd")
+
+    local num = ffi.new("int32_t[1]", 0)
+    -- Pretend to use the output values so we don't get DCE'ed since we didn't flag xadd to have side effects
+    local function inc2(a, b)
+      local a = ffi.C.xadd(num, 1)
+      a = a + ffi.C.xadd(num, 1)
+      return num[0], a
+    end
+    
+    local function checker(i, n)
+      assert(i * 2 == n, n)
+    end
+    
+    assert_jitchecker(checker, inc2)
+  end)
+  
+  it("no cse, has side effects", function()
+    --Pretend we have an input register 
+    assert_cdef([[void rdtsc2(int32_t edx) __mcode("0f31_Es") __reglist(out, uint32_t eax) __reglist(mod, edx);]], "rdtsc2")
+
+    local function getticks()
+      local t1 = ffi.C.rdtsc2(0)
+      local t2 = ffi.C.rdtsc2(0)
+      return t2-t1
+    end
+    
+    local function checker(i, n)
+      assert(n > 0, tostring(n))
+    end
+    
+    assert_jitchecker(checker, getticks)
+  end)
+  
+  it("cse, fuse conflict", function()
+   -- assert_cdef([[int32_t add(int32_t i, int32_t n) __mcode("03rMc");]], "add")
+   assert_cdef([[double addsd(double n1, double n2) __mcode("F20F58rMvc");]], "addsd")
+
+    local num = ffi.new("double[2]", 0)
+    
+    local function testfuse(i, a, b)
+      local n = ffi.C.addsd(num[0], num[1])
+      num[1] = i
+      n = n + ffi.C.addsd(num[0], num[1])
+      return n
+    end
+    
+    local function checker(i, n)
+      assert(n > 0, tostring(n))
+    end
+    
+    assert_jitchecker(checker, testfuse, 2.5)
+  end)
+
+end)
+
 end)
 
 

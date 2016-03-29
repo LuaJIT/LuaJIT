@@ -25,6 +25,7 @@
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_carith.h"
+#include "lj_intrinsic.h"
 #endif
 #include "lj_vm.h"
 #include "lj_strscan.h"
@@ -2331,6 +2332,25 @@ LJFOLDF(xload_kptr)
 LJFOLD(XLOAD any any)
 LJFOLDX(lj_opt_fwd_xload)
 
+/* -- Intrinsics ----------------------------------------------------------- */
+
+LJFOLD(INTRN any any)
+LJFOLDF(cse_intrin)
+{
+  CIntrinsic *intrin = lj_intrinsic_get(ctype_ctsG(J2G(J)), fins->op2);
+
+  /* NYI: CSE of multi return intrinsics */
+  if (!LJ_LIKELY(J->flags & JIT_F_OPT_CSE) || intrin->outsz != 1 || 
+      intrin->insz == 0 || (intrin->flags & (INTRINSFLAG_INDIRECT|
+                                INTRINSFLAG_HASSIDE|INTRINSFLAG_MEMORYSIDE))) {
+    return EMITFOLD;
+  }
+  /* This also works for template intrinsics since they append an extra CARG with
+  ** a pointer to there per instance code.
+  */
+  return lj_opt_cse(J);
+}
+
 /* -- Write barriers ------------------------------------------------------ */
 
 /* Write barriers are amenable to CSE, but not across any incremental
@@ -2371,7 +2391,6 @@ LJFOLDF(prof)
     return ref;
   return EMITFOLD;
 }
-
 /* -- Stores and allocations ---------------------------------------------- */
 
 /* Stores and allocations cannot be folded or passed on to CSE in general.
@@ -2405,7 +2424,6 @@ LJFOLD(TDUP any)
 LJFOLD(CNEW any any)
 LJFOLD(XSNEW any any)
 LJFOLD(BUFHDR any any)
-LJFOLD(INTRN any any)
 LJFOLD(ASMRET any any)
 LJFOLDX(lj_ir_emit)
 
