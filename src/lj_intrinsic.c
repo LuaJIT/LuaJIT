@@ -564,7 +564,7 @@ int lj_intrinsic_call(CTState *cts, CType *ct)
       dp = &context.fpr[nfpr++];
     }
 
-    lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, CCF_ARG(narg+1));
+    lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, CCF_ARG(narg+1) | CCF_INTRINS_ARG);
   }
 
   /* Pass in the return type chain so the results are typed */

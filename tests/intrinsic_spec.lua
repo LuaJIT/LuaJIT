@@ -185,7 +185,7 @@ if ffi.arch == "x64" then
 end
   
   it("fpr_vec", function()
-    assert_cdef([[void fpr_vec(void* xmm7v) __mcode("90_E") __reglist(out, float4 xmm7v)]], "fpr_vec")
+    assert_cdef([[void fpr_vec(float4 xmm7v) __mcode("90_E") __reglist(out, float4 xmm7v)]], "fpr_vec")
   
     local v1 = ffi.new("float[4]", 1, 2, 3, 4)
     local xmmout = ffi.C.fpr_vec(v1)  
@@ -216,7 +216,7 @@ end
   end) 
 
   it("fpr_vec(ymm)", function()
-    assert_cdef([[void fpr_ymmvec(void* ymm7) __mcode("90_E") __reglist(out, float8 ymm7)]], "fpr_ymmvec")
+    assert_cdef([[void fpr_ymmvec(float8 ymm7) __mcode("90_E") __reglist(out, float8 ymm7)]], "fpr_ymmvec")
     --test using plain array in place of a vector 
     local v1 = ffi.new("float[8]", 0, 1, 2, 3, 4, 5, 6, 7)
     local ymmout = ffi.C.fpr_ymmvec(v1)
@@ -225,7 +225,7 @@ end
       assert_equal(ymmout[i], i)
     end
   
-    assert_cdef([[void fpr_ymmvec2(void* ymm0, void* ymm7) __mcode("90_E") __reglist(out, float8 ymm7, float8 ymm0)]], "fpr_ymmvec2")
+    assert_cdef([[void fpr_ymmvec2(float8 ymm0, void* ymm7) __mcode("90_E") __reglist(out, float8 ymm7, float8 ymm0)]], "fpr_ymmvec2")
     
     local v2 = ffi.new("float[8]", 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5) 
     local ymmtest2 = ffi.C.fpr_ymmvec2

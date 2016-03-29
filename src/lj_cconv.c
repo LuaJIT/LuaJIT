@@ -78,7 +78,13 @@ int lj_cconv_compatptr(CTState *cts, CType *d, CType *s, CTInfo flags)
   if (!((flags & CCF_CAST) || d == s)) {
     CTInfo dqual = 0, squal = 0;
     d = cconv_childqual(cts, d, &dqual);
-    if (!ctype_isstruct(s->info))
+    /* Accept arrays for vector pointers */
+    if ((flags & CCF_INTRINS_ARG) && ctype_isvector(d->info) && ctype_isarray(s->info) && 
+        ctype_cid(s->info) == ctype_cid(d->info)) {
+      return 1;
+    }
+
+    if (!ctype_isstruct(s->info) && !ctype_isvector(s->info))
       s = cconv_childqual(cts, s, &squal);
     if ((flags & CCF_SAME)) {
       if (dqual != squal)
@@ -339,6 +345,8 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
     cdata_setptr(dp, dsize, cdata_getptr(sp, ssize));
     break;
 
+  case CCX(P, V):
+    if(!(flags & CCF_INTRINS_ARG))goto err_conv;
   case CCX(P, A):
   case CCX(P, S):
     if (!lj_cconv_compatptr(cts, d, s, flags)) goto err_conv;
