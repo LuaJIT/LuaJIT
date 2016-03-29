@@ -310,6 +310,11 @@ static int parse_opmode(const char *op, MSize len)
       case 'U':
         flags |= INTRINSFLAG_IMMB;
         break;
+      case 'S':
+        flags |= INTRINSFLAG_MEMORYSIDE;
+      case 's':
+        flags |= INTRINSFLAG_HASSIDE;
+        break;
       case 'C':
         flags |= INTRINSFLAG_CALLED;
         break;

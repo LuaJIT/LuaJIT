@@ -61,6 +61,8 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_LARGEOP  = 0x800,
   /* Opcode is commutative allowing the input registers to be swapped to allow better fusing */
   INTRINSFLAG_ISCOMM = 0x1000,
+  /* Instruction has non obvious side effects */
+  INTRINSFLAG_HASSIDE  = 0x2000, 
  
   /* Opcode uses ymm registers */
   INTRINSFLAG_VEX256   = 0x4000,
@@ -89,6 +91,8 @@ typedef struct AsmHeader {
 #define intrin_setregmode(intrins, mode) \
   (intrins)->flags = ((intrins)->flags & ~INTRINSFLAG_REGMODEMASK)|(mode)
 #define intrin_iscomm(intrins) ((intrins)->flags & INTRINSFLAG_ISCOMM)
+/* Has side effects that may not be to memory */
+#define intrin_sideeff(intrins) ((intrins)->flags & INTRINSFLAG_HASSIDE)
 
 #define intrin_getopextb(intrins) ((intrins)->out[3])
 #define intrin_setopextb(intrins, opext) \

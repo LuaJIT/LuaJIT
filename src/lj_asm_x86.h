@@ -866,12 +866,13 @@ static void asm_intrin_opcode(ASMState *as, IRIns *ir, IntrinsInfo *ininfo)
   checkmclim(as);
 }
 
-void asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo* ininfo)
+int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo* ininfo)
 {
   IRRef results[LJ_INTRINS_MAXREG];
   RegSet evict = 0, outset = 0, aout = 0;
   int32_t i = intrin_regmode(intrins) ? intrins->dyninsz : 0;
   int32_t dynout = intrin_dynrout(intrins) ? 1 : 0;
+  int used = 0;
 
   /* Gather the output register IR instructions */
   if (intrins->outsz > 0) {
@@ -883,6 +884,7 @@ void asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInf
       results[n] = (IRRef)(irret - as->ir);
 
       if (ra_used(irret)) {
+        used++;
         if (n >= dynout && irret->r == reg_rid(ininfo->inregs[n])) {
           rset_set(aout, irret->r);
         }
@@ -895,6 +897,10 @@ void asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInf
     }
   }
   
+  if (!used && !intrin_sideeff(intrins)) {
+    /* IR is dead code */
+    return 0;
+  }
   evict = ininfo->modset;
 
   /* Check what registers need evicting for fixed input registers */
@@ -938,6 +944,8 @@ void asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInf
       ra_destreg(as, irret, r);
     }
   }
+
+  return 1;
 }
 
 static void asm_intrinsic(ASMState *as, IRIns *ir, IRIns *asmend)
@@ -983,7 +991,10 @@ static void asm_intrinsic(ASMState *as, IRIns *ir, IRIns *asmend)
   }
   lua_assert(n == 0);
 
-  asm_intrin_results(as, ir, intrins, &ininfo);
+  /* If there is no users of our results skip emitting */
+  if (!asm_intrin_results(as, ir, intrins, &ininfo)) {
+    goto exit;
+  }
 
   if (intrin_regmode(intrins)) {
     asm_intrin_opcode(as, ir, &ininfo);
@@ -1004,6 +1015,7 @@ static void asm_intrinsic(ASMState *as, IRIns *ir, IRIns *asmend)
   }
 
   asm_asmsetupargs(as, &ininfo);
+exit:
   if (ininfo.asmend) {
     /* Skip over our IR_INTRN since were emitting from the tail */
     as->curins = (IRRef)(ir - as->ir);

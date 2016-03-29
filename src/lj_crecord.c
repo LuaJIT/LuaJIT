@@ -1398,8 +1398,9 @@ void crec_call_intrins(jit_State *J, RecordFFData *rd, CType *func)
     }
   }
   
-  /* Intrinsics are assumed to always have side effects */
-  J->needsnap = 1;
+  if (intrin_sideeff(intrins)) {
+    J->needsnap = 1;
+  }
   rd->nres = intrins->outsz;
 }
 #else
