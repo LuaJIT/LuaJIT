@@ -1204,6 +1204,18 @@ static void cp_decl_msvcattribute(CPState *cp, CPDecl *decl)
 
 #if LJ_HASINTRINSICS
 
+static uint8_t getsignedbyte(CPState *cp)
+{
+  int32_t val = cp->val.i32;
+
+  if (cp->tok != CTOK_INTEGER)
+    cp_err_token(cp, CTOK_INTEGER);
+
+  /* Flatten negative values to a signed 8 bit number */
+  /* NYI: immediate values larger than 8 bits */
+  return (val < 0 ? (uint8_t)(int8_t)val : val);
+}
+
 static void cp_decl_mcode(CPState *cp, CPDecl *decl)
 {
   /* Check were declared after a function definition */
@@ -1224,6 +1236,17 @@ static void cp_decl_mcode(CPState *cp, CPDecl *decl)
   decl->redir = cp->str;
 
   cp_next(cp);
+  /* Check if we have immediate and prefix byte values */
+  if (cp_opt(cp, ',')) {
+    /* NYI: immediate values larger than 8 bits */
+    decl->bits = (CTSize)getsignedbyte(cp);
+    cp_next(cp);
+    
+    if (cp_opt(cp, ',')) {
+      decl->bits |= getsignedbyte(cp) << 8;
+      cp_next(cp);
+    }
+  }
   cp_check(cp, ')');
   /* Mark the function as an intrinsic */
   decl->stack[decl->top-1].info |= CTF_INTRINS;

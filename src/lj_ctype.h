@@ -175,7 +175,15 @@ typedef int (LJ_FASTCALL *IntrinsicWrapper)(void *incontext, void* outcontext);
 
 typedef struct CIntrinsic {
   IntrinsicWrapper wrapped;
-  uint8_t in[8];
+  union {
+    uint8_t in[8];
+    struct {
+      uint8_t opregs[5]; /* cmpxchg8b */
+      uint8_t immb;
+      uint8_t prefix; /* prefix byte see INTRINSFLAG_PREFIX */
+      uint8_t dyninsz; /* dynamic input register count */
+    };
+  };
   union {
     uint8_t out[8];
     struct {

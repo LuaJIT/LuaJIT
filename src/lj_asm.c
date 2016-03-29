@@ -2452,40 +2452,52 @@ typedef struct IntrinBuildState {
   RegSet inset, outset, modregs;
   uint32_t spadj, contexspill, contexofs;
   uint8_t outcontext;
-  char vzeroupper;
+  char vzeroupper, fuse;
 } IntrinBuildState;
 
 static void intrins_setup(CIntrinsic *intrins, IntrinBuildState *info)
 {
   MSize offset = 0, i;
+  int dynreg = intrin_regmode(intrins);
+  int dynout = intrin_dynrout(intrins);
   memcpy(info->in, intrins->in, LJ_INTRINS_MAXREG);
   memcpy(info->out, intrins->out, LJ_INTRINS_MAXREG);
 
   info->contexofs = -1;
+  info->fuse = dynreg && 
+              !(intrins->flags & (INTRINSFLAG_NOFUSE|INTRINSFLAG_INDIRECT));
 
   for (i = 0; i < intrins->insz; i++) {
     Reg r = reg_rid(info->in[i]);
+    int isdyn = dynreg && i < intrins->dyninsz;
+    lua_assert(!isdyn || reg_isdyn(info->in[i]));
     
     if (reg_kind(info->in[i]) == REGKIND_V256)
       info->vzeroupper = 1;
 
     if (reg_isgpr(info->in[i])) {
-      if (r == RID_CONTEXT) {
+      if (!isdyn && r == RID_CONTEXT) {
         /* Save the offset in the input context so we can load it last */
         info->contexofs = offset;
       }
       offset += sizeof(intptr_t);
     }
 
-    rset_set(info->inset, r);
+    if (!isdyn) 
+      rset_set(info->inset, r);
   }
 
   for (i = 0; i < intrins->outsz; i++) {
     if (reg_kind(info->out[i]) == REGKIND_V256)
       info->vzeroupper = 1;
+    if (i == 0 && dynout) continue;
 
     rset_set(info->outset, reg_rid(info->out[i]));
   }
+
+  /* Don't try to fuse if a fixed register is the same as the input context */
+  if (info->contexofs != -1)
+    info->fuse = 0;
 
   /* TODO: dynamic output context register selection */
   info->outcontext = RID_OUTCONTEXT;
@@ -2506,6 +2518,7 @@ static void intrins_loadregs(ASMState *as, CIntrinsic *intrins, IntrinBuildState
 
   /* Finally load the input register conflicting with the input context */
   if (rset_test(info->inset, RID_CONTEXT) && info->contexofs != -1) {
+    lua_assert(!info->fuse);
     emit_loadofsirt(as, IRT_INTP, RID_CONTEXT, RID_CONTEXT, info->contexofs);
   }
 
@@ -2513,6 +2526,16 @@ static void intrins_loadregs(ASMState *as, CIntrinsic *intrins, IntrinBuildState
   for (i = 0; i < intrins->insz; i++) {
     uint32_t reg = info->in[i];
     Reg r = reg_rid(reg);   
+    if (i == 0 && info->fuse) {
+      lua_assert(info->contexofs == -1);
+      /* The load is fused into the modrm of the opcode emitted in emit_intrins */
+      if (reg_isgpr(reg)) {
+        gpr++;
+      } else {
+        fpr++;
+      }
+      continue;
+    }
 
     if (reg_isgpr(reg)) {
       if (r != RID_CONTEXT)
@@ -2559,6 +2582,32 @@ static void intrins_saveregs(ASMState *as, CIntrinsic *intrins, IntrinBuildState
   }
 }
 
+/* Replace placeholder register ids with platform specific registers */
+static RegSet pickdynlist(uint8_t *list, MSize sz, RegSet freeset)
+{
+  MSize i;
+  RegSet free = freeset;
+
+  for (i = 0; i < sz; i++) {
+    RegSet rset = free & (reg_isgpr(list[i]) ? RSET_GPR : RSET_FPR);
+    Reg r;
+
+    /* Try to use scratch register first */
+    if ((rset & RSET_SCRATCH) != 0) {
+      rset = rset & RSET_SCRATCH;
+    }
+
+    r = rset_pickbot(rset);
+    lua_assert(rset_test(free, r));
+
+    list[i] = reg_setrid(list[i], r);
+    rset_clear(free, r);
+  }
+
+  /* Return register set of extra used registers */
+  return freeset & ~free;
+}
+
 /* 
 ** Stack spill slots and gpr slots in the context are always the size of a native pointer 
 ** The output context register is always spilled to a fixed stack offset
@@ -2577,7 +2626,10 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
   AsmHeader *hdr;
   MCode *asmofs = NULL, *origtop;
   void* target = state->target;
+  uint8_t *in = info.in, *out = info.out;
   int spadj = 0;
+  int dynreg = intrin_regmode(intrins);
+  Reg rout = RID_NONE, rin = RID_NONE;
 
   lj_asm_setup_intrins(J, as);
   origtop = as->mctop;
@@ -2585,6 +2637,60 @@ static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *sta
   memset(&info, 0, sizeof(info));
   info.modregs = state->mod;
   intrins_setup(intrins, &info);
+
+  /* Pick some ABI specific scratch registers for the opcode's input/output registers */
+  if (dynreg) {
+    RegSet scatch = RSET_ALL & ~info.inset;
+    int inofs = 0;
+    lua_assert(intrins->dyninsz <= intrins->insz);
+    /* Avoid unnecessary spill of the output context */
+    if (intrins->outsz != 0)
+      rset_clear(scatch, info.outcontext);
+
+    if (dynreg == DYNREG_OPEXT || dynreg == DYNREG_TWOSTORE || reg_isvec(in[0])) {
+      info.fuse = 0;
+    }
+
+    if (info.fuse) {
+      inofs++;
+      rin = RID_CONTEXT;
+      rset_clear(scatch, RID_CONTEXT);
+    }
+
+    if ((intrins->dyninsz-inofs) > 0) {
+      rset_clear(scatch, RID_CONTEXT);
+      /* Merge in registers used for dynamic input registers */
+      info.inset |= pickdynlist(in+inofs, intrins->dyninsz-inofs, scatch);
+    }
+
+    if (rin == RID_NONE)
+      rin = reg_rid(in[0]);
+
+    /* Allocate the dynamic output register */
+    if (intrins->outsz > 0 && intrin_dynrout(intrins)) {
+      if (dynreg == DYNREG_INOUT) {
+        rout = reg_rid(in[1]);
+        out[0] = reg_setrid(out[0], rout);
+      } else if (dynreg == DYNREG_OPEXT) {
+        /* Destructive single register opcode */
+        rout = out[0] = reg_setrid(out[0], rin);
+      } else {
+        scatch = RSET_INIT & ~info.outset;
+        rset_clear(scatch, info.outcontext);
+        scatch = pickdynlist(out, 1, scatch);
+        rout = reg_rid(out[0]);
+      }
+
+      rset_set(info.outset, rout);
+    }
+
+    if (rout == RID_NONE && intrins->dyninsz > 1) {
+      lua_assert(reg_isdyn(intrins->in[1]));
+      rout = reg_rid(in[1]);
+    }
+
+    info.modregs |= info.inset|info.outset;
+  }
 
   /* Used for picking scratch register when loading or saving boxed values */
   as->modset = info.modregs|RID_CONTEXT;
@@ -2651,16 +2757,49 @@ restart:
     emit_storeofsirt(as, IRT_INTP, info.outcontext, RID_SP, TEMPSPILL);
   }
 
-  if (intrins->flags & INTRINSFLAG_CALLED) {
-    Reg rin = 0;
+#if LJ_TARGET_X86ORX64
+/* Setup modrm to tobe a load from the input context pointer we assume offset
+ * will be to the first value in either the gpr or fpr part of the context
+ * because the first input register should always be the dynamic one for opcodes 
+ */
+  as->mrm.idx = RID_NONE;
+  as->mrm.scale = XM_SCALE1;
+  as->mrm.ofs = 0;
+
+  if (dynreg) {
+    if (info.fuse || (intrins->flags & INTRINSFLAG_INDIRECT)) {
+      lua_assert(!reg_isvec(in[0]));
+      as->mrm.base = rin;
+      rin = RID_MRM;
+
+      if (info.fuse) {
+        /* Set the fused offset into the input context */
+        if (reg_isfp(in[0])) {
+          as->mrm.ofs = offsetof(RegContext, fpr);
+        } else {
+          as->mrm.ofs = offsetof(RegContext, gpr);
+        }
+      }
+    } else {
+      as->mrm.base = RID_NONE;
+      lua_assert(rin != RID_NONE);
+    }
+  } else if(intrins->flags & INTRINSFLAG_CALLED) {
 #if LJ_64
     /* Pick a scratch register in case the relative distance for the call is
     ** larger than a signed 32bit value
     */
     rin = intrinsic_scratch(as, RSET_GPR);
 #endif
+  }
+#endif
+
+  if (intrins->flags & INTRINSFLAG_CALLED) {
     /* emit a call to the target which may be collocated after us */
     emit_intrins(as, intrins, rin, (uintptr_t)target);
+  } else if (dynreg) {
+    /* Write an opcode to the wrapper */
+    asmofs = emit_intrins(as, intrins, rin, rout);
   } else {
     /* Append the user supplied machine code */
     asmofs = asm_mcode(as, state->target, state->targetsz);
