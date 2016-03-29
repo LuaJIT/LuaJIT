@@ -669,6 +669,10 @@ static MCode* emit_intrins(ASMState *as, CIntrinsic *intrins, Reg r1,
     if (intrins->flags & INTRINSFLAG_IMMB) {
       *--as->mcp = intrins->immb;
     }
+    /* Tell emit_op the opcode is 4 bytes long */
+    if (intrins->flags & INTRINSFLAG_LARGEOP) {
+      r2 |= OP4B;
+    }
 
     emit_mrm(as, intrins->opcode, (Reg)r2, r1);
 

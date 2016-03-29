@@ -899,7 +899,46 @@ it("shufps", function()
   assert_equal(vout[3], 1.5)
 end)
 
+it("phaddd 4byte opcode", function()
+
+  ffi.cdef([[int4 phaddd(int4 v1, int4 v2) __mcode("660F3802rM");]])
+
+  local phaddd = ffi.C.phaddd
+
+  function hsum(v)
+    local result = phaddd(v, v)
+    result = phaddd(result, result)
+    return result[0]
+  end
+
+  local v = ffi.new("int4", 1, 2, 3, 4)
+  local vzero = ffi.new("int4", 0)
+
+  assert_equal(hsum(v), 10)
+  assert_equal(hsum(vzero), 0)
+end)
+
 context("mixed register type opcodes", function()
+
+  it("pcmpstr", function()
+    ffi.cdef([[void pcmpistri(byte16 string, byte16 mask) __mcode("660F3A63rMU", 0x2) __reglist(out, int32_t ecx)]])
+    
+    local charlist = ffi.new("byte16", 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    local string = ffi.new("byte16",   2, 2, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 7, 7, 2, 2)
+
+    local ecx = ffi.C.pcmpistri(charlist, string)
+    assert_equal(ecx, 4)
+    
+    ffi.cdef([[
+      void pcmpistrm(byte16 string, byte16 mask) __mcode("660F3A62rMU", 0x40) __reglist(out, byte16 xmm0v);
+      int32_t pmovmskb(byte16 mask) __mcode("660FD7rM");
+    ]])
+    
+    local mask = ffi.C.pcmpistrm(charlist, string)
+    mask = ffi.C.pmovmskb(mask)
+    
+    assert_equal(mask, 48)
+  end)
 
   it("cvttsd2s", function()  
     assert_cdef([[int cvttsd2s(double n) __mcode("F20F2CrM");]], "cvttsd2s")

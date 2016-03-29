@@ -385,7 +385,7 @@ static void setopcode(lua_State *L, CIntrinsic *intrins, uint32_t opcode)
   if (len < 4) {
     opcode |= (uint8_t)(int8_t)-(len+1);
   } else {
-    lj_err_callermsg(L, "bad opcode literal");
+    intrins->flags |= INTRINSFLAG_LARGEOP;
   }
 
   if (intrin_regmode(intrins) == DYNREG_OPEXT) {

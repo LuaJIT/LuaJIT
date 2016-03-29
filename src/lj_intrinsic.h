@@ -57,6 +57,8 @@ typedef enum INTRINSFLAGS {
   INTRINSFLAG_PREFIX   = 0x200,
   /* Opcode has an immediate byte that needs to be set at construction time */
   INTRINSFLAG_IMMB     = 0x400,
+  /* Opcode is larger than the emit system normally handles x86/x64(4 bytes) */
+  INTRINSFLAG_LARGEOP  = 0x800,
  
   /* Opcode uses ymm registers */
   INTRINSFLAG_VEX256   = 0x4000,
@@ -89,7 +91,7 @@ typedef struct AsmHeader {
 #define intrin_setopextb(intrins, opext) \
   lua_assert((intrins)->outsz < 4); \
   ((intrins)->out[3] = (opext))
-#define intrin_oplen(intrins) ((-(int8_t)(intrins)->opcode)-1)
+#define intrin_oplen(intrins) (((intrins)->flags & INTRINSFLAG_LARGEOP) ? 4 : (-(int8_t)(intrins)->opcode)-1)
 
 /* odd numbered have an dynamic output */
 #define intrin_dynrout(intrins) (intrin_regmode(intrins) && reg_isdyn(intrins->out[0]))
