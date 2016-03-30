@@ -1621,6 +1621,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
   |  ffgccheck
+  |.  nop
   |  lw CARG3, HI(BASE)
   |   ldc1 FARG1, 0(BASE)
   |  li AT, 8
@@ -1648,6 +1649,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_sub
   |  ffgccheck
+  |.  nop
   |  addiu AT, NARGS8:RC, -16
   |   lw CARG3, 16+HI(BASE)
   |    ldc1 f0, 16(BASE)
@@ -1697,6 +1699,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_rep			// Only handle the 1-char case inline.
   |  ffgccheck
+  |.  nop
   |  lw TMP0, HI(BASE)
   |   addiu AT, NARGS8:RC, -16		// Exactly 2 arguments.
   |  lw CARG4, 8+HI(BASE)
@@ -1731,6 +1734,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_reverse
   |  ffgccheck
+  |.  nop
   |  lw CARG3, HI(BASE)
   |   lw STR:CARG1, LO(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
@@ -1756,6 +1760,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro ffstring_case, name, lo
   |  .ffunc name
   |  ffgccheck
+  |.  nop
   |  lw CARG3, HI(BASE)
   |   lw STR:CARG1, LO(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
