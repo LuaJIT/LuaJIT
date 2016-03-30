@@ -1875,7 +1875,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
   |  ffgccheck
-  |.  lw CARG3, HI(BASE)
+  |.  nop
+  |  lw CARG3, HI(BASE)
   |   lw CARG1, LO(BASE)
   |  li TMP1, 255
   |  xori AT, NARGS8:RC, 8		// Exactly 1 argument.
@@ -1902,7 +1903,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc string_sub
   |  ffgccheck
-  |.  addiu AT, NARGS8:RC, -16
+  |.  nop
+  |  addiu AT, NARGS8:RC, -16
   |   lw CARG3, 16+HI(BASE)
   |   lw TMP0, HI(BASE)
   |    lw STR:CARG1, LO(BASE)
@@ -1946,7 +1948,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro ffstring_op, name
   |  .ffunc string_ .. name
   |  ffgccheck
-  |.  lw CARG3, HI(BASE)
+  |.  nop
+  |  lw CARG3, HI(BASE)
   |   lw STR:CARG2, LO(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
   |.  li AT, LJ_TSTR
