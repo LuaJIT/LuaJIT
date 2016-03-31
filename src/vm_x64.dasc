@@ -1804,12 +1804,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_res1
   |
   |.ffunc_n math_frexp
+  |  mov RB, BASE
   |.if X64WIN
-  |  lea CARG2, TMP1
+  |  lea CARG2, TMP1		// Caveat: CARG2 == BASE
   |.else
   |  lea CARG1, TMP1
   |.endif
-  |  mov RB, BASE
   |  call extern frexp
   |  mov BASE, RB
   |  mov RBd, TMP1d
@@ -1826,13 +1826,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_res
   |
   |.ffunc_n math_modf
+  |  mov RB, BASE
   |.if X64WIN
-  |  lea CARG2, [BASE-16]
+  |  lea CARG2, [BASE-16]	// Caveat: CARG2 == BASE
   |.else
   |  lea CARG1, [BASE-16]
   |.endif
-  |  mov PC, [BASE-8]
-  |  mov RB, BASE
   |  call extern modf
   |  mov BASE, RB
   |  mov PC, [BASE-8]
