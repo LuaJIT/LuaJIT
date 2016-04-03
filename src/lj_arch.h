@@ -68,7 +68,10 @@
        defined(__NetBSD__) || defined(__OpenBSD__) || \
        defined(__DragonFly__)) && !defined(__ORBIS__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
-#elif (defined(__sun__) && defined(__svr4__)) || defined(__CYGWIN__)
+#elif (defined(__sun__) && defined(__svr4__))
+#define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif defined(__CYGWIN__)
+#define LJ_TARGET_CYGWIN	1
 #define LUAJIT_OS	LUAJIT_OS_POSIX
 #else
 #define LUAJIT_OS	LUAJIT_OS_OTHER
@@ -137,7 +140,7 @@
 #define LJ_ARCH_NAME		"x86"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#if LJ_TARGET_WINDOWS || __CYGWIN__
+#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
 #define LJ_ABI_WIN		1
 #else
 #define LJ_ABI_WIN		0
@@ -155,7 +158,7 @@
 #define LJ_ARCH_NAME		"x64"
 #define LJ_ARCH_BITS		64
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#if LJ_TARGET_WINDOWS || __CYGWIN__
+#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
 #define LJ_ABI_WIN		1
 #else
 #define LJ_ABI_WIN		0
