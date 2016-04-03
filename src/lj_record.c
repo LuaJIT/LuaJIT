@@ -1490,8 +1490,11 @@ static int select_detect(jit_State *J)
   BCIns ins = J->pc[1];
   if (bc_op(ins) == BC_CALLM && bc_b(ins) == 2 && bc_c(ins) == 1) {
     cTValue *func = &J->L->base[bc_a(ins)];
-    if (tvisfunc(func) && funcV(func)->c.ffid == FF_select)
+    if (tvisfunc(func) && funcV(func)->c.ffid == FF_select) {
+      TRef kfunc = lj_ir_kfunc(J, funcV(func));
+      emitir(IRTG(IR_EQ, IRT_FUNC), getslot(J, bc_a(ins)), kfunc);
       return 1;
+    }
   }
   return 0;
 }
