@@ -3516,7 +3516,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD	// RA = level, RD = target
     |  branchPC RD			// Do this first to free RD.
     |  mov L:RB, SAVE_L
-    |  cmp dword L:RB->openupval, 0
+    |  cmp qword L:RB->openupval, 0
     |  je >1
     |  mov L:RB->base, BASE
     |  lea CARG2, [BASE+RA*8]		// Caveat: CARG2 == BASE
