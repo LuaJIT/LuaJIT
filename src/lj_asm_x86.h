@@ -2685,17 +2685,17 @@ static uint32_t asm_x86_inslen(const uint8_t* p)
       return result + (x & 15);
     case 7: /* VEX c4/c5. */
       if (LJ_32 && p[1] < 0xc0) {
-        x = 2;
-        goto mrm;
+	x = 2;
+	goto mrm;
       }
       if (x == 0x70) {
-        x = *++p & 0x1f;
-        result++;
-        if (x >= 2) {
-          p += 2;
-          result += 2;
-          goto mrm;
-        }
+	x = *++p & 0x1f;
+	result++;
+	if (x >= 2) {
+	  p += 2;
+	  result += 2;
+	  goto mrm;
+	}
       }
       p++;
       result++;
@@ -2712,8 +2712,8 @@ static uint32_t asm_x86_inslen(const uint8_t* p)
       case 3: return result;
       }
       if ((x & 7) == 4) {
-        result++;
-        if (x < 0x40 && (p[1] & 7) == 5) result += 4;
+	result++;
+	if (x < 0x40 && (p[1] & 7) == 5) result += 4;
       }
       return result;
     }
