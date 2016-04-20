@@ -31,6 +31,7 @@
 #include "lj_record.h"
 #include "lj_ffrecord.h"
 #include "lj_snap.h"
+#include "lj_strscan.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 
@@ -960,6 +961,23 @@ nocheck:
     return !tref_isnil(ix->mobj);  /* 1 if metamethod found, 0 if not. */
   }
   return 0;  /* No metamethod. */
+}
+
+/* Check if no metamethod call is required for the given arguments. */
+static int rec_isnumericarith(jit_State *J,
+                              TRef rb, TValue *rbv,
+                              TRef rc, TValue *rcv) {
+  if (tref_isnumber_str(rb) && tref_isnumber_str(rc)) {
+    TValue tmp;
+    if ((tref_isstr(rb) && !lj_strscan_num(strV(rbv), &tmp)) ||
+        (tref_isstr(rc) && !lj_strscan_num(strV(rcv), &tmp))) {
+      /* Would need an inverted STRTO for this case. */
+      lj_trace_err_info(J, LJ_TRERR_NYIMM);
+    }
+    return 1;
+  } else {
+    return 0;
+  }
 }
 
 /* Record call to arithmetic metamethod. */
@@ -2127,7 +2145,7 @@ void lj_record_ins(jit_State *J)
   /* -- Arithmetic ops ---------------------------------------------------- */
 
   case BC_UNM:
-    if (tref_isnumber_str(rc)) {
+    if (rec_isnumericarith(J, rc, rcv, rc, rcv)) {
       rc = lj_opt_narrow_unm(J, rc, rcv);
     } else {
       ix.tab = rc;
@@ -2148,9 +2166,10 @@ void lj_record_ins(jit_State *J)
   case BC_ADDVN: case BC_SUBVN: case BC_MULVN: case BC_DIVVN:
   case BC_ADDVV: case BC_SUBVV: case BC_MULVV: case BC_DIVVV: {
     MMS mm = bcmode_mm(op);
-    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+    if (rec_isnumericarith(J, rb, rbv, rc, rcv)) {
       rc = lj_opt_narrow_arith(J, rb, rc, rbv, rcv,
 			       (int)mm - (int)MM_add + (int)IR_ADD);
+    }
     else
       rc = rec_mm_arith(J, &ix, mm);
     break;
@@ -2158,14 +2177,14 @@ void lj_record_ins(jit_State *J)
 
   case BC_MODVN: case BC_MODVV:
   recmod:
-    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+    if (rec_isnumericarith(J, rb, rbv, rc, rcv))
       rc = lj_opt_narrow_mod(J, rb, rc, rcv);
     else
       rc = rec_mm_arith(J, &ix, MM_mod);
     break;
 
   case BC_POW:
-    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+    if (rec_isnumericarith(J, rb, rbv, rc, rcv))
       rc = lj_opt_narrow_pow(J, lj_ir_tonum(J, rb), rc, rcv);
     else
       rc = rec_mm_arith(J, &ix, MM_pow);

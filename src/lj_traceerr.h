@@ -14,6 +14,7 @@ TREDEF(SNAPOV,	"too many snapshots")
 TREDEF(BLACKL,	"blacklisted")
 TREDEF(RETRY,	"retry recording")
 TREDEF(NYIBC,	"NYI: bytecode %d")
+TREDEF(NYIMM, "NYI: arithmetic metamethod on non-numeric strings")
 
 /* Recording loop ops. */
 TREDEF(LLEAVE,	"leaving loop in root trace")
