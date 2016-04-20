@@ -970,7 +970,7 @@ static int rec_isnumericarith(jit_State *J,
   if (tref_isnumber_str(rb) && tref_isnumber_str(rc)) {
     TValue tmp;
     if ((tref_isstr(rb) && !lj_strscan_num(strV(rbv), &tmp)) ||
-        (tref_isstr(rb) && !lj_strscan_num(strV(rbv), &tmp))) {
+        (tref_isstr(rc) && !lj_strscan_num(strV(rcv), &tmp))) {
       /* Would need an inverted STRTO for this case. */
       lj_trace_err_info(J, LJ_TRERR_NYIMM);
     }
