@@ -539,10 +539,8 @@ static void LJ_FASTCALL recff_math_degrad(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_math_pow(jit_State *J, RecordFFData *rd)
 {
-  TRef tr = lj_ir_tonum(J, J->base[0]);
-  if (!tref_isnumber_str(J->base[1]))
-    lj_trace_err(J, LJ_TRERR_BADTYPE);
-  J->base[0] = lj_opt_narrow_pow(J, tr, J->base[1], &rd->argv[1]);
+  J->base[0] = lj_opt_narrow_pow(J, J->base[0], J->base[1],
+				 &rd->argv[0], &rd->argv[1]);
   UNUSED(rd);
 }
 
