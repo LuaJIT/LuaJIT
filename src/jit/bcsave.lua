@@ -11,7 +11,7 @@
 ------------------------------------------------------------------------------
 
 local jit = require("jit")
-assert(jit.version_num == 20004, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20100, "LuaJIT core/library version mismatch")
 local bit = require("bit")
 
 -- Symbol name prefix for LuaJIT bytecode.
@@ -63,7 +63,7 @@ local map_type = {
 }
 
 local map_arch = {
-  x86 = true, x64 = true, arm = true, ppc = true, ppcspe = true,
+  x86 = true, x64 = true, arm = true, arm64 = true, ppc = true,
   mips = true, mipsel = true,
 }
 
@@ -200,9 +200,9 @@ typedef struct {
 ]]
   local symname = LJBC_PREFIX..ctx.modname
   local is64, isbe = false, false
-  if ctx.arch == "x64" then
+  if ctx.arch == "x64" or ctx.arch == "arm64" then
     is64 = true
-  elseif ctx.arch == "ppc" or ctx.arch == "ppcspe" or ctx.arch == "mips" then
+  elseif ctx.arch == "ppc" or ctx.arch == "mips" then
     isbe = true
   end
 
@@ -237,7 +237,7 @@ typedef struct {
   hdr.eendian = isbe and 2 or 1
   hdr.eversion = 1
   hdr.type = f16(1)
-  hdr.machine = f16(({ x86=3, x64=62, arm=40, ppc=20, ppcspe=20, mips=8, mipsel=8 })[ctx.arch])
+  hdr.machine = f16(({ x86=3, x64=62, arm=40, arm64=183, ppc=20, mips=8, mipsel=8 })[ctx.arch])
   if ctx.arch == "mips" or ctx.arch == "mipsel" then
     hdr.flags = 0x50001006
   end
@@ -477,13 +477,13 @@ typedef struct {
 } mach_obj_64;
 typedef struct {
   mach_fat_header fat;
-  mach_fat_arch fat_arch[4];
+  mach_fat_arch fat_arch[2];
   struct {
     mach_header hdr;
     mach_segment_command seg;
     mach_section sec;
     mach_symtab_command sym;
-  } arch[4];
+  } arch[2];
   mach_nlist sym_entry;
   uint8_t space[4096];
 } mach_fat_obj;
@@ -494,6 +494,8 @@ typedef struct {
     is64, align, mobj = true, 8, "mach_obj_64"
   elseif ctx.arch == "arm" then
     isfat, mobj = true, "mach_fat_obj"
+  elseif ctx.arch == "arm64" then
+    is64, align, isfat, mobj = true, 8, true, "mach_fat_obj"
   else
     check(ctx.arch == "x86", "unsupported architecture for OSX")
   end
@@ -503,8 +505,8 @@ typedef struct {
   -- Create Mach-O object and fill in header.
   local o = ffi.new(mobj)
   local mach_size = aligned(ffi.offsetof(o, "space")+#symname+2, align)
-  local cputype = ({ x86={7}, x64={0x01000007}, arm={7,12,12,12} })[ctx.arch]
-  local cpusubtype = ({ x86={3}, x64={3}, arm={3,6,9,11} })[ctx.arch]
+  local cputype = ({ x86={7}, x64={0x01000007}, arm={7,12}, arm64={0x01000007,0x0100000c} })[ctx.arch]
+  local cpusubtype = ({ x86={3}, x64={3}, arm={3,9}, arm64={3,0} })[ctx.arch]
   if isfat then
     o.fat.magic = be32(0xcafebabe)
     o.fat.nfat_arch = be32(#cpusubtype)
@@ -653,7 +655,7 @@ end
 ------------------------------------------------------------------------------
 
 -- Public module functions.
-module(...)
-
-start = docmd -- Process -b command line option.
+return {
+  start = docmd -- Process -b command line option.
+}
 

@@ -46,6 +46,8 @@ td.convop { font-style: italic; width: 40%; }
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
@@ -182,6 +184,8 @@ a <tt>typedef</tt>, except re-declarations will be ignored):
 <tt>int32_t</tt>, <tt>int64_t</tt>, <tt>uint8_t</tt>,
 <tt>uint16_t</tt>, <tt>uint32_t</tt>, <tt>uint64_t</tt>,
 <tt>intptr_t</tt>, <tt>uintptr_t</tt>.</li>
+
+<li>From <tt>&lt;unistd.h&gt;</tt> (POSIX): <tt>ssize_t</tt>.</li>
 
 </ul>
 <p>
@@ -730,6 +734,22 @@ You'll have to explicitly convert a 64&nbsp;bit integer to a Lua
 number (e.g. for regular floating-point calculations) with
 <tt>tonumber()</tt>. But note this may incur a precision loss.</li>
 
+<li><b>64&nbsp;bit bitwise operations</b>: the rules for 64&nbsp;bit
+arithmetic operators apply analogously.<br>
+
+Unlike the other <tt>bit.*</tt> operations, <tt>bit.tobit()</tt>
+converts a cdata number via <tt>int64_t</tt> to <tt>int32_t</tt> and
+returns a Lua number.<br>
+
+For <tt>bit.band()</tt>, <tt>bit.bor()</tt> and <tt>bit.bxor()</tt>, the
+conversion to <tt>int64_t</tt> or <tt>uint64_t</tt> applies to
+<em>all</em> arguments, if <em>any</em> argument is a cdata number.<br>
+
+For all other operations, only the first argument is used to determine
+the output type. This implies that a cdata number as a shift count for
+shifts and rotates is accepted, but that alone does <em>not</em> cause
+a cdata number output.
+
 </ul>
 
 <h3 id="cdata_comp">Comparisons of cdata objects</h3>
@@ -1205,9 +1225,8 @@ suboptimal performance, especially when used in inner loops:
 <li>Vector operations.</li>
 <li>Table initializers.</li>
 <li>Initialization of nested <tt>struct</tt>/<tt>union</tt> types.</li>
-<li>Allocations of variable-length arrays or structs.</li>
-<li>Allocations of C&nbsp;types with a size &gt; 128&nbsp;bytes or an
-alignment &gt; 8&nbsp;bytes.</li>
+<li>Non-default initialization of VLA/VLS or large C&nbsp;types
+(&gt; 128&nbsp;bytes or &gt; 16 array elements.</li>
 <li>Conversions from lightuserdata to <tt>void&nbsp;*</tt>.</li>
 <li>Pointer differences for element sizes that are not a power of
 two.</li>
@@ -1224,7 +1243,6 @@ value.</li>
 Other missing features:
 </p>
 <ul>
-<li>Bit operations for 64&nbsp;bit types.</li>
 <li>Arithmetic for <tt>complex</tt> numbers.</li>
 <li>Passing structs by value to vararg C&nbsp;functions.</li>
 <li><a href="extensions.html#exceptions">C++ exception interoperability</a>

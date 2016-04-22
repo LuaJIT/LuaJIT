@@ -58,6 +58,8 @@ td.excinterop {
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
@@ -113,6 +115,9 @@ bit.lshift bit.rshift bit.arshift bit.rol  bit.ror  bit.bswap
 This module is a LuaJIT built-in &mdash; you don't need to download or
 install Lua BitOp. The Lua BitOp site has full documentation for all
 <a href="http://bitop.luajit.org/api.html"><span class="ext">&raquo;</span>&nbsp;Lua BitOp API functions</a>.
+The FFI adds support for
+<a href="ext_ffi_semantics.html#cdata_arith">64&nbsp;bit bitwise operations</a>,
+using the same API functions.
 </p>
 <p>
 Please make sure to <tt>require</tt> the module before using any of
@@ -146,6 +151,11 @@ LuaJIT adds some
 <a href="ext_c_api.html">extra functions to the Lua/C API</a>.
 </p>
 
+<h3 id="profiler">Profiler</h3>
+<p>
+LuaJIT has an <a href="ext_profiler.html">integrated profiler</a>.
+</p>
+
 <h2 id="library">Enhanced Standard Library Functions</h2>
 
 <h3 id="xpcall"><tt>xpcall(f, err [,args...])</tt> passes arguments</h3>
@@ -173,7 +183,7 @@ in <tt>"-inf"</tt>.
 <h3 id="tonumber"><tt>tonumber()</tt> etc. use builtin string to number conversion</h3>
 <p>
 All string-to-number conversions consistently convert integer and
-floating-point inputs in decimal and hexadecimal on all platforms.
+floating-point inputs in decimal, hexadecimal and binary on all platforms.
 <tt>strtod()</tt> is <em>not</em> used anymore, which avoids numerous
 problems with poor C library implementations. The builtin conversion
 function provides full precision according to the IEEE-754 standard, it
@@ -196,6 +206,36 @@ bytecode compatibility versions must match. Bytecode stays compatible
 for dot releases (x.y.0 &rarr; x.y.1), but may change with major or
 minor releases (2.0 &rarr; 2.1) or between any beta release. Foreign
 bytecode (e.g. from Lua 5.1) is incompatible and cannot be loaded.
+</p>
+<p>
+Note: <tt>LJ_GC64</tt> mode requires a different frame layout, which implies
+a different, incompatible bytecode format for ports that use this mode (e.g.
+ARM64). This may be rectified in the future.
+</p>
+
+<h3 id="table_new"><tt>table.new(narray, nhash)</tt> allocates a pre-sized table</h3>
+<p>
+An extra library function <tt>table.new()</tt> can be made available via
+<tt>require("table.new")</tt>. This creates a pre-sized table, just like
+the C API equivalent <tt>lua_createtable()</tt>. This is useful for big
+tables if the final table size is known and automatic table resizing is
+too expensive.
+</p>
+
+<h3 id="table_clear"><tt>table.clear(tab)</tt> clears a table</h3>
+<p>
+An extra library function <tt>table.clear()</tt> can be made available
+via <tt>require("table.clear")</tt>. This clears all keys and values
+from a table, but preserves the allocated array/hash sizes. This is
+useful when a table, which is linked from multiple places, needs to be
+cleared and/or when recycling a table for use by the same context. This
+avoids managing backlinks, saves an allocation and the overhead of
+incremental array/hash part growth.
+</p>
+<p>
+Please note this function is meant for very specific situations. In most
+cases it's better to replace the (usually single) link with a new table
+and let the GC do its work.
 </p>
 
 <h3 id="math_random">Enhanced PRNG for <tt>math.random()</tt></h3>
@@ -303,6 +343,13 @@ language and Lua library level. LuaJIT is API+ABI-compatible with
 Lua&nbsp;5.1, which prevents implementing features that would otherwise
 break the Lua/C API and ABI (e.g. <tt>_ENV</tt>).
 </p>
+
+<h2 id="lua53">Extensions from Lua 5.3</h2>
+<p>
+LuaJIT supports some extensions from Lua&nbsp;5.3:
+<ul>
+<li>Unicode escape <tt>'\u{XX...}'</tt> embeds the UTF-8 encoding in string literals.</li>
+</ul>
 
 <h2 id="exceptions">C++ Exception Interoperability</h2>
 <p>

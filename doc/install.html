@@ -69,6 +69,8 @@ td.compatno {
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
@@ -112,17 +114,17 @@ operating systems, CPUs and compilers:
 </tr>
 <tr class="odd separate">
 <td class="compatcpu">x86 (32 bit)</td>
-<td class="compatos">GCC 4.x+<br>GCC 3.4</td>
-<td class="compatos">GCC 4.x+<br>GCC 3.4</td>
+<td class="compatos">GCC 4.2+</td>
+<td class="compatos">GCC 4.2+</td>
 <td class="compatos">XCode 5.0+<br>Clang</td>
 <td class="compatos">MSVC, MSVC/EE<br>WinSDK<br>MinGW, Cygwin</td>
 </tr>
 <tr class="even">
 <td class="compatcpu">x64 (64 bit)</td>
-<td class="compatos">GCC 4.x+</td>
+<td class="compatos">GCC 4.2+</td>
 <td class="compatos">ORBIS (<a href="#ps4">PS4</a>)</td>
 <td class="compatos">XCode 5.0+<br>Clang</td>
-<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
+<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0<br>Durango (<a href="#xboxone">Xbox One</a>)</td>
 </tr>
 <tr class="odd">
 <td class="compatcpu"><a href="#cross2">ARMv5+<br>ARM9E+</a></td>
@@ -132,18 +134,18 @@ operating systems, CPUs and compilers:
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
+<td class="compatcpu"><a href="#cross2">ARM64</a></td>
+<td class="compatos">GCC 4.8+</td>
+<td class="compatos compatno">&nbsp;</td>
+<td class="compatos">XCode 6.0+<br>Clang 3.5+</td>
+<td class="compatos compatno">&nbsp;</td>
+</tr>
+<tr class="odd">
 <td class="compatcpu"><a href="#cross2">PPC</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+<br>GCC 4.1 (<a href="#ps3">PS3</a>)</td>
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos">XEDK (<a href="#xbox360">Xbox 360</a>)</td>
-</tr>
-<tr class="odd">
-<td class="compatcpu"><a href="#cross2">PPC/e500v2</a></td>
-<td class="compatos">GCC 4.3+</td>
-<td class="compatos">GCC 4.3+</td>
-<td class="compatos compatno">&nbsp;</td>
-<td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
 <td class="compatcpu"><a href="#cross2">MIPS</a></td>
@@ -386,10 +388,11 @@ make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabi- \
 # ARM hard-float ABI with VFP (armhf, requires recent toolchain)
 make HOST_CC="gcc -m32" CROSS=arm-linux-gnueabihf-
 
+# ARM64 (requires x64 host)
+make CROSS=aarch64-linux-
+
 # PPC
 make HOST_CC="gcc -m32" CROSS=powerpc-linux-gnu-
-# PPC/e500v2 (fast interpreter only)
-make HOST_CC="gcc -m32" CROSS=powerpc-e500v2-linux-gnuspe-
 
 # MIPS big-endian
 make HOST_CC="gcc -m32" CROSS=mips-linux-
@@ -452,11 +455,18 @@ much slower than the JIT compiler. Please complain to Apple, not me.
 Or use Android. :-p
 </p>
 <pre class="code">
+# iOS/ARM (32 bit)
 ISDKP=$(xcrun --sdk iphoneos --show-sdk-path)
 ICC=$(xcrun --sdk iphoneos --find clang)
 ISDKF="-arch armv7 -isysroot $ISDKP"
 make HOST_CC="clang -m32 -arch i386" CROSS="$(dirname $ICC)/" \
      TARGET_FLAGS="$ISDKF" TARGET_SYS=iOS
+
+# iOS/ARM64
+ISDKP=$(xcrun --sdk iphoneos --show-sdk-path)
+ICC=$(xcrun --sdk iphoneos --find clang)
+ISDKF="-arch arm64 -isysroot $ISDKP"
+make CROSS="$(dirname $ICC)/" TARGET_FLAGS="$ISDKF" TARGET_SYS=iOS
 </pre>
 
 <h3 id="consoles">Cross-compiling for consoles</h3>
@@ -512,6 +522,16 @@ the following commands:
 <pre class="code">
 cd src
 xedkbuild
+</pre>
+<p>
+To cross-compile for <b id="xboxone">Xbox One</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and run
+the following commands:
+</p>
+<pre class="code">
+cd src
+xb1build
 </pre>
 
 <h2 id="embed">Embedding LuaJIT</h2>

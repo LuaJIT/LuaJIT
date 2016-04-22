@@ -40,6 +40,7 @@ static LJ_AINLINE IRRef lj_ir_nextins(jit_State *J)
 LJ_FUNC TRef LJ_FASTCALL lj_ir_kint(jit_State *J, int32_t k);
 LJ_FUNC void lj_ir_k64_freeall(jit_State *J);
 LJ_FUNC TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv);
+LJ_FUNC TValue *lj_ir_k64_reserve(jit_State *J);
 LJ_FUNC cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_knum_u64(jit_State *J, uint64_t u64);
 LJ_FUNC TRef lj_ir_knumint(jit_State *J, lua_Number n);

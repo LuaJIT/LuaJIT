@@ -51,8 +51,8 @@ static const char *const jccnames[] = {
   "js", "jns", "jpe", "jpo", "jl", "jge", "jle", "jg"
 };
 
-/* Emit relocation for the incredibly stupid OSX assembler. */
-static void emit_asm_reloc_mach(BuildCtx *ctx, uint8_t *cp, int n,
+/* Emit x86/x64 text relocations. */
+static void emit_asm_reloc_text(BuildCtx *ctx, uint8_t *cp, int n,
 				const char *sym)
 {
   const char *opname = NULL;
@@ -71,6 +71,20 @@ err:
     exit(1);
   }
   emit_asm_bytes(ctx, cp, n);
+  if (strncmp(sym+(*sym == '_'), LABEL_PREFIX, sizeof(LABEL_PREFIX)-1)) {
+    /* Various fixups for external symbols outside of our binary. */
+    if (ctx->mode == BUILD_elfasm) {
+      if (LJ_32)
+	fprintf(ctx->fp, "#if __PIC__\n\t%s lj_wrap_%s\n#else\n", opname, sym);
+      fprintf(ctx->fp, "\t%s %s@PLT\n", opname, sym);
+      if (LJ_32)
+	fprintf(ctx->fp, "#endif\n");
+      return;
+    } else if (LJ_32 && ctx->mode == BUILD_machasm) {
+      fprintf(ctx->fp, "\t%s L%s$stub\n", opname, sym);
+      return;
+    }
+  }
   fprintf(ctx->fp, "\t%s %s\n", opname, sym);
 }
 #else
@@ -107,7 +121,16 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 	    ins, sym);
     exit(1);
   }
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_ARM64
+  if ((ins >> 26) == 0x25u) {
+    fprintf(ctx->fp, "\tbl %s\n", sym);
+  } else {
+    fprintf(stderr,
+	    "Error: unsupported opcode %08x for %s symbol relocation.\n",
+	    ins, sym);
+    exit(1);
+  }
+#elif LJ_TARGET_PPC
 #if LJ_TARGET_PS3
 #define TOCPREFIX "."
 #else
@@ -117,6 +140,14 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
     fprintf(ctx->fp, "\t%s %d, %d, " TOCPREFIX "%s\n",
 	    (ins & 1) ? "bcl" : "bc", (ins >> 21) & 31, (ins >> 16) & 31, sym);
   } else if ((ins >> 26) == 18) {
+#if LJ_ARCH_PPC64
+    const char *suffix = strchr(sym, '@');
+    if (suffix && suffix[1] == 'h') {
+      fprintf(ctx->fp, "\taddis 11, 2, %s\n", sym);
+    } else if (suffix && suffix[1] == 'l') {
+      fprintf(ctx->fp, "\tld 12, %s\n", sym);
+    } else
+#endif
     fprintf(ctx->fp, "\t%s " TOCPREFIX "%s\n", (ins & 1) ? "bl" : "b", sym);
   } else {
     fprintf(stderr,
@@ -214,6 +245,9 @@ void emit_asm(BuildCtx *ctx)
   int i, rel;
 
   fprintf(ctx->fp, "\t.file \"buildvm_%s.dasc\"\n", ctx->dasm_arch);
+#if LJ_ARCH_PPC64
+  fprintf(ctx->fp, "\t.abiversion 2\n");
+#endif
   fprintf(ctx->fp, "\t.text\n");
   emit_asm_align(ctx, 4);
 
@@ -227,10 +261,19 @@ void emit_asm(BuildCtx *ctx)
 
 #if LJ_TARGET_ARM && defined(__GNUC__) && !LJ_NO_UNWIND
   /* This should really be moved into buildvm_arm.dasc. */
+#if LJ_ARCH_HASFPU
+  fprintf(ctx->fp,
+	  ".fnstart\n"
+	  ".save {r5, r6, r7, r8, r9, r10, r11, lr}\n"
+	  ".vsave {d8-d15}\n"
+	  ".save {r4}\n"
+	  ".pad #28\n");
+#else
   fprintf(ctx->fp,
 	  ".fnstart\n"
 	  ".save {r4, r5, r6, r7, r8, r9, r10, r11, lr}\n"
 	  ".pad #28\n");
+#endif
 #endif
 #if LJ_TARGET_MIPS
   fprintf(ctx->fp, ".set nomips16\n.abicalls\n.set noreorder\n.set nomacro\n");
@@ -254,8 +297,9 @@ void emit_asm(BuildCtx *ctx)
       BuildReloc *r = &ctx->reloc[rel];
       int n = r->ofs - ofs;
 #if LJ_TARGET_X86ORX64
-      if (ctx->mode == BUILD_machasm && r->type != 0) {
-	emit_asm_reloc_mach(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
+      if (r->type != 0 &&
+	  (ctx->mode == BUILD_elfasm || ctx->mode == BUILD_machasm)) {
+	emit_asm_reloc_text(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
       } else {
 	emit_asm_bytes(ctx, ctx->code+ofs, n);
 	emit_asm_reloc(ctx, r->type, ctx->relocsym[r->sym]);
@@ -289,10 +333,7 @@ void emit_asm(BuildCtx *ctx)
 #if !(LJ_TARGET_PS3 || LJ_TARGET_PSVITA)
     fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\"," ELFASM_PX "progbits\n");
 #endif
-#if LJ_TARGET_PPCSPE
-    /* Soft-float ABI + SPE. */
-    fprintf(ctx->fp, "\t.gnu_attribute 4, 2\n\t.gnu_attribute 8, 3\n");
-#elif LJ_TARGET_PPC && !LJ_TARGET_PS3
+#if LJ_TARGET_PPC && !LJ_TARGET_PS3
     /* Hard-float ABI. */
     fprintf(ctx->fp, "\t.gnu_attribute 4, 1\n");
 #endif

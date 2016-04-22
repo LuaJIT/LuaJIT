@@ -15,6 +15,7 @@
 #if LJ_HASJIT
 
 #include "lj_gc.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_ir.h"
@@ -29,6 +30,7 @@
 #endif
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_strfmt.h"
 #include "lj_lib.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
@@ -207,24 +209,13 @@ void lj_ir_k64_freeall(jit_State *J)
     lj_mem_free(J2G(J), k, sizeof(K64Array));
     k = next;
   }
+  setmref(J->k64, NULL);
 }
 
-/* Find 64 bit constant in chained array or add it. */
-cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
+/* Get new 64 bit constant slot. */
+static TValue *ir_k64_add(jit_State *J, K64Array *kp, uint64_t u64)
 {
-  K64Array *k, *kp = NULL;
   TValue *ntv;
-  MSize idx;
-  /* Search for the constant in the whole chain of arrays. */
-  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
-    kp = k;  /* Remember previous element in list. */
-    for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
-      TValue *tv = &k->k[idx];
-      if (tv->u64 == u64)  /* Needed for +-0/NaN/absmask. */
-	return tv;
-    }
-  }
-  /* Constant was not found, need to add it. */
   if (!(kp && kp->numk < LJ_MIN_K64SZ)) {  /* Allocate a new array. */
     K64Array *kn = lj_mem_newt(J->L, sizeof(K64Array), K64Array);
     setmref(kn->next, NULL);
@@ -240,6 +231,33 @@ cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
   return ntv;
 }
 
+/* Find 64 bit constant in chained array or add it. */
+cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
+{
+  K64Array *k, *kp = NULL;
+  MSize idx;
+  /* Search for the constant in the whole chain of arrays. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
+    kp = k;  /* Remember previous element in list. */
+    for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
+      TValue *tv = &k->k[idx];
+      if (tv->u64 == u64)  /* Needed for +-0/NaN/absmask. */
+	return tv;
+    }
+  }
+  /* Otherwise add a new constant. */
+  return ir_k64_add(J, kp, u64);
+}
+
+TValue *lj_ir_k64_reserve(jit_State *J)
+{
+  K64Array *k, *kp = NULL;
+  lj_ir_k64_find(J, 0);  /* Intern dummy 0 to protect the reserved slot. */
+  /* Find last K64Array, if any. */
+  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) kp = k;
+  return ir_k64_add(J, kp, 0);  /* Set to 0. Final value is set later. */
+}
+
 /* Intern 64 bit constant, given by its address. */
 TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv)
 {
@@ -251,7 +269,7 @@ TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
-  lua_assert(checkptr32(tv));
+  lua_assert(checkptrGC(tv));
   setmref(ir->ptr, tv);
   ir->t.irt = t;
   ir->o = op;
@@ -305,6 +323,7 @@ TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
+  lua_assert(!LJ_GC64);  /* TODO_GC64: major changes required. */
   lua_assert(!isdead(J2G(J), o));
   for (ref = J->chain[IR_KGC]; ref; ref = cir[ref].prev)
     if (ir_kgc(&cir[ref]) == o)
@@ -390,7 +409,7 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   UNUSED(L);
   lua_assert(ir->o != IR_KSLOT);  /* Common mistake. */
   switch (ir->o) {
-  case IR_KPRI: setitype(tv, irt_toitype(ir->t)); break;
+  case IR_KPRI: setpriV(tv, irt_toitype(ir->t)); break;
   case IR_KINT: setintV(tv, ir->i); break;
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
   case IR_KPTR: case IR_KKPTR: case IR_KNULL:
@@ -443,7 +462,8 @@ TRef LJ_FASTCALL lj_ir_tostr(jit_State *J, TRef tr)
   if (!tref_isstr(tr)) {
     if (!tref_isnumber(tr))
       lj_trace_err(J, LJ_TRERR_BADTYPE);
-    tr = emitir(IRT(IR_TOSTR, IRT_STR), tr, 0);
+    tr = emitir(IRT(IR_TOSTR, IRT_STR), tr,
+		tref_isnum(tr) ? IRTOSTR_NUM : IRTOSTR_INT);
   }
   return tr;
 }

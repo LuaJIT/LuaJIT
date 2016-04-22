@@ -19,10 +19,10 @@
 #define LUAJIT_ARCH_x64		2
 #define LUAJIT_ARCH_ARM		3
 #define LUAJIT_ARCH_arm		3
-#define LUAJIT_ARCH_PPC		4
-#define LUAJIT_ARCH_ppc		4
-#define LUAJIT_ARCH_PPCSPE	5
-#define LUAJIT_ARCH_ppcspe	5
+#define LUAJIT_ARCH_ARM64	4
+#define LUAJIT_ARCH_arm64	4
+#define LUAJIT_ARCH_PPC		5
+#define LUAJIT_ARCH_ppc		5
 #define LUAJIT_ARCH_MIPS	6
 #define LUAJIT_ARCH_mips	6
 
@@ -43,12 +43,10 @@
 #define LUAJIT_TARGET	LUAJIT_ARCH_X64
 #elif defined(__arm__) || defined(__arm) || defined(__ARM__) || defined(__ARM)
 #define LUAJIT_TARGET	LUAJIT_ARCH_ARM
+#elif defined(__aarch64__)
+#define LUAJIT_TARGET	LUAJIT_ARCH_ARM64
 #elif defined(__ppc__) || defined(__ppc) || defined(__PPC__) || defined(__PPC) || defined(__powerpc__) || defined(__powerpc) || defined(__POWERPC__) || defined(__POWERPC) || defined(_M_PPC)
-#ifdef __NO_FPRS__
-#define LUAJIT_TARGET	LUAJIT_ARCH_PPCSPE
-#else
 #define LUAJIT_TARGET	LUAJIT_ARCH_PPC
-#endif
 #elif defined(__mips__) || defined(__mips) || defined(__MIPS__) || defined(__MIPS)
 #define LUAJIT_TARGET	LUAJIT_ARCH_MIPS
 #else
@@ -99,7 +97,7 @@
 #define LJ_TARGET_WINDOWS	(LUAJIT_OS == LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_LINUX		(LUAJIT_OS == LUAJIT_OS_LINUX)
 #define LJ_TARGET_OSX		(LUAJIT_OS == LUAJIT_OS_OSX)
-#define LJ_TARGET_IOS		(LJ_TARGET_OSX && LUAJIT_TARGET == LUAJIT_ARCH_ARM)
+#define LJ_TARGET_IOS		(LJ_TARGET_OSX && (LUAJIT_TARGET == LUAJIT_ARCH_ARM || LUAJIT_TARGET == LUAJIT_ARCH_ARM64))
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
 
@@ -123,6 +121,12 @@
 #if _XBOX_VER >= 200
 #define LJ_TARGET_XBOX360	1
 #define LJ_TARGET_CONSOLE	1
+#endif
+
+#ifdef _DURANGO
+#define LJ_TARGET_XBOXONE	1
+#define LJ_TARGET_CONSOLE	1
+#define LJ_TARGET_GC64		1
 #endif
 
 #define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
@@ -167,6 +171,9 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNALIGNED	1
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
+#ifdef LUAJIT_ENABLE_GC64
+#define LJ_TARGET_GC64		1
+#endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
 
@@ -200,15 +207,45 @@
 #define LJ_ARCH_VERSION		50
 #endif
 
+#elif LUAJIT_TARGET == LUAJIT_ARCH_ARM64
+
+#define LJ_ARCH_NAME		"arm64"
+#define LJ_ARCH_BITS		64
+#define LJ_ARCH_ENDIAN		LUAJIT_LE
+#define LJ_TARGET_ARM64		1
+#define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
+#define LJ_TARGET_MASKSHIFT	1
+#define LJ_TARGET_MASKROT	1
+#define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
+#define LJ_TARGET_GC64		1
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
+#define LJ_ARCH_NOJIT		1	/* NYI */
+
+#define LJ_ARCH_VERSION		80
+
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
-#define LJ_ARCH_NAME		"ppc"
+#ifndef LJ_ARCH_ENDIAN
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+#define LJ_ARCH_ENDIAN		LUAJIT_LE
+#else
+#define LJ_ARCH_ENDIAN		LUAJIT_BE
+#endif
+#endif
+
 #if _LP64
 #define LJ_ARCH_BITS		64
+#if LJ_ARCH_ENDIAN == LUAJIT_LE
+#define LJ_ARCH_NAME		"ppc64le"
+#else
+#define LJ_ARCH_NAME		"ppc64"
+#endif
 #else
 #define LJ_ARCH_BITS		32
+#define LJ_ARCH_NAME		"ppc"
 #endif
-#define LJ_ARCH_ENDIAN		LUAJIT_BE
+
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_EHRETREG	3
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
@@ -216,6 +253,15 @@
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
+
+#if LJ_TARGET_CONSOLE
+#define LJ_ARCH_PPC32ON64	1
+#define LJ_ARCH_NOFFI		1
+#elif LJ_ARCH_BITS == 64
+#define LJ_ARCH_PPC64		1
+#define LJ_TARGET_GC64		1
+#define LJ_ARCH_NOJIT		1	/* NYI */
+#endif
 
 #if _ARCH_PWR7
 #define LJ_ARCH_VERSION		70
@@ -230,10 +276,6 @@
 #else
 #define LJ_ARCH_VERSION		0
 #endif
-#if __PPC64__ || __powerpc64__ || LJ_TARGET_CONSOLE
-#define LJ_ARCH_PPC64		1
-#define LJ_ARCH_NOFFI		1
-#endif
 #if _ARCH_PPCSQ
 #define LJ_ARCH_SQRT		1
 #endif
@@ -247,25 +289,6 @@
 #define LJ_ARCH_XENON		1
 #endif
 
-#elif LUAJIT_TARGET == LUAJIT_ARCH_PPCSPE
-
-#define LJ_ARCH_NAME		"ppcspe"
-#define LJ_ARCH_BITS		32
-#define LJ_ARCH_ENDIAN		LUAJIT_BE
-#ifndef LJ_ABI_SOFTFP
-#define LJ_ABI_SOFTFP		1
-#endif
-#define LJ_ABI_EABI		1
-#define LJ_TARGET_PPCSPE	1
-#define LJ_TARGET_EHRETREG	3
-#define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
-#define LJ_TARGET_MASKSHIFT	0
-#define LJ_TARGET_MASKROT	1
-#define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
-#define LJ_ARCH_NOFFI		1	/* NYI: comparisons, calls. */
-#define LJ_ARCH_NOJIT		1
-
 #elif LUAJIT_TARGET == LUAJIT_ARCH_MIPS
 
 #if defined(__MIPSEL__) || defined(__MIPSEL) || defined(_MIPSEL)
@@ -275,6 +298,28 @@
 #define LJ_ARCH_NAME		"mips"
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
 #endif
+
+#if !defined(LJ_ARCH_HASFPU)
+#ifdef __mips_soft_float
+#define LJ_ARCH_HASFPU		0
+#else
+#define LJ_ARCH_HASFPU		1
+#endif
+#endif
+
+/* Temporarily disable features until the code has been merged. */
+#if !defined(LUAJIT_NO_UNWIND) && __GNU_COMPACT_EH__
+#define LUAJIT_NO_UNWIND	1
+#endif
+
+#if !defined(LJ_ABI_SOFTFP)
+#ifdef __mips_soft_float
+#define LJ_ABI_SOFTFP		1
+#else
+#define LJ_ABI_SOFTFP		0
+#endif
+#endif
+
 #define LJ_ARCH_BITS		32
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
@@ -282,7 +327,7 @@
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
 #if _MIPS_ARCH_MIPS32R2
 #define LJ_ARCH_VERSION		20
@@ -312,6 +357,16 @@
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
 #error "Need at least GCC 4.2 or newer"
 #endif
+#elif LJ_TARGET_ARM64
+#if __clang__
+#if (__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)
+#error "Need at least Clang 3.5 or newer"
+#endif
+#else
+#if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 8)
+#error "Need at least GCC 4.8 or newer"
+#endif
+#endif
 #elif !LJ_TARGET_PS3
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
@@ -335,20 +390,27 @@
 #if !(__ARM_EABI__ || LJ_TARGET_IOS)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
-#elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
+#elif LJ_TARGET_ARM64
+#if defined(__AARCH64EB__)
+#error "No support for big-endian ARM64"
+#endif
+#if defined(_ILP32)
+#error "No support for ILP32 model on ARM64"
+#endif
+#elif LJ_TARGET_PPC
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif
-#if defined(_LITTLE_ENDIAN)
-#error "No support for little-endian PowerPC"
+#if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
+#error "No support for little-endian PPC32"
 #endif
-#if defined(_LP64)
-#error "No support for PowerPC 64 bit mode"
+#if LJ_ARCH_PPC64
+#error "No support for PowerPC 64 bit mode (yet)"
+#endif
+#ifdef __NO_FPRS__
+#error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS
-#if defined(__mips_soft_float)
-#error "No support for MIPS CPUs without FPU"
-#endif
 #if defined(_LP64)
 #error "No support for MIPS64"
 #endif
@@ -376,8 +438,22 @@
 #endif
 #endif
 
+/* 64 bit GC references. */
+#if LJ_TARGET_GC64
+#define LJ_GC64			1
+#else
+#define LJ_GC64			0
+#endif
+
+/* 2-slot frame info. */
+#if LJ_GC64
+#define LJ_FR2			1
+#else
+#define LJ_FR2			0
+#endif
+
 /* Disable or enable the JIT compiler. */
-#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT)
+#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT) || LJ_FR2 || LJ_GC64
 #define LJ_HASJIT		0
 #else
 #define LJ_HASJIT		1
@@ -388,6 +464,21 @@
 #define LJ_HASFFI		0
 #else
 #define LJ_HASFFI		1
+#endif
+
+#if defined(LUAJIT_DISABLE_PROFILE)
+#define LJ_HASPROFILE		0
+#elif LJ_TARGET_POSIX
+#define LJ_HASPROFILE		1
+#define LJ_PROFILE_SIGPROF	1
+#elif LJ_TARGET_PS3
+#define LJ_HASPROFILE		1
+#define LJ_PROFILE_PTHREAD	1
+#elif LJ_TARGET_WINDOWS || LJ_TARGET_XBOX360
+#define LJ_HASPROFILE		1
+#define LJ_PROFILE_WTHREAD	1
+#else
+#define LJ_HASPROFILE		0
 #endif
 
 #ifndef LJ_ARCH_HASFPU
@@ -422,11 +513,11 @@
 #define LJ_TARGET_UNALIGNED	0
 #endif
 
-/* Various workarounds for embedded operating systems. */
-#if (defined(__ANDROID__) && !defined(LJ_TARGET_X86ORX64)) || defined(__symbian__) || LJ_TARGET_XBOX360
+/* Various workarounds for embedded operating systems or weak C runtimes. */
+#if defined(__ANDROID__) || defined(__symbian__) || LJ_TARGET_XBOX360 || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_LOG2
 #endif
-#if defined(__symbian__)
+#if defined(__symbian__) || LJ_TARGET_WINDOWS
 #define LUAJIT_NO_EXP2
 #endif
 #if LJ_TARGET_CONSOLE || (LJ_TARGET_IOS && __IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_8_0)

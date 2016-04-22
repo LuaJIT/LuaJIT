@@ -96,9 +96,17 @@ static void setprogdir(lua_State *L)
 static void pusherror(lua_State *L)
 {
   DWORD error = GetLastError();
+#if LJ_TARGET_XBOXONE
+  wchar_t wbuffer[128];
+  char buffer[128*2];
+  if (FormatMessageW(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
+      NULL, error, 0, wbuffer, sizeof(wbuffer)/sizeof(wchar_t), NULL) &&
+      WideCharToMultiByte(CP_ACP, 0, wbuffer, 128, buffer, 128*2, NULL, NULL))
+#else
   char buffer[128];
   if (FormatMessageA(FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
       NULL, error, 0, buffer, sizeof(buffer), NULL))
+#endif
     lua_pushstring(L, buffer);
   else
     lua_pushfstring(L, "system error %d\n", error);
@@ -111,7 +119,7 @@ static void ll_unloadlib(void *lib)
 
 static void *ll_load(lua_State *L, const char *path, int gl)
 {
-  HINSTANCE lib = LoadLibraryA(path);
+  HINSTANCE lib = LoadLibraryExA(path, NULL, 0);
   if (lib == NULL) pusherror(L);
   UNUSED(gl);
   return lib;
@@ -226,7 +234,7 @@ static int ll_loadfunc(lua_State *L, const char *path, const char *name, int r)
       const char *bcdata = ll_bcsym(*reg, mksymname(L, name, SYMPREFIX_BC));
       lua_pop(L, 1);
       if (bcdata) {
-	if (luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+	if (luaL_loadbuffer(L, bcdata, LJ_MAX_BUF, name) != 0)
 	  return PACKAGE_ERR_LOAD;
 	return 0;
       }
@@ -383,7 +391,7 @@ static int lj_cf_package_loader_preload(lua_State *L)
   if (lua_isnil(L, -1)) {  /* Not found? */
     const char *bcname = mksymname(L, name, SYMPREFIX_BC);
     const char *bcdata = ll_bcsym(NULL, bcname);
-    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, LJ_MAX_BUF, name) != 0)
       lua_pushfstring(L, "\n\tno field package.preload['%s']", name);
   }
   return 1;

@@ -152,16 +152,18 @@ static void emit_jmp(ASMState *as, MCode *target)
   emit_branch(as, MIPSI_B, RID_ZERO, RID_ZERO, (target));
 }
 
-static void emit_call(ASMState *as, void *target)
+static void emit_call(ASMState *as, void *target, int needcfa)
 {
   MCode *p = as->mcp;
   *--p = MIPSI_NOP;
-  if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0)
+  if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0) {
     *--p = MIPSI_JAL | (((uintptr_t)target >>2) & 0x03ffffffu);
-  else  /* Target out of range: need indirect call. */
+  } else {  /* Target out of range: need indirect call. */
     *--p = MIPSI_JALR | MIPSF_S(RID_CFUNCADDR);
+    needcfa = 1;
+  }
   as->mcp = p;
-  ra_allockreg(as, i32ptr(target), RID_CFUNCADDR);
+  if (needcfa) ra_allockreg(as, i32ptr(target), RID_CFUNCADDR);
 }
 
 /* -- Emit generic operations --------------------------------------------- */
@@ -178,24 +180,24 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
     emit_fg(as, irt_isnum(ir->t) ? MIPSI_MOV_D : MIPSI_MOV_S, dst, src);
 }
 
-/* Generic load of register from stack slot. */
-static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic load of register with base and (small) offset address. */
+static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_tsi(as, MIPSI_LW, r, RID_SP, ofs);
+    emit_tsi(as, MIPSI_LW, r, base, ofs);
   else
     emit_tsi(as, irt_isnum(ir->t) ? MIPSI_LDC1 : MIPSI_LWC1,
-	     (r & 31), RID_SP, ofs);
+	     (r & 31), base, ofs);
 }
 
-/* Generic store of register to stack slot. */
-static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic store of register with base and (small) offset address. */
+static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_tsi(as, MIPSI_SW, r, RID_SP, ofs);
+    emit_tsi(as, MIPSI_SW, r, base, ofs);
   else
     emit_tsi(as, irt_isnum(ir->t) ? MIPSI_SDC1 : MIPSI_SWC1,
-	     (r&31), RID_SP, ofs);
+	     (r&31), base, ofs);
 }
 
 /* Add offset to pointer. */

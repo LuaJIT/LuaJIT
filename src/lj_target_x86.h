@@ -33,6 +33,7 @@ enum {
   RID_MRM = RID_MAX,		/* Pseudo-id for ModRM operand. */
 
   /* Calling conventions. */
+  RID_SP = RID_ESP,
   RID_RET = RID_EAX,
 #if LJ_64
   RID_FPRET = RID_XMM0,
@@ -131,7 +132,11 @@ enum {
 #define SPS_FIXED	(4*2)
 #define SPS_FIRST	(4*2)	/* Don't use callee register save area. */
 #else
+#if LJ_GC64
+#define SPS_FIXED	2
+#else
 #define SPS_FIXED	4
+#endif
 #define SPS_FIRST	2
 #endif
 #else
@@ -184,6 +189,11 @@ typedef struct {
 #define XO_f20f(o)	((uint32_t)(0x0ff2fc + (0x##o<<24)))
 #define XO_f30f(o)	((uint32_t)(0x0ff3fc + (0x##o<<24)))
 
+#define XV_660f38(o)	((uint32_t)(0x79e2c4 + (0x##o<<24)))
+#define XV_f20f38(o)	((uint32_t)(0x7be2c4 + (0x##o<<24)))
+#define XV_f20f3a(o)	((uint32_t)(0x7be3c4 + (0x##o<<24)))
+#define XV_f30f38(o)	((uint32_t)(0x7ae2c4 + (0x##o<<24)))
+
 /* This list of x86 opcodes is not intended to be complete. Opcodes are only
 ** included when needed. Take a look at DynASM or jit.dis_x86 to see the
 ** whole mess.
@@ -225,6 +235,12 @@ typedef enum {
   XI_FPATAN =	0xf3d9,
   XI_FSCALE =	0xfdd9,
   XI_FYL2X =	0xf1d9,
+
+  /* VEX-encoded instructions. XV_* prefix. */
+  XV_RORX =	XV_f20f3a(f0),
+  XV_SARX =	XV_f30f38(f7),
+  XV_SHLX =	XV_660f38(f7),
+  XV_SHRX =	XV_f20f38(f7),
 
   /* Variable-length opcodes. XO_* prefix. */
   XO_MOV =	XO_(8b),
@@ -277,10 +293,8 @@ typedef enum {
   XO_ROUNDSD =	0x0b3a0ffc,  /* Really 66 0f 3a 0b. See asm_fpmath. */
   XO_UCOMISD =	XO_660f(2e),
   XO_CVTSI2SD =	XO_f20f(2a),
-  XO_CVTSD2SI =	XO_f20f(2d),
   XO_CVTTSD2SI=	XO_f20f(2c),
   XO_CVTSI2SS =	XO_f30f(2a),
-  XO_CVTSS2SI =	XO_f30f(2d),
   XO_CVTTSS2SI=	XO_f30f(2c),
   XO_CVTSS2SD =	XO_f30f(5a),
   XO_CVTSD2SS =	XO_f20f(5a),

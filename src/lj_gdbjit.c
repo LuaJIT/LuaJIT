@@ -14,6 +14,8 @@
 #include "lj_err.h"
 #include "lj_debug.h"
 #include "lj_frame.h"
+#include "lj_buf.h"
+#include "lj_strfmt.h"
 #include "lj_jit.h"
 #include "lj_dispatch.h"
 
@@ -428,16 +430,6 @@ static void gdbjit_catnum(GDBJITctx *ctx, uint32_t n)
   *ctx->p++ = '0' + n;
 }
 
-/* Add a ULEB128 value. */
-static void gdbjit_uleb128(GDBJITctx *ctx, uint32_t v)
-{
-  uint8_t *p = ctx->p;
-  for (; v >= 0x80; v >>= 7)
-    *p++ = (uint8_t)((v & 0x7f) | 0x80);
-  *p++ = (uint8_t)v;
-  ctx->p = p;
-}
-
 /* Add a SLEB128 value. */
 static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
 {
@@ -454,7 +446,7 @@ static void gdbjit_sleb128(GDBJITctx *ctx, int32_t v)
 #define DU16(x)		(*(uint16_t *)p = (x), p += 2)
 #define DU32(x)		(*(uint32_t *)p = (x), p += 4)
 #define DADDR(x)	(*(uintptr_t *)p = (x), p += sizeof(uintptr_t))
-#define DUV(x)		(ctx->p = p, gdbjit_uleb128(ctx, (x)), p = ctx->p)
+#define DUV(x)		(p = (uint8_t *)lj_strfmt_wuleb128((char *)p, (x)))
 #define DSV(x)		(ctx->p = p, gdbjit_sleb128(ctx, (x)), p = ctx->p)
 #define DSTR(str)	(ctx->p = p, gdbjit_strz(ctx, (str)), p = ctx->p)
 #define DALIGNNOP(s)	while ((uintptr_t)p & ((s)-1)) *p++ = DW_CFA_nop
@@ -564,8 +556,8 @@ static void LJ_FASTCALL gdbjit_ehframe(GDBJITctx *ctx)
     DB(DW_CFA_offset|DW_REG_15); DUV(4);
     DB(DW_CFA_offset|DW_REG_14); DUV(5);
     /* Extra registers saved for JIT-compiled code. */
-    DB(DW_CFA_offset|DW_REG_13); DUV(9);
-    DB(DW_CFA_offset|DW_REG_12); DUV(10);
+    DB(DW_CFA_offset|DW_REG_13); DUV(LJ_GC64 ? 10 : 9);
+    DB(DW_CFA_offset|DW_REG_12); DUV(LJ_GC64 ? 11 : 10);
 #elif LJ_TARGET_ARM
     {
       int i;

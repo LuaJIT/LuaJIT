@@ -13,10 +13,12 @@
       if (rex != 0x40) *--(p) = rex; }
 #define FORCE_REX		0x200
 #define REX_64			(FORCE_REX|0x080000)
+#define VEX_64			0x800000
 #else
 #define REXRB(p, rr, rb)	((void)0)
 #define FORCE_REX		0
 #define REX_64			0
+#define VEX_64			0
 #endif
 
 #define emit_i8(as, i)		(*--as->mcp = (MCode)(i))
@@ -31,6 +33,13 @@ static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
 				 MCode *p, int delta)
 {
   int n = (int8_t)xo;
+  if (n == -60) {  /* VEX-encoded instruction */
+#if LJ_64
+    xo ^= (((rr>>1)&4)+((rx>>2)&2)+((rb>>3)&1))<<13;
+#endif
+    *(uint32_t *)(p+delta-5) = (uint32_t)xo;
+    return p+delta-5;
+  }
 #if defined(__GNUC__)
   if (__builtin_constant_p(xo) && n == -2)
     p[delta-2] = (MCode)(xo >> 24);
@@ -241,10 +250,6 @@ static void emit_gmrmi(ASMState *as, x86Group xg, Reg rb, int32_t i)
 
 /* -- Emit loads/stores --------------------------------------------------- */
 
-/* Instruction selection for XMM moves. */
-#define XMM_MOVRR(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVSD : XO_MOVAPS)
-#define XMM_MOVRM(as)	((as->flags & JIT_F_SPLIT_XMM) ? XO_MOVLPD : XO_MOVSD)
-
 /* mov [base+ofs], i */
 static void emit_movmroi(ASMState *as, Reg base, int32_t ofs, int32_t i)
 {
@@ -314,7 +319,7 @@ static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
   if (tvispzero(tv))  /* Use xor only for +0. */
     emit_rr(as, XO_XORPS, r, r);
   else
-    emit_rma(as, XMM_MOVRM(as), r, &tv->n);
+    emit_rma(as, XO_MOVSD, r, &tv->n);
 }
 
 /* -- Emit control-flow instructions -------------------------------------- */
@@ -416,8 +421,10 @@ static void emit_call_(ASMState *as, MCode *target)
 /* Use 64 bit operations to handle 64 bit IR types. */
 #if LJ_64
 #define REX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? REX_64 : 0))
+#define VEX_64IR(ir, r)		((r) + (irt_is64((ir)->t) ? VEX_64 : 0))
 #else
 #define REX_64IR(ir, r)		(r)
+#define VEX_64IR(ir, r)		(r)
 #endif
 
 /* Generic move between two regs. */
@@ -427,25 +434,25 @@ static void emit_movrr(ASMState *as, IRIns *ir, Reg dst, Reg src)
   if (dst < RID_MAX_GPR)
     emit_rr(as, XO_MOV, REX_64IR(ir, dst), src);
   else
-    emit_rr(as, XMM_MOVRR(as), dst, src);
+    emit_rr(as, XO_MOVAPS, dst, src);
 }
 
-/* Generic load of register from stack slot. */
-static void emit_spload(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic load of register with base and (small) offset address. */
+static void emit_loadofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_rmro(as, XO_MOV, REX_64IR(ir, r), RID_ESP, ofs);
+    emit_rmro(as, XO_MOV, REX_64IR(ir, r), base, ofs);
   else
-    emit_rmro(as, irt_isnum(ir->t) ? XMM_MOVRM(as) : XO_MOVSS, r, RID_ESP, ofs);
+    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSD : XO_MOVSS, r, base, ofs);
 }
 
-/* Generic store of register to stack slot. */
-static void emit_spstore(ASMState *as, IRIns *ir, Reg r, int32_t ofs)
+/* Generic store of register with base and (small) offset address. */
+static void emit_storeofs(ASMState *as, IRIns *ir, Reg r, Reg base, int32_t ofs)
 {
   if (r < RID_MAX_GPR)
-    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), RID_ESP, ofs);
+    emit_rmro(as, XO_MOVto, REX_64IR(ir, r), base, ofs);
   else
-    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto, r, RID_ESP, ofs);
+    emit_rmro(as, irt_isnum(ir->t) ? XO_MOVSDto : XO_MOVSSto, r, base, ofs);
 }
 
 /* Add offset to pointer. */

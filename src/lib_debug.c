@@ -29,7 +29,7 @@ LJLIB_CF(debug_getregistry)
   return 1;
 }
 
-LJLIB_CF(debug_getmetatable)
+LJLIB_CF(debug_getmetatable)	LJLIB_REC(.)
 {
   lj_lib_checkany(L, 1);
   if (!lua_getmetatable(L, 1)) {

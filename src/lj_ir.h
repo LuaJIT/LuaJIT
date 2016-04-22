@@ -40,6 +40,7 @@
   _(USE,	S , ref, ___) \
   _(PHI,	S , ref, ref) \
   _(RENAME,	S , ref, lit) \
+  _(PROF,	S , ___, ___) \
   \
   /* Constants. */ \
   _(KPRI,	N , ___, ___) \
@@ -96,6 +97,7 @@
   _(UREFC,	LW, ref, lit) \
   _(FREF,	R , ref, lit) \
   _(STRREF,	N , ref, ref) \
+  _(LREF,	L , ___, ___) \
   \
   /* Loads and Stores. These must be in the same order. */ \
   _(ALOAD,	L , ref, ___) \
@@ -120,6 +122,11 @@
   _(CNEW,	AW, ref, ref) \
   _(CNEWI,	NW, ref, ref)  /* CSE is ok, not marked as A. */ \
   \
+  /* Buffer operations. */ \
+  _(BUFHDR,	L , ref, lit) \
+  _(BUFPUT,	L , ref, ref) \
+  _(BUFSTR,	A , ref, ref) \
+  \
   /* Barriers. */ \
   _(TBAR,	S , ref, ___) \
   _(OBAR,	S , ref, ref) \
@@ -128,11 +135,12 @@
   /* Type conversions. */ \
   _(CONV,	NW, ref, lit) \
   _(TOBIT,	N , ref, ref) \
-  _(TOSTR,	N , ref, ___) \
+  _(TOSTR,	N , ref, lit) \
   _(STRTO,	N , ref, ___) \
   \
   /* Calls. */ \
   _(CALLN,	N , ref, lit) \
+  _(CALLA,	A , ref, lit) \
   _(CALLL,	L , ref, lit) \
   _(CALLS,	S , ref, lit) \
   _(CALLXS,	S , ref, ref) \
@@ -186,6 +194,8 @@ IRFPMDEF(FPMENUM)
   _(STR_LEN,	offsetof(GCstr, len)) \
   _(FUNC_ENV,	offsetof(GCfunc, l.env)) \
   _(FUNC_PC,	offsetof(GCfunc, l.pc)) \
+  _(FUNC_FFID,	offsetof(GCfunc, l.ffid)) \
+  _(THREAD_ENV,	offsetof(lua_State, env)) \
   _(TAB_META,	offsetof(GCtab, metatable)) \
   _(TAB_ARRAY,	offsetof(GCtab, array)) \
   _(TAB_NODE,	offsetof(GCtab, node)) \
@@ -221,13 +231,16 @@ IRFLDEF(FLENUM)
 #define IRXLOAD_VOLATILE	2	/* Load from volatile data. */
 #define IRXLOAD_UNALIGNED	4	/* Unaligned load. */
 
+/* BUFHDR mode, stored in op2. */
+#define IRBUFHDR_RESET		0	/* Reset buffer. */
+#define IRBUFHDR_APPEND		1	/* Append to buffer. */
+
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */
 #define IRCONV_DSTMASK		0x03e0	/* Dest. IRType (also in ir->t). */
 #define IRCONV_DSH		5
 #define IRCONV_NUM_INT		((IRT_NUM<<IRCONV_DSH)|IRT_INT)
 #define IRCONV_INT_NUM		((IRT_INT<<IRCONV_DSH)|IRT_NUM)
-#define IRCONV_TRUNC		0x0400	/* Truncate number to integer. */
 #define IRCONV_SEXT		0x0800	/* Sign-extend integer to integer. */
 #define IRCONV_MODEMASK		0x0fff
 #define IRCONV_CONVMASK		0xf000
@@ -237,6 +250,11 @@ IRFLDEF(FLENUM)
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
+
+/* TOSTR mode, stored in op2. */
+#define IRTOSTR_INT		0	/* Convert integer to string. */
+#define IRTOSTR_NUM		1	/* Convert number to string. */
+#define IRTOSTR_CHAR		2	/* Convert char value to string. */
 
 /* -- IR operands --------------------------------------------------------- */
 
@@ -302,6 +320,7 @@ IRTDEF(IRTENUM)
   IRT_PTR = LJ_64 ? IRT_P64 : IRT_P32,
   IRT_INTP = LJ_64 ? IRT_I64 : IRT_INT,
   IRT_UINTP = LJ_64 ? IRT_U64 : IRT_U32,
+  /* TODO_GC64: major changes required for all uses of IRT_P32. */
 
   /* Additional flags. */
   IRT_MARK = 0x20,	/* Marker for misc. purposes. */
@@ -353,7 +372,12 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD, IRT_UDATA))
 #define irt_isint64(t)		(irt_typerange((t), IRT_I64, IRT_U64))
 
-#if LJ_64
+#if LJ_GC64
+#define IRT_IS64 \
+  ((1u<<IRT_NUM)|(1u<<IRT_I64)|(1u<<IRT_U64)|(1u<<IRT_P64)|\
+   (1u<<IRT_LIGHTUD)|(1u<<IRT_STR)|(1u<<IRT_THREAD)|(1u<<IRT_PROTO)|\
+   (1u<<IRT_FUNC)|(1u<<IRT_CDATA)|(1u<<IRT_TAB)|(1u<<IRT_UDATA))
+#elif LJ_64
 #define IRT_IS64 \
   ((1u<<IRT_NUM)|(1u<<IRT_I64)|(1u<<IRT_U64)|(1u<<IRT_P64)|(1u<<IRT_LIGHTUD))
 #else
@@ -374,7 +398,7 @@ static LJ_AINLINE IRType itype2irt(const TValue *tv)
     return IRT_INT;
   else if (tvisnum(tv))
     return IRT_NUM;
-#if LJ_64
+#if LJ_64 && !LJ_GC64
   else if (tvislightud(tv))
     return IRT_LIGHTUD;
 #endif
@@ -464,6 +488,7 @@ typedef uint32_t TRef;
 #define tref_isnil(tr)		(tref_istype((tr), IRT_NIL))
 #define tref_isfalse(tr)	(tref_istype((tr), IRT_FALSE))
 #define tref_istrue(tr)		(tref_istype((tr), IRT_TRUE))
+#define tref_islightud(tr)	(tref_istype((tr), IRT_LIGHTUD))
 #define tref_isstr(tr)		(tref_istype((tr), IRT_STR))
 #define tref_isfunc(tr)		(tref_istype((tr), IRT_FUNC))
 #define tref_iscdata(tr)	(tref_istype((tr), IRT_CDATA))
@@ -528,6 +553,7 @@ typedef union IRIns {
   MRef ptr;		/* Pointer constant (overlaps op12). */
 } IRIns;
 
+/* TODO_GC64: major changes required. */
 #define ir_kgc(ir)	check_exp((ir)->o == IR_KGC, gcref((ir)->gcr))
 #define ir_kstr(ir)	(gco2str(ir_kgc((ir))))
 #define ir_ktab(ir)	(gco2tab(ir_kgc((ir))))

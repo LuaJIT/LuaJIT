@@ -30,9 +30,9 @@
 
 #include "lua.h"
 
-#define LUAJIT_VERSION		"LuaJIT 2.0.4"
-#define LUAJIT_VERSION_NUM	20004  /* Version 2.0.4 = 02.00.04. */
-#define LUAJIT_VERSION_SYM	luaJIT_version_2_0_4
+#define LUAJIT_VERSION		"LuaJIT 2.1.0-beta2"
+#define LUAJIT_VERSION_NUM	20100  /* Version 2.1.0 = 02.01.00. */
+#define LUAJIT_VERSION_SYM	luaJIT_version_2_1_0_beta2
 #define LUAJIT_COPYRIGHT	"Copyright (C) 2005-2016 Mike Pall"
 #define LUAJIT_URL		"http://luajit.org/"
 
@@ -63,6 +63,15 @@ enum {
 
 /* Control the JIT engine. */
 LUA_API int luaJIT_setmode(lua_State *L, int idx, int mode);
+
+/* Low-overhead profiling API. */
+typedef void (*luaJIT_profile_callback)(void *data, lua_State *L,
+					int samples, int vmstate);
+LUA_API void luaJIT_profile_start(lua_State *L, const char *mode,
+				  luaJIT_profile_callback cb, void *data);
+LUA_API void luaJIT_profile_stop(lua_State *L);
+LUA_API const char *luaJIT_profile_dumpstack(lua_State *L, const char *fmt,
+					     int depth, size_t *len);
 
 /* Enforce (dynamic) linker error for version mismatches. Call from main. */
 LUA_API void LUAJIT_VERSION_SYM(void);
