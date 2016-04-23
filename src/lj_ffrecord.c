@@ -118,11 +118,7 @@ static void recff_stitch(jit_State *J)
 
   /* Ditto for the IR. */
   memmove(&J->base[1], &J->base[-1], sizeof(TRef)*(J->maxslot+1));
-#if LJ_64
-  trcont = lj_ir_kptr(J, (void *)((int64_t)cont-(int64_t)lj_vm_asm_begin));
-#else
-  trcont = lj_ir_kptr(J, (void *)cont);
-#endif
+  trcont = lj_ir_kptr(J, mkcontptr(cont));
   J->base[0] = trcont | TREF_CONT;
   J->ktracep = lj_ir_k64_reserve(J);
   lua_assert(irt_toitype_(IRT_P64) == LJ_TTRACE);

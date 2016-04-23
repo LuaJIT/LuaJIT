@@ -882,11 +882,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 static BCReg rec_mm_prep(jit_State *J, ASMFunction cont)
 {
   BCReg s, top = cont == lj_cont_cat ? J->maxslot : curr_proto(J->L)->framesize;
-#if LJ_64
-  TRef trcont = lj_ir_kptr(J, (void *)((int64_t)cont-(int64_t)lj_vm_asm_begin));
-#else
-  TRef trcont = lj_ir_kptr(J, (void *)cont);
-#endif
+  TRef trcont = lj_ir_kptr(J, mkcontptr(cont));
   J->base[top] = trcont | TREF_CONT;
   J->framedepth++;
   for (s = J->maxslot; s < top; s++)

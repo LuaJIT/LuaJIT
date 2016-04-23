@@ -345,7 +345,7 @@ TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
-  lua_assert((void *)(intptr_t)i32ptr(ptr) == ptr);
+  lua_assert((void *)(uintptr_t)u32ptr(ptr) == ptr);
   for (ref = J->chain[op]; ref; ref = cir[ref].prev)
     if (mref(cir[ref].ptr, void) == ptr)
       goto found;
