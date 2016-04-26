@@ -60,6 +60,16 @@ enum {
 
 /* These definitions must match with the arch-specific *.dasc files. */
 #if LJ_TARGET_X86
+#if LJ_ABI_WIN
+#define CFRAME_OFS_ERRF		(19*4)
+#define CFRAME_OFS_NRES		(18*4)
+#define CFRAME_OFS_PREV		(17*4)
+#define CFRAME_OFS_L		(16*4)
+#define CFRAME_OFS_PC		(6*4)
+#define CFRAME_OFS_MULTRES	(5*4)
+#define CFRAME_SIZE		(16*4)
+#define CFRAME_SHIFT_MULTRES	0
+#else
 #define CFRAME_OFS_ERRF		(15*4)
 #define CFRAME_OFS_NRES		(14*4)
 #define CFRAME_OFS_PREV		(13*4)
@@ -68,6 +78,7 @@ enum {
 #define CFRAME_OFS_MULTRES	(5*4)
 #define CFRAME_SIZE		(12*4)
 #define CFRAME_SHIFT_MULTRES	0
+#endif
 #elif LJ_TARGET_X64
 #if LJ_ABI_WIN
 #define CFRAME_OFS_PREV		(13*8)
