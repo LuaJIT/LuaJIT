@@ -130,7 +130,18 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
     lj_err_msg(L, LJ_ERR_STROV);
   g = G(L);
   /* Compute string hash. Constants taken from lookup3 hash by Bob Jenkins. */
-  if (len >= 4) {  /* Caveat: unaligned access! */
+  if (len >= 12) {  /* Caveat: unaligned access! */
+    MSize i = (len-1)/8;
+    const char *ss;
+    a = lj_getu32(str+len-8);
+    b = lj_getu32(str+len-4);
+    ss = str;
+    for (; i; i--, ss += 8) {
+      h = lj_rol(h ^ a, 17) + (b ^ 0xdeadbeef);
+      a = lj_rol(a, 13); a -= lj_getu32(ss);
+      b = lj_rol(b, 11); b -= lj_getu32(ss+4);
+    }
+  } else if (len >= 4) {  /* Caveat: unaligned access! */
     a = lj_getu32(str);
     h ^= lj_getu32(str+len-4);
     b = lj_getu32(str+(len>>1)-2);
@@ -152,7 +163,7 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   if (LJ_LIKELY((((uintptr_t)str+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
@@ -162,7 +173,7 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   } else {  /* Slow path: end of string is too close to a page boundary. */
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && memcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
