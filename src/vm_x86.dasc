@@ -125,8 +125,9 @@
 |.define CFRAME_SPACE,	aword*9			// Delta for esp (see <--).
 |.macro saveregs_
 |  push edi; push esi; push ebx
-|  push 0
+|  push extern lj_err_unwind_win
 |  fs; push dword [0]
+|  fs; mov [0], esp
 |  sub esp, CFRAME_SPACE
 |.endmacro
 |.macro restoreregs
@@ -600,7 +601,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov eax, FCARG2			// Error return status for vm_pcall.
   |  mov esp, FCARG1
   |.if WIN
-  |  mov FCARG1, SEH_NEXT
+  |  lea FCARG1, SEH_NEXT
   |  fs; mov [0], FCARG1
   |.endif
   |.endif
@@ -627,7 +628,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  and FCARG1, CFRAME_RAWMASK
   |  mov esp, FCARG1
   |.if WIN
-  |  mov FCARG1, SEH_NEXT
+  |  lea FCARG1, SEH_NEXT
   |  fs; mov [0], FCARG1
   |.endif
   |.endif
@@ -642,6 +643,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov dword [BASE-4], LJ_TFALSE	// Prepend false to error message.
   |  set_vmstate INTERP
   |  jmp ->vm_returnc			// Increments RD/MULTRES and returns.
+  |
+  |.if WIN and not X64
+  |->vm_rtlunwind@16:			// Thin layer around RtlUnwind
+  |  // (void *cframe, void *excptrec, void *unwinder, int errcode)
+  |  mov [esp], FCARG1			// Return value for RtlUnwind
+  |  push FCARG2			// Exception record for RtlUnwind
+  |  push 0				// Ignored by RtlUnwind
+  |  push dword [FCARG1+CFRAME_OFS_SEH]
+  |  call extern RtlUnwind@16		// Violates ABI (clobbers too much)
+  |  mov FCARG1, eax
+  |  mov FCARG2, [esp+4]		// errcode (for vm_unwind_c)
+  |  ret				// Jump to unwinder
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------

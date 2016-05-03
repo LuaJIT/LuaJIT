@@ -65,6 +65,7 @@ enum {
 #define CFRAME_OFS_NRES		(18*4)
 #define CFRAME_OFS_PREV		(17*4)
 #define CFRAME_OFS_L		(16*4)
+#define CFRAME_OFS_SEH		(9*4)
 #define CFRAME_OFS_PC		(6*4)
 #define CFRAME_OFS_MULTRES	(5*4)
 #define CFRAME_SIZE		(16*4)
