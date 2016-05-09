@@ -75,8 +75,8 @@ static LJ_AINLINE TRef lj_ir_knum(jit_State *J, lua_Number n)
 #define lj_ir_knum_tobit(J)	lj_ir_knum_u64(J, U64x(43380000,00000000))
 
 /* Special 128 bit SIMD constants. */
-#define lj_ir_knum_abs(J)	lj_ir_k64(J, IR_KNUM, LJ_KSIMD(J, LJ_KSIMD_ABS))
-#define lj_ir_knum_neg(J)	lj_ir_k64(J, IR_KNUM, LJ_KSIMD(J, LJ_KSIMD_NEG))
+#define lj_ir_ksimd(J, idx) \
+  lj_ir_ggfload(J, IRT_NUM, (uintptr_t)LJ_KSIMD(J, idx) - (uintptr_t)J2GG(J))
 
 /* Access to constants. */
 LJ_FUNC void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir);

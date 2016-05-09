@@ -498,7 +498,7 @@ static void LJ_FASTCALL recff_getfenv(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_math_abs(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);
-  J->base[0] = emitir(IRTN(IR_ABS), tr, lj_ir_knum_abs(J));
+  J->base[0] = emitir(IRTN(IR_ABS), tr, lj_ir_ksimd(J, LJ_KSIMD_ABS));
   UNUSED(rd);
 }
 
