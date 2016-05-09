@@ -619,10 +619,21 @@ static Reg ra_alloc1(ASMState *as, IRRef ref, RegSet allow)
   return r;
 }
 
+/* Add a register rename to the IR. */
+static void ra_addrename(ASMState *as, Reg down, IRRef ref, SnapNo snapno)
+{
+  IRRef ren;
+  lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), ref, snapno);
+  ren = tref_ref(lj_ir_emit(as->J));
+  as->ir = as->T->ir;  /* The IR may have been reallocated. */
+  IR(ren)->r = (uint8_t)down;
+  IR(ren)->s = SPS_NONE;
+}
+
 /* Rename register allocation and emit move. */
 static void ra_rename(ASMState *as, Reg down, Reg up)
 {
-  IRRef ren, ref = regcost_ref(as->cost[up] = as->cost[down]);
+  IRRef ref = regcost_ref(as->cost[up] = as->cost[down]);
   IRIns *ir = IR(ref);
   ir->r = (uint8_t)up;
   as->cost[down] = 0;
@@ -635,11 +646,7 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
   emit_movrr(as, ir, down, up);  /* Backwards codegen needs inverse move. */
   if (!ra_hasspill(IR(ref)->s)) {  /* Add the rename to the IR. */
-    lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), ref, as->snapno);
-    ren = tref_ref(lj_ir_emit(as->J));
-    as->ir = as->T->ir;  /* The IR may have been reallocated. */
-    IR(ren)->r = (uint8_t)down;
-    IR(ren)->s = SPS_NONE;
+    ra_addrename(as, down, ref, as->snapno);
   }
 }
 
@@ -1472,12 +1479,7 @@ static void asm_phi_fixup(ASMState *as)
       irt_clearmark(ir->t);
       /* Left PHI gained a spill slot before the loop? */
       if (ra_hasspill(ir->s)) {
-	IRRef ren;
-	lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), lref, as->loopsnapno);
-	ren = tref_ref(lj_ir_emit(as->J));
-	as->ir = as->T->ir;  /* The IR may have been reallocated. */
-	IR(ren)->r = (uint8_t)r;
-	IR(ren)->s = SPS_NONE;
+	ra_addrename(as, r, lref, as->loopsnapno);
       }
     }
     rset_clear(work, r);
