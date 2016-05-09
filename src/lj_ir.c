@@ -204,12 +204,12 @@ typedef struct K64Array {
 void lj_ir_k64_freeall(jit_State *J)
 {
   K64Array *k;
-  for (k = mref(J->k64, K64Array); k; ) {
+  for (k = mref(J->k64p, K64Array); k; ) {
     K64Array *next = mref(k->next, K64Array);
     lj_mem_free(J2G(J), k, sizeof(K64Array));
     k = next;
   }
-  setmref(J->k64, NULL);
+  setmref(J->k64p, NULL);
 }
 
 /* Get new 64 bit constant slot. */
@@ -223,7 +223,7 @@ static TValue *ir_k64_add(jit_State *J, K64Array *kp, uint64_t u64)
     if (kp)
       setmref(kp->next, kn);  /* Chain to the end of the list. */
     else
-      setmref(J->k64, kn);  /* Link first array. */
+      setmref(J->k64p, kn);  /* Link first array. */
     kp = kn;
   }
   ntv = &kp->k[kp->numk++];  /* Add to current array. */
@@ -237,7 +237,7 @@ cTValue *lj_ir_k64_find(jit_State *J, uint64_t u64)
   K64Array *k, *kp = NULL;
   MSize idx;
   /* Search for the constant in the whole chain of arrays. */
-  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) {
+  for (k = mref(J->k64p, K64Array); k; k = mref(k->next, K64Array)) {
     kp = k;  /* Remember previous element in list. */
     for (idx = 0; idx < k->numk; idx++) {  /* Search one array. */
       TValue *tv = &k->k[idx];
@@ -254,7 +254,7 @@ TValue *lj_ir_k64_reserve(jit_State *J)
   K64Array *k, *kp = NULL;
   lj_ir_k64_find(J, 0);  /* Intern dummy 0 to protect the reserved slot. */
   /* Find last K64Array, if any. */
-  for (k = mref(J->k64, K64Array); k; k = mref(k->next, K64Array)) kp = k;
+  for (k = mref(J->k64p, K64Array); k; k = mref(k->next, K64Array)) kp = k;
   return ir_k64_add(J, kp, 0);  /* Set to 0. Final value is set later. */
 }
 

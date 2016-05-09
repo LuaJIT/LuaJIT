@@ -304,6 +304,18 @@ void lj_trace_initstate(global_State *g)
   tv = LJ_KSIMD(J, LJ_KSIMD_NEG);
   tv[0].u64 = U64x(80000000,00000000);
   tv[1].u64 = U64x(80000000,00000000);
+
+  J->k64[LJ_K64_TOBIT].u64  = U64x(43380000, 00000000);
+  J->k64[LJ_K64_2P64].u64   = U64x(43f00000, 00000000);
+  J->k64[LJ_K64_M2P64].u64  = U64x(c3f00000, 00000000);
+  J->k64[LJ_K64_M2P31].u64  = U64x(c1e00000, 00000000);
+  J->k64[LJ_K64_4F].u64     = U64x(4f000000, 00000000);
+  J->k64[LJ_K64_4F_4F].u64  = U64x(4f000000, 4f000000);
+  J->k64[LJ_K64_41E].u64    = U64x(41e00000, 00000000);
+  J->k64[LJ_K64_TOINTG].u64 = U64x(59800004, 59800000);
+
+  J->k32[LJ_K32_M2P64] = 0xdf800000;
+  J->k32[LJ_K32_M2P31] = 0xcf000000;
 }
 
 /* Free everything associated with the JIT compiler state. */

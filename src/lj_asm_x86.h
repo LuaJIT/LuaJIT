@@ -696,7 +696,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       if (left == dest) return;  /* Avoid the XO_XORPS. */
     } else if (LJ_32 && st == IRT_U32) {  /* U32 to FP conversion on x86. */
       /* number = (2^52+2^51 .. u32) - (2^52+2^51) */
-      cTValue *k = lj_ir_k64_find(as->J, U64x(43380000,00000000));
+      cTValue *k = &as->J->k64[LJ_K64_TOBIT];
       Reg bias = ra_scratch(as, rset_exclude(RSET_FPR, dest));
       if (irt_isfloat(ir->t))
 	emit_rr(as, XO_CVTSD2SS, dest, dest);
@@ -711,7 +711,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		 asm_fuseloadm(as, lref, RSET_GPR, st64);
       if (LJ_64 && st == IRT_U64) {
 	MCLabel l_end = emit_label(as);
-	const void *k = lj_ir_k64_find(as->J, U64x(43f00000,00000000));
+	cTValue *k = &as->J->k64[LJ_K64_2P64];
 	emit_rma(as, XO_ADDSD, dest, k);  /* Add 2^64 to compensate. */
 	emit_sjcc(as, CC_NS, l_end);
 	emit_rr(as, XO_TEST, left|REX_64, left);  /* Check if u64 >= 2^63. */
@@ -738,11 +738,11 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	  emit_gri(as, XG_ARITHi(XOg_ADD), dest, (int32_t)0x80000000);
 	emit_rr(as, op, dest|REX_64, tmp);
 	if (st == IRT_NUM)
-	  emit_rma(as, XO_ADDSD, tmp, lj_ir_k64_find(as->J,
-		   LJ_64 ? U64x(c3f00000,00000000) : U64x(c1e00000,00000000)));
+	  emit_rma(as, XO_ADDSD, tmp, &as->J->k64[
+		   LJ_64 ? LJ_K64_M2P64 : LJ_K64_M2P31]);
 	else
-	  emit_rma(as, XO_ADDSS, tmp, lj_ir_k64_find(as->J,
-		   LJ_64 ? U64x(00000000,df800000) : U64x(00000000,cf000000)));
+	  emit_rma(as, XO_ADDSS, tmp, &as->J->k32[
+		   LJ_64 ? LJ_K32_M2P64 : LJ_K32_M2P31]);
 	emit_sjcc(as, CC_NS, l_end);
 	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest negative. */
 	emit_rr(as, op, dest|REX_64, tmp);
@@ -828,8 +828,7 @@ static void asm_conv_fp_int64(ASMState *as, IRIns *ir)
   if (((ir-1)->op2 & IRCONV_SRCMASK) == IRT_U64) {
     /* For inputs in [2^63,2^64-1] add 2^64 to compensate. */
     MCLabel l_end = emit_label(as);
-    emit_rma(as, XO_FADDq, XOg_FADDq,
-	     lj_ir_k64_find(as->J, U64x(43f00000,00000000)));
+    emit_rma(as, XO_FADDq, XOg_FADDq, &as->J->k64[LJ_K64_2P64]);
     emit_sjcc(as, CC_NS, l_end);
     emit_rr(as, XO_TEST, hi, hi);  /* Check if u64 >= 2^63. */
   } else {
@@ -869,8 +868,7 @@ static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
       emit_rmro(as, XO_FISTTPq, XOg_FISTTPq, RID_ESP, 0);
     else
       emit_rmro(as, XO_FISTPq, XOg_FISTPq, RID_ESP, 0);
-    emit_rma(as, XO_FADDq, XOg_FADDq,
-	     lj_ir_k64_find(as->J, U64x(c3f00000,00000000)));
+    emit_rma(as, XO_FADDq, XOg_FADDq, &as->J->k64[LJ_K64_M2P64]);
     emit_sjcc(as, CC_NS, l_pop);
     emit_rr(as, XO_TEST, hi, hi);  /* Check if out-of-range (2^63). */
   }
