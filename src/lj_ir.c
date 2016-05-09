@@ -514,6 +514,30 @@ void lj_ir_rollback(jit_State *J, IRRef ref)
   J->cur.nins = nins;
 }
 
+/* Load field of type t from GG+ofs */
+LJ_FUNC TRef lj_ir_ggfload(jit_State *J, IRType t, uintptr_t ofs)
+{
+  IRIns *ir, *cir = J->cur.ir;
+  IRRef2 op12 = IRREF2((IRRef1)REF_NIL, (IRRef1)ofs);
+  IRRef ref;
+  lua_assert(ofs >= IRFL__MAX && ofs == (IRRef1)ofs);
+  for (ref = J->chain[IR_FLOAD]; ref; ref = cir[ref].prev) {
+    if (cir[ref].op12 == op12) {
+      lua_assert(cir[ref].t.irt == t);
+      goto found;
+    }
+  }
+  ref = lj_ir_nextins(J);
+  ir = IR(ref);
+  ir->op12 = op12;
+  ir->t.irt = t;
+  ir->o = IR_FLOAD;
+  ir->prev = J->chain[IR_FLOAD];
+  J->chain[IR_FLOAD] = (IRRef1)ref;
+found:
+  return TREF(ref, t);
+}
+
 #undef IR
 #undef fins
 #undef emitir

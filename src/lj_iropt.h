@@ -90,6 +90,7 @@ LJ_FUNC TRef LJ_FASTCALL lj_ir_tostr(jit_State *J, TRef tr);
 LJ_FUNC int lj_ir_numcmp(lua_Number a, lua_Number b, IROp op);
 LJ_FUNC int lj_ir_strcmp(GCstr *a, GCstr *b, IROp op);
 LJ_FUNC void lj_ir_rollback(jit_State *J, IRRef ref);
+LJ_FUNC TRef lj_ir_ggfload(jit_State *J, IRType t, uintptr_t ofs);
 
 /* Emit IR instructions with on-the-fly optimizations. */
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fold(jit_State *J);
