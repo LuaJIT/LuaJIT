@@ -625,9 +625,8 @@ static void ra_addrename(ASMState *as, Reg down, IRRef ref, SnapNo snapno)
   IRRef ren;
   lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), ref, snapno);
   ren = tref_ref(lj_ir_emit(as->J));
-  as->ir = as->T->ir;  /* The IR may have been reallocated. */
-  IR(ren)->r = (uint8_t)down;
-  IR(ren)->s = SPS_NONE;
+  as->J->cur.ir[ren].r = (uint8_t)down;
+  as->J->cur.ir[ren].s = SPS_NONE;
 }
 
 /* Rename register allocation and emit move. */
@@ -948,7 +947,7 @@ static void asm_snap_prep(ASMState *as)
   } else {
     /* Process any renames above the highwater mark. */
     for (; as->snaprename < as->T->nins; as->snaprename++) {
-      IRIns *ir = IR(as->snaprename);
+      IRIns *ir = as->T->ir + as->snaprename;
       if (asm_snap_checkrename(as, ir->op1))
 	ir->op2 = REF_BIAS-1;  /* Kill rename. */
     }
@@ -1965,12 +1964,8 @@ static void asm_setup_regsp(ASMState *as)
   /* REF_BASE is used for implicit references to the BASE register. */
   lastir->prev = REGSP_HINT(RID_BASE);
 
-  ir = IR(nins-1);
-  if (ir->o == IR_RENAME) {
-    do { ir--; nins--; } while (ir->o == IR_RENAME);
-    T->nins = nins;  /* Remove any renames left over from ASM restart. */
-  }
   as->snaprename = nins;
+
   as->snapref = nins;
   as->snapno = T->nsnap;
 
@@ -2202,13 +2197,14 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   MCode *origtop;
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
-  J->cur.nins = lj_ir_nextins(J);
-  J->cur.ir[J->cur.nins].o = IR_NOP;
+  /* This also allows one RENAME to be added without reallocating curfinal. */
+  as->orignins = lj_ir_nextins(J);
+  J->cur.ir[as->orignins].o = IR_NOP;
 
   /* Setup initial state. Copy some fields to reduce indirections. */
   as->J = J;
   as->T = T;
-  as->ir = T->ir;
+  J->curfinal = lj_trace_alloc(J->L, T);
   as->flags = J->flags;
   as->loopref = J->loopref;
   as->realign = NULL;
@@ -2221,12 +2217,14 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->mclim = as->mcbot + MCLIM_REDZONE;
   asm_setup_target(as);
 
-  do {
+  for (;;) {
     as->mcp = as->mctop;
 #ifdef LUA_USE_ASSERT
     as->mcp_prev = as->mcp;
 #endif
-    as->curins = T->nins;
+    as->ir = J->curfinal->ir;
+    as->curins = J->cur.nins = as->orignins;
+
     RA_DBG_START();
     RA_DBGX((as, "===== STOP ====="));
 
@@ -2254,22 +2252,38 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
       checkmclim(as);
       asm_ir(as, ir);
     }
-  } while (as->realign);  /* Retry in case the MCode needs to be realigned. */
 
-  /* Emit head of trace. */
-  RA_DBG_REF();
-  checkmclim(as);
-  if (as->gcsteps > 0) {
-    as->curins = as->T->snap[0].ref;
-    asm_snap_prep(as);  /* The GC check is a guard. */
-    asm_gc_check(as);
+    if (as->realign && J->curfinal->nins >= T->nins)
+      continue;  /* Retry in case the MCode needs to be realigned. */
+
+    /* Emit head of trace. */
+    RA_DBG_REF();
+    checkmclim(as);
+    if (as->gcsteps > 0) {
+      as->curins = as->T->snap[0].ref;
+      asm_snap_prep(as);  /* The GC check is a guard. */
+      asm_gc_check(as);
+    }
+    ra_evictk(as);
+    if (as->parent)
+      asm_head_side(as);
+    else
+      asm_head_root(as);
+    asm_phi_fixup(as);
+
+    /* Commit renames. */
+    if (J->curfinal->nins < T->nins) {
+      lj_trace_free(J2G(J), J->curfinal);
+      J->curfinal = NULL;  /* In case lj_trace_alloc OOMs. */
+      J->curfinal = lj_trace_alloc(J->L, T);
+    } else {
+      lua_assert(J->curfinal->nk == T->nk);
+      memcpy(J->curfinal->ir + as->orignins, T->ir + as->orignins,
+	     (T->nins - as->orignins) * sizeof(IRIns));
+      T->nins = J->curfinal->nins;
+      break;
+    }
   }
-  ra_evictk(as);
-  if (as->parent)
-    asm_head_side(as);
-  else
-    asm_head_root(as);
-  asm_phi_fixup(as);
 
   RA_DBGX((as, "===== START ===="));
   RA_DBG_FLUSH();

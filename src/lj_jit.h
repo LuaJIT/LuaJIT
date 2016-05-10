@@ -349,6 +349,7 @@ typedef struct FoldState {
 /* JIT compiler state. */
 typedef struct jit_State {
   GCtrace cur;		/* Current trace. */
+  GCtrace *curfinal;	/* Final address of current trace (set during asm). */
 
   lua_State *L;		/* Current Lua state. */
   const BCIns *pc;	/* Current PC. */
