@@ -379,7 +379,6 @@ typedef struct jit_State {
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
-  MRef k64p;		/* Pointer to chained array of 64 bit constants. */
   TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
   TValue k64[LJ_K64__MAX];  /* Common 8 byte constants used by assemblers. */
   uint32_t k32[LJ_K32__MAX];  /* Ditto for 4 byte constants. */
