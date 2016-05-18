@@ -51,7 +51,7 @@ static void rec_check_ir(jit_State *J)
 {
   IRRef i, nins = J->cur.nins, nk = J->cur.nk;
   lua_assert(nk <= REF_BIAS && nins >= REF_BIAS && nins < 65536);
-  for (i = nins-1; i >= nk; i--) {
+  for (i = nk; i < nins; ++i) {
     IRIns *ir = IR(i);
     uint32_t mode = lj_ir_mode[ir->o];
     IRRef op1 = ir->op1;
