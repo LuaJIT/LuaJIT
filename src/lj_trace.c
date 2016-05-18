@@ -426,7 +426,7 @@ static void trace_start(jit_State *J)
   J->postproc = LJ_POST_NONE;
   lj_resetsplit(J);
   J->retryrec = 0;
-  J->ktracep = NULL;
+  J->ktrace = 0;
   setgcref(J->cur.startpt, obj2gco(J->pt));
 
   L = J->L;
@@ -502,9 +502,6 @@ static void trace_stop(jit_State *J)
   lj_mcode_commit(J, J->cur.mcode);
   J->postproc = LJ_POST_NONE;
   trace_save(J, T);
-  if (J->ktracep) {  /* Patch K64Array slot with the final GCtrace pointer. */
-    setgcV(J->L, J->ktracep, obj2gco(T), LJ_TTRACE);
-  }
 
   L = J->L;
   lj_vmevent_send(L, TRACE,

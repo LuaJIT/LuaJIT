@@ -118,9 +118,7 @@ static void recff_stitch(jit_State *J)
   /* Ditto for the IR. */
   memmove(&J->base[1], &J->base[-1], sizeof(TRef)*(J->maxslot+1));
   J->base[0] = lj_ir_kptr(J, contptr(cont)) | TREF_CONT;
-  J->ktracep = lj_ir_k64_reserve(J);
-  lua_assert(irt_toitype_(IRT_P64) == LJ_TTRACE);
-  J->base[-1] = emitir(IRT(IR_XLOAD, IRT_P64), lj_ir_kptr(J, &J->ktracep->gcr), 0);
+  J->ktrace = tref_ref((J->base[-1] = lj_ir_ktrace(J)));
   J->base += 2;
   J->baseslot += 2;
   J->framedepth++;
