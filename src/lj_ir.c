@@ -177,6 +177,12 @@ static LJ_AINLINE IRRef ir_nextk64(jit_State *J)
   return ref;
 }
 
+#if LJ_GC64
+#define ir_nextkgc ir_nextk64
+#else
+#define ir_nextkgc ir_nextk
+#endif
+
 /* Intern int32_t constant. */
 TRef LJ_FASTCALL lj_ir_kint(jit_State *J, int32_t k)
 {
@@ -260,15 +266,14 @@ TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
-  lua_assert(!LJ_GC64);  /* TODO_GC64: major changes required. */
   lua_assert(!isdead(J2G(J), o));
   for (ref = J->chain[IR_KGC]; ref; ref = cir[ref].prev)
     if (ir_kgc(&cir[ref]) == o)
       goto found;
-  ref = ir_nextk(J);
+  ref = ir_nextkgc(J);
   ir = IR(ref);
   /* NOBARRIER: Current trace is a GC root. */
-  setgcref(ir->gcr, o);
+  setgcref(ir[LJ_GC64].gcr, o);
   ir->t.irt = (uint8_t)t;
   ir->o = IR_KGC;
   ir->prev = J->chain[IR_KGC];
@@ -280,33 +285,39 @@ found:
 /* Allocate GCtrace constant placeholder (no interning). */
 TRef lj_ir_ktrace(jit_State *J)
 {
-  IRRef ref = ir_nextk(J);
+  IRRef ref = ir_nextkgc(J);
   IRIns *ir = IR(ref);
   lua_assert(irt_toitype_(IRT_P64) == LJ_TTRACE);
   ir->t.irt = IRT_P64;
-  ir->o = IR_KNULL; /* Not IR_KGC yet, but same size. */
+  ir->o = LJ_GC64 ? IR_KNUM : IR_KNULL; /* Not IR_KGC yet, but same size. */
   ir->prev = 0;
   return TREF(ref, IRT_P64);
 }
 
-/* Intern 32 bit pointer constant. */
+/* Intern pointer constant. */
 TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
+#if LJ_64 && !LJ_GC64
   lua_assert((void *)(uintptr_t)u32ptr(ptr) == ptr);
+#endif
   for (ref = J->chain[op]; ref; ref = cir[ref].prev)
     if (ir_kptr(&cir[ref]) == ptr)
       goto found;
+#if LJ_GC64
+  ref = ir_nextk64(J);
+#else
   ref = ir_nextk(J);
+#endif
   ir = IR(ref);
-  setmref(ir->ptr, ptr);
-  ir->t.irt = IRT_P32;
+  setmref(ir[LJ_GC64].ptr, ptr);
+  ir->t.irt = IRT_PGC;
   ir->o = op;
   ir->prev = J->chain[op];
   J->chain[op] = (IRRef1)ref;
 found:
-  return TREF(ref, IRT_P32);
+  return TREF(ref, IRT_PGC);
 }
 
 /* Intern typed NULL constant. */
