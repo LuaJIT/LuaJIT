@@ -459,12 +459,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	      dest, dest);
       if (irt_isfloat(ir->t))
 	emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(4f000000,4f000000)),
-		   RSET_GPR);
+		   (void *)&as->J->k64[LJ_K64_4F_4F], RSET_GPR);
       else
 	emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(41e00000,00000000)),
-		   RSET_GPR);
+		   (void *)&as->J->k64[LJ_K64_41E], RSET_GPR);
       emit_tg(as, MIPSI_MTC1, RID_TMP, dest);
       emit_dst(as, MIPSI_XOR, RID_TMP, RID_TMP, left);
       emit_ti(as, MIPSI_LUI, RID_TMP, 0x8000);
@@ -494,12 +492,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		 tmp, left, tmp);
 	if (st == IRT_FLOAT)
 	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		     (void *)lj_ir_k64_find(as->J, U64x(4f000000,4f000000)),
-		     RSET_GPR);
+		     (void *)&as->J->k64[LJ_K64_4F_4F], RSET_GPR);
 	else
 	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		     (void *)lj_ir_k64_find(as->J, U64x(41e00000,00000000)),
-		     RSET_GPR);
+		     (void *)&as->J->k64[LJ_K64_41E], RSET_GPR);
       } else {
 	emit_tg(as, MIPSI_MFC1, dest, tmp);
 	emit_fg(as, st == IRT_FLOAT ? MIPSI_TRUNC_W_S : MIPSI_TRUNC_W_D,
@@ -901,17 +897,23 @@ static MIPSIns asm_fxstoreins(IRIns *ir)
 static void asm_fload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
   MIPSIns mi = asm_fxloadins(ir);
+  Reg idx;
   int32_t ofs;
-  if (ir->op2 == IRFL_TAB_ARRAY) {
-    ofs = asm_fuseabase(as, ir->op1);
-    if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
-      emit_tsi(as, MIPSI_ADDIU, dest, idx, ofs);
-      return;
+  if (ir->op1 == REF_NIL) {
+    idx = RID_JGL;
+    ofs = ir->op2 - 32768;
+  } else {
+    idx = ra_alloc1(as, ir->op1, RSET_GPR);
+    if (ir->op2 == IRFL_TAB_ARRAY) {
+      ofs = asm_fuseabase(as, ir->op1);
+      if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
+	emit_tsi(as, MIPSI_ADDIU, dest, idx, ofs);
+	return;
+      }
     }
+    ofs = field_ofs[ir->op2];
   }
-  ofs = field_ofs[ir->op2];
   lua_assert(!irt_isfp(ir->t));
   emit_tsi(as, mi, dest, idx, ofs);
 }

@@ -721,7 +721,11 @@ static void crec_index_meta(jit_State *J, CTState *cts, CType *ct,
   if (!tv)
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   if (tvisfunc(tv)) {
-    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+    J->base[-1-LJ_FR2] = lj_ir_kfunc(J, funcV(tv));
+#if LJ_FR2
+    J->base[-1] = 0;
+#endif
+    J->base[-1] |= TREF_FRAME;
     rd->nres = -1;  /* Pending tailcall. */
   } else if (rd->data == 0 && tvistab(tv) && tref_isstr(J->base[1])) {
     /* Specialize to result of __index lookup. */
@@ -1119,20 +1123,20 @@ static void crec_snap_caller(jit_State *J)
   lua_State *L = J->L;
   TValue *base = L->base, *top = L->top;
   const BCIns *pc = J->pc;
-  TRef ftr = J->base[-1];
+  TRef ftr = J->base[-1-LJ_FR2];
   ptrdiff_t delta;
   if (!frame_islua(base-1) || J->framedepth <= 0)
     lj_trace_err(J, LJ_TRERR_NYICALL);
   J->pc = frame_pc(base-1); delta = 1+LJ_FR2+bc_a(J->pc[-1]);
   L->top = base; L->base = base - delta;
-  J->base[-1] = TREF_FALSE;
+  J->base[-1-LJ_FR2] = TREF_FALSE;
   J->base -= delta; J->baseslot -= (BCReg)delta;
-  J->maxslot = (BCReg)delta; J->framedepth--;
+  J->maxslot = (BCReg)delta-LJ_FR2; J->framedepth--;
   lj_snap_add(J);
   L->base = base; L->top = top;
   J->framedepth++; J->maxslot = 1;
   J->base += delta; J->baseslot += (BCReg)delta;
-  J->base[-1] = ftr; J->pc = pc;
+  J->base[-1-LJ_FR2] = ftr; J->pc = pc;
 }
 
 /* Record function call. */
@@ -1224,7 +1228,11 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
   tv = lj_ctype_meta(cts, ctype_isptr(ct->info) ? ctype_cid(ct->info) : id, mm);
   if (tv) {
     if (tvisfunc(tv)) {
-      J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+      J->base[-1-LJ_FR2] = lj_ir_kfunc(J, funcV(tv));
+#if LJ_FR2
+      J->base[-1] = 0;
+#endif
+      J->base[-1] |= TREF_FRAME;
       rd->nres = -1;  /* Pending tailcall. */
       return;
     }
@@ -1373,7 +1381,11 @@ static TRef crec_arith_meta(jit_State *J, TRef *sp, CType **s, CTState *cts,
   }
   if (tv) {
     if (tvisfunc(tv)) {
-      J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
+      J->base[-1-LJ_FR2] = lj_ir_kfunc(J, funcV(tv));
+#if LJ_FR2
+      J->base[-1] = 0;
+#endif
+      J->base[-1] |= TREF_FRAME;
       rd->nres = -1;  /* Pending tailcall. */
       return 0;
     }  /* NYI: non-function metamethods. */

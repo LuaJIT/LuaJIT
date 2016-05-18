@@ -310,15 +310,17 @@ local function fmtfunc(func, pc)
   end
 end
 
-local function formatk(tr, idx)
+local function formatk(tr, idx, sn)
   local k, t, slot = tracek(tr, idx)
   local tn = type(k)
   local s
   if tn == "number" then
-    if k == 2^52+2^51 then
+    if band(sn or 0, 0x30000) ~= 0 then
+      s = band(sn, 0x20000) ~= 0 and "contpc" or "ftsz"
+    elseif k == 2^52+2^51 then
       s = "bias"
     else
-      s = format("%+.14g", k)
+      s = format(0 < k and k < 0x1p-1026 and "%+a" or "%+.14g", k)
     end
   elseif tn == "string" then
     s = format(#k > 20 and '"%.20s"~' or '"%s"', gsub(k, "%c", ctlsub))
@@ -354,7 +356,7 @@ local function printsnap(tr, snap)
       n = n + 1
       local ref = band(sn, 0xffff) - 0x8000 -- REF_BIAS
       if ref < 0 then
-	out:write(formatk(tr, ref))
+	out:write(formatk(tr, ref, sn))
       elseif band(sn, 0x80000) ~= 0 then -- SNAP_SOFTFPNUM
 	out:write(colorize(format("%04d/%04d", ref, ref+1), 14))
       else

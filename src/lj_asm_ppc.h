@@ -393,8 +393,7 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
   emit_asi(as, PPCI_XORIS, RID_TMP, dest, 0x8000);
   emit_tai(as, PPCI_LWZ, dest, RID_SP, SPOFS_TMPLO);
   emit_lsptr(as, PPCI_LFS, (fbias & 31),
-	     (void *)lj_ir_k64_find(as->J, U64x(59800004,59800000)),
-	     RSET_GPR);
+	     (void *)&as->J->k64[LJ_K64_TOINTG], RSET_GPR);
   emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
   emit_fb(as, PPCI_FCTIWZ, tmp, left);
 }
@@ -437,7 +436,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       if (irt_isfloat(ir->t)) emit_fb(as, PPCI_FRSP, dest, dest);
       emit_fab(as, PPCI_FSUB, dest, dest, fbias);
       emit_fai(as, PPCI_LFD, dest, RID_SP, SPOFS_TMP);
-      kbias = (const float *)lj_ir_k64_find(as->J, U64x(59800004,59800000));
+      kbias = (const float *)&as->J->k64[LJ_K64_TOINTG];
       if (st == IRT_U32) kbias++;
       emit_lsptr(as, PPCI_LFS, (fbias & 31), (void *)kbias,
 		 rset_clear(allow, hibias));
@@ -472,8 +471,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	emit_fb(as, PPCI_FCTIWZ, tmp, tmp);
 	emit_fab(as, PPCI_FSUB, tmp, left, tmp);
 	emit_lsptr(as, PPCI_LFS, (tmp & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(4f000000,00000000)),
-		   RSET_GPR);
+		   (void *)&as->J->k64[LJ_K64_4F], RSET_GPR);
       } else {
 	emit_tai(as, PPCI_LWZ, dest, RID_SP, SPOFS_TMPLO);
 	emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
@@ -809,17 +807,23 @@ static PPCIns asm_fxstoreins(IRIns *ir)
 static void asm_fload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
   PPCIns pi = asm_fxloadins(ir);
+  Reg idx;
   int32_t ofs;
-  if (ir->op2 == IRFL_TAB_ARRAY) {
-    ofs = asm_fuseabase(as, ir->op1);
-    if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
-      emit_tai(as, PPCI_ADDI, dest, idx, ofs);
-      return;
+  if (ir->op1 == REF_NIL) {
+    idx = RID_JGL;
+    ofs = ir->op2 - 32768;
+  } else {
+    idx = ra_alloc1(as, ir->op1, RSET_GPR);
+    if (ir->op2 == IRFL_TAB_ARRAY) {
+      ofs = asm_fuseabase(as, ir->op1);
+      if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
+	emit_tai(as, PPCI_ADDI, dest, idx, ofs);
+	return;
+      }
     }
+    ofs = field_ofs[ir->op2];
   }
-  ofs = field_ofs[ir->op2];
   lua_assert(!irt_isi8(ir->t));
   emit_tai(as, pi, dest, idx, ofs);
 }
@@ -975,7 +979,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
 	emit_fab(as, PPCI_FSUB, dest, dest, fbias);
 	emit_fai(as, PPCI_LFD, dest, RID_SP, SPOFS_TMP);
 	emit_lsptr(as, PPCI_LFS, (fbias & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(59800004,59800000)),
+		   (void *)&as->J->k64[LJ_K64_TOINTG],
 		   rset_clear(allow, hibias));
 	emit_tai(as, PPCI_STW, tmp, RID_SP, SPOFS_TMPLO);
 	emit_tai(as, PPCI_STW, hibias, RID_SP, SPOFS_TMPHI);
