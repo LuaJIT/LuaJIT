@@ -334,7 +334,7 @@ static Reg ra_rematk(ASMState *as, IRRef ref)
   RA_DBGX((as, "remat     $i $r", ir, r));
 #if !LJ_SOFTFP
   if (ir->o == IR_KNUM) {
-    emit_loadn(as, r, ir_knum(ir));
+    emit_loadk64(as, r, ir);
   } else
 #endif
   if (emit_canremat(REF_BASE) && ir->o == IR_BASE) {
@@ -695,15 +695,14 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
   if (ra_noreg(left)) {
     if (irref_isk(lref)) {
       if (ir->o == IR_KNUM) {
-	cTValue *tv = ir_knum(ir);
 	/* FP remat needs a load except for +0. Still better than eviction. */
-	if (tvispzero(tv) || !(as->freeset & RSET_FPR)) {
-	  emit_loadn(as, dest, tv);
+	if (tvispzero(ir_knum(ir)) || !(as->freeset & RSET_FPR)) {
+	  emit_loadk64(as, dest, ir);
 	  return;
 	}
 #if LJ_64
       } else if (ir->o == IR_KINT64) {
-	emit_loadu64(as, dest, ir_kint64(ir)->u64);
+	emit_loadk64(as, dest, ir);
 	return;
 #endif
       } else if (ir->o != IR_KPRI) {
@@ -1963,8 +1962,14 @@ static void asm_setup_regsp(ASMState *as)
   ra_setup(as);
 
   /* Clear reg/sp for constants. */
-  for (ir = IR(T->nk), lastir = IR(REF_BASE); ir < lastir; ir++)
+  for (ir = IR(T->nk), lastir = IR(REF_BASE); ir < lastir; ir++) {
     ir->prev = REGSP_INIT;
+    if (irt_is64(ir->t) && ir->o != IR_KNULL) {
+      /* Make life easier for backends by putting address of constant in i. */
+      ir->i = (int32_t)(intptr_t)(ir+1);
+      ir++;
+    }
+  }
 
   /* REF_BASE is used for implicit references to the BASE register. */
   lastir->prev = REGSP_HINT(RID_BASE);

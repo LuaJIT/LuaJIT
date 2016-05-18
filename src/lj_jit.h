@@ -342,8 +342,8 @@ enum {
 /* Fold state is used to fold instructions on-the-fly. */
 typedef struct FoldState {
   IRIns ins;		/* Currently emitted instruction. */
-  IRIns left;		/* Instruction referenced by left operand. */
-  IRIns right;		/* Instruction referenced by right operand. */
+  IRIns left[2];	/* Instruction referenced by left operand. */
+  IRIns right[2];	/* Instruction referenced by right operand. */
 } FoldState;
 
 /* JIT compiler state. */

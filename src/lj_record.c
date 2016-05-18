@@ -61,7 +61,10 @@ static void rec_check_ir(jit_State *J)
     case IRMref: lua_assert(op1 >= nk);
       lua_assert(i >= REF_BIAS ? op1 < i : op1 > i); break;
     case IRMlit: break;
-    case IRMcst: lua_assert(i < REF_BIAS); continue;
+    case IRMcst: lua_assert(i < REF_BIAS);
+      if (irt_is64(ir->t) && ir->o != IR_KNULL)
+	++i;
+      continue;
     }
     switch (irm_op2(mode)) {
     case IRMnone: lua_assert(op2 == 0); break;

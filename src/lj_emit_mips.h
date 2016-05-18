@@ -112,8 +112,8 @@ static void emit_lsptr(ASMState *as, MIPSIns mi, Reg r, void *p, RegSet allow)
   emit_tsi(as, mi, r, base, i);
 }
 
-#define emit_loadn(as, r, tv) \
-  emit_lsptr(as, MIPSI_LDC1, ((r) & 31), (void *)(tv), RSET_GPR)
+#define emit_loadk64(as, r, ir) \
+  emit_lsptr(as, MIPSI_LDC1, ((r) & 31), (void *)&(ir)[1].tv.u64, RSET_GPR)
 
 /* Get/set global_State fields. */
 static void emit_lsglptr(ASMState *as, MIPSIns mi, Reg r, int32_t ofs)

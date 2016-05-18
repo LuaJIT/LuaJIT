@@ -136,8 +136,8 @@
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)		(&J->cur.ir[(ref)])
 #define fins		(&J->fold.ins)
-#define fleft		(&J->fold.left)
-#define fright		(&J->fold.right)
+#define fleft		(J->fold.left)
+#define fright		(J->fold.right)
 #define knumleft	(ir_knum(fleft)->n)
 #define knumright	(ir_knum(fright)->n)
 
@@ -2393,10 +2393,14 @@ retry:
   if (fins->op1 >= J->cur.nk) {
     key += (uint32_t)IR(fins->op1)->o << 10;
     *fleft = *IR(fins->op1);
+    if (fins->op1 < REF_TRUE)
+      fleft[1] = IR(fins->op1)[1];
   }
   if (fins->op2 >= J->cur.nk) {
     key += (uint32_t)IR(fins->op2)->o;
     *fright = *IR(fins->op2);
+    if (fins->op2 < REF_TRUE)
+      fright[1] = IR(fins->op2)[1];
   } else {
     key += (fins->op2 & 0x3ffu);  /* Literal mask. Must include IRCONV_*MASK. */
   }
