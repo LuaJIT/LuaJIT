@@ -439,7 +439,7 @@ VOID RtlUnwindEx_FIXED(PVOID,PVOID,PVOID,PVOID,PVOID,PVOID) asm("RtlUnwindEx");
 #define LJ_EXCODE_ERRCODE(cl)	((int)((cl) & 0xff))
 
 /* Windows exception handler for interpreter frame. */
-LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win(EXCEPTION_RECORD *rec,
+LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
   void *f, CONTEXT *ctx, UndocumentedDispatcherContext *dispatch)
 {
 #if LJ_TARGET_X64
@@ -464,7 +464,7 @@ LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win(EXCEPTION_RECORD *rec,
 	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
       } else if (!LJ_EXCODE_CHECK(rec->ExceptionCode)) {
 	/* Don't catch access violations etc. */
-	return ExceptionContinueSearch;
+	return 1;  /* ExceptionContinueSearch */
       }
 #if LJ_TARGET_X64
       /* Unwind the stack and call all handlers for all lower C frames
@@ -490,7 +490,7 @@ LJ_FUNCA EXCEPTION_DISPOSITION lj_err_unwind_win(EXCEPTION_RECORD *rec,
 #endif
     }
   }
-  return ExceptionContinueSearch;
+  return 1;  /* ExceptionContinueSearch */
 }
 
 /* Raise Windows exception. */
