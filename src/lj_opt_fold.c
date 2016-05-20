@@ -502,7 +502,7 @@ LJFOLDF(kfold_strref_snew)
       PHIBARRIER(ir);
       fins->op2 = emitir(IRTI(IR_ADD), ir->op2, fins->op2); /* Clobbers fins! */
       fins->op1 = str;
-      fins->ot = IRT(IR_STRREF, IRT_P32);
+      fins->ot = IRT(IR_STRREF, IRT_PGC);
       return RETRYFOLD;
     }
   }
