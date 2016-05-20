@@ -104,12 +104,6 @@ typedef struct CCallInfo {
 #define IRCALLCOND_FFI32(x)		NULL
 #endif
 
-#if LJ_TARGET_X86
-#define CCI_RANDFPR	0	/* Clang on OSX/x86 is overzealous. */
-#else
-#define CCI_RANDFPR	CCI_NOFPRCLOBBER
-#endif
-
 #if LJ_SOFTFP
 #define XA_FP		CCI_XA
 #define XA2_FP		(CCI_XA+CCI_XA)
@@ -162,7 +156,7 @@ typedef struct CCallInfo {
   _(ANY,	lj_gc_step_jit,		2,  FS, NIL, CCI_L) \
   _(ANY,	lj_gc_barrieruv,	2,  FS, NIL, 0) \
   _(ANY,	lj_mem_newgco,		2,  FS, P32, CCI_L) \
-  _(ANY,	lj_math_random_step, 1, FS, NUM, CCI_CASTU64|CCI_RANDFPR)\
+  _(ANY,	lj_math_random_step, 1, FS, NUM, CCI_CASTU64) \
   _(ANY,	lj_vm_modi,		2,  FN, INT, 0) \
   _(ANY,	sinh,			1,   N, NUM, XA_FP) \
   _(ANY,	cosh,			1,   N, NUM, XA_FP) \
