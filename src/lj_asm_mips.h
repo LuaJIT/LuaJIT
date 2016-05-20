@@ -810,7 +810,6 @@ nolo:
 
 static void asm_uref(ASMState *as, IRIns *ir)
 {
-  /* NYI: Check that UREFO is still open and not aliasing a slot. */
   Reg dest = ra_dest(as, ir, RSET_GPR);
   if (irref_isk(ir->op1)) {
     GCfunc *fn = ir_kfunc(IR(ir->op1));
