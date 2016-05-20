@@ -999,7 +999,7 @@ LJFOLDF(simplify_nummuldiv_k)
     return LEFTFOLD;
   } else if (n == -1.0) {  /* x o -1 ==> -x */
     fins->o = IR_NEG;
-    fins->op2 = (IRRef1)lj_ir_knum_neg(J);
+    fins->op2 = (IRRef1)lj_ir_ksimd(J, LJ_KSIMD_NEG);
     return RETRYFOLD;
   } else if (fins->o == IR_MUL && n == 2.0) {  /* x * 2 ==> x + x */
     fins->o = IR_ADD;
