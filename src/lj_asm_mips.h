@@ -896,17 +896,23 @@ static MIPSIns asm_fxstoreins(IRIns *ir)
 static void asm_fload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
   MIPSIns mi = asm_fxloadins(ir);
+  Reg idx;
   int32_t ofs;
-  if (ir->op2 == IRFL_TAB_ARRAY) {
-    ofs = asm_fuseabase(as, ir->op1);
-    if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
-      emit_tsi(as, MIPSI_ADDIU, dest, idx, ofs);
-      return;
+  if (ir->op1 == REF_NIL) {
+    idx = RID_JGL;
+    ofs = ir->op2 - 32768;
+  } else {
+    idx = ra_alloc1(as, ir->op1, RSET_GPR);
+    if (ir->op2 == IRFL_TAB_ARRAY) {
+      ofs = asm_fuseabase(as, ir->op1);
+      if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
+	emit_tsi(as, MIPSI_ADDIU, dest, idx, ofs);
+	return;
+      }
     }
+    ofs = field_ofs[ir->op2];
   }
-  ofs = field_ofs[ir->op2];
   lua_assert(!irt_isfp(ir->t));
   emit_tsi(as, mi, dest, idx, ofs);
 }

@@ -145,6 +145,14 @@ TRef lj_ir_call(jit_State *J, IRCallID id, ...)
   return emitir(CCI_OPTYPE(ci), tr, id);
 }
 
+/* Load field of type t from GG_State + offset. */
+LJ_FUNC TRef lj_ir_ggfload(jit_State *J, IRType t, uintptr_t ofs)
+{
+  lua_assert(ofs >= IRFL__MAX && ofs < REF_BIAS);
+  lj_ir_set(J, IRT(IR_FLOAD, t), REF_NIL, ofs);
+  return lj_opt_fold(J);
+}
+
 /* -- Interning of constants ---------------------------------------------- */
 
 /*

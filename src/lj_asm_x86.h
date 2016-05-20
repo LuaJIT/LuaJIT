@@ -205,8 +205,13 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
 static void asm_fusefref(ASMState *as, IRIns *ir, RegSet allow)
 {
   lua_assert(ir->o == IR_FLOAD || ir->o == IR_FREF);
-  as->mrm.ofs = field_ofs[ir->op2];
   as->mrm.idx = RID_NONE;
+  if (ir->op1 == REF_NIL) {
+    as->mrm.ofs = (int32_t)ir->op2 + ptr2addr(J2GG(as->J));
+    as->mrm.base = RID_NONE;
+    return;
+  }
+  as->mrm.ofs = field_ofs[ir->op2];
   if (irref_isk(ir->op1)) {
     as->mrm.ofs += IR(ir->op1)->i;
     as->mrm.base = RID_NONE;
@@ -368,6 +373,10 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       asm_fuseahuref(as, ir->op1, xallow);
       return RID_MRM;
     }
+  }
+  if (ir->o == IR_FLOAD && ir->op1 == REF_NIL) {
+    asm_fusefref(as, ir, RSET_EMPTY);
+    return RID_MRM;
   }
   if (!(as->freeset & allow) && !irref_isk(ref) &&
       (allow == RSET_EMPTY || ra_hasspill(ir->s) || iscrossref(as, ref)))

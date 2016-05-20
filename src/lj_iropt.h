@@ -36,6 +36,8 @@ static LJ_AINLINE IRRef lj_ir_nextins(jit_State *J)
   return ref;
 }
 
+LJ_FUNC TRef lj_ir_ggfload(jit_State *J, IRType t, uintptr_t ofs);
+
 /* Interning of constants. */
 LJ_FUNC TRef LJ_FASTCALL lj_ir_kint(jit_State *J, int32_t k);
 LJ_FUNC void lj_ir_k64_freeall(jit_State *J);
