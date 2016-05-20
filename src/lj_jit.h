@@ -308,6 +308,37 @@ enum {
   LJ_KSIMD__MAX
 };
 
+enum {
+#if LJ_TARGET_X86ORX64
+  LJ_K64_TOBIT,		/* 2^52 + 2^51 */
+  LJ_K64_2P64,		/* 2^64 */
+  LJ_K64_M2P64,		/* -2^64 */
+#if LJ_32
+  LJ_K64_M2P64_31,	/* -2^64 or -2^31 */
+#else
+  LJ_K64_M2P64_31 = LJ_K64_M2P64,
+#endif
+#endif
+#if LJ_TARGET_MIPS
+  LJ_K64_2P31,		/* 2^31 */
+#endif
+  LJ_K64__MAX,
+};
+
+enum {
+#if LJ_TARGET_X86ORX64
+  LJ_K32_M2P64_31,	/* -2^64 or -2^31 */
+#endif
+#if LJ_TARGET_PPC
+  LJ_K32_2P52_2P31,	/* 2^52 + 2^31 */
+  LJ_K32_2P52,		/* 2^52 */
+#endif
+#if LJ_TARGET_PPC || LJ_TARGET_MIPS
+  LJ_K32_2P31,		/* 2^31 */
+#endif
+  LJ_K32__MAX
+};
+
 /* Get 16 byte aligned pointer to SIMD constant. */
 #define LJ_KSIMD(J, n) \
   ((TValue *)(((intptr_t)&J->ksimd[2*(n)] + 15) & ~(intptr_t)15))
@@ -360,8 +391,10 @@ typedef struct jit_State {
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
-  MRef k64;		/* Pointer to chained array of 64 bit constants. */
+  MRef k64p;		/* Pointer to chained array of 64 bit constants. */
   TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
+  TValue k64[LJ_K64__MAX];  /* Common 8 byte constants used by backends. */
+  uint32_t k32[LJ_K32__MAX];  /* Ditto for 4 byte constants. */
 
   IRIns *irbuf;		/* Temp. IR instruction buffer. Biased with REF_BIAS. */
   IRRef irtoplim;	/* Upper limit of instuction buffer (biased). */

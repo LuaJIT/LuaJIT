@@ -459,12 +459,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	      dest, dest);
       if (irt_isfloat(ir->t))
 	emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(4f000000,4f000000)),
-		   RSET_GPR);
+		   (void *)&as->J->k32[LJ_K32_2P31], RSET_GPR);
       else
 	emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		   (void *)lj_ir_k64_find(as->J, U64x(41e00000,00000000)),
-		   RSET_GPR);
+		   (void *)&as->J->k64[LJ_K64_2P31], RSET_GPR);
       emit_tg(as, MIPSI_MTC1, RID_TMP, dest);
       emit_dst(as, MIPSI_XOR, RID_TMP, RID_TMP, left);
       emit_ti(as, MIPSI_LUI, RID_TMP, 0x8000);
@@ -494,12 +492,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		 tmp, left, tmp);
 	if (st == IRT_FLOAT)
 	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		     (void *)lj_ir_k64_find(as->J, U64x(4f000000,4f000000)),
-		     RSET_GPR);
+		     (void *)&as->J->k32[LJ_K32_2P31], RSET_GPR);
 	else
 	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		     (void *)lj_ir_k64_find(as->J, U64x(41e00000,00000000)),
-		     RSET_GPR);
+		     (void *)&as->J->k64[LJ_K64_2P31], RSET_GPR);
       } else {
 	emit_tg(as, MIPSI_MFC1, dest, tmp);
 	emit_fg(as, st == IRT_FLOAT ? MIPSI_TRUNC_W_S : MIPSI_TRUNC_W_D,
