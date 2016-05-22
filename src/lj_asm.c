@@ -1933,6 +1933,11 @@ static void asm_tail_link(ASMState *as)
   }
   emit_addptr(as, RID_BASE, 8*(int32_t)baseslot);
 
+  if (as->J->ktrace) {  /* Patch ktrace slot with the final GCtrace pointer. */
+    setgcref(IR(as->J->ktrace)->gcr, obj2gco(as->J->curfinal));
+    IR(as->J->ktrace)->o = IR_KGC;
+  }
+
   /* Sync the interpreter state with the on-trace state. */
   asm_stack_restore(as, snap);
 

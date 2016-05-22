@@ -348,6 +348,18 @@ found:
   return TREF(ref, t);
 }
 
+/* Allocate GCtrace constant placeholder (no interning). */
+TRef lj_ir_ktrace(jit_State *J)
+{
+  IRRef ref = ir_nextk(J);
+  IRIns *ir = IR(ref);
+  lua_assert(irt_toitype_(IRT_P64) == LJ_TTRACE);
+  ir->t.irt = IRT_P64;
+  ir->o = IR_KNULL;  /* Not IR_KGC yet, but same size. */
+  ir->prev = 0;
+  return TREF(ref, IRT_P64);
+}
+
 /* Intern 32 bit pointer constant. */
 TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr)
 {
