@@ -704,6 +704,11 @@ static void ra_left(ASMState *as, Reg dest, IRRef lref)
       } else if (ir->o == IR_KINT64) {
 	emit_loadk64(as, dest, ir);
 	return;
+#if LJ_GC64
+      } else if (ir->o == IR_KGC || ir->o == IR_KPTR || ir->o == IR_KKPTR) {
+	emit_loadk64(as, dest, ir);
+	return;
+#endif
 #endif
       } else if (ir->o != IR_KPRI) {
 	lua_assert(ir->o == IR_KINT || ir->o == IR_KGC ||
@@ -1933,7 +1938,7 @@ static void asm_tail_link(ASMState *as)
   emit_addptr(as, RID_BASE, 8*(int32_t)baseslot);
 
   if (as->J->ktrace) {  /* Patch ktrace slot with the final GCtrace pointer. */
-    setgcref(IR(as->J->ktrace)->gcr, obj2gco(as->J->curfinal));
+    setgcref(IR(as->J->ktrace)[LJ_GC64].gcr, obj2gco(as->J->curfinal));
     IR(as->J->ktrace)->o = IR_KGC;
   }
 
@@ -1965,8 +1970,12 @@ static void asm_setup_regsp(ASMState *as)
   for (ir = IR(T->nk), lastir = IR(REF_BASE); ir < lastir; ir++) {
     ir->prev = REGSP_INIT;
     if (irt_is64(ir->t) && ir->o != IR_KNULL) {
+#if LJ_GC64
+      ir->i = 0;  /* Will become non-zero only for RIP-relative addresses. */
+#else
       /* Make life easier for backends by putting address of constant in i. */
       ir->i = (int32_t)(intptr_t)(ir+1);
+#endif
       ir++;
     }
   }
