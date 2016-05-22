@@ -220,7 +220,7 @@ IRFLDEF(FLENUM)
 
 /* SLOAD mode bits, stored in op2. */
 #define IRSLOAD_PARENT		0x01	/* Coalesce with parent trace. */
-#define IRSLOAD_FRAME		0x02	/* Load hiword of frame. */
+#define IRSLOAD_FRAME		0x02	/* Load 32 bits of ftsz. */
 #define IRSLOAD_TYPECHECK	0x04	/* Needs type check. */
 #define IRSLOAD_CONVERT		0x08	/* Number to integer conversion. */
 #define IRSLOAD_READONLY	0x10	/* Read-only, omit slot store. */

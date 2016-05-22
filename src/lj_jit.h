@@ -179,13 +179,25 @@ LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 #define SNAP(slot, flags, ref)	(((SnapEntry)(slot) << 24) + (flags) + (ref))
 #define SNAP_TR(slot, tr) \
   (((SnapEntry)(slot) << 24) + ((tr) & (TREF_CONT|TREF_FRAME|TREF_REFMASK)))
+#if !LJ_FR2
 #define SNAP_MKPC(pc)		((SnapEntry)u32ptr(pc))
+#endif
 #define SNAP_MKFTSZ(ftsz)	((SnapEntry)(ftsz))
 #define snap_ref(sn)		((sn) & 0xffff)
 #define snap_slot(sn)		((BCReg)((sn) >> 24))
 #define snap_isframe(sn)	((sn) & SNAP_FRAME)
-#define snap_pc(sn)		((const BCIns *)(uintptr_t)(sn))
 #define snap_setref(sn, ref)	(((sn) & (0xffff0000&~SNAP_NORESTORE)) | (ref))
+
+static LJ_AINLINE const BCIns *snap_pc(SnapEntry *sn)
+{
+#if LJ_FR2
+  uint64_t pcbase;
+  memcpy(&pcbase, sn, sizeof(uint64_t));
+  return (const BCIns *)(pcbase >> 8);
+#else
+  return (const BCIns *)(uintptr_t)*sn;
+#endif
+}
 
 /* Snapshot and exit numbers. */
 typedef uint32_t SnapNo;

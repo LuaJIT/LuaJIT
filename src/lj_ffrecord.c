@@ -102,35 +102,41 @@ static void recff_stitch(jit_State *J)
   ASMFunction cont = lj_cont_stitch;
   lua_State *L = J->L;
   TValue *base = L->base;
+  BCReg nslot = J->maxslot + 1 + LJ_FR2;
+  TValue *nframe = base + 1 + LJ_FR2;
   const BCIns *pc = frame_pc(base-1);
   TValue *pframe = frame_prevl(base-1);
 
-  lua_assert(!LJ_FR2);  /* TODO_FR2: handle frame shift. */
   /* Move func + args up in Lua stack and insert continuation. */
-  memmove(&base[1], &base[-1], sizeof(TValue)*(J->maxslot+1));
-  setframe_ftsz(base+1, ((char *)(base+1) - (char *)pframe) + FRAME_CONT);
-  setcont(base, cont);
+  memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
+  setframe_ftsz(nframe, ((char *)nframe - (char *)pframe) + FRAME_CONT);
+  setcont(base-LJ_FR2, cont);
   setframe_pc(base, pc);
-  setnilV(base-1);  /* Incorrect, but rec_check_slots() won't run anymore. */
-  L->base += 2;
-  L->top += 2;
+  setnilV(base-1-LJ_FR2);  /* Incorrect, but rec_check_slots() won't run anymore. */
+  L->base += 2 + LJ_FR2;
+  L->top += 2 + LJ_FR2;
 
   /* Ditto for the IR. */
-  memmove(&J->base[1], &J->base[-1], sizeof(TRef)*(J->maxslot+1));
+  memmove(&J->base[1], &J->base[-1-LJ_FR2], sizeof(TRef)*nslot);
+#if LJ_FR2
+  J->base[2] = TREF_FRAME;
+  J->base[-1] = lj_ir_k64(J, IR_KNUM, u64ptr(contptr(cont)));
+  J->base[0] = lj_ir_k64(J, IR_KNUM, u64ptr(pc)) | TREF_CONT;
+#else
   J->base[0] = lj_ir_kptr(J, contptr(cont)) | TREF_CONT;
-  J->base[-1] = lj_ir_ktrace(J);
-  J->ktrace = tref_ref(J->base[-1]);
-  J->base += 2;
-  J->baseslot += 2;
+#endif
+  J->ktrace = tref_ref((J->base[-1-LJ_FR2] = lj_ir_ktrace(J)));
+  J->base += 2 + LJ_FR2;
+  J->baseslot += 2 + LJ_FR2;
   J->framedepth++;
 
   lj_record_stop(J, LJ_TRLINK_STITCH, 0);
 
   /* Undo Lua stack changes. */
-  memmove(&base[-1], &base[1], sizeof(TValue)*(J->maxslot+1));
+  memmove(&base[-1-LJ_FR2], &base[1], sizeof(TValue)*nslot);
   setframe_pc(base-1, pc);
-  L->base -= 2;
-  L->top -= 2;
+  L->base -= 2 + LJ_FR2;
+  L->top -= 2 + LJ_FR2;
 }
 
 /* Fallback handler for fast functions that are not recorded (yet). */
@@ -373,10 +379,10 @@ static int recff_metacall(jit_State *J, RecordFFData *rd, MMS mm)
     int errcode;
     TValue argv0;
     /* Temporarily insert metamethod below object. */
-    J->base[1] = J->base[0];
+    J->base[1+LJ_FR2] = J->base[0];
     J->base[0] = ix.mobj;
     copyTV(J->L, &argv0, &rd->argv[0]);
-    copyTV(J->L, &rd->argv[1], &rd->argv[0]);
+    copyTV(J->L, &rd->argv[1+LJ_FR2], &rd->argv[0]);
     copyTV(J->L, &rd->argv[0], &ix.mobjv);
     /* Need to protect lj_record_tailcall because it may throw. */
     errcode = lj_vm_cpcall(J->L, NULL, J, recff_metacall_cp);
@@ -443,6 +449,10 @@ static void LJ_FASTCALL recff_xpairs(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_pcall(jit_State *J, RecordFFData *rd)
 {
   if (J->maxslot >= 1) {
+#if LJ_FR2
+    /* Shift function arguments up. */
+    memmove(J->base + 1, J->base, sizeof(TRef) * J->maxslot);
+#endif
     lj_record_call(J, 0, J->maxslot - 1);
     rd->nres = -1;  /* Pending call. */
   }  /* else: Interpreter will throw. */
@@ -462,13 +472,16 @@ static void LJ_FASTCALL recff_xpcall(jit_State *J, RecordFFData *rd)
     TValue argv0, argv1;
     TRef tmp;
     int errcode;
-    lua_assert(!LJ_FR2);  /* TODO_FR2: handle different frame setup. */
     /* Swap function and traceback. */
     tmp = J->base[0]; J->base[0] = J->base[1]; J->base[1] = tmp;
     copyTV(J->L, &argv0, &rd->argv[0]);
     copyTV(J->L, &argv1, &rd->argv[1]);
     copyTV(J->L, &rd->argv[0], &argv1);
     copyTV(J->L, &rd->argv[1], &argv0);
+#if LJ_FR2
+    /* Shift function arguments up. */
+    memmove(J->base + 2, J->base + 1, sizeof(TRef) * (J->maxslot-1));
+#endif
     /* Need to protect lj_record_call because it may throw. */
     errcode = lj_vm_cpcall(J->L, NULL, J, recff_xpcall_cp);
     /* Always undo Lua stack swap to avoid confusing the interpreter. */
