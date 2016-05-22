@@ -12,9 +12,11 @@
 
 /* String helpers. */
 LJ_FUNC int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b);
-LJ_FUNC const char *lj_str_find(const char *s, const char *f,
-				MSize slen, MSize flen);
+LJ_FUNC uint32_t lj_str_find(const char *s, const char *p, MSize slen,
+				MSize plen, int32_t start);
 LJ_FUNC int lj_str_haspattern(GCstr *s);
+LJ_FUNC MatchState * lj_str_match(lua_State *L, const char *s, const char *p,
+				MSize slen, int32_t start);
 
 /* String interning. */
 LJ_FUNC void lj_str_resize(lua_State *L, MSize newmask);

@@ -123,7 +123,8 @@ typedef struct CCallInfo {
 /* Function definitions for CALL* instructions. */
 #define IRCALLDEF(_) \
   _(ANY,	lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
-  _(ANY,	lj_str_find,		4,   N, P32, 0) \
+  _(ANY, 	lj_str_match, 		5,   N, P32, CCI_L) \
+  _(ANY,	lj_str_find,		5,   N, INT, 0) \
   _(ANY,	lj_str_new,		3,   S, STR, CCI_L) \
   _(ANY,	lj_strscan_num,		2,  FN, INT, 0) \
   _(ANY,	lj_strfmt_int,		2,  FN, STR, CCI_L) \
