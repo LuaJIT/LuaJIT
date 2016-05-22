@@ -117,15 +117,26 @@ static void perftools_addtrace(GCtrace *T)
 }
 #endif
 
-/* Allocate space for copy of trace. */
-static GCtrace *trace_save_alloc(jit_State *J)
+/* Allocate space for copy of T. */
+GCtrace * LJ_FASTCALL lj_trace_alloc(lua_State *L, GCtrace *T)
 {
   size_t sztr = ((sizeof(GCtrace)+7)&~7);
-  size_t szins = (J->cur.nins-J->cur.nk)*sizeof(IRIns);
+  size_t szins = (T->nins-T->nk)*sizeof(IRIns);
   size_t sz = sztr + szins +
-	      J->cur.nsnap*sizeof(SnapShot) +
-	      J->cur.nsnapmap*sizeof(SnapEntry);
-  return lj_mem_newt(J->L, (MSize)sz, GCtrace);
+	      T->nsnap*sizeof(SnapShot) +
+	      T->nsnapmap*sizeof(SnapEntry);
+  GCtrace *T2 = lj_mem_newt(L, (MSize)sz, GCtrace);
+  char *p = (char *)T2 + sztr;
+  T2->gct = ~LJ_TTRACE;
+  T2->marked = 0;
+  T2->traceno = 0;
+  T2->ir = (IRIns *)p - T->nk;
+  T2->nins = T->nins;
+  T2->nk = T->nk;
+  T2->nsnap = T->nsnap;
+  T2->nsnapmap = T->nsnapmap;
+  memcpy(p, T->ir + T->nk, szins);
+  return T2;
 }
 
 /* Save current trace by copying and compacting it. */
@@ -139,12 +150,12 @@ static void trace_save(jit_State *J, GCtrace *T)
   setgcrefp(J2G(J)->gc.root, T);
   newwhite(J2G(J), T);
   T->gct = ~LJ_TTRACE;
-  T->ir = (IRIns *)p - J->cur.nk;
-  memcpy(p, J->cur.ir+J->cur.nk, szins);
+  T->ir = (IRIns *)p - J->cur.nk;  /* The IR has already been copied above. */
   p += szins;
   TRACE_APPENDVEC(snap, nsnap, SnapShot)
   TRACE_APPENDVEC(snapmap, nsnapmap, SnapEntry)
   J->cur.traceno = 0;
+  J->curfinal = NULL;
   setgcrefp(J->trace[T->traceno], T);
   lj_gc_barriertrace(J2G(J), T->traceno);
   lj_gdbjit_addtrace(J, T);
@@ -449,7 +460,7 @@ static void trace_stop(jit_State *J)
   BCOp op = bc_op(J->cur.startins);
   GCproto *pt = &gcref(J->cur.startpt)->pt;
   TraceNo traceno = J->cur.traceno;
-  GCtrace *T = trace_save_alloc(J);  /* Do this first. May throw OOM. */
+  GCtrace *T = J->curfinal;
   lua_State *L;
 
   switch (op) {
@@ -537,6 +548,10 @@ static int trace_abort(jit_State *J)
 
   J->postproc = LJ_POST_NONE;
   lj_mcode_abort(J);
+  if (J->curfinal) {
+    lj_trace_free(J2G(J), J->curfinal);
+    J->curfinal = NULL;
+  }
   if (tvisnumber(L->top-1))
     e = (TraceError)numberVint(L->top-1);
   if (e == LJ_TRERR_MCODELM) {

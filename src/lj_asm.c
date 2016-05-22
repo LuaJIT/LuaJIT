@@ -625,9 +625,8 @@ static void ra_addrename(ASMState *as, Reg down, IRRef ref, SnapNo snapno)
   IRRef ren;
   lj_ir_set(as->J, IRT(IR_RENAME, IRT_NIL), ref, snapno);
   ren = tref_ref(lj_ir_emit(as->J));
-  as->ir = as->T->ir;  /* The IR may have been reallocated. */
-  IR(ren)->r = (uint8_t)down;
-  IR(ren)->s = SPS_NONE;
+  as->J->cur.ir[ren].r = (uint8_t)down;
+  as->J->cur.ir[ren].s = SPS_NONE;
 }
 
 /* Rename register allocation and emit move. */
@@ -948,7 +947,7 @@ static void asm_snap_prep(ASMState *as)
   } else {
     /* Process any renames above the highwater mark. */
     for (; as->snaprename < as->T->nins; as->snaprename++) {
-      IRIns *ir = IR(as->snaprename);
+      IRIns *ir = &as->T->ir[as->snaprename];
       if (asm_snap_checkrename(as, ir->op1))
 	ir->op2 = REF_BIAS-1;  /* Kill rename. */
     }
@@ -1967,8 +1966,9 @@ static void asm_setup_regsp(ASMState *as)
 
   ir = IR(nins-1);
   if (ir->o == IR_RENAME) {
+    /* Remove any renames left over from ASM restart due to LJ_TRERR_MCODELM. */
     do { ir--; nins--; } while (ir->o == IR_RENAME);
-    T->nins = nins;  /* Remove any renames left over from ASM restart. */
+    T->nins = nins;
   }
   as->snaprename = nins;
   as->snapref = nins;
@@ -2202,13 +2202,14 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   MCode *origtop;
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
-  J->cur.nins = lj_ir_nextins(J);
-  J->cur.ir[J->cur.nins].o = IR_NOP;
+  /* This also allows one RENAME to be added without reallocating curfinal. */
+  as->orignins = lj_ir_nextins(J);
+  J->cur.ir[as->orignins].o = IR_NOP;
 
   /* Setup initial state. Copy some fields to reduce indirections. */
   as->J = J;
   as->T = T;
-  as->ir = T->ir;
+  J->curfinal = lj_trace_alloc(J->L, T);  /* This copies the IR, too. */
   as->flags = J->flags;
   as->loopref = J->loopref;
   as->realign = NULL;
@@ -2221,12 +2222,41 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->mclim = as->mcbot + MCLIM_REDZONE;
   asm_setup_target(as);
 
-  do {
+  /*
+  ** This is a loop, because the MCode may have to be (re-)assembled
+  ** multiple times:
+  **
+  ** 1. as->realign is set (and the assembly aborted), if the arch-specific
+  **    backend wants the MCode to be aligned differently.
+  **
+  **    This is currently only the case on x86/x64, where small loops get
+  **    an aligned loop body plus a short branch. Not much effort is wasted,
+  **    because the abort happens very quickly and only once.
+  **
+  ** 2. The IR is immovable, since the MCode embeds pointers to various
+  **    constants inside the IR. But RENAMEs may need to be added to the IR
+  **    during assembly, which might grow and reallocate the IR. We check
+  **    at the end if the IR (in J->cur.ir) has actually grown, resize the
+  **    copy (in J->curfinal.ir) and try again.
+  **
+  **    95% of all traces have zero RENAMEs, 3% have one RENAME, 1.5% have
+  **    2 RENAMEs and only 0.5% have more than that. That's why we opt to
+  **    always have one spare slot in the IR (see above), which means we
+  **    have to redo the assembly for only ~2% of all traces.
+  **
+  **    Very, very rarely, this needs to be done repeatedly, since the
+  **    location of constants inside the IR (actually, reachability from
+  **    a global pointer) may affect register allocation and thus the
+  **    number of RENAMEs.
+  */
+  for (;;) {
     as->mcp = as->mctop;
 #ifdef LUA_USE_ASSERT
     as->mcp_prev = as->mcp;
 #endif
-    as->curins = T->nins;
+    as->ir = J->curfinal->ir;  /* Use the copied IR. */
+    as->curins = J->cur.nins = as->orignins;
+
     RA_DBG_START();
     RA_DBGX((as, "===== STOP ====="));
 
@@ -2254,22 +2284,39 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
       checkmclim(as);
       asm_ir(as, ir);
     }
-  } while (as->realign);  /* Retry in case the MCode needs to be realigned. */
 
-  /* Emit head of trace. */
-  RA_DBG_REF();
-  checkmclim(as);
-  if (as->gcsteps > 0) {
-    as->curins = as->T->snap[0].ref;
-    asm_snap_prep(as);  /* The GC check is a guard. */
-    asm_gc_check(as);
+    if (as->realign && J->curfinal->nins >= T->nins)
+      continue;  /* Retry in case only the MCode needs to be realigned. */
+
+    /* Emit head of trace. */
+    RA_DBG_REF();
+    checkmclim(as);
+    if (as->gcsteps > 0) {
+      as->curins = as->T->snap[0].ref;
+      asm_snap_prep(as);  /* The GC check is a guard. */
+      asm_gc_check(as);
+    }
+    ra_evictk(as);
+    if (as->parent)
+      asm_head_side(as);
+    else
+      asm_head_root(as);
+    asm_phi_fixup(as);
+
+    if (J->curfinal->nins >= T->nins) {  /* IR didn't grow? */
+      lua_assert(J->curfinal->nk == T->nk);
+      memcpy(J->curfinal->ir + as->orignins, T->ir + as->orignins,
+	     (T->nins - as->orignins) * sizeof(IRIns));  /* Copy RENAMEs. */
+      T->nins = J->curfinal->nins;
+      break;  /* Done. */
+    }
+
+    /* Otherwise try again with a bigger IR. */
+    lj_trace_free(J2G(J), J->curfinal);
+    J->curfinal = NULL;  /* In case lj_trace_alloc() OOMs. */
+    J->curfinal = lj_trace_alloc(J->L, T);
+    as->realign = NULL;
   }
-  ra_evictk(as);
-  if (as->parent)
-    asm_head_side(as);
-  else
-    asm_head_root(as);
-  asm_phi_fixup(as);
 
   RA_DBGX((as, "===== START ===="));
   RA_DBG_FLUSH();
