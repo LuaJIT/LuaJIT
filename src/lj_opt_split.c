@@ -354,6 +354,8 @@ static void split_ir(jit_State *J)
       ir->prev = ref;  /* Identity substitution for loword. */
       hisubst[ref] = 0;
     }
+    if (irt_is64(ir->t) && ir->o != IR_KNULL)
+      ref++;
   }
 
   /* Process old IR instructions. */

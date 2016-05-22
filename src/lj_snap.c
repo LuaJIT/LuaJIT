@@ -371,8 +371,8 @@ static TRef snap_replay_const(jit_State *J, IRIns *ir)
   case IR_KPRI: return TREF_PRI(irt_type(ir->t));
   case IR_KINT: return lj_ir_kint(J, ir->i);
   case IR_KGC: return lj_ir_kgc(J, ir_kgc(ir), irt_t(ir->t));
-  case IR_KNUM: return lj_ir_k64(J, IR_KNUM, ir_knum(ir));
-  case IR_KINT64: return lj_ir_k64(J, IR_KINT64, ir_kint64(ir));
+  case IR_KNUM: case IR_KINT64:
+    return lj_ir_k64(J, (IROp)ir->o, ir_k64(ir)->u64);
   case IR_KPTR: return lj_ir_kptr(J, ir_kptr(ir));  /* Continuation. */
   default: lua_assert(0); return TREF_NIL; break;
   }
@@ -555,8 +555,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 		if (irref_isk(irs->op2) && irref_isk((irs+1)->op2)) {
 		  uint64_t k = (uint32_t)T->ir[irs->op2].i +
 			       ((uint64_t)T->ir[(irs+1)->op2].i << 32);
-		  val = lj_ir_k64(J, t == IRT_I64 ? IR_KINT64 : IR_KNUM,
-				  lj_ir_k64_find(J, k));
+		  val = lj_ir_k64(J, t == IRT_I64 ? IR_KINT64 : IR_KNUM, k);
 		} else {
 		  val = emitir_raw(IRT(IR_HIOP, t), val,
 			  snap_pref(J, T, map, nent, seen, (irs+1)->op2));
@@ -651,7 +650,7 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
   uint64_t tmp;
   if (irref_isk(ref)) {
     if (ir->o == IR_KNUM || ir->o == IR_KINT64) {
-      src = mref(ir->ptr, int32_t);
+      src = (int32_t *)&ir[1];
     } else if (sz == 8) {
       tmp = (uint64_t)(uint32_t)ir->i;
       src = (int32_t *)&tmp;

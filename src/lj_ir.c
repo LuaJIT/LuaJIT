@@ -91,7 +91,7 @@ static void lj_ir_growbot(jit_State *J)
   IRIns *baseir = J->irbuf + J->irbotlim;
   MSize szins = J->irtoplim - J->irbotlim;
   lua_assert(szins != 0);
-  lua_assert(J->cur.nk == J->irbotlim);
+  lua_assert(J->cur.nk == J->irbotlim || J->cur.nk-1 == J->irbotlim);
   if (J->cur.nins + (szins >> 1) < J->irtoplim) {
     /* More than half of the buffer is free on top: shift up by a quarter. */
     MSize ofs = szins >> 2;
@@ -170,6 +170,18 @@ static LJ_AINLINE IRRef ir_nextk(jit_State *J)
   IRRef ref = J->cur.nk;
   if (LJ_UNLIKELY(ref <= J->irbotlim)) lj_ir_growbot(J);
   J->cur.nk = --ref;
+  return ref;
+}
+
+/* Get ref of next 64 bit IR constant and optionally grow IR.
+** Note: this may invalidate all IRIns *!
+*/
+static LJ_AINLINE IRRef ir_nextk64(jit_State *J)
+{
+  IRRef ref = J->cur.nk - 2;
+  lua_assert(J->state != LJ_TRACE_ASM);
+  if (LJ_UNLIKELY(ref < J->irbotlim)) lj_ir_growbot(J);
+  J->cur.nk = ref;
   return ref;
 }
 
@@ -266,19 +278,18 @@ TValue *lj_ir_k64_reserve(jit_State *J)
   return ir_k64_add(J, kp, 0);  /* Set to 0. Final value is set later. */
 }
 
-/* Intern 64 bit constant, given by its address. */
-TRef lj_ir_k64(jit_State *J, IROp op, cTValue *tv)
+/* Intern 64 bit constant, given by its 64 bit pattern. */
+TRef lj_ir_k64(jit_State *J, IROp op, uint64_t u64)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
   IRType t = op == IR_KNUM ? IRT_NUM : IRT_I64;
   for (ref = J->chain[op]; ref; ref = cir[ref].prev)
-    if (ir_k64(&cir[ref]) == tv)
+    if (ir_k64(&cir[ref])->u64 == u64)
       goto found;
-  ref = ir_nextk(J);
+  ref = ir_nextk64(J);
   ir = IR(ref);
-  lua_assert(checkptrGC(tv));
-  setmref(ir->ptr, tv);
+  ir[1].tv.u64 = u64;
   ir->t.irt = t;
   ir->o = op;
   ir->prev = J->chain[op];
@@ -290,13 +301,13 @@ found:
 /* Intern FP constant, given by its 64 bit pattern. */
 TRef lj_ir_knum_u64(jit_State *J, uint64_t u64)
 {
-  return lj_ir_k64(J, IR_KNUM, lj_ir_k64_find(J, u64));
+  return lj_ir_k64(J, IR_KNUM, u64);
 }
 
 /* Intern 64 bit integer constant. */
 TRef lj_ir_kint64(jit_State *J, uint64_t u64)
 {
-  return lj_ir_k64(J, IR_KINT64, lj_ir_k64_find(J, u64));
+  return lj_ir_k64(J, IR_KINT64, u64);
 }
 
 /* Check whether a number is int and return it. -0 is NOT considered an int. */
@@ -367,7 +378,7 @@ TRef lj_ir_kptr_(jit_State *J, IROp op, void *ptr)
   IRRef ref;
   lua_assert((void *)(uintptr_t)u32ptr(ptr) == ptr);
   for (ref = J->chain[op]; ref; ref = cir[ref].prev)
-    if (mref(cir[ref].ptr, void) == ptr)
+    if (ir_kptr(&cir[ref]) == ptr)
       goto found;
   ref = ir_nextk(J);
   ir = IR(ref);
@@ -432,9 +443,8 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   case IR_KPRI: setpriV(tv, irt_toitype(ir->t)); break;
   case IR_KINT: setintV(tv, ir->i); break;
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
-  case IR_KPTR: case IR_KKPTR: case IR_KNULL:
-    setlightudV(tv, mref(ir->ptr, void));
-    break;
+  case IR_KPTR: case IR_KKPTR: setlightudV(tv, ir_kptr(ir)); break;
+  case IR_KNULL: setlightudV(tv, NULL); break;
   case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
 #if LJ_HASFFI
   case IR_KINT64: {

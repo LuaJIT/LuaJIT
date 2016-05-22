@@ -313,13 +313,23 @@ static void emit_loadu64(ASMState *as, Reg r, uint64_t u64)
 }
 #endif
 
-/* movsd r, [&tv->n] / xorps r, r */
-static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
+/* Load 64 bit IR constant into register. */
+static void emit_loadk64(ASMState *as, Reg r, IRIns *ir)
 {
-  if (tvispzero(tv))  /* Use xor only for +0. */
-    emit_rr(as, XO_XORPS, r, r);
-  else
-    emit_rma(as, XO_MOVSD, r, &tv->n);
+  const uint64_t *k = &ir_k64(ir)->u64;
+  if (rset_test(RSET_FPR, r)) {
+    if (*k == 0) {
+      emit_rr(as, XO_XORPS, r, r);
+    } else {
+      emit_rma(as, XO_MOVSD, r, k);
+    }
+  } else {
+    if (*k == 0) {
+      emit_rr(as, XO_ARITH(XOg_XOR), r, r);
+    } else {
+      emit_rma(as, XO_MOV, r | REX_64, k);
+    }
+  }
 }
 
 /* -- Emit control-flow instructions -------------------------------------- */

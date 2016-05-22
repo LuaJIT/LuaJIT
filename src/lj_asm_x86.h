@@ -306,6 +306,16 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
   }
 }
 
+/* Fuse load of 64 bit IR constant into memory operand. */
+static Reg asm_fuseloadk64(ASMState *as, IRIns *ir)
+{
+  const uint64_t *k = &ir_k64(ir)->u64;
+  as->mrm.ofs = ptr2addr(k);
+  as->mrm.base = RID_NONE;
+  as->mrm.idx = RID_NONE;
+  return RID_MRM;
+}
+
 /* Fuse load into memory operand. */
 static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 {
@@ -325,19 +335,13 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
   if (ir->o == IR_KNUM) {
     RegSet avail = as->freeset & ~as->modset & RSET_FPR;
     lua_assert(allow != RSET_EMPTY);
-    if (!(avail & (avail-1))) {  /* Fuse if less than two regs available. */
-      as->mrm.ofs = ptr2addr(ir_knum(ir));
-      as->mrm.base = as->mrm.idx = RID_NONE;
-      return RID_MRM;
-    }
+    if (!(avail & (avail-1)))  /* Fuse if less than two regs available. */
+      return asm_fuseloadk64(as, ir);
   } else if (ir->o == IR_KINT64) {
     RegSet avail = as->freeset & ~as->modset & RSET_GPR;
     lua_assert(allow != RSET_EMPTY);
-    if (!(avail & (avail-1))) {  /* Fuse if less than two regs available. */
-      as->mrm.ofs = ptr2addr(ir_kint64(ir));
-      as->mrm.base = as->mrm.idx = RID_NONE;
-      return RID_MRM;
-    }
+    if (!(avail & (avail-1)))  /* Fuse if less than two regs available. */
+      return asm_fuseloadk64(as, ir);
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
@@ -711,7 +715,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	emit_rr(as, XO_CVTSD2SS, dest, dest);
       emit_rr(as, XO_SUBSD, dest, bias);  /* Subtract 2^52+2^51 bias. */
       emit_rr(as, XO_XORPS, dest, bias);  /* Merge bias and integer. */
-      emit_loadn(as, bias, k);
+      emit_rma(as, XO_MOVSD, bias, k);
       emit_mrm(as, XO_MOVD, dest, asm_fuseload(as, lref, RSET_GPR));
       return;
     } else {  /* Integer to FP conversion. */
