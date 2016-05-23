@@ -215,6 +215,12 @@ static int CALL_MUNMAP(void *ptr, size_t size)
 
 #if LJ_ALLOC_MMAP_PROBE
 
+#ifdef MAP_TRYFIXED
+#define MMAP_FLAGS_PROBE	(MMAP_FLAGS|MAP_TRYFIXED)
+#else
+#define MMAP_FLAGS_PROBE	MMAP_FLAGS
+#endif
+
 #define LJ_ALLOC_MMAP_PROBE_MAX		30
 #define LJ_ALLOC_MMAP_PROBE_LINEAR	5
 
@@ -247,7 +253,7 @@ static void *mmap_probe(size_t size)
   int olderr = errno;
   int retry;
   for (retry = 0; retry < LJ_ALLOC_MMAP_PROBE_MAX; retry++) {
-    void *p = mmap((void *)hint_addr, size, MMAP_PROT, MMAP_FLAGS, -1, 0);
+    void *p = mmap((void *)hint_addr, size, MMAP_PROT, MMAP_FLAGS_PROBE, -1, 0);
     uintptr_t addr = (uintptr_t)p;
     if ((addr >> LJ_ALLOC_MBITS) == 0 && addr >= LJ_ALLOC_MMAP_PROBE_LOWER) {
       /* We got a suitable address. Bump the hint address. */
