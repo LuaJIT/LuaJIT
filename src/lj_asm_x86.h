@@ -422,11 +422,24 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
     lua_assert(allow != RSET_EMPTY);
     if (!(avail & (avail-1)))  /* Fuse if less than two regs available. */
       return asm_fuseloadk64(as, ir);
-  } else if (ir->o == IR_KINT64) {
+  } else if (ref == REF_BASE || ir->o == IR_KINT64) {
     RegSet avail = as->freeset & ~as->modset & RSET_GPR;
     lua_assert(allow != RSET_EMPTY);
-    if (!(avail & (avail-1)))  /* Fuse if less than two regs available. */
-      return asm_fuseloadk64(as, ir);
+    if (!(avail & (avail-1))) {  /* Fuse if less than two regs available. */
+      if (ref == REF_BASE) {
+#if LJ_GC64
+	as->mrm.ofs = (int32_t)dispofs(as, &J2G(as->J)->jit_base);
+	as->mrm.base = RID_DISPATCH;
+#else
+	as->mrm.ofs = ptr2addr(&J2G(as->J)->jit_base);
+	as->mrm.base = RID_NONE;
+#endif
+	as->mrm.idx = RID_NONE;
+	return RID_MRM;
+      } else {
+	return asm_fuseloadk64(as, ir);
+      }
+    }
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
@@ -470,7 +483,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
     asm_fusefref(as, ir, RSET_EMPTY);
     return RID_MRM;
   }
-  if (!(as->freeset & allow) && !irref_isk(ref) &&
+  if (!(as->freeset & allow) && !emit_canremat(ref) &&
       (allow == RSET_EMPTY || ra_hasspill(ir->s) || iscrossref(as, ref)))
     goto fusespill;
   return ra_allocref(as, ref, allow);
