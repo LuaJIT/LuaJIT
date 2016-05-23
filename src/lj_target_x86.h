@@ -22,7 +22,7 @@
   _(XMM0) _(XMM1) _(XMM2) _(XMM3) _(XMM4) _(XMM5) _(XMM6) _(XMM7)
 #endif
 #define VRIDDEF(_) \
-  _(MRM)
+  _(MRM) _(RIP)
 
 #define RIDENUM(name)	RID_##name,
 
@@ -31,6 +31,7 @@ enum {
   FPRDEF(RIDENUM)		/* Floating-point registers (FPRs). */
   RID_MAX,
   RID_MRM = RID_MAX,		/* Pseudo-id for ModRM operand. */
+  RID_RIP = RID_MAX+1,		/* Pseudo-id for RIP (x64 only). */
 
   /* Calling conventions. */
   RID_SP = RID_ESP,
@@ -63,8 +64,10 @@ enum {
 
 /* -- Register sets ------------------------------------------------------- */
 
-/* Make use of all registers, except the stack pointer. */
-#define RSET_GPR	(RSET_RANGE(RID_MIN_GPR, RID_MAX_GPR)-RID2RSET(RID_ESP))
+/* Make use of all registers, except the stack pointer (and maybe DISPATCH). */
+#define RSET_GPR	(RSET_RANGE(RID_MIN_GPR, RID_MAX_GPR) \
+			 - RID2RSET(RID_ESP) \
+			 - LJ_GC64*RID2RSET(RID_DISPATCH))
 #define RSET_FPR	(RSET_RANGE(RID_MIN_FPR, RID_MAX_FPR))
 #define RSET_ALL	(RSET_GPR|RSET_FPR)
 #define RSET_INIT	RSET_ALL
@@ -200,6 +203,7 @@ typedef struct {
 */
 typedef enum {
   /* Fixed length opcodes. XI_* prefix. */
+  XI_O16 =	0x66,
   XI_NOP =	0x90,
   XI_XCHGa =	0x90,
   XI_CALL =	0xe8,
@@ -217,6 +221,7 @@ typedef enum {
   XI_PUSHi8 =	0x6a,
   XI_TESTb =	0x84,
   XI_TEST =	0x85,
+  XI_INT3 =	0xcc,
   XI_MOVmi =	0xc7,
   XI_GROUP5 =	0xff,
 
@@ -243,6 +248,7 @@ typedef enum {
   XV_SHRX =	XV_f20f38(f7),
 
   /* Variable-length opcodes. XO_* prefix. */
+  XO_OR =	XO_(0b),
   XO_MOV =	XO_(8b),
   XO_MOVto =	XO_(89),
   XO_MOVtow =	XO_66(89),

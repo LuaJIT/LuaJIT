@@ -453,7 +453,7 @@
 #endif
 
 /* Disable or enable the JIT compiler. */
-#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT) || LJ_GC64
+#if defined(LUAJIT_DISABLE_JIT) || defined(LJ_ARCH_NOJIT) || defined(LJ_OS_NOJIT)
 #define LJ_HASJIT		0
 #else
 #define LJ_HASJIT		1
