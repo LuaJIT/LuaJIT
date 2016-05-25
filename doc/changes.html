@@ -44,6 +44,8 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
@@ -72,6 +74,72 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.1.0-beta2">LuaJIT 2.1.0-beta2 &mdash; 2016-03-03</h2>
+<ul>
+<li>Enable trace stitching.</li>
+<li>Use internal implementation for converting FP numbers to strings.</li>
+<li>Parse Unicode escape <tt>'\u{XX...}'</tt> in string literals.</li>
+<li>Add MIPS soft-float support.</li>
+<li>Switch MIPS port to dual-number mode.</li>
+<li>x86/x64: Add support for AES-NI, AVX and AVX2 to DynASM.</li>
+<li>FFI: Add <tt>ssize_t</tt> declaration.</li>
+<li>FFI: Parse <tt>#line NN</tt> and <tt>#NN</tt>.</li>
+<li>Various minor fixes.</li>
+</ul>
+
+<h2 id="LuaJIT-2.1.0-beta1">LuaJIT 2.1.0-beta1 &mdash; 2015-08-25</h2>
+<p>
+This is a brief summary of the major changes in LuaJIT 2.1 compared to 2.0.
+Please take a look at the commit history for more details.
+</p>
+<ul>
+<li>Changes to the VM core:
+<ul>
+<li>Add low-overhead profiler (<tt>-jp</tt>).</li>
+<li>Add <tt>LJ_GC64</tt> mode: 64 bit GC object references (really: 47 bit). Interpreter-only for now.</li>
+<li>Add <tt>LJ_FR2</tt> mode: Two-slot frame info. Required by <tt>LJ_GC64</tt> mode.</li>
+<li>Add <tt>table.new()</tt> and <tt>table.clear()</tt>.</li>
+<li>Parse binary number literals (<tt>0bxxx</tt>).</li>
+</ul></li>
+<li>Improvements to the JIT compiler:
+<ul>
+<li>Add trace stitching (disabled for now).</li>
+<li>Compile various builtins: <tt>string.char()</tt>, <tt>string.reverse()</tt>, <tt>string.lower()</tt>, <tt>string.upper()</tt>, <tt>string.rep()</tt>, <tt>string.format()</tt>, <tt>table.concat()</tt>, <tt>bit.tohex()</tt>, <tt>getfenv(0)</tt>, <tt>debug.getmetatable()</tt>.</li>
+<li>Compile <tt>string.find()</tt> for fixed string searches (no patterns).</li>
+<li>Compile <tt>BC_TSETM</tt>, e.g. <tt>{1,2,3,f()}</tt>.</li>
+<li>Compile string concatenations (<tt>BC_CAT</tt>).</li>
+<li>Compile <tt>__concat</tt> metamethod.</li>
+<li>Various minor optimizations.</li>
+</ul></li>
+<li>Internal Changes:
+<ul>
+<li>Add support for embedding LuaJIT bytecode for builtins.</li>
+<li>Replace various builtins with embedded bytecode.</li>
+<li>Refactor string buffers and string formatting.</li>
+<li>Remove obsolete non-truncating number to integer conversions.</li>
+</ul></li>
+<li>Ports:
+<ul>
+<li>Add Xbox One port (<tt>LJ_GC64</tt> mode).</li>
+<li>ARM64: Add port of the interpreter (<tt>LJ_GC64</tt> mode).</li>
+<li>x64: Add separate port of the interpreter to <tt>LJ_GC64</tt> mode.</li>
+<li>x86/x64: Drop internal x87 math functions. Use libm functions.</li>
+<li>x86: Remove x87 support from interpreter. SSE2 is mandatory now.</li>
+<li>PPC/e500: Drop support for this architecture.</li>
+</ul></li>
+<li>FFI library:
+<ul>
+<li>FFI: Add 64 bit bitwise operations.</li>
+<li>FFI: Compile VLA/VLS and large cdata allocations with default initialization.</li>
+<li>FFI: Compile conversions from functions to function pointers.</li>
+<li>FFI: Compile lightuserdata to <tt>void *</tt> conversion.</li>
+<li>FFI: Compile <tt>ffi.gc(cdata, nil)</tt>, too.</li>
+<li>FFI: Add <tt>ffi.typeinfo()</tt>.</li>
+</ul></li>
+</ul>
+</div>
+
+<div class="major" style="background: #ffffd0;">
 <h2 id="LuaJIT-2.0.4">LuaJIT 2.0.4 &mdash; 2015-05-14</h2>
 <ul>
 <li>Fix stack check in narrowing optimization.</li>
@@ -734,235 +802,6 @@ This matches the behavior of Lua 5.1, but not the specification.</li>
 <li>The whole VM has been rewritten from the ground up, so there's
 no point in listing differences over earlier versions.</li>
 </ul>
-</div>
-
-<div class="major" style="background: #ffff80;">
-<h2 id="LuaJIT-1.1.8">LuaJIT 1.1.8 &mdash; 2012-04-16</h2>
-<ul>
-<li>Merged with Lua 5.1.5. Also integrated fixes for all
-<a href="http://www.lua.org/bugs.html#5.1.5"><span class="ext">&raquo;</span>&nbsp;<span class="ext">&raquo;</span>&nbsp;currently known bugs in Lua 5.1.5</a>.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.7">LuaJIT 1.1.7 &mdash; 2011-05-05</h2>
-<ul>
-<li>Added fixes for the
-<a href="http://www.lua.org/bugs.html#5.1.4"><span class="ext">&raquo;</span>&nbsp;currently known bugs in Lua 5.1.4</a>.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.6">LuaJIT 1.1.6 &mdash; 2010-03-28</h2>
-<ul>
-<li>Added fixes for the
-<a href="http://www.lua.org/bugs.html#5.1.4"><span class="ext">&raquo;</span>&nbsp;currently known bugs in Lua 5.1.4</a>.</li>
-<li>Removed wrong GC check in <tt>jit_createstate()</tt>.
-Thanks to Tim Mensch.</li>
-<li>Fixed bad assertions while compiling <tt>table.insert()</tt> and
-<tt>table.remove()</tt>.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.5">LuaJIT 1.1.5 &mdash; 2008-10-25</h2>
-<ul>
-<li>Merged with Lua 5.1.4. Fixes all
-<a href="http://www.lua.org/bugs.html#5.1.3"><span class="ext">&raquo;</span>&nbsp;known bugs in Lua 5.1.3</a>.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.4">LuaJIT 1.1.4 &mdash; 2008-02-05</h2>
-<ul>
-<li>Merged with Lua 5.1.3. Fixes all
-<a href="http://www.lua.org/bugs.html#5.1.2"><span class="ext">&raquo;</span>&nbsp;known bugs in Lua 5.1.2</a>.</li>
-<li>Fixed possible (but unlikely) stack corruption while compiling
-<tt>k^x</tt> expressions.</li>
-<li>Fixed DynASM template for cmpss instruction.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.3">LuaJIT 1.1.3 &mdash; 2007-05-24</h2>
-<ul>
-<li>Merged with Lua 5.1.2. Fixes all
-<a href="http://www.lua.org/bugs.html#5.1.1"><span class="ext">&raquo;</span>&nbsp;known bugs in Lua 5.1.1</a>.</li>
-<li>Merged pending Lua 5.1.x fixes: "return -nil" bug, spurious count hook call.</li>
-<li>Remove a (sometimes) wrong assertion in <tt>luaJIT_findpc()</tt>.</li>
-<li>DynASM now allows labels for displacements and <tt>.aword</tt>.</li>
-<li>Fix some compiler warnings for DynASM glue (internal API change).</li>
-<li>Correct naming for SSSE3 (temporarily known as SSE4) in DynASM and x86 disassembler.</li>
-<li>The loadable debug modules now handle redirection to stdout
-(e.g. <tt>-j&nbsp;trace=-</tt>).</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.2">LuaJIT 1.1.2 &mdash; 2006-06-24</h2>
-<ul>
-<li>Fix MSVC inline assembly: use only local variables with
-<tt>lua_number2int()</tt>.</li>
-<li>Fix "attempt to call a thread value" bug on Mac OS X:
-make values of consts used as lightuserdata keys unique
-to avoid joining by the compiler/linker.</li>
-</ul>
-
-<h2 id="LuaJIT-1.1.1">LuaJIT 1.1.1 &mdash; 2006-06-20</h2>
-<ul>
-<li>Merged with Lua 5.1.1. Fixes all
-<a href="http://www.lua.org/bugs.html#5.1"><span class="ext">&raquo;</span>&nbsp;known bugs in Lua 5.1</a>.</li>
-<li>Enforce (dynamic) linker error for EXE/DLL version mismatches.</li>
-<li>Minor changes to DynASM: faster pre-processing, smaller encoding
-for some immediates.</li>
-</ul>
-<p>
-This release is in sync with Coco 1.1.1 (see the
-<a href="http://coco.luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Coco Change History</a>).
-</p>
-
-<h2 id="LuaJIT-1.1.0">LuaJIT 1.1.0 &mdash; 2006-03-13</h2>
-<ul>
-<li>Merged with Lua 5.1 (final).</li>
-
-<li>New JIT call frame setup:
-<ul>
-<li>The C stack is kept 16 byte aligned (faster).
-Mandatory for Mac OS X on Intel, too.</li>
-<li>Faster calling conventions for internal C helper functions.</li>
-<li>Better instruction scheduling for function prologue, OP_CALL and
-OP_RETURN.</li>
-</ul></li>
-
-<li>Miscellaneous optimizations:
-<ul>
-<li>Faster loads of FP constants. Remove narrow-to-wide store-to-load
-forwarding stalls.</li>
-<li>Use (scalar) SSE2 ops (if the CPU supports it) to speed up slot moves
-and FP to integer conversions.</li>
-<li>Optimized the two-argument form of <tt>OP_CONCAT</tt> (<tt>a..b</tt>).</li>
-<li>Inlined <tt>OP_MOD</tt> (<tt>a%b</tt>).
-With better accuracy than the C variant, too.</li>
-<li>Inlined <tt>OP_POW</tt> (<tt>a^b</tt>). Unroll <tt>x^k</tt> or
-use <tt>k^x = 2^(log2(k)*x)</tt> or call <tt>pow()</tt>.</li>
-</ul></li>
-
-<li>Changes in the optimizer:
-<ul>
-<li>Improved hinting for table keys derived from table values
-(<tt>t1[t2[x]]</tt>).</li>
-<li>Lookup hinting now works with arbitrary object types and
-supports index chains, too.</li>
-<li>Generate type hints for arithmetic and comparison operators,
-OP_LEN, OP_CONCAT and OP_FORPREP.</li>
-<li>Remove several hint definitions in favour of a generic COMBINE hint.</li>
-<li>Complete rewrite of <tt>jit.opt_inline</tt> module
-(ex <tt>jit.opt_lib</tt>).</li>
-</ul></li>
-
-<li>Use adaptive deoptimization:
-<ul>
-<li>If runtime verification of a contract fails, the affected
-instruction is recompiled and patched on-the-fly.
-Regular programs will trigger deoptimization only occasionally.</li>
-<li>This avoids generating code for uncommon fallback cases
-most of the time. Generated code is up to 30% smaller compared to
-LuaJIT&nbsp;1.0.3.</li>
-<li>Deoptimization is used for many opcodes and contracts:
-<ul>
-<li>OP_CALL, OP_TAILCALL: type mismatch for callable.</li>
-<li>Inlined calls: closure mismatch, parameter number and type mismatches.</li>
-<li>OP_GETTABLE, OP_SETTABLE: table or key type and range mismatches.</li>
-<li>All arithmetic and comparison operators, OP_LEN, OP_CONCAT,
-OP_FORPREP: operand type and range mismatches.</li>
-</ul></li>
-<li>Complete redesign of the debug and traceback info
-(bytecode &harr; mcode) to support deoptimization.
-Much more flexible and needs only 50% of the space.</li>
-<li>The modules <tt>jit.trace</tt>, <tt>jit.dumphints</tt> and
-<tt>jit.dump</tt> handle deoptimization.</li>
-</ul></li>
-
-<li>Inlined many popular library functions
-(for commonly used arguments only):
-<ul>
-<li>Most <tt>math.*</tt> functions (the 18 most used ones)
-[2x-10x faster].</li>
-<li><tt>string.len</tt>, <tt>string.sub</tt> and <tt>string.char</tt>
-[2x-10x faster].</li>
-<li><tt>table.insert</tt>, <tt>table.remove</tt> and <tt>table.getn</tt>
-[3x-5x faster].</li>
-<li><tt>coroutine.yield</tt> and <tt>coroutine.resume</tt>
-[3x-5x faster].</li>
-<li><tt>pairs</tt>, <tt>ipairs</tt> and the corresponding iterators
-[8x-15x faster].</li>
-</ul></li>
-
-<li>Changes in the core and loadable modules and the stand-alone executable:
-<ul>
-<li>Added <tt>jit.version</tt>, <tt>jit.version_num</tt>
-and <tt>jit.arch</tt>.</li>
-<li>Reorganized some internal API functions (<tt>jit.util.*mcode*</tt>).</li>
-<li>The <tt>-j dump</tt> output now shows JSUB names, too.</li>
-<li>New x86 disassembler module written in pure Lua. No dependency
-on ndisasm anymore. Flexible API, very compact (500 lines)
-and complete (x87, MMX, SSE, SSE2, SSE3, SSSE3, privileged instructions).</li>
-<li><tt>luajit -v</tt> prints the LuaJIT version and copyright
-on a separate line.</li>
-</ul></li>
-
-<li>Added SSE, SSE2, SSE3 and SSSE3 support to DynASM.</li>
-<li>Miscellaneous doc changes. Added a section about
-<a href="install.html#embedding">embedding LuaJIT</a>.</li>
-</ul>
-<p>
-This release is in sync with Coco 1.1.0 (see the
-<a href="http://coco.luajit.org/changes.html"><span class="ext">&raquo;</span>&nbsp;Coco Change History</a>).
-</p>
-</div>
-
-<div class="major" style="background: #ffffd0;">
-<h2 id="LuaJIT-1.0.3">LuaJIT 1.0.3 &mdash; 2005-09-08</h2>
-<ul>
-<li>Even more docs.</li>
-<li>Unified closure checks in <tt>jit.*</tt>.</li>
-<li>Fixed some range checks in <tt>jit.util.*</tt>.</li>
-<li>Fixed __newindex call originating from <tt>jit_settable_str()</tt>.</li>
-<li>Merged with Lua 5.1 alpha (including early bug fixes).</li>
-</ul>
-<p>
-This is the first public release of LuaJIT.
-</p>
-
-<h2 id="LuaJIT-1.0.2">LuaJIT 1.0.2 &mdash; 2005-09-02</h2>
-<ul>
-<li>Add support for flushing the Valgrind translation cache <br>
-(<tt>MYCFLAGS= -DUSE_VALGRIND</tt>).</li>
-<li>Add support for freeing executable mcode memory to the <tt>mmap()</tt>-based
-variant for POSIX systems.</li>
-<li>Reorganized the C&nbsp;function signature handling in
-<tt>jit.opt_lib</tt>.</li>
-<li>Changed to index-based hints for inlining C&nbsp;functions.
-Still no support in the backend for inlining.</li>
-<li>Hardcode <tt>HEAP_CREATE_ENABLE_EXECUTE</tt> value if undefined.</li>
-<li>Misc. changes to the <tt>jit.*</tt> modules.</li>
-<li>Misc. changes to the Makefiles.</li>
-<li>Lots of new docs.</li>
-<li>Complete doc reorg.</li>
-</ul>
-<p>
-Not released because Lua 5.1 alpha came out today.
-</p>
-
-<h2 id="LuaJIT-1.0.1">LuaJIT 1.0.1 &mdash; 2005-08-31</h2>
-<ul>
-<li>Missing GC step in <tt>OP_CONCAT</tt>.</li>
-<li>Fix result handling for C &ndash;> JIT calls.</li>
-<li>Detect CPU feature bits.</li>
-<li>Encode conditional moves (<tt>fucomip</tt>) only when supported.</li>
-<li>Add fallback instructions for FP compares.</li>
-<li>Add support for <tt>LUA_COMPAT_VARARG</tt>. Still disabled by default.</li>
-<li>MSVC needs a specific place for the <tt>CALLBACK</tt> attribute
-(David Burgess).</li>
-<li>Misc. doc updates.</li>
-</ul>
-<p>
-Interim non-public release.
-Special thanks to Adam D. Moss for reporting most of the bugs.
-</p>
-
-<h2 id="LuaJIT-1.0.0">LuaJIT 1.0.0 &mdash; 2005-08-29</h2>
-<p>
-This is the initial non-public release of LuaJIT.
-</p>
 </div>
 <br class="flush">
 </div>

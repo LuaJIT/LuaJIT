@@ -104,7 +104,7 @@ enum {
 /* This definition must match with the *.dasc file(s). */
 typedef struct {
   lua_Number fpr[RID_NUM_FPR];	/* Floating-point registers. */
-  int32_t gpr[RID_NUM_GPR];	/* General-purpose registers. */
+  intptr_t gpr[RID_NUM_GPR];	/* General-purpose registers. */
   int32_t spill[256];		/* Spill slots. */
 } ExitState;
 

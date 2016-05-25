@@ -384,7 +384,7 @@ local function disass_block(ctx, ofs, len)
 end
 
 -- Extended API: create a disassembler context. Then call ctx:disass(ofs, len).
-local function create_(code, addr, out)
+local function create(code, addr, out)
   local ctx = {}
   ctx.code = code
   ctx.addr = addr or 0
@@ -396,33 +396,33 @@ local function create_(code, addr, out)
   return ctx
 end
 
-local function create_el_(code, addr, out)
-  local ctx = create_(code, addr, out)
+local function create_el(code, addr, out)
+  local ctx = create(code, addr, out)
   ctx.get = get_le
   return ctx
 end
 
 -- Simple API: disassemble code (a string) at address and output via out.
-local function disass_(code, addr, out)
-  create_(code, addr, out):disass()
+local function disass(code, addr, out)
+  create(code, addr, out):disass()
 end
 
-local function disass_el_(code, addr, out)
-  create_el_(code, addr, out):disass()
+local function disass_el(code, addr, out)
+  create_el(code, addr, out):disass()
 end
 
 -- Return register name for RID.
-local function regname_(r)
+local function regname(r)
   if r < 32 then return map_gpr[r] end
   return "f"..(r-32)
 end
 
 -- Public module functions.
-module(...)
-
-create = create_
-create_el = create_el_
-disass = disass_
-disass_el = disass_el_
-regname = regname_
+return {
+  create = create,
+  create_el = create_el,
+  disass = disass,
+  disass_el = disass_el,
+  regname = regname
+}
 
