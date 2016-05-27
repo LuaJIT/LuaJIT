@@ -1180,7 +1180,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     lua_assert(irt_ispri(kt) && !irt_isnil(kt));
     emit_u32(as, (irt_toitype(kt)<<15)|0x7fff);
     emit_rmro(as, XO_ARITHi, XOg_CMP, dest, offsetof(Node, key.it));
-#else
+#endif
   } else {
     if (!irt_ispri(kt)) {
       lua_assert(irt_isaddr(kt));
@@ -1194,7 +1194,6 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     lua_assert(!irt_isnil(kt));
     emit_i8(as, irt_toitype(kt));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
-#endif
   }
   emit_sfixup(as, l_loop);
   checkmclim(as);
