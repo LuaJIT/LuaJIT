@@ -822,7 +822,9 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
   SnapShot *snap = &T->snap[snapno];
   MSize n, nent = snap->nent;
   SnapEntry *map = &T->snapmap[snap->mapofs];
+#if !LJ_FR2 || defined(LUA_USE_ASSERT)
   SnapEntry *flinks = &T->snapmap[snap_nextofs(T, snap)-1-LJ_FR2];
+#endif
 #if !LJ_FR2
   ptrdiff_t ftsz0;
 #endif
