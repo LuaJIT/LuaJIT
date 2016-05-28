@@ -46,11 +46,15 @@
 #define JIT_F_CPU_FIRST		JIT_F_SQRT
 #define JIT_F_CPUSTRING		"\4SQRT\5ROUND"
 #elif LJ_TARGET_MIPS
-#define JIT_F_MIPS32R2		0x00000010
+#define JIT_F_MIPSXXR2		0x00000010
 
 /* Names for the CPU-specific flags. Must match the order above. */
-#define JIT_F_CPU_FIRST		JIT_F_MIPS32R2
+#define JIT_F_CPU_FIRST		JIT_F_MIPSXXR2
+#if LJ_TARGET_MIPS32
 #define JIT_F_CPUSTRING		"\010MIPS32R2"
+#else
+#define JIT_F_CPUSTRING		"\010MIPS64R2"
+#endif
 #else
 #define JIT_F_CPU_FIRST		0
 #define JIT_F_CPUSTRING		""

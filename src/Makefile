@@ -257,7 +257,11 @@ ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring MIPSEL ,$(TARGET_TESTARCH)))
     TARGET_ARCH= -D__MIPSEL__=1
   endif
-  TARGET_LJARCH= mips
+  ifneq (,$(findstring LJ_TARGET_MIPS64 ,$(TARGET_TESTARCH)))
+    TARGET_LJARCH= mips64
+  else
+    TARGET_LJARCH= mips
+  endif
 else
   $(error Unsupported target architecture)
 endif

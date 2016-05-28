@@ -35,7 +35,7 @@ static void emit_fgh(ASMState *as, MIPSIns mi, Reg rf, Reg rg, Reg rh)
 
 static void emit_rotr(ASMState *as, Reg dest, Reg src, Reg tmp, uint32_t shift)
 {
-  if ((as->flags & JIT_F_MIPS32R2)) {
+  if ((as->flags & JIT_F_MIPSXXR2)) {
     emit_dta(as, MIPSI_ROTR, dest, src, shift);
   } else {
     emit_dst(as, MIPSI_OR, dest, dest, tmp);

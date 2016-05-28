@@ -510,7 +510,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       Reg left = ra_alloc1(as, ir->op1, RSET_GPR);
       lua_assert(irt_isint(ir->t) || irt_isu32(ir->t));
       if ((ir->op2 & IRCONV_SEXT)) {
-	if ((as->flags & JIT_F_MIPS32R2)) {
+	if ((as->flags & JIT_F_MIPSXXR2)) {
 	  emit_dst(as, st == IRT_I8 ? MIPSI_SEB : MIPSI_SEH, dest, 0, left);
 	} else {
 	  uint32_t shift = st == IRT_I8 ? 24 : 16;
@@ -739,7 +739,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_dst(as, MIPSI_SUBU, tmp2, tmp2, dest);
       if (LJ_SOFTFP ? (irkey[1].o == IR_HIOP) : irt_isnum(kt)) {
 	emit_dst(as, MIPSI_XOR, tmp2, tmp2, tmp1);
-	if ((as->flags & JIT_F_MIPS32R2)) {
+	if ((as->flags & JIT_F_MIPSXXR2)) {
 	  emit_dta(as, MIPSI_ROTR, dest, tmp1, (-HASH_ROT1)&31);
 	} else {
 	  emit_dst(as, MIPSI_OR, dest, dest, tmp1);
@@ -1457,7 +1457,7 @@ static void asm_bswap(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
   Reg left = ra_alloc1(as, ir->op1, RSET_GPR);
-  if ((as->flags & JIT_F_MIPS32R2)) {
+  if ((as->flags & JIT_F_MIPSXXR2)) {
     emit_dta(as, MIPSI_ROTR, dest, RID_TMP, 16);
     emit_dst(as, MIPSI_WSBH, RID_TMP, 0, left);
   } else {
@@ -1513,7 +1513,7 @@ static void asm_bitshift(ASMState *as, IRIns *ir, MIPSIns mi, MIPSIns mik)
 
 static void asm_bror(ASMState *as, IRIns *ir)
 {
-  if ((as->flags & JIT_F_MIPS32R2)) {
+  if ((as->flags & JIT_F_MIPSXXR2)) {
     asm_bitshift(as, ir, MIPSI_ROTRV, MIPSI_ROTR);
   } else {
     Reg dest = ra_dest(as, ir, RSET_GPR);

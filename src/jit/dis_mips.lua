@@ -38,7 +38,7 @@ local map_special = {
   "multST",	"multuST",	"divST",	"divuST",
   false,	false,		false,		false,
   "addDST",	"addu|moveDST0", "subDST",	"subu|neguDS0T",
-  "andDST",	"orDST",	"xorDST",	"nor|notDST0",
+  "andDST",	"or|moveDST0",	"xorDST",	"nor|notDST0",
   false,	false,		"sltDST",	"sltuDST",
   false,	false,		false,		false,
   "tgeSTZ",	"tgeuSTZ",	"tltSTZ",	"tltuSTZ",
