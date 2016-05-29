@@ -12,11 +12,11 @@
 
 #include "lj_err.h"
 #include "lj_buf.h"
-#include "lj_dispatch.h"
 #include "lj_ir.h"
 #include "lj_jit.h"
 #include "lj_ircall.h"
 #include "lj_iropt.h"
+#include "lj_dispatch.h"
 #include "lj_vm.h"
 
 /* SPLIT pass:

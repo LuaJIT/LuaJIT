@@ -428,11 +428,11 @@
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS32
-#if _MIPS_SIM != _MIPS_SIM_ABI32
+#if !((defined(_MIPS_SIM_ABI32) && _MIPS_SIM == _MIPS_SIM_ABI32) || (defined(_ABIO32) && _MIPS_SIM == _ABIO32))
 #error "Only o32 ABI supported for MIPS32"
 #endif
 #elif LJ_TARGET_MIPS64
-#if _MIPS_SIM != _MIPS_SIM_ABI64
+#if !((defined(_MIPS_SIM_ABI64) && _MIPS_SIM == _MIPS_SIM_ABI64) || (defined(_ABI64) && _MIPS_SIM == _ABI64))
 #error "Only n64 ABI supported for MIPS64"
 #endif
 #endif
