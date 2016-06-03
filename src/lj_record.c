@@ -687,7 +687,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     (void)getslot(J, rbase+i);  /* Ensure all results have a reference. */
   while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
     BCReg cbase = (BCReg)frame_delta(frame);
-    if (--J->framedepth < 0)
+    if (--J->framedepth <= 0)
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lua_assert(J->baseslot > 1);
     gotresults++;
