@@ -2970,6 +2970,7 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 static void asm_setup_target(ASMState *as)
 {
   asm_exitstub_setup(as, as->T->nsnap);
+  as->mrm.base = 0;
 }
 
 /* -- Trace patching ------------------------------------------------------ */
