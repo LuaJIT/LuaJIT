@@ -155,7 +155,7 @@ static void sink_remark_phi(jit_State *J)
       IRIns *irl = IR(ir->op1), *irr = IR(ir->op2);
       if (!((irl->t.irt ^ irr->t.irt) & IRT_MARK) && irl->prev == irr->prev)
 	continue;
-      /* Must remark if either was marked. */
+      /* Must remark if any operand will be marked. */
       remark = (~(irl->t.irt & irr->t.irt) & IRT_MARK);
       irt_setmark(IR(ir->op1)->t);
       irt_setmark(IR(ir->op2)->t);
