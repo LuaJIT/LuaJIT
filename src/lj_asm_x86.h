@@ -599,7 +599,7 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
     if (r) {  /* Argument is in a register. */
       if (r < RID_MAX_GPR && ref < ASMREF_TMP1) {
 #if LJ_64
-	if (LJ_GC64 ? ir->o != IR_KINT : ir->o == IR_KINT64)
+	if (LJ_GC64 ? !(ir->o == IR_KINT || ir->o == IR_KNULL) : ir->o == IR_KINT64)
 	  emit_loadu64(as, r, ir_k64(ir)->u64);
 	else
 #endif
