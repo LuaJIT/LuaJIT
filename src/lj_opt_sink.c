@@ -153,10 +153,9 @@ static void sink_remark_phi(jit_State *J)
     remark = 0;
     for (ir = IR(J->cur.nins-1); ir->o == IR_PHI; ir--) {
       IRIns *irl = IR(ir->op1), *irr = IR(ir->op2);
-      if (((irl->t.irt ^ irr->t.irt) & IRT_MARK))
-	remark = 1;
-      else if (irl->prev == irr->prev)
+      if (!((irl->t.irt ^ irr->t.irt) & IRT_MARK) && irl->prev == irr->prev)
 	continue;
+      remark |= (~(irl->t.irt & irr->t.irt) & IRT_MARK);
       irt_setmark(IR(ir->op1)->t);
       irt_setmark(IR(ir->op2)->t);
     }
