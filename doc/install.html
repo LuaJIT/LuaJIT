@@ -386,7 +386,7 @@ important to compile with the proper CPU or architecture settings:
 <li>The best way to get consistent results is to specify the correct settings when building the toolchain yourself.</li>
 <li>For a pre-built, generic toolchain add <tt>-mcpu=...</tt> or <tt>-march=...</tt> and other necessary flags to <tt>TARGET_CFLAGS</tt>.</li>
 <li>For ARM it's important to have the correct <tt>-mfloat-abi=...</tt> setting, too. Otherwise LuaJIT may not run at the full performance of your target CPU.</li>
-<li>For MIPS it's important to select a supported ABI (o32 on MIPS32, n64 on MIPS64) and consistently compile your project either with hard-float or soft-float compiler settings. Do not use <tt>-mips16</tt>.</li>
+<li>For MIPS it's important to select a supported ABI (o32 on MIPS32, n64 on MIPS64) and consistently compile your project either with hard-float or soft-float compiler settings.</li>
 </ul>
 <p>
 Here are some examples for targets with a different CPU than the host:

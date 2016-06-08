@@ -214,7 +214,7 @@ local map_pri = {
   map_cop0,	map_cop1,	false,		map_cop1x,
   "beql|beqzlST0B",	"bnel|bnezlST0B",	"blezlSB",	"bgtzlSB",
   false,	false,		false,		false,
-  map_special2,	false,		false,		map_special3,
+  map_special2,	"jalxJ",	false,		map_special3,
   "lbTSO",	"lhTSO",	"lwlTSO",	"lwTSO",
   "lbuTSO",	"lhuTSO",	"lwrTSO",	false,
   "sbTSO",	"shTSO",	"swlTSO",	"swTSO",

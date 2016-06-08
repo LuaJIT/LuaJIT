@@ -157,7 +157,8 @@ static void emit_call(ASMState *as, void *target, int needcfa)
   MCode *p = as->mcp;
   *--p = MIPSI_NOP;
   if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0) {
-    *--p = MIPSI_JAL | (((uintptr_t)target >>2) & 0x03ffffffu);
+    *--p = (((uintptr_t)target & 1) ? MIPSI_JALX : MIPSI_JAL) |
+	   (((uintptr_t)target >>2) & 0x03ffffffu);
   } else {  /* Target out of range: need indirect call. */
     *--p = MIPSI_JALR | MIPSF_S(RID_CFUNCADDR);
     needcfa = 1;
