@@ -1993,12 +1993,6 @@ static void asm_setup_regsp(ASMState *as)
   /* REF_BASE is used for implicit references to the BASE register. */
   lastir->prev = REGSP_HINT(RID_BASE);
 
-  ir = IR(nins-1);
-  if (ir->o == IR_RENAME) {
-    /* Remove any renames left over from ASM restart due to LJ_TRERR_MCODELM. */
-    do { ir--; nins--; } while (ir->o == IR_RENAME);
-    T->nins = nins;
-  }
   as->snaprename = nins;
   as->snapref = nins;
   as->snapno = T->nsnap;
@@ -2229,6 +2223,16 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   ASMState as_;
   ASMState *as = &as_;
   MCode *origtop;
+
+  /* Remove nops/renames left over from ASM restart due to LJ_TRERR_MCODELM. */
+  {
+    IRRef nins = T->nins;
+    IRIns *ir = &T->ir[nins-1];
+    if (ir->o == IR_NOP || ir->o == IR_RENAME) {
+      do { ir--; nins--; } while (ir->o == IR_NOP || ir->o == IR_RENAME);
+      T->nins = nins;
+    }
+  }
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
   /* This also allows one RENAME to be added without reallocating curfinal. */
