@@ -2207,6 +2207,8 @@ static void assign_adjust(LexState *ls, BCReg nvars, BCReg nexps, ExpDesc *e)
       bcemit_nil(fs, reg, (BCReg)extra);
     }
   }
+  if (nexps > nvars)
+    ls->fs->freereg -= nexps - nvars;  /* Drop leftover regs. */
 }
 
 /* Recursively parse assignment statement. */
@@ -2240,8 +2242,6 @@ static void parse_assignment(LexState *ls, LHSVarList *lh, BCReg nvars)
       return;
     }
     assign_adjust(ls, nvars, nexps, &e);
-    if (nexps > nvars)
-      ls->fs->freereg -= nexps - nvars;  /* Drop leftover regs. */
   }
   /* Assign RHS to LHS and recurse downwards. */
   expr_init(&e, VNONRELOC, ls->fs->freereg-1);
