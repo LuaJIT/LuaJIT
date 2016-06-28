@@ -155,6 +155,9 @@ XCFLAGS=
 # LUAJIT_SMART_STRINGS=1 - use full string hashing for collisioned strings.
 #   if collision chain is longer than 10 and string is longer than 12bytes,
 #   then "fast and dumb" whole string hash function used.
+# LUAJIT_SMART_STRINGS=2 - use slow strong hashing for collisioned strings.
+#   if collision chain is longer than 10, then all new strings are hashed
+#   using 32bit cousine to SipHash
 XCFLAGS+= -DLUAJIT_SMART_STRINGS=1
 #
 ##############################################################################

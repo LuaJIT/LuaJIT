@@ -600,6 +600,9 @@ typedef struct global_State {
     BloomFilter cur[2];
     BloomFilter new[2];
   } strbloom;
+# if LUAJIT_SMART_STRINGS == 2
+  uint32_t str_rand_key[2];
+# endif
 #endif
   lua_Alloc allocf;	/* Memory allocator. */
   void *allocd;		/* Memory allocator data. */
