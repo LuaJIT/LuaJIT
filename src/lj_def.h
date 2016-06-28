@@ -121,6 +121,7 @@ typedef unsigned int uintptr_t;
 /* A really naive Bloom filter. But sufficient for our needs. */
 typedef uintptr_t BloomFilter;
 #define BLOOM_MASK	(8*sizeof(BloomFilter) - 1)
+#define BLOOM_LOG       (sizeof(BloomFilter)==4?5:6)
 #define bloombit(x)	((uintptr_t)1 << ((x) & BLOOM_MASK))
 #define bloomset(b, x)	((b) |= bloombit((x)))
 #define bloomtest(b, x)	((b) & bloombit((x)))

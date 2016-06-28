@@ -146,6 +146,18 @@ XCFLAGS=
 #XCFLAGS+= -DLUA_USE_ASSERT
 #
 ##############################################################################
+############################  STRING INTERNING   #############################
+##############################################################################
+# Define LuaJIT string interning behaviour
+#
+# commented or LUAJIT_SMART_STRINGS=0 - no attepmt to recover from collisions,
+#   only "classic LuaJIT" hashing used - max 16bytes from string is hashed.
+# LUAJIT_SMART_STRINGS=1 - use full string hashing for collisioned strings.
+#   if collision chain is longer than 10 and string is longer than 12bytes,
+#   then "fast and dumb" whole string hash function used.
+XCFLAGS+= -DLUAJIT_SMART_STRINGS=1
+#
+##############################################################################
 # You probably don't need to change anything below this line!
 ##############################################################################
 

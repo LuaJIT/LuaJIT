@@ -126,6 +126,9 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   GCobj *o;
   MSize len = (MSize)lenx;
   MSize a, b, h = len;
+#if LUAJIT_SMART_STRINGS
+  int collisions = 0;
+#endif
   if (lenx >= LJ_MAX_STR)
     lj_err_msg(L, LJ_ERR_STROV);
   g = G(L);
@@ -147,29 +150,103 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   a ^= h; a -= lj_rol(h, 11);
   b ^= a; b -= lj_rol(a, 25);
   h ^= b; h -= lj_rol(b, 16);
+#if LUAJIT_SMART_STRINGS
+  h &= ~strsmartbit;
+#endif
   /* Check if the string has already been interned. */
   o = gcref(g->strhash[h & g->strmask]);
   if (LJ_LIKELY((((uintptr_t)str+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
+#if LUAJIT_SMART_STRINGS
+#define inc_collision_hard() (collisions+=8, 1)
+#define inc_collision_soft() (collisions++)
+#define max_collisions 17
+#else
+#define inc_collision_hard() (1)
+#define inc_collision_soft()
+#endif
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->hash == h && sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && inc_collision_hard() &&
+                      str_fastcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
       }
       o = gcnext(o);
+      inc_collision_soft();
     }
   } else {  /* Slow path: end of string is too close to a page boundary. */
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->hash == h && sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && inc_collision_hard() &&
+                      memcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
       }
       o = gcnext(o);
+      inc_collision_soft();
     }
   }
+#if LUAJIT_SMART_STRINGS
+  if (len > 12)
+  {
+  int need_fullh = 0, search_fullh = 0;
+  search_fullh = bloomtest(g->strbloom.cur[0], strbloombits0(h)) &&
+    bloomtest(g->strbloom.cur[1], strbloombits1(h));
+  need_fullh = search_fullh || collisions > max_collisions;
+  if (LJ_UNLIKELY(need_fullh)) {
+    MSize fh;
+    const char *ss = str;
+    MSize i = (len-1)/8;
+    fh = h ^ len;
+    a = lj_getu32(str + len - 4);
+    b = lj_getu32(str + len - 8);
+    for (; i; i--, ss+=8) {
+      fh = lj_rol(fh ^ a, 17) + (b ^ 0xdeadbeef);
+      a = lj_rol(a, 13); a -= lj_getu32(ss);
+      b = lj_rol(a, 11); b -= lj_getu32(ss+4);
+    }
+    fh = lj_rol(fh ^ a, 17) + (b ^ 0xdeadbeef);
+    a ^= fh; a -= lj_rol(fh, 11);
+    b ^= a;  b -= lj_rol(a, 25);
+    fh ^= b; fh -= lj_rol(b, 16);
+    fh |= strsmartbit;
+    if (search_fullh) {
+      /* Recheck if the string has already been interned with "harder" hash. */
+      o = gcref(g->strhash[fh & g->strmask]);
+      if (LJ_LIKELY((((uintptr_t)str+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
+	while (o != NULL) {
+	  GCstr *sx = gco2str(o);
+	  if (sx->hash == fh && sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+	    /* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	    if (isdead(g, o)) flipwhite(o);
+	    return sx;  /* Return existing string. */
+	  }
+	  o = gcnext(o);
+	}
+      } else {  /* Slow path: end of string is too close to a page boundary. */
+	while (o != NULL) {
+	  GCstr *sx = gco2str(o);
+	  if (sx->hash == fh && sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+	    /* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	    if (isdead(g, o)) flipwhite(o);
+	    return sx;  /* Return existing string. */
+	  }
+	  o = gcnext(o);
+	}
+      }
+    }
+    if (collisions > 10) {
+      bloomset(g->strbloom.cur[0], strbloombits0(h));
+      bloomset(g->strbloom.new[0], strbloombits0(h));
+      bloomset(g->strbloom.cur[1], strbloombits1(h));
+      bloomset(g->strbloom.new[1], strbloombits1(h));
+      h = fh;
+    }
+  }
+  }
+#endif
   /* Nope, create a new string. */
   s = lj_mem_newt(L, sizeof(GCstr)+len+1, GCstr);
   newwhite(g, s);

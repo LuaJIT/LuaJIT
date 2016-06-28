@@ -595,6 +595,12 @@ typedef struct global_State {
   GCRef *strhash;	/* String hash table (hash chain anchors). */
   MSize strmask;	/* String hash mask (size of hash table - 1). */
   MSize strnum;		/* Number of strings in hash table. */
+#if LUAJIT_SMART_STRINGS
+  struct {
+    BloomFilter cur[2];
+    BloomFilter new[2];
+  } strbloom;
+#endif
   lua_Alloc allocf;	/* Memory allocator. */
   void *allocd;		/* Memory allocator data. */
   GCState gc;		/* Garbage collector. */
