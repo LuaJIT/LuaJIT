@@ -1,0 +1,2 @@
+codes = true
+std = 'luajit'
