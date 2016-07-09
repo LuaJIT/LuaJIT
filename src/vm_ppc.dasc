@@ -5209,7 +5209,11 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"
 	"\t.string \"\"\n"
 	"\t.uleb128 0x1\n"
+#if LJ_ARCH_PPC32ON64
+	"\t.sleb128 -8\n"
+#else
 	"\t.sleb128 -4\n"
+#endif
 	"\t.byte 65\n"
 	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"
 	"\t.align 2\n"
@@ -5222,14 +5226,24 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin\n"
 	"\t.long %d\n"
 	"\t.byte 0xe\n\t.uleb128 %d\n"
+#if LJ_ARCH_PPC32ON64
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -2\n"
+	"\t.byte 0x11\n\t.uleb128 70\n\t.sleb128 -1\n",
+#else
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
 	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
+#endif
 	fcofs, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
 	"\t.byte %d\n\t.uleb128 %d\n",
-	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i));
+#if LJ_ARCH_PPC32ON64
+	0x80+i, 19+(31-i), 0x80+32+i, 1+(31-i)
+#else
+	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i)
+#endif
+      );
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
@@ -5261,7 +5275,11 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"
 	"\t.string \"zPR\"\n"
 	"\t.uleb128 0x1\n"
+#if LJ_ARCH_PPC32ON64
+	"\t.sleb128 -8\n"
+#else
 	"\t.sleb128 -4\n"
+#endif
 	"\t.byte 65\n"
 	"\t.uleb128 6\n"			/* augmentation length */
 	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
@@ -5279,14 +5297,24 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
 	"\t.byte 0xe\n\t.uleb128 %d\n"
+#if LJ_ARCH_PPC32ON64
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -2\n"
+	"\t.byte 0x11\n\t.uleb128 70\n\t.sleb128 -1\n",
+#else
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
 	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
+#endif
 	fcofs, CFRAME_SIZE);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"
 	"\t.byte %d\n\t.uleb128 %d\n",
-	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i));
+#if LJ_ARCH_PPC32ON64
+	0x80+i, 19+(31-i), 0x80+32+i, 1+(31-i)
+#else
+	0x80+i, 37+(31-i), 0x80+32+i, 2+2*(31-i)
+#endif
+      );
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE2:\n\n");
