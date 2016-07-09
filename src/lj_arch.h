@@ -427,9 +427,6 @@
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
 #error "No support for PowerPC CPUs without double-precision FPU"
 #endif
-#if LJ_ARCH_ENDIAN == LUAJIT_LE
-#error "No support for little-endian PPC"
-#endif
 #if LJ_ARCH_PPC_ELFV2
 #error "No support for PPC ELFv2"
 #endif
