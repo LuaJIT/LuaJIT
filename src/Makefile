@@ -452,11 +452,11 @@ ifeq (ppc,$(TARGET_LJARCH))
   ifeq (PS3,$(TARGET_SYS))
     DASM_AFLAGS+= -D PPE
   endif
-  ifneq (,$(findstring LJ_ARCH_PPC_TOC 1,$(TARGET_TESTARCH)))
-    DASM_AFLAGS+= -D TOC
+  ifneq (,$(findstring LJ_ARCH_PPC_OPD 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D OPD
   endif
-  ifneq (,$(findstring LJ_ARCH_PPC_TOCENV 1,$(TARGET_TESTARCH)))
-    DASM_AFLAGS+= -D TOCENV
+  ifneq (,$(findstring LJ_ARCH_PPC_OPDENV 1,$(TARGET_TESTARCH)))
+    DASM_AFLAGS+= -D OPDENV
   endif
   ifneq (,$(findstring LJ_ARCH_PPC_ELFV2 1,$(TARGET_TESTARCH)))
     DASM_AFLAGS+= -D ELFV2

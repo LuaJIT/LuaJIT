@@ -22,9 +22,9 @@
 |// GPR64   64 bit registers (but possibly 32 bit pointers, e.g. PS3).
 |//         Affects reg saves, stack layout, carry/overflow/dot flags etc.
 |// FRAME32 Use 32 bit frame layout, even with GPR64 (Xbox 360).
-|// TOC     Need table of contents (64 bit or 32 bit variant, e.g. PS3).
+|// OPD     Need function descriptors (64 bit or 32 bit variant, e.g. PS3).
 |//         Function pointers are really a struct: code, TOC, env (optional).
-|// TOCENV  Function pointers have an environment pointer, too (not on PS3).
+|// OPDENV  Function pointers have an environment pointer, too (not on PS3).
 |// ELFV2   The 64-bit ELF V2 ABI is in use.
 |// PPE     Power Processor Element of Cell (PS3) or Xenon (Xbox 360).
 |//         Must avoid (slow) micro-coded instructions.
@@ -46,10 +46,16 @@
 |.endif
 |
 |// Convenience macros for TOC handling.
-|.if TOC
+|.if OPD or ELFV2
 |// Linker needs a TOC patch area for every external call relocation.
 |.macro blex, target; bl extern target; nop; .endmacro
 |.macro .toc, a, b; a, b; .endmacro
+|.else
+|.macro blex, target; bl extern target@plt; .endmacro
+|.macro .toc, a, b; .endmacro
+|.endif
+|.if OPD
+|.macro .opd, a, b; a, b; .endmacro
 |.if P64
 |.define TOC_OFS,	 8
 |.define ENV_OFS,	16
@@ -57,13 +63,13 @@
 |.define TOC_OFS,	4
 |.define ENV_OFS,	8
 |.endif
-|.else  // No TOC.
-|.macro blex, target; bl extern target@plt; .endmacro
-|.macro .toc, a, b; .endmacro
+|.else  // No OPD.
+|.macro .opd, a, b; .endmacro
 |.endif
-|.macro .tocenv, a, b; .if TOCENV; a, b; .endif; .endmacro
+|.macro .opdenv, a, b; .if OPDENV; a, b; .endif; .endmacro
 |
 |.macro .gpr64, a, b; .if GPR64; a, b; .endif; .endmacro
+|.macro .elfv2, a, b; .if ELFV2; a, b; .endif; .endmacro
 |
 |.macro andix., y, a, i
 |.if PPE
@@ -149,6 +155,7 @@
 |
 |.define TOCREG,	r2	// TOC register (only used by C code).
 |.define ENVREG,	r11	// Environment pointer (nested C functions).
+|.define FUNCREG,	r12	// ELFv2 function pointer (overlaps RD)
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.if GPR64
@@ -181,6 +188,47 @@
 |.define TMPD_BLO,	447(sp)
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
+|
+|.elif ELFV2
+|
+|//			392(sp) // \ 32 bit C frame info.
+|.define SAVE_LR,	384(sp)
+|.define SAVE_CR,	376(sp) // 64 bit CR save.
+|.define CFRAME_SPACE,	368     // Delta for sp.
+|// Back chain for sp:	368(sp) <-- sp entering interpreter
+|.define SAVE_ERRF,	360(sp) // |
+|.define SAVE_NRES,	356(sp) // |
+|.define SAVE_L,	352(sp) //  > Parameter save area.
+|.define SAVE_PC,	348(sp) // |
+|.define SAVE_MULTRES,	344(sp) // |
+|.define SAVE_CFRAME,	336(sp) // / 64 bit C frame chain.
+|.define SAVE_FPR_,	192     // .. 192+18*8: 64 bit FPR saves.
+|.define SAVE_GPR_,	48      // .. 48+18*8: 64 bit GPR saves.
+|.if ENDIAN_LE
+|.define TMPD_HI,	44(sp)  // \ Link editor temp (ABI mandated).
+|.define TMPD_LO,	40(sp)  // /
+|.define TONUM_HI,	36(sp)  // \ Compiler temp (ABI mandated).
+|.define TONUM_LO,	32(sp)  // /
+|.else
+|.define TMPD_LO,	44(sp)  // \ Link editor temp (ABI mandated).
+|.define TMPD_HI,	40(sp)  // /
+|.define TONUM_LO,	36(sp)  // \ Compiler temp (ABI mandated).
+|.define TONUM_HI,	32(sp)  // /
+|.endif
+|.define SAVE_TOC,	24(sp)  // TOC save area.
+|// Next frame lr:	16(sp)
+|// Next frame cr:	8(sp)
+|// Back chain for sp:	0(sp)	<-- sp while in interpreter
+|
+|.if ENDIAN_LE
+|.define TMPD_BLO,	32(sp)
+|.define TMPD,		TMPD_LO
+|.define TONUM_D,	TONUM_LO
+|.else
+|.define TMPD_BLO,	39(sp)
+|.define TMPD,		TMPD_HI
+|.define TONUM_D,	TONUM_HI
+|.endif
 |
 |.else
 |
@@ -852,9 +900,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub TMP0, TMP0, TMP1		// Compute -savestack(L, L->top).
   |    lp TMP1, L->cframe
   |     addi DISPATCH, DISPATCH, GG_G2DISP
-  |  .toc lp TOCREG, TOC_OFS(CARG4)
-  |  .tocenv lp ENVREG, ENV_OFS(CARG4)
-  |  .toc lp CARG4, 0(CARG4)
+  |  .opd lp TOCREG, TOC_OFS(CARG4)
+  |  .opdenv lp ENVREG, ENV_OFS(CARG4)
+  |  .opd lp CARG4, 0(CARG4)
   |  li TMP2, 0
   |   stw TMP0, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |  stw TMP2, SAVE_ERRF		// No error function.
@@ -862,6 +910,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    stp sp, L->cframe		// Add our C frame to cframe chain.
   |     stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  mtctr CARG4
+  |  .elfv2 mr FUNCREG, CARG4
   |  bctrl			// (lua_State *L, lua_CFunction func, void *ud)
   |  .toc lp TOCREG, SAVE_TOC
   |.if PPE
@@ -2460,21 +2509,21 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->fff_fallback:			// Call fast function fallback handler.
   |  // BASE = new base, RB = CFUNC, RC = nargs*8
-  |  lp TMP3, CFUNC:RB->f
+  |  lp FUNCREG, CFUNC:RB->f
   |    add TMP1, BASE, NARGS8:RC
   |   lwz PC, FRAME_PC(BASE)		// Fallback may overwrite PC.
   |    addi TMP0, TMP1, 8*LUA_MINSTACK
   |     lwz TMP2, L->maxstack
   |   stw PC, SAVE_PC			// Redundant (but a defined value).
-  |  .toc lp TOCREG, TOC_OFS(TMP3)
-  |  .tocenv lp ENVREG, ENV_OFS(TMP3)
-  |  .toc lp TMP3, 0(TMP3)
+  |  .opd lp TOCREG, TOC_OFS(FUNCREG)
+  |  .opdenv lp ENVREG, ENV_OFS(FUNCREG)
+  |  .opd lp FUNCREG, 0(FUNCREG)
   |  cmplw TMP0, TMP2
   |     stp BASE, L->base
   |    stp TMP1, L->top
   |   mr CARG1, L
   |  bgt >5				// Need to grow stack.
-  |  mtctr TMP3
+  |  mtctr FUNCREG
   |  bctrl				// (lua_State *L)
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  lp BASE, L->base
@@ -5258,35 +5307,35 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_FUNCCW:
     |  // BASE = new base, RA = BASE+framesize*8, RB = CFUNC, RC = nargs*8
     if (op == BC_FUNCC) {
-      |  lp RD, CFUNC:RB->f
+      |  lp FUNCREG, CFUNC:RB->f
     } else {
-      |  lp RD, DISPATCH_GL(wrapf)(DISPATCH)
+      |  lp FUNCREG, DISPATCH_GL(wrapf)(DISPATCH)
     }
     |   add TMP1, RA, NARGS8:RC
     |   lwz TMP2, L->maxstack
-    |  .toc lp TMP3, 0(RD)
+    |  .opd lp TMP3, 0(FUNCREG)
     |    add RC, BASE, NARGS8:RC
     |   stp BASE, L->base
     |   cmplw TMP1, TMP2
     |    stp RC, L->top
     |     li_vmstate C
-    |.if TOC
+    |.if OPD
     |  mtctr TMP3
     |.else
-    |  mtctr RD
+    |  mtctr FUNCREG
     |.endif
     if (op == BC_FUNCCW) {
       |  lp CARG2, CFUNC:RB->f
     }
     |  mr CARG1, L
     |   bgt ->vm_growstack_c		// Need to grow stack.
-    |  .toc lp TOCREG, TOC_OFS(RD)
-    |  .tocenv lp ENVREG, ENV_OFS(RD)
+    |  .opd lp TOCREG, TOC_OFS(FUNCREG)
+    |  .opdenv lp ENVREG, ENV_OFS(FUNCREG)
     |     st_vmstate
     |  bctrl				// (lua_State *L [, lua_CFunction f])
     |  // Returns nresults.
     |  lp BASE, L->base
-    |  .toc ld TOCREG, SAVE_TOC
+    |  .toc lp TOCREG, SAVE_TOC
     |   slwi RD, CRET1, 3
     |  lp TMP1, L->top
     |    li_vmstate INTERP
