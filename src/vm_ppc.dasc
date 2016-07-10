@@ -792,6 +792,8 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub TMP0, TMP0, TMP1		// Compute -savestack(L, L->top).
   |    lp TMP1, L->cframe
   |     addi DISPATCH, DISPATCH, GG_G2DISP
+  |  .toc lp TOCREG, TOC_OFS(CARG4)
+  |  .tocenv lp ENVREG, ENV_OFS(CARG4)
   |  .toc lp CARG4, 0(CARG4)
   |  li TMP2, 0
   |   stw TMP0, SAVE_NRES		// Neg. delta means cframe w/o frame.
@@ -801,6 +803,7 @@ static void build_subroutines(BuildCtx *ctx)
   |     stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  mtctr CARG4
   |  bctrl			// (lua_State *L, lua_CFunction func, void *ud)
+  |  .toc lp TOCREG, SAVE_TOC
   |.if PPE
   |  mr BASE, CRET1
   |  cmpwi CRET1, 0
@@ -2409,6 +2412,8 @@ static void build_subroutines(BuildCtx *ctx)
   |    addi TMP0, TMP1, 8*LUA_MINSTACK
   |     lwz TMP2, L->maxstack
   |   stw PC, SAVE_PC			// Redundant (but a defined value).
+  |  .toc lp TOCREG, TOC_OFS(TMP3)
+  |  .tocenv lp ENVREG, ENV_OFS(TMP3)
   |  .toc lp TMP3, 0(TMP3)
   |  cmplw TMP0, TMP2
   |     stp BASE, L->base
@@ -2419,6 +2424,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  bctrl				// (lua_State *L)
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  lp BASE, L->base
+  |  .toc lp TOCREG, SAVE_TOC
   |  cmpwi CRET1, 0
   |   slwi RD, CRET1, 3
   |   la RA, -8(BASE)
