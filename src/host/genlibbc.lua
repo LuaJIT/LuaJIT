@@ -97,7 +97,7 @@ local function fixup_dump(dump, fixup)
   p = read_uleb128(p)
   p, sizebc = read_uleb128(p)
   local rawtab = {}
-  for i=0,sizebc-1 do
+  for _=0,sizebc-1 do
     local op = p[xop]
     if op == BC.KSHORT then
       local rd = p[xrc] + 256*p[xrb]
