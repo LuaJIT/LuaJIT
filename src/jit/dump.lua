@@ -63,9 +63,9 @@ local traceinfo, traceir, tracek = jutil.traceinfo, jutil.traceir, jutil.tracek
 local tracemc, tracesnap = jutil.tracemc, jutil.tracesnap
 local traceexitstub, ircalladdr = jutil.traceexitstub, jutil.ircalladdr
 local bit = require("bit")
-local band, shl, shr = bit.band, bit.lshift, bit.rshift
+local band, shr = bit.band, bit.rshift
 local sub, gsub, format = string.sub, string.gsub, string.format
-local byte, char, rep = string.byte, string.char, string.rep
+local byte, rep = string.byte, string.rep
 local type, tostring = type, tostring
 local stdout, stderr = io.stdout, io.stderr
 
@@ -207,7 +207,7 @@ local colortype_ansi = {
   "\027[35m%s\027[m",
 }
 
-local function colorize_text(s, t)
+local function colorize_text(s)
   return s
 end
 
