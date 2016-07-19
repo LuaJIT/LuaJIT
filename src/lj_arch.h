@@ -269,7 +269,6 @@
 #elif LJ_ARCH_BITS == 64
 #define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOJIT		1	/* NYI */
-#define LJ_ARCH_NOFFI		1	/* NYI */
 #if _CALL_ELF == 2
 #define LJ_ARCH_PPC_ELFV2	1
 #else

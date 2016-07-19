@@ -33,16 +33,16 @@
 |.macro lpx, a, b, c; ldx a, b, c; .endmacro
 |.macro lp, a, b; ld a, b; .endmacro
 |.macro stp, a, b; std a, b; .endmacro
+|.macro stpx, a, b, c; stdx a, b, c; .endmacro
 |.define decode_OPP, decode_OP8
-|.if FFI
-|// Missing: Calling conventions, 64 bit regs, TOC.
-|.error lib_ffi not yet implemented for PPC64
-|.endif
+|.define WORD_SIZE, 8
 |.else
 |.macro lpx, a, b, c; lwzx a, b, c; .endmacro
 |.macro lp, a, b; lwz a, b; .endmacro
 |.macro stp, a, b; stw a, b; .endmacro
+|.macro stpx, a, b, c; stwx a, b, c; .endmacro
 |.define decode_OPP, decode_OP4
+|.define WORD_SIZE, 4
 |.endif
 |
 |// Convenience macros for TOC handling.
@@ -2525,9 +2525,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  bgt >5				// Need to grow stack.
   |  mtctr FUNCREG
   |  bctrl				// (lua_State *L)
+  |  .toc lp TOCREG, SAVE_TOC
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  lp BASE, L->base
-  |  .toc lp TOCREG, SAVE_TOC
   |  cmpwi CRET1, 0
   |   slwi RD, CRET1, 3
   |   la RA, -8(BASE)
@@ -2928,10 +2928,18 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_cachesync:
   |.if JIT or FFI
   |  // Compute start of first cache line and number of cache lines.
+  |  .if GPR64
+  |  rldicr CARG1, CARG1, 0, 58
+  |  .else
   |  rlwinm CARG1, CARG1, 0, 0, 26
+  |  .endif
   |  sub CARG2, CARG2, CARG1
   |  addi CARG2, CARG2, 31
+  |  .if GPR64
+  |  srdi. CARG2, CARG2, 5
+  |  .else
   |  rlwinm. CARG2, CARG2, 27, 5, 31
+  |  .endif
   |  beqlr
   |  mtctr CARG2
   |  mr CARG3, CARG1
@@ -2953,32 +2961,54 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |// Handler for callback functions. Callback slot number in r11, g in r12.
+  |// Handler for callback functions. Callback slot number in r12, g in r11.
   |->vm_ffi_callback:
   |.if FFI
   |.type CTSTATE, CTState, PC
+  |  .if OPD
+  |   rldicl r12, r11, 17, 47
+  |   rldicl r11, r11, 0, 17
+  |  .endif
+  |  .if ELFV2
+  |   rlwinm r12, r12, 30, 22, 31
+  |   addisl TOCREG, TOCREG, extern .TOC.-lj_vm_ffi_callback@ha
+  |   addil TOCREG, TOCREG, extern .TOC.-lj_vm_ffi_callback@l
+  |  .endif
   |  saveregs
-  |  lwz CTSTATE, GL:r12->ctype_state
-  |   addi DISPATCH, r12, GG_G2DISP
-  |  stw r11, CTSTATE->cb.slot
-  |  stw r3, CTSTATE->cb.gpr[0]
+  |  lwz CTSTATE, GL:r11->ctype_state
+  |   addi DISPATCH, r11, GG_G2DISP
+  |  stw r12, CTSTATE->cb.slot
+  |  stp r3, CTSTATE->cb.gpr[0]
   |   stfd f1, CTSTATE->cb.fpr[0]
-  |  stw r4, CTSTATE->cb.gpr[1]
+  |  stp r4, CTSTATE->cb.gpr[1]
   |   stfd f2, CTSTATE->cb.fpr[1]
-  |  stw r5, CTSTATE->cb.gpr[2]
+  |  stp r5, CTSTATE->cb.gpr[2]
   |   stfd f3, CTSTATE->cb.fpr[2]
-  |  stw r6, CTSTATE->cb.gpr[3]
+  |  stp r6, CTSTATE->cb.gpr[3]
   |   stfd f4, CTSTATE->cb.fpr[3]
-  |  stw r7, CTSTATE->cb.gpr[4]
+  |  stp r7, CTSTATE->cb.gpr[4]
   |   stfd f5, CTSTATE->cb.fpr[4]
-  |  stw r8, CTSTATE->cb.gpr[5]
+  |  stp r8, CTSTATE->cb.gpr[5]
   |   stfd f6, CTSTATE->cb.fpr[5]
-  |  stw r9, CTSTATE->cb.gpr[6]
+  |  stp r9, CTSTATE->cb.gpr[6]
   |   stfd f7, CTSTATE->cb.fpr[6]
-  |  stw r10, CTSTATE->cb.gpr[7]
+  |  stp r10, CTSTATE->cb.gpr[7]
   |   stfd f8, CTSTATE->cb.fpr[7]
+  |  .if GPR64
+  |   stfd f9, CTSTATE->cb.fpr[8]
+  |   stfd f10, CTSTATE->cb.fpr[9]
+  |   stfd f11, CTSTATE->cb.fpr[10]
+  |   stfd f12, CTSTATE->cb.fpr[11]
+  |   stfd f13, CTSTATE->cb.fpr[12]
+  |  .endif
+  |  .if ELFV2
+  |  addi TMP0, sp, CFRAME_SPACE+96
+  |  .elif GPR64
+  |  addi TMP0, sp, CFRAME_SPACE+112
+  |  .else
   |  addi TMP0, sp, CFRAME_SPACE+8
-  |  stw TMP0, CTSTATE->cb.stack
+  |  .endif
+  |  stp TMP0, CTSTATE->cb.stack
   |   mr CARG1, CTSTATE
   |  stw CTSTATE, SAVE_PC		// Any value outside of bytecode is ok.
   |   mr CARG2, sp
@@ -3019,9 +3049,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  mr CARG1, CTSTATE
   |  mr CARG2, RA
   |  bl extern lj_ccallback_leave	// (CTState *cts, TValue *o)
-  |  lwz CRET1, CTSTATE->cb.gpr[0]
+  |  lp CRET1, CTSTATE->cb.gpr[0]
   |  lfd FARG1, CTSTATE->cb.fpr[0]
-  |  lwz CRET2, CTSTATE->cb.gpr[1]
+  |  lp CRET2, CTSTATE->cb.gpr[1]
+  |  .if GPR64
+  |    lfd FARG2, CTSTATE->cb.fpr[1]
+  |  .else
+  |    lp CARG3, CTSTATE->cb.gpr[2]
+  |    lp CARG4, CTSTATE->cb.gpr[3]
+  |  .endif
+  |  .elfv2 lfd f3, CTSTATE->cb.fpr[2]
+  |  .elfv2 lfd f4, CTSTATE->cb.fpr[3]
+  |  .elfv2 lfd f5, CTSTATE->cb.fpr[4]
+  |  .elfv2 lfd f6, CTSTATE->cb.fpr[5]
+  |  .elfv2 lfd f7, CTSTATE->cb.fpr[6]
+  |  .elfv2 lfd f8, CTSTATE->cb.fpr[7]
   |  b ->vm_leave_unw
   |.endif
   |
@@ -3034,23 +3076,46 @@ static void build_subroutines(BuildCtx *ctx)
   |   lbz CARG2, CCSTATE->nsp
   |   lbz CARG3, CCSTATE->nfpr
   |  neg TMP1, TMP1
+  |  .if GPR64
+  |    std TMP0, 16(sp)
+  |  .else
   |    stw TMP0, 4(sp)
+  |  .endif
   |   cmpwi cr1, CARG3, 0
   |  mr TMP2, sp
   |   addic. CARG2, CARG2, -1
+  |  .if GPR64
+  |  stdux sp, sp, TMP1
+  |  .else
   |  stwux sp, sp, TMP1
+  |  .endif
   |   crnot 4*cr1+eq, 4*cr1+eq		// For vararg calls.
-  |  stw r14, -4(TMP2)
-  |  stw CCSTATE, -8(TMP2)
+  |  .if GPR64
+  |    std r14, -8(TMP2)
+  |    std CCSTATE, -16(TMP2)
+  |  .else
+  |    stw r14, -4(TMP2)
+  |    stw CCSTATE, -8(TMP2)
+  |  .endif
   |  mr r14, TMP2
   |  la TMP1, CCSTATE->stack
+  |  .if GPR64
+  |   sldi CARG2, CARG2, 3
+  |  .else
   |   slwi CARG2, CARG2, 2
+  |  .endif
   |   blty >2
-  |  la TMP2, 8(sp)
+  |  .if ELFV2
+  |    la TMP2, 96(sp)
+  |  .elif GPR64
+  |    la TMP2, 112(sp)
+  |  .else
+  |    la TMP2, 8(sp)
+  |  .endif
   |1:
-  |  lwzx TMP0, TMP1, CARG2
-  |  stwx TMP0, TMP2, CARG2
-  |   addic. CARG2, CARG2, -4
+  |  lpx TMP0, TMP1, CARG2
+  |  stpx TMP0, TMP2, CARG2
+  |   addic. CARG2, CARG2, -WORD_SIZE
   |  bge <1
   |2:
   |  bney cr1, >3
@@ -3062,28 +3127,49 @@ static void build_subroutines(BuildCtx *ctx)
   |  lfd f6, CCSTATE->fpr[5]
   |  lfd f7, CCSTATE->fpr[6]
   |  lfd f8, CCSTATE->fpr[7]
+  |  .if GPR64
+  |  lfd f9, CCSTATE->fpr[8]
+  |  lfd f10, CCSTATE->fpr[9]
+  |  lfd f11, CCSTATE->fpr[10]
+  |  lfd f12, CCSTATE->fpr[11]
+  |  lfd f13, CCSTATE->fpr[12]
+  |  .endif
   |3:
-  |   lp TMP0, CCSTATE->func
-  |  lwz CARG2, CCSTATE->gpr[1]
-  |  lwz CARG3, CCSTATE->gpr[2]
-  |  lwz CARG4, CCSTATE->gpr[3]
-  |  lwz CARG5, CCSTATE->gpr[4]
-  |   mtctr TMP0
-  |  lwz r8, CCSTATE->gpr[5]
-  |  lwz r9, CCSTATE->gpr[6]
-  |  lwz r10, CCSTATE->gpr[7]
-  |  lwz CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
+  |  .toc std TOCREG, SAVE_TOC
+  |   lp FUNCREG, CCSTATE->func
+  |  lp CARG2, CCSTATE->gpr[1]
+  |  lp CARG3, CCSTATE->gpr[2]
+  |  .opd lp TOCREG, TOC_OFS(FUNCREG)
+  |  .opdenv lp ENVREG, ENV_OFS(FUNCREG)
+  |  .opd lp FUNCREG, 0(FUNCREG)
+  |  lp CARG4, CCSTATE->gpr[3]
+  |  lp CARG5, CCSTATE->gpr[4]
+  |   mtctr FUNCREG
+  |  lp r8, CCSTATE->gpr[5]
+  |  lp r9, CCSTATE->gpr[6]
+  |  lp r10, CCSTATE->gpr[7]
+  |  lp CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
   |   bctrl
-  |  lwz CCSTATE:TMP1, -8(r14)
-  |  lwz TMP2, -4(r14)
+  |   .toc lp TOCREG, SAVE_TOC
+  |  .if GPR64
+  |   ld CCSTATE:TMP1, -16(r14)
+  |   ld TMP2, -8(r14)
+  |   ld TMP0, 16(r14)
+  |  .else
+  |   lwz CCSTATE:TMP1, -8(r14)
+  |   lwz TMP2, -4(r14)
   |   lwz TMP0, 4(r14)
-  |  stw CARG1, CCSTATE:TMP1->gpr[0]
+  |  .endif
+  |  stp CARG1, CCSTATE:TMP1->gpr[0]
   |  stfd FARG1, CCSTATE:TMP1->fpr[0]
-  |  stw CARG2, CCSTATE:TMP1->gpr[1]
+  |  stp CARG2, CCSTATE:TMP1->gpr[1]
+  |  .if GPR64
+  |   stfd FARG2, CCSTATE:TMP1->fpr[1]
+  |  .endif
   |   mtlr TMP0
-  |  stw CARG3, CCSTATE:TMP1->gpr[2]
+  |  stp CARG3, CCSTATE:TMP1->gpr[2]
   |   mr sp, r14
-  |  stw CARG4, CCSTATE:TMP1->gpr[3]
+  |  stp CARG4, CCSTATE:TMP1->gpr[3]
   |   mr r14, TMP2
   |  blr
   |.endif
@@ -5333,9 +5419,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  .opdenv lp ENVREG, ENV_OFS(FUNCREG)
     |     st_vmstate
     |  bctrl				// (lua_State *L [, lua_CFunction f])
+    |  .toc lp TOCREG, SAVE_TOC
     |  // Returns nresults.
     |  lp BASE, L->base
-    |  .toc lp TOCREG, SAVE_TOC
     |   slwi RD, CRET1, 3
     |  lp TMP1, L->top
     |    li_vmstate INTERP
@@ -5436,8 +5522,12 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long lj_vm_ffi_call\n"
 #endif
 	"\t.long %d\n"
+#if LJ_ARCH_PPC32ON64
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -2\n"
+#else
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
-	"\t.byte 0x8e\n\t.uleb128 2\n"
+#endif
+	"\t.byte 0x8e\n\t.uleb128 1\n"
 	"\t.byte 0xd\n\t.uleb128 0xe\n"
 	"\t.align 2\n"
 	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
@@ -5519,8 +5609,12 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long lj_vm_ffi_call-.\n"
 	"\t.long %d\n"
 	"\t.uleb128 0\n"			/* augmentation length */
+#if LJ_ARCH_PPC32ON64
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -2\n"
+#else
 	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 -1\n"
-	"\t.byte 0x8e\n\t.uleb128 2\n"
+#endif
+	"\t.byte 0x8e\n\t.uleb128 1\n"
 	"\t.byte 0xd\n\t.uleb128 0xe\n"
 	"\t.align 2\n"
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
