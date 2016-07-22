@@ -998,8 +998,10 @@ LJFOLDF(simplify_nummuldiv_k)
   if (n == 1.0) {  /* x o 1 ==> x */
     return LEFTFOLD;
   } else if (n == -1.0) {  /* x o -1 ==> -x */
+    IRRef op1 = fins->op1;
+    fins->op2 = (IRRef1)lj_ir_ksimd(J, LJ_KSIMD_NEG);  /* Modifies fins. */
+    fins->op1 = op1;
     fins->o = IR_NEG;
-    fins->op2 = (IRRef1)lj_ir_ksimd(J, LJ_KSIMD_NEG);
     return RETRYFOLD;
   } else if (fins->o == IR_MUL && n == 2.0) {  /* x * 2 ==> x + x */
     fins->o = IR_ADD;
