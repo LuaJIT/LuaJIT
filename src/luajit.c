@@ -387,7 +387,7 @@ static int dobytecode(lua_State *L, char **argv)
   for (argv++; *argv != NULL; narg++, argv++)
     lua_pushstring(L, *argv);
   report(L, lua_pcall(L, narg, 0, 0));
-  return 1;
+  return -1;
 }
 
 /* check that argument has no extra characters at the end */
@@ -580,6 +580,6 @@ int main(int argc, char **argv)
   status = lua_cpcall(L, pmain, NULL);
   report(L, status);
   lua_close(L);
-  return (status || smain.status) ? EXIT_FAILURE : EXIT_SUCCESS;
+  return (status || smain.status > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
