@@ -169,10 +169,6 @@ else
     HOST_SYS= Windows
     HOST_MSYS= cygwin
   endif
-  # Use Clang for OSX host.
-  ifeq (Darwin,$(HOST_SYS))
-    DEFAULT_CC= clang
-  endif
 endif
 
 ##############################################################################
