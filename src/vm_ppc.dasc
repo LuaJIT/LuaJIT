@@ -35,14 +35,14 @@
 |.macro stp, a, b; std a, b; .endmacro
 |.macro stpx, a, b, c; stdx a, b, c; .endmacro
 |.define decode_OPP, decode_OP8
-|.define WORD_SIZE, 8
+|.define PSIZE, 8
 |.else
 |.macro lpx, a, b, c; lwzx a, b, c; .endmacro
 |.macro lp, a, b; lwz a, b; .endmacro
 |.macro stp, a, b; stw a, b; .endmacro
 |.macro stpx, a, b, c; stwx a, b, c; .endmacro
 |.define decode_OPP, decode_OP4
-|.define WORD_SIZE, 4
+|.define PSIZE, 4
 |.endif
 |
 |// Convenience macros for TOC handling.
@@ -77,29 +77,6 @@
 |  cmpwi y, 0
 |.else
 |  andi. y, a, i
-|.endif
-|.endmacro
-|
-|.macro clrso, reg
-|.if PPE
-|  li reg, 0
-|  mtxer reg
-|.else
-|  mcrxr cr0
-|.endif
-|.endmacro
-|
-|.macro checkov, reg, noov
-|.if PPE
-|  mfxer reg
-|  add reg, reg, reg
-|  cmpwi reg, 0
-|   li reg, 0
-|   mtxer reg
-|  bgey noov
-|.else
-|  mcrxr cr0
-|  bley noov
 |.endif
 |.endmacro
 |
@@ -149,6 +126,12 @@
 |
 |.define FARG1,		f1
 |.define FARG2,		f2
+|.define FARG3,		f3
+|.define FARG4,		f4
+|.define FARG5,		f5
+|.define FARG6,		f6
+|.define FARG7,		f7
+|.define FARG8,		f8
 |
 |.define CRET1,		r3
 |.define CRET2,		r4
@@ -205,15 +188,15 @@
 |.define SAVE_FPR_,	192     // .. 192+18*8: 64 bit FPR saves.
 |.define SAVE_GPR_,	48      // .. 48+18*8: 64 bit GPR saves.
 |.if ENDIAN_LE
-|.define TMPD_HI,	44(sp)  // \ Link editor temp (ABI mandated).
-|.define TMPD_LO,	40(sp)  // /
-|.define TONUM_HI,	36(sp)  // \ Compiler temp (ABI mandated).
-|.define TONUM_LO,	32(sp)  // /
+|.define TMPD_HI,	44(sp)
+|.define TMPD_LO,	40(sp)
+|.define TONUM_HI,	36(sp)
+|.define TONUM_LO,	32(sp)
 |.else
-|.define TMPD_LO,	44(sp)  // \ Link editor temp (ABI mandated).
-|.define TMPD_HI,	40(sp)  // /
-|.define TONUM_LO,	36(sp)  // \ Compiler temp (ABI mandated).
-|.define TONUM_HI,	32(sp)  // /
+|.define TMPD_LO,	44(sp)
+|.define TMPD_HI,	40(sp)
+|.define TONUM_LO,	36(sp)
+|.define TONUM_HI,	32(sp)
 |.endif
 |.define SAVE_TOC,	24(sp)  // TOC save area.
 |// Next frame lr:	16(sp)
@@ -229,6 +212,8 @@
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
 |.endif
+|
+|.define EXIT_OFFSET,	32
 |
 |.else
 |
@@ -272,6 +257,8 @@
 |.define TONUM_D,	TONUM_HI
 |.endif
 |
+|.define EXIT_OFFSET,	112
+|
 |.endif
 |.else
 |
@@ -311,6 +298,8 @@
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
 |.endif
+|
+|.define EXIT_OFFSET,	16
 |
 |.endif
 |
@@ -1496,8 +1485,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  .gpr64 extsw CARG3, CARG3
   |.if P64
   |  li TMP0, LJ_TNUMX
-  |    srawi TMP3, CARG1, 15
-  |  subfc TMP1, TMP0, CARG1
+  |    srawi TMP3, CARG3, 15
+  |  subfc TMP1, TMP0, CARG3
   |.else
   |  subfc TMP0, TISNUM, CARG3
   |.endif
@@ -1592,7 +1581,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz CARG1, WORD_HI(BASE)
   |    lwz TAB:CARG2, WORD_LO(BASE)
   |  blt ->fff_fallback
-  |   stwx TISNIL, BASE_HI, NARGS8:RC	// Set missing 2nd arg to nil.
+  |.if ENDIAN_LE
+  |   add TMP1, BASE, NARGS8:RC
+  |   stw TISNIL, WORD_HI(TMP1)		// Set missing 2nd arg to nil.
+  |.else
+  |   stwx TISNIL, BASE, NARGS8:RC	// Set missing 2nd arg to nil.
+  |.endif
   |  checktab CARG1
   |   lwz PC, FRAME_PC(BASE)
   |  bne ->fff_fallback
@@ -2208,7 +2202,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  .ffunc_n name
   |  li TMP1, 8
   |1:
-  |   lwzx CARG2, BASE_HI, TMP1
+  |.if ENDIAN_LE
+  |   add CARG2, BASE, TMP1
+  |   lwz CARG2, WORD_HI(CARG2)
+  |.else
+  |   lwzx CARG2, BASE, TMP1
+  |.endif
   |   lfdx FARG2, BASE, TMP1
   |  cmplw cr1, TMP1, NARGS8:RC
   |   checknum CARG2
@@ -2734,7 +2733,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->cont_nop
   |
   |9:
-  |  stwx TISNIL, BASE_HI, RC
+  |.if ENDIAN_LE
+  |  addi BASEP4, BASE, 4
+  |  stwx TISNIL, BASEP4, RC
+  |.else
+  |  stwx TISNIL, BASE, RC
+  |.endif
   |  addi RC, RC, 8
   |  b <3
   |.endif
@@ -2758,40 +2762,72 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |.macro savex_, a, b, c, d
-  |  stfd f..a, 16+a*8(sp)
-  |  stfd f..b, 16+b*8(sp)
-  |  stfd f..c, 16+c*8(sp)
-  |  stfd f..d, 16+d*8(sp)
+  |  stfd f..a, EXIT_OFFSET+a*8(sp)
+  |  stfd f..b, EXIT_OFFSET+b*8(sp)
+  |  stfd f..c, EXIT_OFFSET+c*8(sp)
+  |  stfd f..d, EXIT_OFFSET+d*8(sp)
+  |.endmacro
+  |
+  |.macro saver, a
+  |  stp r..a, EXIT_OFFSET+32*8+a*PSIZE(sp)
   |.endmacro
   |
   |->vm_exit_handler:
   |.if JIT
-  // XXX: endian
-  |  addi sp, sp, -(16+32*8+32*4)
-  |  stmw r2, 16+32*8+2*4(sp)
+  |  addi sp, TMP0, sp, -(EXIT_OFFSET+32*8+32*PSIZE)
+  |  saver 3 // CARG1
+  |  saver 4 // CARG2
+  |  saver 5 // CARG3
+  |  saver 17 // DISPATCH
   |    addi DISPATCH, JGL, -GG_DISP2G-32768
   |    li CARG2, ~LJ_VMST_EXIT
-  |   lwz CARG1, 16+32*8+32*4(sp)	// Get stack chain.
+  |   lp CARG1, EXIT_OFFSET+32*8+32*PSIZE(sp)	// Get stack chain.
   |    stw CARG2, DISPATCH_GL(vmstate)(DISPATCH)
+  |  saver 2
+  |  saver 6
+  |  saver 7
+  |  saver 8
+  |  saver 9
+  |  saver 10
+  |  saver 11
+  |  saver 12
+  |  saver 13
   |  savex_ 0,1,2,3
-  |   stw CARG1, 0(sp)			// Store extended stack chain.
-  |   clrso TMP1
+  |   stp CARG1, 0(sp)			// Store extended stack chain.
+
   |  savex_ 4,5,6,7
-  |   addi CARG2, sp, 16+32*8+32*4	// Recompute original value of sp.
+  |  saver 14
+  |  saver 15
+  |  saver 16
+  |  saver 18
+  |   addi CARG2, sp, EXIT_OFFSET+32*8+32*PSIZE	// Recompute original value of sp.
   |  savex_ 8,9,10,11
-  |   stw CARG2, 16+32*8+1*4(sp)	// Store sp in RID_SP.
+  |   stp CARG2, EXIT_OFFSET+32*8+1*PSIZE(sp)	// Store sp in RID_SP.
   |  savex_ 12,13,14,15
   |   mflr CARG3
   |   li TMP1, 0
   |  savex_ 16,17,18,19
-  |   stw TMP1, 16+32*8+0*4(sp)		// Clear RID_TMP.
+  |   stw TMP1, EXIT_OFFSET+32*8+0*PSIZE(sp)		// Clear RID_TMP.
   |  savex_ 20,21,22,23
   |   lhz CARG4, 2(CARG3)		// Load trace number.
   |  savex_ 24,25,26,27
   |  lwz L, DISPATCH_GL(cur_L)(DISPATCH)
   |  savex_ 28,29,30,31
+  |  saver 19
+  |  saver 20
+  |  saver 21
+  |  saver 22
+  |  saver 23
+  |  saver 24
+  |  saver 25
+  |  saver 26
+  |  saver 27
+  |  saver 28
+  |  saver 29
+  |  saver 30
+  |  saver 31
   |   sub CARG3, TMP0, CARG3		// Compute exit number.
-  |  lp BASE, DISPATCH_GL(jit_base)(DISPATCH)
+  |  lwz BASE, DISPATCH_GL(jit_base)(DISPATCH)
   |   srwi CARG3, CARG3, 2
   |  stp L, DISPATCH_J(L)(DISPATCH)
   |   subi CARG3, CARG3, 2
@@ -2800,11 +2836,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  stw TMP1, DISPATCH_GL(jit_base)(DISPATCH)
   |  addi CARG1, DISPATCH, GG_DISP2J
   |   stw CARG3, DISPATCH_J(exitno)(DISPATCH)
-  |  addi CARG2, sp, 16
+  |  addi CARG2, sp, EXIT_OFFSET
   |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)
   |  // Returns MULTRES (unscaled) or negated error code.
   |  lp TMP1, L->cframe
-  |  lwz TMP2, 0(sp)
+  |  lp TMP2, 0(sp)
   |   lp BASE, L->base
   |.if GPR64
   |  rldicr sp, TMP1, 0, 61
@@ -2812,13 +2848,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  rlwinm sp, TMP1, 0, 0, 29
   |.endif
   |   lwz PC, SAVE_PC			// Get SAVE_PC.
-  |  stw TMP2, 0(sp)
+  |  stp TMP2, 0(sp)
   |  stw L, SAVE_L			// Set SAVE_L (on-trace resume/yield).
   |  b >1
   |.endif
   |->vm_exit_interp:
   |.if JIT
-  // XXX: endian
   |  // CARG1 = MULTRES or negated error code, BASE, PC and JGL set.
   |  lwz L, SAVE_L
   |  addi DISPATCH, JGL, -GG_DISP2G-32768
@@ -2859,14 +2894,14 @@ static void build_subroutines(BuildCtx *ctx)
   |   decode_RA8 RA, INS
   |  lpx TMP0, DISPATCH, TMP1
   |  mtctr TMP0
-  |  cmplwi TMP1, BC_FUNCF*4		// Function header?
+  |  cmplwi TMP1, BC_FUNCF*PSIZE	// Function header?
   |  bge >2
   |   decode_RB8 RB, INS
   |   decode_RD8 RD, INS
   |   decode_RC8 RC, INS
   |  bctr
   |2:
-  |  cmplwi TMP1, (BC_FUNCC+2)*4	// Fast function?
+  |  cmplwi TMP1, (BC_FUNCC+2)*PSIZE	// Fast function?
   |  blt >3
   |  // Check frame below fast function.
   |  lwz TMP1, FRAME_PC(BASE)
@@ -2897,6 +2932,8 @@ static void build_subroutines(BuildCtx *ctx)
   |// NYI: Use internal implementations of floor, ceil, trunc.
   |
   |->vm_modi:
+  |  li TMP1, 0
+  |  mtxer TMP1
   |  divwo. TMP0, CARG1, CARG2
   |  bso >1
   |.if GPR64
@@ -2915,7 +2952,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmpwi CARG2, 0
   |   li CARG1, 0
   |  beqlr
-  |  clrso TMP0			// Clear SO for -2147483648 % -1 and return 0.
+  |  // Clear SO for -2147483648 % -1 and return 0.
+  |  crxor 4*cr0+so, 4*cr0+so, 4*cr0+so
   |  blr
   |
   |//-----------------------------------------------------------------------
@@ -2961,7 +2999,11 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |// Handler for callback functions. Callback slot number in r12, g in r11.
+  |// Handler for callback functions.
+  |// 32-bit: Callback slot number in r12, g in r11.
+  |// 64-bit v1: Callback slot number in bits 47+ of r11, g in 0-46, TOC in r2.
+  |// 64-bit v2: Callback slot number in bits 2-11 of r12, g in r11,
+  |// vm_ffi_callback in r2.
   |->vm_ffi_callback:
   |.if FFI
   |.type CTSTATE, CTState, PC
@@ -3115,7 +3157,7 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  lpx TMP0, TMP1, CARG2
   |  stpx TMP0, TMP2, CARG2
-  |   addic. CARG2, CARG2, -WORD_SIZE
+  |   addic. CARG2, CARG2, -PSIZE
   |  bge <1
   |2:
   |  bney cr1, >3
@@ -3166,6 +3208,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  .if GPR64
   |   stfd FARG2, CCSTATE:TMP1->fpr[1]
   |  .endif
+  |  .elfv2 stfd FARG3, CCSTATE:TMP1->fpr[2]
+  |  .elfv2 stfd FARG4, CCSTATE:TMP1->fpr[3]
+  |  .elfv2 stfd FARG5, CCSTATE:TMP1->fpr[4]
+  |  .elfv2 stfd FARG6, CCSTATE:TMP1->fpr[5]
+  |  .elfv2 stfd FARG7, CCSTATE:TMP1->fpr[6]
+  |  .elfv2 stfd FARG8, CCSTATE:TMP1->fpr[7]
   |   mtlr TMP0
   |  stp CARG3, CCSTATE:TMP1->gpr[2]
   |   mr sp, r14
@@ -3624,6 +3672,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = dst*8, RD = src*8
     |  lwzx TMP1, BASE_HI, RD
     |   lwzx TMP0, BASE_LO, RD
+    |.if DUALNUM and not GPR64
+    |  mtxer ZERO
+    |.endif
     |  checknum TMP1
     |.if DUALNUM
     |  bne >5
@@ -3635,7 +3686,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.else
     |  nego. TMP0, TMP0
     |  bso >4
-    |1:
     |.endif
     |  ins_next1
     |  stwx TISNUM, BASE_HI, RA
@@ -3643,10 +3693,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |3:
     |  ins_next2
     |4:
-    |.if not GPR64
-    |  // Potential overflow.
-    |  checkov TMP1, <1			// Ignore unrelated overflow.
-    |.endif
     |  lus TMP1, 0x41e0			// 2^31.
     |  li TMP0, 0
     |  b >7
@@ -3856,20 +3902,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   .endif
     ||  break;
     ||}
+    |  mtxer ZERO
     |  checknum cr1, TMP2
     |  bne >5
     |  bne cr1, >5
     |  intins CARG1, CARG1, CARG2
-    |  bso >4
-    |1:
+    |  ins_arithfallback bso
     |  ins_next1
     |  stwx TISNUM, BASE_HI, RA
     |  stwx CARG1, BASE_LO, RA
     |2:
     |  ins_next2
-    |4:  // Overflow.
-    |  checkov TMP0, <1			// Ignore unrelated overflow.
-    |  ins_arithfallback b
     |5:  // FP variant.
     ||if (vk == 1) {
     |  lfd f15, 0(RB)
@@ -4017,6 +4060,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  slwi RD, RD, 13
     |  srawi TMP1, RD, 31
     |  xor TMP2, TMP1, RD
+    |  .gpr64 extsw RD, RD
     |  sub TMP2, TMP2, TMP1		// TMP2 = abs(x)
     |  cntlzw TMP3, TMP2
     |  subfic TMP1, TMP3, 0x40d		// TMP1 = exponent-1
@@ -4174,6 +4218,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add CARG2, BASE, RA
     |  bl extern lj_func_closeuv	// (lua_State *L, TValue *level)
     |  lp BASE, L->base
+    |  addi BASEP4, BASE, 4
     |1:
     |  ins_next
     break;
@@ -4192,6 +4237,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Returns GCfuncL *.
     |  lp BASE, L->base
     |   li TMP0, LJ_TFUNC
+    |  addi BASEP4, BASE, 4
     |  stwx TMP0, BASE_HI, RA
     |  stwx LFUNC:CRET1, BASE_LO, RA
     |  ins_next
@@ -4295,12 +4341,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endif
     |  ble ->vmeta_tgetv		// Integer key and in array part?
     |  .if ENDIAN_LE
-    |    addi TMP3, TMP1, 4
-    |    lwzx TMP0, TMP3, TMP2
+    |    lfdux f14, TMP1, TMP2
+    |    lwz TMP0, WORD_HI(TMP1)
     |  .else
     |    lwzx TMP0, TMP1, TMP2
+    |    lfdx f14, TMP1, TMP2
     |  .endif
-    |   lfdx f14, TMP1, TMP2
     |  checknil TMP0; beq >2
     |1:
     |  ins_next1
@@ -4381,12 +4427,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   lwz TMP2, TAB:RB->array
     |  cmplw TMP0, TMP1; bge ->vmeta_tgetb
     |  .if ENDIAN_LE
-    |    addi TMP1, TMP2, 4
-    |    lwzx TMP1, TMP1, RC
+    |    lfdux f0, TMP2, RC
+    |    lwz TMP1, WORD_HI(TMP2)
     |  .else
     |    lwzx TMP1, TMP2, RC
+    |    lfdx f0, TMP2, RC
     |  .endif
-    |   lfdx f0, TMP2, RC
     |  checknil TMP1; beq >5
     |1:
     |  ins_next1
@@ -4883,9 +4929,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Despecialize bytecode if any of the checks fail.
     |  li TMP0, BC_JMP
     |   li TMP1, BC_ITERC
+    |  .if ENDIAN_LE
+    |  stb TMP0, -4(PC)
+    |  .else
     |  stb TMP0, -1(PC)
+    |  .endif
     |    addis PC, TMP3, -(BCBIAS_J*4 >> 16)
+    |  .if ENDIAN_LE
+    |   stb TMP1, 0(PC)
+    |  .else
     |   stb TMP1, 3(PC)
+    |  .endif
     |  b <1
     break;
 
@@ -4924,7 +4978,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   addi RA, RA, 8
     |  blt <2
     |3:
-    |  addi BASEP4, BASE, 4
     |  ins_next
     |
     |5:  // Copy all varargs.
@@ -4957,6 +5010,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  add RA, BASE, RA
     |  add RC, BASE, SAVE0
     |  subi TMP3, BASE, 8
+    |  addi BASEP4, BASE, 4
     |  b <6
     break;
 
@@ -5082,6 +5136,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if DUALNUM
     |  // Integer loop.
     |  lwzux2 TMP1, CARG1, RA, BASE
+    if (vk) {
+      |  mtxer ZERO
+    }
     |  cmplw cr0, TMP1, TISNUM
     if (vk) {
       |   lwz CARG3, FORL_STEP*8+WORD_LO(RA)
@@ -5097,7 +5154,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |.endif
       |    cmpwi cr6, CARG3, 0
       |   lwz CARG2, FORL_STOP*8+WORD_LO(RA)
-      |  bso >6
+      |  bso >2
       |4:
       |  stw CARG1, FORL_IDX*8+WORD_LO(RA)
     } else {
@@ -5139,11 +5196,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Invert check for negative step.
     |  cmpw CARG2, CARG1
     |  b <1
-    if (vk) {
-      |6:  // Potential overflow.
-      |  checkov TMP0, <4		// Ignore unrelated overflow.
-      |  b <2
-    }
     |.endif
     if (vk) {
       |.if DUALNUM
@@ -5285,7 +5337,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Traces on PPC don't store the trace number, so use 0.
     |   stw ZERO, DISPATCH_GL(vmstate)(DISPATCH)
     |  lwzx TRACE:TMP2, TMP1, RD
-    |  clrso TMP1
+    |  mtxer ZERO
     |  lp TMP2, TRACE:TMP2->mcode
     |   stw BASE, DISPATCH_GL(jit_base)(DISPATCH)
     |  mtctr TMP2
