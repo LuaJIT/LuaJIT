@@ -390,8 +390,13 @@
       if (nfpr + 1 <= CCALL_NARG_FPR) { \
 	dp = &cc->fpr[nfpr]; \
 	nfpr += 1; \
-	ngpr += 1;  /* align GPRs */ \
 	d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
+	if (ngpr + 1 <= maxgpr) \
+	  ngpr += 1;  /* align GPRs */ \
+	else if (nsp + 1 <= CCALL_MAXSTACK) \
+	  nsp += 1; /* align save area slots */ \
+        else \
+          goto err_nyi; /* Too many args */ \
 	goto done; \
       } \
     } else {  /* Try to pass argument in GPRs. */ \
