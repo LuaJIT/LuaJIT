@@ -395,8 +395,8 @@
 	  ngpr += 1;  /* align GPRs */ \
 	else if (nsp + 1 <= CCALL_MAXSTACK) \
 	  nsp += 1; /* align save area slots */ \
-        else \
-          goto err_nyi; /* Too many args */ \
+	else \
+	  goto err_nyi; /* Too many args */ \
 	goto done; \
       } \
     } else {  /* Try to pass argument in GPRs. */ \
