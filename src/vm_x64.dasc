@@ -1105,11 +1105,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov BASE, L:RB->base
   |  mov NARGS:RDd, TMP1d
   |  mov LFUNC:RB, [RA-16]
-  |  cleartp LFUNC:RB
   |  add NARGS:RDd, 1
   |  // This is fragile. L->base must not move, KBASE must always be defined.
   |  cmp KBASE, BASE			// Continue with CALLT if flag set.
   |  je ->BC_CALLT_Z
+  |  cleartp LFUNC:RB
   |  mov BASE, RA
   |  ins_call				// Otherwise call resolved metamethod.
   |
@@ -2401,8 +2401,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movzx RCd, byte [rbp-8]		// Reconstruct exit number.
   |  mov RCH, byte [rbp-16]
   |  mov [rbp-8], r15; mov [rbp-16], r14
-  |  // Caveat: DISPATCH is rbx.
-  |  mov DISPATCH, [ebp]
+  |  // DISPATCH is preserved on-trace in LJ_GC64 mode.
   |  mov RAd, [DISPATCH+DISPATCH_GL(vmstate)]	// Get trace number.
   |  set_vmstate EXIT
   |  mov [DISPATCH+DISPATCH_J(exitno)], RCd
@@ -3516,7 +3515,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD	// RA = level, RD = target
     |  branchPC RD			// Do this first to free RD.
     |  mov L:RB, SAVE_L
-    |  cmp dword L:RB->openupval, 0
+    |  cmp aword L:RB->openupval, 0
     |  je >1
     |  mov L:RB->base, BASE
     |  lea CARG2, [BASE+RA*8]		// Caveat: CARG2 == BASE

@@ -46,11 +46,15 @@
 #define JIT_F_CPU_FIRST		JIT_F_SQRT
 #define JIT_F_CPUSTRING		"\4SQRT\5ROUND"
 #elif LJ_TARGET_MIPS
-#define JIT_F_MIPS32R2		0x00000010
+#define JIT_F_MIPSXXR2		0x00000010
 
 /* Names for the CPU-specific flags. Must match the order above. */
-#define JIT_F_CPU_FIRST		JIT_F_MIPS32R2
+#define JIT_F_CPU_FIRST		JIT_F_MIPSXXR2
+#if LJ_TARGET_MIPS32
 #define JIT_F_CPUSTRING		"\010MIPS32R2"
+#else
+#define JIT_F_CPUSTRING		"\010MIPS64R2"
+#endif
 #else
 #define JIT_F_CPU_FIRST		0
 #define JIT_F_CPUSTRING		""
@@ -179,13 +183,25 @@ LJ_STATIC_ASSERT(SNAP_CONT == TREF_CONT);
 #define SNAP(slot, flags, ref)	(((SnapEntry)(slot) << 24) + (flags) + (ref))
 #define SNAP_TR(slot, tr) \
   (((SnapEntry)(slot) << 24) + ((tr) & (TREF_CONT|TREF_FRAME|TREF_REFMASK)))
+#if !LJ_FR2
 #define SNAP_MKPC(pc)		((SnapEntry)u32ptr(pc))
+#endif
 #define SNAP_MKFTSZ(ftsz)	((SnapEntry)(ftsz))
 #define snap_ref(sn)		((sn) & 0xffff)
 #define snap_slot(sn)		((BCReg)((sn) >> 24))
 #define snap_isframe(sn)	((sn) & SNAP_FRAME)
-#define snap_pc(sn)		((const BCIns *)(uintptr_t)(sn))
 #define snap_setref(sn, ref)	(((sn) & (0xffff0000&~SNAP_NORESTORE)) | (ref))
+
+static LJ_AINLINE const BCIns *snap_pc(SnapEntry *sn)
+{
+#if LJ_FR2
+  uint64_t pcbase;
+  memcpy(&pcbase, sn, sizeof(uint64_t));
+  return (const BCIns *)(pcbase >> 8);
+#else
+  return (const BCIns *)(uintptr_t)*sn;
+#endif
+}
 
 /* Snapshot and exit numbers. */
 typedef uint32_t SnapNo;
@@ -308,6 +324,37 @@ enum {
   LJ_KSIMD__MAX
 };
 
+enum {
+#if LJ_TARGET_X86ORX64
+  LJ_K64_TOBIT,		/* 2^52 + 2^51 */
+  LJ_K64_2P64,		/* 2^64 */
+  LJ_K64_M2P64,		/* -2^64 */
+#if LJ_32
+  LJ_K64_M2P64_31,	/* -2^64 or -2^31 */
+#else
+  LJ_K64_M2P64_31 = LJ_K64_M2P64,
+#endif
+#endif
+#if LJ_TARGET_MIPS
+  LJ_K64_2P31,		/* 2^31 */
+#endif
+  LJ_K64__MAX,
+};
+
+enum {
+#if LJ_TARGET_X86ORX64
+  LJ_K32_M2P64_31,	/* -2^64 or -2^31 */
+#endif
+#if LJ_TARGET_PPC
+  LJ_K32_2P52_2P31,	/* 2^52 + 2^31 */
+  LJ_K32_2P52,		/* 2^52 */
+#endif
+#if LJ_TARGET_PPC || LJ_TARGET_MIPS
+  LJ_K32_2P31,		/* 2^31 */
+#endif
+  LJ_K32__MAX
+};
+
 /* Get 16 byte aligned pointer to SIMD constant. */
 #define LJ_KSIMD(J, n) \
   ((TValue *)(((intptr_t)&J->ksimd[2*(n)] + 15) & ~(intptr_t)15))
@@ -324,13 +371,14 @@ enum {
 /* Fold state is used to fold instructions on-the-fly. */
 typedef struct FoldState {
   IRIns ins;		/* Currently emitted instruction. */
-  IRIns left;		/* Instruction referenced by left operand. */
-  IRIns right;		/* Instruction referenced by right operand. */
+  IRIns left[2];	/* Instruction referenced by left operand. */
+  IRIns right[2];	/* Instruction referenced by right operand. */
 } FoldState;
 
 /* JIT compiler state. */
 typedef struct jit_State {
   GCtrace cur;		/* Current trace. */
+  GCtrace *curfinal;	/* Final address of current trace (set during asm). */
 
   lua_State *L;		/* Current Lua state. */
   const BCIns *pc;	/* Current PC. */
@@ -360,8 +408,9 @@ typedef struct jit_State {
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
-  MRef k64;		/* Pointer to chained array of 64 bit constants. */
   TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
+  TValue k64[LJ_K64__MAX];  /* Common 8 byte constants used by backends. */
+  uint32_t k32[LJ_K32__MAX];  /* Ditto for 4 byte constants. */
 
   IRIns *irbuf;		/* Temp. IR instruction buffer. Biased with REF_BIAS. */
   IRRef irtoplim;	/* Upper limit of instuction buffer (biased). */
@@ -382,7 +431,7 @@ typedef struct jit_State {
   GCRef *trace;		/* Array of traces. */
   TraceNo freetrace;	/* Start of scan for next free trace. */
   MSize sizetrace;	/* Size of trace array. */
-  TValue *ktracep;	/* Pointer to K64Array slot with GCtrace pointer. */
+  IRRef1 ktrace;	/* Reference to KGC with GCtrace. */
 
   IRRef1 chain[IR__MAX];  /* IR instruction skip-list chain anchors. */
   TRef slot[LJ_MAX_JSLOTS+LJ_STACK_EXTRA];  /* Stack slot map. */

@@ -715,15 +715,19 @@ static uint32_t jit_cpudetect(lua_State *L)
 #if LJ_HASJIT
   /* Compile-time MIPS CPU detection. */
 #if LJ_ARCH_VERSION >= 20
-  flags |= JIT_F_MIPS32R2;
+  flags |= JIT_F_MIPSXXR2;
 #endif
   /* Runtime MIPS CPU detection. */
 #if defined(__GNUC__)
-  if (!(flags & JIT_F_MIPS32R2)) {
+  if (!(flags & JIT_F_MIPSXXR2)) {
     int x;
+#ifdef __mips16
+    x = 0;  /* Runtime detection is difficult. Ensure optimal -march flags. */
+#else
     /* On MIPS32R1 rotr is treated as srl. rotr r2,r2,1 -> srl r2,r2,1. */
     __asm__("li $2, 1\n\t.long 0x00221042\n\tmove %0, $2" : "=r"(x) : : "$2");
-    if (x) flags |= JIT_F_MIPS32R2;  /* Either 0x80000000 (R2) or 0 (R1). */
+#endif
+    if (x) flags |= JIT_F_MIPSXXR2;  /* Either 0x80000000 (R2) or 0 (R1). */
   }
 #endif
 #endif

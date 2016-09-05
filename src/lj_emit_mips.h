@@ -35,7 +35,7 @@ static void emit_fgh(ASMState *as, MIPSIns mi, Reg rf, Reg rg, Reg rh)
 
 static void emit_rotr(ASMState *as, Reg dest, Reg src, Reg tmp, uint32_t shift)
 {
-  if ((as->flags & JIT_F_MIPS32R2)) {
+  if ((as->flags & JIT_F_MIPSXXR2)) {
     emit_dta(as, MIPSI_ROTR, dest, src, shift);
   } else {
     emit_dst(as, MIPSI_OR, dest, dest, tmp);
@@ -112,8 +112,8 @@ static void emit_lsptr(ASMState *as, MIPSIns mi, Reg r, void *p, RegSet allow)
   emit_tsi(as, mi, r, base, i);
 }
 
-#define emit_loadn(as, r, tv) \
-  emit_lsptr(as, MIPSI_LDC1, ((r) & 31), (void *)(tv), RSET_GPR)
+#define emit_loadk64(as, r, ir) \
+  emit_lsptr(as, MIPSI_LDC1, ((r) & 31), (void *)&ir_knum((ir))->u64, RSET_GPR)
 
 /* Get/set global_State fields. */
 static void emit_lsglptr(ASMState *as, MIPSIns mi, Reg r, int32_t ofs)
@@ -157,7 +157,8 @@ static void emit_call(ASMState *as, void *target, int needcfa)
   MCode *p = as->mcp;
   *--p = MIPSI_NOP;
   if ((((uintptr_t)target ^ (uintptr_t)p) >> 28) == 0) {
-    *--p = MIPSI_JAL | (((uintptr_t)target >>2) & 0x03ffffffu);
+    *--p = (((uintptr_t)target & 1) ? MIPSI_JALX : MIPSI_JAL) |
+	   (((uintptr_t)target >>2) & 0x03ffffffu);
   } else {  /* Target out of range: need indirect call. */
     *--p = MIPSI_JALR | MIPSF_S(RID_CFUNCADDR);
     needcfa = 1;

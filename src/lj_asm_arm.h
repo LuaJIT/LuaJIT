@@ -909,7 +909,6 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 
 static void asm_uref(ASMState *as, IRIns *ir)
 {
-  /* NYI: Check that UREFO is still open and not aliasing a slot. */
   Reg dest = ra_dest(as, ir, RSET_GPR);
   if (irref_isk(ir->op1)) {
     GCfunc *fn = ir_kfunc(IR(ir->op1));
@@ -998,22 +997,26 @@ static ARMIns asm_fxstoreins(IRIns *ir)
 
 static void asm_fload(ASMState *as, IRIns *ir)
 {
-  Reg dest = ra_dest(as, ir, RSET_GPR);
-  Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
-  ARMIns ai = asm_fxloadins(ir);
-  int32_t ofs;
-  if (ir->op2 == IRFL_TAB_ARRAY) {
-    ofs = asm_fuseabase(as, ir->op1);
-    if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
-      emit_dn(as, ARMI_ADD|ARMI_K12|ofs, dest, idx);
-      return;
+  if (ir->op1 == REF_NIL) {
+    lua_assert(!ra_used(ir));  /* We can end up here if DCE is turned off. */
+  } else {
+    Reg dest = ra_dest(as, ir, RSET_GPR);
+    Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
+    ARMIns ai = asm_fxloadins(ir);
+    int32_t ofs;
+    if (ir->op2 == IRFL_TAB_ARRAY) {
+      ofs = asm_fuseabase(as, ir->op1);
+      if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
+	emit_dn(as, ARMI_ADD|ARMI_K12|ofs, dest, idx);
+	return;
+      }
     }
+    ofs = field_ofs[ir->op2];
+    if ((ai & 0x04000000))
+      emit_lso(as, ai, dest, idx, ofs);
+    else
+      emit_lsox(as, ai, dest, idx, ofs);
   }
-  ofs = field_ofs[ir->op2];
-  if ((ai & 0x04000000))
-    emit_lso(as, ai, dest, idx, ofs);
-  else
-    emit_lsox(as, ai, dest, idx, ofs);
 }
 
 static void asm_fstore(ASMState *as, IRIns *ir)

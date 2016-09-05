@@ -219,8 +219,9 @@ static void emit_lsptr(ASMState *as, ARMIns ai, Reg r, void *p)
 
 #if !LJ_SOFTFP
 /* Load a number constant into an FPR. */
-static void emit_loadn(ASMState *as, Reg r, cTValue *tv)
+static void emit_loadk64(ASMState *as, Reg r, IRIns *ir)
 {
+  cTValue *tv = ir_knum(ir);
   int32_t i;
   if ((as->flags & JIT_F_VFPV3) && !tv->u32.lo) {
     uint32_t hi = tv->u32.hi;

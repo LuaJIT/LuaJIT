@@ -11,8 +11,8 @@
 ------------------------------------------------------------------------------
 
 local type = type
-local sub, byte, format = string.sub, string.byte, string.format
-local match, gmatch, gsub = string.match, string.gmatch, string.gsub
+local byte, format = string.byte, string.format
+local match, gmatch = string.match, string.gmatch
 local concat = table.concat
 local bit = require("bit")
 local band, bor, tohex = bit.band, bit.bor, bit.tohex
@@ -38,7 +38,7 @@ local map_special = {
   "multST",	"multuST",	"divST",	"divuST",
   false,	false,		false,		false,
   "addDST",	"addu|moveDST0", "subDST",	"subu|neguDS0T",
-  "andDST",	"orDST",	"xorDST",	"nor|notDST0",
+  "andDST",	"or|moveDST0",	"xorDST",	"nor|notDST0",
   false,	false,		"sltDST",	"sltuDST",
   false,	false,		false,		false,
   "tgeSTZ",	"tgeuSTZ",	"tltSTZ",	"tltuSTZ",
@@ -214,7 +214,7 @@ local map_pri = {
   map_cop0,	map_cop1,	false,		map_cop1x,
   "beql|beqzlST0B",	"bnel|bnezlST0B",	"blezlSB",	"bgtzlSB",
   false,	false,		false,		false,
-  map_special2,	false,		false,		map_special3,
+  map_special2,	"jalxJ",	false,		map_special3,
   "lbTSO",	"lhTSO",	"lwlTSO",	"lwTSO",
   "lbuTSO",	"lhuTSO",	"lwrTSO",	false,
   "sbTSO",	"shTSO",	"swlTSO",	"swTSO",

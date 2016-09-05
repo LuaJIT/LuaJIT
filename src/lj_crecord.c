@@ -712,6 +712,19 @@ static TRef crec_reassoc_ofs(jit_State *J, TRef tr, ptrdiff_t *ofsp, MSize sz)
   return tr;
 }
 
+/* Tailcall to function. */
+static void crec_tailcall(jit_State *J, RecordFFData *rd, cTValue *tv)
+{
+  TRef kfunc = lj_ir_kfunc(J, funcV(tv));
+#if LJ_FR2
+  J->base[-2] = kfunc;
+  J->base[-1] = TREF_FRAME;
+#else
+  J->base[-1] = kfunc | TREF_FRAME;
+#endif
+  rd->nres = -1;  /* Pending tailcall. */
+}
+
 /* Record ctype __index/__newindex metamethods. */
 static void crec_index_meta(jit_State *J, CTState *cts, CType *ct,
 			    RecordFFData *rd)
@@ -721,8 +734,7 @@ static void crec_index_meta(jit_State *J, CTState *cts, CType *ct,
   if (!tv)
     lj_trace_err(J, LJ_TRERR_BADTYPE);
   if (tvisfunc(tv)) {
-    J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
-    rd->nres = -1;  /* Pending tailcall. */
+    crec_tailcall(J, rd, tv);
   } else if (rd->data == 0 && tvistab(tv) && tref_isstr(J->base[1])) {
     /* Specialize to result of __index lookup. */
     cTValue *o = lj_tab_get(J->L, tabV(tv), &rd->argv[1]);
@@ -1119,20 +1131,20 @@ static void crec_snap_caller(jit_State *J)
   lua_State *L = J->L;
   TValue *base = L->base, *top = L->top;
   const BCIns *pc = J->pc;
-  TRef ftr = J->base[-1];
+  TRef ftr = J->base[-1-LJ_FR2];
   ptrdiff_t delta;
   if (!frame_islua(base-1) || J->framedepth <= 0)
     lj_trace_err(J, LJ_TRERR_NYICALL);
   J->pc = frame_pc(base-1); delta = 1+LJ_FR2+bc_a(J->pc[-1]);
   L->top = base; L->base = base - delta;
-  J->base[-1] = TREF_FALSE;
+  J->base[-1-LJ_FR2] = TREF_FALSE;
   J->base -= delta; J->baseslot -= (BCReg)delta;
-  J->maxslot = (BCReg)delta; J->framedepth--;
+  J->maxslot = (BCReg)delta-LJ_FR2; J->framedepth--;
   lj_snap_add(J);
   L->base = base; L->top = top;
   J->framedepth++; J->maxslot = 1;
   J->base += delta; J->baseslot += (BCReg)delta;
-  J->base[-1] = ftr; J->pc = pc;
+  J->base[-1-LJ_FR2] = ftr; J->pc = pc;
 }
 
 /* Record function call. */
@@ -1224,8 +1236,7 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
   tv = lj_ctype_meta(cts, ctype_isptr(ct->info) ? ctype_cid(ct->info) : id, mm);
   if (tv) {
     if (tvisfunc(tv)) {
-      J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
-      rd->nres = -1;  /* Pending tailcall. */
+      crec_tailcall(J, rd, tv);
       return;
     }
   } else if (mm == MM_new) {
@@ -1238,7 +1249,7 @@ void LJ_FASTCALL recff_cdata_call(jit_State *J, RecordFFData *rd)
 
 static TRef crec_arith_int64(jit_State *J, TRef *sp, CType **s, MMS mm)
 {
-  if (ctype_isnum(s[0]->info) && ctype_isnum(s[1]->info)) {
+  if (sp[0] && sp[1] && ctype_isnum(s[0]->info) && ctype_isnum(s[1]->info)) {
     IRType dt;
     CTypeID id;
     TRef tr;
@@ -1296,6 +1307,7 @@ static TRef crec_arith_ptr(jit_State *J, TRef *sp, CType **s, MMS mm)
 {
   CTState *cts = ctype_ctsG(J2G(J));
   CType *ctp = s[0];
+  if (!(sp[0] && sp[1])) return 0;
   if (ctype_isptr(ctp->info) || ctype_isrefarray(ctp->info)) {
     if ((mm == MM_sub || mm == MM_eq || mm == MM_lt || mm == MM_le) &&
 	(ctype_isptr(s[1]->info) || ctype_isrefarray(s[1]->info))) {
@@ -1373,8 +1385,7 @@ static TRef crec_arith_meta(jit_State *J, TRef *sp, CType **s, CTState *cts,
   }
   if (tv) {
     if (tvisfunc(tv)) {
-      J->base[-1] = lj_ir_kfunc(J, funcV(tv)) | TREF_FRAME;
-      rd->nres = -1;  /* Pending tailcall. */
+      crec_tailcall(J, rd, tv);
       return 0;
     }  /* NYI: non-function metamethods. */
   } else if ((MMS)rd->data == MM_eq) {  /* Fallback cdata pointer comparison. */

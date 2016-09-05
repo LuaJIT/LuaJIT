@@ -120,7 +120,7 @@ end
 -- Show top N list.
 local function prof_top(count1, count2, samples, indent)
   local t, n = {}, 0
-  for k, v in pairs(count1) do
+  for k in pairs(count1) do
     n = n + 1
     t[n] = k
   end

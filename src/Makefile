@@ -121,8 +121,8 @@ XCFLAGS=
 #
 # Use the system provided memory allocator (realloc) instead of the
 # bundled memory allocator. This is slower, but sometimes helpful for
-# debugging. This option cannot be enabled on x64, since realloc usually
-# doesn't return addresses in the right address range.
+# debugging. This option cannot be enabled on x64 without GC64, since
+# realloc usually doesn't return addresses in the right address range.
 # OTOH this option is mandatory for Valgrind's memcheck tool on x64 and
 # the only way to get useful results from it for all other architectures.
 #XCFLAGS+= -DLUAJIT_USE_SYSMALLOC
@@ -165,10 +165,6 @@ else
   ifneq (,$(findstring CYGWIN,$(HOST_SYS)))
     HOST_SYS= Windows
     HOST_MSYS= cygwin
-  endif
-  # Use Clang for OSX host.
-  ifeq (Darwin,$(HOST_SYS))
-    DEFAULT_CC= clang
   endif
 endif
 
@@ -257,7 +253,11 @@ ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring MIPSEL ,$(TARGET_TESTARCH)))
     TARGET_ARCH= -D__MIPSEL__=1
   endif
-  TARGET_LJARCH= mips
+  ifneq (,$(findstring LJ_TARGET_MIPS64 ,$(TARGET_TESTARCH)))
+    TARGET_LJARCH= mips64
+  else
+    TARGET_LJARCH= mips
+  endif
 else
   $(error Unsupported target architecture)
 endif
