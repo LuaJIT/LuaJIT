@@ -110,7 +110,7 @@
 |.define SAVE_TOC,	24(sp)	// TOC save area.
 |// Next frame lr:	16(sp)
 |.define SAVE_CR,	8(sp)	// 64 bit CR save.
-|// Back chain for sp:	0(sp) 	<-- sp while in interpreter
+|// Back chain for sp:	0(sp)   <-- sp while in interpreter
 |
 |.define TMPD_BLO,	40(sp)	// LSB
 |.define TMPD,		TMPD_LO	// base address of TMPD doubleword
