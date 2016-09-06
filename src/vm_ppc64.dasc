@@ -2394,6 +2394,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  lfd f6, CCSTATE->fpr[5]
   |  lfd f7, CCSTATE->fpr[6]
   |  lfd f8, CCSTATE->fpr[7]
+  |  lfd f9, CCSTATE->fpr[8]
+  |  lfd f10, CCSTATE->fpr[9]
+  |  lfd f11, CCSTATE->fpr[10]
+  |  lfd f12, CCSTATE->fpr[11]
+  |  lfd f13, CCSTATE->fpr[12]
   |3:
   |  ld r12, CCSTATE->func
   |  ld CARG2, CCSTATE->gpr[1]
