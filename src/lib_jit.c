@@ -224,8 +224,9 @@ LJLIB_CF(jit_util_funcbc)
     lua_assert(op < BC__MAX);
     setintV(L->top, ins);
     setintV(L->top+1, lj_bc_mode[op]);
-    L->top += 2;
-    return 2;
+    setintV(L->top+2, lj_debug_line(pt, pc));
+    L->top += 3;
+    return 3;
   }
   return 0;
 }
