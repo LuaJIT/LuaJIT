@@ -218,15 +218,20 @@ LJLIB_CF(jit_util_funcbc)
 {
   GCproto *pt = check_Lproto(L, 0);
   BCPos pc = (BCPos)lj_lib_checkint(L, 2);
+  int lineinfo = lj_lib_optint(L, 3, 0);
   if (pc < pt->sizebc) {
     BCIns ins = proto_bc(pt)[pc];
     BCOp op = bc_op(ins);
     lua_assert(op < BC__MAX);
     setintV(L->top, ins);
     setintV(L->top+1, lj_bc_mode[op]);
-    setintV(L->top+2, lj_debug_line(pt, pc));
-    L->top += 3;
-    return 3;
+    L->top += 2;
+    if (lineinfo) {
+      setintV(L->top, lj_debug_line(pt, pc));
+      L->top += 1;
+      return 3;
+    }
+    return 2;
   }
   return 0;
 }

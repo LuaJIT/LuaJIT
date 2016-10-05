@@ -63,15 +63,21 @@ local function ctlsub(c)
 end
 
 -- Return one bytecode line.
-local function bcline(func, pc, prefix)
-  local ins, m, l = funcbc(func, pc)
+local function bcline(func, pc, prefix, lineinfo)
+  local ins, m, l = funcbc(func, pc, lineinfo and 1 or 0)
   if not ins then return end
   local ma, mb, mc = band(m, 7), band(m, 15*8), band(m, 15*128)
   local a = band(shr(ins, 8), 0xff)
   local oidx = 6*band(ins, 0xff)
   local op = sub(bcnames, oidx+1, oidx+6)
-  local s = format("%04d %7s %s %-6s %3s ",
-    pc, "["..l.."]", prefix or "  ", op, ma == 0 and "" or a)
+  local s
+  if lineinfo then
+    s = format("%04d %7s %s %-6s %3s ",
+      pc, "["..l.."]", prefix or "  ", op, ma == 0 and "" or a)
+  else
+    s = format("%04d %s %-6s %3s ",
+      pc, prefix or "  ", op, ma == 0 and "" or a)
+  end
   local d = shr(ins, 16)
   if mc == 13*128 then -- BCMjump
     return format("%s=> %04d\n", s, pc+d-0x7fff)
@@ -124,20 +130,20 @@ local function bctargets(func)
 end
 
 -- Dump bytecode instructions of a function.
-local function bcdump(func, out, all)
+local function bcdump(func, out, all, lineinfo)
   if not out then out = stdout end
   local fi = funcinfo(func)
   if all and fi.children then
     for n=-1,-1000000000,-1 do
       local k = funck(func, n)
       if not k then break end
-      if type(k) == "proto" then bcdump(k, out, true) end
+      if type(k) == "proto" then bcdump(k, out, true, lineinfo) end
     end
   end
   out:write(format("-- BYTECODE -- %s-%d\n", fi.loc, fi.lastlinedefined))
   local target = bctargets(func)
   for pc=1,1000000000 do
-    local s = bcline(func, pc, target[pc] and "=>")
+    local s = bcline(func, pc, target[pc] and "=>", lineinfo)
     if not s then break end
     out:write(s)
   end
