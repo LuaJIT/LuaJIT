@@ -381,8 +381,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  and sp, CARG1, #CFRAME_RAWMASK
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  ldr L, SAVE_L
-  |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
-  |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |    movz TISNUM, #(LJ_TISNUM)&0xffff, lsl #48
+  |    asr  TISNUM, TISNUM, #1
+  |    lsr  TISNUMhi, TISNUM, #32
   |    movn TISNIL, #0
   |    mov RC, #16			// 2 results: false + error message.
   |  ldr BASE, L->base
@@ -447,8 +448,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  str L, GL->cur_L
   |  mov RA, BASE
   |   ldp BASE, CARG1, L->base
-  |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
-  |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |    movz TISNUM, #(LJ_TISNUM)&0xffff, lsl #48
+  |    asr  TISNUM, TISNUM, #1
+  |    lsr  TISNUMhi, TISNUM, #32
   |  ldr PC, [BASE, FRAME_PC]
   |     strb wzr, L->status
   |    movn TISNIL, #0
@@ -486,8 +488,9 @@ static void build_subroutines(BuildCtx *ctx)
   |3:  // Entry point for vm_cpcall/vm_resume (BASE = base, PC = ftype).
   |  str L, GL->cur_L
   |  ldp RB, CARG1, L->base		// RB = old base (for vmeta_call).
-  |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
-  |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |    movz TISNUM, #(LJ_TISNUM)&0xffff, lsl #48
+  |    asr  TISNUM, TISNUM, #1
+  |    lsr  TISNUMhi, TISNUM, #32
   |  add PC, PC, BASE
   |    movn TISNIL, #0
   |  sub PC, PC, RB			// PC = frame delta + frame type
@@ -589,6 +592,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tgets:
   |  movk CARG2, #(LJ_TTAB>>1)&0xffff, lsl #48
+  |  orr CARG2, CARG2, #LJ_SET47BIT
   |  str CARG2, GL->tmptv
   |  add CARG2, GL, #offsetof(global_State, tmptv)
   |2:
@@ -647,6 +651,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tsets:
   |  movk CARG2, #(LJ_TTAB>>1)&0xffff, lsl #48
+  |  orr CARG2, CARG2, #LJ_SET47BIT
   |  str CARG2, GL->tmptv
   |  add CARG2, GL, #offsetof(global_State, tmptv)
   |2:
@@ -988,6 +993,7 @@ static void build_subroutines(BuildCtx *ctx)
   |4:
   |  mov CARG1, RB			// Use metatable as default result.
   |  movk CARG1, #(LJ_TTAB>>1)&0xffff, lsl #48
+  |  orr CARG1, CARG1, #LJ_SET47BIT
   |  b ->fff_restv
   |5:
   |  cmp TMP0, TISNIL
@@ -1882,8 +1888,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
   |  // Returns lua_State *.
   |  ldp BASE, RC, L:CRET1->base
-  |   movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
-  |   movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |   movz TISNUM, #(LJ_TISNUM)&0xffff, lsl #48
+  |   asr  TISNUM, TISNUM, #1
+  |   lsr  TISNUMhi, TISNUM, #32
   |   movn TISNIL, #0
   |   mov L, CRET1
   |  ldr LFUNC:CARG3, [BASE, FRAME_FUNC]
@@ -2660,6 +2667,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |  ldr BASE, L->base
     |   movk CRET1, #(LJ_TTAB>>1)&0xffff, lsl #48
+    |   orr CRET1, CRET1, #LJ_SET47BIT
     |  str CRET1, [BASE, RA, lsl #3]
     |  ins_next
     |

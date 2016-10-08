@@ -581,6 +581,14 @@ endif
 endif
 endif
 
+ifeq (arm64,$(TARGET_LJARCH))
+  GENLIBBC_FLAGS= --arm64
+  LIBBC_H= host/buildvm_libbc_arm64.h
+else
+  GENLIBBC_FLAGS=
+  LIBBC_H= host/buildvm_libbc.h
+endif
+
 Q= @
 E= @echo
 #Q=
@@ -600,7 +608,7 @@ clean:
 	$(HOST_RM) $(ALL_RM)
 
 libbc:
-	./$(LUAJIT_T) host/genlibbc.lua -o host/buildvm_libbc.h $(LJLIB_C)
+	./$(LUAJIT_T) host/genlibbc.lua $(GENLIBBC_FLAGS) -o $(LIBBC_H) $(LJLIB_C)
 	$(MAKE) all
 
 depend:

@@ -254,6 +254,24 @@ typedef const TValue cTValue;
 ** GC objects are at the end, table/userdata must be lowest.
 ** Also check lj_ir.h for similar ordering constraints.
 */
+#if LJ_TARGET_ARM64
+#define LJ_TNIL			(~0u)
+#define LJ_TFALSE		(~1u)
+#define LJ_TTRUE		(~2u)
+#define LJ_TLIGHTUD1		(~3u)
+#define LJ_TLIGHTUD2		(~4u)
+#define LJ_TSTR			(~5u)
+#define LJ_TUPVAL		(~6u)
+#define LJ_TTHREAD		(~7u)
+#define LJ_TPROTO		(~8u)
+#define LJ_TFUNC		(~9u)
+#define LJ_TTRACE		(~10u)
+#define LJ_TCDATA		(~11u)
+#define LJ_TTAB			(~12u)
+#define LJ_TUDATA		(~13u)
+/* This is just the canonical number type used in some places. */
+#define LJ_TNUMX		(~14u)
+#else
 #define LJ_TNIL			(~0u)
 #define LJ_TFALSE		(~1u)
 #define LJ_TTRUE		(~2u)
@@ -269,7 +287,7 @@ typedef const TValue cTValue;
 #define LJ_TUDATA		(~12u)
 /* This is just the canonical number type used in some places. */
 #define LJ_TNUMX		(~13u)
-
+#endif
 /* Integers have itype == LJ_TISNUM doubles have itype < LJ_TISNUM */
 #if LJ_64 && !LJ_GC64
 #define LJ_TISNUM		0xfffeffffu
@@ -283,6 +301,10 @@ typedef const TValue cTValue;
 
 #if LJ_GC64
 #define LJ_GCVMASK		(((uint64_t)1 << 47) - 1)
+#endif
+
+#if LJ_TARGET_ARM64
+#define LJ_SET47BIT              ((uint64_t)1 << 47)
 #endif
 
 /* -- String object ------------------------------------------------------- */
@@ -749,7 +771,11 @@ typedef union GCobj {
 #if LJ_64 && !LJ_GC64
 #define tvislightud(o)	(((int32_t)itype(o) >> 15) == -2)
 #else
+#if LJ_TARGET_ARM64
+#define tvislightud(o)	(itype(o) == LJ_TLIGHTUD1 || itype(o) == LJ_TLIGHTUD2)
+#else
 #define tvislightud(o)	(itype(o) == LJ_TLIGHTUD)
+#endif
 #endif
 #define tvisstr(o)	(itype(o) == LJ_TSTR)
 #define tvisfunc(o)	(itype(o) == LJ_TFUNC)
@@ -795,8 +821,13 @@ typedef union GCobj {
 #endif
 #define boolV(o)	check_exp(tvisbool(o), (LJ_TFALSE - itype(o)))
 #if LJ_64
+#if LJ_TARGET_ARM64
+#define lightudV(o) \
+  check_exp(tvislightud(o), (void *)((o)->u64 & U64x(0000ffff,ffffffff)))
+#else
 #define lightudV(o) \
   check_exp(tvislightud(o), (void *)((o)->u64 & U64x(00007fff,ffffffff)))
+#endif
 #else
 #define lightudV(o)	check_exp(tvislightud(o), gcrefp((o)->gcr, void))
 #endif
@@ -827,7 +858,14 @@ typedef union GCobj {
 static LJ_AINLINE void setlightudV(TValue *o, void *p)
 {
 #if LJ_GC64
+#if LJ_TARGET_ARM64
+  if ((uint64_t)p & ((uint64_t)0x1<<47))
+    o->u64 = (uint64_t)p | (((uint64_t)LJ_TLIGHTUD2) << 47);
+  else
+    o->u64 = (uint64_t)p | (((uint64_t)LJ_TLIGHTUD1) << 47);
+#else
   o->u64 = (uint64_t)p | (((uint64_t)LJ_TLIGHTUD) << 47);
+#endif
 #elif LJ_64
   o->u64 = (uint64_t)p | (((uint64_t)0xffff) << 48);
 #else
@@ -836,8 +874,13 @@ static LJ_AINLINE void setlightudV(TValue *o, void *p)
 }
 
 #if LJ_64
+#if LJ_TARGET_ARM64
+#define checklightudptr(L, p) \
+  (((uint64_t)(p) >> 48) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
+#else
 #define checklightudptr(L, p) \
   (((uint64_t)(p) >> 47) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
+#endif
 #else
 #define checklightudptr(L, p)	(p)
 #endif

@@ -189,7 +189,7 @@ LUA_API int lua_type(lua_State *L, int idx)
   cTValue *o = index2adr(L, idx);
   if (tvisnumber(o)) {
     return LUA_TNUMBER;
-#if LJ_64 && !LJ_GC64
+#if LJ_64 && !LJ_GC64 || LJ_TARGET_ARM64
   } else if (tvislightud(o)) {
     return LUA_TLIGHTUSERDATA;
 #endif
@@ -198,7 +198,11 @@ LUA_API int lua_type(lua_State *L, int idx)
   } else {  /* Magic internal/external tag conversion. ORDER LJ_T */
     uint32_t t = ~itype(o);
 #if LJ_64
+#if LJ_TARGET_ARM64
+    int tt = (int)((U64x(75a069,80400110) >> 4*t) & 15u);
+#else
     int tt = (int)((U64x(75a06,98042110) >> 4*t) & 15u);
+#endif
 #else
     int tt = (int)(((t < 8 ? 0x98042110u : 0x75a06u) >> 4*(t&7)) & 15u);
 #endif

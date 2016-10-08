@@ -303,6 +303,17 @@ LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
 ** a TValue after implicit or explicit conversion. Their types must be
 ** contiguous and next to IRT_NUM (see the typerange macros below).
 */
+#if LJ_TARGET_ARM64
+#define IRTDEF(_) \
+  _(NIL, 4) _(FALSE, 4) _(TRUE, 4) _(LIGHTUD1, LJ_64 ? 8 : 4) \
+  _(LIGHTUD2, LJ_64 ? 8 : 4) \
+  _(STR, IRTSIZE_PGC) _(P32, 4) _(THREAD, IRTSIZE_PGC) _(PROTO, IRTSIZE_PGC) \
+  _(FUNC, IRTSIZE_PGC) _(P64, 8) _(CDATA, IRTSIZE_PGC) _(TAB, IRTSIZE_PGC) \
+  _(UDATA, IRTSIZE_PGC) \
+  _(FLOAT, 4) _(NUM, 8) _(I8, 1) _(U8, 1) _(I16, 2) _(U16, 2) \
+  _(INT, 4) _(U32, 4) _(I64, 8) _(U64, 8) \
+  _(SOFTFP, 4)  /* There is room for 5 more types. */
+#else
 #define IRTDEF(_) \
   _(NIL, 4) _(FALSE, 4) _(TRUE, 4) _(LIGHTUD, LJ_64 ? 8 : 4) \
   _(STR, IRTSIZE_PGC) _(P32, 4) _(THREAD, IRTSIZE_PGC) _(PROTO, IRTSIZE_PGC) \
@@ -311,6 +322,7 @@ LJ_DATA const uint8_t lj_ir_mode[IR__MAX+1];
   _(FLOAT, 4) _(NUM, 8) _(I8, 1) _(U8, 1) _(I16, 2) _(U16, 2) \
   _(INT, 4) _(U32, 4) _(I64, 8) _(U64, 8) \
   _(SOFTFP, 4)  /* There is room for 8 more types. */
+#endif
 
 /* IR result type and flags (8 bit). */
 typedef enum {
@@ -373,14 +385,25 @@ typedef struct IRType1 { uint8_t irt; } IRType1;
 #define irt_isfp(t)		(irt_isnum(t) || irt_isfloat(t))
 #define irt_isinteger(t)	(irt_typerange((t), IRT_I8, IRT_INT))
 #define irt_isgcv(t)		(irt_typerange((t), IRT_STR, IRT_UDATA))
+#if LJ_TARGET_ARM64
+#define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD1, IRT_UDATA))
+#else
 #define irt_isaddr(t)		(irt_typerange((t), IRT_LIGHTUD, IRT_UDATA))
+#endif
 #define irt_isint64(t)		(irt_typerange((t), IRT_I64, IRT_U64))
 
 #if LJ_GC64
+#if LJ_TARGET_ARM64
 #define IRT_IS64 \
   ((1u<<IRT_NUM)|(1u<<IRT_I64)|(1u<<IRT_U64)|(1u<<IRT_P64)|\
-   (1u<<IRT_LIGHTUD)|(1u<<IRT_STR)|(1u<<IRT_THREAD)|(1u<<IRT_PROTO)|\
-   (1u<<IRT_FUNC)|(1u<<IRT_CDATA)|(1u<<IRT_TAB)|(1u<<IRT_UDATA))
+   (1u<<IRT_LIGHTUD1)|(1u<<IRT_LIGHTUD2)|(1u<<IRT_STR)|(1u<<IRT_THREAD)|\
+   (1u<<IRT_PROTO)|(1u<<IRT_FUNC)|(1u<<IRT_CDATA)|(1u<<IRT_TAB)|(1u<<IRT_UDATA))
+#else
+#define IRT_IS64 \
+  ((1u<<IRT_NUM)|(1u<<IRT_I64)|(1u<<IRT_U64)|(1u<<IRT_P64)|\
+   (1u<<IRT_LIGHTUD)|(1u<<IRT_STR)|(1u<<IRT_THREAD)|\
+   (1u<<IRT_PROTO)|(1u<<IRT_FUNC)|(1u<<IRT_CDATA)|(1u<<IRT_TAB)|(1u<<IRT_UDATA))
+#endif
 #elif LJ_64
 #define IRT_IS64 \
   ((1u<<IRT_NUM)|(1u<<IRT_I64)|(1u<<IRT_U64)|(1u<<IRT_P64)|(1u<<IRT_LIGHTUD))
@@ -412,7 +435,9 @@ static LJ_AINLINE IRType itype2irt(const TValue *tv)
 
 static LJ_AINLINE uint32_t irt_toitype_(IRType t)
 {
+#if !LJ_TARGET_ARM64
   lua_assert(!LJ_64 || LJ_GC64 || t != IRT_LIGHTUD);
+#endif
   if (LJ_DUALNUM && t > IRT_NUM) {
     return LJ_TISNUM;
   } else {
@@ -492,7 +517,12 @@ typedef uint32_t TRef;
 #define tref_isnil(tr)		(tref_istype((tr), IRT_NIL))
 #define tref_isfalse(tr)	(tref_istype((tr), IRT_FALSE))
 #define tref_istrue(tr)		(tref_istype((tr), IRT_TRUE))
+#if LJ_TARGET_ARM64
+#define tref_islightud(tr)	(tref_istype((tr), IRT_LIGHTUD1) ||\
+                                 tref_istype((tr), IRT_LIGHTUD2))
+#else
 #define tref_islightud(tr)	(tref_istype((tr), IRT_LIGHTUD))
+#endif
 #define tref_isstr(tr)		(tref_istype((tr), IRT_STR))
 #define tref_isfunc(tr)		(tref_istype((tr), IRT_FUNC))
 #define tref_iscdata(tr)	(tref_istype((tr), IRT_CDATA))

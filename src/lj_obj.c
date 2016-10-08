@@ -13,12 +13,17 @@ LJ_DATADEF const char *const lj_obj_typename[] = {  /* ORDER LUA_T */
   "no value", "nil", "boolean", "userdata", "number", "string",
   "table", "function", "userdata", "thread", "proto", "cdata"
 };
-
+#if LJ_TARGET_ARM64
+LJ_DATADEF const char *const lj_obj_itypename[] = {  /* ORDER LJ_T */
+  "nil", "boolean", "boolean", "userdata", "userdata", "string", "upval", "thread",
+  "proto", "function", "trace", "cdata", "table", "userdata", "number"
+};
+#else
 LJ_DATADEF const char *const lj_obj_itypename[] = {  /* ORDER LJ_T */
   "nil", "boolean", "boolean", "userdata", "string", "upval", "thread",
   "proto", "function", "trace", "cdata", "table", "userdata", "number"
 };
-
+#endif
 /* Compare two objects without calling metamethods. */
 int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
 {
