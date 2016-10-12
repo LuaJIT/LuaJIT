@@ -1765,6 +1765,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
   int32_t numparams = J->pt->numparams;
   ptrdiff_t nvararg = frame_delta(J->L->base-1) - numparams - 1 - LJ_FR2;
   lua_assert(frame_isvarg(J->L->base-1));
+  if (LJ_FR2 && dst > J->maxslot)
+    J->base[dst-1] = 0;  /* Prevent resurrection of unrelated slot. */
   if (J->framedepth > 0) {  /* Simple case: varargs defined on-trace. */
     ptrdiff_t i;
     if (nvararg < 0) nvararg = 0;
