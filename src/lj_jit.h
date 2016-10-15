@@ -8,6 +8,9 @@
 
 #include "lj_obj.h"
 #include "lj_ir.h"
+#ifdef LUAJIT_TRACEPROFILE
+#include "lj_traceprofile.h"
+#endif
 
 /* JIT engine flags. */
 #define JIT_F_ON		0x00000001
@@ -255,6 +258,9 @@ typedef struct GCtrace {
   TraceNo1 nextside;	/* Next side trace of same root trace. */
   uint8_t sinktags;	/* Trace has SINK tags. */
   uint8_t unused1;
+#ifdef LUAJIT_TRACEPROFILE
+  TraceProfile prof;    /* Samples of where the trace spends execution time */
+#endif
 #ifdef LUAJIT_USE_GDBJIT
   void *gdbjit_entry;	/* GDB JIT entry. */
 #endif
