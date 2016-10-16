@@ -90,7 +90,7 @@ static void traceprofile_stop_timer()
 
 LUA_API void luaJIT_traceprofile_start(lua_State *L, int interval)
 {
-  memset(&state, sizeof(state), 0);
+  memset(&state, 0, sizeof(state));
   state.g = G(L);
   traceprofile_start_timer(interval);
 }
