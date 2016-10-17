@@ -33,6 +33,7 @@
 #include "lj_vm.h"
 #include "lj_vmevent.h"
 #include "lj_lib.h"
+#include "lj_def.h"
 
 #include "luajit.h"
 
@@ -648,6 +649,27 @@ LJLIB_CF(jit_traceprofile_tracestats)
     return 3;
   }
   return 0;
+}
+
+LJLIB_CF(jit_traceprofile_vmstats)
+{
+  uint64_t *vmstats = luaJIT_traceprofile_vmstats(L);
+  if (vmstats == NULL) {
+    return 0;
+  } else {
+    setint64V(L->top++, vmstats[LJ_VMST_INTERP]);
+    setint64V(L->top++, vmstats[LJ_VMST_C]);
+    setint64V(L->top++, vmstats[LJ_VMST_GC]);
+    setint64V(L->top++, vmstats[LJ_VMST_EXIT]);
+    setint64V(L->top++, vmstats[LJ_VMST_RECORD]);
+    setint64V(L->top++, vmstats[LJ_VMST_OPT]);
+    setint64V(L->top++, vmstats[LJ_VMST_ASM]);
+    setint64V(L->top++, vmstats[LJ_TRACEPROF_VMST_TRACE_NONLOOP]);
+    setint64V(L->top++, vmstats[LJ_TRACEPROF_VMST_TRACE_LOOP]);
+    setint64V(L->top++, vmstats[LJ_TRACEPROF_VMST_TRACE_OTHER]);
+    setint64V(L->top++, vmstats[LJ_TRACEPROF_VMST_TOTAL]);
+    return 11;
+  }
 }
 
 LJLIB_CF(jit_traceprofile_start)

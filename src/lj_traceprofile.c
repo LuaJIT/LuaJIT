@@ -23,16 +23,9 @@
 #include "lj_trace.h"
 #include "lj_traceprofile.h"
 
-/* vmstate extended to represent running in a trace (any one) */
-enum {
-  LJ_TRACEPROF_VMST_TRACE = LJ_VMST__MAX,
-  LJ_TRACEPROF_VMST__MAX
-};
-
 typedef struct TraceProfileState {
   global_State *g;                  /* VM state that started the profiler. */
   struct sigaction oldsa;
-  int events;                       /* Number of events (signals) handled. */
   uint64_t vmstate[LJ_TRACEPROF_VMST__MAX]; /* Counter per VM state */
 } TraceProfileState;
 
@@ -43,7 +36,7 @@ static void traceprofile_signal(int sig, siginfo_t *si, void *data)
   global_State *g = state.g;
   intptr_t ip = (intptr_t)((ucontext_t*)data)->uc_mcontext.gregs[REG_RIP];
   int st = g->vmstate;
-  state.events++;
+  state.vmstate[LJ_TRACEPROF_VMST_TOTAL]++;
   assert((st >= 0) || (~st < LJ_VMST__MAX));
   if (st >= 0) {
     lua_State *L = gco2th(gcref(g->cur_L));
@@ -54,13 +47,15 @@ static void traceprofile_signal(int sig, siginfo_t *si, void *data)
     if ((rel_ip >= 0) && (rel_ip < T->szmcode)) {
       if (rel_ip < T->mcloop) {
 	T->prof.nonloop++;	/* Sample is in non-loop mcode. */
+	state.vmstate[LJ_TRACEPROF_VMST_TRACE_NONLOOP]++;
       } else {
 	T->prof.loop++;		/* Sample is in loop mcode. */
+	state.vmstate[LJ_TRACEPROF_VMST_TRACE_LOOP]++;
       }
     } else {
       T->prof.other++;		/* Sample is outside the trace mcode. */
+      state.vmstate[LJ_TRACEPROF_VMST_TRACE_OTHER]++;
     }
-    state.vmstate[LJ_TRACEPROF_VMST_TRACE]++;
   } else {
     state.vmstate[~st]++;
   }
@@ -98,6 +93,15 @@ LUA_API void luaJIT_traceprofile_start(lua_State *L, int interval)
 LUA_API void luaJIT_traceprofile_stop(lua_State *L)
 {
   traceprofile_stop_timer();
+}
+
+LUA_API uint64_t *luaJIT_traceprofile_vmstats(lua_State *L)
+{
+  if (state.g && L == gco2th(gcref(state.g->cur_L))) {
+    return state.vmstate;
+  } else {
+    return NULL;
+  }
 }
 
 #endif
