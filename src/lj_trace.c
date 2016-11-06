@@ -446,6 +446,13 @@ static void trace_start(jit_State *J)
     if (J->parent) {
       setintV(L->top++, J->parent);
       setintV(L->top++, J->exitno);
+    } else {
+      BCOp op = bc_op(*J->pc);
+      if (op == BC_CALLM || op == BC_CALL || op == BC_ITERC) {
+        /* stitching, parent stored as exitno */
+        setintV(L->top++, J->exitno);
+        setintV(L->top++, 0);
+      }
     }
   );
   lj_record_setup(J);
