@@ -245,8 +245,8 @@ else
 ifneq (,$(findstring LJ_TARGET_ARM ,$(TARGET_TESTARCH)))
   TARGET_LJARCH= arm
 else
-ifneq (,$(findstring LJ_TARGET_S390 ,$(TARGET_TESTARCH)))
-  TARGET_LJARCH= s390
+ifneq (,$(findstring LJ_TARGET_S390x ,$(TARGET_TESTARCH)))
+  TARGET_LJARCH= s390x
 else
 ifneq (,$(findstring LJ_TARGET_ARM64 ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring __AARCH64EB__ ,$(TARGET_TESTARCH)))
