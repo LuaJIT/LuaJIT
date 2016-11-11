@@ -29,7 +29,7 @@
 #define LUAJIT_ARCH_mips32	6
 #define LUAJIT_ARCH_MIPS64	7
 #define LUAJIT_ARCH_mips64	7
-#define LUAJIT_ARCH_S390	8
+#define LUAJIT_ARCH_S390x	8
 
 /* Target OS. */
 #define LUAJIT_OS_OTHER		0
@@ -50,8 +50,8 @@
 #define LUAJIT_TARGET	LUAJIT_ARCH_ARM
 #elif defined(__aarch64__)
 #define LUAJIT_TARGET	LUAJIT_ARCH_ARM64
-#elif defined(__s390__) || defined(__s390) || defined(__S390__) || defined(__S390) || defined(S390)
-#define LUAJIT_TARGET	LUAJIT_ARCH_S390
+#elif defined(__s390x__) || defined(__s390x) || defined(__S390x__) || defined(__S390x) || defined(S390x)
+#define LUAJIT_TARGET	LUAJIT_ARCH_S390x
 #elif defined(__ppc__) || defined(__ppc) || defined(__PPC__) || defined(__PPC) || defined(__powerpc__) || defined(__powerpc) || defined(__POWERPC__) || defined(__POWERPC) || defined(_M_PPC)
 #define LUAJIT_TARGET	LUAJIT_ARCH_PPC
 #elif defined(__mips64__) || defined(__mips64) || defined(__MIPS64__) || defined(__MIPS64)
@@ -235,20 +235,10 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_S390
  
- #define LJ_ARCH_NAME		"s390"
+ #define LJ_ARCH_NAME		"s390x"
  #define LJ_ARCH_BITS		64
  #define LJ_ARCH_ENDIAN		LUAJIT_BE
- #if !defined(LJ_ARCH_HASFPU) && __SOFTFP__
- #define LJ_ARCH_HASFPU		1
- #endif
- #define LJ_ABI_EABI		1
  #define LJ_TARGET_S390		1
- #define LJ_TARGET_EHRETREG	       0
- #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
- #define LJ_TARGET_MASKSHIFT	0
- #define LJ_TARGET_MASKROT	       1
- #define LJ_TARGET_UNIFYROT	       2	/* Want only IR_BROR. */
- #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
  
 #elif LUAJIT_TARGET == LUAJIT_ARCH_PPC
 
@@ -399,7 +389,7 @@
 #if (__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)
 #error "Need at least Clang 3.5 or newer"
 #endif
-#elif LJ_TARGET_S390
+#elif LJ_TARGET_S390x
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
 #error "Need at least GCC 4.2 or newer"
 #endif
