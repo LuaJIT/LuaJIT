@@ -10,12 +10,15 @@
 
 #define GPRDEF(_) \
   _(R0) _(R1) _(R2) _(R3) _(R4) _(R5) _(R6) _(R7) \
-  _(R8) _(R9) _(R10) _(R11) _(R12) _(R13) _(R14) _(15) \
+  _(R8) _(R9) _(R10) _(R11) _(R12) _(R13) _(R14) _R(15) \
 #if LJ_SOFTFP
 #define FPRDEF(_)
 #else
 #define FPRDEF(_) \
-  _(F0) _(F2) _(F4) _(F6)
+  _(F0) _(F1) _(F2) _(F3) \
+  _(F4) _(F5) _(F6) _(F7) \
+  _(F8) _(F9) _(F10) _(F11) \
+  _(F12) _(F13) _(F14) _(F15) 
 #endif
 #define VRIDDEF(_)
 
@@ -150,54 +153,7 @@ typedef struct {
 #define ARMF_SH(sh, n)	(((sh) << 5) | ((n) << 7))
 #define ARMF_RSH(sh, r)	(0x10 | ((sh) << 5) | ARMF_S(r))
 
-typedef enum S390Ins {
-  
-  // Unsupported in S390
-  #ARMI_LDRSB = 0xe01000d0,
-  #ARMI_S = 0x000100000,
-  #ARMI_LDRD = 0xe00000d0,
-  #ARMI_ADC = 0xe0a00000,
-  #ARMI_SBC = 0xe0c00000,
-  #ARMI_STRB = 0xe4400000,
-  #ARMI_STRH = 0xe00000b0,
-  #ARMI_STRD = 0xe00000f0,
-  #ARMI_BL = 0xeb000000,
-  #ARMI_BLX = 0xfa000000,
-  #ARMI_BLXr = 0xe12fff30,
-  #ARMI_BIC = 0xe1c00000,
-  #ARMI_ORR = 0xe1800000,
-  #ARMI_LDRB = 0xe4500000,
-  #ARMI_MVN = 0xe1e00000,
-  #ARMI_LDRSH = 0xe01000f0,
-  #ARMI_NOP = 0xe1a00000,
-  #ARMI_PUSH = 0xe92d0000,
-  #ARMI_RSB = 0xe0600000,
-  #ARMI_RSC = 0xe0e00000,
-  #ARMI_TEQ = 0xe1300000, 
-  #ARMI_CCAL = 0xe0000000,
-  #ARMI_K12 = 0x02000000,
-  #ARMI_KNEG = 0x00200000,
-  #ARMI_LS_W = 0x00200000,
-  #ARMI_LS_U = 0x00800000,
-  #ARMI_LS_P = 0x01000000,
-  #ARMI_LS_R = 0x02000000,
-  #ARMI_LSX_I = 0x00400000,
-
-  
-  #ARMI_SUB = 0xe0400000,
-  #ARMI_ADD = 0xe0800000,
-  #ARMI_AND = 0xe0000000,
-  #ARMI_EOR = 0xe0200000,
-  #ARMI_MUL = 0xe0000090,
-  #ARMI_LDR = 0xe4100000,
-  #ARMI_CMP = 0xe1500000,
-  #ARMI_LDRH = 0xe01000b0,
-  #ARMI_B = 0xea000000,
-  #ARMI_MOV = 0xe1a00000,
-  #ARMI_STR = 0xe4000000,
-  #ARMI_TST = 0xe1100000,
-  #ARMI_SMULL = 0xe0c00090,
-  #ARMI_CMN = 0xe1700000,
+typedef enum S390xIns {
   S390I_SR = 0x1B000000,
   S390I_AR = 0x1A000000,
   S390I_NR = 0x14000000,
@@ -212,76 +168,15 @@ typedef enum S390Ins {
   S390I_TM = 0x91000000,
   S390I_MP = 0xbd000090,
   S390I_CLR = 0x15000000,
+} S390xIns;
 
-  /* ARMv6 */
-  #ARMI_REV = 0xe6bf0f30,
-  #ARMI_SXTB = 0xe6af0070,
-  #ARMI_SXTH = 0xe6bf0070,
-  #ARMI_UXTB = 0xe6ef0070,
-  #ARMI_UXTH = 0xe6ff0070,
-
-  /* ARMv6T2 */
-  #ARMI_MOVW = 0xe3000000,
-  #ARMI_MOVT = 0xe3400000,
-
-  /* VFP */
-  ARMI_VMOV_D = 0xeeb00b40,
-  ARMI_VMOV_S = 0xeeb00a40,
-  ARMI_VMOVI_D = 0xeeb00b00,
-
-  ARMI_VMOV_R_S = 0xee100a10,
-  ARMI_VMOV_S_R = 0xee000a10,
-  ARMI_VMOV_RR_D = 0xec500b10,
-  ARMI_VMOV_D_RR = 0xec400b10,
-
-  ARMI_VADD_D = 0xee300b00,
-  ARMI_VSUB_D = 0xee300b40,
-  ARMI_VMUL_D = 0xee200b00,
-  ARMI_VMLA_D = 0xee000b00,
-  ARMI_VMLS_D = 0xee000b40,
-  ARMI_VNMLS_D = 0xee100b00,
-  ARMI_VDIV_D = 0xee800b00,
-
-  ARMI_VABS_D = 0xeeb00bc0,
-  ARMI_VNEG_D = 0xeeb10b40,
-  ARMI_VSQRT_D = 0xeeb10bc0,
-
-  ARMI_VCMP_D = 0xeeb40b40,
-  ARMI_VCMPZ_D = 0xeeb50b40,
-
-  ARMI_VMRS = 0xeef1fa10,
-
-  ARMI_VCVT_S32_F32 = 0xeebd0ac0,
-  ARMI_VCVT_S32_F64 = 0xeebd0bc0,
-  ARMI_VCVT_U32_F32 = 0xeebc0ac0,
-  ARMI_VCVT_U32_F64 = 0xeebc0bc0,
-  ARMI_VCVTR_S32_F32 = 0xeebd0a40,
-  ARMI_VCVTR_S32_F64 = 0xeebd0b40,
-  ARMI_VCVTR_U32_F32 = 0xeebc0a40,
-  ARMI_VCVTR_U32_F64 = 0xeebc0b40,
-  ARMI_VCVT_F32_S32 = 0xeeb80ac0,
-  ARMI_VCVT_F64_S32 = 0xeeb80bc0,
-  ARMI_VCVT_F32_U32 = 0xeeb80a40,
-  ARMI_VCVT_F64_U32 = 0xeeb80b40,
-  ARMI_VCVT_F32_F64 = 0xeeb70bc0,
-  ARMI_VCVT_F64_F32 = 0xeeb70ac0,
-
-  ARMI_VLDR_S = 0xed100a00,
-  ARMI_VLDR_D = 0xed100b00,
-  ARMI_VSTR_S = 0xed000a00,
-  ARMI_VSTR_D = 0xed000b00,
-} S390Ins;
-
-typedef enum S390Shift {
+typedef enum S390xShift {
   S390SH_SLL, S390SH_SRL, S390SH_SRA
-   # Adjustment needed  for ROR
-} S390Shift;
+} S390xShift;
 
 /* ARM condition codes. */
-typedef enum ARMCC {
-  CC_EQ, CC_NE, CC_CS, CC_CC, CC_MI, CC_PL, CC_VS, CC_VC,
-  CC_HI, CC_LS, CC_GE, CC_LT, CC_GT, CC_LE, CC_AL,
-  CC_HS = CC_CS, CC_LO = CC_CC
-} ARMCC;
+typedef enum S390xCC {
+  
+} S390xCC;
 
 #endif
