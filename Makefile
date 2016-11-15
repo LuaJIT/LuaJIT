@@ -87,7 +87,7 @@ FILE_PC= luajit.pc
 FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h
 FILES_JITLIB= bc.lua bcsave.lua dump.lua p.lua v.lua zone.lua \
 	      dis_x86.lua dis_x64.lua dis_arm.lua dis_ppc.lua \
-	      dis_mips.lua dis_mipsel.lua vmdef.lua
+	      dis_mips.lua dis_mipsel.lua dis_s390x.lua vmdef.lua
 
 ifeq (,$(findstring Windows,$(OS)))
   HOST_SYS:= $(shell uname -s)
