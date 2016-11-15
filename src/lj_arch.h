@@ -429,10 +429,6 @@
 #if ((__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)) && !defined(__NX_TOOLCHAIN_MAJOR__)
 #error "Need at least Clang 3.5 or newer"
 #endif
-#elif LJ_TARGET_S390x
-#if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 2)
-#error "Need at least GCC 4.2 or newer"
-#endif
 #else
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 8)
 #error "Need at least GCC 4.8 or newer"
