@@ -176,7 +176,14 @@ typedef enum S390xShift {
 
 /* S390x condition codes. */
 typedef enum S390xCC {
-  
+  /* Z- Zero , LZ - Less thena Zero , GZ - Greater than Zero
+     O  - Overflow , NZ - Not Zero , ZC - Zero with carry
+     NZC - No Zero with carry , ZNC - Zero with No Carry
+     EQ - Equal , NE - Not Equal , LO - Loq , HI - High
+  */
+  CC_Z , CC_LZ , CC_GZ , CC_O ,
+  CC_NZ , CC_ZC , CC_NZC ,
+  CC_ZNC , CC_EQ , CC_NE , CC_LO , CC_HI
 } S390xCC;
 
 #endif
