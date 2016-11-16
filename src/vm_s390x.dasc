@@ -1,12 +1,9 @@
-|// Low-level VM code for x86 CPUs.
+|// Low-level VM code for S390x CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
 |
-|.if P64
-|.arch x64
-|.else
-|.arch x86
-|.endif
+
+|.arch S390x
 |.section code_op, code_sub
 |
 |.actionlist build_actionlist
@@ -15,13 +12,6 @@
 |.externnames extnames
 |
 |//-----------------------------------------------------------------------
-|
-|.if P64
-|.define X64, 1
-|.if WIN
-|.define X64WIN, 1
-|.endif
-|.endif
 |
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
@@ -119,10 +109,6 @@
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |//-----------------------------------------------------------------------
-|.if not X64		// x86 stack layout.
-|
-|.if WIN
-|
 |.define CFRAME_SPACE,	aword*9			// Delta for esp (see <--).
 |.macro saveregs_
 |  push edi; push esi; push ebx
@@ -138,51 +124,9 @@
 |  pop ebx; pop esi; pop edi; pop ebp
 |.endmacro
 |
-|.else
-|
-|.define CFRAME_SPACE,	aword*7			// Delta for esp (see <--).
-|.macro saveregs_
-|  push edi; push esi; push ebx
-|  sub esp, CFRAME_SPACE
-|.endmacro
-|.macro restoreregs
-|  add esp, CFRAME_SPACE
-|  pop ebx; pop esi; pop edi; pop ebp
-|.endmacro
-|
-|.endif
-|
 |.macro saveregs
 |  push ebp; saveregs_
 |.endmacro
-|
-|.if WIN
-|.define SAVE_ERRF,	aword [esp+aword*19]	// vm_pcall/vm_cpcall only.
-|.define SAVE_NRES,	aword [esp+aword*18]
-|.define SAVE_CFRAME,	aword [esp+aword*17]
-|.define SAVE_L,	aword [esp+aword*16]
-|//----- 16 byte aligned, ^^^ arguments from C caller
-|.define SAVE_RET,	aword [esp+aword*15]	//<-- esp entering interpreter.
-|.define SAVE_R4,	aword [esp+aword*14]
-|.define SAVE_R3,	aword [esp+aword*13]
-|.define SAVE_R2,	aword [esp+aword*12]
-|//----- 16 byte aligned
-|.define SAVE_R1,	aword [esp+aword*11]
-|.define SEH_FUNC,	aword [esp+aword*10]
-|.define SEH_NEXT,	aword [esp+aword*9]	//<-- esp after register saves.
-|.define UNUSED2,	aword [esp+aword*8]
-|//----- 16 byte aligned
-|.define UNUSED1,	aword [esp+aword*7]
-|.define SAVE_PC,	aword [esp+aword*6]
-|.define TMP2,		aword [esp+aword*5]
-|.define TMP1,		aword [esp+aword*4]
-|//----- 16 byte aligned
-|.define ARG4,		aword [esp+aword*3]
-|.define ARG3,		aword [esp+aword*2]
-|.define ARG2,		aword [esp+aword*1]
-|.define ARG1,		aword [esp]		//<-- esp while in interpreter.
-|//----- 16 byte aligned, ^^^ arguments for C callee
-|.else
 |.define SAVE_ERRF,	aword [esp+aword*15]	// vm_pcall/vm_cpcall only.
 |.define SAVE_NRES,	aword [esp+aword*14]
 |.define SAVE_CFRAME,	aword [esp+aword*13]
@@ -203,7 +147,6 @@
 |.define ARG2,		aword [esp+aword*1]
 |.define ARG1,		aword [esp]		//<-- esp while in interpreter.
 |//----- 16 byte aligned, ^^^ arguments for C callee
-|.endif
 |
 |// FPARGx overlaps ARGx and ARG(x+1) on x86.
 |.define FPARG3,	qword [esp+qword*1]
@@ -214,112 +157,6 @@
 |.define ARG5,		TMP1
 |.define TMPa,		TMP1
 |.define MULTRES,	TMP2
-|
-|// Arguments for vm_call and vm_pcall.
-|.define INARG_BASE,	SAVE_CFRAME		// Overwritten by SAVE_CFRAME!
-|
-|// Arguments for vm_cpcall.
-|.define INARG_CP_CALL,	SAVE_ERRF
-|.define INARG_CP_UD,	SAVE_NRES
-|.define INARG_CP_FUNC,	SAVE_CFRAME
-|
-|//-----------------------------------------------------------------------
-|.elif X64WIN		// x64/Windows stack layout
-|
-|.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
-|.macro saveregs_
-|  push rdi; push rsi; push rbx
-|  sub rsp, CFRAME_SPACE
-|.endmacro
-|.macro saveregs
-|  push rbp; saveregs_
-|.endmacro
-|.macro restoreregs
-|  add rsp, CFRAME_SPACE
-|  pop rbx; pop rsi; pop rdi; pop rbp
-|.endmacro
-|
-|.define SAVE_CFRAME,	aword [rsp+aword*13]
-|.define SAVE_PC,	dword [rsp+dword*25]
-|.define SAVE_L,	dword [rsp+dword*24]
-|.define SAVE_ERRF,	dword [rsp+dword*23]
-|.define SAVE_NRES,	dword [rsp+dword*22]
-|.define TMP2,		dword [rsp+dword*21]
-|.define TMP1,		dword [rsp+dword*20]
-|//----- 16 byte aligned, ^^^ 32 byte register save area, owned by interpreter
-|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
-|.define SAVE_R4,	aword [rsp+aword*8]
-|.define SAVE_R3,	aword [rsp+aword*7]
-|.define SAVE_R2,	aword [rsp+aword*6]
-|.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
-|.define ARG5,		aword [rsp+aword*4]
-|.define CSAVE_4,	aword [rsp+aword*3]
-|.define CSAVE_3,	aword [rsp+aword*2]
-|.define CSAVE_2,	aword [rsp+aword*1]
-|.define CSAVE_1,	aword [rsp]		//<-- rsp while in interpreter.
-|//----- 16 byte aligned, ^^^ 32 byte register save area, owned by callee
-|
-|// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [rsp+aword*10]
-|.define MULTRES,	TMP2
-|.define TMPa,		ARG5
-|.define ARG5d,		dword [rsp+aword*4]
-|.define TMP3,		ARG5d
-|
-|//-----------------------------------------------------------------------
-|.else			// x64/POSIX stack layout
-|
-|.define CFRAME_SPACE,	aword*5			// Delta for rsp (see <--).
-|.macro saveregs_
-|  push rbx; push r15; push r14
-|.if NO_UNWIND
-|  push r13; push r12
-|.endif
-|  sub rsp, CFRAME_SPACE
-|.endmacro
-|.macro saveregs
-|  push rbp; saveregs_
-|.endmacro
-|.macro restoreregs
-|  add rsp, CFRAME_SPACE
-|.if NO_UNWIND
-|  pop r12; pop r13
-|.endif
-|  pop r14; pop r15; pop rbx; pop rbp
-|.endmacro
-|
-|//----- 16 byte aligned,
-|.if NO_UNWIND
-|.define SAVE_RET,	aword [rsp+aword*11]	//<-- rsp entering interpreter.
-|.define SAVE_R4,	aword [rsp+aword*10]
-|.define SAVE_R3,	aword [rsp+aword*9]
-|.define SAVE_R2,	aword [rsp+aword*8]
-|.define SAVE_R1,	aword [rsp+aword*7]
-|.define SAVE_RU2,	aword [rsp+aword*6]
-|.define SAVE_RU1,	aword [rsp+aword*5]	//<-- rsp after register saves.
-|.else
-|.define SAVE_RET,	aword [rsp+aword*9]	//<-- rsp entering interpreter.
-|.define SAVE_R4,	aword [rsp+aword*8]
-|.define SAVE_R3,	aword [rsp+aword*7]
-|.define SAVE_R2,	aword [rsp+aword*6]
-|.define SAVE_R1,	aword [rsp+aword*5]	//<-- rsp after register saves.
-|.endif
-|.define SAVE_CFRAME,	aword [rsp+aword*4]
-|.define SAVE_PC,	dword [rsp+dword*7]
-|.define SAVE_L,	dword [rsp+dword*6]
-|.define SAVE_ERRF,	dword [rsp+dword*5]
-|.define SAVE_NRES,	dword [rsp+dword*4]
-|.define TMPa,		aword [rsp+aword*1]
-|.define TMP2,		dword [rsp+dword*1]
-|.define TMP1,		dword [rsp]		//<-- rsp while in interpreter.
-|//----- 16 byte aligned
-|
-|// TMPQ overlaps TMP1/TMP2. MULTRES overlaps TMP2 (and TMPQ).
-|.define TMPQ,		qword [rsp]
-|.define TMP3,		dword [rsp+aword*1]
-|.define MULTRES,	TMP2
-|
-|.endif
 |
 |//-----------------------------------------------------------------------
 |
@@ -339,11 +176,6 @@
 |  movzx OP, RCL
 |  add PC, 4
 |  shr RC, 16
-|.if X64
-|  jmp aword [DISPATCH+OP*8]
-|.else
-|  jmp aword [DISPATCH+OP*4]
-|.endif
 |.endmacro
 |
 |// Instruction footer.
@@ -433,30 +265,9 @@
 |  mov dword [DISPATCH+DISPATCH_GL(vmstate)], ~LJ_VMST_..st
 |.endmacro
 |
-|// x87 compares.
-|.macro fcomparepp			// Compare and pop st0 >< st1.
-|  fucomip st1
-|  fpop
-|.endmacro
 |
 |.macro fpop1; fstp st1; .endmacro
 |
-|// Synthesize SSE FP constants.
-|.macro sseconst_abs, reg, tmp		// Synthesize abs mask.
-|.if X64
-|  mov64 tmp, U64x(7fffffff,ffffffff); movd reg, tmp
-|.else
-|  pxor reg, reg; pcmpeqd reg, reg; psrlq reg, 1
-|.endif
-|.endmacro
-|
-|.macro sseconst_hi, reg, tmp, val	// Synthesize hi-32 bit const.
-|.if X64
-|  mov64 tmp, U64x(val,00000000); movd reg, tmp
-|.else
-|  mov tmp, 0x .. val; movd reg, tmp; pshufd reg, reg, 0x51
-|.endif
-|.endmacro
 |
 |.macro sseconst_sign, reg, tmp		// Synthesize sign mask.
 |  sseconst_hi reg, tmp, 80000000
