@@ -15,81 +15,85 @@
 |
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
-|.define BASE,		edx		// Not C callee-save, refetched anyway.
-|.if not X64
-|.define KBASE,		edi		// Must be C callee-save.
-|.define KBASEa,	KBASE
-|.define PC,		esi		// Must be C callee-save.
-|.define PCa,		PC
-|.define DISPATCH,	ebx		// Must be C callee-save.
-|.elif X64WIN
-|.define KBASE,		edi		// Must be C callee-save.
-|.define KBASEa,	rdi
-|.define PC,		esi		// Must be C callee-save.
-|.define PCa,		rsi
-|.define DISPATCH,	ebx		// Must be C callee-save.
-|.else
-|.define KBASE,		r15d		// Must be C callee-save.
-|.define KBASEa,	r15
-|.define PC,		ebx		// Must be C callee-save.
-|.define PCa,		rbx
-|.define DISPATCH,	r14d		// Must be C callee-save.
-|.endif
+.define BASE,			// Base of current Lua stack frame.
+|.define KBASE,			// Constants of current Lua function.
+|.define PC,			// Next PC.
+|.define GLREG,			// Global state.
+|.define LREG,			// Register holding lua_State (also in SAVE_L).
+|.define TISNUM,		// Constant LJ_TISNUM << 47.
+|.define TISNUMhi,		// Constant LJ_TISNUM << 15.
+|.define TISNIL,		// Constant -1LL.
+|.define fp,			// Yes, we have to maintain a frame pointer.
 |
-|.define RA,		ecx
-|.define RAH,		ch
-|.define RAL,		cl
-|.define RB,		ebp		// Must be ebp (C callee-save).
-|.define RC,		eax		// Must be eax.
-|.define RCW,		ax
-|.define RCH,		ah
-|.define RCL,		al
-|.define OP,		RB
-|.define RD,		RC
-|.define RDW,		RCW
-|.define RDL,		RCL
-|.if X64
-|.define RAa, rcx
-|.define RBa, rbp
-|.define RCa, rax
-|.define RDa, rax
-|.else
-|.define RAa, RA
-|.define RBa, RB
-|.define RCa, RC
-|.define RDa, RD
-|.endif
+|// The following temporaries are not saved across C calls, except for RA/RC.
+|.define RA,		
+|.define RC,		
+|.define RB,		
+|.define RAw,		
+|.define RCw,		
+|.define RBw,		
+|.define INS,		
+|.define INSw,		
+|.define ITYPE,		
+|.define TMP0,		
+|.define TMP1,		
+|.define TMP2,		
+|.define TMP3,		
+|.define TMP0w,		
+|.define TMP1w,		
+|.define TMP2w,		
+|.define TMP3w,		
 |
-|.if not X64
-|.define FCARG1,	ecx		// x86 fastcall arguments.
-|.define FCARG2,	edx
-|.elif X64WIN
-|.define CARG1,		rcx		// x64/WIN64 C call arguments.
-|.define CARG2,		rdx
-|.define CARG3,		r8
-|.define CARG4,		r9
-|.define CARG1d,	ecx
-|.define CARG2d,	edx
-|.define CARG3d,	r8d
-|.define CARG4d,	r9d
-|.define FCARG1,	CARG1d		// Upwards compatible to x86 fastcall.
-|.define FCARG2,	CARG2d
-|.else
-|.define CARG1,		rdi		// x64/POSIX C call arguments.
-|.define CARG2,		rsi
-|.define CARG3,		rdx
-|.define CARG4,		rcx
-|.define CARG5,		r8
-|.define CARG6,		r9
-|.define CARG1d,	edi
-|.define CARG2d,	esi
-|.define CARG3d,	edx
-|.define CARG4d,	ecx
-|.define CARG5d,	r8d
-|.define CARG6d,	r9d
-|.define FCARG1,	CARG1d		// Simulate x86 fastcall.
-|.define FCARG2,	CARG2d
-|.endif
+|// Calling conventions. Also used as temporaries.
+|.define CARG1,		
+|.define CARG2,		
+|.define CARG3,		
+|.define CARG4,		
+|.define CARG5,		
+|.define CARG1w,	
+|.define CARG2w,	
+|.define CARG3w,	
+|.define CARG4w,	
+|.define CARG5w,	
+|
+|.define FARG1,		
+|.define FARG2,		
+|
+|.define CRET1,		
+|.define CRET1w,	
+|// Stack layout while in interpreter. Must match with lj_frame.h.
+|
+|.define CFRAME_SPACE,	208
+|//----- 16 byte aligned, <-- sp entering interpreter
+|// Unused		[sp, #204]	// 32 bit values
+|.define SAVE_NRES,	
+|.define SAVE_ERRF,	
+|.define SAVE_MULTRES,	
+|.define TMPD,		
+|.define SAVE_L,	
+|.define SAVE_PC,	
+|.define SAVE_CFRAME,	
+|.define SAVE_FPR_,	
+|.define SAVE_GPR_,	
+|.define SAVE_LR,	
+|.define SAVE_FP,	
+|//----- 16 byte aligned, <-- sp while in interpreter.
+|
+|.define TMPDofs,	
+|
+|.macro save_, gpr1, gpr2, fpr1, fpr2
+]
+|.endmacro
+|.macro rest_, gpr1, gpr2, fpr1, fpr2
+]
+|.endmacro
+|
+|.macro saveregs
+
+|.endmacro
+|.macro restoreregs
+
+|.endmacro
 |
 |// Type definitions. Some of these are only used for documentation.
 |.type L,		lua_State
@@ -111,22 +115,16 @@
 |//-----------------------------------------------------------------------
 |.define CFRAME_SPACE,	aword*9			// Delta for esp (see <--).
 |.macro saveregs_
-|  push edi; push esi; push ebx
-|  push extern lj_err_unwind_win
-|  fs; push dword [0]
-|  fs; mov [0], esp
-|  sub esp, CFRAME_SPACE
+
 |.endmacro
 |.macro restoreregs
-|  add esp, CFRAME_SPACE
-|  fs; pop dword [0]
-|  pop edi	// Short for esp += 4.
-|  pop ebx; pop esi; pop edi; pop ebp
+
 |.endmacro
 |
 |.macro saveregs
-|  push ebp; saveregs_
+
 |.endmacro
+
 |.define SAVE_ERRF,	aword [esp+aword*15]	// vm_pcall/vm_cpcall only.
 |.define SAVE_NRES,	aword [esp+aword*14]
 |.define SAVE_CFRAME,	aword [esp+aword*13]
@@ -164,18 +162,14 @@
 |.macro ins_A; .endmacro
 |.macro ins_AD; .endmacro
 |.macro ins_AJ; .endmacro
-|.macro ins_ABC; movzx RB, RCH; movzx RC, RCL; .endmacro
-|.macro ins_AB_; movzx RB, RCH; .endmacro
-|.macro ins_A_C; movzx RC, RCL; .endmacro
-|.macro ins_AND; not RDa; .endmacro
+|.macro ins_ABC;  .endmacro
+|.macro ins_AB_;  .endmacro
+|.macro ins_A_C; .endmacro
+|.macro ins_AND; .endmacro
 |
 |// Instruction decode+dispatch. Carefully tuned (nope, lodsd is not faster).
 |.macro ins_NEXT
-|  mov RC, [PC]
-|  movzx RA, RCH
-|  movzx OP, RCL
-|  add PC, 4
-|  shr RC, 16
+
 |.endmacro
 |
 |// Instruction footer.
@@ -220,11 +214,11 @@
 |//-----------------------------------------------------------------------
 |
 |// Macros to test operand types.
-|.macro checktp, reg, tp;  cmp dword [BASE+reg*8+4], tp; .endmacro
-|.macro checknum, reg, target; checktp reg, LJ_TISNUM; jae target; .endmacro
-|.macro checkint, reg, target; checktp reg, LJ_TISNUM; jne target; .endmacro
-|.macro checkstr, reg, target; checktp reg, LJ_TSTR; jne target; .endmacro
-|.macro checktab, reg, target; checktp reg, LJ_TTAB; jne target; .endmacro
+|.macro checktp,  .endmacro
+|.macro checknum,  .endmacro
+|.macro checkint,  .endmacro
+|.macro checkstr, .endmacro
+|.macro checktab,  .endmacro
 |
 |// These operands must be used with movzx.
 |.define PC_OP, byte [PC-4]
@@ -234,7 +228,7 @@
 |.define PC_RD, word [PC-2]
 |
 |.macro branchPC, reg
-|  lea PC, [PC+reg*4-BCBIAS_J*4]
+
 |.endmacro
 |
 |// Assumes DISPATCH is relative to GL.
@@ -245,24 +239,16 @@
 |
 |// Decrement hashed hotcount and trigger trace recorder if zero.
 |.macro hotloop, reg
-|  mov reg, PC
-|  shr reg, 1
-|  and reg, HOTCOUNT_PCMASK
-|  sub word [DISPATCH+reg+GG_DISP2HOT], HOTCOUNT_LOOP
-|  jb ->vm_hotloop
+
 |.endmacro
 |
 |.macro hotcall, reg
-|  mov reg, PC
-|  shr reg, 1
-|  and reg, HOTCOUNT_PCMASK
-|  sub word [DISPATCH+reg+GG_DISP2HOT], HOTCOUNT_CALL
-|  jb ->vm_hotcall
+
 |.endmacro
 |
 |// Set current VM state.
 |.macro set_vmstate, st
-|  mov dword [DISPATCH+DISPATCH_GL(vmstate)], ~LJ_VMST_..st
+
 |.endmacro
 |
 |
@@ -270,27 +256,24 @@
 |
 |
 |.macro sseconst_sign, reg, tmp		// Synthesize sign mask.
-|  sseconst_hi reg, tmp, 80000000
+|  
 |.endmacro
 |.macro sseconst_1, reg, tmp		// Synthesize 1.0.
-|  sseconst_hi reg, tmp, 3ff00000
+|  
 |.endmacro
 |.macro sseconst_m1, reg, tmp		// Synthesize -1.0.
-|  sseconst_hi reg, tmp, bff00000
+|  
 |.endmacro
 |.macro sseconst_2p52, reg, tmp		// Synthesize 2^52.
-|  sseconst_hi reg, tmp, 43300000
+|  
 |.endmacro
 |.macro sseconst_tobit, reg, tmp	// Synthesize 2^52 + 2^51.
-|  sseconst_hi reg, tmp, 43380000
+|  
 |.endmacro
 |
 |// Move table write barrier back. Overwrites reg.
 |.macro barrierback, tab, reg
-|  and byte tab->marked, (uint8_t)~LJ_GC_BLACK	// black2gray(tab)
-|  mov reg, [DISPATCH+DISPATCH_GL(gc.grayagain)]
-|  mov [DISPATCH+DISPATCH_GL(gc.grayagain)], tab
-|  mov tab->gclist, reg
+
 |.endmacro
 |
 |//-----------------------------------------------------------------------
