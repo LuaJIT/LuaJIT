@@ -16,6 +16,7 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_lib.h"
+#include "lj_gc.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -399,11 +400,23 @@ static int lj_cf_package_loader_preload(lua_State *L)
 
 /* ------------------------------------------------------------------------ */
 
-static const int sentinel_ = 0;
-#define sentinel	((void *)&sentinel_)
+static const int *sentinel_ = NULL;
+#define sentinel	((void *)sentinel_)
+
+void lj_cf_free_sentinel(lua_State *L) {
+  if (sentinel_ != NULL) {
+    lj_mem_free(G(L), (void *)sentinel_, sizeof(int));
+    sentinel_ = NULL;
+  }
+}
 
 static int lj_cf_package_require(lua_State *L)
 {
+  if (sentinel_ == NULL) {
+    int *p = lj_mem_newt(L, sizeof(int), int);
+    *p = 0;
+    sentinel_ = p;
+  }
   const char *name = luaL_checkstring(L, 1);
   int i;
   lua_settop(L, 1);  /* _LOADED table will be at index 2 */
