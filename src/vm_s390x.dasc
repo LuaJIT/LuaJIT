@@ -15,15 +15,15 @@
 |
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
-.define BASE,			// Base of current Lua stack frame.
-|.define KBASE,			// Constants of current Lua function.
-|.define PC,			// Next PC.
-|.define GLREG,			// Global state.
-|.define LREG,			// Register holding lua_State (also in SAVE_L).
-|.define TISNUM,		// Constant LJ_TISNUM << 47.
-|.define TISNUMhi,		// Constant LJ_TISNUM << 15.
-|.define TISNIL,		// Constant -1LL.
-|.define fp,			// Yes, we have to maintain a frame pointer.
+|.define BASE,			gr0	// Base of current Lua stack frame.
+|.define KBASE,			gr1	// Constants of current Lua function.
+|.define PC,			gr14	// Next PC.
+|.define GLREG,			gr2	// Global state.
+|.define LREG,			gr3	// Register holding lua_State (also in SAVE_L).
+|.define TISNUM,		gr4	// Constant LJ_TISNUM << 47.
+|.define TISNUMhi,		gr5	// Constant LJ_TISNUM << 15.
+|.define TISNIL,		gr6	// Constant -1LL.
+|.define fp,			gr7	// Yes, we have to maintain a frame pointer.
 |
 |// The following temporaries are not saved across C calls, except for RA/RC.
 |.define RA,		
@@ -66,6 +66,7 @@
 |.define CFRAME_SPACE,	208
 |//----- 16 byte aligned, <-- sp entering interpreter
 |// Unused		[sp, #204]	// 32 bit values
+|
 |.define SAVE_NRES,	
 |.define SAVE_ERRF,	
 |.define SAVE_MULTRES,	
