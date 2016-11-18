@@ -1,9 +1,9 @@
-|// Low-level VM code for S390x CPUs.
+|// Low-level VM code for IBM z/Architecture (s390x) CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
 |
 
-|.arch S390x
+|.arch s390x
 |.section code_op, code_sub
 |
 |.actionlist build_actionlist
