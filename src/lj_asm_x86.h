@@ -234,10 +234,10 @@ static void asm_fusefref(ASMState *as, IRIns *ir, RegSet allow)
   as->mrm.idx = RID_NONE;
   if (ir->op1 == REF_NIL) {
 #if LJ_GC64
-    as->mrm.ofs = (int32_t)ir->op2 - GG_OFS(dispatch);
+    as->mrm.ofs = (int32_t)(ir->op2 << 2) - GG_OFS(dispatch);
     as->mrm.base = RID_DISPATCH;
 #else
-    as->mrm.ofs = (int32_t)ir->op2 + ptr2addr(J2GG(as->J));
+    as->mrm.ofs = (int32_t)(ir->op2 << 2) + ptr2addr(J2GG(as->J));
     as->mrm.base = RID_NONE;
 #endif
     return;
