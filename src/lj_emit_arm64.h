@@ -46,7 +46,9 @@ static uint32_t emit_isk13(uint64_t n, int is64)
   if (!n) return 0;  /* Neither all-zero nor all-ones are allowed. */
   do {  /* Find the repeat width. */
     if (is64 && (uint32_t)(n^(n>>32))) break;
-    n = (uint32_t)n; w = 32; if ((n^(n>>16)) & 0xffff) break;
+    n = (uint32_t)n;
+    if (!n) return 0;  /* Ditto when passing n=0xffffffff and is64=0. */
+    w = 32; if ((n^(n>>16)) & 0xffff) break;
     n = n & 0xffff; w = 16; if ((n^(n>>8)) & 0xff) break;
     n = n & 0xff; w = 8; if ((n^(n>>4)) & 0xf) break;
     n = n & 0xf; w = 4; if ((n^(n>>2)) & 0x3) break;
