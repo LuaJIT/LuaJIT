@@ -80,8 +80,6 @@
 |// Callee save area (allocated by interpreter).
 |.define CALLEESAVE	000(SP) // <- SP in interpreter.
 |
-|.define TMPDofs,	
-|
 |.macro savereg arg1 arg2 arg3
 |  STG arg1;				// Store 64bit content 
 |  STG arg2;				// Store 64bit content 
@@ -109,51 +107,6 @@
 |.type NARGS,		int
 |.type TRACE,		GCtrace
 |.type SBUF,		SBuf
-|
-|// Stack layout while in interpreter. Must match with lj_frame.h.
-|//-----------------------------------------------------------------------
-|.define CFRAME_SPACE,	aword*9			// Delta for esp (see <--).
-|.macro saveregs_
-
-|.endmacro
-|.macro restoreregs
-
-|.endmacro
-|
-|.macro saveregs
-
-|.endmacro
-
-|.define SAVE_ERRF,	aword [esp+aword*15]	// vm_pcall/vm_cpcall only.
-|.define SAVE_NRES,	aword [esp+aword*14]
-|.define SAVE_CFRAME,	aword [esp+aword*13]
-|.define SAVE_L,	aword [esp+aword*12]
-|//----- 16 byte aligned, ^^^ arguments from C caller
-|.define SAVE_RET,	aword [esp+aword*11]	//<-- esp entering interpreter.
-|.define SAVE_R4,	aword [esp+aword*10]
-|.define SAVE_R3,	aword [esp+aword*9]
-|.define SAVE_R2,	aword [esp+aword*8]
-|//----- 16 byte aligned
-|.define SAVE_R1,	aword [esp+aword*7]	//<-- esp after register saves.
-|.define SAVE_PC,	aword [esp+aword*6]
-|.define TMP2,		aword [esp+aword*5]
-|.define TMP1,		aword [esp+aword*4]
-|//----- 16 byte aligned
-|.define ARG4,		aword [esp+aword*3]
-|.define ARG3,		aword [esp+aword*2]
-|.define ARG2,		aword [esp+aword*1]
-|.define ARG1,		aword [esp]		//<-- esp while in interpreter.
-|//----- 16 byte aligned, ^^^ arguments for C callee
-|
-|// FPARGx overlaps ARGx and ARG(x+1) on x86.
-|.define FPARG3,	qword [esp+qword*1]
-|.define FPARG1,	qword [esp]
-|// TMPQ overlaps TMP1/TMP2. ARG5/MULTRES overlap TMP1/TMP2 (and TMPQ).
-|.define TMPQ,		qword [esp+aword*4]
-|.define TMP3,		ARG4
-|.define ARG5,		TMP1
-|.define TMPa,		TMP1
-|.define MULTRES,	TMP2
 |
 |//-----------------------------------------------------------------------
 |
