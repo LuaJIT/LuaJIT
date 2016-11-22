@@ -15,15 +15,15 @@
 |
 |// Fixed register assignments for the interpreter.
 |// This is very fragile and has many dependencies. Caveat emptor.
-|.define BASE,			gr0	// Base of current Lua stack frame.
-|.define KBASE,			gr1	// Constants of current Lua function.
-|.define PC,			gr14	// Next PC.
-|.define GLREG,			gr2	// Global state.
-|.define LREG,			gr3	// Register holding lua_State (also in SAVE_L).
-|.define TISNUM,		gr4	// Constant LJ_TISNUM << 47.
-|.define TISNUMhi,		gr5	// Constant LJ_TISNUM << 15.
-|.define TISNIL,		gr6	// Constant -1LL.
-|.define fp,			gr7	// Yes, we have to maintain a frame pointer.
+|.define BASE,			gr0	
+|.define KBASE,			gr1	
+|.define PC,			gr14	
+|.define GLREG,			gr2	
+|.define LREG,			gr3	
+|.define TISNUM,		gr4	
+|.define TISNUMhi,		gr5	
+|.define TISNIL,		gr6	
+|.define fp,			gr7	
 |
 |// The following temporaries are not saved across C calls, except for RA/RC.
 |.define RA,		
@@ -82,18 +82,16 @@
 |
 |.define TMPDofs,	
 |
-|.macro save_, gpr1, gpr2, fpr1, fpr2
-]
-|.endmacro
-|.macro rest_, gpr1, gpr2, fpr1, fpr2
-]
+|.macro savereg arg1 arg2 arg3
+|  STG arg1;				// Store 64bit content 
+|  STG arg2;				// Store 64bit content 
+|  STG arg3;				// Store 64bit content 
 |.endmacro
 |
-|.macro saveregs
-
-|.endmacro
-|.macro restoreregs
-
+|.macro restreg arg1 arg2 arg3
+|  LG arg1;				// Load 64 bit content
+|  LG arg2;				// Load 64 bit content
+|  LG arg3;				// Load 64 bit content
 |.endmacro
 |
 |// Type definitions. Some of these are only used for documentation.
