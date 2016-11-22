@@ -80,16 +80,23 @@
 |// Callee save area (allocated by interpreter).
 |.define CALLEESAVE	000(SP) // <- SP in interpreter.
 |
-|.macro savereg arg1 arg2 arg3
-|  STG arg1;				// Store 64bit content 
-|  STG arg2;				// Store 64bit content 
-|  STG arg3;				// Store 64bit content 
+|.macro saveregs
+|  lay SP, -CFRAME_SPACE(SP)	// Allocate stack frame.
+|  stmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
+|  std f0, SAVE_FPR0
+|  std f2, SAVE_FPR2
+|  std f4, SAVE_FPR4
+|  std f6, SAVE_FPR6
 |.endmacro
 |
-|.macro restreg arg1 arg2 arg3
-|  LG arg1;				// Load 64 bit content
-|  LG arg2;				// Load 64 bit content
-|  LG arg3;				// Load 64 bit content
+|.macro restoreregs
+|  la SP, CFRAME_SPACE(SP)	// De-allocate stack frame.
+|  lmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
+|  ld f0, SAVE_FPR0
+|  ld f2, SAVE_FPR2
+|  ld f4, SAVE_FPR4
+|  ld f6, SAVE_FPR6
+|// br r14 to return?
 |.endmacro
 |
 |// Type definitions. Some of these are only used for documentation.
