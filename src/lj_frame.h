@@ -200,15 +200,6 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_OFS_MULTRES	192
 #define CFRAME_SIZE		208
 #define CFRAME_SHIFT_MULTRES	3
-#elif LJ_TARGET_S390X
-#define CFRAME_OFS_ERRF		
-#define CFRAME_OFS_NRES		
-#define CFRAME_OFS_PREV		
-#define CFRAME_OFS_L		
-#define CFRAME_OFS_PC		
-#define CFRAME_OFS_MULTRES	
-#define CFRAME_SIZE		
-#define CFRAME_SHIFT_MULTRES	
 #elif LJ_TARGET_PPC
 #if LJ_TARGET_XBOX360
 #define CFRAME_OFS_ERRF		424
@@ -272,6 +263,15 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_SIZE		128
 #endif
 #define CFRAME_OFS_MULTRES	0
+#define CFRAME_SHIFT_MULTRES	3
+#elif LJ_TARGET_S390X
+#define CFRAME_OFS_ERRF		216
+#define CFRAME_OFS_NRES		208
+#define CFRAME_OFS_PREV		200
+#define CFRAME_OFS_L		192
+#define CFRAME_OFS_PC		168
+#define CFRAME_OFS_MULTRES	160
+#define CFRAME_SIZE		172
 #define CFRAME_SHIFT_MULTRES	3
 #else
 #error "Missing CFRAME_* definitions for this architecture"
