@@ -2,7 +2,22 @@
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
 |
-
+|// ELF ABI registers:
+|// r0,r1       |                            | volatile |
+|// r2          | parameter and return value | volatile |
+|// r3-r5       | parameter                  | volatile |
+|// r6          | parameter                  | saved    |
+|// r7-r11      |                            | saved    |
+|// r12         | GOT pointer  (needed?)     | saved    |
+|// r13         | literal pool (needed?)     | saved    |
+|// r14         | return address             | volatile |
+|// r15         | stack pointer              | saved    |
+|// f0,f2,f4,f6 | parameter and return value | volatile |
+|// f1,f3,f5,f7 |                            | volatile |
+|// f8-f15      |                            | saved    |
+|// ar0,ar1     | TLS                        | volatile |
+|// ar2-ar15    |                            | volatile |
+|
 |.arch s390x
 |.section code_op, code_sub
 |
@@ -13,72 +28,57 @@
 |
 |//-----------------------------------------------------------------------
 |
-|// Fixed register assignments for the interpreter.
-|// This is very fragile and has many dependencies. Caveat emptor.
-|.define BASE,			gr0	
-|.define KBASE,			gr1	
-|.define PC,			gr14	
-|.define GLREG,			gr2	
-|.define LREG,			gr3	
-|.define TISNUM,		gr4	
-|.define TISNUMhi,		gr5	
-|.define TISNIL,		gr6	
-|.define fp,			gr7	
+|// Fixed register assignments for the interpreter, callee-saved.
+|.define BASE,			r7	// Base of current Lua stack frame.
+|.define KBASE,			r8	// Constants of current Lua function.
+|.define PC,			r9	// Next PC.
+|.define GLREG,			r10	// Global state.
+|.define LREG,			r11	// Register holding lua_State (also in SAVE_L).
 |
-|// The following temporaries are not saved across C calls, except for RA/RC.
-|.define RA,		
-|.define RC,		
-|.define RB,		
-|.define RAw,		
-|.define RCw,		
-|.define RBw,		
-|.define INS,		
-|.define INSw,		
-|.define ITYPE,		
-|.define TMP0,		
-|.define TMP1,		
-|.define TMP2,		
-|.define TMP3,		
-|.define TMP0w,		
-|.define TMP1w,		
-|.define TMP2w,		
-|.define TMP3w,		
+|// The following temporaries are not saved across C calls, except for RD.
+|.define RA,			r0	// Cannot be dereferenced.
+|.define RB,			r1
+|.define RC,			r5	// Overlaps CARG4.
+|.define RD,			r6	// Overlaps CARG5. Callee-saved.
 |
 |// Calling conventions. Also used as temporaries.
-|.define CARG1,		
-|.define CARG2,		
-|.define CARG3,		
-|.define CARG4,		
-|.define CARG5,		
-|.define CARG1w,	
-|.define CARG2w,	
-|.define CARG3w,	
-|.define CARG4w,	
-|.define CARG5w,	
+|.define CARG1,			r2
+|.define CARG2,			r3
+|.define CARG3,			r4
+|.define CARG4,			r5
+|.define CARG5,			r6
 |
-|.define FARG1,		
-|.define FARG2,		
+|.define FARG1,			f0
+|.define FARG2,			f2
+|.define FARG3,			f4
+|.define FARG4,			f6
 |
-|.define CRET1,		
-|.define CRET1w,	
+|.define CRET1,			r2
+|
+|.define SP,			r15
+|
 |// Stack layout while in interpreter. Must match with lj_frame.h.
+|.define CFRAME_SPACE,	176	// Delta for SP, 8 byte aligned.
 |
-|.define CFRAME_SPACE,	208
-|//----- 16 byte aligned, <-- sp entering interpreter
-|// Unused		[sp, #204]	// 32 bit values
+|// Register save area.
+|.define SAVE_FPR6,	328(SP)
+|.define SAVE_FPR4,	320(SP)
+|.define SAVE_FPR2,	312(SP)
+|.define SAVE_FPR0,	304(SP)
+|.define SAVE_GPRS,	224(SP)	// Save area for r6-r15 (10*8 bytes).
 |
-|.define SAVE_NRES,	
-|.define SAVE_ERRF,	
-|.define SAVE_MULTRES,	
-|.define TMPD,		
-|.define SAVE_L,	
-|.define SAVE_PC,	
-|.define SAVE_CFRAME,	
-|.define SAVE_FPR_,	
-|.define SAVE_GPR_,	
-|.define SAVE_LR,	
-|.define SAVE_FP,	
-|//----- 16 byte aligned, <-- sp while in interpreter.
+|// Argument save area, each slot is 8-bytes (32-bit types are sign/zero extended).
+|.define SAVE_ERRF,	216(SP) // Argument 4, in r5.
+|.define SAVE_NRES,	208(SP)	// Argument 3, in r4.
+|.define SAVE_CFRAME,	200(SP)	// Argument 2, in r3.
+|.define SAVE_L,	192(SP)	// Argument 1, in r2.
+|.define RESERVED,	184(SP)	// Reserved for compiler use.
+|.define BACKCHAIN,	176(SP)	// <- SP entering interpreter.
+|.define SAVE_PC,	168(SP)
+|.define SAVE_MULTRES,	160(SP)
+|
+|// Callee save area (allocated by interpreter).
+|.define CALLEESAVE	000(SP) // <- SP in interpreter.
 |
 |.define TMPDofs,	
 |
