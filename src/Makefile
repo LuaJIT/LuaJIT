@@ -641,6 +641,10 @@ $(LJVM_BOUT): $(BUILDVM_T)
 	$(E) "BUILDVM   $@"
 	$(Q)$(BUILDVM_X) -m $(LJVM_MODE) -o $@
 
+lj_known_strings.h: $(DASM_DEP) lj_cparse.c lib_ffi.c known_strings.lua
+	$(E) "CALCHASH  $@"
+	$(Q) cat lj_cparse.c lib_ffi.c | $(HOST_LUA) known_strings.lua > lj_known_strings.h
+
 lj_bcdef.h: $(BUILDVM_T) $(LJLIB_C)
 	$(E) "BUILDVM   $@"
 	$(Q)$(BUILDVM_X) -m bcdef -o $@ $(LJLIB_C)
