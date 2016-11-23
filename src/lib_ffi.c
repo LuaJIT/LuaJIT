@@ -720,36 +720,35 @@ LJLIB_CF(ffi_fill)	LJLIB_REC(.)
   return 0;
 }
 
-#define H_(le, be)	LJ_ENDIAN_SELECT(0x##le, 0x##be)
-
 /* Test ABI string. */
 LJLIB_CF(ffi_abi)	LJLIB_REC(.)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
+  const char *str = strdata(s);
   int b = 0;
-  switch (s->hash) {
+  switch (str[0]) {
 #if LJ_64
-  case H_(849858eb,ad35fd06): b = 1; break;  /* 64bit */
+  case '6': b = strcmp(str, "64bit") == 0; break;  /* 64bit */
 #else
-  case H_(662d3c79,d0e22477): b = 1; break;  /* 32bit */
+  case '3': b = strcmp(str, "32bit") == 0; break;  /* 32bit */
 #endif
 #if LJ_ARCH_HASFPU
-  case H_(e33ee463,e33ee463): b = 1; break;  /* fpu */
+  case 'f': b = strcmp(str, "fpu") == 0; break;  /* fpu */
 #endif
 #if LJ_ABI_SOFTFP
-  case H_(61211a23,c2e8c81c): b = 1; break;  /* softfp */
+  case 's': b = strcmp(str, "softfp") == 0; break;  /* softfp */
 #else
-  case H_(539417a8,8ce0812f): b = 1; break;  /* hardfp */
+  case 'h': b = strcmp(str, "hardfp") == 0; break;  /* hardfp */
 #endif
 #if LJ_ABI_EABI
-  case H_(2182df8f,f2ed1152): b = 1; break;  /* eabi */
+  case 'e': b = strcmp(str, "eabi") == 0; break;  /* eabi */
 #endif
 #if LJ_ABI_WIN
-  case H_(4ab624a8,4ab624a8): b = 1; break;  /* win */
+  case 'w': b = strcmp(str, "win") == 0; break;  /* win */
 #endif
-  case H_(3af93066,1f001464): b = 1; break;  /* le/be */
+  case LJ_ENDIAN_SELECT('l', 'b'): b = str[1]=='e' && str[2]==0; break;  /* le/be */
 #if LJ_GC64
-  case H_(9e89d2c9,13c83c92): b = 1; break;  /* gc64 */
+  case 'g': b = strcmp(str, "gc64") == 0; break;  /* gc64 */
 #endif
   default:
     break;
