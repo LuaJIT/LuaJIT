@@ -58,22 +58,28 @@
 |.define SP,			r15
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
-|.define CFRAME_SPACE,	176	// Delta for SP, 8 byte aligned.
+|.define CFRAME_SPACE,	240	// Delta for SP, 8 byte aligned.
 |
 |// Register save area.
-|.define SAVE_FPR6,	328(SP)
-|.define SAVE_FPR4,	320(SP)
-|.define SAVE_FPR2,	312(SP)
-|.define SAVE_FPR0,	304(SP)
-|.define SAVE_GPRS,	224(SP)	// Save area for r6-r15 (10*8 bytes).
+|.define SAVE_GPRS,	288(SP)	// Save area for r6-r15 (10*8 bytes).
 |
 |// Argument save area, each slot is 8-bytes (32-bit types are sign/zero extended).
-|.define SAVE_ERRF,	216(SP) // Argument 4, in r5.
-|.define SAVE_NRES,	208(SP)	// Argument 3, in r4.
-|.define SAVE_CFRAME,	200(SP)	// Argument 2, in r3.
-|.define SAVE_L,	192(SP)	// Argument 1, in r2.
-|.define RESERVED,	184(SP)	// Reserved for compiler use.
-|.define BACKCHAIN,	176(SP)	// <- SP entering interpreter.
+|.define SAVE_ERRF,	280(SP) // Argument 4, in r5.
+|.define SAVE_NRES,	272(SP)	// Argument 3, in r4.
+|.define SAVE_CFRAME,	264(SP)	// Argument 2, in r3.
+|.define SAVE_L,	256(SP)	// Argument 1, in r2.
+|.define RESERVED,	248(SP)	// Reserved for compiler use.
+|.define BACKCHAIN,	240(SP)	// <- SP entering interpreter.
+|
+|// Interpreter stack frame.
+|.define SAVE_FPR15,	232(SP)
+|.define SAVE_FPR14,	224(SP)
+|.define SAVE_FPR13,	216(SP)
+|.define SAVE_FPR12,	208(SP)
+|.define SAVE_FPR11,	200(SP)
+|.define SAVE_FPR10,	192(SP)
+|.define SAVE_FPR9,	184(SP)
+|.define SAVE_FPR8,	176(SP)
 |.define SAVE_PC,	168(SP)
 |.define SAVE_MULTRES,	160(SP)
 |
@@ -83,19 +89,26 @@
 |.macro saveregs
 |  lay SP, -CFRAME_SPACE(SP)	// Allocate stack frame.
 |  stmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
-|  std f0, SAVE_FPR0
-|  std f2, SAVE_FPR2
-|  std f4, SAVE_FPR4
-|  std f6, SAVE_FPR6
+|  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
+|  std f9, SAVE_FPR9
+|  std f10, SAVE_FPR10
+|  std f11, SAVE_FPR11
+|  std f12, SAVE_FPR12
+|  std f13, SAVE_FPR13
+|  std f14, SAVE_FPR14
+|  std f15, SAVE_FPR15
 |.endmacro
 |
 |.macro restoreregs
-|  la SP, CFRAME_SPACE(SP)	// De-allocate stack frame.
-|  lmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
-|  ld f0, SAVE_FPR0
-|  ld f2, SAVE_FPR2
-|  ld f4, SAVE_FPR4
-|  ld f6, SAVE_FPR6
+|  ld f8, SAVE_FPR8		// f8-f15 are callee-saved.
+|  ld f9, SAVE_FPR9
+|  ld f10, SAVE_FPR10
+|  ld f11, SAVE_FPR11
+|  ld f12, SAVE_FPR12
+|  ld f13, SAVE_FPR13
+|  ld f14, SAVE_FPR14
+|  ld f15, SAVE_FPR15
+|  lmg r6, r15, SAVE_GPRS	// Restores the stack pointer.
 |// br r14 to return?
 |.endmacro
 |
