@@ -136,10 +136,10 @@
 |.macro ins_A; .endmacro
 |.macro ins_AD; .endmacro
 |.macro ins_AJ; .endmacro
-|.macro ins_ABC; .endmacro
-|.macro ins_AB_; .endmacro
-|.macro ins_A_C; .endmacro
-|.macro ins_AND; .endmacro
+|.macro ins_ABC; mvcl RB, RCH; mvcl RC, RCL; .endmacro
+|.macro ins_AB_; mvcl RB, RCH; .endmacro
+|.macro ins_A_C; mvcl RC, RCL; .endmacro
+|.macro ins_AND; ??? RD; .endmacro
 |
 |// Instruction decode+dispatch.
 |  // TODO: tune this, right now we always decode RA-D even if they aren't used.
