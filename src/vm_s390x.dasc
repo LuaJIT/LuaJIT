@@ -196,11 +196,11 @@
 |//-----------------------------------------------------------------------
 |
 |// Macros to test operand types.
-|.macro checktp,  .endmacro
-|.macro checknum,  .endmacro
-|.macro checkint,  .endmacro
-|.macro checkstr, .endmacro
-|.macro checktab,  .endmacro
+|.macro checktp, reg, tp;  CG dword [BASE+reg*8+4], tp; .endmacro
+|.macro checknum, reg, target; checktp reg, LJ_TISNUM; brc target; .endmacro  // condition to chk is result is above or equal
+|.macro checkint, reg, target; checktp reg, LJ_TISNUM; brc target; .endmacro  // condition to chk is result is not equal
+|.macro checkstr, reg, target; checktp reg, LJ_TSTR; brc target; .endmacro    // condition to chk is result is nto equal
+|.macro checktab, reg, target; checktp reg, LJ_TTAB; brc target; .endmacro    // condition to chk is result is nto equal
 |
 |// These operands must be used with movzx.
 |.define PC_OP, byte [PC-4]
