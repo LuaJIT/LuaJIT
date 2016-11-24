@@ -47,53 +47,41 @@ static Reg ra_alloc2(ASMState *as, IRIns *ir, RegSet allow)
 
 /* -- Guard handling ------------------------------------------------------ */
 
-/* Generate an exit stub group at the bottom of the reserved MCode memory. */
-static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
-{
-  MCode *mxp = as->mcbot;
-  int i;
-  if (mxp + 3*4+4*EXITSTUBS_PER_GROUP >= as->mctop)
-    asm_mclimit(as);
-  /* str lr, [sp]; bl ->vm_exit_handler; .long group. */
-  *mxp++ = A64I_STRx | A64F_D(RID_LR) | A64F_N(RID_SP);
-  *mxp = A64I_BL | (((MCode *)(void *)lj_vm_exit_handler-mxp)&0x03ffffffu);
-  mxp++;
-  *mxp++ = group*EXITSTUBS_PER_GROUP;
-  for (i = 0; i < EXITSTUBS_PER_GROUP; i++)
-    *mxp++ = A64I_B | ((-3-i)&0x03ffffffu);
-  lj_mcode_sync(as->mcbot, mxp);
-  lj_mcode_commitbot(as->J, mxp);
-  as->mcbot = mxp;
-  as->mclim = as->mcbot + MCLIM_REDZONE;
-  return mxp - EXITSTUBS_PER_GROUP;
-}
-
 /* Setup all needed exit stubs. */
 static void asm_exitstub_setup(ASMState *as, ExitNo nexits)
 {
   ExitNo i;
-  if (nexits >= EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR)
-    lj_trace_err(as->J, LJ_TRERR_SNAPOV);
-  for (i = 0; i < (nexits+EXITSTUBS_PER_GROUP-1)/EXITSTUBS_PER_GROUP; i++)
-    if (as->J->exitstubgroup[i] == NULL)
-      as->J->exitstubgroup[i] = asm_exitstub_gen(as, i);
+  MCode *mxp = as->mctop;
+  if (mxp - (nexits + 3 + MCLIM_REDZONE) < as->mclim)
+    asm_mclimit(as);
+  /* 1: str lr,[sp]; bl ->vm_exit_handler; movz w0,traceno; bl <1; bl <1; ... */
+  for (i = nexits-1; (int32_t)i >= 0; i--)
+    *--mxp = A64I_BL|((-3-i)&0x03ffffffu);
+  *--mxp = A64I_MOVZw|A64F_U16(as->T->traceno);
+  mxp--;
+  *mxp = A64I_BL|(((MCode *)(void *)lj_vm_exit_handler-mxp)&0x03ffffffu);
+  *--mxp = A64I_STRx|A64F_D(RID_LR)|A64F_N(RID_SP);
+  as->mctop = mxp;
+}
+
+static MCode *asm_exitstub_addr(ASMState *as, ExitNo exitno)
+{
+  /* Keep this in-sync with exitstub_trace_addr(). */
+  return as->mctop + exitno + 3;
 }
 
 /* Emit conditional branch to exit for guard. */
 static void asm_guardcc(ASMState *as, A64CC cc)
 {
-  MCode *target = exitstub_addr(as->J, as->snapno);
+  MCode *target = asm_exitstub_addr(as, as->snapno);
   MCode *p = as->mcp;
   if (LJ_UNLIKELY(p == as->invmcp)) {
     as->loopinv = 1;
-    *p = A64I_BL | ((target-p) & 0x03ffffffu);
+    *p = A64I_B | ((target-p) & 0x03ffffffu);
     emit_cond_branch(as, cc^1, p-1);
     return;
   }
-  /* No conditional calls. Emit b.cc/bl instead. */
-  /* That's a bad idea. NYI: emit per-trace exit stubs instead, see PPC. */
-  emit_branch(as, A64I_BL, target);
-  emit_cond_branch(as, cc^1, p);
+  emit_cond_branch(as, cc, target);
 }
 
 /* -- Operand fusion ------------------------------------------------------ */
@@ -1568,8 +1556,7 @@ static void asm_stack_check(ASMState *as, BCReg topslot,
   } else {
     pbase = RID_BASE;
   }
-  emit_branch(as, A64I_BL, exitstub_addr(as->J, exitno));
-  emit_cond_branch(as, CC_LS^1, as->mcp+1);
+  emit_cond_branch(as, CC_LS, asm_exitstub_addr(as, exitno));
   k = emit_isk12((8*topslot));
   lua_assert(k);
   emit_n(as, A64I_CMPx^k, RID_TMP);
@@ -1744,7 +1731,8 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   /* Undo the sp adjustment in BC_JLOOP when exiting to the interpreter. */
   int32_t spadj = as->T->spadjust + (lnk ? 0 : sps_scale(SPS_FIXED));
   if (spadj == 0) {
-    as->mctop = --p;
+    *--p = A64I_NOP;
+    as->mctop = p;
   } else {
     /* Patch stack adjustment. */
     uint32_t k = emit_isk12(spadj);
@@ -1805,13 +1793,18 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   MCode *pe = (MCode *)((char *)p + T->szmcode);
   MCode *cstart = NULL, *cend = p;
   MCode *mcarea = lj_mcode_patch(J, p, 0);
-  MCode *px = exitstub_addr(J, exitno);
+  MCode *px = exitstub_trace_addr(T, exitno);
   for (; p < pe; p++) {
-    /* Look for bl exitstub, replace with b target. */
+    /* Look for bcc/b exitstub, replace with bcc/b target. */
     uint32_t ins = *p;
-    if ((ins & 0xfc000000u) == 0x94000000u &&
-	((ins ^ (px-p)) & 0x03ffffffu) == 0) {
-      *p = (ins & 0x7c000000u) | ((target-p) & 0x03ffffffu);
+    if ((ins & 0xff000000u) == 0x54000000u &&
+	((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
+      *p = (ins & 0xff00001fu) | (((target-p)<<5) & 0x00ffffe0u);
+      cend = p+1;
+      if (!cstart) cstart = p;
+    } else if ((ins & 0xfc000000u) == 0x14000000u &&
+	       ((ins ^ (px-p)) & 0x03ffffffu) == 0) {
+      *p = (ins & 0xfc000000u) | ((target-p) & 0x03ffffffu);
       cend = p+1;
       if (!cstart) cstart = p;
     }

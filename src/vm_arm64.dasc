@@ -1927,22 +1927,21 @@ static void build_subroutines(BuildCtx *ctx)
   |  stp d30, d31, [sp, #30*8]
   |  ldr CARG1, [sp, #64*8]	// Load original value of lr.
   |   add CARG3, sp, #64*8	// Recompute original value of sp.
-  |   mv_vmstate CARG4, EXIT
-  |  ldr CARG2w, [CARG1, #-4]!	// Get exit instruction.
-  |   stp CARG1, CARG3, [sp, #62*8]	// Store exit pc/sp in RID_LR/RID_SP.
-  |  lsl CARG2, CARG2, #38
-  |  add CARG1, CARG1, CARG2, asr #36
-  |   ldr CARG2w, [lr]		// Load exit stub group offset.
-  |   sub CARG1, CARG1, lr
-  |   sub CARG1, CARG1, #4
-  |  ldr L, GL->cur_L
-  |   add CARG1, CARG2, CARG1, lsr #2	// Compute exit number.
-  |    ldr BASE, GL->jit_base
-  |   st_vmstate CARG4
-  |   str CARG1w, [GL, #GL_J(exitno)]
-  |    str BASE, L->base
-  |  str L, [GL, #GL_J(L)]
-  |   str xzr, GL->jit_base
+  |    mv_vmstate CARG4, EXIT
+  |   stp xzr, CARG3, [sp, #62*8]	// Store 0/sp in RID_LR/RID_SP.
+  |  sub CARG1, CARG1, lr
+  |   ldr L, GL->cur_L
+  |  lsr CARG1, CARG1, #2
+  |   ldr BASE, GL->jit_base
+  |  sub CARG1, CARG1, #2
+  |   ldr CARG2w, [lr]		// Load trace number.
+  |    st_vmstate CARG4
+  |   str BASE, L->base
+  |  ubfx CARG2w, CARG2w, #5, #16
+  |  str CARG1w, [GL, #GL_J(exitno)]
+  |   str CARG2w, [GL, #GL_J(parent)]
+  |   str L, [GL, #GL_J(L)]
+  |  str xzr, GL->jit_base
   |  add CARG1, GL, #GG_G2J
   |  mov CARG2, sp
   |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)

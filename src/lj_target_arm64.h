@@ -101,14 +101,18 @@ typedef struct {
   int32_t spill[256];		/* Spill slots. */
 } ExitState;
 
-/* PC after instruction that caused an exit. Used to find the trace number. */
-#define EXITSTATE_PCREG		RID_LR
 /* Highest exit + 1 indicates stack check. */
 #define EXITSTATE_CHECKEXIT	1
 
-#define EXITSTUB_SPACING	4
-#define EXITSTUBS_PER_GROUP	32
-
+/* Return the address of a per-trace exit stub. */
+static LJ_AINLINE uint32_t *exitstub_trace_addr_(uint32_t *p, uint32_t exitno)
+{
+  while (*p == 0xd503201f) p++;  /* Skip A64I_NOP. */
+  return p + 3 + exitno;
+}
+/* Avoid dependence on lj_jit.h if only including lj_target.h. */
+#define exitstub_trace_addr(T, exitno) \
+  exitstub_trace_addr_((MCode *)((char *)(T)->mcode + (T)->szmcode), (exitno))
 
 /* -- Instructions -------------------------------------------------------- */
 
