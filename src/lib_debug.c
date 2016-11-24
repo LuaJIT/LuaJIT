@@ -283,13 +283,29 @@ LJLIB_CF(debug_setuservalue)
 
 /* ------------------------------------------------------------------------ */
 
-static const char KEY_HOOK = 'h';
+static const char *KEY_HOOK = NULL;
+
+static const char *get_key_hook(lua_State *L, const char **KEY_HOOK) {
+  if (*KEY_HOOK == NULL) {
+    char *p = lj_mem_newt(L, sizeof(char), char);
+    *p = 'h';
+    *KEY_HOOK = p;
+  }
+  return *KEY_HOOK;
+}
+
+void free_key_hook(lua_State *L) {
+  if (KEY_HOOK != NULL) {
+    lj_mem_free(G(L), (void *)KEY_HOOK, sizeof(char));
+    KEY_HOOK = NULL;
+  }
+}
 
 static void hookf(lua_State *L, lua_Debug *ar)
 {
   static const char *const hooknames[] =
     {"call", "return", "line", "count", "tail return"};
-  lua_pushlightuserdata(L, (void *)&KEY_HOOK);
+  lua_pushlightuserdata(L, (void *)get_key_hook(L, &KEY_HOOK));
   lua_rawget(L, LUA_REGISTRYINDEX);
   if (lua_isfunction(L, -1)) {
     lua_pushstring(L, hooknames[(int)ar->event]);
@@ -334,7 +350,7 @@ LJLIB_CF(debug_sethook)
     count = luaL_optint(L, arg+3, 0);
     func = hookf; mask = makemask(smask, count);
   }
-  lua_pushlightuserdata(L, (void *)&KEY_HOOK);
+  lua_pushlightuserdata(L, (void *)get_key_hook(L, &KEY_HOOK));
   lua_pushvalue(L, arg+1);
   lua_rawset(L, LUA_REGISTRYINDEX);
   lua_sethook(L, func, mask, count);
@@ -349,7 +365,7 @@ LJLIB_CF(debug_gethook)
   if (hook != NULL && hook != hookf) {  /* external hook? */
     lua_pushliteral(L, "external hook");
   } else {
-    lua_pushlightuserdata(L, (void *)&KEY_HOOK);
+    lua_pushlightuserdata(L, (void *)get_key_hook(L, &KEY_HOOK));
     lua_rawget(L, LUA_REGISTRYINDEX);   /* get hook */
   }
   lua_pushstring(L, unmakemask(mask, buff));

@@ -157,6 +157,9 @@ static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
   return NULL;
 }
 
+extern void lj_cf_free_sentinel(lua_State *L);
+extern void free_key_hook(lua_State *L);
+
 static void close_state(lua_State *L)
 {
   global_State *g = G(L);
@@ -171,6 +174,8 @@ static void close_state(lua_State *L)
   lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
   lj_buf_free(g, &g->tmpbuf);
   lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
+  lj_cf_free_sentinel(L);
+  free_key_hook(L);
   lua_assert(g->gc.total == sizeof(GG_State));
 #ifndef LUAJIT_USE_SYSMALLOC
   if (g->allocf == lj_alloc_f)
