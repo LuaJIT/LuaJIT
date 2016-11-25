@@ -239,9 +239,10 @@ local map_extend = {
 }
 
 local map_cond = {
-  eq = 0, ne = 1, cs = 2, cc = 3, mi = 4, pl = 5, vs = 6, vc = 7,
-  hi = 8, ls = 9, ge = 10, lt = 11, gt = 12, le = 13, al = 14,
-  hs = 2, lo = 3,
+  o = 1, h = 2, hle = 3, l = 4,
+  nhe = 5, lh = 6, ne = 7, e = 8,
+  nlh = 9, he = 10, nl = 11, le = 12,
+  nh = 13, no = 14, [""] = 15,
 }
 
 ------------------------------------------------------------------------------
@@ -650,7 +651,7 @@ local alias_lslimm = op_alias("ubfm_4", function(p)
   end
 end)
 
--- Template strings for ARM instructions.
+-- Template strings for s390x instructions.
 map_op = {
   a =             "000000005a000000j",
 ar =            "0000000000001a00g",
@@ -1084,7 +1085,7 @@ msgfr =                 "00000000b91c0000h",
 msfi =          "0000c20100000000l",
 msgfi =                 "0000c20000000000l",
 o =             "0000000056000000j",
-or =            "0000000000001600g",
+["or"] =            "0000000000001600g",
 oy =            "0000e30000000056k",
 og =            "0000e30000000081k",
 ogr =           "00000000b9810000h",
@@ -1213,7 +1214,16 @@ tracg =                 "0000eb000000000fn",
 tre =           "00000000b2a50000h",
 }
 for cond,c in pairs(map_cond) do
-  map_op["b"..cond.."_1"] = tohex(0x54000000+c).."B"
+  -- Extended mnemonics for branches.
+  -- TODO: replace 'B' with correct encoding.
+  -- brc
+  map_op["j"..cond.."_1"] = "00000000"..tohex(0xa7040000+shl(c, 20)).."B"
+  -- brcl
+  map_op["jg"..cond.."_1"] = tohex(0xc004+shl(c, 4)).."00000000".."B"
+  -- bc
+  map_op["b"..cond.."_1"] = "00000000"..tohex(0x47000000+shl(c, 20)).."B"
+  -- bcr
+  map_op["b"..cond.."r_1"] = "00000000"..tohex(0x0700+shl(c, 4)).."B"
 end
 ------------------------------------------------------------------------------
 -- Handle opcodes defined with template strings.
