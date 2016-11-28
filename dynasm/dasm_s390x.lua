@@ -88,7 +88,7 @@ end
 
 -- Add word to action list.
 local function wputxw(n)
-  assert(n >= 0 and n <= 0xffffffff and n % 1 == 0, "word out of range")
+  assert(n >= 0 and n <= 0xffffffffffff and n % 1 == 0, "word out of range")  -- s390x inst can be 6 bytes 
   actlist[#actlist+1] = n
 end
 
@@ -109,7 +109,7 @@ local function wflush(term)
   secpos = 1 -- The actionlist offset occupies a buffer position, too.
 end
 
--- Put escaped word.
+-- Put escaped word.    --Need to check this as well, not sure how it will work on s390x
 local function wputw(n)
   if n <= 0x000fffff then waction("ESC") end
   wputxw(n)
@@ -122,9 +122,9 @@ local function wpos()
   return pos
 end
 
--- Store word to reserved position.
+-- Store word to reserved position.  -- added 2 bytes more since s390x has 6 bytes inst as well 
 local function wputpos(pos, n)
-  assert(n >= 0 and n <= 0xffffffff and n % 1 == 0, "word out of range")
+  assert(n >= 0 and n <= 0xffffffffffff and n % 1 == 0, "word out of range")
   if n <= 0x000fffff then
     insert(actlist, pos+1, n)
     n = map_action.ESC * 0x10000
@@ -278,7 +278,7 @@ local function parse_reg_base(expr)
   local base, tp = parse_reg(expr)
   if parse_reg_type ~= "x" then werror("bad register type") end
   parse_reg_type = false
-  return shl(base, 5), tp
+  return shl(base, 5), tp   -- why is it shifted not able to make out
 end
 
 local parse_ctx = {}
