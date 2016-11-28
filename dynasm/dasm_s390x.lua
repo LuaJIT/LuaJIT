@@ -251,15 +251,7 @@ local parse_reg_type
 
 
 local function parse_gpr(expr)
-  local tname, ovreg = match(expr, "^([%w_]+):(r[1-3]?[0-9])$")
-  local tp = map_type[tname or expr]
-  if tp then
-    local reg = ovreg or tp.reg
-    if not reg then
-      werror("type `"..(tname or expr).."' needs a register override")
-    end
-    expr = reg
-  end
+ -- assuming we get r0-r31  for now
   local r = match(expr, "^r([1-3]?[0-9])$")
   if r then
     r = tonumber(r)
