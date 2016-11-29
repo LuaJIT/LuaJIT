@@ -48,8 +48,10 @@ local maxsecpos = 25 -- Keep this low, to avoid excessively long C lines.
 
 -- Action name -> action number.
 local map_action = {}
+local max_action = 0
 for n,name in ipairs(action_names) do
   map_action[name] = n-1
+  max_action = n
 end
 
 -- Action list buffer.
@@ -77,25 +79,35 @@ end
 local function writeactions(out, name)
   local nn = #actlist
   if nn == 0 then nn = 1; actlist[0] = map_action.STOP end
-  out:write("static const unsigned int ", name, "[", nn, "] = {\n")
-  for i = 1,nn-1 do
-    assert(out:write("0x", tohex(actlist[i]), ",\n"))
+  out:write("static const unsigned short ", name, "[", nn, "] = {")
+  local esc = false -- also need to escape for action arguments
+  for i = 1,nn do
+    assert(out:write("\n  0x", sub(tohex(actlist[i]), 5, 8)))
+    if i ~= nn then assert(out:write(",")) end
+    local name = action_names[actlist[i]+1]
+    if not esc and name then
+      assert(out:write(" /* ", name, " */"))
+      esc = name == "ESC" or name == "SECTION"
+    else
+      esc = false
+    end
   end
-  assert(out:write("0x", tohex(actlist[nn]), "\n};\n\n"))
+  assert(out:write("\n};\n\n"))
 end
 
 ------------------------------------------------------------------------------
 
--- Add word to action list.
-local function wputxw(n)
-  assert(n >= 0 and n <= 0xffffffffffff and n % 1 == 0, "word out of range")  -- s390x inst can be 6 bytes 
+-- Add halfword to action list.
+local function wputxhw(n)
+  assert(n >= 0 and n <= 0xffff, "halfword out of range")
   actlist[#actlist+1] = n
 end
 
 -- Add action to list with optional arg. Advance buffer pos, too.
 local function waction(action, val, a, num)
   local w = assert(map_action[action], "bad action name `"..action.."'")
-  wputxw(w * 0x10000 + (val or 0))
+  wputxhw(w)
+  if val then wputxhw(val) end -- Not sure about this, do we always have one arg?
   if a then actargs[#actargs+1] = a end
   if a or num then secpos = secpos + (num or 1) end
 end
@@ -109,27 +121,17 @@ local function wflush(term)
   secpos = 1 -- The actionlist offset occupies a buffer position, too.
 end
 
--- Put escaped word.    --Need to check this as well, not sure how it will work on s390x
-local function wputw(n)
-  if n <= 0x000fffff then waction("ESC") end
-  wputxw(n)
+-- Put escaped halfword.
+local function wputhw(n)
+  if n <= max_action then waction("ESC") end
+  wputxhw(n)
 end
 
--- Reserve position for word.
+-- Reserve position for halfword.
 local function wpos()
   local pos = #actlist+1
   actlist[pos] = ""
   return pos
-end
-
--- Store word to reserved position.  -- added 2 bytes more since s390x has 6 bytes inst as well 
-local function wputpos(pos, n)
-  assert(n >= 0 and n <= 0xffffffffffff and n % 1 == 0, "word out of range")
-  if n <= 0x000fffff then
-    insert(actlist, pos+1, n)
-    n = map_action.ESC * 0x10000
-  end
-  actlist[pos] = n
 end
 
 ------------------------------------------------------------------------------
@@ -942,35 +944,16 @@ end
 ------------------------------------------------------------------------------
 -- Handle opcodes defined with template strings.
 local function parse_template(params, template, nparams, pos)
-  local op = tonumber(sub(template, 1, 16), 16)  -- 
-						 -- 00000000005a0000  converts to 90
+  -- Read the template in 16-bit chunks.
+  -- Leading halfword zeroes should not be written out.
+  local op0 = tonumber(sub(template, 5, 8), 16)
+  local op1 = tonumber(sub(template, 9, 12), 16)
+  local op2 = tonumber(sub(template, 13, 16), 16)
+
   local n,rs = 1,26
   
   parse_reg_type = false
   -- Process each character.
-  for p in gmatch(sub(template, 17), ".") do
-  local pr1,pr2,pr3
-    if p == "g" then
-      pr1,pr2=params[n],params[n+1]
-      op = op + shl(parse_reg(pr1),4) + parse_reg(pr2); n = n + 1  -- not sure if we will require n later, so keeping it as it is now
-    elseif p == "h" then
-      pr1,pr2=params[n],params[n+1]
-      op = op + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
-    elseif p == "j" then
-      op = op + shl(parse_reg(param[1]),24) + shl(parse_reg(param[2]),20) + shl(parse_reg(param[3]),16) + parse_number(param[4])
-      -- assuming that the parameters are passes in order (R1,X2,B2,D) --only RX-a is satisfied
-    elseif p == "k" then
-      op = op + shl(parse_reg(param[1]),40) + shl(parse_reg(param[2]),36) + shl(parse_reg(param[3]),32) + parse_number(param[4]) + parse_number(param[5])
-      -- assuming params are passed as (R1,X2,B2,DL2,DH2)
-    elseif p == "l" then
-      
-    elseif p == "m" then
-      
-    elseif p == "n" then
-
-    end
-  end
-
   -- TODO
   -- 12-bit displacements (DISP12) and 16-bit immediates (IMM16) can be put at
   -- one of two locations relative to the end of the instruction.
@@ -982,19 +965,42 @@ local function parse_template(params, template, nparams, pos)
   -- oorr iiii 00oo
   -- This should be emitted as oorr, followed by the immediate action, followed by
   -- 00oo.
+  for p in gmatch(sub(template, 17), ".") do
+    local pr1,pr2,pr3
+    if p == "g" then
+      pr1,pr2=params[n],params[n+1]
+      op2 = op2 + shl(parse_reg(pr1),4) + parse_reg(pr2)
+      wputhw(op2)
+    elseif p == "h" then
+      pr1,pr2=params[n],params[n+1]
+      op2 = op2 + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
+      wputhw(op1); wputhw(op2)
+    elseif p == "j" then
+      op1 = op1 + shl(parse_reg(param[1], 8))
+      wputhw(op1); wputhw(op2)
+      -- TODO: parse param[2] using parse_mem_bx, need to put x into op1, b and d
+      -- into op2, emitting an action for the DISP12 afterwards if necessary.
+    elseif p == "k" then
 
-  wputpos(pos, op)
+    elseif p == "l" then
+      
+    elseif p == "m" then
+      
+    elseif p == "n" then
+
+    end
+  end
+
 end
 function op_template(params, template, nparams)
   if not params then return template:gsub("%x%x%x%x%x%x%x%x", "") end
   -- Limit number of section buffer positions used by a single dasm_put().
   -- A single opcode needs a maximum of 3 positions.
   if secpos+3 > maxsecpos then wflush() end
-  local pos = wpos()
   local lpos, apos, spos = #actlist, #actargs, secpos
   local ok, err
   for t in gmatch(template, "[^|]+") do
-    ok, err = pcall(parse_template, params, t, nparams, pos)
+    ok, err = pcall(parse_template, params, t, nparams)
     if ok then return end
     secpos = spos
     actlist[lpos+1] = nil
