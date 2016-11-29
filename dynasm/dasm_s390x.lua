@@ -970,6 +970,19 @@ local function parse_template(params, template, nparams, pos)
 
     end
   end
+
+  -- TODO
+  -- 12-bit displacements (DISP12) and 16-bit immediates (IMM16) can be put at
+  -- one of two locations relative to the end of the instruction.
+  -- To make decoding easier we should insert the actions for these immediately
+  -- after the halfword they modify.
+  -- For example, take the instruction ahik, which is laid out as follows (each
+  -- char is 4 bits):
+  -- o = op code, r = register, i = immediate
+  -- oorr iiii 00oo
+  -- This should be emitted as oorr, followed by the immediate action, followed by
+  -- 00oo.
+
   wputpos(pos, op)
 end
 function op_template(params, template, nparams)

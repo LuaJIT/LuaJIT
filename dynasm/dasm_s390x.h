@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define DASM_ARCH		"s390"
+#define DASM_ARCH		"s390x"
 
 #ifndef DASM_EXTERN
 #define DASM_EXTERN(a,b,c,d)	0
@@ -49,7 +49,7 @@ enum {
 #define DASM_POS2PTR(D, pos)	(D->sections[DASM_POS2SEC(pos)].rbuf + (pos))
 
 /* Action list type. */
-typedef const unsigned int *dasm_ActList;
+typedef const unsigned short *dasm_ActList;
 
 /* Per-section structure. */
 typedef struct dasm_Section {
