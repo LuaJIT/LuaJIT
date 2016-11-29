@@ -1225,29 +1225,28 @@ local function parse_template(params, template, nparams, pos)
   local n,rs = 1,26
   
   parse_reg_type = false
-  -- Process each character. (if its RX-a==> 1st iteration gets R, 2nd==X and so on)
+  -- Process each character.
   for p in gmatch(sub(template, 17), ".") do
   local pr1,pr2,pr3
     if p == "g" then
-	pr1,pr2=param[n],param[n+1]			
-      	op = op + shl(parse_reg(pr1),4) + parse_reg(pr2); n = n + 1  -- not sure if we will require n later, so keeping it as it is now
+      pr1,pr2=param[n],param[n+1]
+      op = op + shl(parse_reg(pr1),4) + parse_reg(pr2); n = n + 1  -- not sure if we will require n later, so keeping it as it is now
     elseif p == "h" then
-      	pr1,pr2=param[n],param[n+1]
-	op = op + shl(parse_reg(pr1),4) + parse_reg(pr2)
+      pr1,pr2=param[n],param[n+1]
+      op = op + shl(parse_reg(pr1),4) + parse_reg(pr2)
     elseif p == "j" then
-      	op = op + shl(parse_reg(param[1],24) + shl(parse_reg(param[2],20) + shl(parse_reg(param[3]),16) + parse_number(param[4])
-					-- assuming that the parameters are passes in order (R1,X2,B2,D) --only RX-a is satisfied
-					
+      op = op + shl(parse_reg(param[1]),24) + shl(parse_reg(param[2]),20) + shl(parse_reg(param[3]),16) + parse_number(param[4])
+      -- assuming that the parameters are passes in order (R1,X2,B2,D) --only RX-a is satisfied
     elseif p == "k" then
-      op = op + shl(parse_reg(param[1],40) + shl(parse_reg(param[2],36) + shl(parse_reg(param[3]),32) + parse_number(param[4]) parse_number(param[5])
-							-- assuming params are passed as (R1,X2,B2,DL2,DH2)
+      op = op + shl(parse_reg(param[1]),40) + shl(parse_reg(param[2]),36) + shl(parse_reg(param[3]),32) + parse_number(param[4]) + parse_number(param[5])
+      -- assuming params are passed as (R1,X2,B2,DL2,DH2)
     elseif p == "l" then
       
     elseif p == "m" then
       
     elseif p == "n" then
-	
-      end
+
+    end
   end
   wputpos(pos, op)
 end
