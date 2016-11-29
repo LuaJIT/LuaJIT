@@ -214,15 +214,12 @@ end
 ------------------------------------------------------------------------------
 
 -- Arch-specific maps.
--- TODO: add s390x related register names
 -- Ext. register name -> int. name.
---local map_archdef = { xzr = "@x31", wzr = "@w31", lr = "x30", }
-local map_archdef = {}
+local map_archdef = { sp = "r15" }
 
 -- Int. register name -> ext. name.
--- local map_reg_rev = { ["@x31"] = "xzr", ["@w31"] = "wzr", x30 = "lr", }
-local map_reg_rev = {}
-	
+local map_reg_rev = { r15 = "sp" }
+
 local map_type = {}		-- Type name -> { ctype, reg }
 local ctypenum = 0		-- Type number (for Dt... macros).
 
@@ -1077,7 +1074,7 @@ msgfr_2 =               "00000000b91c0000h",
 msfi_3 =                "0000c20100000000n",
 msgfi_3 =               "0000c20000000000n",
 o_4 =           "0000000056000000j",
-["or_2"] =	"0000000000001600g",
+or_2 =	        "0000000000001600g",
 oy_5 =          "0000e30000000056l",
 og_5 =          "0000e30000000081l",
 ogr_2 =                 "00000000b9810000h",
