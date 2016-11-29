@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "IMM", "IMM6", "IMM12", "IMM13W", "IMM13X", "IMML",
+  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -227,13 +227,6 @@ local ctypenum = 0		-- Type number (for Dt... macros).
 function _M.revdef(s)
   return map_reg_rev[s] or s
 end
--- not sure of these
-local map_shift = { lsl = 0, lsr = 1, asr = 2, }
-
-local map_extend = {
-  uxtb = 0, uxth = 1, uxtw = 2, uxtx = 3,
-  sxtb = 4, sxth = 5, sxtw = 6, sxtx = 7,
-}
 
 local map_cond = {
   o = 1, h = 2, hle = 3, l = 4,
@@ -246,13 +239,11 @@ local map_cond = {
 
 local parse_reg_type
 
-
 local function parse_gpr(expr)
- -- assuming we get r0-r31  for now
   local r = match(expr, "^r([1-3]?[0-9])$")
   if r then
     r = tonumber(r)
-    if r <= 31 then return r, tp end
+    if r <= 15 then return r, tp end
   end
   werror("bad register name `"..expr.."'")
 end
@@ -261,21 +252,9 @@ local function parse_fpr(expr)
   local r = match(expr, "^f([1-3]?[0-9])$")
   if r then
     r = tonumber(r)
-    if r <= 31 then return r end
+    if r <= 15 then return r end
   end
   werror("bad register name `"..expr.."'")
-end
-
-
-
-
-
-local function parse_reg_base(expr)
-  if expr == "sp" then return 0x3e0 end
-  local base, tp = parse_reg(expr)
-  if parse_reg_type ~= "x" then werror("bad register type") end
-  parse_reg_type = false
-  return shl(base, 5), tp   -- why is it shifted not able to make out
 end
 
 local parse_ctx = {}
@@ -300,262 +279,35 @@ local function parse_number(n)
   return nil
 end
 
-local function parse_imm(imm, bits, shift, scale, signed)
-  imm = match(imm, "^#(.*)$")
-  if not imm then werror("expected immediate operand") end
-  local n = parse_number(imm)
-  if n then
-    local m = sar(n, scale)
-    if shl(m, scale) == n then
-      if signed then
-	local s = sar(m, bits-1)
-	if s == 0 then return shl(m, shift)
-	elseif s == -1 then return shl(m + shl(1, bits), shift) end
-      else
-	if sar(m, bits) == 0 then return shl(m, shift) end
-      end
-    end
-    werror("out of range immediate `"..imm.."'")
-  else
-    waction("IMM", (signed and 32768 or 0)+scale*1024+bits*32+shift, imm)
-    return 0
-  end
+-- Parse memory operand of the form d(b) where 0 <= d < 4096 and b is a GPR.
+-- Encoded as: bddd
+local function parse_mem_b(arg)
+  werror("parse_mem_b: not implemented")
+  return nil
 end
 
-local function parse_imm12(imm)
-  imm = match(imm, "^#(.*)$")
-  if not imm then werror("expected immediate operand") end
-  local n = parse_number(imm)
-  if n then
-    if shr(n, 12) == 0 then
-      return shl(n, 10)
-    elseif band(n, 0xff000fff) == 0 then
-      return shr(n, 2) + 0x00400000
-    end
-    werror("out of range immediate `"..imm.."'")
-  else
-    waction("IMM12", 0, imm)
-    return 0
-  end
+-- Parse memory operand of the form d(x, b) where 0 <= d < 4096 and b and x
+-- are GPRs.
+-- Encoded as: xbddd
+local function parse_mem_bx(arg)
+  werror("parse_mem_bx: not implemented")
+  return nil
 end
 
-local function parse_imm13(imm)
-  imm = match(imm, "^#(.*)$")
-  if not imm then werror("expected immediate operand") end
-  local n = parse_number(imm)
-  local r64 = parse_reg_type == "x"
-  if n and n % 1 == 0 and n >= 0 and n <= 0xffffffff then
-    local inv = false
-    if band(n, 1) == 1 then n = bit.bnot(n); inv = true end
-    local t = {}
-    for i=1,32 do t[i] = band(n, 1); n = shr(n, 1) end
-    local b = table.concat(t)
-    b = b..(r64 and (inv and "1" or "0"):rep(32) or b)
-    local p0, p1, p0a, p1a = b:match("^(0+)(1+)(0*)(1*)")
-    if p0 then
-      local w = p1a == "" and (r64 and 64 or 32) or #p1+#p0a
-      if band(w, w-1) == 0 and b == b:sub(1, w):rep(64/w) then
-	local s = band(-2*w, 0x3f) - 1
-	if w == 64 then s = s + 0x1000 end
-	if inv then
-	  return shl(w-#p1-#p0, 16) + shl(s+w-#p1, 10)
-	else
-	  return shl(w-#p0, 16) + shl(s+#p1, 10)
-	end
-      end
-    end
-    werror("out of range immediate `"..imm.."'")
-  elseif r64 then
-    waction("IMM13X", 0, format("(unsigned int)(%s)", imm))
-    actargs[#actargs+1] = format("(unsigned int)((unsigned long long)(%s)>>32)", imm)
-    return 0
-  else
-    waction("IMM13W", 0, imm)
-    return 0
-  end
+-- Parse memory operand of the form d(b) where -(2^20)/2 <= d < (2^20)/2 and
+-- b is a GPR.
+-- Encoded as: blllhh (ls are the low-bits of d, and hs are the high bits).
+local function parse_mem_by(arg)
+  werror("parse_mem_by: not implemented")
+  return nil
 end
 
-local function parse_imm6(imm)
-  imm = match(imm, "^#(.*)$")
-  if not imm then werror("expected immediate operand") end
-  local n = parse_number(imm)
-  if n then
-    if n >= 0 and n <= 63 then
-      return shl(band(n, 0x1f), 19) + (n >= 32 and 0x80000000 or 0)
-    end
-    werror("out of range immediate `"..imm.."'")
-  else
-    waction("IMM6", 0, imm)
-    return 0
-  end
-end
-
-local function parse_imm_load(imm, scale)
-  local n = parse_number(imm)
-  if n then
-    local m = sar(n, scale)
-    if shl(m, scale) == n and m >= 0 and m < 0x1000 then
-      return shl(m, 10) + 0x01000000 -- Scaled, unsigned 12 bit offset.
-    elseif n >= -256 and n < 256 then
-      return shl(band(n, 511), 12) -- Unscaled, signed 9 bit offset.
-    end
-    werror("out of range immediate `"..imm.."'")
-  else
-    waction("IMML", 0, imm)
-    return 0
-  end
-end
-
-local function parse_fpimm(imm)
-  imm = match(imm, "^#(.*)$")
-  if not imm then werror("expected immediate operand") end
-  local n = parse_number(imm)
-  if n then
-    local m, e = math.frexp(n)
-    local s, e2 = 0, band(e-2, 7)
-    if m < 0 then m = -m; s = 0x00100000 end
-    m = m*32-16
-    if m % 1 == 0 and m >= 0 and m <= 15 and sar(shl(e2, 29), 29)+2 == e then
-      return s + shl(e2, 17) + shl(m, 13)
-    end
-    werror("out of range immediate `"..imm.."'")
-  else
-    werror("NYI fpimm action")
-  end
-end
-
-local function parse_shift(expr)
-  local s, s2 = match(expr, "^(%S+)%s*(.*)$")
-  s = map_shift[s]
-  if not s then werror("expected shift operand") end
-  return parse_imm(s2, 6, 10, 0, false) + shl(s, 22)
-end
-
-local function parse_lslx16(expr)
-  local n = match(expr, "^lsl%s*#(%d+)$")
-  n = tonumber(n)
-  if not n then werror("expected shift operand") end
-  if band(n, parse_reg_type == "x" and 0xffffffcf or 0xffffffef) ~= 0 then
-    werror("bad shift amount")
-  end
-  return shl(n, 17)
-end
-
-local function parse_extend(expr)
-  local s, s2 = match(expr, "^(%S+)%s*(.*)$")
-  if s == "lsl" then
-    s = parse_reg_type == "x" and 3 or 2
-  else
-    s = map_extend[s]
-  end
-  if not s then werror("expected extend operand") end
-  return (s2 == "" and 0 or parse_imm(s2, 3, 10, 0, false)) + shl(s, 13)
-end
-
-local function parse_cond(expr, inv)
-  local c = map_cond[expr]
-  if not c then werror("expected condition operand") end
-  return shl(bit.bxor(c, inv), 12)
-end
-
-local function parse_load(params, nparams, n, op)
-  if params[n+2] then werror("too many operands") end
-  local pn, p2 = params[n], params[n+1]
-  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
-  if not p1 then
-    if not p2 then
-      local reg, tailr = match(pn, "^([%w_:]+)%s*(.*)$")
-      if reg and tailr ~= "" then
-	local base, tp = parse_reg_base(reg)
-	if tp then
-	  waction("IMML", 0, format(tp.ctypefmt, tailr))
-	  return op + base
-	end
-      end
-    end
-    werror("expected address operand")
-  end
-  local scale = shr(op, 30)
-  if p2 then
-    if wb == "!" then werror("bad use of '!'") end
-    op = op + parse_reg_base(p1) + parse_imm(p2, 9, 12, 0, true) + 0x400
-  elseif wb == "!" then
-    local p1a, p2a = match(p1, "^([^,%s]*)%s*,%s*(.*)$")
-    if not p1a then werror("bad use of '!'") end
-    op = op + parse_reg_base(p1a) + parse_imm(p2a, 9, 12, 0, true) + 0xc00
-  else
-    local p1a, p2a = match(p1, "^([^,%s]*)%s*(.*)$")
-    op = op + parse_reg_base(p1a)
-    if p2a ~= "" then
-      local imm = match(p2a, "^,%s*#(.*)$")
-      if imm then
-	op = op + parse_imm_load(imm, scale)
-      else
-	local p2b, p3b, p3s = match(p2a, "^,%s*([^,%s]*)%s*,?%s*(%S*)%s*(.*)$")
-	op = op + shl(parse_reg(p2b), 16) + 0x00200800
-	if parse_reg_type ~= "x" and parse_reg_type ~= "w" then
-	  werror("bad index register type")
-	end
-	if p3b == "" then
-	  if parse_reg_type ~= "x" then werror("bad index register type") end
-	  op = op + 0x6000
-	else
-	  if p3s == "" or p3s == "#0" then
-	  elseif p3s == "#"..scale then
-	    op = op + 0x1000
-	  else
-	    werror("bad scale")
-	  end
-	  if parse_reg_type == "x" then
-	    if p3b == "lsl" and p3s ~= "" then op = op + 0x6000
-	    elseif p3b == "sxtx" then op = op + 0xe000
-	    else
-	      werror("bad extend/shift specifier")
-	    end
-	  else
-	    if p3b == "uxtw" then op = op + 0x4000
-	    elseif p3b == "sxtw" then op = op + 0xc000
-	    else
-	      werror("bad extend/shift specifier")
-	    end
-	  end
-	end
-      end
-    else
-      if wb == "!" then werror("bad use of '!'") end
-      op = op + 0x01000000
-    end
-  end
-  return op
-end
-
-local function parse_load_pair(params, nparams, n, op)
-  if params[n+2] then werror("too many operands") end
-  local pn, p2 = params[n], params[n+1]
-  local scale = shr(op, 30) == 0 and 2 or 3
-  local p1, wb = match(pn, "^%[%s*(.-)%s*%](!?)$")
-  if not p1 then
-    if not p2 then
-      local reg, tailr = match(pn, "^([%w_:]+)%s*(.*)$")
-      if reg and tailr ~= "" then
-	local base, tp = parse_reg_base(reg)
-	if tp then
-	  waction("IMM", 32768+7*32+15+scale*1024, format(tp.ctypefmt, tailr))
-	  return op + base + 0x01000000
-	end
-      end
-    end
-    werror("expected address operand")
-  end
-  if p2 then
-    if wb == "!" then werror("bad use of '!'") end
-    op = op + 0x00800000
-  else
-    local p1a, p2a = match(p1, "^([^,%s]*)%s*,%s*(.*)$")
-    if p1a then p1, p2 = p1a, p2a else p2 = "#0" end
-    op = op + (wb == "!" and 0x01800000 or 0x01000000)
-  end
-  return op + parse_reg_base(p1) + parse_imm(p2, 7, 15, scale, true)
+-- Parse memory operand of the form d(x, b) where -(2^20)/2 <= d < (2^20)/2
+-- and b and x are GPRs.
+-- Encoded as: xblllhh (ls are the low-bits of d, and hs are the high bits).
+local function parse_mem_bxy(arg)
+  werror("parse_mem_bxy: not implemented")
+  return nil
 end
 
 local function parse_label(label, def)
@@ -612,33 +364,6 @@ local function op_alias(opname, f)
     op_template(params, map_op[opname], nparams)
   end
 end
-
-local function alias_bfx(p)
-  p[4] = "#("..p[3]:sub(2)..")+("..p[4]:sub(2)..")-1"
-end
-
-local function alias_bfiz(p)
-  parse_reg(p[1])
-  if parse_reg_type == "w" then
-    p[3] = "#-("..p[3]:sub(2)..")%32"
-    p[4] = "#("..p[4]:sub(2)..")-1"
-  else
-    p[3] = "#-("..p[3]:sub(2)..")%64"
-    p[4] = "#("..p[4]:sub(2)..")-1"
-  end
-end
-
-local alias_lslimm = op_alias("ubfm_4", function(p)
-  parse_reg(p[1])
-  local sh = p[3]:sub(2)
-  if parse_reg_type == "w" then
-    p[3] = "#-("..sh..")%32"
-    p[4] = "#31-("..sh..")"
-  else
-    p[3] = "#-("..sh..")%64"
-    p[4] = "#63-("..sh..")"
-  end
-end)
 
 -- Template strings for s390x instructions.
 map_op = {
@@ -1226,11 +951,11 @@ local function parse_template(params, template, nparams, pos)
   for p in gmatch(sub(template, 17), ".") do
   local pr1,pr2,pr3
     if p == "g" then
-      pr1,pr2=param[n],param[n+1]
+      pr1,pr2=params[n],params[n+1]
       op = op + shl(parse_reg(pr1),4) + parse_reg(pr2); n = n + 1  -- not sure if we will require n later, so keeping it as it is now
     elseif p == "h" then
-      pr1,pr2=param[n],param[n+1]
-      op = op + shl(parse_reg(pr1),4) + parse_reg(pr2)
+      pr1,pr2=params[n],params[n+1]
+      op = op + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
     elseif p == "j" then
       op = op + shl(parse_reg(param[1]),24) + shl(parse_reg(param[2]),20) + shl(parse_reg(param[3]),16) + parse_number(param[4])
       -- assuming that the parameters are passes in order (R1,X2,B2,D) --only RX-a is satisfied
