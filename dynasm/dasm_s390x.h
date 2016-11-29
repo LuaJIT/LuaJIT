@@ -21,7 +21,7 @@ enum {
   /* The following actions need a buffer position. */
   DASM_ALIGN, DASM_REL_LG, DASM_LABEL_LG,
   /* The following actions also have an argument. */
-  DASM_REL_PC, DASM_LABEL_PC, DASM_IMM, DASM_IMMSH,
+  DASM_REL_PC, DASM_LABEL_PC, DASM_DISP12, DASM_DISP20, DASM_IMM16, DASM_IMM32,
   DASM__MAX
 };
 
