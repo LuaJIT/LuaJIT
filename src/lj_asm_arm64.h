@@ -84,6 +84,34 @@ static void asm_guardcc(ASMState *as, A64CC cc)
   emit_cond_branch(as, cc, target);
 }
 
+/* Emit test and branch instruction to exit for guard. */
+static void asm_guardtnb(ASMState *as, A64Ins ai, Reg r, uint32_t bit)
+{
+  MCode *target = asm_exitstub_addr(as, as->snapno);
+  MCode *p = as->mcp;
+  if (LJ_UNLIKELY(p == as->invmcp)) {
+    as->loopinv = 1;
+    *p = A64I_B | ((target-p) & 0x03ffffffu);
+    emit_tnb(as, ai^0x01000000u, r, bit, p-1);
+    return;
+  }
+  emit_tnb(as, ai, r, bit, target);
+}
+
+/* Emit compare and branch instruction to exit for guard. */
+static void asm_guardcnb(ASMState *as, A64Ins ai, Reg r)
+{
+  MCode *target = asm_exitstub_addr(as, as->snapno);
+  MCode *p = as->mcp;
+  if (LJ_UNLIKELY(p == as->invmcp)) {
+    as->loopinv = 1;
+    *p = A64I_B | ((target-p) & 0x03ffffffu);
+    emit_cnb(as, ai^0x01000000u, r, p-1);
+    return;
+  }
+  emit_cnb(as, ai, r, target);
+}
+
 /* -- Operand fusion ------------------------------------------------------ */
 
 /* Limit linear search to this distance. Avoids O(n^2) behavior. */
@@ -482,10 +510,9 @@ static void asm_strto(ASMState *as, IRIns *ir)
       dest = ra_dest(as, ir, RSET_FPR);
     }
   }
-  asm_guardcc(as, CC_EQ);
   if (destused)
     emit_lso(as, A64I_LDRd, (dest & 31), RID_SP, 0);
-  emit_n(as, (A64I_CMPw^A64I_K12)|A64F_U12(0), RID_RET);
+  asm_guardcnb(as, A64I_CBZ, RID_RET);
   args[0] = ir->op1; /* GCstr *str */
   args[1] = ASMREF_TMP1; /* TValue *n  */
   asm_gencall(as, ci, args);
@@ -1465,13 +1492,13 @@ static void asm_intcomp(ASMState *as, IRIns *ir)
     else if (cc > CC_NE) cc ^= 11;  /* LO <-> HI, LS <-> HS */
   }
   oldcc = cc;
-  if (irref_isk(rref) && IR(rref)->i == 0) {
+  if (irref_isk(rref) && get_k64val(IR(rref)) == 0) {
     IRIns *irl = IR(lref);
     if (cc == CC_GE) cc = CC_PL;
     else if (cc == CC_LT) cc = CC_MI;
-    else if (cc > CC_NE) goto notst;  /* Other conds don't work with tst. */
+    else if (cc > CC_NE) goto nocombine;  /* Other conds don't work with tst. */
     cmpprev0 = (irl+1 == ir);
-    /* Combine comp(BAND(left, right), 0) into tst left, right. */
+    /* Combine and-cmp-bcc into tbz/tbnz or and-cmp into tst. */
     if (cmpprev0 && irl->o == IR_BAND && !ra_used(irl)) {
       IRRef blref = irl->op1, brref = irl->op2;
       uint32_t m2 = 0;
@@ -1480,10 +1507,13 @@ static void asm_intcomp(ASMState *as, IRIns *ir)
 	Reg tmp = blref; blref = brref; brref = tmp;
       }
       if (irref_isk(brref)) {
-	/* NYI: use tbz/tbnz, if applicable. */
-	m2 = emit_isk13(IR(brref)->i, irt_is64(irl->t));
-	if (!m2)
-	  goto notst;  /* Not beneficial if we miss a constant operand. */
+	uint64_t k = get_k64val(IR(brref));
+	if (k && !(k & (k-1)) && (cc == CC_EQ || cc == CC_NE)) {
+	  asm_guardtnb(as, cc == CC_EQ ? A64I_TBZ : A64I_TBNZ,
+		       ra_alloc1(as, blref, RSET_GPR), emit_ctz64(k));
+	  return;
+	}
+	m2 = emit_isk13(k, irt_is64(irl->t));
       }
       bleft = ra_alloc1(as, blref, RSET_GPR);
       ai = (irt_is64(irl->t) ? A64I_TSTx : A64I_TSTw);
@@ -1493,9 +1523,15 @@ static void asm_intcomp(ASMState *as, IRIns *ir)
       emit_n(as, ai^m2, bleft);
       return;
     }
-    /* NYI: use cbz/cbnz for EQ/NE 0. */
+    if (cc == CC_EQ || cc == CC_NE) {
+      /* Combine cmp-bcc into cbz/cbnz. */
+      ai = cc == CC_EQ ? A64I_CBZ : A64I_CBNZ;
+      if (irt_is64(ir->t)) ai |= A64I_X;
+      asm_guardcnb(as, ai, ra_alloc1(as, lref, RSET_GPR));
+      return;
+    }
   }
-notst:
+nocombine:
   left = ra_alloc1(as, lref, RSET_GPR);
   m = asm_fuseopm(as, ai, rref, rset_exclude(RSET_GPR, left));
   asm_guardcc(as, cc);
@@ -1638,8 +1674,7 @@ static void asm_gc_check(ASMState *as)
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
-  asm_guardcc(as, CC_NE);  /* Assumes asm_snap_prep() already done. */
-  emit_n(as, A64I_CMPx^A64I_K12, RID_RET);
+  asm_guardcnb(as, A64I_CBNZ, RID_RET); /* Assumes asm_snap_prep() is done. */
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
@@ -1666,10 +1701,10 @@ static void asm_loop_fixup(ASMState *as)
   MCode *p = as->mctop;
   MCode *target = as->mcp;
   if (as->loopinv) {  /* Inverted loop branch? */
+    uint32_t mask = (p[-2] & 0x7e000000) == 0x36000000 ? 0x3fffu : 0x7ffffu;
     ptrdiff_t delta = target - (p - 2);
-    lua_assert(((delta + 0x40000) >> 19) == 0);
-    /* asm_guardcc already inverted the b.cc and patched the final bl. */
-    p[-2] |= ((uint32_t)delta & 0x7ffff) << 5;
+    /* asm_guard* already inverted the bcc/tnb/cnb and patched the final b. */
+    p[-2] |= ((uint32_t)delta & mask) << 5;
   } else {
     ptrdiff_t delta = target - (p - 1);
     p[-1] = A64I_B | ((uint32_t)(delta) & 0x03ffffffu);
@@ -1795,16 +1830,30 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   MCode *mcarea = lj_mcode_patch(J, p, 0);
   MCode *px = exitstub_trace_addr(T, exitno);
   for (; p < pe; p++) {
-    /* Look for bcc/b exitstub, replace with bcc/b target. */
+    /* Look for exitstub branch, replace with branch to target. */
     uint32_t ins = *p;
     if ((ins & 0xff000000u) == 0x54000000u &&
 	((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
+      /* Patch bcc exitstub. */
       *p = (ins & 0xff00001fu) | (((target-p)<<5) & 0x00ffffe0u);
       cend = p+1;
       if (!cstart) cstart = p;
     } else if ((ins & 0xfc000000u) == 0x14000000u &&
 	       ((ins ^ (px-p)) & 0x03ffffffu) == 0) {
+      /* Patch b exitstub. */
       *p = (ins & 0xfc000000u) | ((target-p) & 0x03ffffffu);
+      cend = p+1;
+      if (!cstart) cstart = p;
+    } else if ((ins & 0x7e000000u) == 0x34000000u &&
+	       ((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
+      /* Patch cbz/cbnz exitstub. */
+      *p = (ins & 0xff00001f) | (((target-p)<<5) & 0x00ffffe0u);
+      cend = p+1;
+      if (!cstart) cstart = p;
+    } else if ((ins & 0x7e000000u) == 0x36000000u &&
+	       ((ins ^ ((px-p)<<5)) & 0x0007ffe0u) == 0) {
+      /* Patch tbz/tbnz exitstub. */
+      *p = (ins & 0xfff8001fu) | (((target-p)<<5) & 0x0007ffe0u);
       cend = p+1;
       if (!cstart) cstart = p;
     }

@@ -127,7 +127,9 @@ static LJ_AINLINE uint32_t *exitstub_trace_addr_(uint32_t *p, uint32_t exitno)
 #define A64F_U12(x)	((x) << 10)
 #define A64F_S26(x)	(x)
 #define A64F_S19(x)	((x) << 5)
+#define A64F_S14(x)	((x) << 5)
 #define A64F_S9(x)	((x) << 12)
+#define A64F_BIT(x)	((x) << 19)
 #define A64F_SH(sh, x)	(((sh) << 22) | ((x) << 10))
 #define A64F_EX(ex)	(A64I_EX | ((ex) << 13))
 #define A64F_EXSH(ex,x)	(A64I_EX | ((ex) << 13) | ((x) << 10))
@@ -235,6 +237,10 @@ typedef enum A64Ins {
   A64I_BL = 0x94000000,
   A64I_BR = 0xd61f0000,
   A64I_BLR = 0xd63f0000,
+  A64I_TBZ = 0x36000000,
+  A64I_TBNZ = 0x37000000,
+  A64I_CBZ = 0x34000000,
+  A64I_CBNZ = 0x35000000,
 
   A64I_NOP = 0xd503201f,
 
