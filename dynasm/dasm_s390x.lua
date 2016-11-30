@@ -281,6 +281,32 @@ local function parse_number(n)
   return nil
 end
 
+local function is_uint12(num)
+  return 0 <= num and num < 4096
+end
+
+local function is_int20(num)
+  return -shl(1, 19) <= num and num < shl(1, 19)
+end
+
+-- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
+-- If x is not specified then it is 0.
+local function split_memop(arg)
+  local reg = "r[0-1]?[0-9]"
+  local d, x, b = match(arg, "^(.*)%(("..reg.."), ("..reg..")%)$")
+  if d then
+    return d, parse_gpr(x), parse_gpr(b)
+  end
+  local d, b = match(arg, "^(.*)%(("..reg..")%)$")
+  if d then
+    return d, 0, parse_gpr(b)
+  end
+  -- TODO: handle values without registers?
+  -- TODO: handle registers without a displacement?
+  werror("bad memory operand: "..arg)
+  return nil
+end
+
 -- Parse memory operand of the form d(b) where 0 <= d < 4096 and b is a GPR.
 -- Encoded as: bddd
 local function parse_mem_b(arg)
@@ -292,6 +318,17 @@ end
 -- are GPRs.
 -- Encoded as: xbddd
 local function parse_mem_bx(arg)
+  local d, x, b = split_memop(arg)
+  local dval = tonumber(d)
+  if dval then
+    if not is_uint12(dval) then
+      werror("displacement out of range: ", dval)
+    end
+    return dval, x, b, nil
+  end
+  -- TODO: handle d being a symbol.
+  -- Action is currently the final return value (the caller needs to add it
+  -- to the action list at a later point).
   werror("parse_mem_bx: not implemented")
   return nil
 end
@@ -369,7 +406,7 @@ end
 
 -- Template strings for s390x instructions.
 map_op = {
-a_4 =           "000000005a000000j",
+a_2 =           "000000005a000000j",
 ar_2 =          "0000000000001a00g",
 ay_5 =          "0000e3000000005al",
 ag_5 =          "0000e30000000008l",
@@ -853,7 +890,7 @@ sqdbr_2 =               "00000000b3150000h",
 sqdr_2 =                "00000000b2440000h",
 sqebr_2 =               "00000000b3140000h",
 sqer_2 =                "00000000b2450000h",
-st_4 =          "0000000050000000j",
+st_2 =          "0000000050000000j",
 sty_5 =                 "0000e30000000050l",
 stg_5 =                 "0000e30000000024l",
 std_4 =                 "0000000060000000j",
@@ -976,10 +1013,13 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
       wputhw(op1); wputhw(op2)
     elseif p == "j" then
-      op1 = op1 + shl(parse_reg(param[1], 8))
-      wputhw(op1); wputhw(op2)
-      -- TODO: parse param[2] using parse_mem_bx, need to put x into op1, b and d
-      -- into op2, emitting an action for the DISP12 afterwards if necessary.
+      local d, x, b, a = parse_mem_bx(params[2])
+      op1 = op1 + shl(parse_gpr(params[1]), 4) + x
+      op2 = op2 + shl(b, 12) + d
+      wputhw(op1); wputhw(op2);
+      if a then
+        werror("disp12 actions not yet implemented")
+      end
     elseif p == "k" then
 
     elseif p == "l" then
@@ -988,6 +1028,14 @@ local function parse_template(params, template, nparams, pos)
       
     elseif p == "n" then
 
+    elseif p == "y" then
+       local d, x, b, a = parse_mem_bx(params[1])
+       op1 = op1 + x
+       op2 = op2 + shl(b, 12) + d
+       wputhw(op1); wputhw(op2);
+       if a then
+         werror("disp12 actions not yet implemented")
+       end
     elseif p == "z" then
        op2 = op2 + parse_gpr(params[1])
        wputhw(op2)
