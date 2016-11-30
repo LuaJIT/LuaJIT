@@ -933,13 +933,13 @@ for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
   -- TODO: replace 'B' with correct encoding.
   -- brc
-  map_op["j"..cond.."_1"] = "00000000"..tohex(0xa7040000+shl(c, 20)).."B"
+  map_op["j"..cond.."_1"] = "00000000"..tohex(0xa7040000+shl(c, 20)).."w"
   -- brcl
-  map_op["jg"..cond.."_1"] = tohex(0xc004+shl(c, 4)).."00000000".."B"
+  map_op["jg"..cond.."_1"] = tohex(0xc004+shl(c, 4)).."00000000".."x"
   -- bc
-  map_op["b"..cond.."_1"] = "00000000"..tohex(0x47000000+shl(c, 20)).."B"
+  map_op["b"..cond.."_1"] = "00000000"..tohex(0x47000000+shl(c, 20)).."y"
   -- bcr
-  map_op["b"..cond.."r_1"] = "00000000"..tohex(0x0700+shl(c, 4)).."B"
+  map_op["b"..cond.."r_1"] = "00000000"..tohex(0x0700+shl(c, 4)).."z"
 end
 ------------------------------------------------------------------------------
 -- Handle opcodes defined with template strings.
@@ -969,7 +969,7 @@ local function parse_template(params, template, nparams, pos)
     local pr1,pr2,pr3
     if p == "g" then
       pr1,pr2=params[n],params[n+1]
-      op2 = op2 + shl(parse_reg(pr1),4) + parse_reg(pr2)
+      op2 = op2 + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
       wputhw(op2)
     elseif p == "h" then
       pr1,pr2=params[n],params[n+1]
@@ -988,6 +988,9 @@ local function parse_template(params, template, nparams, pos)
       
     elseif p == "n" then
 
+    elseif p == "z" then
+       op2 = op2 + parse_gpr(params[1])
+       wputhw(op2)
     end
   end
 

@@ -186,10 +186,10 @@ void dasm_put(Dst_DECL, int start, ...)
 
   va_start(ap, start);
   while (1) {
-    unsigned int ins = *p++;
-    unsigned int action = (ins >> 16);
+    unsigned short ins = *p++;
+    unsigned short action = ins;
     if (action >= DASM__MAX) {
-      ofs += 4;
+      ofs += 2;
     } else {
       int *pl, n = action >= DASM_REL_PC ? va_arg(ap, int) : 0;
       switch (action) {
@@ -231,22 +231,11 @@ void dasm_put(Dst_DECL, int start, ...)
 	*pl = -pos;  /* Label exists now. */
 	b[pos++] = ofs;  /* Store pass1 offset estimate. */
 	break;
-      case DASM_IMM:
-#ifdef DASM_CHECKS
-	CK((n & ((1<<((ins>>10)&31))-1)) == 0, RANGE_I);
-#endif
-	n >>= ((ins>>10)&31);
-#ifdef DASM_CHECKS
-	if (ins & 0x8000)
-	  CK(((n + (1<<(((ins>>5)&31)-1)))>>((ins>>5)&31)) == 0, RANGE_I);
-	else
-	  CK((n>>((ins>>5)&31)) == 0, RANGE_I);
-#endif
-	b[pos++] = n;
-	break;
-      case DASM_IMMSH:
-	CK((n >> 6) == 0, RANGE_I);
-	b[pos++] = n;
+      case DASM_IMM16:
+      case DASM_IMM32:
+      case DASM_DISP20:
+      case DASM_DISP12:
+        fprintf(stderr, "not implemented\n");
 	break;
       }
     }
@@ -294,8 +283,8 @@ int dasm_link(Dst_DECL, size_t *szp)
     while (pos != lastpos) {
       dasm_ActList p = D->actionlist + b[pos++];
       while (1) {
-	unsigned int ins = *p++;
-	unsigned int action = (ins >> 16);
+	unsigned short ins = *p++;
+	unsigned short action = ins;
 	switch (action) {
 	case DASM_STOP: case DASM_SECTION: goto stop;
 	case DASM_ESC: p++; break;
@@ -303,7 +292,12 @@ int dasm_link(Dst_DECL, size_t *szp)
 	case DASM_ALIGN: ofs -= (b[pos++] + ofs) & (ins & 255); break;
 	case DASM_REL_LG: case DASM_REL_PC: pos++; break;
 	case DASM_LABEL_LG: case DASM_LABEL_PC: b[pos++] += ofs; break;
-	case DASM_IMM: case DASM_IMMSH: pos++; break;
+        case DASM_IMM16:
+        case DASM_IMM32:
+        case DASM_DISP20:
+        case DASM_DISP12:
+          fprintf(stderr, "not implemented\n");
+	  break;
 	}
       }
       stop: (void)0;
@@ -328,7 +322,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 {
   dasm_State *D = Dst_REF;
   char *base = (char *)buffer;
-  unsigned int *cp = (unsigned int *)buffer;
+  unsigned short *cp = (unsigned short *)buffer;
   int secnum;
 
   /* Encode all code sections. No support for data sections (yet). */
@@ -340,8 +334,8 @@ int dasm_encode(Dst_DECL, void *buffer)
     while (b != endb) {
       dasm_ActList p = D->actionlist + *b++;
       while (1) {
-	unsigned int ins = *p++;
-	unsigned int action = (ins >> 16);
+	unsigned short ins = *p++;
+	unsigned short action = ins;
 	int n = (action >= DASM_ALIGN && action < DASM__MAX) ? *b++ : 0;
 	switch (action) {
 	case DASM_STOP: case DASM_SECTION: goto stop;
@@ -350,7 +344,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
 	  goto patchrel;
 	case DASM_ALIGN:
-	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0x60000000;
+	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0x0707;
 	  break;
 	case DASM_REL_LG:
 	  CK(n >= 0, UNDEF_LG);
@@ -367,11 +361,11 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  ins &= 2047; if (ins >= 20) D->globals[ins-10] = (void *)(base + n);
 	  break;
 	case DASM_LABEL_PC: break;
-	case DASM_IMM:
-	  cp[-1] |= (n & ((1<<((ins>>5)&31))-1)) << (ins&31);
-	  break;
-	case DASM_IMMSH:
-	  cp[-1] |= (ins & 1) ? ((n&31)<<11)|((n&32)>>4) : ((n&31)<<6)|(n&32);
+        case DASM_IMM16:
+        case DASM_IMM32:
+        case DASM_DISP20:
+        case DASM_DISP12:
+          fprintf(stderr, "not implemented\n");
 	  break;
 	default: *cp++ = ins; break;
 	}
