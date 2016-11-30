@@ -242,7 +242,7 @@ local map_cond = {
 local parse_reg_type
 
 local function parse_gpr(expr)
-  local r = match(expr, "^r([1-3]?[0-9])$")
+  local r = match(expr, "^r(1?[0-9])$")
   if r then
     r = tonumber(r)
     if r <= 15 then return r, tp end
@@ -251,7 +251,7 @@ local function parse_gpr(expr)
 end
 
 local function parse_fpr(expr)
-  local r = match(expr, "^f([1-3]?[0-9])$")
+  local r = match(expr, "^f(1?[0-9])$")
   if r then
     r = tonumber(r)
     if r <= 15 then return r end
@@ -292,7 +292,7 @@ end
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
 local function split_memop(arg)
-  local reg = "r[0-1]?[0-9]"
+  local reg = "r1?[0-9]"
   local d, x, b = match(arg, "^(.*)%(("..reg.."), ("..reg..")%)$")
   if d then
     return d, parse_gpr(x), parse_gpr(b)
