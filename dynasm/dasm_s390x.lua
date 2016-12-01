@@ -316,6 +316,8 @@ end
 
 -- Parse memory operand of the form d(x, b) where 0 <= d < 4096 and b and x
 -- are GPRs.
+-- If the fourth return value is not-nil then it needs to be called to
+-- insert an action.
 -- Encoded as: xbddd
 local function parse_mem_bx(arg)
   local d, x, b = split_memop(arg)
@@ -326,11 +328,10 @@ local function parse_mem_bx(arg)
     end
     return dval, x, b, nil
   end
-  -- TODO: handle d being a symbol.
-  -- Action is currently the final return value (the caller needs to add it
-  -- to the action list at a later point).
-  werror("parse_mem_bx: not implemented")
-  return nil
+  if match(d, "^[rf]1?[0-9]?") then
+    werror("expected immediate operand, got register")
+  end
+  return 0, x, b, function() waction("DISP12", nil, d) end
 end
 
 -- Parse memory operand of the form d(b) where -(2^20)/2 <= d < (2^20)/2 and
@@ -1018,7 +1019,7 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
       if a then
-        werror("disp12 actions not yet implemented")
+        a()
       end
     elseif p == "k" then
 
@@ -1034,7 +1035,7 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
       if a then
-        werror("disp12 actions not yet implemented")
+        a()
       end
     elseif p == "z" then
       op2 = op2 + parse_gpr(params[1])
@@ -1046,8 +1047,8 @@ end
 function op_template(params, template, nparams)
   if not params then return template:gsub("%x%x%x%x%x%x%x%x", "") end
   -- Limit number of section buffer positions used by a single dasm_put().
-  -- A single opcode needs a maximum of 3 positions.
-  if secpos+3 > maxsecpos then wflush() end
+  -- A single opcode needs a maximum of 5 positions.
+  if secpos+5 > maxsecpos then wflush() end
   local lpos, apos, spos = #actlist, #actargs, secpos
   local ok, err
   for t in gmatch(template, "[^|]+") do
