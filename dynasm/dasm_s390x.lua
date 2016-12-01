@@ -1029,16 +1029,16 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "n" then
 
     elseif p == "y" then
-       local d, x, b, a = parse_mem_bx(params[1])
-       op1 = op1 + x
-       op2 = op2 + shl(b, 12) + d
-       wputhw(op1); wputhw(op2);
-       if a then
-         werror("disp12 actions not yet implemented")
-       end
+      local d, x, b, a = parse_mem_bx(params[1])
+      op1 = op1 + x
+      op2 = op2 + shl(b, 12) + d
+      wputhw(op1); wputhw(op2);
+      if a then
+        werror("disp12 actions not yet implemented")
+      end
     elseif p == "z" then
-       op2 = op2 + parse_gpr(params[1])
-       wputhw(op2)
+      op2 = op2 + parse_gpr(params[1])
+      wputhw(op2)
     end
   end
 
