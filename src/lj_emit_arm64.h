@@ -234,7 +234,7 @@ static void emit_loadk(ASMState *as, Reg rd, uint64_t u64, int is64)
 #define glofs(as, k) \
   ((intptr_t)((uintptr_t)(k) - (uintptr_t)&J2GG(as->J)->g))
 #define mcpofs(as, k) \
-  ((intptr_t)((uintptr_t)(k) - (uintptr_t)as->mcp))
+  ((intptr_t)((uintptr_t)(k) - (uintptr_t)(as->mcp - 1)))
 #define checkmcpofs(as, k) \
   ((((mcpofs(as, k)>>2) + 0x00040000) >> 19) == 0)
 
