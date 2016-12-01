@@ -234,8 +234,10 @@ void dasm_put(Dst_DECL, int start, ...)
       case DASM_IMM16:
       case DASM_IMM32:
       case DASM_DISP20:
-      case DASM_DISP12:
         fprintf(stderr, "not implemented\n");
+      case DASM_DISP12:
+        CK((n>>12) == 0, RANGE_I);
+        b[pos++] = n;
 	break;
       }
     }
@@ -296,7 +298,7 @@ int dasm_link(Dst_DECL, size_t *szp)
         case DASM_IMM32:
         case DASM_DISP20:
         case DASM_DISP12:
-          fprintf(stderr, "not implemented\n");
+          pos++;
 	  break;
 	}
       }
@@ -364,8 +366,10 @@ int dasm_encode(Dst_DECL, void *buffer)
         case DASM_IMM16:
         case DASM_IMM32:
         case DASM_DISP20:
-        case DASM_DISP12:
           fprintf(stderr, "not implemented\n");
+          break;
+        case DASM_DISP12:
+          cp[-1] |= n&0xfff;
 	  break;
 	default: *cp++ = ins; break;
 	}
