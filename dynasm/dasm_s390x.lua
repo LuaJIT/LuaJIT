@@ -290,7 +290,7 @@ local function is_int20(num)
 end
 
 local function is_int32(num)
-	return -2147483648 <= num and num < 2147483648
+  return -2147483648 <= num and num < 2147483648
 end
 
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
@@ -371,11 +371,11 @@ local function parse_mem_by(arg)
 end
 
 local function parse_imm(arg)
-   local imm_val = tonumber(arg,16)
-   if not is_int32(imm_val) then
-      werror("Immediate value out of range: ", imm_val)
-   end
-   return imm_val
+  local imm_val = tonumber(arg,16)
+  if not is_int32(imm_val) then
+    werror("Immediate value out of range: ", imm_val)
+  end
+  return imm_val
 end
 
 local function parse_label(label, def)
