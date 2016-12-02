@@ -289,6 +289,10 @@ local function is_int20(num)
   return -shl(1, 19) <= num and num < shl(1, 19)
 end
 
+local function is_int32(num)
+	return -shl(1,31) <= num and num <shl(1,31)
+end
+
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
 local function split_memop(arg)
@@ -364,6 +368,14 @@ local function parse_mem_by(arg)
     werror("unexpected index register")
   end
   return d, b, a
+end
+
+local function parse_imm(arg)
+   local imm_val = tonumber(arg,16)
+   if not is_int32(imm_val) then
+      werror("Immediate value out of range: ", imm_val)
+   end
+   return imm_val
 end
 
 local function parse_label(label, def)
@@ -1047,7 +1059,9 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "m" then
       
     elseif p == "n" then
-
+      op0 = op0 + shl(parse_gpr(params[1], 4)	
+      local imm = parse_imm(param[2])
+      wputhw(op0); waction("IMM32", nil, imm)		
     elseif p == "q" then
       local d, b, a = parse_mem_b(params[3])
       op1 = op1 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
