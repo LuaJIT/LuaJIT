@@ -233,7 +233,10 @@ void dasm_put(Dst_DECL, int start, ...)
 	break;
       case DASM_IMM16:
       case DASM_IMM32:
-        fprintf(stderr, "not implemented\n");
+	CK((n>>32) == 0, RANGE_I);
+	b[pos++]=n;	     
+	break;  
+        //fprintf(stderr, "not implemented\n");
       case DASM_DISP20:
         CK(-(1<<19) <= n && n < (1<<19), RANGE_I);
         b[pos++] = n;
@@ -368,7 +371,9 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_LABEL_PC: break;
         case DASM_IMM16:
         case DASM_IMM32:
-          fprintf(stderr, "not implemented\n");
+          //pintf(stderr, "not implemented\n");
+	  cp[-1] |= n
+	  cp[-2] |= n
           break;
         case DASM_DISP20:
           cp[-2] |= n&0xfff;
