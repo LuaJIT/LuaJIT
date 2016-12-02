@@ -307,13 +307,6 @@ local function split_memop(arg)
   return nil
 end
 
--- Parse memory operand of the form d(b) where 0 <= d < 4096 and b is a GPR.
--- Encoded as: bddd
-local function parse_mem_b(arg)
-  werror("parse_mem_b: not implemented")
-  return nil
-end
-
 -- Parse memory operand of the form d(x, b) where 0 <= d < 4096 and b and x
 -- are GPRs.
 -- If the fourth return value is not-nil then it needs to be called to
@@ -334,12 +327,14 @@ local function parse_mem_bx(arg)
   return 0, x, b, function() waction("DISP12", nil, d) end
 end
 
--- Parse memory operand of the form d(b) where -(2^20)/2 <= d < (2^20)/2 and
--- b is a GPR.
--- Encoded as: blllhh (ls are the low-bits of d, and hs are the high bits).
-local function parse_mem_by(arg)
-  werror("parse_mem_by: not implemented")
-  return nil
+-- Parse memory operand of the form d(b) where 0 <= d < 4096 and b is a GPR.
+-- Encoded as: bddd
+local function parse_mem_b(arg)
+  local d, x, b, a = parse_mem_bx(arg)
+  if x ~= 0 then
+    werror("unexpected index register")
+  end
+  return d, b, a
 end
 
 -- Parse memory operand of the form d(x, b) where -(2^20)/2 <= d < (2^20)/2
@@ -358,6 +353,17 @@ local function parse_mem_bxy(arg)
     werror("expected immediate operand, got register")
   end
   return 0, x, b, function() waction("DISP20", nil, d) end
+end
+
+-- Parse memory operand of the form d(b) where -(2^20)/2 <= d < (2^20)/2 and
+-- b is a GPR.
+-- Encoded as: blllhh (ls are the low-bits of d, and hs are the high bits).
+local function parse_mem_by(arg)
+  local d, x, b, a = parse_mem_bxy(arg)
+  if x ~= 0 then
+    werror("unexpected index register")
+  end
+  return d, b, a
 end
 
 local function parse_label(label, def)
@@ -1028,9 +1034,7 @@ local function parse_template(params, template, nparams, pos)
       op1 = op1 + shl(parse_gpr(params[1]), 4) + x
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
-      if a then
-        a()
-      end
+      if a then a() end
     elseif p == "k" then
 
     elseif p == "l" then
@@ -1039,21 +1043,30 @@ local function parse_template(params, template, nparams, pos)
       op1 = op1 + shl(b, 12) + band(d, 0xfff)
       op2 = op2 + band(shr(d, 4), 0xff00)
       wputhw(op0); wputhw(op1); wputhw(op2)
-      if a then
-        a()
-      end
+      if a then a() end
     elseif p == "m" then
       
     elseif p == "n" then
 
+    elseif p == "q" then
+      local d, b, a = parse_mem_b(params[3])
+      op1 = op1 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
+      op2 = op2 + shl(b, 12) + d
+      wputhw(op1); wputhw(op2)
+      if a then a() end
+    elseif p == "s" then
+      local d, b, a = parse_mem_by(params[3])
+      op0 = op0 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
+      op1 = op1 + shl(b, 12) + band(d, 0xfff)
+      op2 = op2 + band(shr(d, 4), 0xff00)
+      wputhw(op0); wputhw(op1); wputhw(op2)
+      if a then a() end
     elseif p == "y" then
       local d, x, b, a = parse_mem_bx(params[1])
       op1 = op1 + x
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
-      if a then
-        a()
-      end
+      if a then a() end
     elseif p == "z" then
       op2 = op2 + parse_gpr(params[1])
       wputhw(op2)
