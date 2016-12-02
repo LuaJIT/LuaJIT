@@ -346,8 +346,18 @@ end
 -- and b and x are GPRs.
 -- Encoded as: xblllhh (ls are the low-bits of d, and hs are the high bits).
 local function parse_mem_bxy(arg)
-  werror("parse_mem_bxy: not implemented")
-  return nil
+  local d, x, b = split_memop(arg)
+  local dval = tonumber(d)
+  if dval then
+    if not is_int20(dval) then
+      werror("displacement out of range: ", dval)
+    end
+    return dval, x, b, nil
+  end
+  if match(d, "^[rf]1?[0-9]?") then
+    werror("expected immediate operand, got register")
+  end
+  return 0, x, b, function() waction("DISP20", nil, d) end
 end
 
 local function parse_label(label, def)
@@ -1024,7 +1034,14 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "k" then
 
     elseif p == "l" then
-      
+      local d, x, b, a = parse_mem_bxy(params[2])
+      op0 = op0 + shl(parse_gpr(params[1]), 4) + x
+      op1 = op1 + shl(b, 12) + band(d, 0xfff)
+      op2 = op2 + band(shr(d, 4), 0xff00)
+      wputhw(op0); wputhw(op1); wputhw(op2)
+      if a then
+        a()
+      end
     elseif p == "m" then
       
     elseif p == "n" then
