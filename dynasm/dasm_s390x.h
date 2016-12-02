@@ -55,28 +55,28 @@ typedef const unsigned short *dasm_ActList;
 
 /* Per-section structure. */
 typedef struct dasm_Section {
-  int *rbuf;			/* Biased buffer pointer (negative section bias). */
-  int *buf;			/* True buffer pointer. */
-  size_t bsize;			/* Buffer size in bytes. */
-  int pos;			/* Biased buffer position. */
-  int epos;			/* End of biased buffer position - max single put. */
-  int ofs;			/* Byte offset into section. */
+  int *rbuf;                    /* Biased buffer pointer (negative section bias). */
+  int *buf;                     /* True buffer pointer. */
+  size_t bsize;                 /* Buffer size in bytes. */
+  int pos;                      /* Biased buffer position. */
+  int epos;                     /* End of biased buffer position - max single put. */
+  int ofs;                      /* Byte offset into section. */
 } dasm_Section;
 
 /* Core structure holding the DynASM encoding state. */
 struct dasm_State {
-  size_t psize;			/* Allocated size of this structure. */
-  dasm_ActList actionlist;	/* Current actionlist pointer. */
-  int *lglabels;		/* Local/global chain/pos ptrs. */
+  size_t psize;                 /* Allocated size of this structure. */
+  dasm_ActList actionlist;      /* Current actionlist pointer. */
+  int *lglabels;                /* Local/global chain/pos ptrs. */
   size_t lgsize;
-  int *pclabels;		/* PC label chains/pos ptrs. */
+  int *pclabels;                /* PC label chains/pos ptrs. */
   size_t pcsize;
-  void **globals;		/* Array of globals (bias -10). */
-  dasm_Section *section;	/* Pointer to active section. */
-  size_t codesize;		/* Total size of all code sections. */
-  int maxsection;		/* 0 <= sectionidx < maxsection. */
-  int status;			/* Status code. */
-  dasm_Section sections[1];	/* All sections. Alloc-extended. */
+  void **globals;               /* Array of globals (bias -10). */
+  dasm_Section *section;        /* Pointer to active section. */
+  size_t codesize;              /* Total size of all code sections. */
+  int maxsection;               /* 0 <= sectionidx < maxsection. */
+  int status;                   /* Status code. */
+  dasm_Section sections[1];     /* All sections. Alloc-extended. */
 };
 
 /* The size of the core structure depends on the max. number of sections. */
@@ -100,10 +100,10 @@ void dasm_init(Dst_DECL, int maxsection)
   D->globals = NULL;
   D->maxsection = maxsection;
   for (i = 0; i < maxsection; i++) {
-    D->sections[i].buf = NULL;	/* Need this for pass3. */
+    D->sections[i].buf = NULL;  /* Need this for pass3. */
     D->sections[i].rbuf = D->sections[i].buf - DASM_SEC2POS(i);
     D->sections[i].bsize = 0;
-    D->sections[i].epos = 0;	/* Wrong, but is recalculated after resize. */
+    D->sections[i].epos = 0;    /* Wrong, but is recalculated after resize. */
   }
 }
 
@@ -126,7 +126,7 @@ void dasm_free(Dst_DECL)
 void dasm_setupglobal(Dst_DECL, void **gl, unsigned int maxgl)
 {
   dasm_State *D = Dst_REF;
-  D->globals = gl - 10;		/* Negative bias to compensate for locals. */
+  D->globals = gl - 10;         /* Negative bias to compensate for locals. */
   DASM_M_GROW(Dst, int, D->lglabels, D->lgsize, (10 + maxgl) * sizeof(int));
 }
 
@@ -181,7 +181,7 @@ void dasm_put(Dst_DECL, int start, ...)
 
   if (pos >= sec->epos) {
     DASM_M_GROW(Dst, int, sec->buf, sec->bsize,
-		sec->bsize + 2 * DASM_MAXSECPOS * sizeof(int));
+                sec->bsize + 2 * DASM_MAXSECPOS * sizeof(int));
     sec->rbuf = sec->buf - DASM_POS2BIAS(pos);
     sec->epos =
       (int)sec->bsize / sizeof(int) - DASM_MAXSECPOS + DASM_POS2BIAS(pos);
@@ -223,26 +223,26 @@ void dasm_put(Dst_DECL, int start, ...)
       pl = D->lglabels + n;
       /* Bkwd rel or global. */
       if (n >= 0) {
-	CK(n >= 10 || *pl < 0, RANGE_LG);
-	CKPL(lg, LG);
-	goto putrel;
+        CK(n >= 10 || *pl < 0, RANGE_LG);
+        CKPL(lg, LG);
+        goto putrel;
       }
       pl += 10;
       n = *pl;
       if (n < 0)
-	n = 0;			/* Start new chain for fwd rel if label exists. */
+        n = 0;                  /* Start new chain for fwd rel if label exists. */
       goto linkrel;
     case DASM_REL_PC:
       pl = D->pclabels + n;
       CKPL(pc, PC);
     putrel:
       n = *pl;
-      if (n < 0) {		/* Label exists. Get label pos and store it. */
-	b[pos] = -n;
+      if (n < 0) {              /* Label exists. Get label pos and store it. */
+        b[pos] = -n;
       } else {
       linkrel:
-	b[pos] = n;		/* Else link to rel chain, anchored at label. */
-	*pl = pos;
+        b[pos] = n;             /* Else link to rel chain, anchored at label. */
+        *pl = pos;
       }
       pos++;
       break;
@@ -254,17 +254,17 @@ void dasm_put(Dst_DECL, int start, ...)
       pl = D->pclabels + n;
       CKPL(pc, PC);
     putlabel:
-      n = *pl;			/* n > 0: Collapse rel chain and replace with label pos. */
+      n = *pl;                  /* n > 0: Collapse rel chain and replace with label pos. */
       while (n > 0) {
-	int *pb = DASM_POS2PTR(D, n);
-	n = *pb;
-	*pb = pos;
+        int *pb = DASM_POS2PTR(D, n);
+        n = *pb;
+        *pb = pos;
       }
-      *pl = -pos;		/* Label exists now. */
-      b[pos++] = ofs;		/* Store pass1 offset estimate. */
+      *pl = -pos;               /* Label exists now. */
+      b[pos++] = ofs;           /* Store pass1 offset estimate. */
       break;
     case DASM_IMM16:
-      CK(((short)n) == n, RANGE_I);	/* TODO: unsigned immediates? */
+      CK(((short)n) == n, RANGE_I);     /* TODO: unsigned immediates? */
       ofs += 2;
       b[pos++] = n;
       break;
@@ -305,19 +305,19 @@ int dasm_link(Dst_DECL, size_t * szp)
     int pc;
     for (pc = 0; pc * sizeof(int) < D->pcsize; pc++)
       if (D->pclabels[pc] > 0)
-	return DASM_S_UNDEF_PC | pc;
+        return DASM_S_UNDEF_PC | pc;
   }
 #endif
 
-  {				/* Handle globals not defined in this translation unit. */
+  {                             /* Handle globals not defined in this translation unit. */
     int idx;
     for (idx = 20; idx * sizeof(int) < D->lgsize; idx++) {
       int n = D->lglabels[idx];
       /* Undefined label: Collapse rel chain and replace with marker (< 0). */
       while (n > 0) {
-	int *pb = DASM_POS2PTR(D, n);
-	n = *pb;
-	*pb = -idx;
+        int *pb = DASM_POS2PTR(D, n);
+        n = *pb;
+        *pb = -idx;
       }
     }
   }
@@ -332,42 +332,42 @@ int dasm_link(Dst_DECL, size_t * szp)
     while (pos != lastpos) {
       dasm_ActList p = D->actionlist + b[pos++];
       while (1) {
-	unsigned short ins = *p++;
-	unsigned short action = ins;
-	switch (action) {
-	case DASM_STOP:
-	case DASM_SECTION:
-	  goto stop;
-	case DASM_ESC:
-	  p++;
-	  break;
-	case DASM_REL_EXT:
-	  break;
-	case DASM_ALIGN:
-	  ofs -= (b[pos++] + ofs) & *p++;
-	  break;
-	case DASM_REL_LG:
-	case DASM_REL_PC:
-	  pos++;
-	  break;
-	case DASM_LABEL_LG:
-	case DASM_LABEL_PC:
-	  b[pos++] += ofs;
-	  break;
-	case DASM_IMM16:
-	case DASM_IMM32:
-	case DASM_DISP20:
-	case DASM_DISP12:
-	  pos++;
-	  break;
-	}
+        unsigned short ins = *p++;
+        unsigned short action = ins;
+        switch (action) {
+        case DASM_STOP:
+        case DASM_SECTION:
+          goto stop;
+        case DASM_ESC:
+          p++;
+          break;
+        case DASM_REL_EXT:
+          break;
+        case DASM_ALIGN:
+          ofs -= (b[pos++] + ofs) & *p++;
+          break;
+        case DASM_REL_LG:
+        case DASM_REL_PC:
+          pos++;
+          break;
+        case DASM_LABEL_LG:
+        case DASM_LABEL_PC:
+          b[pos++] += ofs;
+          break;
+        case DASM_IMM16:
+        case DASM_IMM32:
+        case DASM_DISP20:
+        case DASM_DISP12:
+          pos++;
+          break;
+        }
       }
     stop:(void)0;
     }
-    ofs += sec->ofs;		/* Next section starts right after current section. */
+    ofs += sec->ofs;            /* Next section starts right after current section. */
   }
 
-  D->codesize = ofs;		/* Total size of all code sections */
+  D->codesize = ofs;            /* Total size of all code sections */
   *szp = ofs;
   return DASM_S_OK;
 }
@@ -396,67 +396,67 @@ int dasm_encode(Dst_DECL, void *buffer)
     while (b != endb) {
       dasm_ActList p = D->actionlist + *b++;
       while (1) {
-	unsigned short ins = *p++;
-	unsigned short action = ins;
-	int n = (action >= DASM_ALIGN && action < DASM__MAX) ? *b++ : 0;
-	switch (action) {
-	case DASM_STOP:
-	case DASM_SECTION:
-	  goto stop;
-	case DASM_ESC:
-	  *cp++ = *p++;
-	  break;
-	case DASM_REL_EXT:
-	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
-	  goto patchrel;
-	case DASM_ALIGN:
-	  ins = *p++;
-	  /* TODO: emit 4-byte noprs instead of 2-byte nops where possible. */
-	  while ((((char *)cp - base) & ins))
-	    *cp++ = 0x0700;	/* nop */
-	  break;
-	case DASM_REL_LG:
-	  CK(n >= 0, UNDEF_LG);
-	case DASM_REL_PC:
-	  CK(n >= 0, UNDEF_PC);
-	  n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
-	patchrel:
-	  CK((n & 3) == 0 &&
-	     (((n + 4) + ((ins & 2048) ? 0x00008000 : 0x02000000)) >>
-	      ((ins & 2048) ? 16 : 26)) == 0, RANGE_REL);
-	  cp[-1] |= ((n + 4) & ((ins & 2048) ? 0x0000fffc : 0x03fffffc));
-	  break;
-	case DASM_LABEL_LG:
-	  ins &= 2047;
-	  if (ins >= 20)
-	    D->globals[ins - 10] = (void *)(base + n);
-	  break;
-	case DASM_LABEL_PC:
-	  break;
-	case DASM_IMM16:
-	  *cp++ = n;
-	  break;
-	case DASM_IMM32:
-	  *cp++ = n >> 16;
-	  *cp++ = n;
-	  break;
-	case DASM_DISP20:
-	  cp[-2] |= n & 0xfff;
-	  cp[-1] |= (n >> 4) & 0xff00;
-	  break;
-	case DASM_DISP12:
-	  cp[-1] |= n & 0xfff;
-	  break;
-	default:
-	  *cp++ = ins;
-	  break;
-	}
+        unsigned short ins = *p++;
+        unsigned short action = ins;
+        int n = (action >= DASM_ALIGN && action < DASM__MAX) ? *b++ : 0;
+        switch (action) {
+        case DASM_STOP:
+        case DASM_SECTION:
+          goto stop;
+        case DASM_ESC:
+          *cp++ = *p++;
+          break;
+        case DASM_REL_EXT:
+          n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
+          goto patchrel;
+        case DASM_ALIGN:
+          ins = *p++;
+          /* TODO: emit 4-byte noprs instead of 2-byte nops where possible. */
+          while ((((char *)cp - base) & ins))
+            *cp++ = 0x0700;     /* nop */
+          break;
+        case DASM_REL_LG:
+          CK(n >= 0, UNDEF_LG);
+        case DASM_REL_PC:
+          CK(n >= 0, UNDEF_PC);
+          n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
+        patchrel:
+          CK((n & 3) == 0 &&
+             (((n + 4) + ((ins & 2048) ? 0x00008000 : 0x02000000)) >>
+              ((ins & 2048) ? 16 : 26)) == 0, RANGE_REL);
+          cp[-1] |= ((n + 4) & ((ins & 2048) ? 0x0000fffc : 0x03fffffc));
+          break;
+        case DASM_LABEL_LG:
+          ins &= 2047;
+          if (ins >= 20)
+            D->globals[ins - 10] = (void *)(base + n);
+          break;
+        case DASM_LABEL_PC:
+          break;
+        case DASM_IMM16:
+          *cp++ = n;
+          break;
+        case DASM_IMM32:
+          *cp++ = n >> 16;
+          *cp++ = n;
+          break;
+        case DASM_DISP20:
+          cp[-2] |= n & 0xfff;
+          cp[-1] |= (n >> 4) & 0xff00;
+          break;
+        case DASM_DISP12:
+          cp[-1] |= n & 0xfff;
+          break;
+        default:
+          *cp++ = ins;
+          break;
+        }
       }
     stop:(void)0;
     }
   }
 
-  if (base + D->codesize != (char *)cp)	/* Check for phase errors. */
+  if (base + D->codesize != (char *)cp) /* Check for phase errors. */
     return DASM_S_PHASE;
   return DASM_S_OK;
 }
@@ -472,9 +472,9 @@ int dasm_getpclabel(Dst_DECL, unsigned int pc)
     if (pos < 0)
       return *DASM_POS2PTR(D, -pos);
     if (pos > 0)
-      return -1;		/* Undefined. */
+      return -1;                /* Undefined. */
   }
-  return -2;			/* Unused or out of range. */
+  return -2;                    /* Unused or out of range. */
 }
 
 #ifdef DASM_CHECKS
@@ -486,8 +486,8 @@ int dasm_checkstep(Dst_DECL, int secmatch)
     int i;
     for (i = 1; i <= 9; i++) {
       if (D->lglabels[i] > 0) {
-	D->status = DASM_S_UNDEF_LG | i;
-	break;
+        D->status = DASM_S_UNDEF_LG | i;
+        break;
       }
       D->lglabels[i] = 0;
     }
