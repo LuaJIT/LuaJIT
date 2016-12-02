@@ -32,15 +32,35 @@ void *jitcode(dasm_State **state)
   return (int *)ret;
 }
 
-void add(dasm_State *state)
+void add(dasm_State *state , int mode)
 {
    dasm_State ** Dst = &state;
-   
-   | ar r2,r3
-   | br r14
+ 
+   switch(mode)
+   {
+     /* Case RR instruction mode */
+    case 0:
+     {
+      | ar r2,r3
+      | br r14
+      break;
+     }
+     /* Case RIL instruction mode */
+    case 1:
+     {
+      | ar r2,0x16
+      | br r14
+      break;
+     }
+    default:
+     {
+      printf( " Mode not recognised \n ");
+      break;
+     }
+   }
 } 
 
-void sub(dasm_State *state)
+void sub(dasm_State *state , int mode)
 {
   dasm_State **Dst = &state;
   
@@ -48,7 +68,7 @@ void sub(dasm_State *state)
   | br r14
 }
 
-void mul(dasm_State *state)
+void mul(dasm_State *state, int mode)
 {
   dasm_State **Dst = &state;
   
@@ -73,8 +93,8 @@ void main(int argc, char *argv[])
   dasm_setup(&state, actions);
 
   /* Call respective test function */
-  sub(state);
+  add(state , 0);
 
   ret = fptr(num1 , num2);
-  printf("The value is %d\n" ,ret);
+  printf("Result is %d\n" ,ret);
 }
