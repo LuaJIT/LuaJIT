@@ -215,7 +215,7 @@ void dasm_put(Dst_DECL, int start, ...)
     case DASM_REL_EXT:
       break;
     case DASM_ALIGN:
-      ofs += (ins & 255);
+      ofs += *p++;
       b[pos++] = ofs;
       break;
     case DASM_REL_LG:
@@ -344,7 +344,7 @@ int dasm_link(Dst_DECL, size_t * szp)
 	case DASM_REL_EXT:
 	  break;
 	case DASM_ALIGN:
-	  ofs -= (b[pos++] + ofs) & (ins & 255);
+	  ofs -= (b[pos++] + ofs) & *p++;
 	  break;
 	case DASM_REL_LG:
 	case DASM_REL_PC:
@@ -410,9 +410,10 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
 	  goto patchrel;
 	case DASM_ALIGN:
-	  ins &= 255;
+	  ins = *p++;
+	  /* TODO: emit 4-byte noprs instead of 2-byte nops where possible. */
 	  while ((((char *)cp - base) & ins))
-	    *cp++ = 0x0707;
+	    *cp++ = 0x0700;	/* nop */
 	  break;
 	case DASM_REL_LG:
 	  CK(n >= 0, UNDEF_LG);
