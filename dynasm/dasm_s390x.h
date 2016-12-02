@@ -204,7 +204,7 @@ void dasm_put(Dst_DECL, int start, ...)
     case DASM_STOP:
       goto stop;
     case DASM_SECTION:
-      n = (ins & 255);
+      n = *p++ & 255;
       CK(n < D->maxsection, RANGE_SEC);
       D->section = &D->sections[n];
       goto stop;
