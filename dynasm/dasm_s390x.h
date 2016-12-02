@@ -373,7 +373,7 @@ int dasm_encode(Dst_DECL, void *buffer)
         case DASM_IMM32:
           //pintf(stderr, "not implemented\n");
 	  cp[-1] |= n
-	  cp[-2] |= n
+	  cp[-2] |= (n >>4)
           break;
         case DASM_DISP20:
           cp[-2] |= n&0xfff;
