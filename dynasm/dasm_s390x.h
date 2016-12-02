@@ -196,89 +196,90 @@ void dasm_put(Dst_DECL, int start, ...)
     unsigned short action = ins;
     if (action >= DASM__MAX) {
       ofs += 2;
-    } else {
-      int *pl, n = action >= DASM_REL_PC ? va_arg(ap, int) : 0;
-      switch (action) {
-      case DASM_STOP:
-	goto stop;
-      case DASM_SECTION:
-	n = (ins & 255);
-	CK(n < D->maxsection, RANGE_SEC);
-	D->section = &D->sections[n];
-	goto stop;
-      case DASM_ESC:
-	p++;
-	ofs += 4;
-	break;
-      case DASM_REL_EXT:
-	break;
-      case DASM_ALIGN:
-	ofs += (ins & 255);
-	b[pos++] = ofs;
-	break;
-      case DASM_REL_LG:
-	n = (ins & 2047) - 10;
-	pl = D->lglabels + n;
-	/* Bkwd rel or global. */
-	if (n >= 0) {
-	  CK(n >= 10 || *pl < 0, RANGE_LG);
-	  CKPL(lg, LG);
-	  goto putrel;
-	}
-	pl += 10;
-	n = *pl;
-	if (n < 0)
-	  n = 0;		/* Start new chain for fwd rel if label exists. */
-	goto linkrel;
-      case DASM_REL_PC:
-	pl = D->pclabels + n;
-	CKPL(pc, PC);
-      putrel:
-	n = *pl;
-	if (n < 0) {		/* Label exists. Get label pos and store it. */
-	  b[pos] = -n;
-	} else {
-	linkrel:
-	  b[pos] = n;		/* Else link to rel chain, anchored at label. */
-	  *pl = pos;
-	}
-	pos++;
-	break;
-      case DASM_LABEL_LG:
-	pl = D->lglabels + (ins & 2047) - 10;
+      continue;
+    }
+
+    int *pl, n = action >= DASM_REL_PC ? va_arg(ap, int) : 0;
+    switch (action) {
+    case DASM_STOP:
+      goto stop;
+    case DASM_SECTION:
+      n = (ins & 255);
+      CK(n < D->maxsection, RANGE_SEC);
+      D->section = &D->sections[n];
+      goto stop;
+    case DASM_ESC:
+      p++;
+      ofs += 4;
+      break;
+    case DASM_REL_EXT:
+      break;
+    case DASM_ALIGN:
+      ofs += (ins & 255);
+      b[pos++] = ofs;
+      break;
+    case DASM_REL_LG:
+      n = (ins & 2047) - 10;
+      pl = D->lglabels + n;
+      /* Bkwd rel or global. */
+      if (n >= 0) {
+	CK(n >= 10 || *pl < 0, RANGE_LG);
 	CKPL(lg, LG);
-	goto putlabel;
-      case DASM_LABEL_PC:
-	pl = D->pclabels + n;
-	CKPL(pc, PC);
-      putlabel:
-	n = *pl;		/* n > 0: Collapse rel chain and replace with label pos. */
-	while (n > 0) {
-	  int *pb = DASM_POS2PTR(D, n);
-	  n = *pb;
-	  *pb = pos;
-	}
-	*pl = -pos;		/* Label exists now. */
-	b[pos++] = ofs;		/* Store pass1 offset estimate. */
-	break;
-      case DASM_IMM16:
-	ofs += 2;
-	fprintf(stderr, "DASM_IMM16 not implemented\n");
-	break;
-      case DASM_IMM32:
-	ofs += 4;
-	CK((n >> 32) == 0, RANGE_I);
-	b[pos++] = n;
-	break;
-      case DASM_DISP20:
-	CK(-(1 << 19) <= n && n < (1 << 19), RANGE_I);
-	b[pos++] = n;
-	break;
-      case DASM_DISP12:
-	CK((n >> 12) == 0, RANGE_I);
-	b[pos++] = n;
-	break;
+	goto putrel;
       }
+      pl += 10;
+      n = *pl;
+      if (n < 0)
+	n = 0;			/* Start new chain for fwd rel if label exists. */
+      goto linkrel;
+    case DASM_REL_PC:
+      pl = D->pclabels + n;
+      CKPL(pc, PC);
+    putrel:
+      n = *pl;
+      if (n < 0) {		/* Label exists. Get label pos and store it. */
+	b[pos] = -n;
+      } else {
+      linkrel:
+	b[pos] = n;		/* Else link to rel chain, anchored at label. */
+	*pl = pos;
+      }
+      pos++;
+      break;
+    case DASM_LABEL_LG:
+      pl = D->lglabels + (ins & 2047) - 10;
+      CKPL(lg, LG);
+      goto putlabel;
+    case DASM_LABEL_PC:
+      pl = D->pclabels + n;
+      CKPL(pc, PC);
+    putlabel:
+      n = *pl;			/* n > 0: Collapse rel chain and replace with label pos. */
+      while (n > 0) {
+	int *pb = DASM_POS2PTR(D, n);
+	n = *pb;
+	*pb = pos;
+      }
+      *pl = -pos;		/* Label exists now. */
+      b[pos++] = ofs;		/* Store pass1 offset estimate. */
+      break;
+    case DASM_IMM16:
+      ofs += 2;
+      fprintf(stderr, "DASM_IMM16 not implemented\n");
+      break;
+    case DASM_IMM32:
+      ofs += 4;
+      CK((n >> 32) == 0, RANGE_I);
+      b[pos++] = n;
+      break;
+    case DASM_DISP20:
+      CK(-(1 << 19) <= n && n < (1 << 19), RANGE_I);
+      b[pos++] = n;
+      break;
+    case DASM_DISP12:
+      CK((n >> 12) == 0, RANGE_I);
+      b[pos++] = n;
+      break;
     }
   }
 stop:
