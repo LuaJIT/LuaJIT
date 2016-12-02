@@ -1059,7 +1059,7 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "m" then
       
     elseif p == "n" then
-      op0 = op0 + shl(parse_gpr(params[1], 4)	
+      op0 = op0 + shl(parse_gpr(params[1]), 4)	
       local imm = parse_imm(param[2])
       wputhw(op0); waction("IMM32", nil, imm)		
     elseif p == "q" then
