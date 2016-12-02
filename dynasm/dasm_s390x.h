@@ -264,12 +264,12 @@ void dasm_put(Dst_DECL, int start, ...)
       b[pos++] = ofs;		/* Store pass1 offset estimate. */
       break;
     case DASM_IMM16:
+      CK(((short)n) == n, RANGE_I);	/* TODO: unsigned immediates? */
       ofs += 2;
-      fprintf(stderr, "DASM_IMM16 not implemented\n");
+      b[pos++] = n;
       break;
     case DASM_IMM32:
       ofs += 4;
-      CK((n >> 32) == 0, RANGE_I);
       b[pos++] = n;
       break;
     case DASM_DISP20:
@@ -433,7 +433,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_LABEL_PC:
 	  break;
 	case DASM_IMM16:
-	  fprintf(stderr, "DASM_IMM16 not implemented\n");
+	  *cp++ = n;
 	  break;
 	case DASM_IMM32:
 	  *cp++ = n >> 16;
