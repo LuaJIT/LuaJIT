@@ -290,7 +290,7 @@ local function is_int20(num)
 end
 
 local function is_int32(num)
-	return -shl(1,31) <= num and num <shl(1,31)
+	return -2147483648 <= num and num < 2147483648
 end
 
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
@@ -1060,7 +1060,7 @@ local function parse_template(params, template, nparams, pos)
       
     elseif p == "n" then
       op0 = op0 + shl(parse_gpr(params[1]), 4)	
-      local imm = parse_imm(param[2])
+      local imm = parse_imm(params[2])
       wputhw(op0); waction("IMM32", nil, imm)		
     elseif p == "q" then
       local d, b, a = parse_mem_b(params[3])
