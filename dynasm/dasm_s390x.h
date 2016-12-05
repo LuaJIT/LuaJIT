@@ -219,7 +219,7 @@ void dasm_put(Dst_DECL, int start, ...)
       b[pos++] = ofs;
       break;
     case DASM_REL_LG:
-      n = (ins & 2047) - 10;
+      n = *p++ - 10;
       pl = D->lglabels + n;
       /* Bkwd rel or global. */
       if (n >= 0) {
@@ -247,7 +247,7 @@ void dasm_put(Dst_DECL, int start, ...)
       pos++;
       break;
     case DASM_LABEL_LG:
-      pl = D->lglabels + (ins & 2047) - 10;
+      pl = D->lglabels + *p++ - 10;
       CKPL(lg, LG);
       goto putlabel;
     case DASM_LABEL_PC:
@@ -262,6 +262,7 @@ void dasm_put(Dst_DECL, int start, ...)
       }
       *pl = -pos;               /* Label exists now. */
       b[pos++] = ofs;           /* Store pass1 offset estimate. */
+      ofs += 2;
       break;
     case DASM_IMM16:
       CK(((short)n) == n, RANGE_I);     /* TODO: unsigned immediates? */
@@ -348,10 +349,12 @@ int dasm_link(Dst_DECL, size_t * szp)
           break;
         case DASM_REL_LG:
         case DASM_REL_PC:
+          p++;
           pos++;
           break;
         case DASM_LABEL_LG:
         case DASM_LABEL_PC:
+          p++;
           b[pos++] += ofs;
           break;
         case DASM_IMM16:
@@ -421,13 +424,11 @@ int dasm_encode(Dst_DECL, void *buffer)
           CK(n >= 0, UNDEF_PC);
           n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
         patchrel:
-          CK((n & 3) == 0 &&
-             (((n + 4) + ((ins & 2048) ? 0x00008000 : 0x02000000)) >>
-              ((ins & 2048) ? 16 : 26)) == 0, RANGE_REL);
-          cp[-1] |= ((n + 4) & ((ins & 2048) ? 0x0000fffc : 0x03fffffc));
+          *cp++ = n/2; /* TODO: only 16-bit relative jump currently works. */
+          p++; /* skip argument */
           break;
         case DASM_LABEL_LG:
-          ins &= 2047;
+          ins = *p++;
           if (ins >= 20)
             D->globals[ins - 10] = (void *)(base + n);
           break;
