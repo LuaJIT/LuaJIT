@@ -239,8 +239,6 @@ local map_cond = {
 
 ------------------------------------------------------------------------------
 
-local parse_reg_type
-
 local function parse_gpr(expr)
   local r = match(expr, "^r(1?[0-9])$")
   if r then
@@ -1016,30 +1014,14 @@ local function parse_template(params, template, nparams, pos)
   local op1 = tonumber(sub(template, 5, 8), 16)
   local op2 = tonumber(sub(template, 9, 12), 16)
 
-  local n,rs = 1,26
-  
-  parse_reg_type = false
   -- Process each character.
-  -- TODO
-  -- 12-bit displacements (DISP12) and 16-bit immediates (IMM16) can be put at
-  -- one of two locations relative to the end of the instruction.
-  -- To make decoding easier we should insert the actions for these immediately
-  -- after the halfword they modify.
-  -- For example, take the instruction ahik, which is laid out as follows (each
-  -- char is 4 bits):
-  -- o = op code, r = register, i = immediate
-  -- oorr iiii 00oo
-  -- This should be emitted as oorr, followed by the immediate action, followed by
-  -- 00oo.
   for p in gmatch(sub(template, 13), ".") do
     local pr1,pr2,pr3
     if p == "g" then
-      pr1,pr2=params[n],params[n+1]
-      op2 = op2 + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
+      op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
       wputhw(op2)
     elseif p == "h" then
-      pr1,pr2=params[n],params[n+1]
-      op2 = op2 + shl(parse_gpr(pr1),4) + parse_gpr(pr2)
+      op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
       wputhw(op1); wputhw(op2)
     elseif p == "j" then
       local d, x, b, a = parse_mem_bx(params[2])
@@ -1067,20 +1049,20 @@ local function parse_template(params, template, nparams, pos)
       op1 = op1 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2)
-      if a then a() end
+      if a then a() end -- a() emits action.
     elseif p == "s" then
       local d, b, a = parse_mem_by(params[3])
       op0 = op0 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
       op1 = op1 + shl(b, 12) + band(d, 0xfff)
       op2 = op2 + band(shr(d, 4), 0xff00)
       wputhw(op0); wputhw(op1); wputhw(op2)
-      if a then a() end
+      if a then a() end -- a() emits action.
     elseif p == "y" then
       local d, x, b, a = parse_mem_bx(params[1])
       op1 = op1 + x
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
-      if a then a() end
+      if a then a() end -- a() emits action.
     elseif p == "z" then
       op2 = op2 + parse_gpr(params[1])
       wputhw(op2)
@@ -1166,7 +1148,7 @@ map_op[".align_1"] = function(params)
     for i=1,8 do
       x = x / 2
       if x == 1 then
-	waction("ALIGN", align-1, nil, 1) -- Action byte is 2**n-1.
+	waction("ALIGN", align-1, nil, 1) -- Action halfword is 2**n-1.
 	return
       end
     end
