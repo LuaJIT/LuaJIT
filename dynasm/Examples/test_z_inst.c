@@ -9,15 +9,26 @@
  |.arch s390x
  |.actionlist actions
 
-/* Instructio modes
-   mode 0 : RR Mode
-   mode 1 : I Mode
-*/
+typedef struct
+{
+  int arg1;
+  int arg2;
+  void (*fn)(dasm_State *);
+  int want;
+  char *testname;
+}test_table;
+
+test_table test[] = {
+                      {1,2,add,3,"add"}, 
+                      {10,5 ,sub ,5,"subract"} , 
+                      {2,3,mul,6,"Multiply"}
+                    };
+                     
 
 void *jitcode(dasm_State **state);
-void add(dasm_State * , int);
-void sub(dasm_State * , int);
-void mul(dasm_State * , int);
+void add(dasm_State *);
+void sub(dasm_State *);
+void mul(dasm_State *);
 
 void *jitcode(dasm_State **state) 
 {
@@ -32,35 +43,15 @@ void *jitcode(dasm_State **state)
   return (int *)ret;
 }
 
-void add(dasm_State *state , int mode)
+void add(dasm_State *state)
 {
    dasm_State ** Dst = &state;
  
-   switch(mode)
-   {
-     /* Case RR instruction mode */
-    case 0:
-     {
-      | ar r2,r3
-      | br r14
-      break;
-     }
-     /* Case RIL instruction mode */
-    case 1:
-     {
-      | ar r2,0x16
-      | br r14
-      break;
-     }
-    default:
-     {
-      printf( " Mode not recognised \n ");
-      break;
-     }
-   }
+    | ar r2,r3
+    | br r14
 } 
 
-void sub(dasm_State *state , int mode)
+void sub(dasm_State *state)
 {
   dasm_State **Dst = &state;
   
@@ -68,7 +59,7 @@ void sub(dasm_State *state , int mode)
   | br r14
 }
 
-void mul(dasm_State *state, int mode)
+void mul(dasm_State *state)
 {
   dasm_State **Dst = &state;
   
@@ -80,21 +71,22 @@ void main(int argc, char *argv[])
 {
   dasm_State *state;
   dasm_State **Dst = &state;
-  int num1 , num2;
-  int *ret;
+  int  i;
   size_t size;
   
-  int* (*fptr)(int , int) = jitcode(&state);
+  for(i=0;i<sizeof(test)/sizeof(test[0]);i++)
+  {
+     dasm_init(&state, 1);
+     dasm_setup(&state, actions);
+     test[i].fn(state);
+     int (*fptr)(int, int) = jitcode(&state);
+     int got = fptr(test[i].arg1, test[i].arg2);
 
-  num1 = atoi(argv[1]);
-  num2 = atoi(argv[2]);
-
-  dasm_init(&state, 1);
-  dasm_setup(&state, actions);
-
-  /* Call respective test function */
-  add(state , 0);
-
-  ret = fptr(num1 , num2);
-  printf("Result is %d\n" ,ret);
+     if (got != test[i].want) {
+      fprintf(stderr, "test %s failed: want %d, got %d\n", test[i].testname, test[i].want, got);
+      exit(1);
+    }
+    free(fptr);
+  }
+  printf("All test passed\n");
 }
