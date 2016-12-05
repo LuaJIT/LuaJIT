@@ -1057,6 +1057,14 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + band(shr(d, 4), 0xff00)
       wputhw(op0); wputhw(op1); wputhw(op2)
       if a then a() end -- a() emits action.
+    elseif p == "w" then
+      local mode, n, s = parse_label(params[1])
+      wputhw(op1)
+      waction("REL_"..mode, n, s)
+    elseif p == "x" then
+      local mode, n, s = parse_label(params[1])
+      wputhw(op0)
+      waction("REL_"..mode, n, s)
     elseif p == "y" then
       local d, x, b, a = parse_mem_bx(params[1])
       op1 = op1 + x
@@ -1066,6 +1074,8 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "z" then
       op2 = op2 + parse_gpr(params[1])
       wputhw(op2)
+    else
+      werror("unrecognized encoding")
     end
   end
 

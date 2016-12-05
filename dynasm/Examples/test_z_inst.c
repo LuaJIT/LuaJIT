@@ -8,6 +8,7 @@
 // DynASM directives.
 |.arch s390x
 |.actionlist actions
+|.globals lab_
 
 static void add(dasm_State *state)
 {
@@ -61,6 +62,20 @@ static void rxy(dasm_State *state)
   | br r14
 }
 
+static void lab(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  // r1 = 0; do { r2 += r2; r1 += 1; } while(r1 < r3);
+  | la r1, 0(r0)
+  |1:
+  | agr r2, r2
+  | la r1, 1(r1)
+  | cgr r1, r3
+  | jl <1
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -74,7 +89,8 @@ test_table test[] = {
   {10, 5, sub,     5, "sub"},
   { 2, 3, mul,     6, "mul"},
   { 5, 7,  rx, 12298,  "rx"},
-  { 5, 7, rxy,    10, "rxy"}
+  { 5, 7, rxy,    10, "rxy"},
+  { 2, 4, lab,    32, "lab"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
@@ -93,9 +109,10 @@ static void *jitcode(dasm_State **state, size_t *size)
 int main(int argc, char *argv[])
 {
   dasm_State *state;
-
-  for(int i=0; i < sizeof(test)/sizeof(test[0]); i++) {
+  for(int i = 0; i < sizeof(test)/sizeof(test[0]); i++) {
     dasm_init(&state, 1);
+    void* labels[lab__MAX];
+    dasm_setupglobal(&state, labels, lab__MAX);
     dasm_setup(&state, actions);
     test[i].fn(state);
     size_t size;
