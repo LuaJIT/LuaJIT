@@ -33,18 +33,48 @@ static void mul(dasm_State *state)
   | br r14
 }
 
+static void rx(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  int x = 1;
+  int y = 4095;
+
+  | la r4, 4095(r2, r3)
+  | la r5, 4095(r4)
+  | la r1, x(r5)
+  | la r2, y(r1, r0)
+  | br r14
+}
+
+static void rxy(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  int x = -524287;
+  int y = 524286;
+
+  | lay r4, -524288(r2, r3)
+  | lay r5, 524287(r4)
+  | lay r1, x(r5)
+  | lay r2, y(r1, r0)
+  | br r14
+}
+
 typedef struct {
-  int arg1;
-  int arg2;
+  int64_t arg1;
+  int64_t arg2;
   void (*fn)(dasm_State *);
-  int want;
+  int64_t want;
   const char *testname;
 } test_table;
 
 test_table test[] = {
-  { 1, 2, add, 3, "add"},
-  {10, 5, sub, 5, "sub"},
-  { 2, 3, mul, 6, "mul"}
+  { 1, 2, add,     3, "add"},
+  {10, 5, sub,     5, "sub"},
+  { 2, 3, mul,     6, "mul"},
+  { 5, 7,  rx, 12298,  "rx"},
+  { 5, 7, rxy,    10, "rxy"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
@@ -69,11 +99,11 @@ int main(int argc, char *argv[])
     dasm_setup(&state, actions);
     test[i].fn(state);
     size_t size;
-    int (*fptr)(int, int) = jitcode(&state, &size);
-    int got = fptr(test[i].arg1, test[i].arg2);
+    int64_t (*fptr)(int64_t, int64_t) = jitcode(&state, &size);
+    int64_t got = fptr(test[i].arg1, test[i].arg2);
 
     if (got != test[i].want) {
-      fprintf(stderr, "FAIL: test %s: want %d, got %d\n", test[i].testname, test[i].want, got);
+      fprintf(stderr, "FAIL: test %s: want %ld, got %ld\n", test[i].testname, test[i].want, got);
       exit(1);
     }
     munmap(fptr, size);
