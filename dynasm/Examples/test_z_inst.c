@@ -202,6 +202,23 @@ static void save(dasm_State *state)
   | br r14
 }
 
+static void pc(dasm_State *state) {
+  dasm_State **Dst = &state;
+  int MAX = 10;
+  dasm_growpc(Dst, MAX+1);
+
+  | j =>MAX
+  for (int i = 0; i <= MAX; i++) {
+    |=>i:
+    if (i == 0) {
+      | br r14
+    } else {
+      | aghi r2, i
+      | j =>i-1
+    }
+  }
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -222,7 +239,8 @@ test_table test[] = {
   { 2, 0, add_imm32,     16,   "imm32"},
   { 7, 3,      save,    480,    "save"},
   { 7, 3,    labmul,     21, "labmul0"},
-  { 7, 0,    labmul,      0, "labmul1"}
+  { 7, 0,    labmul,      0, "labmul1"},
+  { 0, 0,        pc,     55,      "pc"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
