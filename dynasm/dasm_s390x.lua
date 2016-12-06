@@ -291,6 +291,9 @@ local function is_int32(num)
   return -2147483648 <= num and num < 2147483648
 end
 
+local function_is_int16(num)
+  return -32768 <= num and num < 32768
+
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
 local function split_memop(arg)
@@ -381,6 +384,18 @@ local function parse_imm(arg)
   end
 end
 
+local function parse_imm16(arg)
+  local imm_val = tonumber(arg,16)
+  if imm_val then
+    if not is_int16(imm_val) then
+      werror("Immediate value out of range: ", imm_val)
+    end
+    wputhw(imm_val)
+  else
+    waction("IMM16", nil, arg)
+  end
+end
+
 local function parse_label(label, def)
   local prefix = sub(label, 1, 2)
   -- =>label (pc label reference)
@@ -449,6 +464,7 @@ map_op = {
   adbr_2 =	"0000b31a0000h",
   aebr_2 =	"0000b30a0000h",
   ah_2 =	"00004a000000j",
+  ahi_2 =	"0000a70a0000i",
   ahy_2 =	"e3000000007al",
   afi_2 =	"c20900000000n",
   agfi_2 =	"c20800000000n",
@@ -1028,6 +1044,10 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "h" then
       op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
       wputhw(op1); wputhw(op2)
+    else if p == "i" then
+      op1 = op1 + shl(parse_gpr(params[1]),4)
+      wputhw(op1);
+      parse_imm16(params[2])
     elseif p == "j" then
       local d, x, b, a = parse_mem_bx(params[2])
       op1 = op1 + shl(parse_gpr(params[1]), 4) + x
