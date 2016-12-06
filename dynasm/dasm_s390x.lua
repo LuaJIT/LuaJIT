@@ -246,20 +246,11 @@ local map_cond = {
 
 ------------------------------------------------------------------------------
 
-local function parse_gpr(expr)
-  local r = match(expr, "^r(1?[0-9])$")
+local function parse_reg(expr)
+  local r = match(expr, "^[r|f](1?[0-9])$")
   if r then
     r = tonumber(r)
     if r <= 15 then return r, tp end
-  end
-  werror("bad register name `"..expr.."'")
-end
-
-local function parse_fpr(expr)
-  local r = match(expr, "^f(1?[0-9])$")
-  if r then
-    r = tonumber(r)
-    if r <= 15 then return r end
   end
   werror("bad register name `"..expr.."'")
 end
@@ -308,11 +299,11 @@ local function split_memop(arg)
   local reg = "r1?[0-9]"
   local d, x, b = match(arg, "^(.*)%(("..reg.."), ("..reg..")%)$")
   if d then
-    return d, parse_gpr(x), parse_gpr(b)
+    return d, parse_reg(x), parse_reg(b)
   end
   local d, b = match(arg, "^(.*)%(("..reg..")%)$")
   if d then
-    return d, 0, parse_gpr(b)
+    return d, 0, parse_reg(b)
   end
   -- TODO: handle values without registers?
   -- TODO: handle registers without a displacement?
@@ -1047,18 +1038,18 @@ local function parse_template(params, template, nparams, pos)
   for p in gmatch(sub(template, 13), ".") do
     local pr1,pr2,pr3
     if p == "g" then
-      op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
+      op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
       wputhw(op2)
     elseif p == "h" then
-      op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
+      op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
       wputhw(op1); wputhw(op2)
     elseif p == "i" then
-      op1 = op1 + shl(parse_gpr(params[1]),4)
+      op1 = op1 + shl(parse_reg(params[1]),4)
       wputhw(op1);
       parse_imm16(params[2])
     elseif p == "j" then
       local d, x, b, a = parse_mem_bx(params[2])
-      op1 = op1 + shl(parse_gpr(params[1]), 4) + x
+      op1 = op1 + shl(parse_reg(params[1]), 4) + x
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2);
       if a then a() end
@@ -1066,7 +1057,7 @@ local function parse_template(params, template, nparams, pos)
 
     elseif p == "l" then
       local d, x, b, a = parse_mem_bxy(params[2])
-      op0 = op0 + shl(parse_gpr(params[1]), 4) + x
+      op0 = op0 + shl(parse_reg(params[1]), 4) + x
       op1 = op1 + shl(b, 12) + band(d, 0xfff)
       op2 = op2 + band(shr(d, 4), 0xff00)
       wputhw(op0); wputhw(op1); wputhw(op2)
@@ -1074,18 +1065,18 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "m" then
       
     elseif p == "n" then
-      op0 = op0 + shl(parse_gpr(params[1]), 4)	
+      op0 = op0 + shl(parse_reg(params[1]), 4)
       wputhw(op0);
       parse_imm(params[2])
     elseif p == "q" then
       local d, b, a = parse_mem_b(params[3])
-      op1 = op1 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
+      op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2)
       if a then a() end -- a() emits action.
     elseif p == "s" then
       local d, b, a = parse_mem_by(params[3])
-      op0 = op0 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
+      op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
       op1 = op1 + shl(b, 12) + band(d, 0xfff)
       op2 = op2 + band(shr(d, 4), 0xff00)
       wputhw(op0); wputhw(op1); wputhw(op2)
@@ -1105,7 +1096,7 @@ local function parse_template(params, template, nparams, pos)
       wputhw(op1); wputhw(op2);
       if a then a() end -- a() emits action.
     elseif p == "z" then
-      op2 = op2 + parse_gpr(params[1])
+      op2 = op2 + parse_reg(params[1])
       wputhw(op2)
     else
       werror("unrecognized encoding")
