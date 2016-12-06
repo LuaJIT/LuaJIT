@@ -210,7 +210,7 @@ void dasm_put(Dst_DECL, int start, ...)
       goto stop;
     case DASM_ESC:
       p++;
-      ofs += 4;
+      ofs += 2;
       break;
     case DASM_REL_EXT:
       break;
@@ -244,6 +244,10 @@ void dasm_put(Dst_DECL, int start, ...)
         b[pos] = n;             /* Else link to rel chain, anchored at label. */
         *pl = pos;
       }
+      ofs += 2;
+      if (p[-3] >> 12 == 0xc) { /* RIL instruction needs 32-bit immediate. */
+        ofs += 2;
+      }
       pos++;
       break;
     case DASM_LABEL_LG:
@@ -262,7 +266,6 @@ void dasm_put(Dst_DECL, int start, ...)
       }
       *pl = -pos;               /* Label exists now. */
       b[pos++] = ofs;           /* Store pass1 offset estimate. */
-      ofs += 2;
       break;
     case DASM_IMM16:
       CK(((short)n) == n, RANGE_I);     /* TODO: unsigned immediates? */
@@ -424,8 +427,15 @@ int dasm_encode(Dst_DECL, void *buffer)
           CK(n >= 0, UNDEF_PC);
           n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
         patchrel:
-          *cp++ = n/2; /* TODO: only 16-bit relative jump currently works. */
-          p++; /* skip argument */
+          /* Offsets are halfword aligned (so need to be halved). */
+          n += 2;               /* Offset is relative to start of instruction. */
+          if (cp[-1] >> 12 == 0xc) {
+            *cp++ = n >> 17;
+          } else {
+            CK(-(1 << 16) <= n && n < (1 << 16) && n & 1 == 0, RANGE_LG);
+          }
+          *cp++ = n >> 1;
+          p++;                  /* skip argument */
           break;
         case DASM_LABEL_LG:
           ins = *p++;

@@ -75,6 +75,13 @@ local function dumpactions(out)
   out:write("\n")
 end
 
+local function havearg(a)
+  return a == "ESC" or
+         a == "SECTION" or
+         a == "REL_LG" or
+         a == "LABEL_LG"
+end
+
 -- Write action list buffer as a huge static C array.
 local function writeactions(out, name)
   local nn = #actlist
@@ -87,7 +94,7 @@ local function writeactions(out, name)
     local name = action_names[actlist[i]+1]
     if not esc and name then
       assert(out:write(" /* ", name, " */"))
-      esc = name == "ESC" or name == "SECTION"
+      esc = havearg(name)
     else
       esc = false
     end

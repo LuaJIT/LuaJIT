@@ -76,6 +76,23 @@ static void lab(dasm_State *state)
   | br r14
 }
 
+static void labg(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  // r1 = 0; do { r2 += r2; r1 += 1; } while(r1 < r3);
+  | la r1, 0(r0)
+  |1:
+  | agr r2, r2
+  | la r1, 1(r1)
+  | cgr r1, r3
+  | jgl <1
+  | jgnl >1
+  | stg r0, 0(r0)
+  |1:
+  | br r14
+}
+
 static void add_imm16(dasm_State *state)
 {
   dasm_State **Dst = &state;
@@ -108,6 +125,7 @@ test_table test[] = {
   { 5, 7,        rx,  12298,    "rx"},
   { 5, 7,       rxy,     10,   "rxy"},
   { 2, 4,       lab,     32,   "lab"},
+  { 2, 4,      labg,     32,  "labg"},
   { 2, 0, add_imm16,     17, "imm16"},
   { 2, 0, add_imm32,     16, "imm32"}
 };
