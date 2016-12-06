@@ -1068,6 +1068,11 @@ local function parse_template(params, template, nparams, pos)
       op0 = op0 + shl(parse_reg(params[1]), 4)
       wputhw(op0);
       parse_imm(params[2])
+    elseif p == "o" then
+      op0 = op0 + shl(parse_reg(params[1]), 4)
+      wputhw(op0);
+      local mode, n, s = parse_label(params[2])
+      waction("REL_"..mode, n, s)
     elseif p == "q" then
       local d, b, a = parse_mem_b(params[3])
       op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
