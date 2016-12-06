@@ -93,6 +93,38 @@ static void labg(dasm_State *state)
   | br r14
 }
 
+static void labmul(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  // Multiply using an add function.
+  // Only correct if input is positive.
+  |->mul_func:
+  | stmg r6, r14, 48(sp)
+  | lgr r6, r2
+  | lgr r7, r3
+  | cgfi r7, 0
+  | je >3
+  | cgfi r7, 1
+  | je >2
+  |1:
+  | lgr r3, r6
+  | brasl r14, ->add_func
+  | lay r7, -1(r7)
+  | cgfi r7, 1
+  | jh <1
+  |2:
+  | lmg r6, r14, 48(sp)
+  | br r14
+  |3:
+  | la r2, 0(r0)
+  | j <2
+
+  |->add_func:
+  | agr r2, r3
+  | br r14
+}
+
 static void add_imm16(dasm_State *state)
 {
   dasm_State **Dst = &state;
@@ -179,16 +211,18 @@ typedef struct {
 } test_table;
 
 test_table test[] = {
-  { 1, 2,       add,      3,   "add"},
-  {10, 5,       sub,      5,   "sub"},
-  { 2, 3,       mul,      6,   "mul"},
-  { 5, 7,        rx,  12298,    "rx"},
-  { 5, 7,       rxy,     10,   "rxy"},
-  { 2, 4,       lab,     32,   "lab"},
-  { 2, 4,      labg,     32,  "labg"},
-  { 2, 0, add_imm16,     17, "imm16"},
-  { 2, 0, add_imm32,     16, "imm32"},
-  { 7, 3,      save,    480,  "save"}
+  { 1, 2,       add,      3,     "add"},
+  {10, 5,       sub,      5,     "sub"},
+  { 2, 3,       mul,      6,     "mul"},
+  { 5, 7,        rx,  12298,      "rx"},
+  { 5, 7,       rxy,     10,     "rxy"},
+  { 2, 4,       lab,     32,     "lab"},
+  { 2, 4,      labg,     32,    "labg"},
+  { 2, 0, add_imm16,     17,   "imm16"},
+  { 2, 0, add_imm32,     16,   "imm32"},
+  { 7, 3,      save,    480,    "save"},
+  { 7, 3,    labmul,     21, "labmul0"},
+  { 7, 0,    labmul,      0, "labmul1"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
