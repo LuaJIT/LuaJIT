@@ -291,8 +291,9 @@ local function is_int32(num)
   return -2147483648 <= num and num < 2147483648
 end
 
-local function_is_int16(num)
+local function is_int16(num)
   return -32768 <= num and num < 32768
+end
 
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
@@ -1044,7 +1045,7 @@ local function parse_template(params, template, nparams, pos)
     elseif p == "h" then
       op2 = op2 + shl(parse_gpr(params[1]),4) + parse_gpr(params[2])
       wputhw(op1); wputhw(op2)
-    else if p == "i" then
+    elseif p == "i" then
       op1 = op1 + shl(parse_gpr(params[1]),4)
       wputhw(op1);
       parse_imm16(params[2])
