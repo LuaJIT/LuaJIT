@@ -102,14 +102,14 @@ typedef struct {
 } test_table;
 
 test_table test[] = {
-  { 1, 2, add,      3, "add"},
-  {10, 5, sub,      5, "sub"},
-  { 2, 3, mul,      6, "mul"},
-  { 5, 7,  rx,  12298,  "rx"},
-  { 5, 7, rxy,     10, "rxy"},
-  { 2, 4, lab,     32, "lab"},
-  { 2, 0, add_imm16,17, "imm16"}
-  { 2, 0, add_imm32,16, "imm32"}
+  { 1, 2,       add,      3,   "add"},
+  {10, 5,       sub,      5,   "sub"},
+  { 2, 3,       mul,      6,   "mul"},
+  { 5, 7,        rx,  12298,    "rx"},
+  { 5, 7,       rxy,     10,   "rxy"},
+  { 2, 4,       lab,     32,   "lab"},
+  { 2, 0, add_imm16,     17, "imm16"},
+  { 2, 0, add_imm32,     16, "imm32"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
