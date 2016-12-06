@@ -76,6 +76,23 @@ static void lab(dasm_State *state)
   | br r14
 }
 
+static void add_imm16(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+  
+  | ahi r2 , 0xf
+  | br r14
+}
+
+
+static void add_imm32(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+  
+  | afi r2 , 0xe
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -85,12 +102,14 @@ typedef struct {
 } test_table;
 
 test_table test[] = {
-  { 1, 2, add,     3, "add"},
-  {10, 5, sub,     5, "sub"},
-  { 2, 3, mul,     6, "mul"},
-  { 5, 7,  rx, 12298,  "rx"},
-  { 5, 7, rxy,    10, "rxy"},
-  { 2, 4, lab,    32, "lab"}
+  { 1, 2, add,      3, "add"},
+  {10, 5, sub,      5, "sub"},
+  { 2, 3, mul,      6, "mul"},
+  { 5, 7,  rx,  12298,  "rx"},
+  { 5, 7, rxy,     10, "rxy"},
+  { 2, 4, lab,     32, "lab"},
+  { 2, 0, add_imm16,17, "imm16"}
+  { 2, 0, add_imm32,16, "imm32"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
