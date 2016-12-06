@@ -93,38 +93,6 @@ static void labg(dasm_State *state)
   | br r14
 }
 
-static void labmul(dasm_State *state)
-{
-  dasm_State **Dst = &state;
-
-  // Multiply using an add function.
-  // Only correct if input is positive.
-  |->mul_func:
-  | stmg r6, r14, 48(sp)
-  | lgr r6, r2
-  | lgr r7, r3
-  | cgfi r7, 0
-  | je >3
-  | cgfi r7, 1
-  | je >2
-  |1:
-  | lgr r3, r6
-  | brasl r14, ->add_func
-  | lay r7, -1(r7)
-  | cgfi r7, 1
-  | jh <1
-  |2:
-  | lmg r6, r14, 48(sp)
-  | br r14
-  |3:
-  | la r2, 0(r0)
-  | j <2
-
-  |->add_func:
-  | agr r2, r3
-  | br r14
-}
-
 static void add_imm16(dasm_State *state)
 {
   dasm_State **Dst = &state;
@@ -199,6 +167,38 @@ static void save(dasm_State *state)
   | agr r7, r8
   | msgr r2, r7
   | restoreregs
+  | br r14
+}
+
+static void labmul(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  // Multiply using an add function.
+  // Only correct if input is positive.
+  |->mul_func:
+  | stmg r6, r14, 48(sp)
+  | lgr r6, r2
+  | lgr r7, r3
+  | cgfi r7, 0
+  | je >3
+  | cgfi r7, 1
+  | je >2
+  |1:
+  | lgr r3, r6
+  | brasl r14, ->add_func
+  | lay r7, -1(r7)
+  | cgfi r7, 1
+  | jh <1
+  |2:
+  | lmg r6, r14, 48(sp)
+  | br r14
+  |3:
+  | la r2, 0(r0)
+  | j <2
+
+  |->add_func:
+  | agr r2, r3
   | br r14
 }
 
