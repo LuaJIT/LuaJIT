@@ -55,41 +55,40 @@
 |
 |.define CRET1,			r2
 |
-|.define SP,			r15
 |.define OP,			r2
 |.define TMP1,			r3
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
-|.define CFRAME_SPACE,	240	// Delta for SP, 8 byte aligned.
+|.define CFRAME_SPACE,	240	// Delta for sp, 8 byte aligned.
 |
 |// Register save area.
-|.define SAVE_GPRS,	288(SP)	// Save area for r6-r15 (10*8 bytes).
+|.define SAVE_GPRS,	288(sp)	// Save area for r6-r15 (10*8 bytes).
 |
 |// Argument save area, each slot is 8-bytes (32-bit types are sign/zero extended).
-|.define SAVE_ERRF,	280(SP) // Argument 4, in r5.
-|.define SAVE_NRES,	272(SP)	// Argument 3, in r4.
-|.define SAVE_CFRAME,	264(SP)	// Argument 2, in r3.
-|.define SAVE_L,	256(SP)	// Argument 1, in r2.
-|.define RESERVED,	248(SP)	// Reserved for compiler use.
-|.define BACKCHAIN,	240(SP)	// <- SP entering interpreter.
+|.define SAVE_ERRF,	280(sp) // Argument 4, in r5.
+|.define SAVE_NRES,	272(sp)	// Argument 3, in r4.
+|.define SAVE_CFRAME,	264(sp)	// Argument 2, in r3.
+|.define SAVE_L,	256(sp)	// Argument 1, in r2.
+|.define RESERVED,	248(sp)	// Reserved for compiler use.
+|.define BACKCHAIN,	240(sp)	// <- sp entering interpreter.
 |
 |// Interpreter stack frame.
-|.define SAVE_FPR15,	232(SP)
-|.define SAVE_FPR14,	224(SP)
-|.define SAVE_FPR13,	216(SP)
-|.define SAVE_FPR12,	208(SP)
-|.define SAVE_FPR11,	200(SP)
-|.define SAVE_FPR10,	192(SP)
-|.define SAVE_FPR9,	184(SP)
-|.define SAVE_FPR8,	176(SP)
-|.define SAVE_PC,	168(SP)
-|.define SAVE_MULTRES,	160(SP)
+|.define SAVE_FPR15,	232(sp)
+|.define SAVE_FPR14,	224(sp)
+|.define SAVE_FPR13,	216(sp)
+|.define SAVE_FPR12,	208(sp)
+|.define SAVE_FPR11,	200(sp)
+|.define SAVE_FPR10,	192(sp)
+|.define SAVE_FPR9,	184(sp)
+|.define SAVE_FPR8,	176(sp)
+|.define SAVE_PC,	168(sp)
+|.define SAVE_MULTRES,	160(sp)
 |
 |// Callee save area (allocated by interpreter).
-|.define CALLEESAVE	000(SP) // <- SP in interpreter.
+|.define CALLEESAVE,	000(sp) // <- sp in interpreter.
 |
 |.macro saveregs
-|  lay SP, -CFRAME_SPACE(SP)	// Allocate stack frame.
+|  lay sp, -CFRAME_SPACE(sp)	// Allocate stack frame.
 |  stmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
 |  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  std f9, SAVE_FPR9
