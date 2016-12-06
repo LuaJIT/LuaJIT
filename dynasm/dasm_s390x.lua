@@ -370,10 +370,15 @@ end
 
 local function parse_imm(arg)
   local imm_val = tonumber(arg,16)
-  if not is_int32(imm_val) then
-    werror("Immediate value out of range: ", imm_val)
+  if imm_val then
+    if not is_int32(imm_val) then
+      werror("Immediate value out of range: ", imm_val)
+    end
+    wputhw(band(shr(imm_val, 16), 0xffff));
+    wputhw(band(imm_val, 0xffff));
+  else
+    waction("IMM32", nil, arg) -- if we get label
   end
-  return imm_val
 end
 
 local function parse_label(label, def)
@@ -1042,8 +1047,8 @@ local function parse_template(params, template, nparams, pos)
       
     elseif p == "n" then
       op0 = op0 + shl(parse_gpr(params[1]), 4)	
-      local imm = parse_imm(params[2])
-      wputhw(op0); waction("IMM32", nil, imm)		
+      wputhw(op0);
+      parse_imm(params[2])
     elseif p == "q" then
       local d, b, a = parse_mem_b(params[3])
       op1 = op1 + shl(parse_gpr(params[1]), 4) + parse_gpr(params[2])
