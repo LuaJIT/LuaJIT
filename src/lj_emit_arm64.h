@@ -308,7 +308,7 @@ static void emit_cond_branch(ASMState *as, A64CC cond, MCode *target)
   MCode *p = as->mcp;
   ptrdiff_t delta = target - (p - 1);
   lua_assert(((delta + 0x40000) >> 19) == 0);
-  *--p = A64I_BCC | A64F_S19((uint32_t)delta & 0x7ffff) | cond;
+  *--p = A64I_BCC | A64F_S19((uint32_t)delta) | cond;
   as->mcp = p;
 }
 
@@ -336,7 +336,7 @@ static void emit_cnb(ASMState *as, A64Ins ai, Reg r, MCode *target)
   MCode *p = as->mcp;
   ptrdiff_t delta = target - (p - 1);
   lua_assert(((delta + 0x40000) >> 19) == 0);
-  *--p = ai | A64F_S19((uint32_t)delta & 0x7ffff) | r;
+  *--p = ai | A64F_S19((uint32_t)delta) | r;
   as->mcp = p;
 }
 
