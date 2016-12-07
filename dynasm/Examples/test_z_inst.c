@@ -93,6 +93,22 @@ static void labg(dasm_State *state)
   | br r14
 }
 
+static void jmp_fwd(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+  | j >1
+  |1:
+  | cgr r2 , r3
+  | jne >2
+  | je >3
+  |2:
+  | afi r2, 0x2
+  | j <1
+  |3:
+  | br r14
+
+}
+
 static void add_imm16(dasm_State *state)
 {
   dasm_State **Dst = &state;
@@ -240,7 +256,8 @@ test_table test[] = {
   { 7, 3,      save,    480,    "save"},
   { 7, 3,    labmul,     21, "labmul0"},
   { 7, 0,    labmul,      0, "labmul1"},
-  { 0, 0,        pc,     55,      "pc"}
+  { 0, 0,        pc,     55,      "pc"},
+  { 2,12,   jmp_fwd,     12, "jmp_fwd"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
