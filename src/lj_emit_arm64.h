@@ -234,7 +234,7 @@ static void emit_loadk(ASMState *as, Reg rd, uint64_t u64, int is64)
 #define glofs(as, k) \
   ((intptr_t)((uintptr_t)(k) - (uintptr_t)&J2GG(as->J)->g))
 #define mcpofs(as, k) \
-  ((intptr_t)((uintptr_t)(k) - (uintptr_t)as->mcp))
+  ((intptr_t)((uintptr_t)(k) - (uintptr_t)(as->mcp - 1)))
 #define checkmcpofs(as, k) \
   ((((mcpofs(as, k)>>2) + 0x00040000) >> 19) == 0)
 
@@ -305,39 +305,35 @@ typedef MCode *MCLabel;
 
 static void emit_cond_branch(ASMState *as, A64CC cond, MCode *target)
 {
-  MCode *p = as->mcp;
-  ptrdiff_t delta = target - (p - 1);
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = target - p;
   lua_assert(((delta + 0x40000) >> 19) == 0);
-  *--p = A64I_BCC | A64F_S19((uint32_t)delta & 0x7ffff) | cond;
-  as->mcp = p;
+  *p = A64I_BCC | A64F_S19((uint32_t)delta & 0x7ffff) | cond;
 }
 
 static void emit_branch(ASMState *as, A64Ins ai, MCode *target)
 {
-  MCode *p = as->mcp;
-  ptrdiff_t delta = target - (p - 1);
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = target - p;
   lua_assert(((delta + 0x02000000) >> 26) == 0);
-  *--p = ai | ((uint32_t)delta & 0x03ffffffu);
-  as->mcp = p;
+  *p = ai | ((uint32_t)delta & 0x03ffffffu);
 }
 
 static void emit_tnb(ASMState *as, A64Ins ai, Reg r, uint32_t bit, MCode *target)
 {
-  MCode *p = as->mcp;
-  ptrdiff_t delta = target - (p - 1);
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = target - p;
   lua_assert(bit < 63 && ((delta + 0x2000) >> 14) == 0);
   if (bit > 31) ai |= A64I_X;
-  *--p = ai | A64F_BIT(bit & 31) | A64F_S14((uint32_t)delta & 0x3fffu) | r;
-  as->mcp = p;
+  *p = ai | A64F_BIT(bit & 31) | A64F_S14((uint32_t)delta & 0x3fffu) | r;
 }
 
 static void emit_cnb(ASMState *as, A64Ins ai, Reg r, MCode *target)
 {
-  MCode *p = as->mcp;
-  ptrdiff_t delta = target - (p - 1);
+  MCode *p = --as->mcp;
+  ptrdiff_t delta = target - p;
   lua_assert(((delta + 0x40000) >> 19) == 0);
-  *--p = ai | A64F_S19((uint32_t)delta & 0x7ffff) | r;
-  as->mcp = p;
+  *p = ai | A64F_S19((uint32_t)delta & 0x7ffff) | r;
 }
 
 #define emit_jmp(as, target)	emit_branch(as, A64I_B, (target))
