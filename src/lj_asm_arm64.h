@@ -277,7 +277,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
       if (!emit_checkofs(ai, ofs)) {
 	Reg rn = ra_alloc1(as, ref, allow);
 	Reg rm = ra_allock(as, ofs, rset_exclude(allow, rn));
-	emit_dnm(as, (ai ^ 0x01204800), rd, rn, rm);
+	emit_dnm(as, (ai^A64I_LS_R)|A64I_LS_UXTWx, rd, rn, rm);
 	return;
       }
     }
@@ -936,7 +936,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
 	    ra_allock(as, (irt_toitype(ir->t) << 15) | 0x7fff, allow), tmp);
   }
   if (ofs & FUSE_REG)
-    emit_dnm(as, (A64I_LDRx^A64I_LS_R)|A64I_LS_UXTWx, tmp, idx, (ofs & 31));
+    emit_dnm(as, (A64I_LDRx^A64I_LS_R)|A64I_LS_UXTWx|A64I_LS_SH, tmp, idx, (ofs & 31));
   else
     emit_lso(as, A64I_LDRx, tmp, idx, ofs);
 }
@@ -951,7 +951,7 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
       src = ra_alloc1(as, ir->op2, RSET_FPR);
       idx = asm_fuseahuref(as, ir->op1, &ofs, allow, A64I_STRd);
       if (ofs & FUSE_REG)
-	emit_dnm(as, (A64I_STRd^A64I_LS_R)|A64I_LS_UXTWx, (src & 31), idx, (ofs &31));
+	emit_dnm(as, (A64I_STRd^A64I_LS_R)|A64I_LS_UXTWx|A64I_LS_SH, (src & 31), idx, (ofs &31));
       else
 	emit_lso(as, A64I_STRd, (src & 31), idx, ofs);
     } else {
@@ -968,7 +968,7 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
       idx = asm_fuseahuref(as, ir->op1, &ofs, rset_exclude(allow, type),
 			   A64I_STRx);
       if (ofs & FUSE_REG)
-	emit_dnm(as, (A64I_STRx^A64I_LS_R)|A64I_LS_UXTWx, tmp, idx, (ofs & 31));
+	emit_dnm(as, (A64I_STRx^A64I_LS_R)|A64I_LS_UXTWx|A64I_LS_SH, tmp, idx, (ofs & 31));
       else
 	emit_lso(as, A64I_STRx, tmp, idx, ofs);
       if (ra_hasreg(src)) {
