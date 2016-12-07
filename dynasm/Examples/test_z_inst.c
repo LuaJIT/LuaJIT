@@ -18,6 +18,15 @@ static void add(dasm_State *state)
   | br r14
 }
 
+static void add_rrd(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+  
+  | lgfi r4 , 0x02
+  | maer r2 , r3 , r4
+  | br r14
+}
+
 static void sub(dasm_State *state)
 {
   dasm_State **Dst = &state;
@@ -96,6 +105,8 @@ static void labg(dasm_State *state)
 static void jmp_fwd(dasm_State *state)
 {
   dasm_State **Dst = &state;
+  
+  // compare r2 == r3; do { r2 += r2; } while(r2 != r3);
   | j >1
   |1:
   | cgr r2 , r3
@@ -235,6 +246,14 @@ static void pc(dasm_State *state) {
   }
 }
 
+static void load_test(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+  
+  | ltdr r2 , r3
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -257,7 +276,9 @@ test_table test[] = {
   { 7, 3,    labmul,     21, "labmul0"},
   { 7, 0,    labmul,      0, "labmul1"},
   { 0, 0,        pc,     55,      "pc"},
-  { 2,12,   jmp_fwd,     12, "jmp_fwd"}
+  { 2,12,   jmp_fwd,     12, "jmp_fwd"},
+  { 9,8,    add_rrd,     25, "add_rrd"},
+  { 2,4,  load_test,      4,"load_test"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
