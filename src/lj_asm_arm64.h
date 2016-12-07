@@ -232,7 +232,7 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 	  irl->o == IR_CONV &&
 	  irl->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT) &&
 	  shift <= 4 &&
-	  mayfuse(as, ir->op1)) {
+	  !neverfuse(as)) {
 	Reg m = ra_alloc1(as, irl->op1, allow);
 	return A64F_M(m) | A64F_EXSH(A64EX_SXTW, shift);
       } else {
@@ -257,19 +257,60 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
   int32_t ofs = 0;
   if (ra_noreg(ir->r) && canfuse(as, ir)) {
     if (ir->o == IR_ADD) {
-      if (asm_isk32(as, ir->op2, &ofs) && emit_checkofs(ai, ofs))
+      if (asm_isk32(as, ir->op2, &ofs) && emit_checkofs(ai, ofs)) {
 	ref = ir->op1;
-      /* NYI: Fuse add with two registers. */
+      } else {
+	Reg rn, rm;
+	IRRef lref = ir->op1, rref = ir->op2;
+	IRIns *irl = IR(lref);
+	if (mayfuse(as, irl->op1)) {
+	  unsigned int shift = 4;
+	  if (irl->o == IR_BSHL && irref_isk(irl->op2)) {
+	    shift = (IR(irl->op2)->i & 63);
+	  } else if (irl->o == IR_ADD && irl->op1 == irl->op2) {
+	    shift = 1;
+	  }
+	  if ((ai >> 30) == shift) {
+	    lref = irl->op1;
+	    irl = IR(lref);
+	    ai |= A64I_LS_SH;
+	  }
+	}
+	if (irl->o == IR_CONV &&
+	    irl->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT) &&
+	    !neverfuse(as)) {
+	  lref = irl->op1;
+	  ai |= A64I_LS_SXTWx;
+	} else {
+	  ai |= A64I_LS_LSLx;
+	}
+	rm = ra_alloc1(as, lref, allow);
+	rn = ra_alloc1(as, rref, rset_exclude(allow, rm));
+	emit_dnm(as, (ai^A64I_LS_R), rd, rn, rm);
+	return;
+      }
     } else if (ir->o == IR_STRREF) {
       if (asm_isk32(as, ir->op2, &ofs)) {
 	ref = ir->op1;
       } else if (asm_isk32(as, ir->op1, &ofs)) {
 	ref = ir->op2;
       } else {
-	/* NYI: Fuse ADD with constant. */
 	Reg rn = ra_alloc1(as, ir->op1, allow);
-	uint32_t m = asm_fuseopm(as, 0, ir->op2, rset_exclude(allow, rn));
-	emit_lso(as, ai, rd, rd, sizeof(GCstr));
+	IRIns *irr = IR(ir->op2);
+	uint32_t m;
+	if (irr+1 == ir && !ra_used(irr) &&
+	    irr->o == IR_ADD && irref_isk(irr->op2)) {
+	  ofs = sizeof(GCstr) + IR(irr->op2)->i;
+	  if (emit_checkofs(ai, ofs)) {
+	    Reg rm = ra_alloc1(as, irr->op1, rset_exclude(allow, rn));
+	    m = A64F_M(rm) | A64F_EX(A64EX_SXTW);
+	    goto skipopm;
+	  }
+	}
+	m = asm_fuseopm(as, 0, ir->op2, rset_exclude(allow, rn));
+	ofs = sizeof(GCstr);
+      skipopm:
+	emit_lso(as, ai, rd, rd, ofs);
 	emit_dn(as, A64I_ADDx^m, rd, rn);
 	return;
       }
