@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32",
+  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32", "LEN8R",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -368,6 +368,41 @@ local function parse_mem_by(arg)
     werror("unexpected index register")
   end
   return d, b, a
+end
+
+-- Parse memory operand of the form d(l, b) where 0 <= d < 4096, 1 <= l <= 256,
+-- and b is a GPR.
+local function parse_mem_lb(arg)
+  local reg = "r1?[0-9]"
+  local d, l, b = match(arg, "^(.*)%s*%(%s*(.*)%s*,%s*("..reg..")%s*%)$")
+  if not d then
+    -- TODO: handle values without registers?
+    -- TODO: handle registers without a displacement?
+    werror("bad memory operand: "..arg)
+    return nil
+  end
+  local dval = tonumber(d)
+  local dact = nil
+  if dval then
+    if not is_uint12(dval) then
+      werror("displacement out of range: ", dval)
+    end
+  else
+    dval = 0
+    dact = function() waction("DISP12", nil, d) end
+  end
+  local lval = tonumber(l)
+  local lact = nil
+  if lval then
+    if lval < 1 or lval > 256 then
+      werror("length out of range: ", dval)
+    end
+    lval = lval - 1
+  else
+    lval = 0
+    lact = function() waction("LEN8R", nil, l) end
+  end
+  return dval, lval, parse_reg(b), dact, lact
 end
 
 local function parse_imm(arg)
@@ -1014,6 +1049,23 @@ map_op = {
   trace_3 =	"000099000000q",
   tracg_3 =	"eb000000000fs",
   tre_2 =	"0000b2a50000h",
+
+  -- SS-a instructions
+  clc_2 =	"d50000000000SS-a",
+  ed_2 =	"de0000000000SS-a",
+  edmk_2 =	"df0000000000SS-a",
+  mvc_2 =	"d20000000000SS-a",
+  mvcin_2 =	"e80000000000SS-a",
+  mvn_2 =	"d10000000000SS-a",
+  mvz_2 =	"d30000000000SS-a",
+  nc_2 =	"d40000000000SS-a",
+  oc_2 =	"d60000000000SS-a",
+  tr_2 =	"dc0000000000SS-a",
+  trt_2 =	"dd0000000000SS-a",
+  trtr_2 =	"d00000000000SS-a",
+  unpka_2 =	"ea0000000000SS-a",
+  unpku_2 =	"e20000000000SS-a",
+  xc_2 =	"d70000000000SS-a",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1037,85 +1089,94 @@ local function parse_template(params, template, nparams, pos)
   local op2 = tonumber(sub(template, 9, 12), 16)
 
   -- Process each character.
-  for p in gmatch(sub(template, 13), ".") do
-    local pr1,pr2,pr3
-    if p == "g" then
-      op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
-      wputhw(op2)
-    elseif p == "h" then
-      op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
-      wputhw(op1); wputhw(op2)
-    elseif p == "i" then
-      op1 = op1 + shl(parse_reg(params[1]),4)
-      wputhw(op1);
-      parse_imm16(params[2])
-    elseif p == "j" then
-      local d, x, b, a = parse_mem_bx(params[2])
-      op1 = op1 + shl(parse_reg(params[1]), 4) + x
-      op2 = op2 + shl(b, 12) + d
-      wputhw(op1); wputhw(op2);
-      if a then a() end
-    elseif p == "k" then
+  local p = sub(template, 13)
+  if p == "g" then
+    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw(op2)
+  elseif p == "h" then
+    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw(op1); wputhw(op2)
+  elseif p == "i" then
+    op1 = op1 + shl(parse_reg(params[1]),4)
+    wputhw(op1);
+    parse_imm16(params[2])
+  elseif p == "j" then
+    local d, x, b, a = parse_mem_bx(params[2])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + x
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2);
+    if a then a() end
+  elseif p == "k" then
+  elseif p == "l" then
+    local d, x, b, a = parse_mem_bxy(params[2])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + x
+    op1 = op1 + shl(b, 12) + band(d, 0xfff)
+    op2 = op2 + band(shr(d, 4), 0xff00)
+    wputhw(op0); wputhw(op1); wputhw(op2)
+    if a then a() end
+  elseif p == "m" then
 
-    elseif p == "l" then
-      local d, x, b, a = parse_mem_bxy(params[2])
-      op0 = op0 + shl(parse_reg(params[1]), 4) + x
-      op1 = op1 + shl(b, 12) + band(d, 0xfff)
-      op2 = op2 + band(shr(d, 4), 0xff00)
-      wputhw(op0); wputhw(op1); wputhw(op2)
-      if a then a() end
-    elseif p == "m" then
-      
-    elseif p == "n" then
-      op0 = op0 + shl(parse_reg(params[1]), 4)
-      wputhw(op0);
-      parse_imm(params[2])
-    elseif p == "o" then
-      op0 = op0 + shl(parse_reg(params[1]), 4)
-      wputhw(op0);
-      local mode, n, s = parse_label(params[2])
-      waction("REL_"..mode, n, s)
-    elseif p == "q" then
-      local d, b, a = parse_mem_b(params[3])
-      op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
-      op2 = op2 + shl(b, 12) + d
-      wputhw(op1); wputhw(op2)
-      if a then a() end -- a() emits action.
-    elseif p == "r" then
-      op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
-      wputhw(op1); wputhw(op2)
-    elseif p == "s" then
-      local d, b, a = parse_mem_by(params[3])
-      op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
-      op1 = op1 + shl(b, 12) + band(d, 0xfff)
-      op2 = op2 + band(shr(d, 4), 0xff00)
-      wputhw(op0); wputhw(op1); wputhw(op2)
-      if a then a() end -- a() emits action.
-    elseif p == "w" then
-      local mode, n, s = parse_label(params[1])
-      wputhw(op1)
-      waction("REL_"..mode, n, s)
-    elseif p == "x" then
-      local mode, n, s = parse_label(params[1])
-      wputhw(op0)
-      waction("REL_"..mode, n, s)
-    elseif p == "y" then
-      local d, x, b, a = parse_mem_bx(params[1])
-      op1 = op1 + x
-      op2 = op2 + shl(b, 12) + d
-      wputhw(op1); wputhw(op2);
-      if a then a() end -- a() emits action.
-    elseif p == "z" then
-      op2 = op2 + parse_reg(params[1])
-      wputhw(op2)
-    else
-      werror("unrecognized encoding")
-    end
+  elseif p == "n" then
+    op0 = op0 + shl(parse_reg(params[1]), 4)
+    wputhw(op0);
+    parse_imm(params[2])
+  elseif p == "o" then
+    op0 = op0 + shl(parse_reg(params[1]), 4)
+    wputhw(op0);
+    local mode, n, s = parse_label(params[2])
+    waction("REL_"..mode, n, s)
+  elseif p == "q" then
+    local d, b, a = parse_mem_b(params[3])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2)
+    if a then a() end -- a() emits action.
+  elseif p == "r" then
+    op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
+    wputhw(op1); wputhw(op2)
+  elseif p == "s" then
+    local d, b, a = parse_mem_by(params[3])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
+    op1 = op1 + shl(b, 12) + band(d, 0xfff)
+    op2 = op2 + band(shr(d, 4), 0xff00)
+    wputhw(op0); wputhw(op1); wputhw(op2)
+    if a then a() end -- a() emits action.
+  elseif p == "SS-a" then
+    local d1, l1, b1, d1a, l1a = parse_mem_lb(params[1])
+    local d2, b2, d2a = parse_mem_b(params[2])
+    op0 = op0 + l1
+    op1 = op1 + shl(b1, 12) + d1
+    op2 = op2 + shl(b2, 12) + d2
+    wputhw(op0)
+    if l1a then l1a() end
+    wputhw(op1)
+    if d1a then d1a() end
+    wputhw(op2)
+    if d2a then d2a() end
+  elseif p == "w" then
+    local mode, n, s = parse_label(params[1])
+    wputhw(op1)
+    waction("REL_"..mode, n, s)
+  elseif p == "x" then
+    local mode, n, s = parse_label(params[1])
+    wputhw(op0)
+    waction("REL_"..mode, n, s)
+  elseif p == "y" then
+    local d, x, b, a = parse_mem_bx(params[1])
+    op1 = op1 + x
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2);
+    if a then a() end -- a() emits action.
+  elseif p == "z" then
+    op2 = op2 + parse_reg(params[1])
+    wputhw(op2)
+  else
+    werror("unrecognized encoding")
   end
-
 end
+
 function op_template(params, template, nparams)
-  if not params then return template:gsub("%x%x%x%x%x%x%x%x", "") end
+  if not params then return template:gsub("%x%x%x%x%x%x%x%x%x%x%x%x", "") end
   -- Limit number of section buffer positions used by a single dasm_put().
   -- A single opcode needs a maximum of 5 positions.
   if secpos+5 > maxsecpos then wflush() end
