@@ -885,6 +885,7 @@ map_op = {
   msgfr_2 =	"0000b91c0000h",
   msfi_2 =	"c20100000000n",
   msgfi_2 =	"c20000000000n",
+  maer_3 =	"0000b32e0000r",
   o_2 =		"000056000000j",
   or_2 =	"000000001600g",
   oy_2 =	"e30000000056l",
@@ -1080,6 +1081,9 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + shl(b, 12) + d
       wputhw(op1); wputhw(op2)
       if a then a() end -- a() emits action.
+    elseif p == "r" then
+      op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
+      wputhw(op1); wputhw(op2)
     elseif p == "s" then
       local d, b, a = parse_mem_by(params[3])
       op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
