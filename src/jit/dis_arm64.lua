@@ -411,15 +411,19 @@ local map_lsriro = {
       shift = 26, mask = 1,
       [0] = {
 	shift = 30, mask = 3,
-	[1] = {
+	[0] = {
 	  shift = 22, mask = 3,
-	  [0] = "strhDwO", "ldrhDwO", "ldrshDwO", "ldrshDxO"
+	  [0] = "strbDwO", "ldrbDwO", "ldrsbDxO", "ldrsbDwO"
 	},
-	[2] = {
+	{
+	  shift = 22, mask = 3,
+	  [0] = "strhDwO", "ldrhDwO", "ldrshDxO", "ldrshDwO"
+	},
+	{
 	  shift = 22, mask = 3,
 	  [0] = "strDwO", "ldrDwO", "ldrswDxO"
 	},
-	[3] = {
+	{
 	  shift = 22, mask = 3,
 	  [0] = "strDxO", "ldrDxO"
 	}
@@ -982,7 +986,7 @@ local function disass_ins(ctx)
       local sz = band(rshift(op, 30), 3)
       -- extension to be applied
       if opt == 3 then
-       if s == 0 then x = nil
+       if s == 0 then x = x.."]"
        else x = x..", lsl #"..sz.."]" end
       elseif opt == 2 or opt == 6 or opt == 7 then
 	if s == 0 then x = x..", "..map_extend[opt].."]"
