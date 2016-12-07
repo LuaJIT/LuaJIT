@@ -258,6 +258,39 @@ static void load_test(dasm_State *state)
 }
 */
 
+static void ssa(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  | lay sp, -16(sp)
+  | lay r0, -1(r0)
+  | stg r0, 8(sp)
+  | xc 8(8, sp), 8(sp)
+  | stg r2, 0(sp)
+  | mvc 13(2, sp), 6(sp)
+  | lg r2, 8(sp)
+  | la sp, 16(sp)
+  | br r14
+}
+
+static void ssa_act(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  int xl = 8;
+  int d1 = 13;
+  int l1 = 2;
+  int d2 = 6;
+
+  | lay sp, -16(sp)
+  | lay r0, -1(r0)
+  | stg r0, 8(sp)
+  | xc 8(xl, sp), 8(sp)
+  | stg r2, 0(sp)
+  | mvc d1(l1, sp), d2(sp)
+  | lg r2, 8(sp)
+  | la sp, 16(sp)
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -267,22 +300,24 @@ typedef struct {
 } test_table;
 
 test_table test[] = {
-  { 1, 2,       add,      3,     "add"},
-  {10, 5,       sub,      5,     "sub"},
-  { 2, 3,       mul,      6,     "mul"},
-  { 5, 7,        rx,  12298,      "rx"},
-  { 5, 7,       rxy,     10,     "rxy"},
-  { 2, 4,       lab,     32,     "lab"},
-  { 2, 4,      labg,     32,    "labg"},
-  { 2, 0, add_imm16,     17,   "imm16"},
-  { 2, 0, add_imm32,     16,   "imm32"},
-  { 7, 3,      save,    480,    "save"},
-  { 7, 3,    labmul,     21, "labmul0"},
-  { 7, 0,    labmul,      0, "labmul1"},
-  { 0, 0,        pc,     55,      "pc"},
-  { 2,12,   jmp_fwd,     12, "jmp_fwd"}
-//  { 9,8,    add_rrd,     25, "add_rrd"},
-//  { 2,4,  load_test,      4,"load_test"}
+  { 1, 2,       add,        3,     "add"},
+  {10, 5,       sub,        5,     "sub"},
+  { 2, 3,       mul,        6,     "mul"},
+  { 5, 7,        rx,    12298,      "rx"},
+  { 5, 7,       rxy,       10,     "rxy"},
+  { 2, 4,       lab,       32,     "lab"},
+  { 2, 4,      labg,       32,    "labg"},
+  { 2, 0, add_imm16,       17,   "imm16"},
+  { 2, 0, add_imm32,       16,   "imm32"},
+  { 7, 3,      save,      480,    "save"},
+  { 7, 3,    labmul,       21, "labmul0"},
+  { 7, 0,    labmul,        0, "labmul1"},
+  { 0, 0,        pc,       55,      "pc"},
+  { 2,12,   jmp_fwd,       12, "jmp_fwd"},
+//  { 9,8,    add_rrd,       25, "add_rrd"},
+//  { 2,4,  load_test,        4,"load_test"},
+  {-1, 0,       ssa, 65535<<8,     "ssa"},
+  {-1, 0,   ssa_act, 65535<<8, "ssa_act"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
