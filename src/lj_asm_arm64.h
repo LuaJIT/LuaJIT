@@ -348,6 +348,36 @@ static int asm_fusemadd(ASMState *as, IRIns *ir, A64Ins ai, A64Ins air)
   return 0;
 }
 
+/* Fuse BAND + BSHL/BSHR into UBFM. */
+static int asm_fuseandshift(ASMState *as, IRIns *ir)
+{
+  lua_assert(ir->o == IR_BAND);
+  if (!neverfuse(as) && irref_isk(ir->op2)) {
+    uint64_t mask = get_k64val(IR(ir->op2));
+    IRIns *irl = IR(ir->op1);
+    if (irref_isk(irl->op2) && (irl->o == IR_BSHR || irl->o == IR_BSHL)) {
+      int32_t shmask = irt_is64(irl->t) ? 63 : 31;
+      int32_t shift = (IR(irl->op2)->i & shmask);
+      int32_t imms = shift;
+      if (irl->o == IR_BSHL) {
+	mask >>= shift;
+	shift = (shmask-shift+1) & shmask;
+	imms = 0;
+      }
+      if (mask && !((mask+1) & mask)) {  /* Contiguous 1-bits at the bottom. */
+	Reg dest = ra_dest(as, ir, RSET_GPR);
+	Reg left = ra_alloc1(as, irl->op1, RSET_GPR);
+	A64Ins ai = shmask == 63 ? A64I_UBFMx : A64I_UBFMw;
+	imms += 63 - emit_clz64(mask);
+	if (imms > shmask) imms = shmask;
+	emit_dn(as, ai | A64F_IMMS(imms) | A64F_IMMR(shift), dest, left);
+	return 1;
+      }
+    }
+  }
+  return 0;
+}
+
 /* -- Calls --------------------------------------------------------------- */
 
 /* Generate a call to a C function. */
@@ -1423,8 +1453,14 @@ static void asm_bitop(ASMState *as, IRIns *ir, A64Ins ai)
   }
 }
 
+static void asm_band(ASMState *as, IRIns *ir)
+{
+  if (asm_fuseandshift(as, ir))
+    return;
+  asm_bitop(as, ir, A64I_ANDw);
+}
+
 #define asm_bnot(as, ir)	asm_bitop(as, ir, A64I_MVNw)
-#define asm_band(as, ir)	asm_bitop(as, ir, A64I_ANDw)
 #define asm_bor(as, ir)		asm_bitop(as, ir, A64I_ORRw)
 #define asm_bxor(as, ir)	asm_bitop(as, ir, A64I_EORw)
 
@@ -1437,16 +1473,28 @@ static void asm_bswap(ASMState *as, IRIns *ir)
 
 static void asm_bitshift(ASMState *as, IRIns *ir, A64Ins ai, A64Shift sh)
 {
-  int shmask = irt_is64(ir->t) ? 63 : 31;
+  int32_t shmask = irt_is64(ir->t) ? 63 : 31;
   if (irref_isk(ir->op2)) {  /* Constant shifts. */
-    Reg dest = ra_dest(as, ir, RSET_GPR);
-    Reg left = ra_alloc1(as, ir->op1, RSET_GPR);
+    Reg left, dest = ra_dest(as, ir, RSET_GPR);
     int32_t shift = (IR(ir->op2)->i & shmask);
-
     if (shmask == 63) ai += A64I_UBFMx - A64I_UBFMw;
+
+    /* Fuse BSHL + BSHR/BSAR into UBFM/SBFM aka UBFX/SBFX/UBFIZ/SBFIZ. */
+    if (!neverfuse(as) && (sh == A64SH_LSR || sh == A64SH_ASR)) {
+      IRIns *irl = IR(ir->op1);
+      if (irl->o == IR_BSHL && irref_isk(irl->op2)) {
+	int32_t shift2 = (IR(irl->op2)->i & shmask);
+	shift = ((shift - shift2) & shmask);
+	shmask -= shift2;
+	ir = irl;
+      }
+    }
+
+    left = ra_alloc1(as, ir->op1, RSET_GPR);
     switch (sh) {
     case A64SH_LSL:
-      emit_dn(as, ai | A64F_IMMS(shmask-shift) | A64F_IMMR(shmask-shift+1), dest, left);
+      emit_dn(as, ai | A64F_IMMS(shmask-shift) |
+		  A64F_IMMR((shmask-shift+1)&shmask), dest, left);
       break;
     case A64SH_LSR: case A64SH_ASR:
       emit_dn(as, ai | A64F_IMMS(shmask) | A64F_IMMR(shift), dest, left);
