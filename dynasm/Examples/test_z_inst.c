@@ -108,7 +108,7 @@ static void jmp_fwd(dasm_State *state)
 {
   dasm_State **Dst = &state;
   
-  // compare r2 == r3; do { r2 += r2; } while(r2 != r3);
+  // while(r2!=r3){r2 += 2};
   | j >1
   |1:
   | cgr r2 , r3
