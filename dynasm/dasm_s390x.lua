@@ -460,19 +460,6 @@ local function parse_label(label, def)
   werror("bad label `"..label.."'")
 end
 
-local function branch_type(op)
-  if band(op, 0x7c000000) == 0x14000000 then return 0 -- B, BL
-  elseif shr(op, 24) == 0x54 or band(op, 0x7e000000) == 0x34000000 or
-	 band(op, 0x3b000000) == 0x18000000 then
-    return 0x800 -- B.cond, CBZ, CBNZ, LDR* literal
-  elseif band(op, 0x7e000000) == 0x36000000 then return 0x1000 -- TBZ, TBNZ
-  elseif band(op, 0x9f000000) == 0x10000000 then return 0x2000 -- ADR
-  elseif band(op, 0x9f000000) == band(0x90000000) then return 0x3000 -- ADRP
-  else
-    assert(false, "unknown branch type")
-  end
-end
-
 ------------------------------------------------------------------------------
 
 local map_op, op_template
