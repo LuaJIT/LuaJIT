@@ -74,6 +74,11 @@ static uint32_t emit_isfpk64(uint64_t n)
 
 /* -- Emit basic instructions --------------------------------------------- */
 
+static void emit_dnma(ASMState *as, A64Ins ai, Reg rd, Reg rn, Reg rm, Reg ra)
+{
+  *--as->mcp = ai | A64F_D(rd) | A64F_N(rn) | A64F_M(rm) | A64F_A(ra);
+}
+
 static void emit_dnm(ASMState *as, A64Ins ai, Reg rd, Reg rn, Reg rm)
 {
   *--as->mcp = ai | A64F_D(rd) | A64F_N(rn) | A64F_M(rm);
