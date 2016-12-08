@@ -781,7 +781,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     emit_lso(as, A64I_LDRx, scr, dest, offsetof(Node, key));
   }
 
-  *l_loop = A64I_BCC | A64F_S19((as->mcp-l_loop) & 0x0007ffffu) | CC_NE;
+  *l_loop = A64I_BCC | A64F_S19(as->mcp - l_loop) | CC_NE;
   if (!isk && irt_isaddr(kt)) {
     Reg type = ra_allock(as, (int32_t)irt_toitype(kt), allow);
     emit_dnm(as, A64I_ADDx | A64F_SH(A64SH_LSL, 47), tmp, key, type);
