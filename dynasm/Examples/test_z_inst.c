@@ -292,6 +292,23 @@ static void ssa_act(dasm_State *state) {
 }
 
 typedef struct {
+  int a;
+  int b;
+} SimpleStruct;
+
+static void type(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  | .type SIMPLE, SimpleStruct
+  | lay sp, -8(sp)
+  | stg r2, 0(sp)
+  | xgr r2, r2
+  | l r2, SIMPLE:sp->b
+  | la sp, 8(sp)
+  | br r14
+}
+
+typedef struct {
   int64_t arg1;
   int64_t arg2;
   void (*fn)(dasm_State *);
@@ -317,7 +334,8 @@ test_table test[] = {
 //  { 9,8,    add_rrd,       25, "add_rrd"},
 //  { 2,4,  load_test,        4,"load_test"},
   {-1, 0,       ssa, 65535<<8,     "ssa"},
-  {-1, 0,   ssa_act, 65535<<8, "ssa_act"}
+  {-1, 0,   ssa_act, 65535<<8, "ssa_act"},
+  {27, 0,      type,       27,    "type"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)

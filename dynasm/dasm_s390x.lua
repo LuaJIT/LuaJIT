@@ -247,7 +247,17 @@ local map_cond = {
 ------------------------------------------------------------------------------
 
 local function parse_reg(expr)
-  local r = match(expr, "^[r|f](1?[0-9])$")
+  if not expr then werror("expected register name") end
+  local tname, ovreg = match(expr, "^([%w_]+):(r1?%d)$")
+  local tp = map_type[tname or expr]
+  if tp then
+    local reg = ovreg or tp.reg
+    if not reg then
+      werror("type `"..(tname or expr).."' needs a register override")
+    end
+    expr = reg
+  end
+  local r = match(expr, "^[rf](1?%d)$")
   if r then
     r = tonumber(r)
     if r <= 15 then return r, tp end
@@ -296,14 +306,21 @@ end
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
 local function split_memop(arg)
-  local reg = "r1?[0-9]"
-  local d, x, b = match(arg, "^(.*)%(("..reg.."), ("..reg..")%)$")
+  local reg = "[%w_:]+"
+  local d, x, b = match(arg, "^(.*)%(%s*("..reg..")%s*,%s*("..reg..")%s*%)$")
   if d then
     return d, parse_reg(x), parse_reg(b)
   end
-  local d, b = match(arg, "^(.*)%(("..reg..")%)$")
+  local d, b = match(arg, "^(.*)%(%s*("..reg..")%s*%)$")
   if d then
     return d, 0, parse_reg(b)
+  end
+  local reg, tailr = match(arg, "^([%w_:]+)%s*(.*)$")
+  if reg then
+    local r, tp = parse_reg(reg)
+    if tp then
+      return format(tp.ctypefmt, tailr), 0, r
+    end
   end
   -- TODO: handle values without registers?
   -- TODO: handle registers without a displacement?
