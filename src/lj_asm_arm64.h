@@ -378,6 +378,34 @@ static int asm_fuseandshift(ASMState *as, IRIns *ir)
   return 0;
 }
 
+/* Fuse BOR(BSHL, BSHR) into EXTR/ROR. */
+static int asm_fuseorshift(ASMState *as, IRIns *ir)
+{
+  IRIns *irl = IR(ir->op1), *irr = IR(ir->op2);
+  lua_assert(ir->o == IR_BOR);
+  if (!neverfuse(as) && ((irl->o == IR_BSHR && irr->o == IR_BSHL) ||
+			 (irl->o == IR_BSHL && irr->o == IR_BSHR))) {
+    if (irref_isk(irl->op2) && irref_isk(irr->op2)) {
+      IRRef lref = irl->op1, rref = irr->op1;
+      uint32_t lshift = IR(irl->op2)->i, rshift = IR(irr->op2)->i;
+      if (irl->o == IR_BSHR) {  /* BSHR needs to be the right operand. */
+	uint32_t tmp2;
+	IRRef tmp1 = lref; lref = rref; rref = tmp1;
+	tmp2 = lshift; lshift = rshift; rshift = tmp2;
+      }
+      if (rshift + lshift == (irt_is64(ir->t) ? 64 : 32)) {
+	A64Ins ai = irt_is64(ir->t) ? A64I_EXTRx : A64I_EXTRw;
+	Reg dest = ra_dest(as, ir, RSET_GPR);
+	Reg left = ra_alloc1(as, lref, RSET_GPR);
+	Reg right = ra_alloc1(as, rref, rset_exclude(RSET_GPR, left));
+	emit_dnm(as, ai | A64F_IMMS(rshift), dest, left, right);
+	return 1;
+      }
+    }
+  }
+  return 0;
+}
+
 /* -- Calls --------------------------------------------------------------- */
 
 /* Generate a call to a C function. */
@@ -1460,8 +1488,14 @@ static void asm_band(ASMState *as, IRIns *ir)
   asm_bitop(as, ir, A64I_ANDw);
 }
 
+static void asm_bor(ASMState *as, IRIns *ir)
+{
+  if (asm_fuseorshift(as, ir))
+    return;
+  asm_bitop(as, ir, A64I_ORRw);
+}
+
 #define asm_bnot(as, ir)	asm_bitop(as, ir, A64I_MVNw)
-#define asm_bor(as, ir)		asm_bitop(as, ir, A64I_ORRw)
 #define asm_bxor(as, ir)	asm_bitop(as, ir, A64I_EORw)
 
 static void asm_bswap(ASMState *as, IRIns *ir)
