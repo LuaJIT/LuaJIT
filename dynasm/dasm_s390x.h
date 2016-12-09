@@ -448,7 +448,7 @@ int dasm_encode(Dst_DECL, void *buffer)
           if (cp[-1] >> 12 == 0xc) {
             *cp++ = n >> 17;
           } else {
-            CK(-(1 << 16) <= n && n < (1 << 16) && n & 1 == 0, RANGE_LG);
+            CK(-(1 << 16) <= n && n < (1 << 16) && (n & 1) == 0, RANGE_LG);
           }
           *cp++ = n >> 1;
           p++;                  /* skip argument */
