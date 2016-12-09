@@ -481,7 +481,7 @@ int dasm_encode(Dst_DECL, void *buffer)
           cp[-1] |= (n - 1) & 0xf0;
           break;
         case DASM_LEN4LR:
-          cp[-1] |= (n - 1) & 0xof;
+          cp[-1] |= (n - 1) & 0x0f;
           break;
         default:
           *cp++ = ins;
