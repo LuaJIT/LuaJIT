@@ -24,7 +24,7 @@ enum {
   DASM_REL_PC, DASM_LABEL_PC,
   DASM_DISP12, DASM_DISP20,
   DASM_IMM16, DASM_IMM32,
-  DASM_LEN8R,
+  DASM_LEN8R,DASM_LEN4HR,DASM_LEN4LR,
   DASM__MAX
 };
 
@@ -289,6 +289,14 @@ void dasm_put(Dst_DECL, int start, ...)
       CK(n >= 1 && n <= 256, RANGE_I);
       b[pos++] = n;
       break;
+    case DASM_LEN4HR:
+      CK(n >= 1 && n <= 128, RANGE_I);
+      b[pos++] = n;
+      break;
+    case DASM_LEN4LR:
+      CK(n >= 1 && n <= 128, RANGE_I);
+      b[pos++] = n;
+      break;
     }
   }
 stop:
@@ -370,6 +378,8 @@ int dasm_link(Dst_DECL, size_t * szp)
         case DASM_DISP20:
         case DASM_DISP12:
         case DASM_LEN8R:
+        case DASM_LEN4HR:
+        case DASM_LEN4LR:
           pos++;
           break;
         }
@@ -466,6 +476,12 @@ int dasm_encode(Dst_DECL, void *buffer)
           break;
         case DASM_LEN8R:
           cp[-1] |= (n - 1) & 0xff;
+          break;
+        case DASM_LEN4HR:
+          cp[-1] |= (n - 1) & 0xf0;
+          break;
+        case DASM_LEN4LR:
+          cp[-1] |= (n - 1) & 0xof;
           break;
         default:
           *cp++ = ins;
