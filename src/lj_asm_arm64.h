@@ -232,7 +232,7 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 	  irl->o == IR_CONV &&
 	  irl->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT) &&
 	  shift <= 4 &&
-	  !neverfuse(as)) {
+	  canfuse(as, irl)) {
 	Reg m = ra_alloc1(as, irl->op1, allow);
 	return A64F_M(m) | A64F_EXSH(A64EX_SXTW, shift);
       } else {
@@ -278,7 +278,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	}
 	if (irl->o == IR_CONV &&
 	    irl->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT) &&
-	    !neverfuse(as)) {
+	    canfuse(as, irl)) {
 	  lref = irl->op1;
 	  ai |= A64I_LS_SXTWx;
 	} else {
@@ -351,10 +351,10 @@ static int asm_fusemadd(ASMState *as, IRIns *ir, A64Ins ai, A64Ins air)
 /* Fuse BAND + BSHL/BSHR into UBFM. */
 static int asm_fuseandshift(ASMState *as, IRIns *ir)
 {
+  IRIns *irl = IR(ir->op1);
   lua_assert(ir->o == IR_BAND);
-  if (!neverfuse(as) && irref_isk(ir->op2)) {
+  if (canfuse(as, irl) && irref_isk(ir->op2)) {
     uint64_t mask = get_k64val(IR(ir->op2));
-    IRIns *irl = IR(ir->op1);
     if (irref_isk(irl->op2) && (irl->o == IR_BSHR || irl->o == IR_BSHL)) {
       int32_t shmask = irt_is64(irl->t) ? 63 : 31;
       int32_t shift = (IR(irl->op2)->i & shmask);
@@ -383,8 +383,9 @@ static int asm_fuseorshift(ASMState *as, IRIns *ir)
 {
   IRIns *irl = IR(ir->op1), *irr = IR(ir->op2);
   lua_assert(ir->o == IR_BOR);
-  if (!neverfuse(as) && ((irl->o == IR_BSHR && irr->o == IR_BSHL) ||
-			 (irl->o == IR_BSHL && irr->o == IR_BSHR))) {
+  if (canfuse(as, irl) && canfuse(as, irr) &&
+      ((irl->o == IR_BSHR && irr->o == IR_BSHL) ||
+       (irl->o == IR_BSHL && irr->o == IR_BSHR))) {
     if (irref_isk(irl->op2) && irref_isk(irr->op2)) {
       IRRef lref = irl->op1, rref = irr->op1;
       uint32_t lshift = IR(irl->op2)->i, rshift = IR(irr->op2)->i;
@@ -1511,11 +1512,11 @@ static void asm_bitshift(ASMState *as, IRIns *ir, A64Ins ai, A64Shift sh)
   if (irref_isk(ir->op2)) {  /* Constant shifts. */
     Reg left, dest = ra_dest(as, ir, RSET_GPR);
     int32_t shift = (IR(ir->op2)->i & shmask);
+    IRIns *irl = IR(ir->op1);
     if (shmask == 63) ai += A64I_UBFMx - A64I_UBFMw;
 
     /* Fuse BSHL + BSHR/BSAR into UBFM/SBFM aka UBFX/SBFX/UBFIZ/SBFIZ. */
-    if (!neverfuse(as) && (sh == A64SH_LSR || sh == A64SH_ASR)) {
-      IRIns *irl = IR(ir->op1);
+    if ((sh == A64SH_LSR || sh == A64SH_ASR) && canfuse(as, irl)) {
       if (irl->o == IR_BSHL && irref_isk(irl->op2)) {
 	int32_t shift2 = (IR(irl->op2)->i & shmask);
 	shift = ((shift - shift2) & shmask);
