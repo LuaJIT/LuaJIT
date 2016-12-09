@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32", "LEN8R",
+  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32", "LEN8R","LEN4HR","LEN4LR",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -418,6 +418,43 @@ local function parse_mem_lb(arg)
   else
     lval = 0
     lact = function() waction("LEN8R", nil, l) end
+  end
+  return dval, lval, parse_reg(b), dact, lact
+end
+
+local function parse_mem_l2b(arg,high_l)
+  local reg = "r1?[0-9]"
+  local d, l, b = match(arg, "^(.*)%s*%(%s*(.*)%s*,%s*("..reg..")%s*%)$")
+  if not d then
+    -- TODO: handle values without registers?
+    -- TODO: handle registers without a displacement?
+    werror("bad memory operand: "..arg)
+    return nil
+  end
+  local dval = tonumber(d)
+  local dact = nil
+  if dval then
+    if not is_uint12(dval) then
+      werror("displacement out of range: ", dval)
+    end
+  else
+    dval = 0
+    dact = function() waction("DISP12", nil, d) end
+  end
+  local lval = tonumber(l)
+  local lact = nil
+  if lval then
+    if lval < 1 or lval > 128 then
+      werror("length out of range: ", dval)
+    end
+    lval = lval - 1
+  else
+    lval = 0
+    if high_l then
+    lact = function() waction("LEN4HR", nil, l) end
+    else
+    lact = function() waction("LEN4LR",nil,l) end
+    end
   end
   return dval, lval, parse_reg(b), dact, lact
 end
@@ -1070,6 +1107,7 @@ map_op = {
   unpka_2 =	"ea0000000000SS-a",
   unpku_2 =	"e20000000000SS-a",
   xc_2 =	"d70000000000SS-a",
+  ap_2 =	"fa0000000000SS-b",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1153,6 +1191,21 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + shl(b2, 12) + d2
     wputhw(op0)
     if l1a then l1a() end
+    wputhw(op1)
+    if d1a then d1a() end
+    wputhw(op2)
+    if d2a then d2a() end
+  elseif p == "SS-b" then
+    local high_l=true;
+    local d1, l1, b1, d1a, l1a = parse_mem_l2b(params[1],high_l)
+    high_l=false;
+    local d2, l2, b2, d2a, l2a = parse_mem_l2b(params[2],high_l)
+    op0 = op0 + shl(l1,4) + l2
+    op1 = op1 + shl(b1, 12) + d1
+    op2 = op2 + shl(b2, 12) + d2
+    wputhw(op0)
+    if l1a then l1a() end
+    if l2a then l2a() end
     wputhw(op1)
     if d1a then d1a() end
     wputhw(op2)
