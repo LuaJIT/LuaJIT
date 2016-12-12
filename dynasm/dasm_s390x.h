@@ -290,9 +290,6 @@ void dasm_put(Dst_DECL, int start, ...)
       b[pos++] = n;
       break;
     case DASM_LEN4HR:
-      CK(n >= 1 && n <= 128, RANGE_I);
-      b[pos++] = n;
-      break;
     case DASM_LEN4LR:
       CK(n >= 1 && n <= 128, RANGE_I);
       b[pos++] = n;
@@ -478,7 +475,7 @@ int dasm_encode(Dst_DECL, void *buffer)
           cp[-1] |= (n - 1) & 0xff;
           break;
         case DASM_LEN4HR:
-          cp[-1] |= (n - 1) & 0xf0;
+          cp[-1] |= ((n - 1) << 4) & 0xf0;
           break;
         case DASM_LEN4LR:
           cp[-1] |= (n - 1) & 0x0f;
