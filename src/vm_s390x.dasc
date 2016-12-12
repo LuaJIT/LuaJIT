@@ -63,6 +63,7 @@
 |
 |// Register save area.
 |.define SAVE_GPRS,	288(sp)	// Save area for r6-r15 (10*8 bytes).
+|.define SAVE_GPRS_P,	48(sp)  // Save area for r6-r15 (10*8 bytes) in prologue (before stack frame is allocated).
 |
 |// Argument save area, each slot is 8-bytes (32-bit types are sign/zero extended).
 |.define SAVE_ERRF,	280(sp) // Argument 4, in r5.
@@ -88,8 +89,9 @@
 |.define CALLEESAVE,	000(sp) // <- sp in interpreter.
 |
 |.macro saveregs
+|  stmg r6, r15, SAVE_GPRS_P
 |  lay sp, -CFRAME_SPACE(sp)	// Allocate stack frame.
-|  stmg r6, r15, SAVE_GPRS	// Technically we restore r15 regardless.
+|  // TODO: save backchain?
 |  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  std f9, SAVE_FPR9
 |  std f10, SAVE_FPR10
@@ -110,7 +112,6 @@
 |  ld f14, SAVE_FPR14
 |  ld f15, SAVE_FPR15
 |  lmg r6, r15, SAVE_GPRS	// Restores the stack pointer.
-|// br r14 to return?
 |.endmacro
 |
 |// Type definitions. Some of these are only used for documentation.
@@ -175,6 +176,10 @@
 |    ins_NEXT
 |  .endmacro
 |.endif
+|
+|// Assumes DISPATCH is relative to GL.
+#define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
+#define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
 /* The .code_sub section should be last to help static branch prediction. */
@@ -193,8 +198,13 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_return:
   |
   |->vm_leave_cp:
+  |  lg RA, SAVE_CFRAME			// Restore previous C frame.
+  |  stg RA, L:LREG->cframe
+  |  lghi CRET1, 0			// Ok return status for vm_pcall.
   |
   |->vm_leave_unw:
+  |  restoreregs
+  |  br r14
   |
   |->vm_unwind_yield:
   |
@@ -230,6 +240,31 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_call_dispatch_f:
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
+  |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
+  |  saveregs
+  |  lgr LREG, CARG1
+  |  stg LREG, SAVE_L
+  |  stg LREG, SAVE_PC			// Any value outside of bytecode is ok.
+  |
+  |  lg KBASE, L:LREG->stack		// Compute -savestack(L, L->top).
+  |  sg KBASE, L:LREG->top
+  |   lg DISPATCH, L:LREG->glref	// Setup pointer to dispatch table.
+  |  lghi RA, 0
+  |  stg RA, SAVE_ERRF			// No error function.
+  |  stg KBASE, SAVE_NRES		// Neg. delta means cframe w/o frame.
+  |   aghi DISPATCH, GG_G2DISP
+  |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
+  |
+  |  lg KBASE, L:LREG->cframe		// Add our C frame to cframe chain.
+  |  stg KBASE, SAVE_CFRAME
+  |  stg sp, L:LREG->cframe
+  |  stg L:LREG, DISPATCH_GL(cur_L)(DISPATCH)
+  |
+  |  basr r14, CARG4			// (lua_State *L, lua_CFunction func, void *ud)
+  |  // TValue * (new base) or NULL returned in r2 (CRET1/).
+  |  cghi CRET1, 0
+  |  je ->vm_leave_cp			// No base? Just remove C frame.
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Metamethod handling ------------------------------------------------
