@@ -459,28 +459,34 @@ local function parse_mem_l2b(arg,high_l)
   return dval, lval, parse_reg(b), dact, lact
 end
 
-local function parse_imm(arg)
-  local imm_val = tonumber(arg,16)
+local function parse_imm32(imm)
+  local imm_val = tonumber(imm)
   if imm_val then
     if not is_int32(imm_val) then
-      werror("Immediate value out of range: ", imm_val)
+      werror("immediate value out of range: ", imm_val)
     end
-    wputhw(band(shr(imm_val, 16), 0xffff));
-    wputhw(band(imm_val, 0xffff));
+    wputhw(band(shr(imm_val, 16), 0xffff))
+    wputhw(band(imm_val, 0xffff))
+  elseif match(imm, "^[rfv]([1-3]?[0-9])$") or
+	 match(imm, "^([%w_]+):(r1?[0-9])$") then
+    werror("expected immediate operand, got register")
   else
-    waction("IMM32", nil, arg) -- if we get label
+    waction("IMM32", nil, imm) -- if we get label
   end
 end
 
-local function parse_imm16(arg)
-  local imm_val = tonumber(arg,16)
+local function parse_imm16(imm)
+  local imm_val = tonumber(imm)
   if imm_val then
     if not is_int16(imm_val) then
-      werror("Immediate value out of range: ", imm_val)
+      werror("immediate value out of range: ", imm_val)
     end
-    wputhw(imm_val)
+    wputhw(band(imm_val, 0xffff))
+  elseif match(imm, "^[rfv]([1-3]?[0-9])$") or
+	 match(imm, "^([%w_]+):(r1?[0-9])$") then
+    werror("expected immediate operand, got register")
   else
-    waction("IMM16", nil, arg)
+    waction("IMM16", nil, imm)
   end
 end
 
@@ -842,6 +848,7 @@ map_op = {
   lgh_2 =	"e30000000015l",
   lghr_2 =	"0000b9070000h",
   lhh_2 =	"e300000000c4l",
+  lhi_2 =	"0000a7080000i",
   lhrl_2 =	"c40500000000o",
   lghrl_2 =	"c40400000000o",
   lfh_2 =	"e300000000cal",
@@ -1161,7 +1168,7 @@ local function parse_template(params, template, nparams, pos)
   elseif p == "n" then
     op0 = op0 + shl(parse_reg(params[1]), 4)
     wputhw(op0);
-    parse_imm(params[2])
+    parse_imm32(params[2])
   elseif p == "o" then
     op0 = op0 + shl(parse_reg(params[1]), 4)
     wputhw(op0);
