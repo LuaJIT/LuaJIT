@@ -190,8 +190,8 @@ static void save(dasm_State *state)
   |.endmacro
   |
   | saveregs
-  | lgfi r7, 10 // 16
-  | lgfi r8, 20 // 32
+  | lgfi r7, 0x10 // 16
+  | lgfi r8, 0x20 // 32
   | agr r2, r3
   | agr r7, r8
   | msgr r2, r7
