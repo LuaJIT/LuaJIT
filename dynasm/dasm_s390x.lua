@@ -299,6 +299,10 @@ local function is_int32(num)
   return -2147483648 <= num and num < 2147483648
 end
 
+local function is_uint16(num)
+  return 0 <= num and num < 0xffff
+end
+
 local function is_int16(num)
   return -32768 <= num and num < 32768
 end
@@ -478,7 +482,7 @@ end
 local function parse_imm16(imm)
   local imm_val = tonumber(imm)
   if imm_val then
-    if not is_int16(imm_val) then
+    if not is_int16(imm_val) and not is_uint16(imm_val) then
       werror("immediate value out of range: ", imm_val)
     end
     wputhw(band(imm_val, 0xffff))
@@ -581,7 +585,11 @@ map_op = {
   ng_2 =	"e30000000080l",
   ngr_2 =	"0000b9800000h",
   nihf_2 =	"c00a00000000n",
+  nihh_2 =	"0000a5040000i",
+  nihl_2 =	"0000a5050000i",
   nilf_2 =	"c00b00000000n",
+  nilh_2 =	"0000a5060000i",
+  nill_2 =	"0000a5070000i",
   bal_2 =	"000045000000j",
   balr_2 =	"000000000500g",
   bas_2 =	"00004d000000j",
@@ -772,7 +780,11 @@ map_op = {
   icm_3 =	"0000bf000000r",
   icmy_3 =	"eb0000000081t",
   iihf_2 =	"c00800000000n",
+  iihh_2 =	"0000a5000000i",
+  iihl_2 =	"0000a5010000i",
   iilf_2 =	"c00900000000n",
+  iilh_2 =	"0000a5020000i",
+  iill_2 =	"0000a5030000i",
   ipm_2 =	"0000b2220000h",
   iske_2 =	"0000b2290000h",
   ivsk_2 =	"0000b2230000h",
@@ -876,7 +888,11 @@ map_op = {
   llhrl_2 =	"c40200000000o",
   llghrl_2 =	"c40600000000o",
   llihf_2 =	"c00e00000000n",
+  llihh_2 =	"0000a50c0000i",
+  llihl_2 =	"0000a50d0000i",
   llilf_2 =	"c00f00000000n",
+  llilh_2 =	"0000a50e0000i",
+  llill_2 =	"0000a50f0000i",
   llgfrl_2 =	"c40e00000000o",
   llgt_2 =	"e30000000017l",
   llgtr_2 =	"0000b9170000h",
@@ -980,7 +996,11 @@ map_op = {
   og_2 =	"e30000000081l",
   ogr_2 =	"0000b9810000h",
   oihf_2 =	"c00c00000000n",
+  oihh_2 =	"0000a5080000i",
+  oihl_2 =	"0000a5090000i",
   oilf_2 =	"c00d00000000n",
+  oilh_2 =	"0000a50a0000i",
+  oill_2 =	"0000a50b0000i",
   pgin_2 =	"0000b22e0000h",
   pgout_2 =	"0000b22f0000h",
   pcc_2 =	"0000b92c0000h",
@@ -1099,6 +1119,10 @@ map_op = {
   swr_2 =	"000000002f00g",
   tar_2 =	"0000b24c0000h",
   tb_2 =	"0000b22c0000h",
+  tmhh_2 =	"0000a7020000i",
+  tmhl_2 =	"0000a7030000i",
+  tmlh_2 =	"0000a7000000i",
+  tmll_2 =	"0000a7010000i",
   trace_3 =	"000099000000q",
   tracg_3 =	"eb000000000fs",
   tre_2 =	"0000b2a50000h",

@@ -269,7 +269,7 @@ void dasm_put(Dst_DECL, int start, ...)
       b[pos++] = ofs;           /* Store pass1 offset estimate. */
       break;
     case DASM_IMM16:
-      CK(((short)n) == n, RANGE_I);     /* TODO: unsigned immediates? */
+      CK(((short)n) == n || ((unsigned short)n) == n, RANGE_I);     /* TODO: is this the right way to handle unsigned immediates? */
       ofs += 2;
       b[pos++] = n;
       break;
