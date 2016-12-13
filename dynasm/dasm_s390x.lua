@@ -971,6 +971,9 @@ map_op = {
   msfi_2 =	"c20100000000n",
   msgfi_2 =	"c20000000000n",
   maer_3 =	"0000b32e0000r",
+  mvhhi_2 =	"e54400000000SIL",
+  mvhi_2 =	"e54c00000000SIL",
+  mvghi_2 =	"e54800000000SIL",
   o_2 =		"000056000000j",
   or_2 =	"000000001600g",
   oy_2 =	"e30000000056l",
@@ -1219,6 +1222,13 @@ local function parse_template(params, template, nparams, pos)
     if d1a then d1a() end
     wputhw(op2)
     if d2a then d2a() end
+  elseif p == "SIL" then
+    wputhw(op0)
+    local d, b, a = parse_mem_b(params[1])
+    op1 = op1 + shl(b, 12) + d
+    wputhw(op1)
+    if a then a() end
+    parse_imm16(params[2])
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)

@@ -308,6 +308,22 @@ static void type(dasm_State *state) {
   | br r14
 }
 
+static void sil(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  | lay sp, -16(sp)
+  | xc 0(16, sp), 0(sp)
+  | mvghi 0(sp), 5
+  | mvhi 8(sp), 7
+  | mvhhi 12(sp), 11
+  | lghi r2, 0
+  | ag r2, 0(sp)  // r2 += 5
+  | a r2, 8(sp)   // r2 += 7
+  | ah r2, 12(sp) // r2 += 11
+  | la sp, 16(sp)
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -335,7 +351,8 @@ test_table test[] = {
 //  { 2,4,  load_test,        4,"load_test"},
   {-1, 0,       ssa, 65535<<8,     "ssa"},
   {-1, 0,   ssa_act, 65535<<8, "ssa_act"},
-  {27, 0,      type,       27,    "type"}
+  {27, 0,      type,       27,    "type"},
+  { 0, 0,       sil,       23,     "sil"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
