@@ -34,10 +34,11 @@
 |.define PC,			r9	// Next PC.
 |.define DISPATCH,		r10	// Opcode dispatch table.
 |.define LREG,			r11	// Register holding lua_State (also in SAVE_L).
+|.define ITYPE,			r13	//
 |
 |// The following temporaries are not saved across C calls, except for RD.
-|.define RA,			r0	// Cannot be dereferenced.
-|.define RB,			r1
+|.define RA,			r1	// Cannot be dereferenced.
+|.define RB,			r12
 |.define RC,			r5	// Overlaps CARG4.
 |.define RD,			r6	// Overlaps CARG5. Callee-saved.
 |
@@ -56,7 +57,7 @@
 |.define CRET1,			r2
 |
 |.define OP,			r2
-|.define TMP1,			r3
+|.define TMP1,			r14
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.define CFRAME_SPACE,	240	// Delta for sp, 8 byte aligned.
@@ -144,20 +145,20 @@
 |// Instruction decode+dispatch.
 |  // TODO: tune this, right now we always decode RA-D even if they aren't used.
 |.macro ins_NEXT
-|  l RD, (PC)
+|  llgf RD, 0(PC)
 |  // 32                 63
 |  // [  B |  C |  A | OP ]
 |  // [    D    |  A | OP ]
-|  llhr RA, RD
-|  srl RA, #8
-|  llcr OP, RD
-|  srl RD, #16
-|  lr RB, RD
-|  srl RB, #8
-|  llcr RC, RD
+|  llghr RA, RD
+|  srlg RA, RA, 8(r0)
+|  llgcr OP, RD
+|  srlg RD, RD, 16(r0)
+|  lgr RB, RD
+|  srlg RB, RB, 8(r0)
+|  llgcr RC, RD
 |  la PC, 4(PC)
 |  llgfr TMP1, OP
-|  sll TMP1, #3 // TMP1=OP*8
+|  sllg TMP1, TMP1, 3(r0) // TMP1=OP*8
 |  b 0(TMP1, DISPATCH)
 |.endmacro
 |
@@ -177,9 +178,89 @@
 |  .endmacro
 |.endif
 |
+|// Call decode and dispatch.
+|.macro ins_callt
+|  // BASE = new base, RB = LFUNC, RD = nargs+1, -8(BASE) = PC
+|  lg PC, LFUNC:RB->pc
+|  llgf RA, 0(PC) // TODO: combine loads?
+|  llgcr OP, RA
+|    sllg TMP1, OP, 3(r0)
+|  la PC, 4(PC)
+|    lg TMP1, 0(TMP1, DISPATCH)
+|    br TMP1
+|.endmacro
+|
+|.macro ins_call
+|  // BASE = new base, RB = LFUNC, RD = nargs+1
+|  stg PC, -8(BASE)
+|  ins_callt
+|.endmacro
+|
 |// Assumes DISPATCH is relative to GL.
 #define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
 #define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
+|
+#define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
+|
+|//-----------------------------------------------------------------------
+|
+|// Macros to clear or set tags.
+|.macro cleartp, reg; sllg reg, reg, 17(r0); srlg reg, reg, 17(r0); .endmacro // TODO: use nihf instead? would introduce dependence on z9-109.
+|.macro settp, reg, tp
+|  oihh reg, ((tp>>1) &0xffff)
+|  oihl reg, ((tp<<15)&0x8000)
+|.endmacro
+|.macro setint, reg
+|  settp reg, LJ_TISNUM
+|.endmacro
+|
+|// Macros to test operand types.
+|.macro checktp_nc, reg, tp, target
+|  srag ITYPE, reg, 47(r0)
+|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  jne target
+|.endmacro
+|.macro checktp, reg, tp, target
+|  srag ITYPE, reg, 47(r0)
+|  cleartp reg
+|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  jne target
+|.endmacro
+|.macro checktptp, src, tp, target
+|  srag ITYPE, src, 47(r0)
+|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  jne target
+|.endmacro
+|.macro checkstr, reg, target; checktp reg, LJ_TSTR, target; .endmacro
+|.macro checktab, reg, target; checktp reg, LJ_TTAB, target; .endmacro
+|.macro checkfunc, reg, target; checktp reg, LJ_TFUNC, target; .endmacro
+|
+|.macro checknumx, reg, target, jump
+|  srag ITYPE, reg, 47(r0)
+|  cghi ITYPE, LJ_TISNUM		// Sign extend LJ_TISNUM tp from 16- to 64-bits.
+|  jump target
+|.endmacro
+|.macro checkint, reg, target; checknumx reg, target, jne; .endmacro
+|.macro checkinttp, src, target; checknumx src, target, jne; .endmacro
+|.macro checknum, reg, target; checknumx reg, target, jhe; .endmacro
+|.macro checknumtp, src, target; checknumx src, target, jhe; .endmacro
+|.macro checknumber, src, target; checknumx src, target, jh; .endmacro
+|
+|.macro load_false, reg; lghi reg, -1; iihl reg, 0x7fff; .endmacro	// assumes LJ_TFALSE == ~(1<<47)
+|.macro load_true, reg; lghi reg, -1; iihh reg, 0xfffe; .endmacro	// assumes LJ_TTRUE  == ~(2<<47)
+|
+|.define PC_OP, -4(PC)
+|.define PC_RA, -3(PC)
+|.define PC_RB, -1(PC)
+|.define PC_RC, -2(PC)
+|.define PC_RD, -2(PC)
+|
+|// Set current VM state.
+|.macro set_vmstate, st
+|  lghi TMP1, ~LJ_VMST_..st
+|  stg TMP1, DISPATCH_GL(vmstate)(DISPATCH)
+|.endmacro
+|
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
 /* The .code_sub section should be last to help static branch prediction. */
@@ -192,10 +273,58 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_returnp:
+  |  cghi PC, 0
+  |  je ->cont_dispatch
+  |
+  |  // Return from pcall or xpcall fast func.
+  |  nill PC, -7
+  |  sgr BASE, PC			// Restore caller base.
+  |  lay RA, -8(RA, PC)			// Rebase RA and prepend one result.
+  |  lg PC, -8(BASE)			// Fetch PC of previous frame.
+  |  // Prepending may overwrite the pcall frame, so do it at the end.
+  |  load_true ITYPE
+  |  stg ITYPE, 0(RA, BASE)		// Prepend true to results.
   |
   |->vm_returnc:
+  |  ahi RD, 1				// RD = nresults+1
+  |  jo ->vm_unwind_yield		// TODO: !!! NOT SURE, jz on x64, overflow? !!!
+  |  stg RD, SAVE_MULTRES
+  |  tmll PC, FRAME_TYPE
+  |  je ->BC_RET_Z			// Handle regular return to Lua.
   |
   |->vm_return:
+  |  // BASE = base, RA = resultofs, RD = nresults+1 (= MULTRES), PC = return
+  |  lghi TMP1, FRAME_C
+  |  xgr PC, TMP1
+  |  tmll PC, FRAME_TYPE
+  |  jne ->vm_returnp
+  |
+  |  // Return to C.
+  |  set_vmstate C
+  |  nill PC, -8
+  |  sgr PC, BASE
+  |  lcgr PC, PC			// Previous base = BASE - delta.
+  |
+  |  ahi RD, -1
+  |  je >2
+  |1:  // Move results down.
+  |  lg RB, 0(BASE, RA)
+  |  stg RB, -16(BASE)
+  |  la BASE, 8(BASE)
+  |  ahi RD, -1
+  |  jne <1
+  |2:
+  |  lg L:RB, SAVE_L
+  |  stg PC, L:RB->base
+  |3:
+  |  lg RD, SAVE_MULTRES
+  |  lg RA, SAVE_NRES			// RA = wanted nresults+1
+  |4:
+  |  cgr RA, RD
+  |  jne >6				// More/less results wanted?
+  |5:
+  |  lay BASE, -16(BASE)
+  |  stg BASE, L:RB->top
   |
   |->vm_leave_cp:
   |  lg RA, SAVE_CFRAME			// Restore previous C frame.
@@ -206,7 +335,40 @@ static void build_subroutines(BuildCtx *ctx)
   |  restoreregs
   |  br r14
   |
+  |6:
+  |  jl >7				// Less results wanted?
+  |  // More results wanted. Check stack size and fill up results with nil.
+  |  cg BASE, L:RB->maxstack
+  |  jh >8
+  |  lghi TMP1, LJ_TNIL
+  |  stg TMP1, -16(BASE)
+  |  la BASE, 8(BASE)
+  |  aghi RD, 1
+  |  j <4
+  |
+  |7:  // Fewer results wanted.
+  |  cghi RA, 0
+  |  je <5				// But check for LUA_MULTRET+1.
+  |  sgr RA, RD				// Negative result!
+  |  sllg TMP1, RA, 3(r0)
+  |  lay BASE, 0(TMP1, BASE)		// Correct top.
+  |  j <5
+  |
+  |8:  // Corner case: need to grow stack for filling up results.
+  |  // This can happen if:
+  |  // - A C function grows the stack (a lot).
+  |  // - The GC shrinks the stack in between.
+  |  // - A return back from a lua_call() with (high) nresults adjustment.
+  |  stg BASE, L:RB->top		// Save current top held in BASE (yes).
+  |  stg RD, SAVE_MULTRES		// Need to fill only remainder with nil.
+  |  lgr CARG2, RA
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
+  |  lg BASE, L:RB->top			// Need the (realloced) L->top in BASE.
+  |  j <3
+  |
   |->vm_unwind_yield:
+  |  stg r0, 0(r0)
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
@@ -219,6 +381,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_growstack_c:			// Grow stack for C function.
+  |  stg r0, 0(r0)
   |
   |->vm_growstack_v:			// Grow stack for vararg Lua function.
   |
@@ -235,9 +398,26 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_call:				// Setup C frame and enter VM.
   |
+  |2: // Entry point for vm_resume/vm_cpcall (RA = base, LREG = L, PC = ftype).
+  |  stg L:LREG, DISPATCH_GL(cur_L)(DISPATCH)
+  |  set_vmstate INTERP
+  |  lg BASE, L:LREG->base		// BASE = old base (used in vmeta_call).
+  |  agr PC, RA
+  |  sgr PC, BASE			// PC = frame delta + frame type
+  |
+  |  lg RD, L:LREG->top
+  |  sgr RD, RA
+  |  srlg NARGS:RD, NARGS:RD, 3(r0)	// TODO: support '3' on its own in dynasm.
+  |  aghi NARGS:RD, 1			// RD = nargs+1
+  |
   |->vm_call_dispatch:
+  |  lg LFUNC:RB, -16(RA)
+  |  checkfunc LFUNC:RB, ->vmeta_call	// Ensure KBASE defined and != BASE.
   |
   |->vm_call_dispatch_f:
+  |  lgr BASE, RA
+  |  ins_call
+  |  // BASE = new base, RB = func, RD = nargs+1, PC = caller PC
   |
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
@@ -264,7 +444,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  // TValue * (new base) or NULL returned in r2 (CRET1/).
   |  cghi CRET1, 0
   |  je ->vm_leave_cp			// No base? Just remove C frame.
-  |  stg r0, 0(r0)
+  |  lgr RA, CRET1
+  |  lghi PC, FRAME_CP
+  |  j <2				// Else continue with the call.
   |
   |//-----------------------------------------------------------------------
   |//-- Metamethod handling ------------------------------------------------
@@ -690,7 +872,84 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISNEXT:
   case BC_VARG:
   case BC_RETM:
+    | stg r0, 0(r0) // not implemented
+    break;
+
   case BC_RET: case BC_RET0: case BC_RET1:
+    |  ins_AD	// RA = results, RD = nresults+1
+    if (op != BC_RET0) {
+      |  sllg RA, RA, 3(r0)
+    }
+    |1:
+    |  lg PC, -8(BASE)
+    |  stg RD, SAVE_MULTRES		// Save nresults+1.
+    |  tmll PC, FRAME_TYPE		// Check frame type marker.
+    |  jne >7				// Not returning to a fixarg Lua func?
+    switch (op) {
+    case BC_RET:
+      |->BC_RET_Z:
+      |  lgr KBASE, BASE		// Use KBASE for result move.
+      |  aghi RD, -1
+      |  je >3
+      |2:  // Move results down.
+      |  lg RB, 0(KBASE, RA)
+      |  stg RB, -16(KBASE)
+      |  la KBASE, 8(KBASE)
+      |  // TODO: replace with brctg RD, <2 once supported.
+      |  aghi RD, -1
+      |  jne <2
+      |3:
+      |  lg RD, SAVE_MULTRES		// Note: MULTRES may be >255.
+      |  llgc RB, PC_RB
+      |5:
+      |  cgr RB, RD			// More results expected?
+      |  jh >6
+      break;
+    case BC_RET1:
+      |  lg RB, 0(BASE, RA)
+      |  stg RB, -16(BASE)
+      /* fallthrough */
+    case BC_RET0:
+      |5:
+      |  llgc TMP1, PC_RB
+      |  cgr TMP1, RD
+      |  jh >6
+    default:
+      break;
+    }
+    |  llgc RA, PC_RA
+    |  lcgr RA, RA
+    |  sllg RA, RA, 3(r0)
+    |  lay BASE, -16(RA, BASE)		// base = base - (RA+2)*8
+    |  lg LFUNC:KBASE, -16(BASE)
+    |  cleartp LFUNC:KBASE
+    |  lg KBASE, LFUNC:KBASE->pc
+    |  lg KBASE, PC2PROTO(k)(KBASE)
+    |  ins_next
+    |
+    |6:  // Fill up results with nil.
+    |  lghi TMP1, LJ_TNIL
+    if (op == BC_RET) {
+      |  stg TMP1, -16(KBASE)		// Note: relies on shifted base.
+      |  la KBASE, 8(KBASE)
+    } else {
+      |  sllg RC, RD, 3(r0) 		// RC used as temp.
+      |  stg TMP1, -24(RC, BASE)
+    }
+    |  la RD, 1(RD)
+    |  j <5
+    |
+    |7:  // Non-standard return case.
+    |  lay RB, -FRAME_VARG(PC)
+    |  tmll RB, FRAME_TYPEP
+    |  jne ->vm_return
+    |  // Return from vararg function: relocate BASE down and RA up.
+    |  sgr BASE, RB
+    if (op != BC_RET0) {
+      |  agr RA, RB
+    }
+    |  j <1
+    break;
   case BC_FORL:
   case BC_JFORI:
   case BC_JFORL:
@@ -709,9 +968,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_IFUNCF:
   case BC_JFUNCV:
   case BC_IFUNCV:
+    | lg r0, 0(r0) // Not implemented, seg fault.
+    break;
+
   case BC_FUNCC:
   case BC_FUNCCW:
-    | lg r0, 0(r0) // Not implemented, seg fault.
+    |  ins_AD  // BASE = new base, RD = nargs+1
+    |  lg CFUNC:RB, -16(BASE)
+    |  cleartp CFUNC:RB
+    |  lg KBASE, CFUNC:RB->f
+    |  lg L:RB, SAVE_L
+    |  sllg RD, NARGS:RD, 3(r0)
+    |  lay RD, -8(RD,BASE)
+    |  stg BASE, L:RB->base
+    |  lay RA, (8*LUA_MINSTACK)(RD)
+    |  cg RA, L:RB->maxstack
+    |  stg RD, L:RB->top
+    |  lgr CARG1, L:RB			// Caveat: CARG1 may be RA.
+    if (op != BC_FUNCC) {
+      |  lgr CARG2, KBASE
+    }
+    |  jh ->vm_growstack_c		// Need to grow stack.
+    |  set_vmstate C
+    if (op == BC_FUNCC) {
+      |  basr r14, KBASE		// (lua_State *L)
+    } else {
+      |  // (lua_State *L, lua_CFunction f)
+      |  lg TMP1, (DISPATCH_GL(wrapf))(DISPATCH)
+      |  basr r14, TMP1 // TODO: TMP1==r14, is this ok?
+    }
+    |  // nresults returned in r2 (CRET1).
+    |  lg BASE, L:RB->base
+    |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
+    |  set_vmstate INTERP
+    |  sllg TMP1, RD, 3(r0)
+    |  la RA, 0(TMP1, BASE)
+    |  lcgr RA, RA
+    |  ag RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
+    |  lg PC, -8(BASE)			// Fetch PC of caller.
+    |  j ->vm_returnc
     break;
 
   /* ---------------------------------------------------------------------- */
