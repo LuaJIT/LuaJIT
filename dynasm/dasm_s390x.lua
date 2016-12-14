@@ -79,7 +79,8 @@ local function havearg(a)
   return a == "ESC" or
          a == "SECTION" or
          a == "REL_LG" or
-         a == "LABEL_LG"
+         a == "LABEL_LG" or
+         a == "REL_EXT"
 end
 
 -- Write action list buffer as a huge static C array.
