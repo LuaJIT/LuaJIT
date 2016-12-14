@@ -1187,8 +1187,12 @@ map_op = {
   didbr_4 =	"0000b3580000RRF-b",
   -- S mode instructions
   stfl_1 =	"0000b2b10000sS",
-  -- I- mdoe instructions
+  -- I- mode instructions
   svc_1 =	"000000000a00iI",
+  -- RI-b mode instructions
+  bras_2 =	"0000a7050000RI-b",
+  -- RI-c mode instructions
+  brc_2 =	"0000a7040000RI-c", 
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1329,6 +1333,16 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + imm_val;
     wputhw(op2);
     if a then a() end
+  elseif p == "RI-b" then
+    op1 = op1 + shl(parse_reg(params[1]),4)
+    wputhw(op1)
+    local mode, n, s = parse_label(params[2])
+    waction("REL_"..mode, n, s)
+  elseif p == "RI-c" then
+    op1 = op1 + shl(parse_num(params[1]),4)
+    wputhw(op1)
+    local mode, n, s = parse_label(params[2])
+    waction("REL_"..mode, n, s)
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)
