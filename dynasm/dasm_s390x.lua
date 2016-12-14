@@ -1197,6 +1197,14 @@ map_op = {
   brcl_2 =	"c00400000000RIL-c"
   -- RX-b mode instructions
   bc_2 =	"000047000000RX-b",
+  -- RSI
+  brxh_3 =	"000084000000RSI",
+  -- RIE-e
+  brxhg_3 =	"ec0000000044RIE-e",
+  -- SI
+  ni_2 =	"000094000000SI",
+  -- RXF
+  madb_3 =	"ed000000001eRXF",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1358,6 +1366,34 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + shl(b, 12) + d
     wputhw(op1);wputhw(op2);
     if a then a() end
+  elseif p == "RSI" then
+    op1 = op1 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw(op1)
+    local mode, n, s = parse_label(params[3])
+    waction("REL_"..mode, n, s)
+  elseif p == "RIE-e" then
+    op0 = op0 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw1(op0)
+    local mode, n, s = parse_label(params[3])
+    waction("REL_"..mode, n, s)
+    wputhw(op2)
+  elseif p == "SI" then
+    local imm_val, a = parse_imm8(params[2])
+    op1 = op1 + imm_val
+    wputhw(op1)
+    if a then a() end
+    local d, b, a = parse_mem_b(params[1])
+    op2 = op2 + shl(b,12) + d
+    wputhw(op2)
+    if a then a() end
+  elseif p == "RXF" then
+    local d, x, b, a = parse_mem_bx(params[3])
+    op0 = op0 + shl(parse_reg(params[2]),4) + x
+    op1 = op1 + shl(b, 12) + d
+    wputhw(op0); wputhw(op1);
+    if a then a() end
+    op2 = op2 + shl(parse_reg(params[1]),12)
+    wputhw(op2)
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)
