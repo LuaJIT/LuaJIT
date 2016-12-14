@@ -1316,7 +1316,7 @@ local function parse_template(params, template, nparams, pos)
     parse_imm16(params[2])
   elseif p == "RRF-e" then
     wputhw(op1)
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[1]),12) + parse_reg(params[3])
+    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[2]),12) + parse_reg(params[3])
     if params[4] then
       op2 = op2 + shl(parse_mask2(params[4]),8)
     end
