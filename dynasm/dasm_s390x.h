@@ -214,12 +214,17 @@ void dasm_put(Dst_DECL, int start, ...)
       ofs += 2;
       break;
     case DASM_REL_EXT:
+      p++;
+      ofs += 4;
       break;
     case DASM_ALIGN:
       ofs += *p++;
       b[pos++] = ofs;
       break;
     case DASM_REL_LG:
+      if (p[-2] >> 12 == 0xc) { /* RIL instruction needs 32-bit immediate. */
+        ofs += 2;
+      }
       n = *p++ - 10;
       pl = D->lglabels + n;
       /* Bkwd rel or global. */
@@ -234,6 +239,9 @@ void dasm_put(Dst_DECL, int start, ...)
         n = 0;                  /* Start new chain for fwd rel if label exists. */
       goto linkrel;
     case DASM_REL_PC:
+      if (p[-2] >> 12 == 0xc) { /* RIL instruction needs 32-bit immediate. */
+        ofs += 2;
+      }
       pl = D->pclabels + n;
       CKPL(pc, PC);
     putrel:
@@ -246,9 +254,6 @@ void dasm_put(Dst_DECL, int start, ...)
         *pl = pos;
       }
       ofs += 2;
-      if (p[-3] >> 12 == 0xc) { /* RIL instruction needs 32-bit immediate. */
-        ofs += 2;
-      }
       pos++;
       break;
     case DASM_LABEL_LG:
@@ -359,6 +364,7 @@ int dasm_link(Dst_DECL, size_t * szp)
           p++;
           break;
         case DASM_REL_EXT:
+          p++;
           break;
         case DASM_ALIGN:
           ofs -= (b[pos++] + ofs) & *p++;
@@ -430,7 +436,7 @@ int dasm_encode(Dst_DECL, void *buffer)
           *cp++ = *p++;
           break;
         case DASM_REL_EXT:
-          n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins & 2047), 1) - 4;
+          n = DASM_EXTERN(Dst, (unsigned char *)cp, *p++, 1) - 4;
           goto patchrel;
         case DASM_ALIGN:
           ins = *p++;
@@ -443,6 +449,7 @@ int dasm_encode(Dst_DECL, void *buffer)
         case DASM_REL_PC:
           CK(n >= 0, UNDEF_PC);
           n = *DASM_POS2PTR(D, n) - (int)((char *)cp - base);
+          p++;                  /* skip argument */
         patchrel:
           /* Offsets are halfword aligned (so need to be halved). */
           n += 2;               /* Offset is relative to start of instruction. */
@@ -452,7 +459,6 @@ int dasm_encode(Dst_DECL, void *buffer)
             CK(-(1 << 16) <= n && n < (1 << 16) && (n & 1) == 0, RANGE_LG);
           }
           *cp++ = n >> 1;
-          p++;                  /* skip argument */
           break;
         case DASM_LABEL_LG:
           ins = *p++;
