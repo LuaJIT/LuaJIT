@@ -1194,7 +1194,7 @@ map_op = {
   -- RI-c mode instructions
   brc_2 =	"0000a7040000RI-c",
   -- RIL-c
-  brcl_2 =	"c00400000000RIL-c"
+  brcl_2 =	"c00400000000RIL-c",
   -- RX-b mode instructions
   bc_2 =	"000047000000RX-b",
   -- RSI
