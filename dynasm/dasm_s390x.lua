@@ -494,6 +494,24 @@ local function parse_imm16(imm)
   end
 end
 
+local function parse_mask(arg)
+  local m3 = parse_number(arg)
+  if ((m3 == 1) or (m3 == 0) or ( m3 >=3 and m3 <=7)) then
+    return m3
+  else
+    werror("Mask value should be 0,1 or 3-7: ", m3)
+  end
+end
+
+local function parse_mask2(arg)
+  local m4 = parse_number(arg)
+  if ( m4 >=0 and m4 <=1) then
+    return m4
+  else
+    werror("Mask value should be 0 or 1: ", m4)
+  end
+end
+
 local function parse_label(label, def)
   local prefix = sub(label, 1, 2)
   -- =>label (pc label reference)
@@ -1144,6 +1162,8 @@ map_op = {
   unpku_2 =	"e20000000000SS-a",
   xc_2 =	"d70000000000SS-a",
   ap_2 =	"fa0000000000SS-b",
+  cfebr_3 =	"0000b3980000RRF-e",
+  cfebra_4 =	"0000b3980000RRF-e",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1253,6 +1273,13 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op1)
     if a then a() end
     parse_imm16(params[2])
+  elseif p == "RRF-e" then
+    wputhw(op1)
+    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[1]),12) + parse_reg(params[3])
+    if params[4] then
+      op2 = op2 + shl(parse_mask2(params[4]),8)
+    end
+    wputhw(op2)
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)
