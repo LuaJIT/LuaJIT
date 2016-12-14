@@ -39,7 +39,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM16", "IMM32", "LEN8R","LEN4HR","LEN4LR",
+  "REL_PC", "LABEL_PC", "DISP12", "DISP20", "IMM8", "IMM16", "IMM32", "LEN8R","LEN4HR","LEN4LR",
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -305,6 +305,10 @@ end
 
 local function is_int16(num)
   return -32768 <= num and num < 32768
+end
+
+local function is_int8(num)
+  return -128 <= num and num < 128
 end
 
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
