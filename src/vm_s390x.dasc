@@ -249,11 +249,11 @@
 |.macro load_false, reg; lghi reg, -1; iihl reg, 0x7fff; .endmacro	// assumes LJ_TFALSE == ~(1<<47)
 |.macro load_true, reg; lghi reg, -1; iihh reg, 0xfffe; .endmacro	// assumes LJ_TTRUE  == ~(2<<47)
 |
-|.define PC_OP, -4(PC)
-|.define PC_RA, -3(PC)
-|.define PC_RB, -1(PC)
-|.define PC_RC, -2(PC)
-|.define PC_RD, -2(PC)
+|.define PC_OP, -1(PC)
+|.define PC_RA, -2(PC)
+|.define PC_RB, -4(PC)
+|.define PC_RC, -3(PC)
+|.define PC_RD, -4(PC)
 |
 |// Set current VM state.
 |.macro set_vmstate, st
@@ -381,12 +381,37 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_growstack_c:			// Grow stack for C function.
-  |  stg r0, 0(r0)
+  |  lghi CARG2, LUA_MINSTACK
+  |  j >2
   |
   |->vm_growstack_v:			// Grow stack for vararg Lua function.
+  |  aghi RD, -16			// LJ_FR2
+  |  j >1
   |
   |->vm_growstack_f:			// Grow stack for fixarg Lua function.
   |  // BASE = new base, RD = nargs+1, RB = L, PC = first PC
+  |  sllg RD, NARGS:RD, 3(r0)
+  |  lay RD, -8(RD, BASE)
+  |1:
+  |  llgc RA, (PC2PROTO(framesize)-4)(PC)
+  |  la PC, 4(PC)			// Must point after first instruction.
+  |  stg BASE, L:RB->base
+  |  stg RD, L:RB->top
+  |  stg PC, SAVE_PC
+  |  lgr CARG2, RA
+  |2:
+  |  // RB = L, L->base = new base, L->top = top
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
+  |  lg BASE, L:RB->base
+  |  lg RD, L:RB->top
+  |  lg LFUNC:RB, -16(BASE)
+  |  cleartp LFUNC:RB
+  |  sgr RD, BASE
+  |  srlg RD, RD, 3(r0)
+  |  aghi NARGS:RD, 1
+  |  // BASE = new base, RB = LFUNC, RD = nargs+1
+  |  ins_callt				// Just retry the call.
   |
   |//-----------------------------------------------------------------------
   |//-- Entry points into the assembler VM ---------------------------------
@@ -998,6 +1023,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  basr r14, TMP1 // TODO: TMP1==r14, is this ok?
     }
     |  // nresults returned in r2 (CRET1).
+    |  lgr RD, CRET1
     |  lg BASE, L:RB->base
     |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
     |  set_vmstate INTERP
