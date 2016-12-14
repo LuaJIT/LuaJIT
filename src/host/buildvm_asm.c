@@ -118,8 +118,8 @@ static void emit_asm_reloc_text(BuildCtx *ctx, uint8_t *cp, int n,
   int opcode = *(uint16_t*)(&cp[n]);
   int arg = (opcode>>4) & 0xf;
   switch (opcode & 0xff0f) {
-  case 0xa705: opname = "bras"; argt = "r"; break;
-  case 0xc005: opname = "brasl"; argt = "r"; break;
+  case 0xa705: opname = "bras"; argt = "%r"; break;
+  case 0xc005: opname = "brasl"; argt = "%r"; break;
   case 0xa704: opname = "brc"; break;
   case 0xc004: opname = "brcl"; break;
   default:
@@ -360,7 +360,7 @@ void emit_asm(BuildCtx *ctx)
       ofs += n+4;
 #elif LJ_TARGET_S390X
       emit_asm_reloc_text(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
-      ofs += n;
+      ofs += n+4;
 #else
       emit_asm_wordreloc(ctx, ctx->code+ofs, n, ctx->relocsym[r->sym]);
       ofs += n;
