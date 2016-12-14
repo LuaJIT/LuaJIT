@@ -494,8 +494,20 @@ local function parse_imm16(imm)
   end
 end
 
-local function parse_mask(arg)
-  local m3 = parse_number(arg)
+local function parse_imm8(imm)
+  local imm_val = tonumber(imm)
+  if imm_val then
+    if not is_int8(imm_val) then
+      werror("Immediate value out of range: ", imm_val)
+    end
+  else
+    iact = function() waction("IMM8",nil,imm) end
+  end
+  return imm_val, iact
+end
+
+local function parse_mask(mask)
+  local m3 = parse_number(mask)
   if ((m3 == 1) or (m3 == 0) or ( m3 >=3 and m3 <=7)) then
     return m3
   else
@@ -503,8 +515,8 @@ local function parse_mask(arg)
   end
 end
 
-local function parse_mask2(arg)
-  local m4 = parse_number(arg)
+local function parse_mask2(mask)
+  local m4 = parse_number(mask)
   if ( m4 >=0 and m4 <=1) then
     return m4
   else
@@ -1171,6 +1183,8 @@ map_op = {
   didbr_4 =	"0000b3580000RRF-b",
   -- S mode instructions
   stfl_1 =	"0000b2b10000sS",
+  -- I- mdoe instructions
+  svc_1 =	"000000000a00iI",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1305,6 +1319,11 @@ local function parse_template(params, template, nparams, pos)
     local d, b, a = parse_mem_b(params[1])
     op2 = op2 + shl(b,12) + d;
     wputhw(op2)
+    if a then a() end
+  elseif p =="iI" then
+    local imm_val, a = parse_imm8(params[1])
+    op2 = op2 + imm_val;
+    wputhw(op2);
     if a then a() end
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
