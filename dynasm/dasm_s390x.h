@@ -23,7 +23,7 @@ enum {
   /* The following actions also have an argument. */
   DASM_REL_PC, DASM_LABEL_PC,
   DASM_DISP12, DASM_DISP20,
-  DASM_IMM16, DASM_IMM32,
+  DASM_IMM8, DASM_IMM16, DASM_IMM32,
   DASM_LEN8R,DASM_LEN4HR,DASM_LEN4LR,
   DASM__MAX
 };
@@ -268,6 +268,9 @@ void dasm_put(Dst_DECL, int start, ...)
       *pl = -pos;               /* Label exists now. */
       b[pos++] = ofs;           /* Store pass1 offset estimate. */
       break;
+    case DASM_IMM8:
+      b[pos++] = n;
+      break;
     case DASM_IMM16:
       CK(((short)n) == n || ((unsigned short)n) == n, RANGE_I);     /* TODO: is this the right way to handle unsigned immediates? */
       ofs += 2;
@@ -370,6 +373,7 @@ int dasm_link(Dst_DECL, size_t * szp)
           p++;
           b[pos++] += ofs;
           break;
+        case DASM_IMM8:
         case DASM_IMM16:
         case DASM_IMM32:
         case DASM_DISP20:
@@ -456,6 +460,9 @@ int dasm_encode(Dst_DECL, void *buffer)
             D->globals[ins - 10] = (void *)(base + n);
           break;
         case DASM_LABEL_PC:
+          break;
+        case DASM_IMM8:
+          cp[-1] |= n & 0xff;  
           break;
         case DASM_IMM16:
           *cp++ = n;
