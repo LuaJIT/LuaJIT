@@ -1166,9 +1166,11 @@ map_op = {
   cfebr_3 =	"0000b3980000RRF-e",
   cfebra_4 =	"0000b3980000RRF-e",
   -- RXE instructions
-  sqdb_2 =     "ed0000000015RXE",
+  sqdb_2 =	"ed0000000015RXE",
   -- RRF-b instructions
-  didbr_4 =    "0000b3580000RRF-b",
+  didbr_4 =	"0000b3580000RRF-b",
+  -- S mode instructions
+  stfl_1 =	"0000b2b10000sS",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1298,6 +1300,12 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op1);
     op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + parse_mask(params[4])
     wputhw(op2)
+  elseif p =="sS" then
+    wputhw(op1);
+    local d, b, a = parse_mem_b(params[1])
+    op2 = op2 + shl(b,12) + d;
+    wputhw(op2)
+    if a then a() end
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)
