@@ -324,35 +324,48 @@ static void sil(dasm_State *state) {
   | br r14
 }
 
+static void rrfe_rrd(dasm_State *state) {
+  dasm_State ** Dst = &state;
+
+  | cefbr f0,r2
+  | cefbr f2,r3
+  | cefbr f4,r4
+  | maebr f0 ,f2 ,f4
+  | cfebr r2, 0, f0
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
+  int64_t arg3;
   void (*fn)(dasm_State *);
   int64_t want;
   const char *testname;
 } test_table;
 
 test_table test[] = {
-  { 1, 2,       add,        3,     "add"},
-  {10, 5,       sub,        5,     "sub"},
-  { 2, 3,       mul,        6,     "mul"},
-  { 5, 7,        rx,    12298,      "rx"},
-  { 5, 7,       rxy,       10,     "rxy"},
-  { 2, 4,       lab,       32,     "lab"},
-  { 2, 4,      labg,       32,    "labg"},
-  { 2, 0, add_imm16,       17,   "imm16"},
-  { 2, 0, add_imm32,       16,   "imm32"},
-  { 7, 3,      save,      480,    "save"},
-  { 7, 3,    labmul,       21, "labmul0"},
-  { 7, 0,    labmul,        0, "labmul1"},
-  { 0, 0,        pc,       55,      "pc"},
-  { 2,12,   jmp_fwd,       12, "jmp_fwd"},
-//  { 9,8,    add_rrd,       25, "add_rrd"},
-//  { 2,4,  load_test,        4,"load_test"},
-  {-1, 0,       ssa, 65535<<8,     "ssa"},
-  {-1, 0,   ssa_act, 65535<<8, "ssa_act"},
-  {27, 0,      type,       27,    "type"},
-  { 0, 0,       sil,       23,     "sil"}
+  { 1, 2, 0,       add,        3,     "add"},
+  {10, 5, 0,       sub,        5,     "sub"},
+  { 2, 3, 0,       mul,        6,     "mul"},
+  { 5, 7, 0,        rx,    12298,      "rx"},
+  { 5, 7, 0,       rxy,       10,     "rxy"},
+  { 2, 4, 0,       lab,       32,     "lab"},
+  { 2, 4, 0,      labg,       32,    "labg"},
+  { 2, 0, 0, add_imm16,       17,   "imm16"},
+  { 2, 0, 0, add_imm32,       16,   "imm32"},
+  { 7, 3, 0,      save,      480,    "save"},
+  { 7, 3, 0,    labmul,       21, "labmul0"},
+  { 7, 0, 0,    labmul,        0, "labmul1"},
+  { 0, 0, 0,        pc,       55,      "pc"},
+  { 2,12, 0,   jmp_fwd,       12, "jmp_fwd"},
+//  { 9,8, 0,    add_rrd,       25, "add_rrd"},
+//  { 2,4, 0,  load_test,        4,"load_test"},
+  {-1, 0, 0,       ssa, 65535<<8,     "ssa"},
+  {-1, 0, 0,   ssa_act, 65535<<8, "ssa_act"},
+  {27, 0, 0,      type,       27,    "type"},
+  { 0, 0, 0,       sil,       23,     "sil"},
+  {15,3,10,   rrfe_rrd,       45, "rrfe_rrd"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
@@ -378,8 +391,8 @@ int main(int argc, char *argv[])
     dasm_setup(&state, actions);
     test[i].fn(state);
     size_t size;
-    int64_t (*fptr)(int64_t, int64_t) = jitcode(&state, &size);
-    int64_t got = fptr(test[i].arg1, test[i].arg2);
+    int64_t (*fptr)(int64_t, int64_t, int64_t) = jitcode(&state, &size);
+    int64_t got = fptr(test[i].arg1, test[i].arg2, test[i].arg3);
 
     if (got != test[i].want) {
       fprintf(stderr, "FAIL: test %s: want %ld, got %ld\n", test[i].testname, test[i].want, got);
