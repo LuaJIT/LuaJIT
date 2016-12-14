@@ -1162,8 +1162,11 @@ map_op = {
   unpku_2 =	"e20000000000SS-a",
   xc_2 =	"d70000000000SS-a",
   ap_2 =	"fa0000000000SS-b",
+  -- RRF-e instructions
   cfebr_3 =	"0000b3980000RRF-e",
   cfebra_4 =	"0000b3980000RRF-e",
+  -- RXE instructions
+  sqdb_2 =     "ed0000000015RXE",
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1280,6 +1283,15 @@ local function parse_template(params, template, nparams, pos)
       op2 = op2 + shl(parse_mask2(params[4]),8)
     end
     wputhw(op2)
+  elseif p == "RXE" then
+    local d, x, b, a = parse_mem_bx(params[2])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + x
+    op1 = op1 + shl(b, 12) + d
+    -- m3 is not present, so assumed its not part of the instruction since its not passed as a prameter
+    wputhw(op0);
+    wputhw(op1);
+    if a then a() end
+    wputhw(op2);
   elseif p == "w" then
     local mode, n, s = parse_label(params[1])
     wputhw(op1)
