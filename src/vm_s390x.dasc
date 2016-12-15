@@ -286,7 +286,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg ITYPE, 0(RA, BASE)		// Prepend true to results.
   |
   |->vm_returnc:
-  |  ahi RD, 1				// RD = nresults+1
+  |  aghi RD, 1				// RD = nresults+1
   |  jo ->vm_unwind_yield		// TODO: !!! NOT SURE, jz on x64, overflow? !!!
   |  stg RD, SAVE_MULTRES
   |  tmll PC, FRAME_TYPE
@@ -305,13 +305,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  sgr PC, BASE
   |  lcgr PC, PC			// Previous base = BASE - delta.
   |
-  |  ahi RD, -1
+  |  aghi RD, -1
   |  je >2
   |1:  // Move results down.
   |  lg RB, 0(BASE, RA)
   |  stg RB, -16(BASE)
   |  la BASE, 8(BASE)
-  |  ahi RD, -1
+  |  aghi RD, -1
   |  jne <1
   |2:
   |  lg L:RB, SAVE_L
@@ -368,13 +368,31 @@ static void build_subroutines(BuildCtx *ctx)
   |  j <3
   |
   |->vm_unwind_yield:
-  |  stg r0, 0(r0)
+  |  lghi CRET1, LUA_YIELD
+  |  j ->vm_unwind_c_eh
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
+  |  // (void *cframe, int errcode)
+  |  lgr sp, CARG1
+  |  lgfr CARG2, CRET1			// Error return status for vm_pcall.
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
+  |  lg L:RB, SAVE_L
+  |  lg GL:RB, L:RB->glref
+  |  lghi TMP1, ~LJ_VMST_C
+  |  stg TMP1, GL:RB->vmstate
+  |  j ->vm_leave_unw
+  |
   |->vm_unwind_rethrow:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
+  |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
+  |
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------
@@ -537,69 +555,127 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
   |->vmeta_tgets:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tgetb:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tgetv:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->cont_ra:				// BASE = base, RC = result
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tgetr:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tsetb:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tsetv:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->cont_nop:				// BASE = base, (RC = result)
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_tsetr:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
   |->cont_condt:			// BASE = base, RC = result
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->cont_condf:			// BASE = base, RC = result
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_equal:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_equal_cd:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_istype:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_arith_vno:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->vmeta_arith_vn:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_arith_nvo:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->vmeta_arith_nv:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_unm:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_arith_vvo:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->vmeta_arith_vv:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |  // Call metamethod for binary op.
   |->vmeta_binop:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vmeta_len:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Call metamethod ----------------------------------------------------
   |
   |->vmeta_call_ra:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->vmeta_call:			// Resolve and call __call metamethod.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Argument coercion for 'for' statement ------------------------------
   |
   |->vmeta_for:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
@@ -849,6 +925,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro vm_round, name, mode, cond
   |->name:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |  vm_round vm_floor, 0, 1
@@ -857,9 +935,13 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
   |->vm_mod:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |// Args in xmm0/eax. Ret in xmm0. xmm0-xmm1 and eax modified.
   |->vm_powi_sse:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
@@ -867,12 +949,16 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// int lj_vm_cpuid(uint32_t f, uint32_t res[4])
   |->vm_cpuid:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Assertions ---------------------------------------------------------
   |//-----------------------------------------------------------------------
   |
   |->assert_bad_for_arg_type:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
 #ifdef LUA_USE_ASSERT
 #endif
   |
@@ -882,11 +968,17 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Handler for callback functions. Callback slot number in ah/al.
   |->vm_ffi_callback:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->cont_ffi_callback:			// Return from FFI callback.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |// Note: vm_ffi_call must be the last function in this object file!
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
 }
@@ -901,60 +993,220 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   switch (op) {
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISEQV: case BC_ISNEV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISEQS: case BC_ISNES:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISEQN: case BC_ISNEN:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISEQP: case BC_ISNEP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISTYPE:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISNUM:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_MOV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_NOT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_UNM:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_LEN:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_MODVN:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_MODNV: case BC_MODVV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_POW:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_CAT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KSTR:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KCDATA:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KSHORT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KNUM:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KPRI:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_KNIL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_UGET:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_USETV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_USETS:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_USETN:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_USETP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_UCLO:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_FNEW:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TNEW:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TDUP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_GGET:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_GSET:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TGETV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TGETS:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TGETB:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TGETR:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TSETV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TSETS:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TSETB:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TSETR:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_TSETM:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_CALL: case BC_CALLM:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_CALLMT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_CALLT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ITERC:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ITERN:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ISNEXT:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_VARG:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_RETM:
-    | stg r0, 0(r0) // not implemented
+    |  stg r0, 0(r0) // not implemented
+    |  stg r0, 0(r0)
     break;
 
   case BC_RET: case BC_RET0: case BC_RET1:
@@ -1033,24 +1285,76 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
     break;
   case BC_FORL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JFORI:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JFORL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_FORI:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_IFORL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ITERL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JITERL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_IITERL:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_LOOP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_ILOOP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JLOOP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JMP:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_FUNCF:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JFUNCF:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_IFUNCF:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_JFUNCV:
+    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)
+    break;
   case BC_IFUNCV:
-    | lg r0, 0(r0) // Not implemented, seg fault.
+    |  stg r0, 0(r0) // Not implemented, seg fault.
+    |  stg r0, 0(r0)
     break;
 
   case BC_FUNCC:
@@ -1089,6 +1393,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lcgr RA, RA
     |  ag RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
     |  lg PC, -8(BASE)			// Fetch PC of caller.
+    |  // BUG: PC seems to be -1 here sometimes. Not yet sure why.
     |  j ->vm_returnc
     break;
 
