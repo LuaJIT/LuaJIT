@@ -418,10 +418,67 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_resume:				// Setup C frame and resume thread.
+  |  // (lua_State *L, TValue *base, int nres1 = 0, ptrdiff_t ef = 0)
+  |  saveregs
+  |  lgr L:RB, CARG1			// Caveat: CARG1 may be RA.
+  |  stg CARG1, SAVE_L
+  |  lgr RA, CARG2
+  |  lghi PC, FRAME_CP
+  |  lghi RD, 0
+  |  lay KBASE, CFRAME_RESUME(sp)
+  |  lg DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
+  |  aghi DISPATCH, GG_G2DISP
+  |  stg RD, SAVE_PC			// Any value outside of bytecode is ok.
+  |  stg RD, SAVE_CFRAME
+  |  stg RD, SAVE_NRES
+  |  stg RD, SAVE_ERRF
+  |  stg KBASE, L:RB->cframe
+  |  clm RD, 1, L:RB->status
+  |  je >2				// Initial resume (like a call).
+  |
+  |  // Resume after yield (like a return).
+  |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
+  |  set_vmstate INTERP
+  |  llgc RD, L:RB->status
+  |  lg BASE, L:RB->base
+  |  lg RD, L:RB->top
+  |  sgr RD, RA
+  |  srlg RD, RD, 3(r0)
+  |  aghi RD, 1				// RD = nresults+1
+  |  sgr RA, BASE			// RA = resultofs
+  |  lg PC, -8(BASE)
+  |  stg RD, SAVE_MULTRES
+  |  tmll PC, FRAME_TYPE
+  |  je ->BC_RET_Z
+  |  j ->vm_return
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
+  |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
+  |  saveregs
+  |  lghi PC, FRAME_CP
+  |  llgfr CARG4, CARG4
+  |  stg CARG4, SAVE_ERRF
+  |  j >1
   |
   |->vm_call:				// Setup C frame and enter VM.
+  |  // (lua_State *L, TValue *base, int nres1)
+  |  saveregs
+  |  lghi PC, FRAME_C
+  |
+  |1:  // Entry point for vm_pcall above (PC = ftype).
+  |  lgfr CARG3, CARG3
+  |  stg CARG3, SAVE_NRES
+  |  lgr L:RB, CARG1
+  |  stg CARG1, SAVE_L
+  |  lgr RA, CARG2
+  |
+  |  lg DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
+  |  lg KBASE, L:RB->cframe		// Add our C frame to cframe chain.
+  |  stg KBASE, SAVE_CFRAME
+  |  stg L:RB, SAVE_PC			// Any value outside of bytecode is ok.
+  |  aghi DISPATCH, GG_G2DISP
+  |  stg sp, L:RB->cframe
+  |  lgr L:LREG, L:RB			// TODO: use RB instead of LREG here?
   |
   |2: // Entry point for vm_resume/vm_cpcall (RA = base, LREG = L, PC = ftype).
   |  stg L:LREG, DISPATCH_GL(cur_L)(DISPATCH)
