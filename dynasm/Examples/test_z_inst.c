@@ -335,6 +335,19 @@ static void rrfe_rrd(dasm_State *state) {
   | br r14
 }
 
+static void rre(dasm_State *state)  {
+
+  dasm_State **Dst = &state;
+
+  | lay   sp , -8(sp)
+  | cefbr f0 ,  r2
+  | cefbr f1 ,  r3
+  | fidr  f0 ,  f1
+  | cfebr r2 ,0,f0
+  | la    sp,   8(sp)
+  | br   r14
+}
+
 static void rsb(dasm_State *state) {
   dasm_State **Dst = &state;
 
@@ -384,7 +397,8 @@ test_table test[] = {
   {27, 0, 0,      type,       27,    "type"},
   { 0, 0, 0,       sil,       23,     "sil"},
   {15, 3,10,   rrfe_rrd,      45, "rrfe_rrd"},
-  { 0, 0, 0,        rsb,       0,     "rsb"}
+  { 0, 0, 0,        rsb,       0,     "rsb"},
+  {12,10, 0,        rre,      10,     "rre"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
