@@ -335,6 +335,24 @@ static void rrfe_rrd(dasm_State *state) {
   | br r14
 }
 
+static void rsb(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  | lay sp, -4(sp)
+  | lghi r3, 0x0706
+  | lghi r4, 0
+  | iill r4, 6
+  | iilh r4, 7
+  | st r4, 0(sp)
+  | lghi r2, 0
+  | clm r3, 5, 0(sp)
+  | jne >1
+  | lghi r2, 1
+  |1:
+  | la sp, 4(sp)
+  | br r14
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -365,7 +383,8 @@ test_table test[] = {
   {-1, 0, 0,   ssa_act, 65535<<8, "ssa_act"},
   {27, 0, 0,      type,       27,    "type"},
   { 0, 0, 0,       sil,       23,     "sil"},
-  {15,3,10,   rrfe_rrd,       45, "rrfe_rrd"}
+  {15, 3,10,   rrfe_rrd,      45, "rrfe_rrd"},
+  { 0, 0, 0,        rsb,       0,     "rsb"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)

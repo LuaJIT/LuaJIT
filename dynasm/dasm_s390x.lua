@@ -1206,8 +1206,10 @@ map_op = {
   ni_2 =	"000094000000SI",
   -- RXF
   madb_3 =	"ed000000001eRXF",
-  --RRD
+  -- RRD
   maebr_3 =	"0000b30e0000RRD",
+  -- RS-b
+  clm_3 =	"0000bd000000RS-b"
 }
 for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
@@ -1418,6 +1420,13 @@ local function parse_template(params, template, nparams, pos)
   elseif p == "z" then
     op2 = op2 + parse_reg(params[1])
     wputhw(op2)
+  elseif p == "RS-b" then
+    local m = parse_mask(params[2])
+    local d, b, a = parse_mem_b(params[3])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + m
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2)
+    if a then a() end
   else
     werror("unrecognized encoding")
   end
