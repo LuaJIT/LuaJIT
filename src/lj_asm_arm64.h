@@ -1464,40 +1464,58 @@ static void asm_neg(ASMState *as, IRIns *ir)
   asm_intneg(as, ir);
 }
 
-static void asm_bitop(ASMState *as, IRIns *ir, A64Ins ai)
+static void asm_band(ASMState *as, IRIns *ir)
 {
-  if (as->flagmcp == as->mcp && ai == A64I_ANDw) {
+  A64Ins ai = A64I_ANDw;
+  if (asm_fuseandshift(as, ir))
+    return;
+  if (as->flagmcp == as->mcp) {
     /* Try to drop cmp r, #0. */
     as->flagmcp = NULL;
     as->mcp++;
-    ai += A64I_ANDSw - A64I_ANDw;
+    ai = A64I_ANDSw;
   }
-  if (ir->op2 == 0) {
-    Reg dest = ra_dest(as, ir, RSET_GPR);
-    uint32_t m = asm_fuseopm(as, ai, ir->op1, RSET_GPR);
+  asm_intop(as, ir, ai);
+}
+
+static void asm_borbxor(ASMState *as, IRIns *ir, A64Ins ai)
+{
+  IRRef lref = ir->op1, rref = ir->op2;
+  IRIns *irl = IR(lref), *irr = IR(rref);
+  if ((canfuse(as, irl) && irl->o == IR_BNOT && !irref_isk(rref)) ||
+      (canfuse(as, irr) && irr->o == IR_BNOT && !irref_isk(lref))) {
+    Reg left, dest = ra_dest(as, ir, RSET_GPR);
+    uint32_t m;
+    if (irl->o == IR_BNOT) {
+      IRRef tmp = lref; lref = rref; rref = tmp;
+    }
+    left = ra_alloc1(as, lref, RSET_GPR);
+    ai |= A64I_ON;
     if (irt_is64(ir->t)) ai |= A64I_X;
-    emit_d(as, ai^m, dest);
+    m = asm_fuseopm(as, ai, IR(rref)->op1, rset_exclude(RSET_GPR, left));
+    emit_dn(as, ai^m, dest, left);
   } else {
     asm_intop(as, ir, ai);
   }
-}
-
-static void asm_band(ASMState *as, IRIns *ir)
-{
-  if (asm_fuseandshift(as, ir))
-    return;
-  asm_bitop(as, ir, A64I_ANDw);
 }
 
 static void asm_bor(ASMState *as, IRIns *ir)
 {
   if (asm_fuseorshift(as, ir))
     return;
-  asm_bitop(as, ir, A64I_ORRw);
+  asm_borbxor(as, ir, A64I_ORRw);
 }
 
-#define asm_bnot(as, ir)	asm_bitop(as, ir, A64I_MVNw)
-#define asm_bxor(as, ir)	asm_bitop(as, ir, A64I_EORw)
+#define asm_bxor(as, ir)	asm_borbxor(as, ir, A64I_EORw)
+
+static void asm_bnot(ASMState *as, IRIns *ir)
+{
+  A64Ins ai = A64I_MVNw;
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  uint32_t m = asm_fuseopm(as, ai, ir->op1, RSET_GPR);
+  if (irt_is64(ir->t)) ai |= A64I_X;
+  emit_d(as, ai^m, dest);
+}
 
 static void asm_bswap(ASMState *as, IRIns *ir)
 {
