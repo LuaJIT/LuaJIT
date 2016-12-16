@@ -1190,6 +1190,10 @@ map_op = {
   stfl_1 =	"0000b2b10000sS",
   -- I- mode instructions
   svc_1 =	"000000000a00iI",
+  -- RI-a mode instructions
+  -- TODO: change "i" to "RI-a"
+  mhi_2 =	"0000a70c0000i",
+  mghi_2 =	"0000a70d0000i",
   -- RI-b mode instructions
   bras_2 =	"0000a7050000RI-b",
   -- RI-c mode instructions
