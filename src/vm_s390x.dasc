@@ -57,7 +57,8 @@
 |.define CRET1,			r2
 |
 |.define OP,			r2
-|.define TMP1,			r14
+|.define TMPR1,			r14
+|.define TMPR2,			r0
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
 |.define CFRAME_SPACE,	240	// Delta for sp, 8 byte aligned.
@@ -66,9 +67,9 @@
 |.define SAVE_GPRS,	288(sp)	// Save area for r6-r15 (10*8 bytes).
 |.define SAVE_GPRS_P,	48(sp)  // Save area for r6-r15 (10*8 bytes) in prologue (before stack frame is allocated).
 |
-|// Argument save area, each slot is 8-bytes (32-bit types are sign/zero extended).
+|// Argument save area.
 |.define SAVE_ERRF,	280(sp) // Argument 4, in r5.
-|.define SAVE_NRES,	272(sp)	// Argument 3, in r4.
+|.define SAVE_NRES,	272(sp)	// Argument 3, in r4. Size is 4-bytes.
 |.define SAVE_CFRAME,	264(sp)	// Argument 2, in r3.
 |.define SAVE_L,	256(sp)	// Argument 1, in r2.
 |.define RESERVED,	248(sp)	// Reserved for compiler use.
@@ -85,6 +86,7 @@
 |.define SAVE_FPR8,	176(sp)
 |.define SAVE_PC,	168(sp)
 |.define SAVE_MULTRES,	160(sp)
+|.define TMP_STACK,	160(sp) // Overlaps SAVE_MULTRES
 |
 |// Callee save area (allocated by interpreter).
 |.define CALLEESAVE,	000(sp) // <- sp in interpreter.
@@ -140,7 +142,7 @@
 |.macro ins_ABC; .endmacro
 |.macro ins_AB_; .endmacro
 |.macro ins_A_C; .endmacro
-|.macro ins_AND; .endmacro
+|.macro ins_AND; lghi TMPR1, -1; xgr RD, TMPR1; .endmacro // RD = ~RD
 |
 |// Instruction decode+dispatch.
 |  // TODO: tune this, right now we always decode RA-D even if they aren't used.
@@ -157,9 +159,10 @@
 |  srlg RB, RB, 8(r0)
 |  llgcr RC, RD
 |  la PC, 4(PC)
-|  llgfr TMP1, OP
-|  sllg TMP1, TMP1, 3(r0) // TMP1=OP*8
-|  b 0(TMP1, DISPATCH)
+|  llgfr TMPR1, OP
+|  sllg TMPR1, TMPR1, 3(r0) // TMPR1=OP*8
+|  lg TMPR1, 0(TMPR1, DISPATCH)
+|  br TMPR1
 |.endmacro
 |
 |// Instruction footer.
@@ -184,10 +187,10 @@
 |  lg PC, LFUNC:RB->pc
 |  llgf RA, 0(PC) // TODO: combine loads?
 |  llgcr OP, RA
-|    sllg TMP1, OP, 3(r0)
+|    sllg TMPR1, OP, 3(r0)
 |  la PC, 4(PC)
-|    lg TMP1, 0(TMP1, DISPATCH)
-|    br TMP1
+|    lg TMPR1, 0(TMPR1, DISPATCH)
+|    br TMPR1
 |.endmacro
 |
 |.macro ins_call
@@ -209,6 +212,11 @@
 |.macro settp, reg, tp
 |  oihh reg, ((tp>>1) &0xffff)
 |  oihl reg, ((tp<<15)&0x8000)
+|.endmacro
+|.macro settp, dst, reg, tp
+|  llihh dst, ((tp>>1) &0xffff)
+|  iihl dst,  ((tp<<15)&0x8000)
+|  ogr dst, reg
 |.endmacro
 |.macro setint, reg
 |  settp reg, LJ_TISNUM
@@ -257,10 +265,24 @@
 |
 |// Set current VM state.
 |.macro set_vmstate, st
-|  lghi TMP1, ~LJ_VMST_..st
-|  stg TMP1, DISPATCH_GL(vmstate)(DISPATCH)
+|  lghi TMPR1, ~LJ_VMST_..st
+|  stg TMPR1, DISPATCH_GL(vmstate)(DISPATCH)
 |.endmacro
 |
+|// Move table write barrier back. Overwrites reg.
+|.macro barrierback, tab, reg
+|  // TODO: more efficient way?
+|  llgc reg, tab->marked
+|  nill reg, (uint16_t)~LJ_GC_BLACK // black2gray(tab)
+|  stc reg, tab->marked
+|  lg reg, (DISPATCH_GL(gc.grayagain))(DISPATCH)
+|  stg tab, (DISPATCH_GL(gc.grayagain))(DISPATCH)
+|  stg reg, tab->gclist
+|.endmacro
+
+#if !LJ_DUALNUM
+#error "Only dual-number mode supported for s390x target"
+#endif
 
 /* Generate subroutines used by opcodes and other parts of the VM. */
 /* The .code_sub section should be last to help static branch prediction. */
@@ -294,8 +316,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_return:
   |  // BASE = base, RA = resultofs, RD = nresults+1 (= MULTRES), PC = return
-  |  lghi TMP1, FRAME_C
-  |  xgr PC, TMP1
+  |  lghi TMPR1, FRAME_C
+  |  xgr PC, TMPR1
   |  tmll PC, FRAME_TYPE
   |  jne ->vm_returnp
   |
@@ -318,7 +340,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg PC, L:RB->base
   |3:
   |  lg RD, SAVE_MULTRES
-  |  lg RA, SAVE_NRES			// RA = wanted nresults+1
+  |  lgf RA, SAVE_NRES			// RA = wanted nresults+1
   |4:
   |  cgr RA, RD
   |  jne >6				// More/less results wanted?
@@ -340,8 +362,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  // More results wanted. Check stack size and fill up results with nil.
   |  cg BASE, L:RB->maxstack
   |  jh >8
-  |  lghi TMP1, LJ_TNIL
-  |  stg TMP1, -16(BASE)
+  |  lghi TMPR1, LJ_TNIL
+  |  stg TMPR1, -16(BASE)
   |  la BASE, 8(BASE)
   |  aghi RD, 1
   |  j <4
@@ -350,8 +372,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  cghi RA, 0
   |  je <5				// But check for LUA_MULTRET+1.
   |  sgr RA, RD				// Negative result!
-  |  sllg TMP1, RA, 3(r0)
-  |  lay BASE, 0(TMP1, BASE)		// Correct top.
+  |  sllg TMPR1, RA, 3(r0)
+  |  lay BASE, 0(TMPR1, BASE)		// Correct top.
   |  j <5
   |
   |8:  // Corner case: need to grow stack for filling up results.
@@ -378,8 +400,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
   |  lg L:RB, SAVE_L
   |  lg GL:RB, L:RB->glref
-  |  lghi TMP1, ~LJ_VMST_C
-  |  stg TMP1, GL:RB->vmstate
+  |  lghi TMPR1, ~LJ_VMST_C
+  |  stg TMPR1, GL:RB->vmstate
   |  j ->vm_leave_unw
   |
   |->vm_unwind_rethrow:
@@ -448,7 +470,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  aghi DISPATCH, GG_G2DISP
   |  stg RD, SAVE_PC			// Any value outside of bytecode is ok.
   |  stg RD, SAVE_CFRAME
-  |  stg RD, SAVE_NRES
+  |  st RD, SAVE_NRES
   |  stg RD, SAVE_ERRF
   |  stg KBASE, L:RB->cframe
   |  clm RD, 1, L:RB->status
@@ -484,8 +506,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lghi PC, FRAME_C
   |
   |1:  // Entry point for vm_pcall above (PC = ftype).
-  |  lgfr CARG3, CARG3
-  |  stg CARG3, SAVE_NRES
+  |  st CARG3, SAVE_NRES
   |  lgr L:RB, CARG1
   |  stg CARG1, SAVE_L
   |  lgr RA, CARG2
@@ -531,7 +552,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   lg DISPATCH, L:LREG->glref	// Setup pointer to dispatch table.
   |  lghi RA, 0
   |  stg RA, SAVE_ERRF			// No error function.
-  |  stg KBASE, SAVE_NRES		// Neg. delta means cframe w/o frame.
+  |  st KBASE, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |   aghi DISPATCH, GG_G2DISP
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
   |
@@ -1081,8 +1102,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_KSHORT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = signed int16 literal
+    |  // Assumes DUALNUM.
+    |  lhr RD, RD			// Sign-extend literal to 32-bits.
+    |  setint RD
+    |  sllg TMPR1, RA, 3(r0)
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_KNUM:
     |  stg r0, 0(r0)
@@ -1132,21 +1158,67 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_GGET:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = dst, RD = str const (~)
+    |  lg LFUNC:RB, -16(BASE)
+    |  cleartp LFUNC:RB
+    |  lg TAB:RB, LFUNC:RB->env
+    |  sllg TMPR1, RD, 3(r0)
+    |  lg STR:RC, 0(TMPR1, KBASE)
+    |  j ->BC_TGETS_Z
     break;
   case BC_GSET:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = src, RD = str const (~)
+    |  lg LFUNC:RB, -16(BASE)
+    |  cleartp LFUNC:RB
+    |  lg TAB:RB, LFUNC:RB->env
+    |  sllg TMPR1, RD, 3(r0)
+    |  lg STR:RC, 0(TMPR1, KBASE)
+    |  j ->BC_TSETS_Z
     break;
+
   case BC_TGETV:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
   case BC_TGETS:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  stg r0, 0(r0)	// Not yet implemented.
+    |
+    |->BC_TGETS_Z:	// RB = GCtab *, RC = GCstr *
+    |  l TMPR1, TAB:RB->hmask
+    |  n TMPR1, STR:RC->hash
+    |  lgfr TMPR1, TMPR1
+    |  mghi TMPR1, #NODE // TODO: not sure about this one, original: imul TMPRd, #NODE
+    |  ag NODE:TMPR1, TAB:RB->node
+    |  settp ITYPE, STR:RC, LJ_TSTR
+    |1:
+    |  cg ITYPE, NODE:TMPR1->key
+    |  jne >4
+    |  // Get node value.
+    |  lg ITYPE, NODE:TMPR1->val
+    |  cghi ITYPE, LJ_TNIL
+    |  je >5				// Key found, but nil value?
+    |2:
+    |  sllg RA, RA, 3(r0)
+    |  stg ITYPE, 0(TMPR1, RA)
+    |  ins_next
+    |
+    |4:  // Follow hash chain.
+    |  lg NODE:TMPR1, NODE:TMPR1->next
+    |  cghi NODE:TMPR1, 0
+    |  jne <1
+    |  // End of hash chain: key not found, nil result.
+    |  lghi ITYPE, LJ_TNIL
+    |
+    |5:  // Check for __index if table value is nil.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je <2				// No metatable: done.
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_index
+    |  jne <2				// 'no __index' flag set: done.
+    |  j ->vmeta_tgets			// Caveat: preserve STR:RC.
     break;
   case BC_TGETB:
     |  stg r0, 0(r0)
@@ -1162,7 +1234,73 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETS:
     |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |
+    |->BC_TSETS_Z:	// RB = GCtab *, RC = GCstr *
+    |  l TMPR1, TAB:RB->hmask
+    |  n TMPR1, STR:RC->hash
+    |  lgfr TMPR1, TMPR1
+    |  mghi TMPR1, #NODE
+    |  xr TMPR2, TMPR2
+    |  stc TMPR2, TAB:RB->nomm		// Clear metamethod cache.
+    |  ag NODE:TMPR1, TAB:RB->node
+    |  settp ITYPE, STR:RC, LJ_TSTR
+    |1:
+    |  cg ITYPE, NODE:TMPR1->key
+    |  jne >5
+    |  // Ok, key found. Assumes: offsetof(Node, val) == 0
+    |  lghi TMPR2, LJ_TNIL
+    |  cg TMPR2, 0(TMPR1)
+    |  je >4				// Previous value is nil?
+    |2:
+    |  llgc TMPR2, TAB:RB->marked
+    |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+    |  jne >7
+    |3:  // Set node value.
+    |  sllg RA, RA, 3(r0)
+    |  lg ITYPE, 0(RA, BASE)
+    |  stg ITYPE, 0(TMPR1)
+    |  ins_next
+    |
+    |4:  // Check for __newindex if previous value is nil.
+    |  lg TAB:ITYPE, TAB:RB->metatable
+    |  cghi TAB:ITYPE, 0
+    |  je <2
+    |  llgc TMPR2, TAB:ITYPE->nomm
+    |  tmll TMPR2, 1<<MM_newindex
+    |  je ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
+    |  j <2
+    |
+    |5:  // Follow hash chain.
+    |  lg NODE:TMPR1, NODE:TMPR1->next
+    |  cghi NODE:TMPR1, 0
+    |  jne <1
+    |  // End of hash chain: key not found, add a new one.
+    |
+    |  // But check for __newindex first.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je >6				// No metatable: continue.
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_newindex
+    |  je ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
+    |6:
+    |  stg ITYPE, TMP_STACK
+    |  lg L:CARG1, SAVE_L
+    |  stg BASE, L:CARG1->base
+    |  la CARG3, TMP_STACK		// TODO: lea CARG3, ITYPE... not sure.
+    |  lgr CARG2, TAB:RB
+    |  stg PC, SAVE_PC
+    |  brasl r14, extern lj_tab_newkey	// (lua_State *L, GCtab *t, TValue *k)
+    |  // Handles write barrier for the new key. TValue * returned in r2 (CRET1).
+    |  lgr TMPR1, CRET1
+    |  lg L:CRET1, SAVE_L
+    |  lg BASE, L:CRET1->base
+    |  llgc RA, PC_RA
+    |  j <2				// Must check write barrier for value.
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, ITYPE
+    |  j <3
     break;
   case BC_TSETB:
     |  stg r0, 0(r0)
@@ -1245,8 +1383,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       /* fallthrough */
     case BC_RET0:
       |5:
-      |  llgc TMP1, PC_RB
-      |  cgr TMP1, RD
+      |  llgc TMPR1, PC_RB
+      |  cgr TMPR1, RD
       |  jh >6
     default:
       break;
@@ -1262,13 +1400,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     |
     |6:  // Fill up results with nil.
-    |  lghi TMP1, LJ_TNIL
+    |  lghi TMPR1, LJ_TNIL
     if (op == BC_RET) {
-      |  stg TMP1, -16(KBASE)		// Note: relies on shifted base.
+      |  stg TMPR1, -16(KBASE)		// Note: relies on shifted base.
       |  la KBASE, 8(KBASE)
     } else {
       |  sllg RC, RD, 3(r0) 		// RC used as temp.
-      |  stg TMP1, -24(RC, BASE)
+      |  stg TMPR1, -24(RC, BASE)
     }
     |  la RD, 1(RD)
     |  j <5
@@ -1348,13 +1486,61 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_JFUNCV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+#if !LJ_HASJIT
     break;
+#endif
+    | stg r0, 0(r0)  // NYI: compiled vararg functions
+    break;           /* NYI: compiled vararg functions. */
+
   case BC_IFUNCV:
-    |  stg r0, 0(r0) // Not implemented, seg fault.
-    |  stg r0, 0(r0)
+    |  ins_AD  // BASE = new base, RA = framesize, RD = nargs+1
+    |  sllg TMPR1, NARGS:RD, 3(r0)
+    |  la RB, (FRAME_VARG+8)(TMPR1)
+    |  la RD, 8(TMPR1, BASE)
+    |  lg LFUNC:KBASE, -16(BASE)
+    |  stg RB, -8(RD)			// Store delta + FRAME_VARG.
+    |  stg LFUNC:KBASE, -16(RD)		// Store copy of LFUNC.
+    |  lg L:RB, SAVE_L
+    |  sllg RA, RA, 3(r0)
+    |  la RA, 0(RA, RD)
+    |  cg RA, L:RB->maxstack
+    |  jh ->vm_growstack_v		// Need to grow stack.
+    |  lgr RA, BASE
+    |  lgr BASE, RD
+    |  llgc RB, (PC2PROTO(numparams)-4)(PC)
+    |  cghi RB, 0
+    |  je >2
+    |  aghi RA, 8
+    |  lghi TMPR1, LJ_TNIL
+    |1:  // Copy fixarg slots up to new frame.
+    |  la RA, 8(RA)
+    |  cgr RA, BASE
+    |  jnl >3				// Less args than parameters?
+    |  lg KBASE, -16(RA)
+    |  stg KBASE, 0(RD)
+    |  la RD, 8(RD)
+    |  stg TMPR1, -16(RA)	// Clear old fixarg slot (help the GC).
+    |  aghi RB, -1
+    |  jne <1
+    |  // TODO: brctg instead of decrement/branch
+    |2:
+    if (op == BC_JFUNCV) {
+      |  llgh RD, PC_RD
+      |  j =>BC_JLOOP
+    } else {
+      |  lg KBASE, (PC2PROTO(k)-4)(PC)
+      |  ins_next
+    }
+    |
+    |3:  // Clear missing parameters.
+    |  stg TMPR1, 0(RD)			// TMPR1=LJ_TNIL (-1) here.
+    |  la RD, 8(RD)
+    |  aghi RB, -1
+    |  jne <3
+    |  // TODO: brctg instead of decrement/branch
+    |  j <2
     break;
 
   case BC_FUNCC:
@@ -1380,16 +1566,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  basr r14, KBASE		// (lua_State *L)
     } else {
       |  // (lua_State *L, lua_CFunction f)
-      |  lg TMP1, (DISPATCH_GL(wrapf))(DISPATCH)
-      |  basr r14, TMP1 // TODO: TMP1==r14, is this ok?
+      |  lg TMPR1, (DISPATCH_GL(wrapf))(DISPATCH)
+      |  basr r14, TMPR1 // TODO: TMPR1==r14, is this ok?
     }
     |  // nresults returned in r2 (CRET1).
     |  lgr RD, CRET1
     |  lg BASE, L:RB->base
     |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
     |  set_vmstate INTERP
-    |  sllg TMP1, RD, 3(r0)
-    |  la RA, 0(TMP1, BASE)
+    |  sllg TMPR1, RD, 3(r0)
+    |  la RA, 0(TMPR1, BASE)
     |  lcgr RA, RA
     |  ag RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
     |  lg PC, -8(BASE)			// Fetch PC of caller.
