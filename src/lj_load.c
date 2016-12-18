@@ -161,7 +161,7 @@ LUA_API int lua_dump(lua_State *L, lua_Writer writer, void *data)
   cTValue *o = L->top-1;
   api_check(L, L->top > L->base);
   if (tvisfunc(o) && isluafunc(funcV(o)))
-    return lj_bcwrite(L, funcproto(funcV(o)), writer, data, 0);
+    return lj_bcwrite(L, funcproto(funcV(o)), writer, data, 0, BCDUMP_COMPRESS_LZF);
   else
     return 1;
 }

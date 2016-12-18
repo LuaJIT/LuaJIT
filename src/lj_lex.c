@@ -403,6 +403,8 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->bcstack = NULL;
   ls->sizebcstack = 0;
   ls->tok = 0;
+  ls->tempbuf = NULL;
+  ls->sizetempbuf = 0;
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
@@ -443,6 +445,7 @@ void lj_lex_cleanup(lua_State *L, LexState *ls)
   global_State *g = G(L);
   lj_mem_freevec(g, ls->bcstack, ls->sizebcstack, BCInsLine);
   lj_mem_freevec(g, ls->vstack, ls->sizevstack, VarInfo);
+  if (ls->tempbuf) lj_mem_free(g, ls->tempbuf, ls->sizetempbuf);
   lj_buf_free(g, &ls->sb);
 }
 
@@ -506,4 +509,3 @@ void lj_lex_init(lua_State *L)
     s->reserved = (uint8_t)(i+1);
   }
 }
-

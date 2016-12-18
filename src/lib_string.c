@@ -124,9 +124,10 @@ LJLIB_CF(string_dump)
 {
   GCfunc *fn = lj_lib_checkfunc(L, 1);
   int strip = L->base+1 < L->top && tvistruecond(L->base+1);
+  int compress = L->base+2 < L->top && tvistruecond(L->base+2);
   SBuf *sb = lj_buf_tmp_(L);  /* Assumes lj_bcwrite() doesn't use tmpbuf. */
   L->top = L->base+1;
-  if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, sb, strip))
+  if (!isluafunc(fn) || lj_bcwrite(L, funcproto(fn), writer_buf, sb, strip, compress))
     lj_err_caller(L, LJ_ERR_STRDUMP);
   setstrV(L, L->top-1, lj_buf_str(L, sb));
   lj_gc_check(L);

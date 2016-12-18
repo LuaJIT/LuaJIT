@@ -43,8 +43,9 @@
 #define BCDUMP_F_STRIP		0x02
 #define BCDUMP_F_FFI		0x04
 #define BCDUMP_F_FR2		0x08
+#define BCDUMP_F_COMPRESS	0x10
 
-#define BCDUMP_F_KNOWN		(BCDUMP_F_FR2*2-1)
+#define BCDUMP_F_KNOWN		(BCDUMP_F_COMPRESS*2-1)
 
 /* Type codes for the GC constants of a prototype. Plus length for strings. */
 enum {
@@ -52,6 +53,12 @@ enum {
   BCDUMP_KGC_COMPLEX, BCDUMP_KGC_STR
 };
 
+/* Available compression algorithms.  Currently only LZF is supported */
+typedef enum {
+  BCDUMP_COMPRESS_MEMCPY,	/* Not really compression */
+  BCDUMP_COMPRESS_LZF		/* LZF compression */
+} compression_algorithms;
+ 
 /* Type codes for the keys/values of a constant table. */
 enum {
   BCDUMP_KTAB_NIL, BCDUMP_KTAB_FALSE, BCDUMP_KTAB_TRUE,
@@ -61,7 +68,7 @@ enum {
 /* -- Bytecode reader/writer ---------------------------------------------- */
 
 LJ_FUNC int lj_bcwrite(lua_State *L, GCproto *pt, lua_Writer writer,
-		       void *data, int strip);
+		       void *data, int strip, compression_algorithms compress);
 LJ_FUNC GCproto *lj_bcread_proto(LexState *ls);
 LJ_FUNC GCproto *lj_bcread(LexState *ls);
 
