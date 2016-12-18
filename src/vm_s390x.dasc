@@ -37,7 +37,7 @@
 |.define ITYPE,			r13	//
 |
 |// The following temporaries are not saved across C calls, except for RD.
-|.define RA,			r1	// Cannot be dereferenced.
+|.define RA,			r1
 |.define RB,			r12
 |.define RC,			r5	// Overlaps CARG4.
 |.define RD,			r6	// Overlaps CARG5. Callee-saved.
@@ -686,11 +686,30 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Call metamethod ----------------------------------------------------
   |
   |->vmeta_call_ra:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  la RA, 16(RA, BASE)		// RA previously set to RA*8.
   |->vmeta_call:			// Resolve and call __call metamethod.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // BASE = old base, RA = new base, RC = nargs+1, PC = return
+  |  stg NARGS:RD, TMP_STACK		// Save RA, RC for us (not sure about this).
+  |  lgr RB, RA
+  |  lg L:CARG1, SAVE_L
+  |  stg BASE, L:CARG1->base
+  |  lay CARG2, -16(RA)
+  |  sllg RD, RD, 3(r0)
+  |  lay CARG3, -8(RA, RD)
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
+  |  lgr RA, RB
+  |  lg L:RB, SAVE_L
+  |  lg BASE, L:RB->base
+  |  lg NARGS:RD, TMP_STACK
+  |  lg LFUNC:RB, -16(RA)
+  |  aghi NARGS:RD, 1			// 32-bit on x64.
+  |  // This is fragile. L->base must not move, KBASE must always be defined.
+  |  cgr KBASE, BASE			// Continue with CALLT if flag set.
+  |  je ->BC_CALLT_Z
+  |  cleartp LFUNC:RB
+  |  lgr BASE, RA
+  |  ins_call				// Otherwise call resolved metamethod.
   |
   |//-- Argument coercion for 'for' statement ------------------------------
   |
@@ -704,14 +723,20 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc, name
   |->ff_ .. name:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |.macro .ffunc_1, name
   |->ff_ .. name:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |.macro .ffunc_2, name
   |->ff_ .. name:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |.macro .ffunc_n, name, op
@@ -733,22 +758,36 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: checks -----------------------------------------------
   |
   |.ffunc_1 assert
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |.ffunc_1 type
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Base library: getters and setters ---------------------------------
   |
   |.ffunc_1 getmetatable
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |.ffunc_2 setmetatable
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |.ffunc_2 rawget
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Base library: conversions ------------------------------------------
   |
   |.ffunc tonumber
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |.ffunc_1 tostring
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Base library: iterators -------------------------------------------
   |
@@ -764,8 +803,12 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: catch errors ----------------------------------------
   |
   |.ffunc_1 pcall
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |.ffunc_2 xpcall
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Coroutine library --------------------------------------------------
   |
@@ -843,14 +886,20 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- String library -----------------------------------------------------
   |
   |.ffunc string_byte			// Only handle the 1-arg case here.
+  |  stg r0, 0(r0)
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
+  |  stg r0, 0(r0)
   |->fff_newstr:
+  |  stg r0, 0(r0)
   |->fff_resstr:
+  |  stg r0, 0(r0)
   |
   |.ffunc string_sub
+  |  stg r0, 0(r0)
   |
   |->fff_emptystr:  // Range underflow.
+  |  stg r0, 0(r0)
   |
   |.macro ffstring_op, name
   |  .ffunc_1 string_ .. name
@@ -889,6 +938,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit_sh, name, ins
   |  .ffunc_bit name, 1, .ffunc_2
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |.ffunc_bit_sh bit_lshift, shl
@@ -900,36 +951,64 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->fff_fallback_2:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->fff_fallback_1:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->fff_fallback:			// Call fast function fallback handler.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |// Reconstruct previous base for vmeta_call during tailcall.
   |->vm_call_tail:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->fff_gcstep:			// Call GC step function.
   |  // BASE = new base, RD = nargs+1
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Special dispatch targets -------------------------------------------
   |//-----------------------------------------------------------------------
   |
   |->vm_record:				// Dispatch target for recording phase.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_rethook:			// Dispatch target for return hooks.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->cont_hook:				// Continue from hook yield.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_hotloop:			// Hot loop counter underflow.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_callhook:			// Dispatch target for call hooks.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_hotcall:			// Hot call counter underflow.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->cont_stitch:			// Trace stitching.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |->vm_profhook:			// Dispatch target for profiler hook.
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
@@ -938,7 +1017,11 @@ static void build_subroutines(BuildCtx *ctx)
   |// Called from an exit stub with the exit number on the stack.
   |// The 16 bit exit number is stored with two (sign-extended) push imm8.
   |->vm_exit_handler:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |->vm_exit_interp:
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
   |//-- Math helper functions ----------------------------------------------
@@ -1093,9 +1176,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
+  /* -- Constant ops ------------------------------------------------------ */
+
   case BC_KSTR:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = dst, RD = str const (~)
+    |  sllg RD, RD, 3(r0)
+    |  lg RD, 0(RD, KBASE)
+    |  settp RD, LJ_TSTR
+    |  sllg RA, RA, 3(r0)
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_KCDATA:
     |  stg r0, 0(r0)
@@ -1201,7 +1292,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  je >5				// Key found, but nil value?
     |2:
     |  sllg RA, RA, 3(r0)
-    |  stg ITYPE, 0(TMPR1, RA)
+    |  stg ITYPE, 0(RA, BASE)
     |  ins_next
     |
     |4:  // Follow hash chain.
@@ -1314,18 +1405,87 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
+  /* -- Calls and vararg handling ----------------------------------------- */
+
   case BC_CALL: case BC_CALLM:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_A_C	// RA = base, (RB = nresults+1,) RC = nargs+1 | extra_nargs
+    if (op == BC_CALLM) {
+      |  ag NARGS:RD, SAVE_MULTRES			// TODO: MULTRES is 32-bit on x64
+    }
+    |  sllg RA, RA, 3(r0)
+    |  lg LFUNC:RB, 0(BASE, RA)
+    |  checkfunc LFUNC:RB, ->vmeta_call_ra
+    |  la BASE, 16(RA, BASE)
+    |  lgr RD, RC
+    |  ins_call
     break;
+
   case BC_CALLMT:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
   case BC_CALLT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = base, RD = nargs+1
+    |  sllg RA, RA, 3(r0)
+    |  la RA, 16(RA, BASE)
+    |  lgr KBASE, BASE			// Use KBASE for move + vmeta_call hint.
+    |  lg LFUNC:RB, -16(RA)
+    |  checktp_nc LFUNC:RB, LJ_TFUNC, ->vmeta_call
+    |->BC_CALLT_Z:
+    |  lg PC, -8(BASE)
+    |  tmll PC, FRAME_TYPE
+    |  jne >7
+    |1:
+    |  stg LFUNC:RB, -16(BASE)		// Copy func+tag down, reloaded below.
+    |  stg NARGS:RD, SAVE_MULTRES	// 32-bit on x64.
+    |  aghi NARGS:RD, -1
+    |  je >3
+    |2:  // Move args down.
+    |  // TODO: mvc or something here?
+    |  lg RB, 0(RA)
+    |  la RA, 8(RA)
+    |  stg RB, 0(KBASE)
+    |  la KBASE, 8(KBASE)
+    |  // TODO: replace decrement/branch with brctg
+    |  aghi NARGS:RD, -1
+    |  jne <2
+    |
+    |  lg LFUNC:RB, -16(BASE)
+    |3:
+    |  cleartp LFUNC:RB
+    |  lg NARGS:RD, SAVE_MULTRES
+    |  llgc TMPR1, LFUNC:RB->ffid
+    |  cghi TMPR1, 1			// (> FF_C) Calling a fast function?
+    |  jh >5
+    |4:
+    |  ins_callt
+    |
+    |5:  // Tailcall to a fast function.
+    |  tmll PC, FRAME_TYPE		// Lua frame below?
+    |  jne <4
+    |  llgc RA, PC_RA
+    |  lcgr RA, RA
+    |  sllg RA, RA, 3(r0)
+    |  lg LFUNC:KBASE, -32(RA, BASE)	// Need to prepare KBASE.
+    |  cleartp LFUNC:KBASE
+    |  lg KBASE, LFUNC:KBASE->pc
+    |  lg KBASE, (PC2PROTO(k))(KBASE)
+    |  j <4
+    |
+    |7:  // Tailcall from a vararg function.
+    |  aghi PC, -FRAME_VARG
+    |  tmll PC, FRAME_TYPEP
+    |  jne >8				// Vararg frame below?
+    |  sgr BASE, PC			// Need to relocate BASE/KBASE down.
+    |  lgr KBASE, BASE
+    |  lg PC, -8(BASE)
+    |  j <1
+    |8:
+    |  aghi PC, FRAME_VARG
+    |  j <1
     break;
+
   case BC_ITERC:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
