@@ -18,6 +18,10 @@
 |// ar0,ar1     | TLS                        | volatile |
 |// ar2-ar15    |                            | volatile |
 |
+|// Instructions used that are not in base z/Architecture:
+|//   clfi (compare logical immediate) [requires z9-109]
+|// TODO: alternative instructions?
+|
 |.arch s390x
 |.section code_op, code_sub
 |
@@ -225,18 +229,18 @@
 |// Macros to test operand types.
 |.macro checktp_nc, reg, tp, target
 |  srag ITYPE, reg, 47(r0)
-|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  clfi ITYPE, tp
 |  jne target
 |.endmacro
 |.macro checktp, reg, tp, target
 |  srag ITYPE, reg, 47(r0)
 |  cleartp reg
-|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  clfi ITYPE, tp
 |  jne target
 |.endmacro
 |.macro checktptp, src, tp, target
 |  srag ITYPE, src, 47(r0)
-|  cghi ITYPE, tp			// Sign extend tp from 16- -> 64-bits.
+|  clfi ITYPE, tp
 |  jne target
 |.endmacro
 |.macro checkstr, reg, target; checktp reg, LJ_TSTR, target; .endmacro
@@ -245,7 +249,7 @@
 |
 |.macro checknumx, reg, target, jump
 |  srag ITYPE, reg, 47(r0)
-|  cghi ITYPE, LJ_TISNUM		// Sign extend LJ_TISNUM tp from 16- to 64-bits.
+|  clfi ITYPE, LJ_TISNUM
 |  jump target
 |.endmacro
 |.macro checkint, reg, target; checknumx reg, target, jne; .endmacro
@@ -723,8 +727,19 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Argument coercion for 'for' statement ------------------------------
   |
   |->vmeta_for:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  lgr CARG2, RA
+  |  lgr CARG1, RB
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_for	// (lua_State *L, TValue *base)
+  |  lg BASE, L:RB->base
+  |  llgc OP, PC_OP
+  |  llgc RA, PC_RA
+  |  llgh RD, PC_RD
+  |  sllg TMPR1, OP, 3(r0)
+  |  lg TMPR1, GG_DISP2STATIC(TMPR1, DISPATCH)	// Retry FORI or JFORI.
+  |  br TMPR1
   |
   |//-----------------------------------------------------------------------
   |//-- Fast functions -----------------------------------------------------
@@ -1215,8 +1230,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KNUM:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = num const
+    |  sllg RD, RD, 3(r0)
+    |  ld f0, 0(RD, KBASE)
+    |  sllg RA, RA, 3(r0)
+    |  std f0, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_KPRI:
     |  stg r0, 0(r0)
@@ -1720,11 +1739,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (vk) {
       |  adb f0, FOR_STEP
       |  std f0, FOR_IDX
-      |  cghi RB, 0; jl >3
-    } else {
-      |  // TODO: need cmp here?
-      |  jl >3
     }
+    |  cghi RB, 0; jl >3
     |  cdbr f1, f0
     |1:
     |  std f0, FOR_EXT
