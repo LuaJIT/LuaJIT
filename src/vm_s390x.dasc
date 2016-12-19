@@ -1197,7 +1197,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Assumes DUALNUM.
     |  lhr RD, RD			// Sign-extend literal to 32-bits.
     |  setint RD
-    |  sllg TMPR1, RA, 3(r0)
+    |  sllg RA, RA, 3(r0)
     |  stg RD, 0(RA, BASE)
     |  ins_next
     break;
