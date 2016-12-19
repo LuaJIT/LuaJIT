@@ -694,7 +694,6 @@ map_op = {
   chlr_2 =	"0000b9dd0000h",
   cfi_2 =	"c20d00000000n",
   cgfi_2 =	"c20c00000000n",
-  cghi_2 =	"0000a70f0000i",
   cih_2 =	"cc0d00000000n",
   cl_2 =	"000055000000j",
   clr_2 =	"000000001500g",
@@ -1183,7 +1182,20 @@ map_op = {
   cfebr_3 =	"0000b3980000RRF-e",
   cfebra_4 =	"0000b3980000RRF-e",
   -- RXE instructions
+  adb_2 =	"ed000000001aRXE",
+  aeb_2 =	"ed000000000aRXE",
+  cdb_2 =	"ed0000000019RXE",
+  ceb_2 =	"ed0000000009RXE",
+  ddb_2 =	"ed000000001dRXE",
+  deb_2 =	"ed000000000dRXE",
+  mdb_2 =	"ed000000001cRXE",
+  mdeb_2 =	"ed000000000cRXE",
+  meeb_2 =	"ed0000000017RXE",
+  mxdb_2 =	"ed0000000007RXE",
   sqdb_2 =	"ed0000000015RXE",
+  sqeb_2 =	"ed0000000014RXE",
+  sdb_2 =	"ed000000001bRXE",
+  seb_2 =	"ed000000000bRXE",
   -- RRF-b instructions
   didbr_4 =	"0000b3580000RRF-b",
   -- S mode instructions
@@ -1192,6 +1204,8 @@ map_op = {
   svc_1 =	"000000000a00iI",
   -- RI-a mode instructions
   -- TODO: change "i" to "RI-a"
+  chi_2 =	"0000a70e0000i",
+  cghi_2 =	"0000a70f0000i",
   mhi_2 =	"0000a70c0000i",
   mghi_2 =	"0000a70d0000i",
   -- RI-b mode instructions
