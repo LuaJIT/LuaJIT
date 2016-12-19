@@ -263,6 +263,15 @@
 |.define PC_RC, -3(PC)
 |.define PC_RD, -4(PC)
 |
+|.macro branchPC, reg
+|  // TODO: optimize this, was just lea PC, [PC+reg*4-BCBIAS_J*4].
+|  // Can't clobber TMPR1 or condition code.
+|  lgr TMPR2, TMPR1 // Workaround because TMPR2 == r0 and can't be used in lay.
+|  sllg TMPR1, reg, 2(r0)
+|  lay PC, (-BCBIAS_J*4)(TMPR1, PC)
+|  lgr TMPR1, TMPR2
+|.endmacro
+|
 |// Set current VM state.
 |.macro set_vmstate, st
 |  lghi TMPR1, ~LJ_VMST_..st
@@ -1129,8 +1138,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_MOV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = src
+    |  sllg RD, RD, 3(r0)
+    |  lg RB, 0(RD, BASE)
+    |  sllg RA, RA, 3(r0)
+    |  stg RB, 0(RA, BASE)
+    |  ins_next_
     break;
   case BC_NOT:
     |  stg r0, 0(r0)
@@ -1274,8 +1287,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_TGETS:
-    |  stg r0, 0(r0)	// Not yet implemented.
-    |
+    |  ins_ABC
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  lghi TMPR1, -1
+    |  xgr RC, TMPR1
+    |  sllg RC, RC, 3(r0)
+    |  lg STR:RC, 0(RC, BASE)
+    |  checktab TAB:RB, ->vmeta_tgets
     |->BC_TGETS_Z:	// RB = GCtab *, RC = GCstr *
     |  l TMPR1, TAB:RB->hmask
     |  n TMPR1, STR:RC->hash
@@ -1582,26 +1601,151 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |  j <1
     break;
+
+  /* -- Loops and branches ------------------------------------------------ */
+
+  |.define FOR_IDX,  0(RA)
+  |.define FOR_STOP, 8(RA)
+  |.define FOR_STEP, 16(RA)
+  |.define FOR_EXT,  24(RA)
+
   case BC_FORL:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_JFORI:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
-    break;
   case BC_JFORL:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+#if !LJ_HASJIT
     break;
+#endif
   case BC_FORI:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
-    break;
   case BC_IFORL:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    vk = (op == BC_IFORL || op == BC_JFORL);
+    |  ins_AJ	// RA = base, RD = target (after end of loop or start of loop)
+    |  sllg RA, RA, 3(r0)
+    |  la RA, 0(RA, BASE)
+    |  lg RB, FOR_IDX
+    |  checkint RB, >9
+    |  lg TMPR1, FOR_STOP
+    if (!vk) {
+      |  checkint TMPR1, ->vmeta_for
+      |  lg ITYPE, FOR_STEP
+      |  chi ITYPE, 0; jl >5
+      |  srag ITYPE, ITYPE, 47(r0)
+      |  cghi ITYPE, LJ_TISNUM; jne ->vmeta_for
+    } else {
+#ifdef LUA_USE_ASSERT
+      |  // lg TMPR1, FOR_STOP
+      |  checkinttp TMPR1, ->assert_bad_for_arg_type
+      |  lg TMPR2, FOR_STEP
+      |  checkinttp TMPR2, ->assert_bad_for_arg_type
+#endif
+      |  lg ITYPE, FOR_STEP
+      |  chi ITYPE, 0; jl >5
+      |  ar RB, ITYPE; jo >1
+      |  setint RB
+      |  stg RB, FOR_IDX
+    }
+    |  cr RB, TMPR1
+    |  stg RB, FOR_EXT
+    if (op == BC_FORI) {
+      |  jle >7
+      |1:
+      |6:
+      |  branchPC RD
+    } else if (op == BC_JFORI) {
+      |  branchPC RD
+      |  llgh RD, PC_RD
+      |  jle =>BC_JLOOP
+      |1:
+      |6:
+    } else if (op == BC_IFORL) {
+      |  jh >7
+      |6:
+      |  branchPC RD
+      |1:
+    } else {
+      |  jle =>BC_JLOOP
+      |1:
+      |6:
+    }
+    |7:
+    |  ins_next
+    |
+    |5:  // Invert check for negative step.
+    if (!vk) {
+      |  srag ITYPE, ITYPE, 47(r0)
+      |  cghi ITYPE, LJ_TISNUM; jne ->vmeta_for
+    } else {
+      |  ar RB, ITYPE; jo <1
+      |  setint RB
+      |  stg RB, FOR_IDX
+    }
+    |  cr RB, TMPR1
+    |  stg RB, FOR_EXT
+    if (op == BC_FORI) {
+      |  jhe <7
+    } else if (op == BC_JFORI) {
+      |  branchPC RD
+      |  llgh RD, PC_RD
+      |  jhe =>BC_JLOOP
+    } else if (op == BC_IFORL) {
+      |  jl <7
+    } else {
+      |  jhe =>BC_JLOOP
+    }
+    |  j <6
+    |9:  // Fallback to FP variant.
+    if (!vk) {
+      |  jhe ->vmeta_for
+    }
+    if (!vk) {
+      |  lg TMPR2, FOR_STOP
+      |  checknumtp TMPR2, ->vmeta_for
+    } else {
+#ifdef LUA_USE_ASSERT
+      |  lg TMPR2, FOR_STOP
+      |  checknumtp TMPR2, ->assert_bad_for_arg_type
+      |  lg TMPR2, FOR_STEP
+      |  checknumtp TMPR2, ->assert_bad_for_arg_type
+#endif
+    }
+    |  lg RB, FOR_STEP
+    if (!vk) {
+      |  checknum RB, ->vmeta_for
+    }
+    |  ld f0, FOR_IDX
+    |  ld f1, FOR_STOP
+    if (vk) {
+      |  adb f0, FOR_STEP
+      |  std f0, FOR_IDX
+      |  cghi RB, 0; jl >3
+    } else {
+      |  // TODO: need cmp here?
+      |  jl >3
+    }
+    |  cdbr f1, f0
+    |1:
+    |  std f0, FOR_EXT
+    if (op == BC_FORI) {
+      |  jnl <7
+    } else if (op == BC_JFORI) {
+      |  branchPC RD
+      |  llgh RD, PC_RD
+      |  jnl =>BC_JLOOP
+    } else if (op == BC_IFORL) {
+      |  jl <7
+    } else {
+      |  jnl =>BC_JLOOP
+    }
+    |  j <6
+    |
+    |3:  // Invert comparison if step is negative.
+    |  cdbr f0, f1
+    |  j <1
     break;
+
   case BC_ITERL:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
