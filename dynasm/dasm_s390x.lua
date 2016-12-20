@@ -1202,15 +1202,15 @@ map_op = {
   -- RRF-b instructions
   didbr_4 =	"0000b3580000RRF-b",
   -- S mode instructions
-  stfl_1 =	"0000b2b10000sS",
+  stfl_1 =	"0000b2b10000S",
   -- I- mode instructions
-  svc_1 =	"000000000a00iI",
+  svc_1 =	"000000000a00I",
   -- RI-a mode instructions
   -- TODO: change "i" to "RI-a"
-  chi_2 =	"0000a70e0000i",
-  cghi_2 =	"0000a70f0000i",
-  mhi_2 =	"0000a70c0000i",
-  mghi_2 =	"0000a70d0000i",
+  chi_2 =	"0000a70e0000RI-a",
+  cghi_2 =	"0000a70f0000RI-a",
+  mhi_2 =	"0000a70c0000RI-a",
+  mghi_2 =	"0000a70d0000RI-a",
   -- RI-b mode instructions
   bras_2 =	"0000a7050000RI-b",
   -- RI-c mode instructions
