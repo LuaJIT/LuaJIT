@@ -1172,13 +1172,58 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
+  /* -- Binary ops -------------------------------------------------------- */
+
+    |.macro ins_arithpre
+    |  ins_ABC
+    |  sllg RB, RB, 3(r0)
+    |  sllg RC, RC, 3(r0)
+    |  sllg RA, RA, 3(r0)
+    |.endmacro
+    |
+    |.macro ins_arithdn, intins
+    |  ins_arithpre
+    ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
+    ||switch (vk) {
+    ||case 0:
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, KBASE)
+    |   checkint RB, ->vmeta_arith_vno
+    |   checkint RC, ->vmeta_arith_vno
+    |   intins RB, RC; jo ->vmeta_arith_vno
+    ||  break;
+    ||case 1:
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, KBASE)
+    |   checkint RB, ->vmeta_arith_nvo
+    |   checkint RC, ->vmeta_arith_nvo
+    |   intins RC, RB; jo ->vmeta_arith_nvo
+    ||  break;
+    ||default:
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, BASE)
+    |   checkint RB, ->vmeta_arith_vvo
+    |   checkint RC, ->vmeta_arith_vvo
+    |   intins RB, RC; jo ->vmeta_arith_vvo
+    ||  break;
+    ||}
+    ||if (vk == 1) {
+    |   // setint RC
+    |   stg RC, 0(RA, BASE)
+    ||} else {
+    |   // setint RB
+    |   stg RB, 0(RA, BASE)
+    ||}
+    |  ins_next
+    |.endmacro
+
+    |  // RA = dst, RB = src1 or num const, RC = src2 or num const
   case BC_ADDVN: case BC_ADDNV: case BC_ADDVV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_arithdn ar
     break;
   case BC_SUBVN: case BC_SUBNV: case BC_SUBVV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_arithdn sr
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
     |  stg r0, 0(r0)
