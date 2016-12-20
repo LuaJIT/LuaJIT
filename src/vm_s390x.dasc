@@ -631,8 +631,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0(r0)
   |  stg r0, 0(r0)
   |->cont_nop:				// BASE = base, (RC = result)
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  ins_next
   |
   |->vmeta_tsetr:
   |  stg r0, 0(r0)
@@ -663,34 +662,65 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Arithmetic metamethods ---------------------------------------------
   |
   |->vmeta_arith_vno:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RB, PC_RB
+  |  llgc RC, PC_RC
   |->vmeta_arith_vn:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  sllg RB, RB, 3(r0)
+  |  sllg RC, RC, 3(r0)
+  |  lay RB, 0(RB, BASE)
+  |  lay RC, 0(RC, KBASE)
+  |  j >1
   |
   |->vmeta_arith_nvo:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RC, PC_RC
+  |  llgc RB, PC_RB
   |->vmeta_arith_nv:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  sllg RC, RC, 3(r0)
+  |  sllg RB, RB, 3(r0)
+  |  lay TMPR1, 0(RC, KBASE)
+  |  lay RC, 0(RB, BASE)
+  |  lgr RB, TMPR1
+  |  j >1
   |
   |->vmeta_unm:
   |  stg r0, 0(r0)
   |  stg r0, 0(r0)
   |
   |->vmeta_arith_vvo:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RB, PC_RB
+  |  llgc RC, PC_RC
   |->vmeta_arith_vv:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  sllg RC, RC, 3(r0)
+  |  sllg RB, RB, 3(r0)
+  |  lay RB, 0(RB, BASE)
+  |  lay RC, 0(RC, BASE)
+  |1:
+  |  sllg RA, RA, 3(r0)
+  |  lay RA, 0(RA, BASE)
+  |  llgc CARG5, PC_OP			// Caveat: CARG5 == RD.
+  |  lgr CARG2, RA
+  |  lgr CARG3, RB
+  |  // lgr CARG4, RC			// Caveat: CARG4 == RC (nop, so commented out).
+  |  lg L:CARG1, SAVE_L
+  |  stg BASE, L:CARG1->base
+  |  lgr L:RB, L:CARG1
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_arith // (lua_State *L, TValue *ra,*rb,*rc, BCReg op)
+  |  // NULL (finished) or TValue * (metamethod) returned in r2 (CRET1).
+  |  lg BASE, L:RB->base
+  |  cghi CRET1, 0
+  |  lgr RC, CRET1
+  |  je ->cont_nop
   |
   |  // Call metamethod for binary op.
   |->vmeta_binop:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // BASE = base, RC = new base, stack = cont/func/o1/o2
+  |  lgr RA, RC
+  |  sgr RC, BASE
+  |  stg PC, -24(RA)			// [cont|PC]
+  |  la PC, FRAME_CONT(RC)
+  |  lghi NARGS:RD, 2+1			// 2 args for func(o1, o2).
+  |  j ->vm_call_dispatch
   |
   |->vmeta_len:
   |  stg r0, 0(r0)
