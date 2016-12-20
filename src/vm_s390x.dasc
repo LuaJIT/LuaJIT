@@ -639,6 +639,33 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
+  |->vmeta_comp:
+  |  llgh RD, PC_RD
+  |  sllg RD, RD, 3(r0)
+  |  llgc RA, PC_RA
+  |  sllg RA, RA, 3(r0)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  la CARG2, 0(RA, BASE)
+  |  la CARG3, 0(RD, BASE)
+  |  lgr CARG1, L:RB
+  |  llgc CARG4, PC_OP
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_comp	// (lua_State *L, TValue *o1, *o2, int op)
+  |  // 0/1 or TValue * (metamethod) returned in r2 (CRET1).
+  |3:
+  |  lg BASE, L:RB->base
+  |  clgfi CRET1, 1
+  |  jh ->vmeta_binop
+  |4:
+  |  la PC, 4(PC)
+  |  jl >6
+  |5:
+  |  llgh RD, PC_RD
+  |  branchPC RD
+  |6:
+  |  ins_next
+  |
   |->cont_condt:			// BASE = base, RC = result
   |  stg r0, 0(r0)
   |  stg r0, 0(r0)
@@ -1159,10 +1186,73 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   |=>defop:
 
   switch (op) {
+
+  /* -- Comparison ops ---------------------------------------------------- */
+
+  /* Remember: all ops branch for a true comparison, fall through otherwise. */
+
+  |.macro jmp_comp, lt, ge, le, gt, target
+  ||switch (op) {
+  ||case BC_ISLT:
+  |   lt target
+  ||break;
+  ||case BC_ISGE:
+  |   ge target
+  ||break;
+  ||case BC_ISLE:
+  |   le target
+  ||break;
+  ||case BC_ISGT:
+  |   gt target
+  ||break;
+  ||default: break;  /* Shut up GCC. */
+  ||}
+  |.endmacro
+
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  // RA = src1, RD = src2, JMP with RD = target
+    |  ins_AD
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  ld f0, 0(RA, BASE)
+    |  ld f1, 0(RD, BASE)
+    |  lg RA, 0(RA, BASE)
+    |  lg RD, 0(RD, BASE)
+    |  srag ITYPE, RA, 47(r0)
+    |  srag RB, RD, 47(r0)
+    |
+    |  clfi ITYPE, LJ_TISNUM; jne >7
+    |  clfi RB, LJ_TISNUM; jne >8
+    |  // Both are integers.
+    |  la PC, 4(PC)
+    |  cr RA, RD
+    |  jmp_comp jhe, jl, jh, jle, >9
+    |6:
+    |  llgh RD, PC_RD
+    |  branchPC RD
+    |9:
+    |  ins_next
+    |
+    |7:  // RA is not an integer.
+    |  jh ->vmeta_comp
+    |  // RA is a number.
+    |  clfi RB, LJ_TISNUM; jl >1; jne ->vmeta_comp
+    |  // RA is a number, RD is an integer.
+    |  cdfbr f1, RD
+    |  j >1
+    |
+    |8:  // RA is an integer, RD is not an integer.
+    |  jh ->vmeta_comp
+    |  // RA is an integer, RD is a number.
+    |  cdfbr f0, RA
+    |1:
+    |  la PC, 4(PC)
+    |  cdbr f0, f1
+    |  // To preserve NaN semantics GE/GT branch on unordered, but LT/LE don't.
+    |  jmp_comp jnl, jl, jnle, jle, <9
+    |  j <6
     break;
+
   case BC_ISEQV: case BC_ISNEV:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
@@ -1961,9 +2051,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_JMP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AJ	// RA = unused, RD = target
+    |  branchPC RD
+    |  ins_next
     break;
 
   /* -- Function headers -------------------------------------------------- */
