@@ -239,7 +239,7 @@ function _M.revdef(s)
 end
 
 local map_cond = {
-  o = 1, h = 2, hle = 3, l = 4,
+  o = 1, h = 2, nle = 3, l = 4,
   nhe = 5, lh = 6, ne = 7, e = 8,
   nlh = 9, he = 10, nl = 11, le = 12,
   nh = 13, no = 14, [""] = 15,
@@ -1200,7 +1200,7 @@ map_op = {
   sdb_2 =	"ed000000001bRXE",
   seb_2 =	"ed000000000bRXE",
   -- RRF-b instructions
-  didbr_4 =	"0000b3580000RRF-b",
+  didbr_4 =	"0000b35b0000RRF-b",
   -- S mode instructions
   stfl_1 =	"0000b2b10000S",
   -- I- mode instructions
@@ -1355,7 +1355,7 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op2);
   elseif p == "RRF-b" then
     wputhw(op1);
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + parse_mask(params[4])
+    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + shl(parse_mask(params[4]),8)
     wputhw(op2)
   elseif p =="S" then
     wputhw(op1);
