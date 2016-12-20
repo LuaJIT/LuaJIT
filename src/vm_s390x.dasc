@@ -1429,8 +1429,24 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_FNEW:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = dst, RD = proto const (~) (holding function prototype)
+    |  lg L:RB, SAVE_L
+    |  stg BASE, L:RB->base
+    |  lg CARG3, -16(BASE)
+    |  cleartp CARG3
+    |  sllg RD, RD, 3(r0)
+    |  lg CARG2, 0(RD, KBASE)		// Fetch GCproto *.
+    |  lgr CARG1, L:RB
+    |  stg PC, SAVE_PC
+    |  // (lua_State *L, GCproto *pt, GCfuncL *parent)
+    |  brasl r14, extern lj_func_newL_gc
+    |  // GCfuncL * returned in r2 (CRET1).
+    |  lg BASE, L:RB->base
+    |  llgc RA, PC_RA
+    |  sllg RA, RA, 3(r0)
+    |  settp LFUNC:CRET1, LJ_TFUNC
+    |  stg LFUNC:CRET1, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_TNEW:
     |  stg r0, 0(r0)
@@ -1949,21 +1965,56 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
+  /* -- Function headers -------------------------------------------------- */
+
+   /*
+   ** Reminder: A function may be called with func/args above L->maxstack,
+   ** i.e. occupying EXTRA_STACK slots. And vmeta_call may add one extra slot,
+   ** too. This means all FUNC* ops (including fast functions) must check
+   ** for stack overflow _before_ adding more slots!
+   */
+
   case BC_FUNCF:
+    |.if JIT
     |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
-    break;
+    |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    | // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow and ins_AD is a no-op.
     break;
+
   case BC_JFUNCF:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+#if !LJ_HASJIT
     break;
+#endif
   case BC_IFUNCF:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD  // BASE = new base, RA = framesize, RD = nargs+1
+    |  lg KBASE, (PC2PROTO(k)-4)(PC)
+    |  lg L:RB, SAVE_L
+    |  sllg RA, RA, 3(r0)
+    |  la RA, 0(RA, BASE)		// Top of frame.
+    |  clg RA, L:RB->maxstack
+    |  jh ->vm_growstack_f
+    |  llgc RA, (PC2PROTO(numparams)-4)(PC)
+    |  clgr NARGS:RD, RA		// Check for missing parameters.
+    |  jle >3
+    |2:
+    if (op == BC_JFUNCF) {
+      |  llgh RD, PC_RD
+      |  j =>BC_JLOOP
+    } else {
+      |  ins_next
+    }
+    |
+    |3:  // Clear missing parameters.
+    |  // TODO: optimize this. Some of this can be hoisted.
+    |  sllg TMPR1, NARGS:RD, 3(r0)
+    |  lghi TMPR2, LJ_TNIL
+    |  stg TMPR2, -8(TMPR1, BASE)
+    |  la RD, 1(RD)
+    |  clgr RD, RA
+    |  jle <3
+    |  j <2
     break;
 
   case BC_JFUNCV:
