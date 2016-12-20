@@ -1256,8 +1256,45 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_arithdn sr
     break;
   case BC_MULVN: case BC_MULNV: case BC_MULVV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_arithpre
+    |  // For multiplication we use msgfr and check if the result
+    |  // fits in an int32_t.
+    switch(op) {
+    case BC_MULVN:
+      |  lg RB, 0(RB, BASE)
+      |  lg RC, 0(RC, KBASE)
+      |  checkint RB, ->vmeta_arith_vno
+      |  checkint RC, ->vmeta_arith_vno
+      |  lgfr RB, RB
+      |  msgfr RB, RC
+      |  lgfr RC, RB
+      |  cgr RB, RC; jne ->vmeta_arith_vno
+      break;
+    case BC_MULNV:
+      |  lg RB, 0(RB, BASE)
+      |  lg RC, 0(RC, KBASE)
+      |  checkint RB, ->vmeta_arith_nvo
+      |  checkint RC, ->vmeta_arith_nvo
+      |  lgfr RB, RB
+      |  msgfr RB, RC
+      |  lgfr RC, RB
+      |  cgr RB, RC; jne ->vmeta_arith_nvo
+      break;
+    default:
+      |  lg RB, 0(RB, BASE)
+      |  lg RC, 0(RC, BASE)
+      |  checkint RB, ->vmeta_arith_vvo
+      |  checkint RC, ->vmeta_arith_vvo
+      |  lgfr RB, RB
+      |  msgfr RB, RC
+      |  lgfr RC, RB
+      |  cgr RB, RC; jne ->vmeta_arith_vvo
+      break;
+    }
+    |  llgfr RB, RB
+    |  setint RB
+    |  stg RB, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
     |  stg r0, 0(r0)
