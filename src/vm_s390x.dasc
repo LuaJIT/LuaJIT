@@ -1212,6 +1212,42 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sllg RA, RA, 3(r0)
     |.endmacro
     |
+    |.macro ins_arithfp, ins
+    |  ins_arithpre
+    ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
+    ||switch (vk) {
+    ||case 0:
+    |   ld f0, 0(RB, BASE)
+    |   ld f1, 0(RC, KBASE)
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, KBASE)
+    |   checknumtp RB, ->vmeta_arith_vno
+    |   checknumtp RC, ->vmeta_arith_vno
+    |   ins f0, f1
+    ||  break;
+    ||case 1:
+    |   ld f1, 0(RB, BASE)
+    |   ld f0, 0(RC, KBASE)
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, KBASE)
+    |   checknumtp RB, ->vmeta_arith_nvo
+    |   checknumtp RC, ->vmeta_arith_nvo
+    |   ins f0, f1
+    ||  break;
+    ||default:
+    |   ld f0, 0(RB, BASE)
+    |   ld f1, 0(RC, BASE)
+    |   lg RB, 0(RB, BASE)
+    |   lg RC, 0(RC, BASE)
+    |   checknumtp RB, ->vmeta_arith_vvo
+    |   checknumtp RC, ->vmeta_arith_vvo
+    |   ins f0, f1
+    ||  break;
+    ||}
+    |  std f0, 0(RA, BASE)
+    |  ins_next
+    |.endmacro
+    |
     |.macro ins_arithdn, intins
     |  ins_arithpre
     ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
@@ -1297,8 +1333,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_arithfp ddbr
     break;
   case BC_MODVN:
     |  stg r0, 0(r0)
