@@ -1081,15 +1081,24 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Math helper functions ----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |.macro vm_round, name, mode, cond
+  |// FP value rounding. Called by math.floor/math.ceil fast functions.
+  |// Value to round is in f0. May clobber f0-f7 and r0. Return address is r14.
+  |.macro vm_round, name, mask
   |->name:
-  |  stg r0, 0(r0)
+  |  // TODO: handle edge cases?
+  |  lghi r0, 1
+  |  cdfbr f1, r0
+  |  didbr f0, f2, f1, mask // f0=remainder, f2=quotient.
+  |  jnle >1
+  |  ldr f0, f2
+  |  br r14
+  |1: // partial remainder (sanity check)
   |  stg r0, 0(r0)
   |.endmacro
   |
-  |  vm_round vm_floor, 0, 1
-  |  vm_round vm_ceil,  1, JIT
-  |  vm_round vm_trunc, 2, JIT
+  |  vm_round vm_floor, 7 // Round towards -inf.
+  |  vm_round vm_ceil,  6 // Round towards +inf.
+  |  vm_round vm_trunc, 5 // Round towards 0.
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
   |->vm_mod:
@@ -1335,13 +1344,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
     |  ins_arithfp ddbr
     break;
+  // TODO: implement fast mod operation.
+  // x86_64 does floating point mod, however it might be better to use integer mod.
   case BC_MODVN:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  j ->vmeta_arith_vno
     break;
-  case BC_MODNV: case BC_MODVV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+  case BC_MODNV:
+    |  j ->vmeta_arith_nvo
+    break;
+  case BC_MODVV:
+    |  j ->vmeta_arith_vvo
     break;
   case BC_POW:
     |  stg r0, 0(r0)
