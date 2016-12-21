@@ -1381,8 +1381,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst or unused, RD = src, JMP with RD = target
+    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3(r0)
+    |  lg ITYPE, 0(RD, BASE)
+    |  la PC, 4(PC)
+    if (op == BC_ISTC || op == BC_ISFC) {
+      |  lgr RB, ITYPE
+    }
+    |  srag ITYPE, ITYPE, 47(r0)
+    |  clfi ITYPE, LJ_TISTRUECOND
+    if (op == BC_IST || op == BC_ISTC) {
+      |  jhe >1
+    } else {
+      |  jl >1
+    }
+    if (op == BC_ISTC || op == BC_ISFC) {
+      |  stg RB, 0(RA, BASE)
+    }
+    |  llgh RD, PC_RD
+    |  branchPC RD
+    |1:					// Fallthrough to the next instruction.
+    |  ins_next
     break;
   case BC_ISTYPE:
     |  stg r0, 0(r0)
@@ -1401,8 +1421,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next_
     break;
   case BC_NOT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = src
+    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3(r0)
+    |  lg RB, 0(RD, BASE)
+    |  srag RB, RB, 47(r0)
+    |  load_false RC
+    |  cghi RB, LJ_TTRUE
+    |  je >1 // TODO: Maybe do something fancy to avoid the jump?
+    |  load_true RC
+    |1:
+    |  stg RC, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_UNM:
     |  stg r0, 0(r0)
@@ -1598,8 +1628,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KPRI:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = primitive type (~)
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 47(r0)
+    |  lghi TMPR2, -1
+    |  xgr RD, TMPR2 // not
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_KNIL:
     |  stg r0, 0(r0)
