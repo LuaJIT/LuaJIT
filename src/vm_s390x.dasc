@@ -808,20 +808,16 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc, name
   |->ff_ .. name:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
   |.endmacro
   |
   |.macro .ffunc_1, name
   |->ff_ .. name:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  clfi NARGS:RD, 1+1; jl ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_2, name
   |->ff_ .. name:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  clfi NARGS:RD, 2+1; jl ->fff_fallback
   |.endmacro
   |
   |.macro .ffunc_n, name, op
@@ -867,12 +863,40 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: conversions ------------------------------------------
   |
   |.ffunc tonumber
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // Only handles the number case inline (without a base argument).
+  |  clfi NARGS:RD, 1+1; jne ->fff_fallback	// Exactly one argument.
+  |  lg RB, 0(BASE)
+  |  checknumber RB, ->fff_fallback
+  |  lg PC, -8(BASE)
+  |  stg RB, -16(BASE)
+  |  j ->fff_res1
   |
   |.ffunc_1 tostring
+  |  // Only handles the string or number case inline.
+  |  lg PC, -8(BASE)
+  |  lg STR:RB, 0(BASE)
+  |  checktp_nc STR:RB, LJ_TSTR, >3
+  |  // A __tostring method in the string base metatable is ignored.
+  |2:
+  |  stg STR:RB, -16(BASE)
+  |  j ->fff_res1
+  |3:  // Handle numbers inline, unless a number base metatable is present.
+  |  clfi ITYPE, LJ_TISNUM; jh ->fff_fallback_1
+  |  lghi TMPR2, 0
+  |  cg TMPR2, (DISPATCH_GL(gcroot[GCROOT_BASEMT_NUM]))(DISPATCH)
+  |  jne ->fff_fallback
+  |  ffgccheck				// Caveat: uses label 1.
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base		// Add frame since C call can throw.
+  |  stg PC, SAVE_PC			// Redundant (but a defined value).
+  |  lgr CARG2, BASE			// Otherwise: CARG2 == BASE
+  |  lgr L:CARG1, L:RB
+  |  brasl r14, extern lj_strfmt_number	// (lua_State *L, cTValue *o)
+  |  // GCstr returned in r2 (CRET1).
   |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg BASE, L:RB->base
+  |  settp STR:RB, CRET1, LJ_TSTR
+  |  j <2
   |
   |//-- Base library: iterators -------------------------------------------
   |
@@ -921,8 +945,33 @@ static void build_subroutines(BuildCtx *ctx)
   |->fff_resxmm0:
   |
   |->fff_res1:
+  |  lghi RD, 1+1
   |->fff_res:
+  |  stg RD, SAVE_MULTRES
   |->fff_res_:
+  |  tmll PC, FRAME_TYPE
+  |  jne >7
+  |5:
+  |  llgc TMPR1, PC_RB
+  |  clgr TMPR1, RD			// More results expected?
+  |  jh >6
+  |  // Adjust BASE. KBASE is assumed to be set for the calling frame.
+  |  llgc RA, PC_RA
+  |  lcgr RA, RA
+  |  sllg RA, RA, 3(r0)
+  |  lay BASE, -16(RA, BASE)		// base = base - (RA+2)*8
+  |  ins_next
+  |
+  |6:  // Fill up results with nil.
+  |  sllg TMPR1, RD, 3(r0)
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, -24(TMPR1, BASE)
+  |  la RD, 1(RD)
+  |  j <5
+  |
+  |7:  // Non-standard return case.
+  |  lghi RA, -16			// Results start at BASE+RA = BASE-16.
+  |  j ->vm_return
   |
   |.macro math_round, func
   |  .ffunc math_ .. func
@@ -1036,14 +1085,41 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->fff_fallback_2:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lghi NARGS:RD, 1+2			// Other args are ignored, anyway.
+  |  j ->fff_fallback
   |->fff_fallback_1:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lghi NARGS:RD, 1+1			// Other args are ignored, anyway.
   |->fff_fallback:			// Call fast function fallback handler.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // BASE = new base, RD = nargs+1
+  |  lg L:RB, SAVE_L
+  |  lg PC, -8(BASE)			// Fallback may overwrite PC.
+  |  stg PC, SAVE_PC			// Redundant (but a defined value).
+  |  stg BASE, L:RB->base
+  |  sllg RD, NARGS:RD, 3(r0)
+  |  lay RD, -8(RD, BASE)
+  |  la RA, (8*LUA_MINSTACK)(RD)	// Ensure enough space for handler.
+  |  stg RD, L:RB->top
+  |  lg CFUNC:RD, -16(BASE)
+  |  cleartp CFUNC:RD
+  |  clg RA, L:RB->maxstack
+  |  jh >5				// Need to grow stack.
+  |  lgr CARG1, L:RB
+  |  lg TMPR1, CFUNC:RD->f
+  |  basr r14, TMPR1			// (lua_State *L)
+  |  lg BASE, L:RB->base
+  |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
+  |  lgr RD, CRET1
+  |  cghi RD, 0; jh ->fff_res	// Returned nresults+1?
+  |1:
+  |  lg RA, L:RB->top
+  |  sgr RA, BASE
+  |  srlg RA, RA, 3(r0)
+  |  cghi RD, 0
+  |    la NARGS:RD, 1(RA)
+  |    lg LFUNC:RB, -16(BASE)
+  |  jne ->vm_call_tail			// Returned -1?
+  |  cleartp LFUNC:RB
+  |  ins_callt				// Returned 0: retry fast path.
   |
   |// Reconstruct previous base for vmeta_call during tailcall.
   |->vm_call_tail:
@@ -1777,8 +1853,38 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_TNEW:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = hbits|asize
+    |  lg L:RB, SAVE_L
+    |  stg BASE, L:RB->base
+    |  lg RA, (DISPATCH_GL(gc.total))(DISPATCH)
+    |  clg RA, (DISPATCH_GL(gc.threshold))(DISPATCH)
+    |  stg PC, SAVE_PC
+    |  jhe >5
+    |1:
+    |  srlg CARG3, RD, 11(r0)
+    |  llill TMPR2, 0x7ff
+    |  nr RD, TMPR2
+    |  cr RD, TMPR2
+    |  je >3
+    |2:
+    |  lgr L:CARG1, L:RB
+    |  llgfr CARG2, RD
+    |  brasl r14, extern lj_tab_new  // (lua_State *L, uint32_t asize, uint32_t hbits)
+    |  // Table * returned in r2 (CRET1).
+    |  lg BASE, L:RB->base
+    |  llgc RA, PC_RA
+    |  sllg RA, RA, 3(r0)
+    |  settp TAB:CRET1, LJ_TTAB
+    |  stg TAB:CRET1, 0(RA, BASE)
+    |  ins_next
+    |3:  // Turn 0x7ff into 0x801.
+    |  llill RD, 0x801
+    |  j <2
+    |5:
+    |  lgr L:CARG1, L:RB
+    |  brasl r14, extern lj_gc_step_fixtop	// (lua_State *L)
+    |  llgh RD, PC_RD
+    |  j <1
     break;
   case BC_TDUP:
     |  stg r0, 0(r0)
