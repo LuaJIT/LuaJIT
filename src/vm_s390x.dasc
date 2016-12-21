@@ -1369,17 +1369,90 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     break;
   case BC_ISEQS: case BC_ISNES:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
-    break;
+    vk = op == BC_ISEQS;
+    |  ins_AND	// RA = src, RD = str const, JMP with RD = target
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  lg RB, 0(RA, BASE)
+    |  la PC, 4(PC)
+    |  checkstr RB, >3
+    |  cg RB, 0(RD, KBASE)
+  iseqne_test:
+    if (vk) {
+      |  jne >2
+    } else {
+      |  je >1
+    }
+    goto iseqne_end;
   case BC_ISEQN: case BC_ISNEN:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
-    break;
+    vk = op == BC_ISEQN;
+    |  ins_AD	// RA = src, RD = num const, JMP with RD = target
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  ld f0, 0(RA, BASE)
+    |  lg RB, 0(RA, BASE)
+    |  ld f1, 0(RD, KBASE)
+    |  lg RD, 0(RD, KBASE)
+    |  la PC, 4(PC)
+    |  checkint RB, >7
+    |  checkint RD, >8
+    |  cr RB, RD
+    if (vk) {
+      |  jne >9
+    } else {
+      |  je >9
+    }
+    |  llgh RD, PC_RD
+    |  branchPC RD
+    |9:
+    |  ins_next
+    |
+    |7:  // RA is not an integer.
+    |  jh >3
+    |  // RA is a number.
+    |  checkint RD, >1
+    |  // RA is a number, RD is an integer.
+    |  cdfbr f1, RD
+    |  j >1
+    |
+    |8:  // RA is an integer, RD is a number.
+    |  cdfbr f0, RB
+    |  cdbr f0, f1
+    |  j >4
+    |1:
+    |  cdbr f0, f1
+    |4:
+    goto iseqne_fp;
   case BC_ISEQP: case BC_ISNEP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    vk = op == BC_ISEQP;
+    |  ins_AND	// RA = src, RD = primitive type (~), JMP with RD = target
+    |  sllg RA, RA, 3(r0)
+    |  lg RB, 0(RA, BASE)
+    |  srag RB, RB, 47(r0)
+    |  la PC, 4(PC)
+    |  cr RB, RD
+    if (!LJ_HASFFI) goto iseqne_test;
+    if (vk) {
+      |  jne >3
+      |  llgh RD, PC_RD
+      |  branchPC RD
+      |2:
+      |  ins_next
+      |3:
+      |  cghi RB, LJ_TCDATA; jne <2
+      |  j ->vmeta_equal_cd
+    } else {
+      |  je >2
+      |  cghi RB, LJ_TCDATA; je ->vmeta_equal_cd
+      |  llgh RD, PC_RD
+      |  branchPC RD
+      |2:
+      |  ins_next
+    }
     break;
+
+  /* -- Unary test and copy ops ------------------------------------------- */
+
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
     |  ins_AD	// RA = dst or unused, RD = src, JMP with RD = target
     |  sllg RD, RD, 3(r0)
