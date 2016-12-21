@@ -1255,8 +1255,118 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ISEQV: case BC_ISNEV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    vk = op == BC_ISEQV;
+    |  ins_AD	// RA = src1, RD = src2, JMP with RD = target
+    |  sllg RD, RD, 3(r0)
+    |  ld f1, 0(RD, BASE)
+    |  lg RD, 0(RD, BASE)
+    |  sllg RA, RA, 3(r0)
+    |  ld f0, 0(RA, BASE)
+    |  lg RA, 0(RA, BASE)
+    |  la PC, 4(PC)
+    |  srag RB, RD, 47(r0)
+    |  srag ITYPE, RA, 47(r0)
+    |  clfi RB, LJ_TISNUM; jne >7
+    |  clfi ITYPE, LJ_TISNUM; jne >8
+    |  cr RD, RA
+    if (vk) {
+      |  jne >9
+    } else {
+      |  je >9
+    }
+    |  llgh RD, PC_RD
+    |  branchPC RD
+    |9:
+    |  ins_next
+    |
+    |7:  // RD is not an integer.
+    |  jh >5
+    |  // RD is a number.
+    |  clfi ITYPE, LJ_TISNUM; jl >1; jne >5
+    |  // RD is a number, RA is an integer.
+    |  cdfbr f0, RA
+    |  j >1
+    |
+    |8:  // RD is an integer, RA is not an integer.
+    |  jh >5
+    |  // RD is an integer, RA is a number.
+    |  cdfbr f1, RD
+    |  j >1
+    |
+    |1:
+    |  cdbr f0, f1
+    |4:
+  iseqne_fp:
+    if (vk) {
+      |  jne >2				// Unordered means not equal.
+    } else {
+      |  je >1				// Unordered means not equal.
+    }
+  iseqne_end:
+    if (vk) {
+      |1:				// EQ: Branch to the target.
+      |  llgh RD, PC_RD
+      |  branchPC RD
+      |2:				// NE: Fallthrough to next instruction.
+      |.if not FFI
+      |3:
+      |.endif
+    } else {
+      |.if not FFI
+      |3:
+      |.endif
+      |2:				// NE: Branch to the target.
+      |  llgh RD, PC_RD
+      |  branchPC RD
+      |1:				// EQ: Fallthrough to next instruction.
+    }
+    if (LJ_DUALNUM && (op == BC_ISEQV || op == BC_ISNEV ||
+		       op == BC_ISEQN || op == BC_ISNEN)) {
+      |  j <9
+    } else {
+      |  ins_next
+    }
+    |
+    if (op == BC_ISEQV || op == BC_ISNEV) {
+      |5:  // Either or both types are not numbers.
+      |.if FFI
+      |  clfi RB, LJ_TCDATA; je ->vmeta_equal_cd
+      |  clfi ITYPE, LJ_TCDATA; je ->vmeta_equal_cd
+      |.endif
+      |  cgr RA, RD
+      |  je <1				// Same GCobjs or pvalues?
+      |  cr RB, ITYPE
+      |  jne <2				// Not the same type?
+      |  clfi RB, LJ_TISTABUD
+      |  jh <2				// Different objects and not table/ud?
+      |
+      |  // Different tables or userdatas. Need to check __eq metamethod.
+      |  // Field metatable must be at same offset for GCtab and GCudata!
+      |  cleartp TAB:RA
+      |  lg TAB:RB, TAB:RA->metatable
+      |  cghi TAB:RB, 0
+      |  je <2				// No metatable?
+      |  llgc TMPR2, TAB:RB->nomm
+      |  tmll TMPR2, 1<<MM_eq
+      |  jne <2				// Or 'no __eq' flag set?
+      if (vk) {
+	|  lghi RB, 0			// ne = 0 // TODO: should be 32-bit?
+      } else {
+	|  lghi RB, 1			// ne = 1 // TODO: should be 32-bit?
+      }
+      |  j ->vmeta_equal		// Handle __eq metamethod.
+    } else {
+      |.if FFI
+      |3:
+      |  clfi ITYPE, LJ_TCDATA
+      if (LJ_DUALNUM && vk) {
+	|  jne <9
+      } else {
+	|  jne <2
+      }
+      |  j ->vmeta_equal_cd
+      |.endif
+    }
     break;
   case BC_ISEQS: case BC_ISNES:
     |  stg r0, 0(r0)
