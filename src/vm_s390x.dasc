@@ -710,8 +710,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  j >1
   |
   |->vmeta_unm:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgh RD, PC_RD
+  |  sllg RD, RD, 3(r0)
+  |  la RC, 0(RD, BASE)
+  |  lgr RB, RC
+  |  j >1
   |
   |->vmeta_arith_vvo:
   |  llgc RB, PC_RB
@@ -1508,8 +1511,24 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_UNM:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = src
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  lg RB, 0(RD, BASE)
+    |  checkint RB, >3
+    |  lcr RB, RB; jo >2
+    |1:
+    |  stg RB, 0(RA, BASE)
+    |  ins_next
+    |2:
+    |  llihh RB, 0x41e0 // (double)2^31
+    |  j <1
+    |3:
+    |  jh ->vmeta_unm
+    |  // Toggle sign bit.
+    |  llihh TMPR2, 0x8000
+    |  xgr RB, TMPR2
+    |  j <1
     break;
   case BC_LEN:
     |  stg r0, 0(r0)
