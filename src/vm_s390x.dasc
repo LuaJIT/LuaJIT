@@ -845,8 +845,28 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->vm_call_dispatch
   |
   |->vmeta_len:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgh RD, PC_RD
+  |  sllg RD, RD, 3(r0)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  la CARG2, 0(RD, BASE)
+  |  lgr L:CARG1, L:RB
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_len	// (lua_State *L, TValue *o)
+  |  // NULL (retry) or TValue * (metamethod) returned in r2 (CRET1).
+  |  lgr RC, CRET1
+  |  lg BASE, L:RB->base
+#if LJ_52
+  |  cghi RC, 0
+  |  jne ->vmeta_binop			// Binop call for compatibility.
+  |  llgh RD, PC_RD
+  |  sllg RD, RD, 3(r0)
+  |  lg TAB:CARG1, 0(RD, BASE)
+  |  cleartp TAB:CARG1
+  |  j ->BC_LEN_Z
+#else
+  |  j ->vmeta_binop			// Binop call for compatibility.
+#endif
   |
   |//-- Call metamethod ----------------------------------------------------
   |
@@ -1698,8 +1718,40 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
     break;
   case BC_LEN:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = src
+    |  sllg RD, RD, 3(r0)
+    |  lg RD, 0(RD, BASE)
+    |  checkstr RD, >2
+    |  llgf RD, STR:RD->len
+    |1:
+    |  sllg RA, RA, 3(r0)
+    |  setint RD
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
+    |2:
+    |  cghi ITYPE, LJ_TTAB; jne ->vmeta_len
+    |  lgr TAB:CARG1, TAB:RD
+#if LJ_52
+    |  lg TAB:RB, TAB:RD->metatable
+    |  cghi TAB:RB, 0
+    |  jne >9
+    |3:
+#endif
+    |->BC_LEN_Z:
+    |  lgr RB, BASE			// Save BASE.
+    |  brasl r14, extern lj_tab_len	// (GCtab *t)
+    |  // Length of table returned in r2 (CRET1).
+    |  lgr RD, CRET1
+    |  lgr BASE, RB			// Restore BASE.
+    |  llgc RA, PC_RA
+    |  j <1
+#if LJ_52
+    |9:  // Check for __len.
+    |  llgc TMPR2, TAB:RB->nomm
+    |  tmll TMPR2, 1<<MM_len
+    |  jne <3
+    |  j ->vmeta_len			// 'no __len' flag NOT set: check.
+#endif
     break;
 
   /* -- Binary ops -------------------------------------------------------- */
