@@ -950,8 +950,26 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: checks -----------------------------------------------
   |
   |.ffunc_1 assert
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg RB, 0(BASE)
+  |  srag ITYPE, RB, 47(r0)
+  |  clfi ITYPE, LJ_TISTRUECOND; jhe ->fff_fallback
+  |  lg PC, -8(BASE)
+  |  stg RD, SAVE_MULTRES // TODO: needs to be 32-bit.
+  |  lg RB, 0(BASE)
+  |  stg RB, -16(BASE)
+  |  ahi RD, -2
+  |  je >2
+  |  lgr RA, BASE
+  |1:
+  |  la RA, 8(RA)
+  |  lg RB, 0(RA)
+  |  stg RB, -16(RA)
+  |  ahi RD, -1
+  |  jne <1
+  |  // TODO: replace with branch on count (brctg).
+  |2:
+  |  lg RD, SAVE_MULTRES // TODO: needs to be 32-bit.
+  |  j ->fff_res_
   |
   |.ffunc_1 type
   |  stg r0, 0(r0)
@@ -1972,9 +1990,21 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_UCLO:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = level, RD = target
+    |  branchPC RD				// Do this first to free RD.
+    |  lg L:RB, SAVE_L
+    |  ltg TMPR2, L:RB->openupval
+    |  je >1
+    |  stg BASE, L:RB->base
+    |  sllg RA, RA, 3(r0)
+    |  la CARG2, 0(RA, BASE)
+    |  lgr L:CARG1, L:RB
+    |  brasl r14, extern lj_func_closeuv	// (lua_State *L, TValue *level)
+    |  lg BASE, L:RB->base
+    |1:
+    |  ins_next
     break;
+
   case BC_FNEW:
     |  ins_AND	// RA = dst, RD = proto const (~) (holding function prototype)
     |  lg L:RB, SAVE_L
@@ -2453,9 +2483,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
+  /* -- Returns ----------------------------------------------------------- */
+
   case BC_RETM:
-    |  stg r0, 0(r0) // not implemented
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = results, RD = extra_nresults
+    |  ag RD, SAVE_MULTRES			// MULTRES >=1, so RD >=1. // TODO: needs to be 32-bit.
+    |  // Fall through. Assumes BC_RET follows and ins_AD is a no-op.
     break;
 
   case BC_RET: case BC_RET0: case BC_RET1:
