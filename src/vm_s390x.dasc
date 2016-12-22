@@ -599,19 +599,61 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Table indexing metamethods -----------------------------------------
   |
   |->vmeta_tgets:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  settp STR:RC, LJ_TSTR			// STR:RC = GCstr *
+  |  stg STR:RC, TMP_STACK
+  |  la RC, TMP_STACK
+  |  llgc TMPR1, PC_OP
+  |  cghi TMPR1, BC_GGET
+  |  jne >1
+  |  settp TAB:RA, TAB:RB, LJ_TTAB		// TAB:RB = GCtab *
+  |  lay RB, (DISPATCH_GL(tmptv))(DISPATCH)	// Store fn->l.env in g->tmptv.
+  |  stg TAB:RA, 0(RB)
+  |  j >2
   |
   |->vmeta_tgetb:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RC, PC_RC
+  |  setint RC
+  |  stg RC, TMP_STACK
+  |  la RC, TMP_STACK
+  |  j >1
   |
   |->vmeta_tgetv:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RC, PC_RC			// Reload TValue *k from RC.
+  |  sllg RC, RC, 3(r0)
+  |  la RC, 0(RC, BASE)
+  |1:
+  |  llgc RB, PC_RB			// Reload TValue *t from RB.
+  |  sllg RB, RB, 3(r0)
+  |  la RB, 0(RB, BASE)
+  |2:
+  |  lg L:CARG1, SAVE_L
+  |  stg BASE, L:CARG1->base
+  |  lgr CARG2, RB
+  |  lgr CARG3, RC
+  |  lgr L:RB, L:CARG1
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_tget	// (lua_State *L, TValue *o, TValue *k)
+  |  // TValue * (finished) or NULL (metamethod) returned in r2 (CRET1).
+  |  lg BASE, L:RB->base
+  |  ltgr RC, CRET1
+  |  je >3
   |->cont_ra:				// BASE = base, RC = result
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RA, PC_RA
+  |  sllg RA, RA, 3(r0)
+  |  lg RB, 0(RC)
+  |  stg RB, 0(RA, BASE)
+  |  ins_next
+  |
+  |3:  // Call __index metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k
+  |  lg RA, L:RB->top
+  |  stg PC, -24(PC)			// [cont|PC]
+  |  lay PC, FRAME_CONT(RA)
+  |  sgr PC, BASE
+  |  lg LFUNC:RB, -16(RA)		// Guaranteed to be a function here.
+  |  lghi NARGS:RD, 2+1			// 2 args for func(t, k).
+  |  cleartp LFUNC:RB
+  |  j ->vm_call_dispatch_f
   |
   |->vmeta_tgetr:
   |  stg r0, 0(r0)
@@ -620,18 +662,67 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vmeta_tsets:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  settp STR:RC, LJ_TSTR			// STR:RC = GCstr *
+  |  stg STR:RC, TMP_STACK
+  |  la RC, TMP_STACK
+  |  llgc TMPR2, PC_OP
+  |  cghi TMPR2, BC_GSET
+  |  jne >1
+  |  settp TAB:RA, TAB:RB, LJ_TTAB		// TAB:RB = GCtab *
+  |  lay RB, (DISPATCH_GL(tmptv))(DISPATCH)	// Store fn->l.env in g->tmptv.
+  |  stg TAB:RA, 0(RB)
+  |  j >2
   |
   |->vmeta_tsetb:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RC, PC_RC
+  |  setint RC
+  |  stg RC, TMP_STACK
+  |  la RC, TMP_STACK
+  |  j >1
   |
   |->vmeta_tsetv:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RC, PC_RC			// Reload TValue *k from RC.
+  |  sllg RC, RC, 3(r0)
+  |  la RC, 0(RC, BASE)
+  |1:
+  |  llgc RB, PC_RB			// Reload TValue *t from RB.
+  |  sllg RB, RB, 3(r0)
+  |  la RB, 0(RB, BASE)
+  |2:
+  |  lg L:CARG1, SAVE_L
+  |  stg BASE, L:CARG1->base		// Caveat: CARG2/CARG3 may be BASE.
+  |  lgr CARG2, RB
+  |  lgr CARG3, RC
+  |  lgr L:RB, L:CARG1
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_tset	// (lua_State *L, TValue *o, TValue *k)
+  |  // TValue * (finished) or NULL (metamethod) returned in r2 (CRET1).
+  |  lg BASE, L:RB->base
+  |  ltgr RC, CRET1
+  |  je >3
+  |  // NOBARRIER: lj_meta_tset ensures the table is not black.
+  |  llgc RA, PC_RA
+  |  sllg RA, RA, 3(r0)
+  |  lg RB, 0(RA, BASE)
+  |  stg RB, 0(RC)
   |->cont_nop:				// BASE = base, (RC = result)
   |  ins_next
+  |
+  |3:  // Call __newindex metamethod.
+  |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
+  |  lg RA, L:RB->top
+  |  stg PC, -24(PC)			// [cont|PC]
+  |  llgc RC, PC_RA
+  |  // Copy value to third argument.
+  |  sllg RB, RC, 3(r0)
+  |  lg RB, 0(RB, BASE)
+  |  stg RB, 16(RA)
+  |  la PC, FRAME_CONT(RA)
+  |  sgr PC, BASE
+  |  lg LFUNC:RB, -16(RA)		// Guaranteed to be a function here.
+  |  lghi NARGS:RD, 3+1			// 3 args for func(t, k, v).
+  |  cleartp LFUNC:RB
+  |  j ->vm_call_dispatch_f
   |
   |->vmeta_tsetr:
   |  stg r0, 0(r0)
