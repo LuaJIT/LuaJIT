@@ -2070,7 +2070,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lghi TMPR1, -1
     |  xgr RC, TMPR1
     |  sllg RC, RC, 3(r0)
-    |  lg STR:RC, 0(RC, BASE)
+    |  lg STR:RC, 0(RC, KBASE)
     |  checktab TAB:RB, ->vmeta_tgets
     |->BC_TGETS_Z:	// RB = GCtab *, RC = GCstr *
     |  l TMPR1, TAB:RB->hmask
@@ -2186,8 +2186,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <2
     break;
   case BC_TSETS:
-    |  stg r0, 0(r0)
-    |
+    |  ins_ABC	// RA = src, RB = table, RC = str const (~)
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  lghi TMPR2, -1
+    |  xgr RC, TMPR2 // ~RC
+    |  sllg RC, RC, 3(r0)
+    |  lg STR:RC, 0(RC, KBASE)
+    |  checktab TAB:RB, ->vmeta_tsets
     |->BC_TSETS_Z:	// RB = GCtab *, RC = GCstr *
     |  l TMPR1, TAB:RB->hmask
     |  n TMPR1, STR:RC->hash
