@@ -2057,6 +2057,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_CALL: case BC_CALLM:
     |  ins_A_C	// RA = base, (RB = nresults+1,) RC = nargs+1 | extra_nargs
+    |  lgr RD, RC
     if (op == BC_CALLM) {
       |  ag NARGS:RD, SAVE_MULTRES			// TODO: MULTRES is 32-bit on x64
     }
@@ -2064,7 +2065,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg LFUNC:RB, 0(BASE, RA)
     |  checkfunc LFUNC:RB, ->vmeta_call_ra
     |  la BASE, 16(RA, BASE)
-    |  lgr RD, RC
     |  ins_call
     break;
 
