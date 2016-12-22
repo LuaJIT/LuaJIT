@@ -2026,8 +2026,42 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TGETV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = dst, RB = table, RC = key
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  sllg RC, RC, 3(r0)
+    |  lg RC, 0(RC, BASE)
+    |  checktab TAB:RB, ->vmeta_tgetv
+    |
+    |  // Integer key?
+    |  checkint RC, >5
+    |  cl RC, TAB:RB->asize		// Takes care of unordered, too.
+    |  jhe ->vmeta_tgetv		// Not in array part? Use fallback.
+    |  llgfr RC, RC
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  // Get array slot.
+    |  lg ITYPE, 0(RC)
+    |  cghi ITYPE, LJ_TNIL		// Avoid overwriting RB in fastpath.
+    |  je >2
+    |1:
+    |  sllg RA, RA, 3(r0)
+    |  stg ITYPE, 0(RA, BASE)
+    |  ins_next
+    |
+    |2:  // Check for __index if table value is nil.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je <1
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_index
+    |  je ->vmeta_tgetv			// 'no __index' flag NOT set: check.
+    |  j <1
+    |
+    |5:  // String key?
+    |  cghi ITYPE, LJ_TSTR; jne ->vmeta_tgetv
+    |  cleartp STR:RC
+    |  j ->BC_TGETS_Z
     break;
   case BC_TGETS:
     |  ins_ABC
@@ -2104,9 +2138,52 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_TSETV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = src, RB = table, RC = key
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  sllg RC, RC, 3(r0)
+    |  lg RC, 0(RC, BASE)
+    |  checktab TAB:RB, ->vmeta_tsetv
+    |
+    |  // Integer key?
+    |  checkint RC, >5
+    |  cl RC, TAB:RB->asize		// Takes care of unordered, too.
+    |  jhe ->vmeta_tsetv
+    |  llgfr RC, RC
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  lghi TMPR2, LJ_TNIL
+    |  cg TMPR2, 0(RC)
+    |  je >3				// Previous value is nil?
+    |1:
+    |  llgc TMPR1, TAB:RB->marked
+    |  tmll TMPR1, LJ_GC_BLACK			// isblack(table)
+    |  jne >7
+    |2:  // Set array slot.
+    |  sllg RA, RA, 3(r0)
+    |  lg RB, 0(RA, BASE)
+    |  stg RB, 0(RC)
+    |  ins_next
+    |
+    |3:  // Check for __newindex if previous value is nil.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je <1
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_newindex
+    |  je ->vmeta_tsetv			// 'no __newindex' flag NOT set: check.
+    |  j <1
+    |
+    |5:  // String key?
+    |  cghi ITYPE, LJ_TSTR; jne ->vmeta_tsetv
+    |  cleartp STR:RC
+    |  j ->BC_TSETS_Z
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMPR1
+    |  j <2
     break;
   case BC_TSETS:
     |  stg r0, 0(r0)
