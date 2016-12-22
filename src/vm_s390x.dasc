@@ -1887,8 +1887,32 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
     break;
   case BC_TDUP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = dst, RD = table const (~) (holding template table)
+    |  lg L:RB, SAVE_L
+    |  lg RA, (DISPATCH_GL(gc.total))(DISPATCH)
+    |  stg PC, SAVE_PC
+    |  clg RA, (DISPATCH_GL(gc.threshold))(DISPATCH)
+    |  stg BASE, L:RB->base
+    |  jhe >3
+    |2:
+    |  sllg RD, RD, 3(r0)
+    |  lg TAB:CARG2, 0(RD, KBASE)
+    |  lgr L:CARG1, L:RB
+    |  brasl r14, extern lj_tab_dup		// (lua_State *L, Table *kt)
+    |  // Table * returned in r2 (CRET1).
+    |  lg BASE, L:RB->base
+    |  llgc RA, PC_RA
+    |  settp TAB:CRET1, LJ_TTAB
+    |  sllg RA, RA, 3(r0)
+    |  stg TAB:CRET1, 0(RA, BASE)
+    |  ins_next
+    |3:
+    |  lgr L:CARG1, L:RB
+    |  brasl r14, extern lj_gc_step_fixtop	// (lua_State *L)
+    |  llgh RD, PC_RD				// Need to reload RD.
+    |  lghi TMPR2, -1
+    |  xgr RD, TMPR2				// not RD
+    |  j <2
     break;
 
   case BC_GGET:
@@ -1959,8 +1983,31 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j ->vmeta_tgets			// Caveat: preserve STR:RC.
     break;
   case BC_TGETB:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = dst, RB = table, RC = byte literal
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  checktab TAB:RB, ->vmeta_tgetb
+    |  cl RC, TAB:RB->asize
+    |  jhe ->vmeta_tgetb
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  // Get array slot.
+    |  lg ITYPE, 0(RC)
+    |  cghi ITYPE, LJ_TNIL
+    |  je >2
+    |1:
+    |  sllg RA, RA, 3(r0)
+    |  stg ITYPE, 0(RA, BASE)
+    |  ins_next
+    |
+    |2:  // Check for __index if table value is nil.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je <1
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_index
+    |  je ->vmeta_tgetb			// 'no __index' flag NOT set: check.
+    |  j <1
     break;
   case BC_TGETR:
     |  stg r0, 0(r0)
@@ -2041,8 +2088,39 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <3
     break;
   case BC_TSETB:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = src, RB = table, RC = byte literal
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  checktab TAB:RB, ->vmeta_tsetb
+    |  cl RC, TAB:RB->asize
+    |  jhe ->vmeta_tsetb
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  lghi TMPR2, LJ_TNIL
+    |  cg TMPR2, 0(RC)
+    |  je >3				// Previous value is nil?
+    |1:
+    |  llgc TMPR1, TAB:RB->marked
+    |  tmll TMPR1, LJ_GC_BLACK		// isblack(table)
+    |  jne >7
+    |2:	 // Set array slot.
+    |  sllg RA, RA, 3(r0)
+    |  lg ITYPE, 0(RA, BASE)
+    |  stg ITYPE, 0(RC)
+    |  ins_next
+    |
+    |3:  // Check for __newindex if previous value is nil.
+    |  lg TAB:TMPR1, TAB:RB->metatable
+    |  cghi TAB:TMPR1, 0
+    |  je <1
+    |  llgc TMPR2, TAB:TMPR1->nomm
+    |  tmll TMPR2, 1<<MM_newindex
+    |  je ->vmeta_tsetb			// 'no __newindex' flag NOT set: check.
+    |  j <1
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMPR1
+    |  j <2
     break;
   case BC_TSETR:
     |  stg r0, 0(r0)
