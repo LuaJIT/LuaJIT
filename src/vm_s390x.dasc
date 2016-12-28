@@ -657,8 +657,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->vm_call_dispatch_f
   |
   |->vmeta_tgetr:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lgr CARG1, TAB:RB
+  |  lgr RB, BASE			// Save BASE.
+  |  lgfr CARG2, RC
+  |  brasl r14, extern lj_tab_getinth		// (GCtab *t, int32_t key)
+  |  // cTValue * or NULL returned in r2 (CRET1).
+  |  llgc RA, PC_RA
+  |  lgr BASE, RB			// Restore BASE.
+  |  ltgr RC, CRET1
+  |  jne ->BC_TGETR_Z
+  |  lghi ITYPE, LJ_TNIL
+  |  j ->BC_TGETR2_Z
   |
   |//-----------------------------------------------------------------------
   |
@@ -726,8 +735,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->vm_call_dispatch_f
   |
   |->vmeta_tsetr:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg L:CARG1, SAVE_L
+  |  lgr CARG2, TAB:RB
+  |  stg BASE, L:CARG1->base
+  |  lgr RB, BASE			// Save BASE (TODO: BASE is callee-saved anyway on s390x).
+  |  lgfr CARG3, RC
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
+  |  // TValue * returned in r2 (CRET1).
+  |  lgr RC, CRET1
+  |  llgh RA, PC_RA
+  |  lgr BASE, RB			// Restore BASE.
+  |  j ->BC_TSETR_Z
   |
   |//-- Comparison metamethods ---------------------------------------------
   |
@@ -775,8 +794,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0(r0)
   |
   |->vmeta_istype:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  llgfr CARG2, RA
+  |  llgfr CARG3, RD
+  |  lgr L:CARG1, L:RB
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
+  |  lg BASE, L:RB->base
+  |  j <6
   |
   |//-- Arithmetic metamethods ---------------------------------------------
   |
@@ -946,6 +972,11 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Inlined GC threshold check. Caveat: uses label 1.
   |.macro ffgccheck
+  |  lg RB, (DISPATCH_GL(gc.total))(DISPATCH)
+  |  clg RB, (DISPATCH_GL(gc.threshold))(DISPATCH)
+  |  jl >1
+  |  brasl r14, ->fff_gcstep
+  |1:
   |.endmacro
   |
   |//-- Base library: checks -----------------------------------------------
@@ -973,8 +1004,24 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_res_
   |
   |.ffunc_1 type
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg RC, 0(BASE)
+  |  srag RC, RC, 47(r0)
+  |  lghi RB, LJ_TISNUM
+  |  clgr RC, RB
+  |  jnl >1
+  |  lgr RC, RB
+  |1:
+  |  lghi TMPR2, -1
+  |  xgr RC, TMPR2
+  |2:
+  |  lg CFUNC:RB, -16(BASE)
+  |  cleartp CFUNC:RB
+  |  sllg RC, RC, 3(r0)
+  |  lg STR:RC, ((char *)(&((GCfuncC *)0)->upvalue))(RC, CFUNC:RB)
+  |  lg PC, -8(BASE)
+  |  settp STR:RC, LJ_TSTR
+  |  stg STR:RC, -16(BASE)
+  |  j ->fff_res1
   |
   |//-- Base library: getters and setters ---------------------------------
   |
@@ -1155,18 +1202,89 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc string_char			// Only handle the 1-arg case here.
   |  stg r0, 0(r0)
   |->fff_newstr:
-  |  stg r0, 0(r0)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  llgfr CARG3, TMPR1			// Zero-extended to size_t.
+  |  lgr CARG2, RD
+  |  lgr CARG1, L:RB
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_str_new	// (lua_State *L, char *str, size_t l)
   |->fff_resstr:
-  |  stg r0, 0(r0)
+  |  // GCstr * returned in r2 (CRET1).
+  |  lgr STR:RD, CRET1
+  |  lg BASE, L:RB->base
+  |  lg PC, -8(BASE)
+  |  settp STR:RD, LJ_TSTR
+  |  stg STR:RD, -16(BASE)
+  |  j ->fff_res1
   |
   |.ffunc string_sub
-  |  stg r0, 0(r0)
+  |  ffgccheck
+  |  lghi TMPR1, -1
+  |  clfi NARGS:RD, 1+2;  jl ->fff_fallback
+  |  jnh >1
+  |  lg TMPR1, 16(BASE)
+  |  checkint TMPR1, ->fff_fallback
+  |1:
+  |  lg STR:RB, 0(BASE)
+  |  checkstr STR:RB, ->fff_fallback
+  |  lg ITYPE, 8(BASE)
+  |  llgfr RA, ITYPE			// Must clear hiword for lea below.
+  |  srag ITYPE, ITYPE, 47(r0)
+  |  cghi ITYPE, LJ_TISNUM
+  |  jne ->fff_fallback
+  |  llgf RC, STR:RB->len
+  |  clr RC, TMPR1			// len < end? (unsigned compare)
+  |  jl >5
+  |2:
+  |  cghi RA, 0				// start <= 0?
+  |  jle >7
+  |3:
+  |  sr TMPR1, RA			// start > end?
+  |  jnhe ->fff_emptystr		// TODO: not sure about this, was jl in x64.
+  |  la RD, (#STR-1)(RA, STR:RB)
+  |  ahi TMPR1, 1
+  |4:
+  |  j ->fff_newstr
+  |
+  |5:  // Negative end or overflow.
+  |  chi TMPR1, 0
+  |  jnl >6
+  |  ahi TMPR1, 1
+  |  ar TMPR1, RC			// end = end+(len+1)
+  |  j <2
+  |6:  // Overflow.
+  |  lr TMPR1, RC			// end = len
+  |  j <2
+  |
+  |7:  // Negative start or underflow.
+  |  je >8
+  |  agr RA, RC			// start = start+(len+1)
+  |  aghi RA, 1
+  |  jh <3				// start > 0?
+  |8:  // Underflow.
+  |  lghi RA, 1				// start = 1
+  |  j <3
   |
   |->fff_emptystr:  // Range underflow.
   |  stg r0, 0(r0)
   |
   |.macro ffstring_op, name
   |  .ffunc_1 string_ .. name
+  |  ffgccheck
+  |  lg STR:CARG2, 0(BASE)
+  |  checkstr STR:CARG2, ->fff_fallback
+  |  lg L:RB, SAVE_L
+  |   lay SBUF:CARG1, (DISPATCH_GL(tmpbuf))(DISPATCH)
+  |  stg BASE, L:RB->base
+  |   lg RC, SBUF:CARG1->b
+  |   stg L:RB, SBUF:CARG1->L
+  |   stg RC, SBUF:CARG1->p
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_buf_putstr_ .. name
+  |  // lgr CARG1, CRET1 (nop, CARG1==CRET1)
+  |  brasl r14, extern lj_buf_tostr
+  |  j ->fff_resstr
   |.endmacro
   |
   |ffstring_op reverse
@@ -1258,8 +1376,22 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->fff_gcstep:			// Call GC step function.
   |  // BASE = new base, RD = nargs+1
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r14, TMP_STACK			// Save return address
+  |  lg L:RB, SAVE_L
+  |  stg PC, SAVE_PC			// Redundant (but a defined value).
+  |  stg BASE, L:RB->base
+  |  sllg RD, NARGS:RD, 3(r0)
+  |  lay RD, -8(RD, BASE)
+  |  lgr CARG1, L:RB
+  |  stg RD, L:RB->top
+  |  brasl r14, extern lj_gc_step	// (lua_State *L)
+  |  lg BASE, L:RB->base
+  |  lg RD, L:RB->top
+  |  sgr RD, BASE
+  |  srlg RD, RD, 3(r0)
+  |  aghi NARGS:RD, 1
+  |  lg r14, TMP_STACK			// Restore return address.
+  |  br r14
   |
   |//-----------------------------------------------------------------------
   |//-- Special dispatch targets -------------------------------------------
@@ -1686,13 +1818,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |1:					// Fallthrough to the next instruction.
     |  ins_next
     break;
+
   case BC_ISTYPE:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = src, RD = -type
+    |  lghr RD, RD			// TODO: always sign extend RD?
+    |  sllg RA, RA, 3(r0)
+    |  lg RB, 0(RA, BASE)
+    |  srag RB, RB, 47(r0)
+    |  agr RB, RD
+    |  jne ->vmeta_istype
+    |  ins_next
     break;
   case BC_ISNUM:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = src, RD = -(TISNUM-1)
+    |  sllg TMPR1, RA, 3(r0)
+    |  lg TMPR1, 0(TMPR1, BASE)
+    |  checknumtp TMPR1, ->vmeta_istype
+    |  ins_next
     break;
   case BC_MOV:
     |  ins_AD	// RA = dst, RD = src
@@ -2226,8 +2368,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
     break;
   case BC_TGETR:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = dst, RB = table, RC = key
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  cleartp TAB:RB
+    |  sllg RC, RC, 3(r0)
+    |  llgf RC, 4(RC, BASE)		// Load low word (big endian).
+    |  cl RC, TAB:RB->asize
+    |  jhe ->vmeta_tgetr		// Not in array part? Use fallback.
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  // Get array slot.
+    |->BC_TGETR_Z:
+    |  lg ITYPE, 0(RC)
+    |->BC_TGETR2_Z:
+    |  sllg RA, RA, 3(r0)
+    |  stg ITYPE, 0(RA, BASE)
+    |  ins_next
     break;
 
   case BC_TSETV:
@@ -2388,9 +2545,33 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <2
     break;
   case BC_TSETR:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = src, RB = table, RC = key
+    |  sllg RB, RB, 3(r0)
+    |  lg TAB:RB, 0(RB, BASE)
+    |  cleartp TAB:RB
+    |  sllg RC, RC, 3(r0)
+    |  lg RC, 0(RC, BASE)
+    |  llgc TMPR2, TAB:RB->marked
+    |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+    |  jne >7
+    |2:
+    |  cl RC, TAB:RB->asize
+    |  jhe ->vmeta_tsetr
+    |  llgfr RC, RC
+    |  sllg RC, RC, 3(r0)
+    |  ag RC, TAB:RB->array
+    |  // Set array slot.
+    |->BC_TSETR_Z:
+    |  sllg RA, RA, 3(r0)
+    |  lg ITYPE, 0(RA, BASE)
+    |  stg ITYPE, 0(RC)
+    |  ins_next
+    |
+    |7:  // Possible table write barrier for the value. Skip valiswhite check.
+    |  barrierback TAB:RB, TMPR1
+    |  j <2
     break;
+
   case BC_TSETM:
     |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
     |1:
