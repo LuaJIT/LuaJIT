@@ -1970,8 +1970,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_UGET:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst, RD = upvalue #
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  lg LFUNC:RB, -16(BASE)
+    |  cleartp LFUNC:RB
+    |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RD, LFUNC:RB)
+    |  lg RB, UPVAL:RB->v
+    |  lg RD, 0(RB)
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
     break;
   case BC_USETV:
     |  stg r0, 0(r0)
