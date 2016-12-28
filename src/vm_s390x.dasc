@@ -2844,14 +2844,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
     break;
+
   case BC_LOOP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_A	// RA = base, RD = target (loop extent)
+    |  // Note: RA/RD is only used by trace recorder to determine scope/extent
+    |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
+    |.if JIT
+    |  hotloop RBd
+    |.endif
+    | // Fall through. Assumes BC_ILOOP follows and ins_A is a no-op.
     break;
+
   case BC_ILOOP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_A	// RA = base, RD = target (loop extent)
+    |  ins_next
     break;
+
   case BC_JLOOP:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
