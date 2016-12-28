@@ -2109,9 +2109,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KNIL:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = dst_start, RD = dst_end
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  la RA, 8(RA, BASE)
+    |  la RD, 0(RD, BASE)
+    |  lghi RB, LJ_TNIL
+    |  stg RB, -8(RA)			// Sets minimum 2 slots.
+    |1:
+    |  stg RB, 0(RA)
+    |  la RA, 8(RA)
+    |  clgr RA, RD
+    |  jle <1
+    |  ins_next
     break;
+
+/* -- Upvalue and function ops ------------------------------------------ */
+
   case BC_UGET:
     |  ins_AD	// RA = dst, RD = upvalue #
     |  sllg RA, RA, 3(r0)
@@ -2639,8 +2653,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_CALLMT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = base, RD = extra_nargs
+    |  a NARGS:RD, SAVE_MULTRES
+    |  // Fall through. Assumes BC_CALLT follows and ins_AD is a no-op.
     break;
   case BC_CALLT:
     |  ins_AD	// RA = base, RD = nargs+1
