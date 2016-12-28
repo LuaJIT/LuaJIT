@@ -91,6 +91,7 @@
 |.define SAVE_PC,	168(sp)
 |.define SAVE_MULTRES,	160(sp)
 |.define TMP_STACK,	160(sp) // Overlaps SAVE_MULTRES
+|.define TMP_STACK_HI,	164(sp) // High 32-bits (to avoid SAVE_MULTRES).
 |
 |// Callee save area (allocated by interpreter).
 |.define CALLEESAVE,	000(sp) // <- sp in interpreter.
@@ -323,7 +324,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_returnc:
   |  aghi RD, 1				// RD = nresults+1
   |  jo ->vm_unwind_yield		// TODO: !!! NOT SURE, jz on x64, overflow? !!!
-  |  stg RD, SAVE_MULTRES
+  |  st RD, SAVE_MULTRES
   |  tmll PC, FRAME_TYPE
   |  je ->BC_RET_Z			// Handle regular return to Lua.
   |
@@ -352,7 +353,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:RB, SAVE_L
   |  stg PC, L:RB->base
   |3:
-  |  lg RD, SAVE_MULTRES
+  |  llgf RD, SAVE_MULTRES
   |  lgf RA, SAVE_NRES			// RA = wanted nresults+1
   |4:
   |  cgr RA, RD
@@ -395,7 +396,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // - The GC shrinks the stack in between.
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  stg BASE, L:RB->top		// Save current top held in BASE (yes).
-  |  stg RD, SAVE_MULTRES		// Need to fill only remainder with nil.
+  |  st RD, SAVE_MULTRES		// Need to fill only remainder with nil.
   |  lgr CARG2, RA
   |  lgr CARG1, L:RB
   |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
@@ -500,7 +501,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  aghi RD, 1				// RD = nresults+1
   |  sgr RA, BASE			// RA = resultofs
   |  lg PC, -8(BASE)
-  |  stg RD, SAVE_MULTRES
+  |  st RD, SAVE_MULTRES
   |  tmll PC, FRAME_TYPE
   |  je ->BC_RET_Z
   |  j ->vm_return
@@ -954,7 +955,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  srag ITYPE, RB, 47(r0)
   |  clfi ITYPE, LJ_TISTRUECOND; jhe ->fff_fallback
   |  lg PC, -8(BASE)
-  |  stg RD, SAVE_MULTRES // TODO: needs to be 32-bit.
+  |  st RD, SAVE_MULTRES
   |  lg RB, 0(BASE)
   |  stg RB, -16(BASE)
   |  ahi RD, -2
@@ -968,7 +969,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jne <1
   |  // TODO: replace with branch on count (brctg).
   |2:
-  |  lg RD, SAVE_MULTRES // TODO: needs to be 32-bit.
+  |  llgf RD, SAVE_MULTRES
   |  j ->fff_res_
   |
   |.ffunc_1 type
@@ -1076,7 +1077,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->fff_res1:
   |  lghi RD, 1+1
   |->fff_res:
-  |  stg RD, SAVE_MULTRES
+  |  st RD, SAVE_MULTRES
   |->fff_res_:
   |  tmll PC, FRAME_TYPE
   |  jne >7
@@ -2391,8 +2392,54 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_TSETM:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
+    |1:
+    |  sllg RA, RA, 3(r0)
+    |  sllg TMPR1, RD, 3(r0)
+    |  llgf TMPR1, 4(TMPR1, KBASE)	// Integer constant is in lo-word.
+    |  la RA, 0(RA, BASE)
+    |  lg TAB:RB, -8(RA)		// Guaranteed to be a table.
+    |  cleartp TAB:RB
+    |  llgc TMPR2, TAB:RB->marked
+    |  tmll TMPR2, LJ_GC_BLACK		// isblack(table)
+    |  jne >7
+    |2:
+    |  llgf RD, SAVE_MULTRES
+    |  aghi RD, -1
+    |  je >4				// Nothing to copy?
+    |  agr RD, TMPR1			// Compute needed size.
+    |  clgf RD, TAB:RB->asize
+    |  jh >5				// Doesn't fit into array part?
+    |  sgr RD, TMPR1
+    |  sllg TMPR1, TMPR1, 3(r0)
+    |  ag TMPR1, TAB:RB->array
+    |3:  // Copy result slots to table.
+    |  lg RB, 0(RA)
+    |  la RA, 8(RA)
+    |  stg RB, 0(TMPR1)
+    |  la TMPR1, 8(TMPR1)
+    |  aghi RD, -1
+    |  jne <3
+    |  // TODO: replace decrement/branch with branch on count.
+    |4:
+    |  ins_next
+    |
+    |5:  // Need to resize array part.
+    |  lg L:CARG1, SAVE_L
+    |  stg BASE, L:CARG1->base
+    |  lgr CARG2, TAB:RB
+    |  lgfr CARG3, RD
+    |  lgr L:RB, L:CARG1
+    |  stg PC, SAVE_PC
+    |  brasl r14, extern lj_tab_reasize	// (lua_State *L, GCtab *t, int nasize)
+    |  lg BASE, L:RB->base
+    |  llgc RA, PC_RA			// Restore RA.
+    |  llgh RD, PC_RD			// Restore RD.
+    |  j <1				// Retry.
+    |
+    |7:  // Possible table write barrier for any value. Skip valiswhite check.
+    |  barrierback TAB:RB, RD
+    |  j <2
     break;
 
   /* -- Calls and vararg handling ----------------------------------------- */
@@ -2401,7 +2448,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_A_C	// RA = base, (RB = nresults+1,) RC = nargs+1 | extra_nargs
     |  lgr RD, RC
     if (op == BC_CALLM) {
-      |  ag NARGS:RD, SAVE_MULTRES			// TODO: MULTRES is 32-bit on x64
+      |  agf NARGS:RD, SAVE_MULTRES
     }
     |  sllg RA, RA, 3(r0)
     |  lg LFUNC:RB, 0(BASE, RA)
@@ -2427,7 +2474,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jne >7
     |1:
     |  stg LFUNC:RB, -16(BASE)		// Copy func+tag down, reloaded below.
-    |  stg NARGS:RD, SAVE_MULTRES	// 32-bit on x64.
+    |  st NARGS:RD, SAVE_MULTRES
     |  aghi NARGS:RD, -1
     |  je >3
     |2:  // Move args down.
@@ -2443,7 +2490,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg LFUNC:RB, -16(BASE)
     |3:
     |  cleartp LFUNC:RB
-    |  lg NARGS:RD, SAVE_MULTRES
+    |  llgf NARGS:RD, SAVE_MULTRES
     |  llgc TMPR1, LFUNC:RB->ffid
     |  cghi TMPR1, 1			// (> FF_C) Calling a fast function?
     |  jh >5
@@ -2488,15 +2535,83 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg r0, 0(r0)
     break;
   case BC_VARG:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  // TODO: some opportunities for branch on index in here.
+    |  ins_ABC	// RA = base, RB = nresults+1, RC = numparams
+    |  sllg RA, RA, 3(r0)
+    |  sllg RB, RB, 3(r0)
+    |  sllg RC, RC, 3(r0)
+    |  la TMPR1, (16+FRAME_VARG)(RC, BASE)
+    |  la RA, 0(RA, BASE)
+    |  sg TMPR1, -8(BASE)
+    |  // Note: TMPR1 may now be even _above_ BASE if nargs was < numparams.
+    |  cghi RB, 0
+    |  je >5				// Copy all varargs?
+    |  lay RB, -8(RA, RB)
+    |  clgr TMPR1, BASE			// No vararg slots?
+    |  jnl >2
+    |1:  // Copy vararg slots to destination slots.
+    |  lg RC, -16(TMPR1)
+    |  la TMPR1, 8(TMPR1)
+    |  stg RC, 0(RA)
+    |  la RA, 8(RA)
+    |  clgr RA, RB			// All destination slots filled?
+    |  jnl >3
+    |  clgr TMPR1, BASE			// No more vararg slots?
+    |  jl <1
+    |  lghi TMPR2, LJ_TNIL
+    |2:  // Fill up remainder with nil.
+    |  stg TMPR2, 0(RA)
+    |  la RA, 8(RA)
+    |  clgr RA, RB
+    |  jl <2
+    |3:
+    |  ins_next
+    |
+    |5:  // Copy all varargs.
+    |  lghi TMPR2, 1
+    |  st TMPR2, SAVE_MULTRES		// MULTRES = 0+1
+    |  lgr RC, BASE
+    |  slgr RC, TMPR1
+    |  jno <3				// No vararg slots? (borrow or zero)
+    |  llgfr RB, RC
+    |  srlg RB, RB, 3(r0)
+    |  ahi RB, 1
+    |  st RB, SAVE_MULTRES		// MULTRES = #varargs+1
+    |  lg L:RB, SAVE_L
+    |  agr RC, RA
+    |  clg RC, L:RB->maxstack
+    |  jh >7				// Need to grow stack?
+    |6:  // Copy all vararg slots.
+    |  lg RC, -16(TMPR1)
+    |  la TMPR1, 8(TMPR1)
+    |  stg RC, 0(RA)
+    |  la RA, 8(RA)
+    |  clgr TMPR1, BASE			// No more vararg slots?
+    |  jl <6
+    |  j <3
+    |
+    |7:  // Grow stack for varargs.
+    |  stg BASE, L:RB->base
+    |  stg RA, L:RB->top
+    |  stg PC, SAVE_PC
+    |  sgr TMPR1, BASE			// Need delta, because BASE may change.
+    |  st TMPR1, TMP_STACK_HI
+    |  llgf CARG2, SAVE_MULTRES
+    |  aghi CARG2, -1
+    |  lgr CARG1, L:RB
+    |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
+    |  lg BASE, L:RB->base
+    |  llgf TMPR1, TMP_STACK_HI
+    |  lg RA, L:RB->top
+    |  agr TMPR1, BASE
+    |  j <6
     break;
 
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
     |  ins_AD	// RA = results, RD = extra_nresults
-    |  ag RD, SAVE_MULTRES			// MULTRES >=1, so RD >=1. // TODO: needs to be 32-bit.
+    |  agf RD, SAVE_MULTRES			// MULTRES >=1, so RD >=1.
     |  // Fall through. Assumes BC_RET follows and ins_AD is a no-op.
     break;
 
@@ -2507,7 +2622,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |1:
     |  lg PC, -8(BASE)
-    |  stg RD, SAVE_MULTRES		// Save nresults+1.
+    |  st RD, SAVE_MULTRES		// Save nresults+1.
     |  tmll PC, FRAME_TYPE		// Check frame type marker.
     |  jne >7				// Not returning to a fixarg Lua func?
     switch (op) {
@@ -2524,7 +2639,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  aghi RD, -1
       |  jne <2
       |3:
-      |  lg RD, SAVE_MULTRES		// Note: MULTRES may be >255.
+      |  llgf RD, SAVE_MULTRES		// Note: MULTRES may be >256.
       |  llgc RB, PC_RB
       |5:
       |  cgr RB, RD			// More results expected?
