@@ -2078,8 +2078,28 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_CAT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_ABC	// RA = dst, RB = src_start, RC = src_end
+    |  lg L:CARG1, SAVE_L
+    |  stg BASE, L:CARG1->base
+    |  lgr CARG3, RC
+    |  sgr CARG3, RB
+    |  sllg RC, RC, 3(r0)
+    |  la CARG2, 0(RC, BASE)
+    |->BC_CAT_Z:
+    |  lgr L:RB, L:CARG1
+    |  stg PC, SAVE_PC
+    |  brasl r14, extern lj_meta_cat		// (lua_State *L, TValue *top, int left)
+    |  // NULL (finished) or TValue * (metamethod) returned in r2 (CRET1).
+    |  lg BASE, L:RB->base
+    |  ltgr RC, CRET1
+    |  jne ->vmeta_binop
+    |  llgc RB, PC_RB			// Copy result to Stk[RA] from Stk[RB].
+    |  sllg RB, RB, 3(r0)
+    |  llgc RA, PC_RA
+    |  sllg RA, RA, 3(r0)
+    |  lg RC, 0(RB, BASE)
+    |  stg RC, 0(RA, BASE)
+    |  ins_next
     break;
 
   /* -- Constant ops ------------------------------------------------------ */
