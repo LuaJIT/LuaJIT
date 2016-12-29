@@ -20,6 +20,8 @@
 |
 |// Instructions used that are not in base z/Architecture:
 |//   clfi (compare logical immediate) [requires z9-109]
+|//   ldgr (load FPR from GPR)         [requires z9-109 GA3]
+|//   lgdr (load GPR from FPR)         [requires z9-109 GA3]
 |// TODO: alternative instructions?
 |
 |.arch s390x
@@ -281,6 +283,12 @@
 |.macro set_vmstate, st
 |  lghi TMPR1, ~LJ_VMST_..st
 |  stg TMPR1, DISPATCH_GL(vmstate)(DISPATCH)
+|.endmacro
+|
+|// Synthesize binary floating-point constants.
+|.macro bfpconst_tobit, reg, tmp	// Synthesize 2^52 + 2^51.
+|  llihh tmp, 0x4338
+|  ldgr reg, tmp
 |.endmacro
 |
 |// Move table write barrier back. Overwrites reg.
@@ -1113,10 +1121,26 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |//-- Math library -------------------------------------------------------
   |
-  |  .ffunc_1 math_abs
+  |.ffunc_1 math_abs
+  |  lg RB, 0(BASE)
+  |  checkint RB, >3
+  |  lpr RB, RB; jo >2
   |->fff_resbit:
   |->fff_resi:
+  |  setint RB
   |->fff_resRB:
+  |  lg PC, -8(BASE)
+  |  stg RB, -16(BASE)
+  |  j ->fff_res1
+  |2:
+  |  llihh RB, 0x41e0	// 2^31
+  |  j ->fff_resRB
+  |3:
+  |  jh ->fff_fallback
+  |  nihh RB, 0x7fff	// Clear sign bit.
+  |  lg PC, -8(BASE)
+  |  stg RB, -16(BASE)
+  |  j ->fff_res1
   |
   |.ffunc_n math_sqrt, sqrtsd
   |->fff_resxmm0:
@@ -1295,6 +1319,26 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit, name, kind, fdef
   |  fdef name
+  |.if kind == 2
+  |  bfpconst_tobit f1, RB
+  |.endif
+  |  lg RB, 0(BASE)
+  |  ld f0, 0(BASE)
+  |  checkint RB, >1
+  |.if kind > 0
+  |  j >2
+  |.else
+  |  j ->fff_resbit
+  |.endif
+  |1:
+  |  jh ->fff_fallback
+  |.if kind < 2
+  |  bfpconst_tobit f1, RB
+  |.endif
+  |  adbr f0, f1
+  |  lgdr RB, f0
+  |  llgfr RB, RB
+  |2:
   |.endmacro
   |
   |.macro .ffunc_bit, name, kind
@@ -1302,33 +1346,81 @@ static void build_subroutines(BuildCtx *ctx)
   |.endmacro
   |
   |.ffunc_bit bit_tobit, 0
+  |  j ->fff_resbit
   |
   |.macro .ffunc_bit_op, name, ins
   |  .ffunc_bit name, 2
+  |  lgr TMPR1, NARGS:RD		// Save for fallback.
+  |  sllg RD, NARGS:RD, 3(r0)
+  |  lay RD, -16(RD, BASE)
+  |1:
+  |  clgr RD, BASE
+  |  jle ->fff_resbit
+  |  lg RA, 0(RD)
+  |  checkint RA, >2
+  |  ins RB, RA
+  |  aghi RD, -8
+  |  j <1
+  |2:
+  |  jh ->fff_fallback_bit_op
+  |  ldgr f0, RA
+  |  adbr f0, f1
+  |  lgdr RA, f0
+  |  ins RB, RA
+  |  aghi RD, -8
+  |  j <1
   |.endmacro
   |
-  |.ffunc_bit_op bit_band, and
+  |.ffunc_bit_op bit_band, nr
   |.ffunc_bit_op bit_bor, or
-  |.ffunc_bit_op bit_bxor, xor
+  |.ffunc_bit_op bit_bxor, xr
   |
   |.ffunc_bit bit_bswap, 1
+  |  lrvr RB, RB
+  |  j ->fff_resbit
   |
   |.ffunc_bit bit_bnot, 1
-  |->fff_resbit:
+  |  lhi TMPR2, -1
+  |  xr RB, TMPR2 // TODO: use xilf on newer models?
+  |  j ->fff_resbit
   |
   |->fff_fallback_bit_op:
+  |  lgr NARGS:RD, TMPR1		// Restore for fallback
+  |  j ->fff_fallback
   |
   |.macro .ffunc_bit_sh, name, ins
   |  .ffunc_bit name, 1, .ffunc_2
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // Note: no inline conversion from number for 2nd argument!
+  |  lg RA, 8(BASE)
+  |  checkint RA, ->fff_fallback
+  |  nill RA, 0x1f	// Limit shift to 5-bits.
+  |  ins RB, r0, 0(RA)	// TODO: fix shift args in DynASM.
+  |  j ->fff_resbit
   |.endmacro
   |
-  |.ffunc_bit_sh bit_lshift, shl
-  |.ffunc_bit_sh bit_rshift, shr
-  |.ffunc_bit_sh bit_arshift, sar
-  |.ffunc_bit_sh bit_rol, rol
-  |.ffunc_bit_sh bit_ror, ror
+  |.ffunc_bit_sh bit_lshift, sll
+  |.ffunc_bit_sh bit_rshift, srl
+  |.ffunc_bit_sh bit_arshift, sra
+  |
+  |.ffunc_bit bit_rol, 1, .ffunc_2
+  |  // Note: no inline conversion from number for 2nd argument!
+  |  lg RA, 8(BASE)
+  |  checkint RA, ->fff_fallback
+  |  // Note: no need to limit rotate to 5-bits (wraps).
+  |  rll RB, RB, 0(RA)
+  |  j ->fff_resbit
+  |
+  |.ffunc_bit bit_ror, 1, .ffunc_2
+  |  // Note: no inline conversion from number for 2nd argument!
+  |  lg RA, 8(BASE)
+  |  checkint RA, ->fff_fallback
+  |  // TODO: shorter sequence of instructions to convert right rotate into left rotate.
+  |  nill RA, 0x1f
+  |  lghi TMPR2, 32
+  |  sr TMPR2, RA
+  |  lr RA, TMPR2
+  |  rll RB, RB, 0(RA)
+  |  j ->fff_resbit
   |
   |//-----------------------------------------------------------------------
   |
