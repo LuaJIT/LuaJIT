@@ -117,7 +117,7 @@ local function waction(action, val, a, num)
   wputxhw(w)
   if val then wputxhw(val) end -- Not sure about this, do we always have one arg?
   if a then actargs[#actargs+1] = a end
-  if a or num then secpos = secpos + (num or 1) end
+  if val or a or num then secpos = secpos + (num or 1) end
 end
 
 -- Flush action list (intervening C code or buffer pos overflow).
