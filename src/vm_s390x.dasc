@@ -1092,7 +1092,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  lgr L:CARG1, L:RB
   |  brasl r14, extern lj_strfmt_number	// (lua_State *L, cTValue *o)
   |  // GCstr returned in r2 (CRET1).
-  |  stg r0, 0(r0)
   |  lg BASE, L:RB->base
   |  settp STR:RB, CRET1, LJ_TSTR
   |  j <2
