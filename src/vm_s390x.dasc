@@ -228,6 +228,9 @@
 |.macro setint, reg
 |  settp reg, LJ_TISNUM
 |.endmacro
+|.macro setint, dst, reg
+|  settp dst, reg, LJ_TISNUM
+|.endmacro
 |
 |// Macros to test operand types.
 |.macro checktp_nc, reg, tp, target
@@ -1097,19 +1100,76 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: iterators -------------------------------------------
   |
   |.ffunc_1 next
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  je >2				// Missing 2nd arg?
+  |1:
+  |  lg CARG2, 0(BASE)
+  |  checktab CARG2, ->fff_fallback
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base		// Add frame since C call can throw.
+  |  stg BASE, L:RB->top		// Dummy frame length is ok.
+  |  lg PC, -8(BASE)
+  |  la CARG3, 8(BASE)
+  |  lgr CARG1, L:RB
+  |  stg PC, SAVE_PC			// Needed for ITERN fallback.
+  |  brasl r14, extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
+  |  // Flag returned in r2 (CRET1).
+  |  lg BASE, L:RB->base
+  |  lgr RD, CRET1			// TODO: high bits needed? low bits load/test (ltr) enough?
+  |  ltr RD, CRET1;  je >3		// End of traversal?
+  |  // Copy key and value to results.
+  |  lg RB, 8(BASE)
+  |  lg RD, 16(BASE)
+  |  stg RB, -16(BASE)
+  |  stg RD, -8(BASE)
+  |->fff_res2:
+  |  lghi RD, 1+2
+  |  j ->fff_res
+  |2:  // Set missing 2nd arg to nil.
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, 8(BASE)
+  |  j <1
+  |3:  // End of traversal: return nil.
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, -16(BASE)
+  |  j ->fff_res1
   |
   |.ffunc_1 pairs
   |  stg r0, 0(r0)
   |  stg r0, 0(r0)
   |
   |.ffunc_2 ipairs_aux
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg TAB:RB, 0(BASE)
+  |  checktab TAB:RB, ->fff_fallback
+  |  lg RA, 8(BASE)
+  |  checkint RA, ->fff_fallback
+  |  lg PC, -8(BASE)
+  |  aghi RA, 1
+  |  setint ITYPE, RA
+  |  stg ITYPE, -16(BASE)
+  |  cl RA, TAB:RB->asize;  jhe >2	// Not in array part?
+  |  lg RD, TAB:RB->array
+  |  lgfr TMPR1, RA
+  |  sllg TMPR1, TMPR1, 3(r0)
+  |  la RD, 0(TMPR1, RD)
+  |1:
+  |  lg TMPR2, 0(RD)
+  |  cghi TMPR2, LJ_TNIL;  je ->fff_res0
+  |  // Copy array slot.
+  |  stg TMPR2, -8(BASE)
+  |  j ->fff_res2
+  |2:  // Check for empty hash part first. Otherwise call C function.
+  |  lt TMPR2, TAB:RB->hmask; je ->fff_res0
+  |  lgr CARG1, TAB:RB
+  |  lgr RB, BASE			// Save BASE. // TODO: needed?
+  |  lgfr CARG2, RA
+  |  brasl r14, extern lj_tab_getinth	// (GCtab *t, int32_t key)
+  |  // cTValue * or NULL returned in r2 (CRET1).
+  |  lgr BASE, RB
+  |  ltgr RD, CRET1
+  |  jne <1
   |->fff_res0:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lghi RD, 1+0
+  |  j ->fff_res
   |
   |.ffunc_1 ipairs
   |  lg TAB:RB, 0(BASE)
