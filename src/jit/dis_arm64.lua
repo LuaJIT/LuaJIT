@@ -13,10 +13,9 @@
 -- NYI: Advanced SIMD and VFP instructions.
 ------------------------------------------------------------------------------
 
-local type, tonumber = type, tonumber
+local type = type
 local sub, byte, format = string.sub, string.byte, string.format
 local match, gmatch, gsub = string.match, string.gmatch, string.gsub
-local rep = string.rep
 local concat = table.concat
 local bit = require("bit")
 local band, bor, bxor, tohex = bit.band, bit.bor, bit.bxor, bit.tohex
@@ -864,7 +863,6 @@ local function disass_ins(ctx)
   local operands = {}
   local suffix = ""
   local last, name, pat
-  local vr
   local map_reg
   ctx.op = op
   ctx.rel = nil
@@ -1014,7 +1012,6 @@ local function disass_ins(ctx)
     elseif p == "I" then
       local shf = band(rshift(op, 22), 3)
       local imm12 = band(rshift(op, 10), 0x0fff)
-      local n = #operands
       local rn, rd = band(rshift(op, 5), 31), band(op, 31)
       if altname == "mov" and shf == 0 and imm12 == 0 and (rn == 31 or rd == 31) then
 	name = altname
