@@ -1134,8 +1134,23 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_res1
   |
   |.ffunc_1 pairs
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg TAB:RB, 0(BASE)
+  |  lgr TMPR1, TAB:RB
+  |  checktab TAB:RB, ->fff_fallback
+#if LJ_52
+  |  ltg TMPR2, TAB:RB->metatable; jne ->fff_fallback
+#endif
+  |  lg CFUNC:RD, -16(BASE)
+  |  cleartp CFUNC:RD
+  |  lg CFUNC:RD, CFUNC:RD->upvalue[0]
+  |  settp CFUNC:RD, LJ_TFUNC
+  |  lg PC, -8(BASE)
+  |  stg CFUNC:RD, -16(BASE)
+  |  stg TMPR1, -8(BASE)
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, 0(BASE)
+  |  lghi RD, 1+3
+  |  j ->fff_res
   |
   |.ffunc_2 ipairs_aux
   |  lg TAB:RB, 0(BASE)
@@ -3061,13 +3076,90 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_A	// RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
+    |.if JIT
+    |  // NYI: add hotloop, record BC_ITERN.
+    |.endif
+    |  sllg RA, RA, 3(r0)
+    |  lg TAB:RB, -16(RA, BASE)
+    |  cleartp TAB:RB
+    |  llgf RC, -4(RA, BASE)		// Get index from control var. // TODO: ENDIANNESS DRAGONS.
+    |  llgf TMPR1, TAB:RB->asize
+    |  la PC, 4(PC)
+    |  lg ITYPE, TAB:RB->array
+    |1:  // Traverse array part.
+    |  clr RC, TMPR1; jhe >5		// Index points after array part?
+    |  sllg RD, RC, 3(r0)		// Warning: won't work if RD==RC!
+    |  lg TMPR2, 0(RD, ITYPE)
+    |  cghi TMPR2, LJ_TNIL;  je >4
+    |  // Copy array slot to returned value.
+    |  lgr RB, TMPR2
+    |  stg RB, 8(RA, BASE)
+    |  // Return array index as a numeric key.
+    |  setint ITYPE, RC
+    |  stg ITYPE, 0(RA, BASE)
+    |  ahi RC, 1
+    |  sty RC, -4(RA, BASE)		// Update control var. // TODO: ENDIANNESS DRAGONS
+    |2:
+    |  llgh RD, PC_RD			// Get target from ITERL.
+    |  branchPC RD
+    |3:
+    |  ins_next
+    |
+    |4:  // Skip holes in array part.
+    |  ahi RC, 1
+    |  j <1
+    |
+    |5:  // Traverse hash part.
+    |  sr RC, TMPR1
+    |6:
+    |  cl RC, TAB:RB->hmask; jh <3	// End of iteration? Branch to ITERL+1.
+    |  llgfr ITYPE, RC
+    |  mghi ITYPE, #NODE
+    |  ag NODE:ITYPE, TAB:RB->node
+    |  lghi TMPR2, LJ_TNIL
+    |  cg TMPR2, NODE:ITYPE->val; je >7
+    |  ar TMPR1, RC
+    |  ahi TMPR1, 1
+    |  // Copy key and value from hash slot.
+    |  lg RB, NODE:ITYPE->key
+    |  lg RC, NODE:ITYPE->val
+    |  stg RB, 0(RA, BASE)
+    |  stg RC, 8(RA, BASE)
+    |  sty TMPR1, -4(RA, BASE) // TODO: ENDIANNESS DRAGONS
+    |  j <2
+    |
+    |7:  // Skip holes in hash part.
+    |  ahi RC, 1
+    |  j <6
     break;
+
   case BC_ISNEXT:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = base, RD = target (points to ITERN)
+    |  sllg RA, RA, 3(r0)
+    |  lg CFUNC:RB, -24(RA, BASE)
+    |  checkfunc CFUNC:RB, >5
+    |  lg TMPR1, -16(RA, BASE)
+    |  checktptp TMPR1, LJ_TTAB, >5
+    |  lghi TMPR2, LJ_TNIL
+    |  cg TMPR2, -8(RA, BASE); jne >5
+    |  llgc TMPR1, CFUNC:RB->ffid
+    |  clfi TMPR1, (uint8_t)FF_next_N; jne >5
+    |  branchPC RD
+    |  llihl TMPR1, 0x7fff
+    |  iihh TMPR1, 0xfffe
+    |  stg TMPR1, -8(RA, BASE)		// Initialize control var.
+    |1:
+    |  ins_next
+    |5:  // Despecialize bytecode if any of the checks fail.
+    |  lghi TMPR2, BC_JMP
+    |  stcy  TMPR2, PC_OP
+    |  branchPC RD
+    |  lghi TMPR2, BC_ITERC
+    |  stc TMPR2, 3(PC)
+    |  j <1
     break;
+
   case BC_VARG:
     |  // TODO: some opportunities for branch on index in here.
     |  ins_ABC	// RA = base, RB = nresults+1, RC = numparams
