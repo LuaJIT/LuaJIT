@@ -2421,16 +2421,64 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #undef TV2MARKOFS
   case BC_USETS:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AND	// RA = upvalue #, RD = str const (~)
+    |  lg LFUNC:RB, -16(BASE)
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  cleartp LFUNC:RB
+    |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
+    |  lg STR:RA, 0(RD, KBASE)
+    |  lg RD, UPVAL:RB->v
+    |  settp STR:ITYPE, STR:RA, LJ_TSTR
+    |  stg STR:ITYPE, 0(RD)
+    |  // TODO: tm UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
+    |  llgc TMPR2, UPVAL:RB->marked
+    |  tmll TMPR2, LJ_GC_BLACK
+    |  jne >2
+    |1:
+    |  ins_next
+    |
+    |2:  // Check if string is white and ensure upvalue is closed.
+    |  // TODO: tm GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(str)
+    |  llgc TMPR2, GCOBJ:RA->gch.marked
+    |  tmll TMPR2, LJ_GC_WHITES
+    |  je <1
+    |  // TODO: tm UPVAL:RB->closed, 0xff
+    |  llgc TMPR2, UPVAL:RB->closed
+    |  tmll TMPR2, 0xff
+    |  je <1
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  lgr RB, BASE
+    |  lgr CARG2, RD
+    |  lay GL:CARG1, GG_DISP2G(DISPATCH)
+    |  brasl r14, extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  lgr BASE, RB			// Restore BASE.
+    |  j <1
     break;
   case BC_USETN:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = upvalue #, RD = num const
+    |  lg LFUNC:RB, -16(BASE)
+    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3(r0)
+    |  cleartp LFUNC:RB
+    |  ld f0, 0(RD, KBASE)
+    |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
+    |  lg RA, UPVAL:RB->v
+    |  std f0, 0(RA)
+    |  ins_next
     break;
   case BC_USETP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  ins_AD	// RA = upvalue #, RD = primitive type (~)
+    |  lg LFUNC:RB, -16(BASE)
+    |  sllg RA, RA, 3(r0)
+    |  cleartp LFUNC:RB
+    |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
+    |  sllg RD, RD, 47(r0)
+    |  lghi TMPR2, -1
+    |  xgr RD, TMPR2
+    |  lg RA, UPVAL:RB->v
+    |  stg RD, 0(RA)
+    |  ins_next
     break;
   case BC_UCLO:
     |  ins_AD	// RA = level, RD = target
