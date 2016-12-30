@@ -2378,9 +2378,48 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_USETV:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+#define TV2MARKOFS \
+ ((int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv))
+    |  ins_AD	// RA = upvalue #, RD = src
+    |  lg LFUNC:RB, -16(BASE)
+    |  cleartp LFUNC:RB
+    |  sllg RA, RA, 3(r0)
+    |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
+    |  // TODO: (instead of next 2 instructions) tm UPVAL:RB->closed, 0xff
+    |  llgc TMPR2, UPVAL:RB->closed
+    |  tmll TMPR2, 0xff
+    |  lg RB, UPVAL:RB->v
+    |  sllg TMPR1, RD, 3(r0)
+    |  lg RA, 0(TMPR1, BASE)
+    |  stg RA, 0(RB)
+    |  je >1
+    |  // Check barrier for closed upvalue.
+    |  // TODO: tmy TV2MARKOFS(RB), LJ_GC_BLACK			// isblack(uv)
+    |  llgc TMPR2, TV2MARKOFS(RB)
+    |  tmll TMPR2, LJ_GC_BLACK
+    |  jne >2
+    |1:
+    |  ins_next
+    |
+    |2:  // Upvalue is black. Check if new value is collectable and white.
+    |  srag RD, RA, 47(r0)
+    |  ahi RD, -LJ_TISGCV
+    |  clfi RD, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
+    |  jle <1
+    |  cleartp GCOBJ:RA
+    |  // TODO: tm GCOBJ:RA->gch.marked, LJ_GC_WHITES		// iswhite(v)
+    |  llgc TMPR2, GCOBJ:RA->gch.marked
+    |  tmll TMPR2, LJ_GC_WHITES
+    |  je <1
+    |  // Crossed a write barrier. Move the barrier forward.
+    |  lgr CARG2, RB
+    |  lgr RB, BASE				// Save BASE.
+    |  lay GL:CARG1, GG_DISP2G(DISPATCH)
+    |  brasl r14, extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
+    |  lgr BASE, RB				// Restore BASE.
+    |  j <1
     break;
+#undef TV2MARKOFS
   case BC_USETS:
     |  stg r0, 0(r0)
     |  stg r0, 0(r0)
