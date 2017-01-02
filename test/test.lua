@@ -50,6 +50,11 @@ a = "one string"
 b = string.gsub(a, "one", "another")
 print(b)
 print(a)
+
+print("a=10;b=tostring(a);print(b)")
+a=10
+b=tostring(a)
+print(b)
 print("***************")
 
 
@@ -82,3 +87,12 @@ print(not false)
 print(not 0)
 print(not not nil)
 print("********************************************")
+
+
+print("**********Functions*****************")
+print("function twice(x) return 2*x end")
+b=twice(3)
+print(b)
+print("********************************************")
+
+
