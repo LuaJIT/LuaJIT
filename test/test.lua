@@ -30,6 +30,24 @@ print("a={};a.x=1;a.y=0;b={};b.x=1;b.y=0;c=a")
 a = {}; a.x = 1; a.y = 0
 b = {}; b.x = 1; b.y = 0
 c = a
+
+print(" i=10 ; j='10';k='+10' ; a ={} ; a[i] = 'one value' ; a[j] = 'another value' ; a[k]='yet another value'")
+print("print(a[j];print(a[k];print(a[tonumber(j)];print(a[tonumber(k)]")
+i = 10; j = "10"; k = "+10"
+a = {}
+a[i] = "one value"
+a[j] = "another value"
+a[k] = "yet another value"
+print(a[j])            --> another value
+print(a[k])            --> yet another value
+print(a[tonumber(j)])  --> one value
+print(a[tonumber(k)])  --> one value
+print("***************")
+
+print("**********Ipairs****")
+print("a = {1,2,3,4,5,6} for i , line in ipairs(a) do print(line) end")
+a = {1,2,3,4,5,6}
+for i , line in ipairs(a) do print(line) end
 print("***************")
 
 print("****************Numbers *******************")
@@ -56,9 +74,6 @@ a=10
 b=tostring(a)
 print(b)
 print("***************")
-
-
-
 
 print("*******Escape characters********")
 print("one line\nnext line\n\"in quotes\", 'in quotes'")
