@@ -1,3 +1,6 @@
+-- To run this file use luajit binary as below
+-- ./luajit test.lua
+
 print("*********Addition*******")
 print("a=20;b=10;c=a+b;print(c)")
 a=20
@@ -11,6 +14,16 @@ print("for i=1,10 do print(i) end")
 for i=1,10 do print(i) end
 print("for i=10,1,-1 do print(i) end")
 for i=10,1,-1 do print(i) end
+
+print("************* While Loop ********")
+print("x=10;i=1;while i<x do ; x=i*2 ; print(x); i=i+1;end")
+x=10
+i=1
+while i<x do
+x=i*2
+print(x)
+i=i+1
+end
 print("***************")
 
 print("************ Tables ***********")
@@ -108,6 +121,33 @@ print("**********Functions*****************")
 print("function twice(x) return 2*x end")
 b=twice(3)
 print(b)
+
+print("************Switch case *************")
+function switch(operator)
+local op = operator;
+a = 20 ; b= 10
+
+if op == "+"
+then
+c=a+b
+print("Add Result",c)
+elseif op == "-"
+then 
+c=a-b
+print("Sub Result",c)
+elseif op == "*"
+then
+c=a*b
+print("Mul Result",c)
+elseif op == "/"
+then
+c=a/b
+print("Div Result",c)
+else
+error(" Invalid operator")
+end
+end
+switch("+")
 print("********************************************")
 
 
