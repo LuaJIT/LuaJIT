@@ -119,6 +119,9 @@ print("********************************************")
 
 print("**********Functions*****************")
 print("function twice(x) return 2*x end")
+function twice(x)
+return 2*x
+end 
 b=twice(3)
 print(b)
 
