@@ -320,11 +320,12 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_returnp:
-  |  cghi PC, 0
+  |  lghi TMPR2, FRAME_P
+  |  nr TMPR2, PC
   |  je ->cont_dispatch
   |
   |  // Return from pcall or xpcall fast func.
-  |  nill PC, -7
+  |  nill PC, -8
   |  sgr BASE, PC			// Restore caller base.
   |  lay RA, -8(RA, PC)			// Rebase RA and prepend one result.
   |  lg PC, -8(BASE)			// Fetch PC of previous frame.
@@ -612,8 +613,40 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  // BASE = meta base, RA = resultofs, RD = nresults+1 (also in MULTRES)
+  |  agr RA, BASE
+  |  nill PC, -8
+  |  lgr RB, BASE
+  |  sgr BASE, PC			// Restore caller BASE.
+  |  sllg TMPR1, RD, 3(r0)
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, -8(RA, TMPR1)		// Ensure one valid arg.
+  |  lgr RC, RA				// ... in [RC]
+  |  lg PC, -24(RB)			// Restore PC from [cont|PC].
+  |  lg RA, -32(RB)
+  |.if FFI
+  |  stg r0, 0(r0) // TODO: remove once tested.
+  |  clfi RA, 1
+  |  jle >1
+  |.endif
+  |  lg LFUNC:KBASE, -16(BASE)
+  |  cleartp LFUNC:KBASE
+  |  lg KBASE, LFUNC:KBASE->pc
+  |  lg KBASE, (PC2PROTO(k))(KBASE)
+  |  // BASE = base, RC = result, RB = meta base
+  |  br RA				// Jump to continuation.
+  |
+  |.if FFI
+  |1:
+  |  stg r0, 0(r0) // TODO: remove once tested.
+  |  je ->cont_ffi_callback		// cont = 1: return from FFI callback.
+  |  // cont = 0: Tail call from C function.
+  |  sgr RB, BASE
+  |  srl RB, 3(r0)
+  |  ahi RB, -3
+  |  llgf RD, RB
+  |  j ->vm_call_tail
+  |.endif
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
   |  stg r0, 0(r0)
@@ -787,8 +820,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  brasl r14, extern lj_meta_comp	// (lua_State *L, TValue *o1, *o2, int op)
   |  // 0/1 or TValue * (metamethod) returned in r2 (CRET1).
   |3:
+  |  lgr RC, CRET1
   |  lg BASE, L:RB->base
-  |  clgfi CRET1, 1
+  |  clgfi RC, 1
   |  jh ->vmeta_binop
   |4:
   |  la PC, 4(PC)
@@ -800,16 +834,34 @@ static void build_subroutines(BuildCtx *ctx)
   |  ins_next
   |
   |->cont_condt:			// BASE = base, RC = result
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  la PC, 4(PC)
+  |  lg ITYPE, 0(RC)
+  |  srag ITYPE, ITYPE, 47(r0)
+  |  lghi TMPR2, LJ_TISTRUECOND
+  |  clr ITYPE, TMPR2		// Branch if result is true.
+  |  jl <5
+  |  j <6
   |
   |->cont_condf:			// BASE = base, RC = result
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg ITYPE, 0(RC)
+  |  srag ITYPE, ITYPE, 47(r0)
+  |  lghi TMPR2, LJ_TISTRUECOND
+  |  clr ITYPE, TMPR2		// Branch if result is false.
+  |  j <4
   |
   |->vmeta_equal:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  cleartp TAB:RD
+  |  lay PC, -4(PC)
+  |  lgr CARG2, RA
+  |  lgfr CARG4, RB
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  lgr CARG3, RD
+  |  lgr CARG1, L:RB
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_equal	// (lua_State *L, GCobj *o1, *o2, int ne)
+  |  // 0/1 or TValue * (metamethod) returned in r2 (CRET1).
+  |  j <3
   |
   |->vmeta_equal_cd:
   |  stg r0, 0(r0)
@@ -1048,12 +1100,69 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: getters and setters ---------------------------------
   |
   |.ffunc_1 getmetatable
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg TAB:RB, 0(BASE)
+  |  lg PC, -8(BASE)
+  |  checktab TAB:RB, >6
+  |1:  // Field metatable must be at same offset for GCtab and GCudata!
+  |  lg TAB:RB, TAB:RB->metatable
+  |2:
+  |  lghi TMPR2, LJ_TNIL
+  |  stg TMPR2, -16(BASE)
+  |  cghi TAB:RB, 0
+  |  je ->fff_res1
+  |  settp TAB:RC, TAB:RB, LJ_TTAB
+  |  stg TAB:RC, -16(BASE)		// Store metatable as default result.
+  |  lg STR:RC, (DISPATCH_GL(gcroot)+8*(GCROOT_MMNAME+MM_metatable))(DISPATCH)
+  |  llgf RA, TAB:RB->hmask
+  |  n RA, STR:RC->hash
+  |  settp STR:RC, LJ_TSTR
+  |  mghi RA, #NODE
+  |  ag NODE:RA, TAB:RB->node
+  |3:  // Rearranged logic, because we expect _not_ to find the key.
+  |  cg STR:RC, NODE:RA->key
+  |  je >5
+  |4:
+  |  ltg NODE:RA, NODE:RA->next
+  |  jne <3
+  |  j ->fff_res1			// Not found, keep default result.
+  |5:
+  |  lg RB, NODE:RA->val
+  |  cghi RB, LJ_TNIL; je ->fff_res1	// Ditto for nil value.
+  |  stg RB, -16(BASE)			// Return value of mt.__metatable.
+  |  j ->fff_res1
+  |
+  |6:
+  |  clfi ITYPE, LJ_TUDATA; je <1
+  |  clfi ITYPE, LJ_TISNUM; jh >7
+  |  lhi ITYPE, LJ_TISNUM
+  |7:
+  |  lhi TMPR2, -1
+  |  xr ITYPE, TMPR2 // not ITYPE
+  |  llgfr ITYPE, ITYPE
+  |  sllg ITYPE, ITYPE, 3(r0)
+  |  lg TAB:RB, (DISPATCH_GL(gcroot[GCROOT_BASEMT]))(ITYPE, DISPATCH)
+  |  j <2
   |
   |.ffunc_2 setmetatable
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg TAB:RB, 0(BASE)
+  |  lgr TAB:TMPR1, TAB:RB
+  |  checktab TAB:RB, ->fff_fallback
+  |  // Fast path: no mt for table yet and not clearing the mt.
+  |  lghi TMPR2, 0
+  |  cg TMPR2, TAB:RB->metatable; jne ->fff_fallback
+  |  lg TAB:RA, 8(BASE)
+  |  checktab TAB:RA, ->fff_fallback
+  |  stg TAB:RA, TAB:RB->metatable
+  |  lg PC, -8(BASE)
+  |  stg TAB:TMPR1, -16(BASE)			// Return original table.
+  |  // TODO: change to tm
+  |  llgc TMPR2, TAB:RB->marked
+  |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+  |  je >1
+  |  // Possible write barrier. Table is black, but skip iswhite(mt) check.
+  |  barrierback TAB:RB, RC
+  |1:
+  |  j ->fff_res1
   |
   |.ffunc_2 rawget
   |  stg r0, 0(r0)
