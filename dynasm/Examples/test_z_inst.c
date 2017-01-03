@@ -380,6 +380,20 @@ static void sqrt_rxe(dasm_State *state)
 
 }
 
+static void rxf(dasm_State *state) {
+  dasm_State **Dst = &state;
+
+  | lay    sp , -8(sp)
+  | cegbra f1 ,0, r2,0
+  | cegbra f2 ,0,r3,0
+  | ste    f2 ,0(sp)
+  | maeb   f1, f2, 0(sp)
+  | cfebr  r2 ,0, f1
+  | la     sp, 8(sp)
+  | br     r14
+
+}
+
 typedef struct {
   int64_t arg1;
   int64_t arg2;
@@ -413,7 +427,8 @@ test_table test[] = {
   {15, 3,10,   rrfe_rrd,      45, "rrfe_rrd"},
   { 0, 0, 0,        rsb,       0,     "rsb"},
   {12,10, 0,        rre,      10,     "rre"},
-  {16,10, 0,   sqrt_rxe,       4,"sqrt_rxe"}
+  {16,10, 0,   sqrt_rxe,       4,"sqrt_rxe"},
+  {16,10, 0,        rxf,     116,     "rxf"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
