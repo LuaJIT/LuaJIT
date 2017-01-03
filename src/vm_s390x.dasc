@@ -1358,12 +1358,16 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |.ffunc coroutine_wrap_aux
   |.endif
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |.endmacro
   |
   |  coroutine_resume_wrap 1		// coroutine.resume
   |  coroutine_resume_wrap 0		// coroutine.wrap
   |
   |.ffunc coroutine_yield
+  |  stg r0, 0(r0)
+  |  stg r0, 0(r0)
   |
   |//-- Math library -------------------------------------------------------
   |
@@ -1600,7 +1604,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  j <3
   |
   |->fff_emptystr:  // Range underflow.
-  |  stg r0, 0(r0)
+  |  lghi RD, 0
+  |  j <3
   |
   |.macro ffstring_op, name
   |  .ffunc_1 string_ .. name
