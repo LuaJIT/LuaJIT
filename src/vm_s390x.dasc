@@ -22,6 +22,8 @@
 |//   clfi (compare logical immediate) [requires z9-109]
 |//   ldgr (load FPR from GPR)         [requires z9-109 GA3]
 |//   lgdr (load GPR from FPR)         [requires z9-109 GA3]
+|//   ldy  (load (long bfp))           [requires z900 GA2]
+|//   stdy (store (long bfp))          [requires z900 GA2]
 |// TODO: alternative instructions?
 |
 |.arch s390x
@@ -180,7 +182,7 @@
 |.else
 |  // Common dispatch. Lower I-Cache use, only one (very) unpredictable branch.
 |  .macro ins_next
-|    jmp ->ins_next
+|    j ->ins_next
 |  .endmacro
 |  .macro ins_next_
 |  ->ins_next:
@@ -1034,14 +1036,23 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_n, name, op
   |  .ffunc_1 name
+  |  lg TMPR2, 0(BASE)
+  |  checknumtp TMPR2, ->fff_fallback
+  |  op f0, 0(BASE) // TODO: might be better to unconditionally load into f1.
   |.endmacro
   |
   |.macro .ffunc_n, name
-  |  .ffunc_n name, mvc
+  |  .ffunc_n name, ld
   |.endmacro
   |
   |.macro .ffunc_nn, name
   |  .ffunc_2 name
+  |  lg TMPR1, 0(BASE)
+  |  lg TMPR2, 8(BASE)
+  |  ld f0, 0(BASE)
+  |  ld f1, 8(BASE)
+  |  checknumtp TMPR1, ->fff_fallback
+  |  checknumtp TMPR2, ->fff_fallback
   |.endmacro
   |
   |// Inlined GC threshold check. Caveat: uses label 1.
@@ -1377,8 +1388,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg RB, -16(BASE)
   |  j ->fff_res1
   |
-  |.ffunc_n math_sqrt, sqrtsd
-  |->fff_resxmm0:
+  |.ffunc_n math_sqrt, sqdb
+  |->fff_resf0:
+  |  lg PC, -8(BASE)
+  |  stdy f0, -16(BASE)
+  |  // fallthrough
   |
   |->fff_res1:
   |  lghi RD, 1+1
@@ -1417,13 +1431,29 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_round ceil
   |
   |.ffunc math_log
+  |  chi NARGS:RD, 1+1; jne ->fff_fallback	// Exactly one argument.
+  |  lg TMPR2, 0(BASE)
+  |  ld f0, 0(BASE)
+  |  checknumtp TMPR2, ->fff_fallback
+  |  lgr RB, BASE
+  |  brasl r14, extern log
+  |  lgr BASE, RB
+  |  j ->fff_resf0
   |
   |.macro math_extern, func
   |  .ffunc_n math_ .. func
+  |  lgr RB, BASE
+  |  brasl r14, extern func
+  |  lgr BASE, RB
+  |  j ->fff_resf0
   |.endmacro
   |
   |.macro math_extern2, func
   |  .ffunc_nn math_ .. func
+  |  lgr RB, BASE
+  |  brasl r14, extern func
+  |  lgr BASE, RB
+  |  j ->fff_resf0
   |.endmacro
   |
   |  math_extern log10
@@ -1442,10 +1472,40 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern2 fmod
   |
   |.ffunc_2 math_ldexp
+  |  lg TMPR2, 0(BASE)
+  |  ld f0, 0(BASE)
+  |  lg CARG1, 8(BASE)
+  |  checknumtp TMPR2, ->fff_fallback
+  |  checkinttp CARG1, ->fff_fallback
+  |  lgfr CARG1, CARG1
+  |  lgr RB, BASE
+  |  brasl r14, extern ldexp	// (double, int)
+  |  lgr BASE, RB
+  |  j ->fff_resf0
   |
   |.ffunc_n math_frexp
+  |  lgr RB, BASE
+  |  la CARG1, TMP_STACK
+  |  brasl r14, extern frexp
+  |  lgr BASE, RB
+  |  llgf RB, TMP_STACK
+  |  lg PC, -8(BASE)
+  |  stdy f0, -16(BASE)
+  |  setint RB
+  |  stg RB, -8(BASE)
+  |  lghi RD, 1+2
+  |  j ->fff_res
   |
   |.ffunc_n math_modf
+  |  lgr RB, BASE
+  |  lay CARG1, -16(BASE)
+  |  brasl r14, extern modf	// (double, double*)
+  |  lgr BASE, RB
+  |  lg PC, -8(BASE)
+  |  stdy f0, -8(BASE)
+  |  lghi RD, 1+2
+  |  j ->fff_res
+  |
   |.macro math_minmax, name, cmovop, sseop
   |  .ffunc name
   |.endmacro
