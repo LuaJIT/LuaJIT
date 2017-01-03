@@ -1061,20 +1061,20 @@ map_op = {
   spm_2 =	"000000000400RR",
   ssar_2 =	"0000b2250000RRE",
   ssair_2 =	"0000b99f0000RRE",
-  slda_3 =	"00008f000000RS-a",
-  sldl_3 =	"00008d000000RS-a",
-  sla_3 =	"00008b000000RS-a",
+  slda_2 =	"00008f000000RS-a",
+  sldl_2 =	"00008d000000RS-a",
+  sla_2 =	"00008b000000RS-a",
   slak_3 =	"eb00000000ddRSY-a",
   slag_3 =	"eb000000000bRSY-a",
-  sll_3 =	"000089000000RS-a",
+  sll_2 =	"000089000000RS-a",
   sllk_3 =	"eb00000000dfRSY-a",
   sllg_3 =	"eb000000000dRSY-a",
-  srda_3 =	"00008e000000RS-a",
-  srdl_3 =	"00008c000000RS-a",
-  sra_3 =	"00008a000000RS-a",
+  srda_2 =	"00008e000000RS-a",
+  srdl_2 =	"00008c000000RS-a",
+  sra_2 =	"00008a000000RS-a",
   srak_3 =	"eb00000000dcRSY-a",
   srag_3 =	"eb000000000aRSY-a",
-  srl_3 =	"000088000000RS-a",
+  srl_2 =	"000088000000RS-a",
   srlk_3 =	"eb00000000deRSY-a",
   srlg_3 =	"eb000000000cRSY-a",
   sqxbr_2 =	"0000b3160000RRE",
@@ -1225,6 +1225,9 @@ map_op = {
   brxhg_3 =	"ec0000000044RIE-e",
   -- SI
   ni_2 =	"000094000000SI",
+  tm_2 =	"000091000000SI",
+  -- SIY
+  tmy_2 =	"eb0000000051SIY",
   -- RXF
   madb_3 =	"ed000000001eRXF",
   -- RRD
@@ -1291,11 +1294,17 @@ local function parse_template(params, template, nparams, pos)
     local mode, n, s = parse_label(params[2])
     waction("REL_"..mode, n, s)
   elseif p == "RS-a" then
-    local d, b, a = parse_mem_b(params[3])
-    op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
-    op2 = op2 + shl(b, 12) + d
+    if (params[3]) then
+      local d, b, a = parse_mem_b(params[3])
+      op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
+      op2 = op2 + shl(b, 12) + d
+    else
+      local d, b, a = parse_mem_b(params[2])
+      op1 = op1 + shl(parse_reg(params[1]), 4)
+      op2 = op2 + shl(b, 12) + d
+    end
     wputhw(op1); wputhw(op2)
-    if a then a() end -- a() emits action.
+    if a then a() end 
   elseif p == "RSY-a" then
     local d, b, a = parse_mem_by(params[3])
     op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
@@ -1445,6 +1454,16 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + shl(b, 12) + d
     wputhw(op1); wputhw(op2)
     if a then a() end
+  elseif p == "SIY" then
+    local imm8,iact = parse_imm8(params[2])
+    op0 = op0 + shl(imm8, 8)
+    wputhw(op0);
+    if iact then iact() end
+    local d, b, a = parse_mem_by(params[1])
+    op1 = op1 + shl(b, 12) + band(d, 0xfff)
+    op2 = op2 + band(shr(d, 4), 0xff00)
+    wputhw(op1); wputhw(op2)
+    if a then a() end 
   else
     werror("unrecognized encoding")
   end
