@@ -1520,7 +1520,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg RA, 8(BASE)
   |  checkint RA, ->fff_fallback
   |  nill RA, 0x1f	// Limit shift to 5-bits.
-  |  ins RB, r0, 0(RA)	// TODO: fix shift args in DynASM.
+  |  ins RB, 0(RA)	// TODO: fix shift args in DynASM.
   |  j ->fff_resbit
   |.endmacro
   |
