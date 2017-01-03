@@ -1184,6 +1184,7 @@ map_op = {
   -- RRF-e instructions
   cfebr_3 =	"0000b3980000RRF-e",
   cfebra_4 =	"0000b3980000RRF-e",
+  cegbra_4 =	"0000b3a40000RRF-e",
   -- RXE instructions
   adb_2 =	"ed000000001aRXE",
   aeb_2 =	"ed000000000aRXE",
@@ -1230,6 +1231,7 @@ map_op = {
   tmy_2 =	"eb0000000051SIY",
   -- RXF
   madb_3 =	"ed000000001eRXF",
+  maeb_3 =	"ed000000000eRXF",
   -- RRD
   maebr_3 =	"0000b30e0000RRD",
   -- RS-b
