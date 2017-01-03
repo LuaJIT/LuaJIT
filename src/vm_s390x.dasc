@@ -1516,10 +1516,24 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- String library -----------------------------------------------------
   |
   |.ffunc string_byte			// Only handle the 1-arg case here.
-  |  stg r0, 0(r0)
+  |  chi NARGS:RD, 1+1;  jne ->fff_fallback
+  |  lg STR:RB, 0(BASE)
+  |  checkstr STR:RB, ->fff_fallback
+  |  lg PC, -8(BASE)
+  |  ltg TMPR2, STR:RB->len
+  |  je ->fff_res0			// Return no results for empty string.
+  |  llgc RB, STR:RB[1]
+  |  j ->fff_resi
   |
   |.ffunc string_char			// Only handle the 1-arg case here.
-  |  stg r0, 0(r0)
+  |  ffgccheck
+  |  chi NARGS:RD, 1+1;  jne ->fff_fallback	// *Exactly* 1 arg.
+  |  lg RB, 0(BASE)
+  |  checkint RB, ->fff_fallback
+  |  clfi RB, 255;  jh ->fff_fallback
+  |  strvh RB, TMP_STACK		// Store [c,0].
+  |  lghi TMPR1, 1
+  |  la RD, TMP_STACK			// Points to stack. Little-endian.
   |->fff_newstr:
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
