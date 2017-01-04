@@ -325,9 +325,14 @@ local function split_memop(arg)
     return d, 0, parse_reg(b)
   end
   -- Assuming the two registers are passed as "(r1,r2)", and displacement(d) is not specified
-  local x, b = string.match(arg,"%(%s*("..reg..")%s*,%s*("..reg..")%s*%)$")
+  local x, b = match(arg,"%(%s*("..reg..")%s*,%s*("..reg..")%s*%)$")
   if b then
     return 0, parse_reg(x), parse_reg(b)
+  end
+  -- Assuming that only displacement is passed, as either digit or label "45 or  label1"
+  local d = match(arg,"[%w_]+")
+  if d then 
+    return d, 0, 0
   end
   local reg, tailr = match(arg, "^([%w_:]+)%s*(.*)$")
   if reg then
