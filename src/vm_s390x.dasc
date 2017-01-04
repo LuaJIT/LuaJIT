@@ -1834,8 +1834,27 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Reconstruct previous base for vmeta_call during tailcall.
   |->vm_call_tail:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lgr RA, BASE
+  |  tmll PC, FRAME_TYPE
+  |  jne >3
+  |  llgc RB, PC_RA
+  |  lcgr RB, RB
+  |  sllg RB, RB, 3(r0)
+  |  lay BASE, -16(RB, BASE)		// base = base - (RB+2)*8
+  |  j ->vm_call_dispatch		// Resolve again for tailcall.
+  |3:
+  |  lgr RB, PC
+  |  nill RB, -8
+  |  sgr BASE, RB
+  |  j ->vm_call_dispatch		// Resolve again for tailcall.
+  |
+  |5:  // Grow stack for fallback handler.
+  |  lghi CARG2, LUA_MINSTACK
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
+  |  lg BASE, L:RB->base
+  |  lghi RD, 0				// Simulate a return 0.
+  |  j <1				// Dumb retry (goes through ff first).
   |
   |->fff_gcstep:			// Call GC step function.
   |  // BASE = new base, RD = nargs+1
