@@ -324,6 +324,11 @@ local function split_memop(arg)
   if d then
     return d, 0, parse_reg(b)
   end
+  -- Assuming the two registers are passed as "(r1,r2)", and displacement(d) is not specified
+  local x, b = string.match(arg,"%(%s*("..reg..")%s*,%s*("..reg..")%s*%)$")
+  if b then
+    return 0, parse_reg(x), parse_reg(b)
+  end
   local reg, tailr = match(arg, "^([%w_:]+)%s*(.*)$")
   if reg then
     local r, tp = parse_reg(reg)
@@ -332,7 +337,7 @@ local function split_memop(arg)
     end
   end
   -- TODO: handle values without registers?
-  -- TODO: handle registers without a displacement?
+  -- TODO: handle registers without a displacement? -- done, above ,needs to be tested
   werror("bad memory operand: "..arg)
   return nil
 end
