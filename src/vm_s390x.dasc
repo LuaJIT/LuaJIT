@@ -651,8 +651,21 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  llgc RA, PC_RB
+  |  sllg RA, RA, 3(r0)
+  |  aghi RB, -32
+  |  la RA, 0(RA, BASE)
+  |  sgr RA, RB
+  |  je ->cont_ra
+  |  lcgr RA, RA
+  |  srlg RA, RA, 3(r0)
+  |  lg L:CARG1, SAVE_L
+  |  stg BASE, L:CARG1->base
+  |  lgfr CARG3, RA
+  |  lg RA, 0(RC)
+  |  stg RA, 0(RB)
+  |  lgr CARG2, RB
+  |  j ->BC_CAT_Z
   |
   |//-- Table indexing metamethods -----------------------------------------
   |
@@ -1347,8 +1360,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->vm_call_dispatch
   |
   |.ffunc_2 xpcall
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg LFUNC:RA, 8(BASE)
+  |  checktp_nc LFUNC:RA, LJ_TFUNC, ->fff_fallback
+  |  lg LFUNC:RB, 0(BASE)		// Swap function and traceback.
+  |  stg LFUNC:RA, 0(BASE)
+  |  stg LFUNC:RB, 8(BASE)
+  |  la RA, 24(BASE)
+  |  aghi NARGS:RD, -2
+  |  lghi PC, 24+FRAME_PCALL
+  |  j <1
   |
   |//-- Coroutine library --------------------------------------------------
   |
