@@ -330,10 +330,10 @@ local function split_memop(arg)
     return 0, parse_reg(x), parse_reg(b)
   end
   -- Assuming that only displacement is passed, as either digit or label "45 or  label1"
-  local d = match(arg,"[%w_]+")
-  if d then 
-    return d, 0, 0
-  end
+  -- local d = match(arg,"[%w_]+")
+  -- if d then 
+  --   return d, 0, 0
+  -- end
   local reg, tailr = match(arg, "^([%w_:]+)%s*(.*)$")
   if reg then
     local r, tp = parse_reg(reg)
