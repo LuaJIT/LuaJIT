@@ -791,7 +791,7 @@ static void build_subroutines(BuildCtx *ctx)
   |3:  // Call __newindex metamethod.
   |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
   |  lg RA, L:RB->top
-  |  stg PC, -24(PC)			// [cont|PC]
+  |  stg PC, -24(RA)			// [cont|PC]
   |  llgc RC, PC_RA
   |  // Copy value to third argument.
   |  sllg RB, RC, 3(r0)
