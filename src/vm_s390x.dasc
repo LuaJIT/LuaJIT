@@ -1510,12 +1510,49 @@ static void build_subroutines(BuildCtx *ctx)
   |  lghi RD, 1+2
   |  j ->fff_res
   |
-  |.macro math_minmax, name, cmovop, sseop
+  |.macro math_minmax, name, cjmp
   |  .ffunc name
+  |  lghi RA, 2*8
+  |  sllg TMPR1, RD, 3(r0)
+  |  lg RB, 0(BASE)
+  |  ld f0, 0(BASE)
+  |  checkint RB, >4
+  |1:  // Handle integers.
+  |  clgr RA, TMPR1; jhe ->fff_resRB
+  |  lg TMPR2, -8(RA, BASE)
+  |  checkint TMPR2, >3
+  |  cr RB, TMPR2
+  |  cjmp >2
+  |  lgr RB, TMPR2
+  |2:
+  |  aghi RA, 8
+  |  j <1
+  |3:
+  |  jh ->fff_fallback
+  |  // Convert intermediate result to number and continue below.
+  |  cdfbr f0, RB
+  |  ldgr f1, TMPR2
+  |  j >6
+  |4:
+  |  jh ->fff_fallback
+  |5:  // Handle numbers or integers.
+  |  clgr RA, TMPR1; jhe ->fff_resf0
+  |  lg RB, -8(RA, BASE)
+  |  ldy f1, -8(RA, BASE)
+  |  checknumx RB, >6, jl
+  |  jh ->fff_fallback
+  |  cdfbr f1, RB
+  |6:
+  |  cdbr f0, f1
+  |  cjmp >7
+  |  ldr f0, f1
+  |7:
+  |  aghi RA, 8
+  |  j <5
   |.endmacro
   |
-  |  math_minmax math_min, cmovg, minsd
-  |  math_minmax math_max, cmovl, maxsd
+  |  math_minmax math_min, jnh
+  |  math_minmax math_max, jnl
   |
   |//-- String library -----------------------------------------------------
   |
