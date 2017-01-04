@@ -705,7 +705,7 @@ static void build_subroutines(BuildCtx *ctx)
   |3:  // Call __index metamethod.
   |  // BASE = base, L->top = new base, stack = cont/func/t/k
   |  lg RA, L:RB->top
-  |  stg PC, -24(PC)			// [cont|PC]
+  |  stg PC, -24(RA)			// [cont|PC]
   |  lay PC, FRAME_CONT(RA)
   |  sgr PC, BASE
   |  lg LFUNC:RB, -16(RA)		// Guaranteed to be a function here.
@@ -1603,7 +1603,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg STR:RB, 0(BASE)
   |  checkstr STR:RB, ->fff_fallback
   |  lg ITYPE, 8(BASE)
-  |  llgfr RA, ITYPE			// Must clear hiword for lea below.
+  |  lgfr RA, ITYPE
   |  srag ITYPE, ITYPE, 47(r0)
   |  cghi ITYPE, LJ_TISNUM
   |  jne ->fff_fallback
@@ -1641,8 +1641,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  j <3
   |
   |->fff_emptystr:  // Range underflow.
-  |  lghi RD, 0
-  |  j <3
+  |  lghi TMPR1, 0
+  |  j <4
   |
   |.macro ffstring_op, name
   |  .ffunc_1 string_ .. name
