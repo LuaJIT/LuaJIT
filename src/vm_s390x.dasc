@@ -1189,8 +1189,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_res1
   |
   |.ffunc_2 rawget
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg TAB:CARG2, 0(BASE)
+  |  checktab TAB:CARG2, ->fff_fallback
+  |  lgr RB, BASE			// Save BASE.
+  |  la CARG3, 8(BASE)
+  |  lg CARG1, SAVE_L
+  |  brasl r14, extern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
+  |  // cTValue * returned in r2 (CRET1).
+  |  lgr BASE, RB			// Restore BASE.
+  |  // Copy table slot.
+  |  lg RB, 0(CRET1)
+  |  lg PC, -8(BASE)
+  |  stg RB, -16(BASE)
+  |  j ->fff_res1
   |
   |//-- Base library: conversions ------------------------------------------
   |
