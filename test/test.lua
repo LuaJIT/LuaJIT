@@ -181,3 +181,31 @@ io.write("The date and time is ", os.date(),"\n")
 io.write("The OS time is ", os.time(),"\n")
 io.write("Lua started before ", os.clock(),"\n")
 print("********************************************")
+
+print("****************String Processing Functions *******")
+string1 = "Lua";
+print("String Upper",string.upper(string1))
+print("String Lower",string.lower(string1))
+string = "Lua Tutorial"
+print("String Indices",string.find(string,"Tutorial"))
+print("String Reverse",string.reverse(string))
+string1 = "Lua"
+string2 = "Tutorial"
+number1 = 10
+number2 = 20
+print(string.format("Basic formatting %s %s",string1,string2))
+date = 2; month = 1; year = 2014
+print(string.format("Date formatting %02d/%02d/%03d", date, month, year))
+print("String to ASCII",string.byte("Lua"))
+print("ASCII for 3 character in word",string.byte("Lua",3))
+print("ASCII for 1 character from last in word",string.byte("Lua",-1))
+print("ASCII for 2 character in word",string.byte("Lua",2))
+print("ASCII for 2 character from last in word",string.byte("Lua",-2))
+print("ASCII Value to string",string.char(97))
+
+string1 = "Lua"
+string2 = "Tutorial"
+print("Concatenated string",string1..string2)
+print("Length of string1 is ",string.len(string1))
+print("Repeated String",string.rep(string1,3))
+print("********************************************")
