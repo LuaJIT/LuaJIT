@@ -212,13 +212,14 @@ print("********************************************")
 
 print("****************OS Functions *******")
 fruits = {"banana","orange","apple"}
-print("Table contents are ",fruits)
+print("Table contents are ")
+for key,value in ipairs(fruits) do print(value) end
 print("Concatenated string ",table.concat(fruits))
 print("Concatenated string ",table.concat(fruits,", "))
 print("Concatenated string ",table.concat(fruits,", ", 2,3))
 print("Inserting new fruit Mango")
 table.insert(fruits,"mango")
-print("Fruit table now is",fruits)
+for key,value in ipairs(fruits) do print(value) end
 print("Concatenated string ",table.concat(fruits,", "))
 print("The maximum elements in table is",table.maxn(fruits))
 print("The maximum elements in table is",table.remove(fruits))
