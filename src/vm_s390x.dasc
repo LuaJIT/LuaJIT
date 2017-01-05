@@ -512,6 +512,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  st RD, SAVE_NRES
   |  stg RD, SAVE_ERRF
   |  stg KBASE, L:RB->cframe
+  |  lgr LREG, L:RB
   |  clm RD, 1, L:RB->status
   |  je >2				// Initial resume (like a call).
   |
@@ -1386,19 +1387,169 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro coroutine_resume_wrap, resume
   |.if resume
   |.ffunc_1 coroutine_resume
+  |  lg L:RB, 0(BASE)
+  |  lgr L:TMPR2, L:RB			// Save type for checktptp.
+  |  cleartp L:RB
   |.else
   |.ffunc coroutine_wrap_aux
+  |  lg CFUNC:RB, -16(BASE)
+  |  cleartp CFUNC:RB
+  |  lg L:RB, CFUNC:RB->upvalue[0].gcr
+  |  cleartp L:RB
   |.endif
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg PC, -8(BASE)
+  |  stg PC, SAVE_PC
+  |  stg L:RB, TMP_STACK
+  |.if resume
+  |  checktptp L:TMPR2, LJ_TTHREAD, ->fff_fallback
+  |.endif
+  |  ltg TMPR2, L:RB->cframe; jne ->fff_fallback
+  |  // TODO: replace with cli.
+  |  llgc TMPR1, L:RB->status
+  |  cghi TMPR1, (uint8_t)LUA_YIELD; jh ->fff_fallback
+  |  lg RA, L:RB->top
+  |  je >1				// Status != LUA_YIELD (i.e. 0)?
+  |  cg RA, L:RB->base			// Check for presence of initial func.
+  |  je ->fff_fallback
+  |  lg PC, -8(RA)			// Move initial function up.
+  |  stg PC, 0(RA)
+  |  la RA, 8(RA)
+  |1:
+  |  sllg TMPR1, NARGS:RD, 3(r0)
+  |.if resume
+  |  lay PC, -16(TMPR1, RA)		// Check stack space (-1-thread).
+  |.else
+  |  lay PC, -8(TMPR1, RA)		// Check stack space (-1).
+  |.endif
+  |  clg PC, L:RB->maxstack; jh ->fff_fallback
+  |  stg PC, L:RB->top
+  |
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |.if resume
+  |  la BASE, 8(BASE)			// Keep resumed thread in stack for GC.
+  |.endif
+  |  stg BASE, L:RB->top
+  |.if resume
+  |  lay RB, -24(TMPR1, BASE)		// RB = end of source for stack move.
+  |.else
+  |  lay RB, -16(TMPR1, BASE)		// RB = end of source for stack move.
+  |.endif
+  |  sgr RB, PC			// Relative to PC.
+  |
+  |  cgr PC, RA
+  |  je >3
+  |2:  // Move args to coroutine.
+  |  lg RC, 0(RB, PC)
+  |  stg RC, -8(PC)
+  |  // TODO: replace with branch on count/index?
+  |  lay PC, -8(PC)
+  |  cgr PC, RA
+  |  jne <2
+  |3:
+  |  lgr CARG2, RA
+  |  lg L:CARG1, TMP_STACK
+  |  lghi CARG3, 0
+  |  lghi CARG4, 0
+  |  brasl r14, ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
+  |
+  |  lg L:RB, SAVE_L
+  |  lg L:PC, TMP_STACK
+  |  lg BASE, L:RB->base
+  |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
+  |  set_vmstate INTERP
+  |
+  |  clfi CRET1, LUA_YIELD
+  |  jh >8
+  |4:
+  |  lg RA, L:PC->base
+  |  lg KBASE, L:PC->top
+  |  stg RA, L:PC->top			// Clear coroutine stack.
+  |  lgr PC, KBASE
+  |  sgr PC, RA
+  |  je >6				// No results?
+  |  la RD, 0(PC, BASE)
+  |  llgfr PC, PC
+  |  srlg PC, PC, 3(r0)
+  |  clg RD, L:RB->maxstack
+  |  jh >9				// Need to grow stack?
+  |
+  |  lgr RB, BASE
+  |  sgr RB, RA
+  |5:  // Move results from coroutine.
+  |  lg RD, 0(RA)
+  |  stg RD, 0(RA, RB)
+  |  // TODO: branch on count/index?
+  |  la RA, 8(RA)
+  |  cgr RA, KBASE
+  |  jne <5
+  |6:
+  |.if resume
+  |  la RD, 2(PC)			// nresults+1 = 1 + true + results.
+  |  load_true ITYPE			// Prepend true to results.
+  |  stg ITYPE, -8(BASE)
+  |.else
+  |  la RD, 1(PC)			// nresults+1 = 1 + results.
+  |.endif
+  |7:
+  |  lg PC, SAVE_PC
+  |  st RD, SAVE_MULTRES
+  |.if resume
+  |  lghi RA, -8
+  |.else
+  |  lghi RA, 0
+  |.endif
+  |  tmll PC, FRAME_TYPE
+  |  je ->BC_RET_Z
+  |  j ->vm_return
+  |
+  |8:  // Coroutine returned with error (at co->top-1).
+  |.if resume
+  |  load_false ITYPE			// Prepend false to results.
+  |  stg ITYPE, -8(BASE)
+  |  lg RA, L:PC->top
+  |  aghi RA, -8
+  |  stg RA, L:PC->top			// Clear error from coroutine stack.
+  |  // Copy error message.
+  |  lg RD, 0(RA)
+  |  stg RD, 0(BASE)
+  |  lghi RD, 1+2			// nresults+1 = 1 + false + error.
+  |  j <7
+  |.else
+  |  lgr CARG2, L:PC
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_ffh_coroutine_wrap_err  // (lua_State *L, lua_State *co)
+  |  // Error function does not return.
+  |.endif
+  |
+  |9:  // Handle stack expansion on return from yield.
+  |  lg L:RA, TMP_STACK
+  |  stg KBASE, L:RA->top		// Undo coroutine stack clearing.
+  |  lgr CARG2, PC
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
+  |  lg L:PC, TMP_STACK
+  |  lg BASE, L:RB->base
+  |  j <4				// Retry the stack move.
   |.endmacro
   |
   |  coroutine_resume_wrap 1		// coroutine.resume
   |  coroutine_resume_wrap 0		// coroutine.wrap
   |
   |.ffunc coroutine_yield
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  lg L:RB, SAVE_L
+  |  lg TMPR2, L:RB->cframe
+  |  tmll TMPR2, CFRAME_RESUME
+  |  je ->fff_fallback
+  |  stg BASE, L:RB->base
+  |  sllg TMPR1, NARGS:RD, 3(r0)
+  |  lay RD, -8(TMPR1, BASE)
+  |  stg RD, L:RB->top
+  |  lghi RD, 0
+  |  stg RD, L:RB->cframe
+  |  lhi RA, LUA_YIELD
+  |  stc RA, L:RB->status
+  |  j ->vm_leave_unw
   |
   |//-- Math library -------------------------------------------------------
   |
@@ -3906,7 +4057,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lay RD, -8(RD,BASE)
     |  stg BASE, L:RB->base
     |  lay RA, (8*LUA_MINSTACK)(RD)
-    |  cg RA, L:RB->maxstack
+    |  clg RA, L:RB->maxstack
     |  stg RD, L:RB->top
     |  lgr CARG1, L:RB			// Caveat: CARG1 may be RA.
     if (op != BC_FUNCC) {
