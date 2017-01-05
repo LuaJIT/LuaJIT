@@ -1062,8 +1062,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  .ffunc_2 name
   |  lg TMPR1, 0(BASE)
   |  lg TMPR2, 8(BASE)
-  |  ld f0, 0(BASE)
-  |  ld f1, 8(BASE)
+  |  ld FARG1, 0(BASE)
+  |  ld FARG2, 8(BASE)
   |  checknumtp TMPR1, ->fff_fallback
   |  checknumtp TMPR2, ->fff_fallback
   |.endmacro
@@ -1457,7 +1457,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc math_log
   |  chi NARGS:RD, 1+1; jne ->fff_fallback	// Exactly one argument.
   |  lg TMPR2, 0(BASE)
-  |  ld f0, 0(BASE)
+  |  ld FARG1, 0(BASE)
   |  checknumtp TMPR2, ->fff_fallback
   |  lgr RB, BASE
   |  brasl r14, extern log
@@ -1497,7 +1497,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc_2 math_ldexp
   |  lg TMPR2, 0(BASE)
-  |  ld f0, 0(BASE)
+  |  ld FARG1, 0(BASE)
   |  lg CARG1, 8(BASE)
   |  checknumtp TMPR2, ->fff_fallback
   |  checkinttp CARG1, ->fff_fallback
