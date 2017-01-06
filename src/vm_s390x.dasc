@@ -628,7 +628,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg PC, -24(RB)			// Restore PC from [cont|PC].
   |  lg RA, -32(RB)
   |.if FFI
-  |  stg r0, 0(r0) // TODO: remove once tested.
   |  clfi RA, 1
   |  jle >1
   |.endif
@@ -641,13 +640,12 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.if FFI
   |1:
-  |  stg r0, 0(r0) // TODO: remove once tested.
   |  je ->cont_ffi_callback		// cont = 1: return from FFI callback.
   |  // cont = 0: Tail call from C function.
   |  sgr RB, BASE
   |  srl RB, 3(r0)
   |  ahi RB, -3
-  |  llgf RD, RB
+  |  llgfr RD, RB
   |  j ->vm_call_tail
   |.endif
   |
@@ -880,8 +878,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  j <3
   |
   |->vmeta_equal_cd:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |.if FFI
+  |  lay PC, -4(PC)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  lgr CARG1, L:RB
+  |  llgf CARG2, -4(PC)
+  |  stg PC, SAVE_PC
+  |  brasl r14, extern lj_meta_equal_cd	// (lua_State *L, BCIns ins)
+  |  // 0/1 or TValue * (metamethod) returned in r2 (CRET1).
+  |  j <3
+  |.endif
   |
   |->vmeta_istype:
   |  lg L:RB, SAVE_L
@@ -2165,9 +2172,58 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0(r0)
   |
   |->vm_ffi_call:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
+  |.if FFI
+  |  .type CCSTATE, CCallState, r10
+  |  stmg r6, r15, 48(sp) // TODO: need to save r6, but might be better in separate store?
+  |  lgr CCSTATE, CARG1
+  |
+  |  // Readjust stack.
+  |  sgf sp, CCSTATE->spadj
+  |
+  |  // Copy stack slots.
+  |  llgc r0, CCSTATE->nsp
+  |  cghi r0, 0
+  |  jle >3
+  |  lay r1, (offsetof(CCallState, stack))(CCSTATE)	// Source.
+  |  lay r11, (CCALL_SPS_EXTRA*8)(sp)			// Destination.
+  |1:
+  |  cghi r0, 256
+  |  jl >2
+  |  mvc 0(256, r11), 0(r1)
+  |  aghi r1, 256*8
+  |  aghi r11, 256*8
+  |  aghi r0, -256
+  |  j <1
+  |2:
+  |  cghi r0, 0
+  |  je >3
+  |  // TODO: exrl mvc rather than loop.
+  |  mvc 0(8, r11), 0(r1)
+  |  aghi r1, 8
+  |  aghi r11, 8
+  |  aghi r0, -1
+  |  j <2
+  |3:
+  |
+  |  lmg CARG1, CARG5, CCSTATE->gpr[0]
+  |  // TODO: conditionally load FPRs?
+  |  ld FARG1, CCSTATE->fpr[0]
+  |  ld FARG2, CCSTATE->fpr[1]
+  |  ld FARG3, CCSTATE->fpr[2]
+  |  ld FARG4, CCSTATE->fpr[3]
+  |5:
+  |  lg r1, CCSTATE->func // TODO: move further up?
+  |  basr r14, r1
+  |
+  |  stg CRET1, CCSTATE->gpr[0]
+  |  stg f0, CCSTATE->fpr[0]
+  |
+  |  agf sp, CCSTATE->spadj
+  |  lmg r6, r15, 48(sp)
+  |  br r14
+  |.endif
   |// Note: vm_ffi_call must be the last function in this object file!
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
   |
   |//-----------------------------------------------------------------------
 }
@@ -2767,8 +2823,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KCDATA:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |.if FFI
+    |  ins_AND	// RA = dst, RD = cdata const (~)
+    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3(r0)
+    |  lg RD, 0(RD, KBASE)
+    |  settp RD, LJ_TCDATA
+    |  stg RD, 0(RA, BASE)
+    |  ins_next
+    |.endif
     break;
   case BC_KSHORT:
     |  ins_AD	// RA = dst, RD = signed int16 literal

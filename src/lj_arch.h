@@ -401,7 +401,6 @@
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 #define LJ_TARGET_GC64		1
 #define LJ_ARCH_NOJIT		1	/* NYI */
-#define LJ_ARCH_NOFFI		1	/* Disable FFI for now. */
 
 #else
 #error "No target architecture defined"
