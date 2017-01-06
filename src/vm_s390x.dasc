@@ -337,7 +337,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_returnc:
   |  aghi RD, 1				// RD = nresults+1
-  |  jo ->vm_unwind_yield		// TODO: !!! NOT SURE, jz on x64, overflow? !!!
+  |  je ->vm_unwind_yield
   |  st RD, SAVE_MULTRES
   |  tmll PC, FRAME_TYPE
   |  je ->BC_RET_Z			// Handle regular return to Lua.
@@ -519,7 +519,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Resume after yield (like a return).
   |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
   |  set_vmstate INTERP
-  |  llgc RD, L:RB->status
+  |  stc RD, L:RB->status
   |  lg BASE, L:RB->base
   |  lg RD, L:RB->top
   |  sgr RD, RA
@@ -1542,13 +1542,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  tmll TMPR2, CFRAME_RESUME
   |  je ->fff_fallback
   |  stg BASE, L:RB->base
-  |  sllg TMPR1, NARGS:RD, 3(r0)
-  |  lay RD, -8(TMPR1, BASE)
+  |  sllg RD, NARGS:RD, 3(r0)
+  |  lay RD, -8(RD, BASE)
   |  stg RD, L:RB->top
   |  lghi RD, 0
   |  stg RD, L:RB->cframe
-  |  lhi RA, LUA_YIELD
-  |  stc RA, L:RB->status
+  |  lghi CRET1, LUA_YIELD
+  |  stc CRET1, L:RB->status
   |  j ->vm_leave_unw
   |
   |//-- Math library -------------------------------------------------------
