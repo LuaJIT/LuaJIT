@@ -136,7 +136,11 @@ typedef union FPRArg {
 #define CCALL_SPS_FREE		0
 
 typedef intptr_t GPRArg;
-typedef double FPRArg;
+typedef union FPRArg {
+  double d;
+  float f;
+} FPRArg;
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif

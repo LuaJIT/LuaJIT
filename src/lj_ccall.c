@@ -555,6 +555,41 @@
     goto done; \
   }
 
+#elif LJ_TARGET_S390X
+/* -- POSIX/s390x calling conventions --------------------------------------- */
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return structs of size 1, 2, 4 or 8 in a GPR. */ \
+  cc->retref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8); \
+  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_COMPLEXRET CCALL_HANDLE_STRUCTRET
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (!cc->retref) \
+    *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass structs of size 1, 2, 4 or 8 in a GPR by value. */ \
+  if (!(sz == 1 || sz == 2 || sz == 4 || sz == 8)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR;  /* Pass all other structs by reference. */ \
+  }
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass complex float in a GPR and complex double by reference. */ \
+  if (sz != 2*sizeof(float)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  }
+
+#define CCALL_HANDLE_REGARG \
+  if (isfp) { \
+    if (nfpr < maxgpr) { dp = &cc->fpr[nfpr++]; goto done; } \
+  } else { \
+    if (ngpr < CCALL_NARG_FPR) { dp = &cc->gpr[ngpr++]; goto done; } \
+  }
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
