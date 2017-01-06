@@ -1611,6 +1611,15 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro math_round, func
   |  .ffunc math_ .. func
+  |  lg RB, 0(BASE)
+  |  ld f0, 0(BASE)
+  |  checknumx RB, ->fff_resRB, je
+  |  jh ->fff_fallback
+  |  brasl r14, ->vm_ .. func
+  |  cfdbr RB, 0, f0
+  |  jo ->fff_resf0
+  |  llgfr RB, RB
+  |  j ->fff_resi
   |.endmacro
   |
   |  math_round floor
