@@ -815,7 +815,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  brasl r14, extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
   |  // TValue * returned in r2 (CRET1).
   |  lgr RC, CRET1
-  |  llgh RA, PC_RA
+  |  llgc RA, PC_RA
   |  lgr BASE, RB			// Restore BASE.
   |  j ->BC_TSETR_Z
   |
