@@ -3618,8 +3618,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jnl >3
     |  clgr TMPR1, BASE			// No more vararg slots?
     |  jl <1
-    |  lghi TMPR2, LJ_TNIL
     |2:  // Fill up remainder with nil.
+    |  lghi TMPR2, LJ_TNIL // TODO: move out of loop. Add NIL range macro?
     |  stg TMPR2, 0(RA)
     |  la RA, 8(RA)
     |  clgr RA, RB
