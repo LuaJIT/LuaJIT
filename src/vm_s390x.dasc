@@ -426,10 +426,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg TMPR1, GL:RB->vmstate
   |  j ->vm_leave_unw
   |
-  |->vm_unwind_rethrow:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
-  |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
   |  nill CARG1, CFRAME_RAWMASK		// Assumes high 48-bits set in CFRAME_RAWMASK.
@@ -2124,21 +2120,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  vm_round vm_trunc, 5 // Round towards 0.
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
-  |->vm_mod:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
-  |
-  |// Args in xmm0/eax. Ret in xmm0. xmm0-xmm1 and eax modified.
-  |->vm_powi_sse:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
-  |
-  |//-----------------------------------------------------------------------
-  |//-- Miscellaneous functions --------------------------------------------
-  |//-----------------------------------------------------------------------
-  |
-  |// int lj_vm_cpuid(uint32_t f, uint32_t res[4])
-  |->vm_cpuid:
+  |->vm_mod: // NYI.
   |  stg r0, 0(r0)
   |  stg r0, 0(r0)
   |
