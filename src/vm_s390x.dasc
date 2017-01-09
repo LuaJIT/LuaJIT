@@ -148,29 +148,23 @@
 |.macro ins_A; .endmacro
 |.macro ins_AD; .endmacro
 |.macro ins_AJ; .endmacro
-|.macro ins_ABC; .endmacro
-|.macro ins_AB_; .endmacro
-|.macro ins_A_C; .endmacro
+|.macro ins_ABC; srlg RB, RD, 8(r0); llgcr RC, RD; .endmacro
+|.macro ins_AB_; srlg RB, RD, 8(r0); .endmacro
+|.macro ins_A_C; llgcr RC, RD; .endmacro
 |.macro ins_AND; lghi TMPR1, -1; xgr RD, TMPR1; .endmacro // RD = ~RD
 |
 |// Instruction decode+dispatch.
 |  // TODO: tune this, right now we always decode RA-D even if they aren't used.
 |.macro ins_NEXT
-|  llgf RD, 0(PC)
 |  // 32                 63
 |  // [  B |  C |  A | OP ]
 |  // [    D    |  A | OP ]
-|  llghr RA, RD
-|  srlg RA, RA, 8(r0)
-|  llgcr OP, RD
-|  srlg RD, RD, 16(r0)
-|  lgr RB, RD
-|  srlg RB, RB, 8(r0)
-|  llgcr RC, RD
-|  la PC, 4(PC)
-|  llgfr TMPR1, OP
-|  sllg TMPR1, TMPR1, 3(r0) // TMPR1=OP*8
+|  llgc OP, 3(PC)
+|  llgh RD, 0(PC)
+|  llgc RA, 2(PC)
+|  sllg TMPR1, OP, 3(r0)
 |  lg TMPR1, 0(TMPR1, DISPATCH)
+|  la PC, 4(PC)
 |  br TMPR1
 |.endmacro
 |
