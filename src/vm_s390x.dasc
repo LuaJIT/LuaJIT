@@ -2164,21 +2164,22 @@ static void build_subroutines(BuildCtx *ctx)
   |  basr r14, r7
   |
   |  stg CRET1, CCSTATE->gpr[0]
-  |  stg f0, CCSTATE->fpr[0]
+  |  std f0, CCSTATE->fpr[0]
   |
   |  agf sp, CCSTATE->spadj
   |  lmg r6, r15, 48(sp)
   |  br r14
   |
   |2:
+  |  sll r1, 3
   |  lay r10, (offsetof(CCallState, stack))(CCSTATE)	// Source.
   |  lay r11, (CCALL_SPS_EXTRA*8)(sp)			// Destination.
   |3:
   |  chi r1, 256
   |  jl >4
   |  mvc 0(256, r11), 0(r10)
-  |  la r10, 256*8(r10)
-  |  la r11, 256*8(r11)
+  |  la r10, 256(r10)
+  |  la r11, 256(r11)
   |  ahi r1, -256
   |  j <3
   |
