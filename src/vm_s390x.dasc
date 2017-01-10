@@ -148,8 +148,8 @@
 |.macro ins_A; .endmacro
 |.macro ins_AD; .endmacro
 |.macro ins_AJ; .endmacro
-|.macro ins_ABC; srlg RB, RD, 8(r0); llgcr RC, RD; .endmacro
-|.macro ins_AB_; srlg RB, RD, 8(r0); .endmacro
+|.macro ins_ABC; srlg RB, RD, 8; llgcr RC, RD; .endmacro
+|.macro ins_AB_; srlg RB, RD, 8; .endmacro
 |.macro ins_A_C; llgcr RC, RD; .endmacro
 |.macro ins_AND; lghi TMPR1, -1; xgr RD, TMPR1; .endmacro // RD = ~RD
 |
@@ -162,7 +162,7 @@
 |  llgc OP, 3(PC)
 |  llgh RD, 0(PC)
 |  llgc RA, 2(PC)
-|  sllg TMPR1, OP, 3(r0)
+|  sllg TMPR1, OP, 3
 |  lg TMPR1, 0(TMPR1, DISPATCH)
 |  la PC, 4(PC)
 |  br TMPR1
@@ -190,7 +190,7 @@
 |  lg PC, LFUNC:RB->pc
 |  llgf RA, 0(PC) // TODO: combine loads?
 |  llgcr OP, RA
-|    sllg TMPR1, OP, 3(r0)
+|    sllg TMPR1, OP, 3
 |  la PC, 4(PC)
 |    lg TMPR1, 0(TMPR1, DISPATCH)
 |    br TMPR1
@@ -211,7 +211,7 @@
 |//-----------------------------------------------------------------------
 |
 |// Macros to clear or set tags.
-|.macro cleartp, reg; sllg reg, reg, 17(r0); srlg reg, reg, 17(r0); .endmacro // TODO: use nihf instead? would introduce dependence on z9-109.
+|.macro cleartp, reg; sllg reg, reg, 17; srlg reg, reg, 17; .endmacro // TODO: use nihf instead? would introduce dependence on z9-109.
 |.macro settp, reg, tp
 |  oihh reg, ((tp>>1) &0xffff)
 |  oihl reg, ((tp<<15)&0x8000)
@@ -230,18 +230,18 @@
 |
 |// Macros to test operand types.
 |.macro checktp_nc, reg, tp, target
-|  srag ITYPE, reg, 47(r0)
+|  srag ITYPE, reg, 47
 |  clfi ITYPE, tp
 |  jne target
 |.endmacro
 |.macro checktp, reg, tp, target
-|  srag ITYPE, reg, 47(r0)
+|  srag ITYPE, reg, 47
 |  cleartp reg
 |  clfi ITYPE, tp
 |  jne target
 |.endmacro
 |.macro checktptp, src, tp, target
-|  srag ITYPE, src, 47(r0)
+|  srag ITYPE, src, 47
 |  clfi ITYPE, tp
 |  jne target
 |.endmacro
@@ -250,7 +250,7 @@
 |.macro checkfunc, reg, target; checktp reg, LJ_TFUNC, target; .endmacro
 |
 |.macro checknumx, reg, target, jump
-|  srag ITYPE, reg, 47(r0)
+|  srag ITYPE, reg, 47
 |  clfi ITYPE, LJ_TISNUM
 |  jump target
 |.endmacro
@@ -273,7 +273,7 @@
 |  // TODO: optimize this, was just lea PC, [PC+reg*4-BCBIAS_J*4].
 |  // Can't clobber TMPR1 or condition code.
 |  lgr TMPR2, TMPR1 // Workaround because TMPR2 == r0 and can't be used in lay.
-|  sllg TMPR1, reg, 2(r0)
+|  sllg TMPR1, reg, 2
 |  lay PC, (-BCBIAS_J*4)(TMPR1, PC)
 |  lgr TMPR1, TMPR2
 |.endmacro
@@ -394,7 +394,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cghi RA, 0
   |  je <5				// But check for LUA_MULTRET+1.
   |  sgr RA, RD				// Negative result!
-  |  sllg TMPR1, RA, 3(r0)
+  |  sllg TMPR1, RA, 3
   |  lay BASE, 0(TMPR1, BASE)		// Correct top.
   |  j <5
   |
@@ -459,7 +459,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_growstack_f:			// Grow stack for fixarg Lua function.
   |  // BASE = new base, RD = nargs+1, RB = L, PC = first PC
-  |  sllg RD, NARGS:RD, 3(r0)
+  |  sllg RD, NARGS:RD, 3
   |  lay RD, -8(RD, BASE)
   |1:
   |  llgc RA, (PC2PROTO(framesize)-4)(PC)
@@ -477,7 +477,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg LFUNC:RB, -16(BASE)
   |  cleartp LFUNC:RB
   |  sgr RD, BASE
-  |  srlg RD, RD, 3(r0)
+  |  srlg RD, RD, 3
   |  aghi NARGS:RD, 1
   |  // BASE = new base, RB = LFUNC, RD = nargs+1
   |  ins_callt				// Just retry the call.
@@ -513,7 +513,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg BASE, L:RB->base
   |  lg RD, L:RB->top
   |  sgr RD, RA
-  |  srlg RD, RD, 3(r0)
+  |  srlg RD, RD, 3
   |  aghi RD, 1				// RD = nresults+1
   |  sgr RA, BASE			// RA = resultofs
   |  lg PC, -8(BASE)
@@ -558,7 +558,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  lg RD, L:LREG->top
   |  sgr RD, RA
-  |  srlg NARGS:RD, NARGS:RD, 3(r0)	// TODO: support '3' on its own in dynasm.
+  |  srlg NARGS:RD, NARGS:RD, 3	// TODO: support '3' on its own in dynasm.
   |  aghi NARGS:RD, 1			// RD = nargs+1
   |
   |->vm_call_dispatch:
@@ -611,7 +611,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  nill PC, -8
   |  lgr RB, BASE
   |  sgr BASE, PC			// Restore caller BASE.
-  |  sllg TMPR1, RD, 3(r0)
+  |  sllg TMPR1, RD, 3
   |  lghi TMPR2, LJ_TNIL
   |  stg TMPR2, -8(RA, TMPR1)		// Ensure one valid arg.
   |  lgr RC, RA				// ... in [RC]
@@ -633,7 +633,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  je ->cont_ffi_callback		// cont = 1: return from FFI callback.
   |  // cont = 0: Tail call from C function.
   |  sgr RB, BASE
-  |  srl RB, 3(r0)
+  |  srl RB, 3
   |  ahi RB, -3
   |  llgfr RD, RB
   |  j ->vm_call_tail
@@ -641,13 +641,13 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_cat:				// BASE = base, RC = result, RB = mbase
   |  llgc RA, PC_RB
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  aghi RB, -32
   |  la RA, 0(RA, BASE)
   |  sgr RA, RB
   |  je ->cont_ra
   |  lcgr RA, RA
-  |  srlg RA, RA, 3(r0)
+  |  srlg RA, RA, 3
   |  lg L:CARG1, SAVE_L
   |  stg BASE, L:CARG1->base
   |  lgfr CARG3, RA
@@ -679,11 +679,11 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tgetv:
   |  llgc RC, PC_RC			// Reload TValue *k from RC.
-  |  sllg RC, RC, 3(r0)
+  |  sllg RC, RC, 3
   |  la RC, 0(RC, BASE)
   |1:
   |  llgc RB, PC_RB			// Reload TValue *t from RB.
-  |  sllg RB, RB, 3(r0)
+  |  sllg RB, RB, 3
   |  la RB, 0(RB, BASE)
   |2:
   |  lg L:CARG1, SAVE_L
@@ -699,7 +699,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  je >3
   |->cont_ra:				// BASE = base, RC = result
   |  llgc RA, PC_RA
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  lg RB, 0(RC)
   |  stg RB, 0(RA, BASE)
   |  ins_next
@@ -751,11 +751,11 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tsetv:
   |  llgc RC, PC_RC			// Reload TValue *k from RC.
-  |  sllg RC, RC, 3(r0)
+  |  sllg RC, RC, 3
   |  la RC, 0(RC, BASE)
   |1:
   |  llgc RB, PC_RB			// Reload TValue *t from RB.
-  |  sllg RB, RB, 3(r0)
+  |  sllg RB, RB, 3
   |  la RB, 0(RB, BASE)
   |2:
   |  lg L:CARG1, SAVE_L
@@ -771,7 +771,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  je >3
   |  // NOBARRIER: lj_meta_tset ensures the table is not black.
   |  llgc RA, PC_RA
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  lg RB, 0(RA, BASE)
   |  stg RB, 0(RC)
   |->cont_nop:				// BASE = base, (RC = result)
@@ -783,7 +783,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg PC, -24(RA)			// [cont|PC]
   |  llgc RC, PC_RA
   |  // Copy value to third argument.
-  |  sllg RB, RC, 3(r0)
+  |  sllg RB, RC, 3
   |  lg RB, 0(RB, BASE)
   |  stg RB, 16(RA)
   |  la PC, FRAME_CONT(RA)
@@ -811,9 +811,9 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_comp:
   |  llgh RD, PC_RD
-  |  sllg RD, RD, 3(r0)
+  |  sllg RD, RD, 3
   |  llgc RA, PC_RA
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
   |  la CARG2, 0(RA, BASE)
@@ -840,7 +840,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->cont_condt:			// BASE = base, RC = result
   |  la PC, 4(PC)
   |  lg ITYPE, 0(RC)
-  |  srag ITYPE, ITYPE, 47(r0)
+  |  srag ITYPE, ITYPE, 47
   |  lghi TMPR2, LJ_TISTRUECOND
   |  clr ITYPE, TMPR2		// Branch if result is true.
   |  jl <5
@@ -848,7 +848,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_condf:			// BASE = base, RC = result
   |  lg ITYPE, 0(RC)
-  |  srag ITYPE, ITYPE, 47(r0)
+  |  srag ITYPE, ITYPE, 47
   |  lghi TMPR2, LJ_TISTRUECOND
   |  clr ITYPE, TMPR2		// Branch if result is false.
   |  j <4
@@ -897,8 +897,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  llgc RB, PC_RB
   |  llgc RC, PC_RC
   |->vmeta_arith_vn:
-  |  sllg RB, RB, 3(r0)
-  |  sllg RC, RC, 3(r0)
+  |  sllg RB, RB, 3
+  |  sllg RC, RC, 3
   |  lay RB, 0(RB, BASE)
   |  lay RC, 0(RC, KBASE)
   |  j >1
@@ -907,8 +907,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  llgc RC, PC_RC
   |  llgc RB, PC_RB
   |->vmeta_arith_nv:
-  |  sllg RC, RC, 3(r0)
-  |  sllg RB, RB, 3(r0)
+  |  sllg RC, RC, 3
+  |  sllg RB, RB, 3
   |  lay TMPR1, 0(RC, KBASE)
   |  lay RC, 0(RB, BASE)
   |  lgr RB, TMPR1
@@ -916,7 +916,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_unm:
   |  llgh RD, PC_RD
-  |  sllg RD, RD, 3(r0)
+  |  sllg RD, RD, 3
   |  la RC, 0(RD, BASE)
   |  lgr RB, RC
   |  j >1
@@ -925,13 +925,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  llgc RB, PC_RB
   |  llgc RC, PC_RC
   |->vmeta_arith_vv:
-  |  sllg RC, RC, 3(r0)
-  |  sllg RB, RB, 3(r0)
+  |  sllg RC, RC, 3
+  |  sllg RB, RB, 3
   |  lay RB, 0(RB, BASE)
   |  lay RC, 0(RC, BASE)
   |1:
   |  llgc RA, PC_RA
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  lay RA, 0(RA, BASE)
   |  llgc CARG5, PC_OP			// Caveat: CARG5 == RD.
   |  lgr CARG2, RA
@@ -960,7 +960,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_len:
   |  llgh RD, PC_RD
-  |  sllg RD, RD, 3(r0)
+  |  sllg RD, RD, 3
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
   |  la CARG2, 0(RD, BASE)
@@ -974,7 +974,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cghi RC, 0
   |  jne ->vmeta_binop			// Binop call for compatibility.
   |  llgh RD, PC_RD
-  |  sllg RD, RD, 3(r0)
+  |  sllg RD, RD, 3
   |  lg TAB:CARG1, 0(RD, BASE)
   |  cleartp TAB:CARG1
   |  j ->BC_LEN_Z
@@ -993,7 +993,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:CARG1, SAVE_L
   |  stg BASE, L:CARG1->base
   |  lay CARG2, -16(RA)
-  |  sllg RD, RD, 3(r0)
+  |  sllg RD, RD, 3
   |  lay CARG3, -8(RA, RD)
   |  stg PC, SAVE_PC
   |  brasl r14, extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
@@ -1023,7 +1023,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  llgc OP, PC_OP
   |  llgc RA, PC_RA
   |  llgh RD, PC_RD
-  |  sllg TMPR1, OP, 3(r0)
+  |  sllg TMPR1, OP, 3
   |  lg TMPR1, GG_DISP2STATIC(TMPR1, DISPATCH)	// Retry FORI or JFORI.
   |  br TMPR1
   |
@@ -1079,7 +1079,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc_1 assert
   |  lg RB, 0(BASE)
-  |  srag ITYPE, RB, 47(r0)
+  |  srag ITYPE, RB, 47
   |  clfi ITYPE, LJ_TISTRUECOND; jhe ->fff_fallback
   |  lg PC, -8(BASE)
   |  st RD, SAVE_MULTRES
@@ -1101,7 +1101,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.ffunc_1 type
   |  lg RC, 0(BASE)
-  |  srag RC, RC, 47(r0)
+  |  srag RC, RC, 47
   |  lghi RB, LJ_TISNUM
   |  clgr RC, RB
   |  jnl >1
@@ -1112,7 +1112,7 @@ static void build_subroutines(BuildCtx *ctx)
   |2:
   |  lg CFUNC:RB, -16(BASE)
   |  cleartp CFUNC:RB
-  |  sllg RC, RC, 3(r0)
+  |  sllg RC, RC, 3
   |  lg STR:RC, ((char *)(&((GCfuncC *)0)->upvalue))(RC, CFUNC:RB)
   |  lg PC, -8(BASE)
   |  settp STR:RC, LJ_TSTR
@@ -1161,7 +1161,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lhi TMPR2, -1
   |  xr ITYPE, TMPR2 // not ITYPE
   |  llgfr ITYPE, ITYPE
-  |  sllg ITYPE, ITYPE, 3(r0)
+  |  sllg ITYPE, ITYPE, 3
   |  lg TAB:RB, (DISPATCH_GL(gcroot[GCROOT_BASEMT]))(ITYPE, DISPATCH)
   |  j <2
   |
@@ -1305,7 +1305,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cl RA, TAB:RB->asize;  jhe >2	// Not in array part?
   |  lg RD, TAB:RB->array
   |  lgfr TMPR1, RA
-  |  sllg TMPR1, TMPR1, 3(r0)
+  |  sllg TMPR1, TMPR1, 3
   |  la RD, 0(TMPR1, RD)
   |1:
   |  lg TMPR2, 0(RD)
@@ -1361,7 +1361,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Note: this does a (harmless) copy of the function to the PC slot, too.
   |  lgr KBASE, RD
   |2:
-  |  sllg TMPR1, KBASE, 3(r0)
+  |  sllg TMPR1, KBASE, 3
   |  lg RB, -24(TMPR1, RA)
   |  stg RB, -16(TMPR1, RA)
   |  aghi KBASE, -1
@@ -1412,7 +1412,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg PC, 0(RA)
   |  la RA, 8(RA)
   |1:
-  |  sllg TMPR1, NARGS:RD, 3(r0)
+  |  sllg TMPR1, NARGS:RD, 3
   |.if resume
   |  lay PC, -16(TMPR1, RA)		// Check stack space (-1-thread).
   |.else
@@ -1467,7 +1467,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  je >6				// No results?
   |  la RD, 0(PC, BASE)
   |  llgfr PC, PC
-  |  srlg PC, PC, 3(r0)
+  |  srlg PC, PC, 3
   |  clg RD, L:RB->maxstack
   |  jh >9				// Need to grow stack?
   |
@@ -1539,7 +1539,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  tmll TMPR2, CFRAME_RESUME
   |  je ->fff_fallback
   |  stg BASE, L:RB->base
-  |  sllg RD, NARGS:RD, 3(r0)
+  |  sllg RD, NARGS:RD, 3
   |  lay RD, -8(RD, BASE)
   |  stg RD, L:RB->top
   |  lghi RD, 0
@@ -1591,12 +1591,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Adjust BASE. KBASE is assumed to be set for the calling frame.
   |  llgc RA, PC_RA
   |  lcgr RA, RA
-  |  sllg RA, RA, 3(r0)
+  |  sllg RA, RA, 3
   |  lay BASE, -16(RA, BASE)		// base = base - (RA+2)*8
   |  ins_next
   |
   |6:  // Fill up results with nil.
-  |  sllg TMPR1, RD, 3(r0)
+  |  sllg TMPR1, RD, 3
   |  lghi TMPR2, LJ_TNIL
   |  stg TMPR2, -24(TMPR1, BASE)
   |  la RD, 1(RD)
@@ -1701,7 +1701,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro math_minmax, name, cjmp
   |  .ffunc name
   |  lghi RA, 2*8
-  |  sllg TMPR1, RD, 3(r0)
+  |  sllg TMPR1, RD, 3
   |  lg RB, 0(BASE)
   |  ld f0, 0(BASE)
   |  checkint RB, >4
@@ -1792,7 +1792,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checkstr STR:RB, ->fff_fallback
   |  lg ITYPE, 8(BASE)
   |  lgfr RA, ITYPE
-  |  srag ITYPE, ITYPE, 47(r0)
+  |  srag ITYPE, ITYPE, 47
   |  cghi ITYPE, LJ_TISNUM
   |  jne ->fff_fallback
   |  llgf RC, STR:RB->len
@@ -1890,7 +1890,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.macro .ffunc_bit_op, name, ins
   |  .ffunc_bit name, 2
   |  lgr TMPR1, NARGS:RD		// Save for fallback.
-  |  sllg RD, NARGS:RD, 3(r0)
+  |  sllg RD, NARGS:RD, 3
   |  lay RD, -16(RD, BASE)
   |1:
   |  clgr RD, BASE
@@ -1974,7 +1974,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg PC, -8(BASE)			// Fallback may overwrite PC.
   |  stg PC, SAVE_PC			// Redundant (but a defined value).
   |  stg BASE, L:RB->base
-  |  sllg RD, NARGS:RD, 3(r0)
+  |  sllg RD, NARGS:RD, 3
   |  lay RD, -8(RD, BASE)
   |  la RA, (8*LUA_MINSTACK)(RD)	// Ensure enough space for handler.
   |  stg RD, L:RB->top
@@ -1992,7 +1992,7 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  lg RA, L:RB->top
   |  sgr RA, BASE
-  |  srlg RA, RA, 3(r0)
+  |  srlg RA, RA, 3
   |  cghi RD, 0
   |    la NARGS:RD, 1(RA)
   |    lg LFUNC:RB, -16(BASE)
@@ -2007,7 +2007,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jne >3
   |  llgc RB, PC_RA
   |  lcgr RB, RB
-  |  sllg RB, RB, 3(r0)
+  |  sllg RB, RB, 3
   |  lay BASE, -16(RB, BASE)		// base = base - (RB+2)*8
   |  j ->vm_call_dispatch		// Resolve again for tailcall.
   |3:
@@ -2030,7 +2030,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:RB, SAVE_L
   |  stg PC, SAVE_PC			// Redundant (but a defined value).
   |  stg BASE, L:RB->base
-  |  sllg RD, NARGS:RD, 3(r0)
+  |  sllg RD, NARGS:RD, 3
   |  lay RD, -8(RD, BASE)
   |  lgr CARG1, L:RB
   |  stg RD, L:RB->top
@@ -2038,7 +2038,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg BASE, L:RB->base
   |  lg RD, L:RB->top
   |  sgr RD, BASE
-  |  srlg RD, RD, 3(r0)
+  |  srlg RD, RD, 3
   |  aghi NARGS:RD, 1
   |  lg r14, TMP_STACK			// Restore return address.
   |  br r14
@@ -2048,40 +2048,40 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_record:				// Dispatch target for recording phase.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_rethook:			// Dispatch target for return hooks.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->cont_hook:				// Continue from hook yield.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_hotloop:			// Hot loop counter underflow.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_hotcall:			// Hot call counter underflow.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->cont_stitch:			// Trace stitching.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_profhook:			// Dispatch target for profiler hook.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |//-----------------------------------------------------------------------
   |//-- Trace exit handler -------------------------------------------------
@@ -2090,11 +2090,11 @@ static void build_subroutines(BuildCtx *ctx)
   |// Called from an exit stub with the exit number on the stack.
   |// The 16 bit exit number is stored with two (sign-extended) push imm8.
   |->vm_exit_handler:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |->vm_exit_interp:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |//-----------------------------------------------------------------------
   |//-- Math helper functions ----------------------------------------------
@@ -2112,7 +2112,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr f0, f2
   |  br r14
   |1: // partial remainder (sanity check)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
   |.endmacro
   |
   |  vm_round vm_floor, 7 // Round towards -inf.
@@ -2121,16 +2121,16 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
   |->vm_mod: // NYI.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |//-----------------------------------------------------------------------
   |//-- Assertions ---------------------------------------------------------
   |//-----------------------------------------------------------------------
   |
   |->assert_bad_for_arg_type:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
 #ifdef LUA_USE_ASSERT
 #endif
   |
@@ -2140,12 +2140,12 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Handler for callback functions. Callback slot number in ah/al.
   |->vm_ffi_callback:
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->cont_ffi_callback:			// Return from FFI callback.
-  |  stg r0, 0(r0)
-  |  stg r0, 0(r0)
+  |  stg r0, 0
+  |  stg r0, 0
   |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
@@ -2239,14 +2239,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
     |  // RA = src1, RD = src2, JMP with RD = target
     |  ins_AD
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  ld f0, 0(RA, BASE)
     |  ld f1, 0(RD, BASE)
     |  lg RA, 0(RA, BASE)
     |  lg RD, 0(RD, BASE)
-    |  srag ITYPE, RA, 47(r0)
-    |  srag RB, RD, 47(r0)
+    |  srag ITYPE, RA, 47
+    |  srag RB, RD, 47
     |
     |  clfi ITYPE, LJ_TISNUM; jne >7
     |  clfi RB, LJ_TISNUM; jne >8
@@ -2283,15 +2283,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQV: case BC_ISNEV:
     vk = op == BC_ISEQV;
     |  ins_AD	// RA = src1, RD = src2, JMP with RD = target
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  ld f1, 0(RD, BASE)
     |  lg RD, 0(RD, BASE)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  ld f0, 0(RA, BASE)
     |  lg RA, 0(RA, BASE)
     |  la PC, 4(PC)
-    |  srag RB, RD, 47(r0)
-    |  srag ITYPE, RA, 47(r0)
+    |  srag RB, RD, 47
+    |  srag ITYPE, RA, 47
     |  clfi RB, LJ_TISNUM; jne >7
     |  clfi ITYPE, LJ_TISNUM; jne >8
     |  cr RD, RA
@@ -2397,8 +2397,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
     |  ins_AND	// RA = src, RD = str const, JMP with RD = target
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  lg RB, 0(RA, BASE)
     |  la PC, 4(PC)
     |  checkstr RB, >3
@@ -2413,8 +2413,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQN: case BC_ISNEN:
     vk = op == BC_ISEQN;
     |  ins_AD	// RA = src, RD = num const, JMP with RD = target
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  ld f0, 0(RA, BASE)
     |  lg RB, 0(RA, BASE)
     |  ld f1, 0(RD, KBASE)
@@ -2452,9 +2452,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQP: case BC_ISNEP:
     vk = op == BC_ISEQP;
     |  ins_AND	// RA = src, RD = primitive type (~), JMP with RD = target
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg RB, 0(RA, BASE)
-    |  srag RB, RB, 47(r0)
+    |  srag RB, RB, 47
     |  la PC, 4(PC)
     |  cr RB, RD
     if (!LJ_HASFFI) goto iseqne_test;
@@ -2481,14 +2481,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
     |  ins_AD	// RA = dst or unused, RD = src, JMP with RD = target
-    |  sllg RD, RD, 3(r0)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3
+    |  sllg RA, RA, 3
     |  lg ITYPE, 0(RD, BASE)
     |  la PC, 4(PC)
     if (op == BC_ISTC || op == BC_ISFC) {
       |  lgr RB, ITYPE
     }
-    |  srag ITYPE, ITYPE, 47(r0)
+    |  srag ITYPE, ITYPE, 47
     |  clfi ITYPE, LJ_TISTRUECOND
     if (op == BC_IST || op == BC_ISTC) {
       |  jhe >1
@@ -2507,34 +2507,34 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISTYPE:
     |  ins_AD	// RA = src, RD = -type
     |  lghr RD, RD			// TODO: always sign extend RD?
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg RB, 0(RA, BASE)
-    |  srag RB, RB, 47(r0)
+    |  srag RB, RB, 47
     |  agr RB, RD
     |  jne ->vmeta_istype
     |  ins_next
     break;
   case BC_ISNUM:
     |  ins_AD	// RA = src, RD = -(TISNUM-1)
-    |  sllg TMPR1, RA, 3(r0)
+    |  sllg TMPR1, RA, 3
     |  lg TMPR1, 0(TMPR1, BASE)
     |  checknumtp TMPR1, ->vmeta_istype
     |  ins_next
     break;
   case BC_MOV:
     |  ins_AD	// RA = dst, RD = src
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  lg RB, 0(RD, BASE)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg RB, 0(RA, BASE)
     |  ins_next_
     break;
   case BC_NOT:
     |  ins_AD	// RA = dst, RD = src
-    |  sllg RD, RD, 3(r0)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3
+    |  sllg RA, RA, 3
     |  lg RB, 0(RD, BASE)
-    |  srag RB, RB, 47(r0)
+    |  srag RB, RB, 47
     |  load_false RC
     |  cghi RB, LJ_TTRUE
     |  je >1 // TODO: Maybe do something fancy to avoid the jump?
@@ -2545,8 +2545,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_UNM:
     |  ins_AD	// RA = dst, RD = src
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  lg RB, 0(RD, BASE)
     |  checkint RB, >3
     |  lcr RB, RB; jo >2
@@ -2565,12 +2565,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_LEN:
     |  ins_AD	// RA = dst, RD = src
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  lg RD, 0(RD, BASE)
     |  checkstr RD, >2
     |  llgf RD, STR:RD->len
     |1:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  setint RD
     |  stg RD, 0(RA, BASE)
     |  ins_next
@@ -2604,9 +2604,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
     |.macro ins_arithpre
     |  ins_ABC
-    |  sllg RB, RB, 3(r0)
-    |  sllg RC, RC, 3(r0)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RB, RB, 3
+    |  sllg RC, RC, 3
+    |  sllg RA, RA, 3
     |.endmacro
     |
     |.macro ins_arithfp, ins
@@ -2745,8 +2745,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_POW:
     |  ins_ABC
-    |  sllg RB, RB, 3(r0)
-    |  sllg RC, RC, 3(r0)
+    |  sllg RB, RB, 3
+    |  sllg RC, RC, 3
     |  ld FARG1, 0(RB, BASE)
     |  ld FARG2, 0(RC, BASE)
     |  lg TMPR2, 0(RB, BASE)
@@ -2757,7 +2757,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  brasl r14, extern pow	// double pow(double x, double y), result in f0.
     |  llgc RA, PC_RA
     |  lgr BASE, RB
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  std f0, 0(RA, BASE)
     |  ins_next
     break;
@@ -2768,7 +2768,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg BASE, L:CARG1->base
     |  lgr CARG3, RC
     |  sgr CARG3, RB
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  la CARG2, 0(RC, BASE)
     |->BC_CAT_Z:
     |  lgr L:RB, L:CARG1
@@ -2779,9 +2779,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ltgr RC, CRET1
     |  jne ->vmeta_binop
     |  llgc RB, PC_RB			// Copy result to Stk[RA] from Stk[RB].
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  llgc RA, PC_RA
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg RC, 0(RB, BASE)
     |  stg RC, 0(RA, BASE)
     |  ins_next
@@ -2791,18 +2791,18 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_KSTR:
     |  ins_AND	// RA = dst, RD = str const (~)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  lg RD, 0(RD, KBASE)
     |  settp RD, LJ_TSTR
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg RD, 0(RA, BASE)
     |  ins_next
     break;
   case BC_KCDATA:
     |.if FFI
     |  ins_AND	// RA = dst, RD = cdata const (~)
-    |  sllg RD, RD, 3(r0)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RD, RD, 3
+    |  sllg RA, RA, 3
     |  lg RD, 0(RD, KBASE)
     |  settp RD, LJ_TCDATA
     |  stg RD, 0(RA, BASE)
@@ -2814,22 +2814,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Assumes DUALNUM.
     |  lhr RD, RD			// Sign-extend literal to 32-bits.
     |  setint RD
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg RD, 0(RA, BASE)
     |  ins_next
     break;
   case BC_KNUM:
     |  ins_AD	// RA = dst, RD = num const
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  ld f0, 0(RD, KBASE)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  std f0, 0(RA, BASE)
     |  ins_next
     break;
   case BC_KPRI:
     |  ins_AD	// RA = dst, RD = primitive type (~)
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 47(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 47
     |  lghi TMPR2, -1
     |  xgr RD, TMPR2 // not
     |  stg RD, 0(RA, BASE)
@@ -2837,8 +2837,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_KNIL:
     |  ins_AD	// RA = dst_start, RD = dst_end
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  la RA, 8(RA, BASE)
     |  la RD, 0(RD, BASE)
     |  lghi RB, LJ_TNIL
@@ -2855,8 +2855,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_UGET:
     |  ins_AD	// RA = dst, RD = upvalue #
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  lg LFUNC:RB, -16(BASE)
     |  cleartp LFUNC:RB
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RD, LFUNC:RB)
@@ -2871,13 +2871,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD	// RA = upvalue #, RD = src
     |  lg LFUNC:RB, -16(BASE)
     |  cleartp LFUNC:RB
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
     |  // TODO: (instead of next 2 instructions) tm UPVAL:RB->closed, 0xff
     |  llgc TMPR2, UPVAL:RB->closed
     |  tmll TMPR2, 0xff
     |  lg RB, UPVAL:RB->v
-    |  sllg TMPR1, RD, 3(r0)
+    |  sllg TMPR1, RD, 3
     |  lg RA, 0(TMPR1, BASE)
     |  stg RA, 0(RB)
     |  je >1
@@ -2890,7 +2890,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     |
     |2:  // Upvalue is black. Check if new value is collectable and white.
-    |  srag RD, RA, 47(r0)
+    |  srag RD, RA, 47
     |  ahi RD, -LJ_TISGCV
     |  clfi RD, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
     |  jle <1
@@ -2911,8 +2911,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_USETS:
     |  ins_AND	// RA = upvalue #, RD = str const (~)
     |  lg LFUNC:RB, -16(BASE)
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  cleartp LFUNC:RB
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
     |  lg STR:RA, 0(RD, KBASE)
@@ -2946,8 +2946,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_USETN:
     |  ins_AD	// RA = upvalue #, RD = num const
     |  lg LFUNC:RB, -16(BASE)
-    |  sllg RA, RA, 3(r0)
-    |  sllg RD, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RD, RD, 3
     |  cleartp LFUNC:RB
     |  ld f0, 0(RD, KBASE)
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
@@ -2958,10 +2958,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_USETP:
     |  ins_AD	// RA = upvalue #, RD = primitive type (~)
     |  lg LFUNC:RB, -16(BASE)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  cleartp LFUNC:RB
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
-    |  sllg RD, RD, 47(r0)
+    |  sllg RD, RD, 47
     |  lghi TMPR2, -1
     |  xgr RD, TMPR2
     |  lg RA, UPVAL:RB->v
@@ -2975,7 +2975,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ltg TMPR2, L:RB->openupval
     |  je >1
     |  stg BASE, L:RB->base
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la CARG2, 0(RA, BASE)
     |  lgr L:CARG1, L:RB
     |  brasl r14, extern lj_func_closeuv	// (lua_State *L, TValue *level)
@@ -2990,7 +2990,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg BASE, L:RB->base
     |  lg CARG3, -16(BASE)
     |  cleartp CARG3
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  lg CARG2, 0(RD, KBASE)		// Fetch GCproto *.
     |  lgr CARG1, L:RB
     |  stg PC, SAVE_PC
@@ -2999,7 +2999,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // GCfuncL * returned in r2 (CRET1).
     |  lg BASE, L:RB->base
     |  llgc RA, PC_RA
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  settp LFUNC:CRET1, LJ_TFUNC
     |  stg LFUNC:CRET1, 0(RA, BASE)
     |  ins_next
@@ -3013,7 +3013,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg PC, SAVE_PC
     |  jhe >5
     |1:
-    |  srlg CARG3, RD, 11(r0)
+    |  srlg CARG3, RD, 11
     |  llill TMPR2, 0x7ff
     |  nr RD, TMPR2
     |  cr RD, TMPR2
@@ -3025,7 +3025,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Table * returned in r2 (CRET1).
     |  lg BASE, L:RB->base
     |  llgc RA, PC_RA
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  settp TAB:CRET1, LJ_TTAB
     |  stg TAB:CRET1, 0(RA, BASE)
     |  ins_next
@@ -3047,7 +3047,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg BASE, L:RB->base
     |  jhe >3
     |2:
-    |  sllg RD, RD, 3(r0)
+    |  sllg RD, RD, 3
     |  lg TAB:CARG2, 0(RD, KBASE)
     |  lgr L:CARG1, L:RB
     |  brasl r14, extern lj_tab_dup		// (lua_State *L, Table *kt)
@@ -3055,7 +3055,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg BASE, L:RB->base
     |  llgc RA, PC_RA
     |  settp TAB:CRET1, LJ_TTAB
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg TAB:CRET1, 0(RA, BASE)
     |  ins_next
     |3:
@@ -3072,7 +3072,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg LFUNC:RB, -16(BASE)
     |  cleartp LFUNC:RB
     |  lg TAB:RB, LFUNC:RB->env
-    |  sllg TMPR1, RD, 3(r0)
+    |  sllg TMPR1, RD, 3
     |  lg STR:RC, 0(TMPR1, KBASE)
     |  j ->BC_TGETS_Z
     break;
@@ -3081,16 +3081,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg LFUNC:RB, -16(BASE)
     |  cleartp LFUNC:RB
     |  lg TAB:RB, LFUNC:RB->env
-    |  sllg TMPR1, RD, 3(r0)
+    |  sllg TMPR1, RD, 3
     |  lg STR:RC, 0(TMPR1, KBASE)
     |  j ->BC_TSETS_Z
     break;
 
   case BC_TGETV:
     |  ins_ABC	// RA = dst, RB = table, RC = key
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  lg RC, 0(RC, BASE)
     |  checktab TAB:RB, ->vmeta_tgetv
     |
@@ -3099,14 +3099,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cl RC, TAB:RB->asize		// Takes care of unordered, too.
     |  jhe ->vmeta_tgetv		// Not in array part? Use fallback.
     |  llgfr RC, RC
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  // Get array slot.
     |  lg ITYPE, 0(RC)
     |  cghi ITYPE, LJ_TNIL		// Avoid overwriting RB in fastpath.
     |  je >2
     |1:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg ITYPE, 0(RA, BASE)
     |  ins_next
     |
@@ -3126,11 +3126,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TGETS:
     |  ins_ABC
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  lghi TMPR1, -1
     |  xgr RC, TMPR1
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  lg STR:RC, 0(RC, KBASE)
     |  checktab TAB:RB, ->vmeta_tgets
     |->BC_TGETS_Z:	// RB = GCtab *, RC = GCstr *
@@ -3148,7 +3148,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cghi ITYPE, LJ_TNIL
     |  je >5				// Key found, but nil value?
     |2:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg ITYPE, 0(RA, BASE)
     |  ins_next
     |
@@ -3170,19 +3170,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TGETB:
     |  ins_ABC	// RA = dst, RB = table, RC = byte literal
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  checktab TAB:RB, ->vmeta_tgetb
     |  cl RC, TAB:RB->asize
     |  jhe ->vmeta_tgetb
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  // Get array slot.
     |  lg ITYPE, 0(RC)
     |  cghi ITYPE, LJ_TNIL
     |  je >2
     |1:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg ITYPE, 0(RA, BASE)
     |  ins_next
     |
@@ -3197,29 +3197,29 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TGETR:
     |  ins_ABC	// RA = dst, RB = table, RC = key
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  cleartp TAB:RB
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  llgf RC, 4(RC, BASE)		// Load low word (big endian).
     |  cl RC, TAB:RB->asize
     |  jhe ->vmeta_tgetr		// Not in array part? Use fallback.
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  // Get array slot.
     |->BC_TGETR_Z:
     |  lg ITYPE, 0(RC)
     |->BC_TGETR2_Z:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  stg ITYPE, 0(RA, BASE)
     |  ins_next
     break;
 
   case BC_TSETV:
     |  ins_ABC	// RA = src, RB = table, RC = key
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  lg RC, 0(RC, BASE)
     |  checktab TAB:RB, ->vmeta_tsetv
     |
@@ -3228,7 +3228,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cl RC, TAB:RB->asize		// Takes care of unordered, too.
     |  jhe ->vmeta_tsetv
     |  llgfr RC, RC
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  lghi TMPR2, LJ_TNIL
     |  cg TMPR2, 0(RC)
@@ -3238,7 +3238,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tmll TMPR1, LJ_GC_BLACK			// isblack(table)
     |  jne >7
     |2:  // Set array slot.
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg RB, 0(RA, BASE)
     |  stg RB, 0(RC)
     |  ins_next
@@ -3263,11 +3263,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETS:
     |  ins_ABC	// RA = src, RB = table, RC = str const (~)
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  lghi TMPR2, -1
     |  xgr RC, TMPR2 // ~RC
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  lg STR:RC, 0(RC, KBASE)
     |  checktab TAB:RB, ->vmeta_tsets
     |->BC_TSETS_Z:	// RB = GCtab *, RC = GCstr *
@@ -3291,7 +3291,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
     |  jne >7
     |3:  // Set node value.
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg ITYPE, 0(RA, BASE)
     |  stg ITYPE, 0(TMPR1)
     |  ins_next
@@ -3339,12 +3339,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETB:
     |  ins_ABC	// RA = src, RB = table, RC = byte literal
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  checktab TAB:RB, ->vmeta_tsetb
     |  cl RC, TAB:RB->asize
     |  jhe ->vmeta_tsetb
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  lghi TMPR2, LJ_TNIL
     |  cg TMPR2, 0(RC)
@@ -3354,7 +3354,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tmll TMPR1, LJ_GC_BLACK		// isblack(table)
     |  jne >7
     |2:	 // Set array slot.
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg ITYPE, 0(RA, BASE)
     |  stg ITYPE, 0(RC)
     |  ins_next
@@ -3374,10 +3374,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETR:
     |  ins_ABC	// RA = src, RB = table, RC = key
-    |  sllg RB, RB, 3(r0)
+    |  sllg RB, RB, 3
     |  lg TAB:RB, 0(RB, BASE)
     |  cleartp TAB:RB
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  lg RC, 0(RC, BASE)
     |  llgc TMPR2, TAB:RB->marked
     |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
@@ -3386,11 +3386,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cl RC, TAB:RB->asize
     |  jhe ->vmeta_tsetr
     |  llgfr RC, RC
-    |  sllg RC, RC, 3(r0)
+    |  sllg RC, RC, 3
     |  ag RC, TAB:RB->array
     |  // Set array slot.
     |->BC_TSETR_Z:
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg ITYPE, 0(RA, BASE)
     |  stg ITYPE, 0(RC)
     |  ins_next
@@ -3403,8 +3403,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_TSETM:
     |  ins_AD	// RA = base (table at base-1), RD = num const (start index)
     |1:
-    |  sllg RA, RA, 3(r0)
-    |  sllg TMPR1, RD, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg TMPR1, RD, 3
     |  llgf TMPR1, 4(TMPR1, KBASE)	// Integer constant is in lo-word.
     |  la RA, 0(RA, BASE)
     |  lg TAB:RB, -8(RA)		// Guaranteed to be a table.
@@ -3420,7 +3420,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  clgf RD, TAB:RB->asize
     |  jh >5				// Doesn't fit into array part?
     |  sgr RD, TMPR1
-    |  sllg TMPR1, TMPR1, 3(r0)
+    |  sllg TMPR1, TMPR1, 3
     |  ag TMPR1, TAB:RB->array
     |3:  // Copy result slots to table.
     |  lg RB, 0(RA)
@@ -3459,7 +3459,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_CALLM) {
       |  agf NARGS:RD, SAVE_MULTRES
     }
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg LFUNC:RB, 0(BASE, RA)
     |  checkfunc LFUNC:RB, ->vmeta_call_ra
     |  la BASE, 16(RA, BASE)
@@ -3473,7 +3473,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_CALLT:
     |  ins_AD	// RA = base, RD = nargs+1
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 16(RA, BASE)
     |  lgr KBASE, BASE			// Use KBASE for move + vmeta_call hint.
     |  lg LFUNC:RB, -16(RA)
@@ -3512,7 +3512,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jne <4
     |  llgc RA, PC_RA
     |  lcgr RA, RA
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg LFUNC:KBASE, -32(RA, BASE)	// Need to prepare KBASE.
     |  cleartp LFUNC:KBASE
     |  lg KBASE, LFUNC:KBASE->pc
@@ -3534,7 +3534,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERC:
     |  ins_A	// RA = base, (RB = nresults+1,) RC = nargs+1 (2+1)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 16(RA, BASE)		// fb = base+2
     |  lg RB, -32(RA)			// Copy state. fb[0] = fb[-4].
     |  lg RC, -24(RA)			// Copy control var. fb[1] = fb[-3].
@@ -3553,7 +3553,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if JIT
     |  // NYI: add hotloop, record BC_ITERN.
     |.endif
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg TAB:RB, -16(RA, BASE)
     |  cleartp TAB:RB
     |  llgf RC, -4(RA, BASE)		// Get index from control var. // TODO: ENDIANNESS DRAGONS.
@@ -3562,7 +3562,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg ITYPE, TAB:RB->array
     |1:  // Traverse array part.
     |  clr RC, TMPR1; jhe >5		// Index points after array part?
-    |  sllg RD, RC, 3(r0)		// Warning: won't work if RD==RC!
+    |  sllg RD, RC, 3		// Warning: won't work if RD==RC!
     |  lg TMPR2, 0(RD, ITYPE)
     |  cghi TMPR2, LJ_TNIL;  je >4
     |  // Copy array slot to returned value.
@@ -3609,7 +3609,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISNEXT:
     |  ins_AD	// RA = base, RD = target (points to ITERN)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lg CFUNC:RB, -24(RA, BASE)
     |  checkfunc CFUNC:RB, >5
     |  lg TMPR1, -16(RA, BASE)
@@ -3636,9 +3636,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_VARG:
     |  // TODO: some opportunities for branch on index in here.
     |  ins_ABC	// RA = base, RB = nresults+1, RC = numparams
-    |  sllg RA, RA, 3(r0)
-    |  sllg RB, RB, 3(r0)
-    |  sllg RC, RC, 3(r0)
+    |  sllg RA, RA, 3
+    |  sllg RB, RB, 3
+    |  sllg RC, RC, 3
     |  la TMPR1, (16+FRAME_VARG)(RC, BASE)
     |  la RA, 0(RA, BASE)
     |  sg TMPR1, -8(BASE)
@@ -3673,7 +3673,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  slgr RC, TMPR1
     |  jno <3				// No vararg slots? (borrow or zero)
     |  llgfr RB, RC
-    |  srlg RB, RB, 3(r0)
+    |  srlg RB, RB, 3
     |  ahi RB, 1
     |  st RB, SAVE_MULTRES		// MULTRES = #varargs+1
     |  lg L:RB, SAVE_L
@@ -3717,7 +3717,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_RET: case BC_RET0: case BC_RET1:
     |  ins_AD	// RA = results, RD = nresults+1
     if (op != BC_RET0) {
-      |  sllg RA, RA, 3(r0)
+      |  sllg RA, RA, 3
     }
     |1:
     |  lg PC, -8(BASE)
@@ -3758,7 +3758,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |  llgc RA, PC_RA
     |  lcgr RA, RA
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  lay BASE, -16(RA, BASE)		// base = base - (RA+2)*8
     |  lg LFUNC:KBASE, -16(BASE)
     |  cleartp LFUNC:KBASE
@@ -3772,7 +3772,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  stg TMPR1, -16(KBASE)		// Note: relies on shifted base.
       |  la KBASE, 8(KBASE)
     } else {
-      |  sllg RC, RD, 3(r0) 		// RC used as temp.
+      |  sllg RC, RD, 3 		// RC used as temp.
       |  stg TMPR1, -24(RC, BASE)
     }
     |  la RD, 1(RD)
@@ -3813,7 +3813,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_IFORL:
     vk = (op == BC_IFORL || op == BC_JFORL);
     |  ins_AJ	// RA = base, RD = target (after end of loop or start of loop)
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 0(RA, BASE)
     |  lg RB, FOR_IDX
     |  checkint RB, >9
@@ -3822,7 +3822,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  checkint TMPR1, ->vmeta_for
       |  lg ITYPE, FOR_STEP
       |  chi ITYPE, 0; jl >5
-      |  srag ITYPE, ITYPE, 47(r0)
+      |  srag ITYPE, ITYPE, 47
       |  cghi ITYPE, LJ_TISNUM; jne ->vmeta_for
     } else {
 #ifdef LUA_USE_ASSERT
@@ -3865,7 +3865,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |5:  // Invert check for negative step.
     if (!vk) {
-      |  srag ITYPE, ITYPE, 47(r0)
+      |  srag ITYPE, ITYPE, 47
       |  cghi ITYPE, LJ_TISNUM; jne ->vmeta_for
     } else {
       |  ar RB, ITYPE; jo <1
@@ -3946,7 +3946,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #endif
   case BC_IITERL:
     |  ins_AJ	// RA = base, RD = target
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 0(RA, BASE)
     |  lg RB, 0(RA)
     |  cghi RB, LJ_TNIL; je >1		// Stop if iterator returned nil.
@@ -3977,8 +3977,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JLOOP:
-    |  stg r0, 0(r0)
-    |  stg r0, 0(r0)
+    |  stg r0, 0
+    |  stg r0, 0
     break;
 
   case BC_JMP:
@@ -3998,7 +3998,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCF:
     |.if JIT
-    |  stg r0, 0(r0)
+    |  stg r0, 0
     |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     | // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow and ins_AD is a no-op.
@@ -4012,7 +4012,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD  // BASE = new base, RA = framesize, RD = nargs+1
     |  lg KBASE, (PC2PROTO(k)-4)(PC)
     |  lg L:RB, SAVE_L
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 0(RA, BASE)		// Top of frame.
     |  clg RA, L:RB->maxstack
     |  jh ->vm_growstack_f
@@ -4029,7 +4029,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |3:  // Clear missing parameters.
     |  // TODO: optimize this. Some of this can be hoisted.
-    |  sllg TMPR1, NARGS:RD, 3(r0)
+    |  sllg TMPR1, NARGS:RD, 3
     |  lghi TMPR2, LJ_TNIL
     |  stg TMPR2, -8(TMPR1, BASE)
     |  la RD, 1(RD)
@@ -4042,19 +4042,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 #if !LJ_HASJIT
     break;
 #endif
-    | stg r0, 0(r0)  // NYI: compiled vararg functions
+    | stg r0, 0  // NYI: compiled vararg functions
     break;           /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
     |  ins_AD  // BASE = new base, RA = framesize, RD = nargs+1
-    |  sllg TMPR1, NARGS:RD, 3(r0)
+    |  sllg TMPR1, NARGS:RD, 3
     |  la RB, (FRAME_VARG+8)(TMPR1)
     |  la RD, 8(TMPR1, BASE)
     |  lg LFUNC:KBASE, -16(BASE)
     |  stg RB, -8(RD)			// Store delta + FRAME_VARG.
     |  stg LFUNC:KBASE, -16(RD)		// Store copy of LFUNC.
     |  lg L:RB, SAVE_L
-    |  sllg RA, RA, 3(r0)
+    |  sllg RA, RA, 3
     |  la RA, 0(RA, RD)
     |  cg RA, L:RB->maxstack
     |  jh ->vm_growstack_v		// Need to grow stack.
@@ -4101,7 +4101,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cleartp CFUNC:RB
     |  lg KBASE, CFUNC:RB->f
     |  lg L:RB, SAVE_L
-    |  sllg RD, NARGS:RD, 3(r0)
+    |  sllg RD, NARGS:RD, 3
     |  lay RD, -8(RD,BASE)
     |  stg BASE, L:RB->base
     |  lay RA, (8*LUA_MINSTACK)(RD)
@@ -4125,7 +4125,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg BASE, L:RB->base
     |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
     |  set_vmstate INTERP
-    |  sllg TMPR1, RD, 3(r0)
+    |  sllg TMPR1, RD, 3
     |  la RA, 0(TMPR1, BASE)
     |  lcgr RA, RA
     |  ag RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8

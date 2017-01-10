@@ -324,10 +324,15 @@ local function split_memop(arg)
   if d then
     return d, 0, parse_reg(b)
   end
-  -- Assuming the two registers are passed as "(r1,r2)", and displacement(d) is not specified
+  -- Assume the two registers are passed as "(r1,r2)", and displacement(d) is not specified. TODO: not sure if we want to do this, GAS doesn't.
   local x, b = match(arg,"%(%s*("..reg..")%s*,%s*("..reg..")%s*%)$")
   if b then
     return 0, parse_reg(x), parse_reg(b)
+  end
+  -- Accept a lone integer as a displacement. TODO: allow expressions/variables here? Interacts badly with the other rules currently.
+  local d = match(arg,"^(-?[%d]+)$")
+  if d then
+    return d, 0, 0
   end
   local reg, tailr = match(arg, "^([%w_:]+)%s*(.*)$")
   if reg then
@@ -336,13 +341,6 @@ local function split_memop(arg)
       return format(tp.ctypefmt, tailr), 0, r
     end
   end
-  -- Assuming that only displacement is passed, as either digit or label "45 or  label1"
-  local d = match(arg,"[%w_]+")
-  if d then 
-    return d, 0, 0
-  end
-  -- TODO: handle values without registers?
-  -- TODO: handle registers without a displacement? -- done, above ,needs to be tested
   werror("bad memory operand: "..arg)
   return nil
 end
