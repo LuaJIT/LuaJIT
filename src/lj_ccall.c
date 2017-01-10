@@ -585,9 +585,9 @@
 
 #define CCALL_HANDLE_REGARG \
   if (isfp) { \
-    if (nfpr < maxgpr) { dp = &cc->fpr[nfpr++]; goto done; } \
+    if (nfpr < CCALL_NARG_FPR) { dp = &cc->fpr[nfpr++]; goto done; } \
   } else { \
-    if (ngpr < CCALL_NARG_FPR) { dp = &cc->gpr[ngpr++]; goto done; } \
+    if (ngpr < maxgpr) { dp = &cc->gpr[ngpr++]; goto done; } \
   }
 
 #else
@@ -1072,6 +1072,15 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info) ||
 	 (isfp && nsp == 0)) && d->size <= 4) {
       *(int64_t *)dp = (int64_t)*(int32_t *)dp;  /* Sign-extend to 64 bit. */
+    }
+#endif
+#if LJ_TARGET_S390X
+    /* Arguments need to be sign-/zero-extended to 64-bits. */
+    if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info)) && d->size <= 4) {
+      if (d->info & CTF_UNSIGNED)
+        *(uint64_t *)dp = (uint64_t)*(uint32_t *)dp;
+      else
+        *(int64_t *)dp = (int64_t)*(int32_t *)dp;
     }
 #endif
 #if LJ_TARGET_X64 && LJ_ABI_WIN
