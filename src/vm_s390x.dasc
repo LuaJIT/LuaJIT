@@ -1395,9 +1395,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  checktptp L:TMPR2, LJ_TTHREAD, ->fff_fallback
   |.endif
   |  ltg TMPR2, L:RB->cframe; jne ->fff_fallback
-  |  // TODO: replace with cli.
-  |  llgc TMPR1, L:RB->status
-  |  cghi TMPR1, (uint8_t)LUA_YIELD; jh ->fff_fallback
+  |  cli L:RB->status, LUA_YIELD; jh ->fff_fallback
   |  lg RA, L:RB->top
   |  je >1				// Status != LUA_YIELD (i.e. 0)?
   |  cg RA, L:RB->base			// Check for presence of initial func.
@@ -3250,8 +3248,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  n TMPR1, STR:RC->hash
     |  lgfr TMPR1, TMPR1
     |  mghi TMPR1, #NODE
-    |  xr TMPR2, TMPR2
-    |  stc TMPR2, TAB:RB->nomm		// Clear metamethod cache.
+    |  mvi TAB:RB->nomm, 0		// Clear metamethod cache.
     |  ag NODE:TMPR1, TAB:RB->node
     |  settp ITYPE, STR:RC, LJ_TSTR
     |1:
@@ -3596,8 +3593,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lghi TMPR2, BC_JMP
     |  stcy  TMPR2, PC_OP
     |  branchPC RD
-    |  lghi TMPR2, BC_ITERC
-    |  stc TMPR2, 3(PC)
+    |  mvi 3(PC), BC_ITERC
     |  j <1
     break;
 
