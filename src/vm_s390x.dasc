@@ -292,10 +292,7 @@
 |
 |// Move table write barrier back. Overwrites reg.
 |.macro barrierback, tab, reg
-|  // TODO: more efficient way?
-|  llgc reg, tab->marked
-|  nill reg, (uint16_t)~LJ_GC_BLACK // black2gray(tab)
-|  stc reg, tab->marked
+|  ni tab->marked, ~LJ_GC_BLACK // black2gray(tab)
 |  lg reg, (DISPATCH_GL(gc.grayagain))(DISPATCH)
 |  stg tab, (DISPATCH_GL(gc.grayagain))(DISPATCH)
 |  stg reg, tab->gclist
@@ -316,8 +313,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_returnp:
-  |  lghi TMPR2, FRAME_P
-  |  nr TMPR2, PC
+  |  tmll PC, FRAME_P
   |  je ->cont_dispatch
   |
   |  // Return from pcall or xpcall fast func.
