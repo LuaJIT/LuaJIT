@@ -68,7 +68,7 @@ do --- 5.2 math +lua>=5.2
 end
 
 do --- string
-  check(string, "byte:char:dump:find:format:gmatch:gsub:len:lower:match:rep:reverse:sub:upper", "gfind")
+  check(string, "byte:char:dump:find:format:gmatch:gsub:len:lower:match:pack:packsize:rep:reverse:sub:unpack:upper", "gfind")
 end
 
 do --- pre-5.1 string +lua<5.1 -compat5.1

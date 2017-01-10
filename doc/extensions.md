@@ -221,6 +221,7 @@ LuaJIT supports some extensions from Lua 5.3:
 * The argument table arg can be read (and modified) by `LUA_INIT` and `-e` chunks.
 * `io.read()` and `file:read()` accept formats with or without a leading `*`.
 * `assert()` accepts any type of error object.
+* `string.pack(fmt, v1, v2, ···)`, `string.packsize(fmt)`, `string.unpack(fmt, s [, pos])`
 * `table.move(a1, f, e, t [,a2])`.
 * `coroutine.isyieldable()`.
 * Lua/C API extensions: `lua_isyieldable()`
