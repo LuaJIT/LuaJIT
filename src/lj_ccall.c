@@ -580,11 +580,12 @@
   cc->retref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8); \
   if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
 
-#define CCALL_HANDLE_COMPLEXRET CCALL_HANDLE_STRUCTRET
+#define CCALL_HANDLE_COMPLEXRET \
+  cc->retref = 1;  /* Return all complex values by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
 
 #define CCALL_HANDLE_COMPLEXRET2 \
-  if (!cc->retref) \
-    *(int64_t *)dp = *(int64_t *)sp;  /* Copy complex float from GPRs. */
+  UNUSED(dp); /* Nothing to do. */
 
 #define CCALL_HANDLE_STRUCTARG \
   /* Pass structs of size 1, 2, 4 or 8 in a GPR by value. */ \
@@ -594,11 +595,9 @@
   }
 
 #define CCALL_HANDLE_COMPLEXARG \
-  /* Pass complex float in a GPR and complex double by reference. */ \
-  if (sz != 2*sizeof(float)) { \
-    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
-    sz = CTSIZE_PTR; \
-  }
+  /* Pass complex numbers by reference. */ \
+  rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+  sz = CTSIZE_PTR; \
 
 #define CCALL_HANDLE_REGARG \
   if (isfp) { \
