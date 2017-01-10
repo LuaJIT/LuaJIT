@@ -554,7 +554,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  lg RD, L:LREG->top
   |  sgr RD, RA
-  |  srlg NARGS:RD, NARGS:RD, 3	// TODO: support '3' on its own in dynasm.
+  |  srlg NARGS:RD, NARGS:RD, 3
   |  aghi NARGS:RD, 1			// RD = nargs+1
   |
   |->vm_call_dispatch:
