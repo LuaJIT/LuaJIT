@@ -1177,9 +1177,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg TAB:RA, TAB:RB->metatable
   |  lg PC, -8(BASE)
   |  stg TAB:TMPR1, -16(BASE)			// Return original table.
-  |  // TODO: change to tm
-  |  llgc TMPR2, TAB:RB->marked
-  |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+  |  tm TAB:RB->marked, LJ_GC_BLACK		// isblack(table)
   |  je >1
   |  // Possible write barrier. Table is black, but skip iswhite(mt) check.
   |  barrierback TAB:RB, RC
@@ -2372,8 +2370,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  lg TAB:RB, TAB:RA->metatable
       |  cghi TAB:RB, 0
       |  je <2				// No metatable?
-      |  llgc TMPR2, TAB:RB->nomm
-      |  tmll TMPR2, 1<<MM_eq
+      |  tm TAB:RB->nomm, 1<<MM_eq
       |  jne <2				// Or 'no __eq' flag set?
       if (vk) {
 	|  lghi RB, 0			// ne = 0 // TODO: should be 32-bit?
@@ -2593,8 +2590,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
 #if LJ_52
     |9:  // Check for __len.
-    |  llgc TMPR2, TAB:RB->nomm
-    |  tmll TMPR2, 1<<MM_len
+    |  tm TAB:RB->nomm, 1<<MM_len
     |  jne <3
     |  j ->vmeta_len			// 'no __len' flag NOT set: check.
 #endif
@@ -2873,18 +2869,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cleartp LFUNC:RB
     |  sllg RA, RA, 3
     |  lg UPVAL:RB, (offsetof(GCfuncL, uvptr))(RA, LFUNC:RB)
-    |  // TODO: (instead of next 2 instructions) tm UPVAL:RB->closed, 0xff
-    |  llgc TMPR2, UPVAL:RB->closed
-    |  tmll TMPR2, 0xff
+    |  tm UPVAL:RB->closed, 0xff
     |  lg RB, UPVAL:RB->v
     |  sllg TMPR1, RD, 3
     |  lg RA, 0(TMPR1, BASE)
     |  stg RA, 0(RB)
     |  je >1
     |  // Check barrier for closed upvalue.
-    |  // TODO: tmy TV2MARKOFS(RB), LJ_GC_BLACK			// isblack(uv)
-    |  llgc TMPR2, TV2MARKOFS(RB)
-    |  tmll TMPR2, LJ_GC_BLACK
+    |  tmy TV2MARKOFS(RB), LJ_GC_BLACK		// isblack(uv)
     |  jne >2
     |1:
     |  ins_next
@@ -2892,12 +2884,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:  // Upvalue is black. Check if new value is collectable and white.
     |  srag RD, RA, 47
     |  ahi RD, -LJ_TISGCV
-    |  clfi RD, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
+    |  clfi RD, LJ_TNUMX - LJ_TISGCV		// tvisgcv(v)
     |  jle <1
     |  cleartp GCOBJ:RA
-    |  // TODO: tm GCOBJ:RA->gch.marked, LJ_GC_WHITES		// iswhite(v)
-    |  llgc TMPR2, GCOBJ:RA->gch.marked
-    |  tmll TMPR2, LJ_GC_WHITES
+    |  tm GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
     |  je <1
     |  // Crossed a write barrier. Move the barrier forward.
     |  lgr CARG2, RB
@@ -2919,21 +2909,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg RD, UPVAL:RB->v
     |  settp STR:ITYPE, STR:RA, LJ_TSTR
     |  stg STR:ITYPE, 0(RD)
-    |  // TODO: tm UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
-    |  llgc TMPR2, UPVAL:RB->marked
-    |  tmll TMPR2, LJ_GC_BLACK
+    |  tm UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
     |  jne >2
     |1:
     |  ins_next
     |
     |2:  // Check if string is white and ensure upvalue is closed.
-    |  // TODO: tm GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(str)
-    |  llgc TMPR2, GCOBJ:RA->gch.marked
-    |  tmll TMPR2, LJ_GC_WHITES
+    |  tm GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(str)
     |  je <1
-    |  // TODO: tm UPVAL:RB->closed, 0xff
-    |  llgc TMPR2, UPVAL:RB->closed
-    |  tmll TMPR2, 0xff
+    |  tm UPVAL:RB->closed, 0xff
     |  je <1
     |  // Crossed a write barrier. Move the barrier forward.
     |  lgr RB, BASE
@@ -3114,8 +3098,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je <1
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_index
+    |  tm TAB:TMPR1->nomm, 1<<MM_index
     |  je ->vmeta_tgetv			// 'no __index' flag NOT set: check.
     |  j <1
     |
@@ -3163,8 +3146,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je <2				// No metatable: done.
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_index
+    |  tm TAB:TMPR1->nomm, 1<<MM_index
     |  jne <2				// 'no __index' flag set: done.
     |  j ->vmeta_tgets			// Caveat: preserve STR:RC.
     break;
@@ -3190,8 +3172,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je <1
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_index
+    |  tm TAB:TMPR1->nomm, 1<<MM_index
     |  je ->vmeta_tgetb			// 'no __index' flag NOT set: check.
     |  j <1
     break;
@@ -3234,8 +3215,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cg TMPR2, 0(RC)
     |  je >3				// Previous value is nil?
     |1:
-    |  llgc TMPR1, TAB:RB->marked
-    |  tmll TMPR1, LJ_GC_BLACK			// isblack(table)
+    |  tm TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jne >7
     |2:  // Set array slot.
     |  sllg RA, RA, 3
@@ -3247,8 +3227,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je <1
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_newindex
+    |  tm TAB:TMPR1->nomm, 1<<MM_newindex
     |  je ->vmeta_tsetv			// 'no __newindex' flag NOT set: check.
     |  j <1
     |
@@ -3287,8 +3266,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cg TMPR2, 0(TMPR1)
     |  je >4				// Previous value is nil?
     |2:
-    |  llgc TMPR2, TAB:RB->marked
-    |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+    |  tm TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
     |  jne >7
     |3:  // Set node value.
     |  sllg RA, RA, 3
@@ -3300,8 +3278,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:ITYPE, TAB:RB->metatable
     |  cghi TAB:ITYPE, 0
     |  je <2
-    |  llgc TMPR2, TAB:ITYPE->nomm
-    |  tmll TMPR2, 1<<MM_newindex
+    |  tm TAB:ITYPE->nomm, 1<<MM_newindex
     |  je ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
     |  j <2
     |
@@ -3315,8 +3292,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je >6				// No metatable: continue.
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_newindex
+    |  tm TAB:TMPR1->nomm, 1<<MM_newindex
     |  je ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
     |6:
     |  stg ITYPE, TMP_STACK
@@ -3350,8 +3326,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cg TMPR2, 0(RC)
     |  je >3				// Previous value is nil?
     |1:
-    |  llgc TMPR1, TAB:RB->marked
-    |  tmll TMPR1, LJ_GC_BLACK		// isblack(table)
+    |  tm TAB:RB->marked, LJ_GC_BLACK		// isblack(table)
     |  jne >7
     |2:	 // Set array slot.
     |  sllg RA, RA, 3
@@ -3363,8 +3338,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg TAB:TMPR1, TAB:RB->metatable
     |  cghi TAB:TMPR1, 0
     |  je <1
-    |  llgc TMPR2, TAB:TMPR1->nomm
-    |  tmll TMPR2, 1<<MM_newindex
+    |  tm TAB:TMPR1->nomm, 1<<MM_newindex
     |  je ->vmeta_tsetb			// 'no __newindex' flag NOT set: check.
     |  j <1
     |
@@ -3379,8 +3353,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cleartp TAB:RB
     |  sllg RC, RC, 3
     |  lg RC, 0(RC, BASE)
-    |  llgc TMPR2, TAB:RB->marked
-    |  tmll TMPR2, LJ_GC_BLACK			// isblack(table)
+    |  tm TAB:RB->marked, LJ_GC_BLACK			// isblack(table)
     |  jne >7
     |2:
     |  cl RC, TAB:RB->asize
@@ -3409,8 +3382,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  la RA, 0(RA, BASE)
     |  lg TAB:RB, -8(RA)		// Guaranteed to be a table.
     |  cleartp TAB:RB
-    |  llgc TMPR2, TAB:RB->marked
-    |  tmll TMPR2, LJ_GC_BLACK		// isblack(table)
+    |  tm TAB:RB->marked, LJ_GC_BLACK		// isblack(table)
     |  jne >7
     |2:
     |  llgf RD, SAVE_MULTRES
