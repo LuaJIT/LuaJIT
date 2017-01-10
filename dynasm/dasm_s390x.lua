@@ -312,6 +312,10 @@ local function is_int8(num)
   return -128 <= num and num < 128
 end
 
+local function is_uint8(num)
+  return 0 <= num and num < 256
+end
+
 -- Split a memory operand of the form d(b) or d(x,b) into d, x and b.
 -- If x is not specified then it is 0.
 local function split_memop(arg)
@@ -510,13 +514,12 @@ end
 local function parse_imm8(imm)
   local imm_val = tonumber(imm)
   if imm_val then
-    if not is_int8(imm_val) then
+    if not is_int8(imm_val) and not is_uint8(imm_val) then
       werror("Immediate value out of range: ", imm_val)
     end
-  else
-    iact = function() waction("IMM8",nil,imm) end
+    return imm_val, nil
   end
-  return imm_val, iact
+  return 0, function() waction("IMM8",nil,imm) end
 end
 
 local function parse_mask(mask)
