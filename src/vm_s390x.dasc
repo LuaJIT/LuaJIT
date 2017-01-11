@@ -22,6 +22,7 @@
 |//   clfi (compare logical immediate) [requires z9-109]
 |//   ldgr (load FPR from GPR)         [requires z9-109 GA3]
 |//   lgdr (load GPR from FPR)         [requires z9-109 GA3]
+|//   lay  (load address)              [requires z900 GA2]
 |//   ldy  (load (long bfp))           [requires z900 GA2]
 |//   stdy (store (long bfp))          [requires z900 GA2]
 |// TODO: alternative instructions?
@@ -390,7 +391,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  je <5				// But check for LUA_MULTRET+1.
   |  sgr RA, RD				// Negative result!
   |  sllg TMPR1, RA, 3
-  |  lay BASE, 0(TMPR1, BASE)		// Correct top.
+  |  la BASE, 0(TMPR1, BASE)		// Correct top.
   |  j <5
   |
   |8:  // Corner case: need to grow stack for filling up results.
@@ -430,7 +431,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lghi RD, 1+1			// Really 1+2 results, incr. later.
   |  lg BASE, L:RB->base
   |  lg DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
-  |  lay DISPATCH, GG_G2DISP(DISPATCH)
+  |  la DISPATCH, GG_G2DISP(DISPATCH)
   |  lg PC, -8(BASE)			// Fetch PC of previous frame.
   |  load_false RA
   |  lg RB, 0(BASE)
@@ -489,7 +490,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lgr RA, CARG2
   |  lghi PC, FRAME_CP
   |  lghi RD, 0
-  |  lay KBASE, CFRAME_RESUME(sp)
+  |  la KBASE, CFRAME_RESUME(sp)
   |  lg DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  aghi DISPATCH, GG_G2DISP
   |  stg RD, SAVE_PC			// Any value outside of bytecode is ok.
@@ -701,7 +702,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, L->top = new base, stack = cont/func/t/k
   |  lg RA, L:RB->top
   |  stg PC, -24(RA)			// [cont|PC]
-  |  lay PC, FRAME_CONT(RA)
+  |  la PC, FRAME_CONT(RA)
   |  sgr PC, BASE
   |  lg LFUNC:RB, -16(RA)		// Guaranteed to be a function here.
   |  lghi NARGS:RD, 2+1			// 2 args for func(t, k).
@@ -892,8 +893,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_arith_vn:
   |  sllg RB, RB, 3
   |  sllg RC, RC, 3
-  |  lay RB, 0(RB, BASE)
-  |  lay RC, 0(RC, KBASE)
+  |  la RB, 0(RB, BASE)
+  |  la RC, 0(RC, KBASE)
   |  j >1
   |
   |->vmeta_arith_nvo:
@@ -902,8 +903,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_arith_nv:
   |  sllg RC, RC, 3
   |  sllg RB, RB, 3
-  |  lay TMPR1, 0(RC, KBASE)
-  |  lay RC, 0(RB, BASE)
+  |  la TMPR1, 0(RC, KBASE)
+  |  la RC, 0(RB, BASE)
   |  lgr RB, TMPR1
   |  j >1
   |
@@ -920,12 +921,12 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_arith_vv:
   |  sllg RC, RC, 3
   |  sllg RB, RB, 3
-  |  lay RB, 0(RB, BASE)
-  |  lay RC, 0(RC, BASE)
+  |  la RB, 0(RB, BASE)
+  |  la RC, 0(RC, BASE)
   |1:
   |  llgc RA, PC_RA
   |  sllg RA, RA, 3
-  |  lay RA, 0(RA, BASE)
+  |  la RA, 0(RA, BASE)
   |  llgc CARG5, PC_OP			// Caveat: CARG5 == RD.
   |  lgr CARG2, RA
   |  lgr CARG3, RB
@@ -2167,8 +2168,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |2:
   |  sll r1, 3
-  |  lay r10, (offsetof(CCallState, stack))(CCSTATE)	// Source.
-  |  lay r11, (CCALL_SPS_EXTRA*8)(sp)			// Destination.
+  |  la r10, (offsetof(CCallState, stack))(CCSTATE)	// Source.
+  |  la r11, (CCALL_SPS_EXTRA*8)(sp)			// Destination.
   |3:
   |  chi r1, 256
   |  jl >4
@@ -4056,7 +4057,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sllg RD, NARGS:RD, 3
     |  lay RD, -8(RD,BASE)
     |  stg BASE, L:RB->base
-    |  lay RA, (8*LUA_MINSTACK)(RD)
+    |  la RA, (8*LUA_MINSTACK)(RD)
     |  clg RA, L:RB->maxstack
     |  stg RD, L:RB->top
     |  lgr CARG1, L:RB
