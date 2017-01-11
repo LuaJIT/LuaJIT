@@ -499,9 +499,9 @@ void lj_ccallback_mcode_free(CTState *cts)
 
 #define CALLBACK_HANDLE_REGARG \
   if (isfp) { \
-    if (nfpr < maxgpr) { sp = &cts->cb.fpr[nfpr++]; goto done; } \
+    if (nfpr < CCALL_NARG_FPR) { sp = &cts->cb.fpr[nfpr++]; goto done; } \
   } else { \
-    if (ngpr < CCALL_NARG_FPR) { sp = &cts->cb.gpr[ngpr++]; goto done; } \
+    if (ngpr < maxgpr) { sp = &cts->cb.gpr[ngpr++]; goto done; } \
   }
 
 #else
