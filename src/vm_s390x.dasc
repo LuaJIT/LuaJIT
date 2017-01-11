@@ -41,8 +41,7 @@
 |.define KBASE,			r8	// Constants of current Lua function.
 |.define PC,			r9	// Next PC.
 |.define DISPATCH,		r10	// Opcode dispatch table.
-|.define LREG,			r11	// Register holding lua_State (also in SAVE_L).
-|.define ITYPE,			r13	//
+|.define ITYPE,			r11	//
 |
 |// The following temporaries are not saved across C calls, except for RD.
 |.define RA,			r1
@@ -368,7 +367,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_leave_cp:
   |  lg RA, SAVE_CFRAME			// Restore previous C frame.
-  |  stg RA, L:LREG->cframe
+  |  stg RA, L:RB->cframe
   |  lghi CRET1, 0			// Ok return status for vm_pcall.
   |
   |->vm_leave_unw:
@@ -498,7 +497,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  st RD, SAVE_NRES
   |  stg RD, SAVE_ERRF
   |  stg KBASE, L:RB->cframe
-  |  lgr LREG, L:RB
   |  clm RD, 1, L:RB->status
   |  je >2				// Initial resume (like a call).
   |
@@ -543,16 +541,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg L:RB, SAVE_PC			// Any value outside of bytecode is ok.
   |  aghi DISPATCH, GG_G2DISP
   |  stg sp, L:RB->cframe
-  |  lgr L:LREG, L:RB			// TODO: use RB instead of LREG here?
   |
-  |2: // Entry point for vm_resume/vm_cpcall (RA = base, LREG = L, PC = ftype).
-  |  stg L:LREG, DISPATCH_GL(cur_L)(DISPATCH)
+  |2: // Entry point for vm_resume/vm_cpcall (RA = base, RB = L, PC = ftype).
+  |  stg L:RB, DISPATCH_GL(cur_L)(DISPATCH)
   |  set_vmstate INTERP
-  |  lg BASE, L:LREG->base		// BASE = old base (used in vmeta_call).
+  |  lg BASE, L:RB->base		// BASE = old base (used in vmeta_call).
   |  agr PC, RA
   |  sgr PC, BASE			// PC = frame delta + frame type
   |
-  |  lg RD, L:LREG->top
+  |  lg RD, L:RB->top
   |  sgr RD, RA
   |  srlg NARGS:RD, NARGS:RD, 3
   |  aghi NARGS:RD, 1			// RD = nargs+1
@@ -569,23 +566,23 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_cpcall:				// Setup protected C frame, call C.
   |  // (lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cp)
   |  saveregs
-  |  lgr LREG, CARG1
-  |  stg LREG, SAVE_L
-  |  stg LREG, SAVE_PC			// Any value outside of bytecode is ok.
+  |  lgr L:RB, CARG1
+  |  stg L:RB, SAVE_L
+  |  stg L:RB, SAVE_PC			// Any value outside of bytecode is ok.
   |
-  |  lg KBASE, L:LREG->stack		// Compute -savestack(L, L->top).
-  |  sg KBASE, L:LREG->top
-  |   lg DISPATCH, L:LREG->glref	// Setup pointer to dispatch table.
+  |  lg KBASE, L:RB->stack		// Compute -savestack(L, L->top).
+  |  sg KBASE, L:RB->top
+  |   lg DISPATCH, L:RB->glref	// Setup pointer to dispatch table.
   |  lghi RA, 0
   |  stg RA, SAVE_ERRF			// No error function.
   |  st KBASE, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |   aghi DISPATCH, GG_G2DISP
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
   |
-  |  lg KBASE, L:LREG->cframe		// Add our C frame to cframe chain.
+  |  lg KBASE, L:RB->cframe		// Add our C frame to cframe chain.
   |  stg KBASE, SAVE_CFRAME
-  |  stg sp, L:LREG->cframe
-  |  stg L:LREG, DISPATCH_GL(cur_L)(DISPATCH)
+  |  stg sp, L:RB->cframe
+  |  stg L:RB, DISPATCH_GL(cur_L)(DISPATCH)
   |
   |  basr r14, CARG4			// (lua_State *L, lua_CFunction func, void *ud)
   |  // TValue * (new base) or NULL returned in r2 (CRET1/).
