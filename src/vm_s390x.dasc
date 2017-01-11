@@ -1085,9 +1085,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RA, 8(RA)
   |  lg RB, 0(RA)
   |  stg RB, -16(RA)
-  |  ahi RD, -1
-  |  jne <1
-  |  // TODO: replace with branch on count (brctg).
+  |  brct RD, <1
   |2:
   |  llgf RD, SAVE_MULTRES
   |  j ->fff_res_
@@ -3392,9 +3390,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  la RA, 8(RA)
     |  stg RB, 0(TMPR1)
     |  la TMPR1, 8(TMPR1)
-    |  aghi RD, -1
-    |  jne <3
-    |  // TODO: replace decrement/branch with branch on count.
+    |  brctg RD, <3
     |4:
     |  ins_next
     |
@@ -3458,9 +3454,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  la RA, 8(RA)
     |  stg RB, 0(KBASE)
     |  la KBASE, 8(KBASE)
-    |  // TODO: replace decrement/branch with brctg
-    |  aghi NARGS:RD, -1
-    |  jne <2
+    |  brctg NARGS:RD, <2
     |
     |  lg LFUNC:RB, -16(BASE)
     |3:
@@ -3698,9 +3692,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  lg RB, 0(KBASE, RA)
       |  stg RB, -16(KBASE)
       |  la KBASE, 8(KBASE)
-      |  // TODO: replace with brctg RD, <2 once supported.
-      |  aghi RD, -1
-      |  jne <2
+      |  brctg RD, <2
       |3:
       |  llgf RD, SAVE_MULTRES		// Note: MULTRES may be >256.
       |  llgc RB, PC_RB
@@ -4037,9 +4029,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg KBASE, 0(RD)
     |  la RD, 8(RD)
     |  stg TMPR1, -16(RA)	// Clear old fixarg slot (help the GC).
-    |  aghi RB, -1
-    |  jne <1
-    |  // TODO: brctg instead of decrement/branch
+    |  brctg RB, <1
     |2:
     if (op == BC_JFUNCV) {
       |  llgh RD, PC_RD
@@ -4052,9 +4042,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |3:  // Clear missing parameters.
     |  stg TMPR1, 0(RD)			// TMPR1=LJ_TNIL (-1) here.
     |  la RD, 8(RD)
-    |  aghi RB, -1
-    |  jne <3
-    |  // TODO: brctg instead of decrement/branch
+    |  brctg RB, <3
     |  j <2
     break;
 

@@ -1240,6 +1240,8 @@ map_op = {
   mghi_2 =	"0000a70d0000RI-a",
   -- RI-b mode instructions
   bras_2 =	"0000a7050000RI-b",
+  brct_2 =	"0000a7060000RI-b",
+  brctg_2 =	"0000a7070000RI-b",
   -- RI-c mode instructions
   brc_2 =	"0000a7040000RI-c",
   -- RIL-c
