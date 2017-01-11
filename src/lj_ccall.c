@@ -559,9 +559,8 @@
 /* -- POSIX/s390x calling conventions --------------------------------------- */
 
 #define CCALL_HANDLE_STRUCTRET \
-  /* Return structs of size 1, 2, 4 or 8 in a GPR. */ \
-  cc->retref = !(sz == 1 || sz == 2 || sz == 4 || sz == 8); \
-  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+  cc->retref = 1;  /* Return all structs by reference. */ \
+  cc->gpr[ngpr++] = (GPRArg)dp;
 
 #define CCALL_HANDLE_COMPLEXRET \
   cc->retref = 1;  /* Return all complex values by reference. */ \
@@ -579,6 +578,7 @@
 
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex numbers by reference. */ \
+  /* TODO: not sure why this is different to structs. */ \
   rp = cdataptr(lj_cdata_new(cts, did, sz)); \
   sz = CTSIZE_PTR; \
 
