@@ -258,6 +258,24 @@ static void load_test(dasm_State *state)
 }
 */
 
+
+static void test_mask(dasm_State *state)
+{
+  dasm_State **Dst = &state;
+
+  |lay   sp , -8(sp)
+  |stg   r2,  4(sp)
+  |tm    4(sp),0x04
+  |je >2
+  |jne >1
+|1:
+  |ar r2,r3
+  |br r14
+|2:
+  |sr r2,r3
+  |br r14
+}
+
 static void ssa(dasm_State *state) {
   dasm_State **Dst = &state;
 
@@ -428,7 +446,8 @@ test_table test[] = {
   { 0, 0, 0,        rsb,       0,     "rsb"},
   {12,10, 0,        rre,      10,     "rre"},
   {16,10, 0,   sqrt_rxe,       4,"sqrt_rxe"},
-  {16,10, 0,        rxf,     116,     "rxf"}
+  {16,10, 0,        rxf,     116,     "rxf"},
+  { 4, 3, 0,  test_mask,       1,"test_mask"}
 };
 
 static void *jitcode(dasm_State **state, size_t *size)
