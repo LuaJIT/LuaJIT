@@ -8,8 +8,8 @@
 |// r3-r5       | parameter                  | volatile |
 |// r6          | parameter                  | saved    |
 |// r7-r11      |                            | saved    |
-|// r12         | GOT pointer  (needed?)     | saved    |
-|// r13         | literal pool (needed?)     | saved    |
+|// r12         | GOT pointer (needed?)      | saved    |
+|// r13         | literal pool (not needed)  | saved    |
 |// r14         | return address             | volatile |
 |// r15         | stack pointer              | saved    |
 |// f0,f2,f4,f6 | parameter and return value | volatile |
@@ -41,13 +41,13 @@
 |.define KBASE,			r8	// Constants of current Lua function.
 |.define PC,			r9	// Next PC.
 |.define DISPATCH,		r10	// Opcode dispatch table.
-|.define ITYPE,			r11	//
+|.define ITYPE,			r11	// Temporary used for type information.
 |
-|// The following temporaries are not saved across C calls, except for RD.
+|// The following temporaries are not saved across C calls, except for RB.
 |.define RA,			r1
-|.define RB,			r12
+|.define RB,			r13	// Must be callee-save.
 |.define RC,			r5	// Overlaps CARG4.
-|.define RD,			r6	// Overlaps CARG5. Callee-saved.
+|.define RD,			r6	// Overlaps CARG5.
 |
 |// Calling conventions. Also used as temporaries.
 |.define CARG1,			r2
@@ -484,7 +484,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_resume:				// Setup C frame and resume thread.
   |  // (lua_State *L, TValue *base, int nres1 = 0, ptrdiff_t ef = 0)
   |  saveregs
-  |  lgr L:RB, CARG1			// Caveat: CARG1 may be RA.
+  |  lgr L:RB, CARG1
   |  stg CARG1, SAVE_L
   |  lgr RA, CARG2
   |  lghi PC, FRAME_CP
@@ -752,7 +752,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RB, 0(RB, BASE)
   |2:
   |  lg L:CARG1, SAVE_L
-  |  stg BASE, L:CARG1->base		// Caveat: CARG2/CARG3 may be BASE.
+  |  stg BASE, L:CARG1->base
   |  lgr CARG2, RB
   |  lgr CARG3, RC
   |  lgr L:RB, L:CARG1
@@ -4071,7 +4071,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lay RA, (8*LUA_MINSTACK)(RD)
     |  clg RA, L:RB->maxstack
     |  stg RD, L:RB->top
-    |  lgr CARG1, L:RB			// Caveat: CARG1 may be RA.
+    |  lgr CARG1, L:RB
     if (op != BC_FUNCC) {
       |  lgr CARG2, KBASE
     }
