@@ -188,12 +188,12 @@
 |.macro ins_callt
 |  // BASE = new base, RB = LFUNC, RD = nargs+1, -8(BASE) = PC
 |  lg PC, LFUNC:RB->pc
-|  llgf RA, 0(PC) // TODO: combine loads?
-|  llgcr OP, RA
-|    sllg TMPR1, OP, 3
+|  llgc OP, 3(PC)
+|  llgc RA, 2(PC)
+|  sllg TMPR1, OP, 3
 |  la PC, 4(PC)
-|    lg TMPR1, 0(TMPR1, DISPATCH)
-|    br TMPR1
+|  lg TMPR1, 0(TMPR1, DISPATCH)
+|  br TMPR1
 |.endmacro
 |
 |.macro ins_call
@@ -2044,8 +2044,35 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
-  |  stg r0, 0
-  |  stg r0, 0
+  |  llgc RD, (DISPATCH_GL(hookmask))(DISPATCH)
+  |  tmll RD, HOOK_ACTIVE		// Hook already active?
+  |  jne >5
+  |
+  |  tmll RD, LUA_MASKLINE|LUA_MASKCOUNT
+  |  je >5
+  |  ly TMPR2, (DISPATCH_GL(hookcount))(DISPATCH)
+  |  ahi TMPR2, -1
+  |  sty TMPR2, (DISPATCH_GL(hookcount))(DISPATCH)
+  |  je >1
+  |  tmll RD, LUA_MASKLINE
+  |  je >5
+  |1:
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  lgr CARG2, PC
+  |  lgr CARG1, L:RB
+  |  // SAVE_PC must hold the _previous_ PC. The callee updates it with PC.
+  |  brasl r14, extern lj_dispatch_ins	// (lua_State *L, const BCIns *pc)
+  |3:
+  |  lg BASE, L:RB->base
+  |4:
+  |  llgc RA, PC_RA
+  |5:
+  |  llgc OP, PC_OP
+  |  sllg TMPR1, OP, 3
+  |  llgh RD, PC_RD
+  |  lg TMPR1, GG_DISP2STATIC(TMPR1, DISPATCH)
+  |  br TMPR1
   |
   |->cont_hook:				// Continue from hook yield.
   |  stg r0, 0
@@ -2056,12 +2083,40 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-  |  stg r0, 0
-  |  stg r0, 0
+  |  stg PC, SAVE_PC
+  |.if JIT
+  |  j >1
+  |.endif
   |
   |->vm_hotcall:			// Hot call counter underflow.
-  |  stg r0, 0
-  |  stg r0, 0
+  |.if JIT
+  |  stg PC, SAVE_PC
+  |  oill PC, 1				// Marker for hot call.
+  |1:
+  |.endif
+  |  sllg RD, NARGS:RD, 3
+  |  lay RD, -8(RD, BASE)
+  |  lg L:RB, SAVE_L
+  |  stg BASE, L:RB->base
+  |  stg RD, L:RB->top
+  |  lgr CARG2, PC
+  |  lgr CARG1, L:RB
+  |  brasl r14, extern lj_dispatch_call	// (lua_State *L, const BCIns *pc)
+  |  // ASMFunction returned in r2 (CRET1).
+  |  lghi TMPR2, 0
+  |  stg TMPR2, SAVE_PC			// Invalidate for subsequent line hook.
+  |.if JIT
+  |  nill PC, -2
+  |.endif
+  |  lg BASE, L:RB->base
+  |  lg RD, L:RB->top
+  |  sgr RD, BASE
+  |  lgr RB, CRET1
+  |  llgc RA, PC_RA
+  |  srl RD, 3
+  |  ahi NARGS:RD, 1
+  |  llgfr RD, RD
+  |  br RB
   |
   |->cont_stitch:			// Trace stitching.
   |  stg r0, 0
@@ -3422,7 +3477,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  agf NARGS:RD, SAVE_MULTRES
     }
     |  sllg RA, RA, 3
-    |  lg LFUNC:RB, 0(BASE, RA)
+    |  lg LFUNC:RB, 0(RA, BASE)
     |  checkfunc LFUNC:RB, ->vmeta_call_ra
     |  la BASE, 16(RA, BASE)
     |  ins_call
@@ -3659,7 +3714,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lgr CARG1, L:RB
     |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
     |  lg BASE, L:RB->base
-    |  llgf TMPR1, TMP_STACK_HI
+    |  lgf TMPR1, TMP_STACK_HI
     |  lg RA, L:RB->top
     |  agr TMPR1, BASE
     |  j <6
