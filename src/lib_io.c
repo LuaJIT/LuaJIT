@@ -203,13 +203,13 @@ static int io_file_read(lua_State *L, FILE *fp, int start)
     for (n = start; nargs-- && ok; n++) {
       if (tvisstr(L->base+n)) {
 	const char *p = strVdata(L->base+n);
-	if (p[0] != '*')
-	  lj_err_arg(L, n+1, LJ_ERR_INVOPT);
-	if (p[1] == 'n')
+	if (p[0] == '*')
+	  p++;  /* skip optional '*' (for compatibility) */
+	if (p[0] == 'n')
 	  ok = io_file_readnum(L, fp);
-	else if ((p[1] & ~0x20) == 'L')
-	  ok = io_file_readline(L, fp, (p[1] == 'l'));
-	else if (p[1] == 'a')
+	else if ((p[0] & ~0x20) == 'L')
+	  ok = io_file_readline(L, fp, (p[0] == 'l'));
+	else if (p[0] == 'a')
 	  io_file_readall(L, fp);
 	else
 	  lj_err_arg(L, n+1, LJ_ERR_INVFMT);
