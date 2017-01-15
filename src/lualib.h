@@ -13,6 +13,7 @@
 #define LUA_COLIBNAME	"coroutine"
 #define LUA_MATHLIBNAME	"math"
 #define LUA_STRLIBNAME	"string"
+#define LUA_UTF8LIBNAME	"utf8"
 #define LUA_TABLIBNAME	"table"
 #define LUA_IOLIBNAME	"io"
 #define LUA_OSLIBNAME	"os"
@@ -25,6 +26,7 @@
 LUALIB_API int luaopen_base(lua_State *L);
 LUALIB_API int luaopen_math(lua_State *L);
 LUALIB_API int luaopen_string(lua_State *L);
+LUALIB_API int luaopen_utf8(lua_State *L);
 LUALIB_API int luaopen_table(lua_State *L);
 LUALIB_API int luaopen_io(lua_State *L);
 LUALIB_API int luaopen_os(lua_State *L);
