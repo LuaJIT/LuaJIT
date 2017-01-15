@@ -19,7 +19,7 @@ local function check(m, expected, exclude)
 end
 
 do --- base
-  check(_G, "_G:_VERSION:arg:assert:collectgarbage:coroutine:debug:dofile:error:exdata:getmetatable:io:ipairs:load:loadfile:math:next:os:package:pairs:pcall:print:rawequal:rawget:rawset:require:select:setmetatable:string:table:tonumber:tostring:type:xpcall", "rawlen:bit:bit32:jit:gcinfo:setfenv:getfenv:loadstring:unpack:module:newproxy")
+  check(_G, "_G:_VERSION:arg:assert:collectgarbage:coroutine:debug:dofile:error:exdata:getmetatable:io:ipairs:load:loadfile:math:next:os:package:pairs:pcall:print:rawequal:rawget:rawset:require:select:setmetatable:string:table:tonumber:tostring:type:utf8:xpcall", "rawlen:bit:bit32:jit:gcinfo:setfenv:getfenv:loadstring:unpack:module:newproxy")
 end
 
 do --- pre-5.2 base +lua<5.2
@@ -146,6 +146,10 @@ do --- package.loaded
     end
   end
   check(loaded, "_G:coroutine:debug:io:math:os:package:string:table:thread.exdata", "bit:bit32:common:ffi:jit:table.new")
+end
+
+do --- utf8
+  check(utf8, "char:charpattern:codepoint:codes:len:offset")
 end
 
 do --- bit +bit

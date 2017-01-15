@@ -494,7 +494,7 @@ LJVM_O= lj_vm.o
 LJVM_BOUT= $(LJVM_S)
 LJVM_MODE= elfasm
 
-LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o \
+LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o lib_utf8.o \
 	 lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o lib_ffi.o
 LJLIB_C= $(LJLIB_O:.o=.c)
 
@@ -630,6 +630,10 @@ clean:
 
 libbc:
 	./$(LUAJIT_T) host/genlibbc.lua -o host/buildvm_libbc.h $(LJLIB_C)
+	$(MAKE) all
+
+utf8bc:
+	./$(LUAJIT_T) -b utf8.lua utf8.h
 	$(MAKE) all
 
 depend:

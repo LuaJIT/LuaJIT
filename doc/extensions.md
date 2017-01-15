@@ -229,7 +229,9 @@ LuaJIT supports some extensions from Lua 5.3:
   with Lua 5.3. As a result, these functions work only in the range [-2^53,
   2^53].  `math.maxinteger` and `math.mininteger` thus give the limits of this
   range.
-* Lua/C API extensions: `lua_isyieldable()`
+* `utf8.char(...)`, `utf8.charpattern`, `utf8.codepoints(s [, i [, j]])`, `utf8.codes(s)`,
+  `utf8.len(s [, i [, j]])`, `utf8.offset(s, n [, i])`
+* Lua/C API extensions: `lua_isyieldable()`, `luaopen_utf8()`
 
 <a name="exceptions"></a>
 ### C++ Exception Interoperability
