@@ -2040,8 +2040,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg r0, 0
   |
   |->vm_rethook:			// Dispatch target for return hooks.
-  |  stg r0, 0
-  |  stg r0, 0
+  |  llgc RD, (DISPATCH_GL(hookmask))(DISPATCH)
+  |  tmll RD, HOOK_ACTIVE
+  |  jne >5
+  |  j >1
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
   |  llgc RD, (DISPATCH_GL(hookmask))(DISPATCH)
