@@ -45,7 +45,7 @@
 |.define ITYPE,			r11	// Temporary used for type information.
 |
 |// The following temporaries are not saved across C calls, except for RB.
-|.define RA,			r1
+|.define RA,			r4	// Overlaps CARG3.
 |.define RB,			r13	// Must be callee-save.
 |.define RC,			r5	// Overlaps CARG4.
 |.define RD,			r6	// Overlaps CARG5.
@@ -65,7 +65,7 @@
 |.define CRET1,			r2
 |
 |.define OP,			r2
-|.define TMPR1,			r14
+|.define TMPR1,			r1
 |.define TMPR2,			r0
 |
 |// Stack layout while in interpreter. Must match with lj_frame.h.
@@ -534,7 +534,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  st CARG3, SAVE_NRES
   |  lgr L:RB, CARG1
   |  stg CARG1, SAVE_L
-  |  lgr RA, CARG2
+  |  lgr RA, CARG2			// Caveat: RA = CARG3.
   |
   |  lg DISPATCH, L:RB->glref		// Setup pointer to dispatch table.
   |  lg KBASE, L:RB->cframe		// Add our C frame to cframe chain.
@@ -574,8 +574,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg KBASE, L:RB->stack		// Compute -savestack(L, L->top).
   |  sg KBASE, L:RB->top
   |   lg DISPATCH, L:RB->glref	// Setup pointer to dispatch table.
-  |  lghi RA, 0
-  |  stg RA, SAVE_ERRF			// No error function.
+  |  lghi TMPR2, 0
+  |  stg TMPR2, SAVE_ERRF		// No error function.
   |  st KBASE, SAVE_NRES		// Neg. delta means cframe w/o frame.
   |   aghi DISPATCH, GG_G2DISP
   |  // Handler may change cframe_nres(L->cframe) or cframe_errfunc(L->cframe).
@@ -644,9 +644,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  srlg RA, RA, 3
   |  lg L:CARG1, SAVE_L
   |  stg BASE, L:CARG1->base
-  |  lgfr CARG3, RA
-  |  lg RA, 0(RC)
-  |  stg RA, 0(RB)
+  |  lgfr CARG3, RA			// Caveat: RA == CARG3.
+  |  lg TMPR2, 0(RC)
+  |  stg TMPR2, 0(RB)
   |  lgr CARG2, RB
   |  j ->BC_CAT_Z
   |
@@ -811,7 +811,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
   |  la CARG2, 0(RA, BASE)
-  |  la CARG3, 0(RD, BASE)
+  |  la CARG3, 0(RD, BASE)		// Caveat: RA == CARG3
   |  lgr CARG1, L:RB
   |  llgc CARG4, PC_OP
   |  stg PC, SAVE_PC
@@ -878,7 +878,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
   |  llgfr CARG2, RA
-  |  llgfr CARG3, RD
+  |  llgfr CARG3, RD			// Caveat: CARG3 == RA.
   |  lgr L:CARG1, L:RB
   |  stg PC, SAVE_PC
   |  brasl r14, extern lj_meta_istype  // (lua_State *L, BCReg ra, BCReg tp)
@@ -929,7 +929,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RA, 0(RA, BASE)
   |  llgc CARG5, PC_OP			// Caveat: CARG5 == RD.
   |  lgr CARG2, RA
-  |  lgr CARG3, RB
+  |  lgr CARG3, RB			// Caveat: CARG3 == RA.
   |  // lgr CARG4, RC			// Caveat: CARG4 == RC (nop, so commented out).
   |  lg L:CARG1, SAVE_L
   |  stg BASE, L:CARG1->base
@@ -988,7 +988,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg BASE, L:CARG1->base
   |  lay CARG2, -16(RA)
   |  sllg RD, RD, 3
-  |  lay CARG3, -8(RA, RD)
+  |  lay CARG3, -8(RA, RD)		// Caveat: CARG3 == RA.
   |  stg PC, SAVE_PC
   |  brasl r14, extern lj_meta_call	// (lua_State *L, TValue *func, TValue *top)
   |  lgr RA, RB
