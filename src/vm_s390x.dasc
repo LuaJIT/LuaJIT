@@ -103,26 +103,10 @@
 |.macro saveregs
 |  stmg r6, r15, SAVE_GPRS_P
 |  lay sp, -CFRAME_SPACE(sp)	// Allocate stack frame.
-|  // TODO: save backchain?
-|  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
-|  std f9, SAVE_FPR9
-|  std f10, SAVE_FPR10
-|  std f11, SAVE_FPR11
-|  std f12, SAVE_FPR12
-|  std f13, SAVE_FPR13
-|  std f14, SAVE_FPR14
-|  std f15, SAVE_FPR15
+|  // f8-f15 are also callee-save but are not currently used in the interpreter.
 |.endmacro
 |
 |.macro restoreregs
-|  ld f8, SAVE_FPR8		// f8-f15 are callee-saved.
-|  ld f9, SAVE_FPR9
-|  ld f10, SAVE_FPR10
-|  ld f11, SAVE_FPR11
-|  ld f12, SAVE_FPR12
-|  ld f13, SAVE_FPR13
-|  ld f14, SAVE_FPR14
-|  ld f15, SAVE_FPR15
 |  lmg r6, r15, SAVE_GPRS	// Restores the stack pointer.
 |.endmacro
 |
