@@ -4123,4 +4123,47 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
+  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
+  switch (ctx->mode) {
+  case BUILD_elfasm:
+    fprintf(ctx->fp, "\t.section .debug_frame,\"\",@progbits\n");
+    fprintf(ctx->fp,
+	".Lframe0:\n"
+	"\t.long .LECIE0-.LSCIE0\n"
+	".LSCIE0:\n"
+	"\t.long 0xffffffff\n"
+	"\t.byte 0x1\n"
+	"\t.string \"\"\n"
+	"\t.uleb128 1\n"
+	"\t.sleb128 -8\n"
+	"\t.byte 0xe\n"
+	"\t.byte 0xc\n\t.uleb128 0xf\n\t.uleb128 160\n"
+	"\t.align 8\n"
+	".LECIE0:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE0:\n"
+	"\t.long .LEFDE0-.LASFDE0\n"
+	".LASFDE0:\n"
+	"\t.long .Lframe0\n"
+	"\t.quad .Lbegin\n"
+	"\t.quad %d\n"
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
+	"\t.byte 0x86\n\t.uleb128 0xe\n"	/* offset r6 */
+	"\t.byte 0x87\n\t.uleb128 0xd\n"	/* offset r7 */
+	"\t.byte 0x88\n\t.uleb128 0xc\n"	/* offset r8 */
+	"\t.byte 0x89\n\t.uleb128 0xb\n"	/* offset r9 */
+	"\t.byte 0x8a\n\t.uleb128 0xa\n"	/* offset r10 */
+	"\t.byte 0x8b\n\t.uleb128 0x9\n"	/* offset r11 */
+	"\t.byte 0x8c\n\t.uleb128 0x8\n"	/* offset r12 */
+	"\t.byte 0x8d\n\t.uleb128 0x7\n"	/* offset r13 */
+	"\t.byte 0x8e\n\t.uleb128 0x6\n"	/* offset r14 */
+	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
+	"\t.align 8\n"
+	".LEFDE0:\n\n", fcofs, CFRAME_SIZE+160);
+    /* TODO: FFI, UNWIND */
+    break;
+  default:  /* No other modes. */
+    break;
+  }
+
 }
