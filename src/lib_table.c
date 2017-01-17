@@ -129,6 +129,26 @@ LJLIB_LUA(table_remove) /*
   end
 */
 
+LJLIB_LUA(table_move) /*
+  function(a1, f, e, t, a2)
+    CHECK_tab(a1)
+    CHECK_int(f)
+    CHECK_int(e)
+    CHECK_int(t)
+    if a2 == nil then a2 = a1 end
+    CHECK_tab(a2)
+    if e >= f then
+      local d = t - f
+      if t > e or t <= f or a2 ~= a1 then
+	for i=f,e do a2[i+d] = a1[i] end
+      else
+	for i=e,f,-1 do a2[i+d] = a1[i] end
+      end
+    end
+    return a2
+  end
+*/
+
 LJLIB_CF(table_concat)		LJLIB_REC(.)
 {
   GCtab *t = lj_lib_checktab(L, 1);

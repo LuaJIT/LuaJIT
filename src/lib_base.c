@@ -23,6 +23,7 @@
 #include "lj_tab.h"
 #include "lj_meta.h"
 #include "lj_state.h"
+#include "lj_frame.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_cconv.h"
@@ -555,6 +556,12 @@ LJLIB_CF(coroutine_running)
     setnilV(L->top++);
   return 1;
 #endif
+}
+
+LJLIB_CF(coroutine_isyieldable)
+{
+  setboolV(L->top++, cframe_canyield(L->cframe));
+  return 1;
 }
 
 LJLIB_CF(coroutine_create)
