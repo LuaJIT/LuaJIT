@@ -22,7 +22,7 @@
 |//   clfi (compare logical immediate) [requires z9-109]
 |//   ldgr (load FPR from GPR)         [requires z9-109 GA3]
 |//   lgdr (load GPR from FPR)         [requires z9-109 GA3]
-|//   lay  (load address)              [requires z900 GA2]
+|//   lay  (load address)              [requires z900 GA2]
 |//   ldy  (load (long bfp))           [requires z900 GA2]
 |//   stdy (store (long bfp))          [requires z900 GA2]
 |// TODO: alternative instructions?
@@ -695,12 +695,10 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tgetr:
   |  lgr CARG1, TAB:RB
-  |  lgr RB, BASE			// Save BASE.
   |  lgfr CARG2, RC
   |  brasl r14, extern lj_tab_getinth		// (GCtab *t, int32_t key)
   |  // cTValue * or NULL returned in r2 (CRET1).
   |  llgc RA, PC_RA
-  |  lgr BASE, RB			// Restore BASE.
   |  ltgr RC, CRET1
   |  jne ->BC_TGETR_Z
   |  lghi ITYPE, LJ_TNIL
@@ -775,14 +773,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg L:CARG1, SAVE_L
   |  lgr CARG2, TAB:RB
   |  stg BASE, L:CARG1->base
-  |  lgr RB, BASE			// Save BASE (TODO: BASE is callee-saved anyway on s390x).
   |  lgfr CARG3, RC
   |  stg PC, SAVE_PC
   |  brasl r14, extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
   |  // TValue * returned in r2 (CRET1).
   |  lgr RC, CRET1
   |  llgc RA, PC_RA
-  |  lgr BASE, RB			// Restore BASE.
   |  j ->BC_TSETR_Z
   |
   |//-- Comparison metamethods ---------------------------------------------
@@ -1163,12 +1159,10 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_2 rawget
   |  lg TAB:CARG2, 0(BASE)
   |  checktab TAB:CARG2, ->fff_fallback
-  |  lgr RB, BASE			// Save BASE.
   |  la CARG3, 8(BASE)
   |  lg CARG1, SAVE_L
   |  brasl r14, extern lj_tab_get	// (lua_State *L, GCtab *t, cTValue *key)
   |  // cTValue * returned in r2 (CRET1).
-  |  lgr BASE, RB			// Restore BASE.
   |  // Copy table slot.
   |  lg RB, 0(CRET1)
   |  lg PC, -8(BASE)
@@ -1290,11 +1284,9 @@ static void build_subroutines(BuildCtx *ctx)
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  lt TMPR0, TAB:RB->hmask; je ->fff_res0
   |  lgr CARG1, TAB:RB
-  |  lgr RB, BASE			// Save BASE. // TODO: needed?
   |  lgfr CARG2, RA
   |  brasl r14, extern lj_tab_getinth	// (GCtab *t, int32_t key)
   |  // cTValue * or NULL returned in r2 (CRET1).
-  |  lgr BASE, RB
   |  ltgr RD, CRET1
   |  jne <1
   |->fff_res0:
@@ -1599,24 +1591,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg TMPR0, 0(BASE)
   |  ld FARG1, 0(BASE)
   |  checknumtp TMPR0, ->fff_fallback
-  |  lgr RB, BASE
   |  brasl r14, extern log
-  |  lgr BASE, RB
   |  j ->fff_resf0
   |
   |.macro math_extern, func
   |  .ffunc_n math_ .. func
-  |  lgr RB, BASE
   |  brasl r14, extern func
-  |  lgr BASE, RB
   |  j ->fff_resf0
   |.endmacro
   |
   |.macro math_extern2, func
   |  .ffunc_nn math_ .. func
-  |  lgr RB, BASE
   |  brasl r14, extern func
-  |  lgr BASE, RB
   |  j ->fff_resf0
   |.endmacro
   |
@@ -1642,16 +1628,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  checknumtp TMPR0, ->fff_fallback
   |  checkinttp CARG1, ->fff_fallback
   |  lgfr CARG1, CARG1
-  |  lgr RB, BASE
   |  brasl r14, extern ldexp	// (double, int)
-  |  lgr BASE, RB
   |  j ->fff_resf0
   |
   |.ffunc_n math_frexp
-  |  lgr RB, BASE
   |  la CARG1, TMP_STACK
   |  brasl r14, extern frexp
-  |  lgr BASE, RB
   |  llgf RB, TMP_STACK
   |  lg PC, -8(BASE)
   |  stdy f0, -16(BASE)
@@ -1661,10 +1643,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_res
   |
   |.ffunc_n math_modf
-  |  lgr RB, BASE
   |  lay CARG1, -16(BASE)
   |  brasl r14, extern modf	// (double, double*)
-  |  lgr BASE, RB
   |  lg PC, -8(BASE)
   |  stdy f0, -8(BASE)
   |  lghi RD, 1+2
@@ -2615,11 +2595,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |3:
 #endif
     |->BC_LEN_Z:
-    |  lgr RB, BASE			// Save BASE.
     |  brasl r14, extern lj_tab_len	// (GCtab *t)
     |  // Length of table returned in r2 (CRET1).
     |  lgr RD, CRET1
-    |  lgr BASE, RB			// Restore BASE.
     |  llgc RA, PC_RA
     |  j <1
 #if LJ_52
@@ -2783,10 +2761,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checknumtp TMPR0, ->vmeta_arith_vvo
     |  lg TMPR0, 0(RC, BASE)
     |  checknumtp TMPR0, ->vmeta_arith_vvo
-    |  lgr RB, BASE // TODO: redundant, BASE is currently callee-saved.
     |  brasl r14, extern pow	// double pow(double x, double y), result in f0.
     |  llgc RA, PC_RA
-    |  lgr BASE, RB
     |  sllg RA, RA, 3
     |  std f0, 0(RA, BASE)
     |  ins_next
@@ -2925,10 +2901,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  je <1
     |  // Crossed a write barrier. Move the barrier forward.
     |  lgr CARG2, RB
-    |  lgr RB, BASE				// Save BASE.
     |  lay GL:CARG1, GG_DISP2G(DISPATCH)
     |  brasl r14, extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
-    |  lgr BASE, RB				// Restore BASE.
     |  j <1
     break;
 #undef TV2MARKOFS
@@ -2954,11 +2928,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tm UPVAL:RB->closed, 0xff
     |  je <1
     |  // Crossed a write barrier. Move the barrier forward.
-    |  lgr RB, BASE
     |  lgr CARG2, RD
     |  lay GL:CARG1, GG_DISP2G(DISPATCH)
     |  brasl r14, extern lj_gc_barrieruv	// (global_State *g, TValue *tv)
-    |  lgr BASE, RB			// Restore BASE.
     |  j <1
     break;
   case BC_USETN:
