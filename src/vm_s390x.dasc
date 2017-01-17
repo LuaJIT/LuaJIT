@@ -38,15 +38,15 @@
 |//-----------------------------------------------------------------------
 |
 |// Fixed register assignments for the interpreter, callee-saved.
-|.define BASE,			r7	// Base of current Lua stack frame.
 |.define KBASE,			r8	// Constants of current Lua function.
 |.define PC,			r9	// Next PC.
 |.define DISPATCH,		r10	// Opcode dispatch table.
 |.define ITYPE,			r11	// Temporary used for type information.
+|.define BASE,			r13	// Base of current Lua stack frame.
 |
 |// The following temporaries are not saved across C calls, except for RB.
 |.define RA,			r4	// Overlaps CARG3.
-|.define RB,			r13	// Must be callee-save.
+|.define RB,			r7	// Must be callee-save.
 |.define RC,			r5	// Overlaps CARG4.
 |.define RD,			r6	// Overlaps CARG5.
 |
