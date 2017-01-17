@@ -239,7 +239,7 @@ typedef struct {
   hdr.type = f16(1)
   hdr.machine = f16(({ x86=3, x64=62, arm=40, ppc=20, ppcspe=20, mips=8, mipsel=8 })[ctx.arch])
   if ctx.arch == "mips" or ctx.arch == "mipsel" then
-    hdr.flags = 0x50001006
+    hdr.flags = f32(0x50001006)
   end
   hdr.version = f32(1)
   hdr.shofs = fofs(ffi.offsetof(o, "sect"))
