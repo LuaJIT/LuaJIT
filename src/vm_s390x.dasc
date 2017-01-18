@@ -4160,7 +4160,48 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
 	"\t.align 8\n"
 	".LEFDE0:\n\n", fcofs, CFRAME_SIZE+160);
-    /* TODO: FFI, UNWIND */
+#if !LJ_NO_UNWIND
+    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
+    fprintf(ctx->fp,
+	".Lframe1:\n"
+	"\t.long .LECIE1-.LSCIE1\n"
+	".LSCIE1:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zPR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -8\n"
+	"\t.byte 0xe\n"
+	"\t.uleb128 6\n"			/* augmentation length */
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.long lj_err_unwind_dwarf-.\n"
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 0xf\n\t.uleb128 160\n"
+	"\t.align 8\n"
+	".LECIE1:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE2:\n"
+	"\t.long .LEFDE2-.LASFDE2\n"
+	".LASFDE2:\n"
+	"\t.long .LASFDE2-.Lframe1\n"
+	"\t.long .Lbegin-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 %d\n"		/* def_cfa_offset */
+	"\t.byte 0x86\n\t.uleb128 0xe\n"	/* offset r6 */
+	"\t.byte 0x87\n\t.uleb128 0xd\n"	/* offset r7 */
+	"\t.byte 0x88\n\t.uleb128 0xc\n"	/* offset r8 */
+	"\t.byte 0x89\n\t.uleb128 0xb\n"	/* offset r9 */
+	"\t.byte 0x8a\n\t.uleb128 0xa\n"	/* offset r10 */
+	"\t.byte 0x8b\n\t.uleb128 0x9\n"	/* offset r11 */
+	"\t.byte 0x8c\n\t.uleb128 0x8\n"	/* offset r12 */
+	"\t.byte 0x8d\n\t.uleb128 0x7\n"	/* offset r13 */
+	"\t.byte 0x8e\n\t.uleb128 0x6\n"	/* offset r14 */
+	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
+	"\t.align 8\n"
+	".LEFDE2:\n\n", fcofs, CFRAME_SIZE+160);
+#endif
+    /* TODO: FFI */
     break;
   default:  /* No other modes. */
     break;
