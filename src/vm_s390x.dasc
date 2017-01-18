@@ -2161,8 +2161,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.if FFI
   |  .type CCSTATE, CCallState, r8
   |  stmg r6, r15, 48(sp)
+  |  lgr r13, sp			// Use r13 as frame pointer.
   |  lgr CCSTATE, CARG1
-  |  lg r7, CCSTATE->func // TODO: move further up?
+  |  lg r7, CCSTATE->func
   |
   |  // Readjust stack.
   |  sgf sp, CCSTATE->spadj
@@ -2183,7 +2184,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stg CRET1, CCSTATE->gpr[0]
   |  std f0, CCSTATE->fpr[0]
   |
-  |  agf sp, CCSTATE->spadj
+  |  lgr sp, r13
   |  lmg r6, r15, 48(sp)
   |  br r14
   |
@@ -4160,6 +4161,29 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
 	"\t.align 8\n"
 	".LEFDE0:\n\n", fcofs, CFRAME_SIZE+160);
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.long .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.long .Lframe0\n"
+	"\t.quad lj_vm_ffi_call\n"
+	"\t.quad %d\n"
+	"\t.byte 0xe\n\t.uleb128 160\n"		/* def_cfa_offset */
+	"\t.byte 0xd\n\t.uleb128 0xd\n"		/* def_cfa_register r13 (FP) */
+	"\t.byte 0x86\n\t.uleb128 0xe\n"	/* offset r6 */
+	"\t.byte 0x87\n\t.uleb128 0xd\n"	/* offset r7 */
+	"\t.byte 0x88\n\t.uleb128 0xc\n"	/* offset r8 */
+	"\t.byte 0x89\n\t.uleb128 0xb\n"	/* offset r9 */
+	"\t.byte 0x8a\n\t.uleb128 0xa\n"	/* offset r10 */
+	"\t.byte 0x8b\n\t.uleb128 0x9\n"	/* offset r11 */
+	"\t.byte 0x8c\n\t.uleb128 0x8\n"	/* offset r12 */
+	"\t.byte 0x8d\n\t.uleb128 0x7\n"	/* offset r13 */
+	"\t.byte 0x8e\n\t.uleb128 0x6\n"	/* offset r14 */
+	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
+	"\t.align 8\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
+#endif
 #if !LJ_NO_UNWIND
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
     fprintf(ctx->fp,
@@ -4200,11 +4224,49 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
 	"\t.align 8\n"
 	".LEFDE2:\n\n", fcofs, CFRAME_SIZE+160);
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".Lframe2:\n"
+	"\t.long .LECIE2-.LSCIE2\n"
+	".LSCIE2:\n"
+	"\t.long 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -8\n"
+	"\t.byte 0xe\n"
+	"\t.uleb128 1\n"			/* augmentation length */
+	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
+	"\t.byte 0xc\n\t.uleb128 0xf\n\t.uleb128 160\n"
+	"\t.align 8\n"
+	".LECIE2:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE3:\n"
+	"\t.long .LEFDE3-.LASFDE3\n"
+	".LASFDE3:\n"
+	"\t.long .LASFDE3-.Lframe2\n"
+	"\t.long lj_vm_ffi_call-.\n"
+	"\t.long %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 160\n"		/* def_cfa_offset */
+	"\t.byte 0xd\n\t.uleb128 0xd\n"		/* def_cfa_register r13 (FP) */
+	"\t.byte 0x86\n\t.uleb128 0xe\n"	/* offset r6 */
+	"\t.byte 0x87\n\t.uleb128 0xd\n"	/* offset r7 */
+	"\t.byte 0x88\n\t.uleb128 0xc\n"	/* offset r8 */
+	"\t.byte 0x89\n\t.uleb128 0xb\n"	/* offset r9 */
+	"\t.byte 0x8a\n\t.uleb128 0xa\n"	/* offset r10 */
+	"\t.byte 0x8b\n\t.uleb128 0x9\n"	/* offset r11 */
+	"\t.byte 0x8c\n\t.uleb128 0x8\n"	/* offset r12 */
+	"\t.byte 0x8d\n\t.uleb128 0x7\n"	/* offset r13 */
+	"\t.byte 0x8e\n\t.uleb128 0x6\n"	/* offset r14 */
+	"\t.byte 0x8f\n\t.uleb128 0x5\n"	/* offset r15 */
+	"\t.align 8\n"
+	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
 #endif
     /* TODO: FFI */
     break;
   default:  /* No other modes. */
     break;
   }
-
 }
