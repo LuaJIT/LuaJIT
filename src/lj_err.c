@@ -234,6 +234,9 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
     return _URC_FATAL_PHASE1_ERROR;
   UNUSED(uexclass);
   cf = (void *)_Unwind_GetCFA(ctx);
+#ifdef LJ_TARGET_S390X
+  cf -= 160; /* CFA points 160 bytes above r15. */
+#endif
   L = cframe_L(cf);
   if ((actions & _UA_SEARCH_PHASE)) {
 #if LJ_UNWIND_EXT
