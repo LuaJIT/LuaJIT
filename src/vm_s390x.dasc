@@ -1418,7 +1418,6 @@ static void build_subroutines(BuildCtx *ctx)
   |2:  // Move args to coroutine.
   |  lg RC, 0(RB, PC)
   |  stg RC, -8(PC)
-  |  // TODO: replace with branch on count/index?
   |  lay PC, -8(PC)
   |  cgr PC, RA
   |  jne <2
@@ -1455,7 +1454,6 @@ static void build_subroutines(BuildCtx *ctx)
   |5:  // Move results from coroutine.
   |  lg RD, 0(RA)
   |  stg RD, 0(RA, RB)
-  |  // TODO: branch on count/index?
   |  la RA, 8(RA)
   |  cgr RA, KBASE
   |  jne <5
