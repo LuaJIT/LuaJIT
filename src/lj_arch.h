@@ -362,7 +362,7 @@
 #define LJ_ARCH_BITS		64
 #define LJ_ARCH_ENDIAN		LUAJIT_BE
 #define LJ_TARGET_S390X		1
-#define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRETREG	0xe
 #define LJ_TARGET_JUMPRANGE	32	/* +-2^32 = +-4GB (32-bit, halfword aligned) */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
