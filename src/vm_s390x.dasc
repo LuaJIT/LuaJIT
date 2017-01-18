@@ -104,6 +104,7 @@
 |  stmg r6, r15, SAVE_GPRS_P
 |  lay sp, -CFRAME_SPACE(sp)	// Allocate stack frame.
 |  // TODO: save backchain?
+|  // TODO: is it necessary to save all float registers?
 |  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  std f9, SAVE_FPR9
 |  std f10, SAVE_FPR10
@@ -115,6 +116,7 @@
 |.endmacro
 |
 |.macro restoreregs
+|  // TODO: restore float registers only when unwinding?
 |  ld f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  ld f9, SAVE_FPR9
 |  ld f10, SAVE_FPR10
