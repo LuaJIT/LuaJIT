@@ -272,12 +272,9 @@
 |.define PC_RD, -4(PC)
 |
 |.macro branchPC, reg
-|  // TODO: optimize this, was just lea PC, [PC+reg*4-BCBIAS_J*4].
-|  // Can't clobber TMPR1 or condition code.
-|  lgr TMPR0, TMPR1 // Workaround because TMPR0 == r0 and can't be used in lay.
+|  // Must not clobber condition code.
 |  sllg TMPR1, reg, 2
 |  lay PC, (-BCBIAS_J*4)(TMPR1, PC)
-|  lgr TMPR1, TMPR0
 |.endmacro
 |
 |// Set current VM state.
