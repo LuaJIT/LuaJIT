@@ -415,6 +415,25 @@ static void LJ_FASTCALL recff_tostring(jit_State *J, RecordFFData *rd)
   }
 }
 
+static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
+{
+  RecordIndex ix;
+  ix.tab = J->base[0]; ix.key = J->base[1];
+  if (tref_istab(ix.tab)) {
+    ix.val = 0; ix.idxchain = 0;
+    settabV(J->L, &ix.tabv, tabV(&rd->argv[0]));
+    copyTV(J->L, &ix.keyv, &rd->argv[1]);
+
+    if (lj_record_next(J, &ix)) {
+      rd->nres = 2;
+      J->base[0] = ix.key;
+      J->base[1] = ix.val;
+    } else {
+      recff_nyiu(J, rd);
+    }
+  } /* not a table, interepreter should throw. */
+}
+
 static void LJ_FASTCALL recff_ipairs_aux(jit_State *J, RecordFFData *rd)
 {
   RecordIndex ix;

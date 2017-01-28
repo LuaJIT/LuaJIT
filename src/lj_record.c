@@ -1512,6 +1512,55 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   }
 }
 
+
+int lj_record_next(jit_State *J, RecordIndex *ix)
+{
+  if (!ix->key || tref_isnil(ix->key)) {
+    TRef asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
+    ix->key = lj_ir_call(J, IRCALL_lj_tab_nexta, ix->tab, lj_ir_kint(J, ~0u));
+    emitir(IRTGI(IR_ABC), asizeref, ix->key);
+    {
+      TRef arr = emitir(IRT(IR_FLOAD, IRT_PGC), ix->tab, IRFL_TAB_ARRAY);
+      TRef aref = emitir(IRT(IR_AREF, IRT_PGC), arr, ix->key);
+      ix->val = emitir(IRTG(IR_ALOAD, itype2irt(&ix->valv)), aref, 0);
+    }
+    return 1;
+  }
+
+  GCtab *t = tabV(&ix->tabv);
+  if (lj_tab_next(J->L, t, &ix->keyv)) {   /* overrides ix->keyv and ix->valv */
+    if (tref_isnumber(ix->key)) {
+      int32_t k = numberVint(&ix->keyv);
+      if ((tvisint(&ix->keyv) || numV(&ix->keyv) == (lua_Number)k)
+	  && (MSize)k < t->asize
+      ) {
+	TRef asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
+	TRef ikey = lj_opt_narrow_index(J, ix->key);
+	ix->key = lj_ir_call(J, IRCALL_lj_tab_nexta, ix->tab, ikey);
+	emitir(IRTGI(IR_ABC), asizeref, ix->key);
+	{
+	  TRef arr = emitir(IRT(IR_FLOAD, IRT_PGC), ix->tab, IRFL_TAB_ARRAY);
+	  TRef aref = emitir(IRT(IR_AREF, IRT_PGC), arr, ix->key);
+	  ix->val = emitir(IRTG(IR_ALOAD, itype2irt(&ix->valv)), aref, 0);
+	}
+	return 1;
+      }
+    }
+    if (t->hmask) {
+      TRef inkref = emitir(IRT(IR_HREF, IRT_PGC), ix->tab, ix->key);
+      TRef kref = lj_ir_call(J, IRCALL_lj_tab_nexth, ix->tab, inkref);
+      lj_snap_add(J);
+      ix->key = emitir(IRTG(IR_HLOAD, itype2irt(&ix->keyv)), kref, 0);
+      {
+	TRef href = emitir(IRT(IR_HREF, IRT_PGC), ix->tab, ix->key);
+	ix->val = emitir(IRTG(IR_HLOAD, (itype2irt(&ix->valv))), href, 0);
+      }
+    }
+    return 1;
+  }
+  return 0;
+}
+
 static void rec_tsetm(jit_State *J, BCReg ra, BCReg rn, int32_t i)
 {
   RecordIndex ix;

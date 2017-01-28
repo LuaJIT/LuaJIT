@@ -594,6 +594,29 @@ static uint32_t keyindex(lua_State *L, GCtab *t, cTValue *key)
   return ~0u;  /* A nil key starts the traversal. */
 }
 
+
+/* Get the next array index */
+MSize LJ_FASTCALL lj_tab_nexta(GCtab *t, MSize k)
+{
+  for (k++; k < t->asize; k++)
+    if (!tvisnil(arrayslot(t, k)))
+      break;
+  return k;
+}
+
+
+LJ_FUNCA cTValue *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n)
+{
+  const Node *nodeend = noderef(t->node)+t->hmask;
+  for (n++; n <= nodeend; n++) {
+    if (!tvisnil(&n->val)) {
+      return &n->key;
+    }
+  }
+  return niltv(L);
+}
+
+
 /* Advance to the next step in a table traversal. */
 int lj_tab_next(lua_State *L, GCtab *t, TValue *key)
 {

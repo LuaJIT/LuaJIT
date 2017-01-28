@@ -38,6 +38,8 @@ LJ_FUNC void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults);
 LJ_FUNC int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm);
 LJ_FUNC TRef lj_record_idx(jit_State *J, RecordIndex *ix);
 
+LJ_FUNC int lj_record_next(jit_State *J, RecordIndex *ix);
+
 LJ_FUNC void lj_record_ins(jit_State *J);
 LJ_FUNC void lj_record_setup(jit_State *J);
 #endif
