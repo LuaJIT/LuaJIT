@@ -2,6 +2,9 @@
 |// Bytecode interpreter, fast functions and helper functions.
 |// Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
 |
+|// This assembly targets the instruction set available on z10 (and newer)
+|// machines.
+|
 |// ELF ABI registers:
 |// r0,r1       |                            | volatile |
 |// r2          | parameter and return value | volatile |
@@ -17,15 +20,6 @@
 |// f8-f15      |                            | saved    |
 |// ar0,ar1     | TLS                        | volatile |
 |// ar2-ar15    |                            | volatile |
-|
-|// Instructions used that are not in base z/Architecture:
-|//   clfi (compare logical immediate) [requires z9-109]
-|//   ldgr (load FPR from GPR)         [requires z9-109 GA3]
-|//   lgdr (load GPR from FPR)         [requires z9-109 GA3]
-|//   lay  (load address)              [requires z900 GA2]
-|//   ldy  (load (long bfp))           [requires z900 GA2]
-|//   stdy (store (long bfp))          [requires z900 GA2]
-|// TODO: alternative instructions?
 |
 |.arch s390x
 |.section code_op, code_sub
@@ -213,14 +207,14 @@
 |//-----------------------------------------------------------------------
 |
 |// Macros to clear or set tags.
-|.macro cleartp, reg; sllg reg, reg, 17; srlg reg, reg, 17; .endmacro // TODO: use nihf instead? would introduce dependence on z9-109.
+|.macro cleartp, reg
+|  nihf reg, 0x7fff
+|.endmacro
 |.macro settp, reg, tp
-|  oihh reg, ((tp>>1) &0xffff)
-|  oihl reg, ((tp<<15)&0x8000)
+|  oihf reg, tp<<15
 |.endmacro
 |.macro settp, dst, reg, tp
-|  llihh dst, ((tp>>1) &0xffff)
-|  iihl dst,  ((tp<<15)&0x8000)
+|  llihf dst, tp<<15
 |  ogr dst, reg
 |.endmacro
 |.macro setint, reg
@@ -1238,7 +1232,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  brasl r14, extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
   |  // Flag returned in r2 (CRET1).
   |  lg BASE, L:RB->base
-  |  lgr RD, CRET1			// TODO: high bits needed? low bits load/test (ltr) enough?
   |  ltr RD, CRET1;  je >3		// End of traversal?
   |  // Copy key and value to results.
   |  lg RB, 8(BASE)
@@ -1323,7 +1316,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg PC, -8(BASE)
   |  stg CFUNC:RD, -16(BASE)
   |  stg TMPR1, -8(BASE)
-  |  llihh RD, ((int)LJ_TISNUM)>>1 // mov64 RD, ((int64_t)LJ_TISNUM<<47) // TODO: write mov64-macro, use all of TISNUM (currently this is very fragile).
+  |  llihf RD, LJ_TISNUM<<15
   |  stg RD, 0(BASE)
   |  lghi RD, 1+3
   |  j ->fff_res
@@ -1768,7 +1761,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jle >7
   |3:
   |  sr TMPR1, RA			// start > end?
-  |  jnhe ->fff_emptystr		// TODO: not sure about this, was jl in x64.
+  |  jnhe ->fff_emptystr
   |  la RD, (#STR-1)(RA, STR:RB)
   |  ahi TMPR1, 1
   |4:
@@ -3444,11 +3437,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_CALL: case BC_CALLM:
     |  ins_A_C	// RA = base, (RB = nresults+1,) RC = nargs+1 | extra_nargs
+    |  sllg RA, RA, 3
     |  lgr RD, RC
     if (op == BC_CALLM) {
       |  agf NARGS:RD, SAVE_MULTRES
     }
-    |  sllg RA, RA, 3
     |  lg LFUNC:RB, 0(RA, BASE)
     |  checkfunc LFUNC:RB, ->vmeta_call_ra
     |  la BASE, 16(RA, BASE)
