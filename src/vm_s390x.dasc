@@ -1899,7 +1899,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Note: no inline conversion from number for 2nd argument!
   |  lg RA, 8(BASE)
   |  checkint RA, ->fff_fallback
-  |  // Note: no need to limit rotate to 5-bits (wraps).
   |  rll RB, RB, 0(RA)
   |  j ->fff_resbit
   |
@@ -1907,11 +1906,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Note: no inline conversion from number for 2nd argument!
   |  lg RA, 8(BASE)
   |  checkint RA, ->fff_fallback
-  |  // TODO: shorter sequence of instructions to convert right rotate into left rotate.
-  |  nill RA, 0x1f
-  |  lghi TMPR0, 32
-  |  sr TMPR0, RA
-  |  lr RA, TMPR0
+  |  lcr RA, RA		// Right rotate equivalent to negative left rotate.
   |  rll RB, RB, 0(RA)
   |  j ->fff_resbit
   |
