@@ -4092,7 +4092,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lcgr RA, RA
     |  ag RA, L:RB->top			// RA = (L->top-(L->base+nresults))*8
     |  lg PC, -8(BASE)			// Fetch PC of caller.
-    |  // BUG: PC seems to be -1 here sometimes. Not yet sure why.
     |  j ->vm_returnc
     break;
 
