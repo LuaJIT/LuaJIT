@@ -1105,6 +1105,15 @@ static void LJ_FASTCALL recff_table_clear(jit_State *J, RecordFFData *rd)
   }  /* else: Interpreter will throw. */
 }
 
+static void LJ_FASTCALL recff_table_maxn(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (tref_istab(tr)) {
+    J->base[0] = lj_ir_call(J, IRCALL_lj_tab_maxn, tr);
+  }  /* else: Interpreter will throw. */
+  UNUSED(rd);
+}
+
 /* -- I/O library fast functions ------------------------------------------ */
 
 /* Get FILE* for I/O function. Any I/O error aborts recording, so there's
