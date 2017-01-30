@@ -3614,6 +3614,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  je >5				// Copy all varargs?
     |  lay RB, -8(RA, RB)
     |  clgr TMPR1, BASE			// No vararg slots?
+    |  lghi TMPR0, LJ_TNIL
     |  jnl >2
     |1:  // Copy vararg slots to destination slots.
     |  lg RC, -16(TMPR1)
@@ -3625,7 +3626,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  clgr TMPR1, BASE			// No more vararg slots?
     |  jl <1
     |2:  // Fill up remainder with nil.
-    |  lghi TMPR0, LJ_TNIL // TODO: move out of loop. Add NIL range macro?
     |  stg TMPR0, 0(RA)
     |  la RA, 8(RA)
     |  clgr RA, RB
@@ -3993,13 +3993,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |
     |3:  // Clear missing parameters.
-    |  // TODO: optimize this. Some of this can be hoisted.
     |  sllg TMPR1, NARGS:RD, 3
     |  lghi TMPR0, LJ_TNIL
+    |4:
     |  stg TMPR0, -8(TMPR1, BASE)
+    |  la TMPR1, 8(TMPR1)
     |  la RD, 1(RD)
     |  clgr RD, RA
-    |  jle <3
+    |  jle <4
     |  j <2
     break;
 
