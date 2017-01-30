@@ -97,8 +97,6 @@
 |.macro saveregs
 |  stmg r6, r15, SAVE_GPRS_P
 |  lay sp, -CFRAME_SPACE(sp)	// Allocate stack frame.
-|  // TODO: save backchain?
-|  // TODO: is it necessary to save all float registers?
 |  std f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  std f9, SAVE_FPR9
 |  std f10, SAVE_FPR10
@@ -110,7 +108,6 @@
 |.endmacro
 |
 |.macro restoreregs
-|  // TODO: restore float registers only when unwinding?
 |  ld f8, SAVE_FPR8		// f8-f15 are callee-saved.
 |  ld f9, SAVE_FPR9
 |  ld f10, SAVE_FPR10
@@ -1032,7 +1029,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  .ffunc_1 name
   |  lg TMPR0, 0(BASE)
   |  checknumtp TMPR0, ->fff_fallback
-  |  op f0, 0(BASE) // TODO: might be better to unconditionally load into f1.
+  |  op f0, 0(BASE)
   |.endmacro
   |
   |.macro .ffunc_n, name
@@ -1877,8 +1874,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_resbit
   |
   |.ffunc_bit bit_bnot, 1
-  |  lhi TMPR0, -1
-  |  xr RB, TMPR0 // TODO: use xilf on newer models?
+  |  xilf RB, -1
   |  j ->fff_resbit
   |
   |->fff_fallback_bit_op:
@@ -1891,7 +1887,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg RA, 8(BASE)
   |  checkint RA, ->fff_fallback
   |  nill RA, 0x1f	// Limit shift to 5-bits.
-  |  ins RB, 0(RA)	// TODO: fix shift args in DynASM.
+  |  ins RB, 0(RA)
   |  j ->fff_resbit
   |.endmacro
   |
@@ -2119,7 +2115,6 @@ static void build_subroutines(BuildCtx *ctx)
   |// Value to round is in f0. May clobber f0-f7 and r0. Return address is r14.
   |.macro vm_round, name, mask
   |->name:
-  |  // TODO: handle edge cases?
   |  lghi r0, 1
   |  cdfbr f1, r0
   |  didbr f0, f2, f1, mask // f0=remainder, f2=quotient.
@@ -2211,7 +2206,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ahi r1, -1
   |  jl <1
   |  larl r9, >5
-  |  ex r1, 0(r9) // TODO: exrl is faster but needs z10.
+  |  ex r1, 0(r9)
   |  j <1
   |
   |5:
@@ -2394,9 +2389,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  tm TAB:RB->nomm, 1<<MM_eq
       |  jne <2				// Or 'no __eq' flag set?
       if (vk) {
-	|  lghi RB, 0			// ne = 0 // TODO: should be 32-bit?
+	|  lghi RB, 0			// ne = 0
       } else {
-	|  lghi RB, 1			// ne = 1 // TODO: should be 32-bit?
+	|  lghi RB, 1			// ne = 1
       }
       |  j ->vmeta_equal		// Handle __eq metamethod.
     } else {
@@ -2524,7 +2519,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISTYPE:
     |  ins_AD	// RA = src, RD = -type
-    |  lghr RD, RD			// TODO: always sign extend RD?
+    |  lghr RD, RD
     |  sllg RA, RA, 3
     |  lg RB, 0(RA, BASE)
     |  srag RB, RB, 47
@@ -2555,7 +2550,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  srag RB, RB, 47
     |  load_false RC
     |  cghi RB, LJ_TTRUE
-    |  je >1 // TODO: Maybe do something fancy to avoid the jump?
+    |  je >1
     |  load_true RC
     |1:
     |  stg RC, 0(RA, BASE)
@@ -3133,7 +3128,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  l TMPR1, TAB:RB->hmask
     |  n TMPR1, STR:RC->hash
     |  lgfr TMPR1, TMPR1
-    |  mghi TMPR1, #NODE // TODO: not sure about this one, original: imul TMPRd, #NODE
+    |  mghi TMPR1, #NODE
     |  ag NODE:TMPR1, TAB:RB->node
     |  settp ITYPE, STR:RC, LJ_TSTR
     |1:
@@ -3310,7 +3305,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg ITYPE, TMP_STACK
     |  lg L:CARG1, SAVE_L
     |  stg BASE, L:CARG1->base
-    |  la CARG3, TMP_STACK		// TODO: lea CARG3, ITYPE... not sure.
+    |  la CARG3, TMP_STACK
     |  lgr CARG2, TAB:RB
     |  stg PC, SAVE_PC
     |  brasl r14, extern lj_tab_newkey	// (lua_State *L, GCtab *t, TValue *k)
@@ -3470,7 +3465,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  aghi NARGS:RD, -1
     |  je >3
     |2:  // Move args down.
-    |  // TODO: mvc or something here?
     |  lg RB, 0(RA)
     |  la RA, 8(RA)
     |  stg RB, 0(KBASE)
@@ -3536,7 +3530,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sllg RA, RA, 3
     |  lg TAB:RB, -16(RA, BASE)
     |  cleartp TAB:RB
-    |  llgf RC, -4(RA, BASE)		// Get index from control var. // TODO: ENDIANNESS DRAGONS.
+    |  llgf RC, -4(RA, BASE)		// Get index from control var.
     |  llgf TMPR1, TAB:RB->asize
     |  la PC, 4(PC)
     |  lg ITYPE, TAB:RB->array
@@ -3552,7 +3546,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  setint ITYPE, RC
     |  stg ITYPE, 0(RA, BASE)
     |  ahi RC, 1
-    |  sty RC, -4(RA, BASE)		// Update control var. // TODO: ENDIANNESS DRAGONS
+    |  sty RC, -4(RA, BASE)		// Update control var.
     |2:
     |  llgh RD, PC_RD			// Get target from ITERL.
     |  branchPC RD
@@ -3579,7 +3573,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg RC, NODE:ITYPE->val
     |  stg RB, 0(RA, BASE)
     |  stg RC, 8(RA, BASE)
-    |  sty TMPR1, -4(RA, BASE) // TODO: ENDIANNESS DRAGONS
+    |  sty TMPR1, -4(RA, BASE)
     |  j <2
     |
     |7:  // Skip holes in hash part.
@@ -3613,7 +3607,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_VARG:
-    |  // TODO: some opportunities for branch on index in here.
     |  ins_ABC	// RA = base, RB = nresults+1, RC = numparams
     |  sllg RA, RA, 3
     |  sllg RB, RB, 3
@@ -4091,7 +4084,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     } else {
       |  // (lua_State *L, lua_CFunction f)
       |  lg TMPR1, (DISPATCH_GL(wrapf))(DISPATCH)
-      |  basr r14, TMPR1 // TODO: TMPR1==r14, is this ok?
+      |  basr r14, TMPR1
     }
     |  // nresults returned in r2 (CRET1).
     |  lgr RD, CRET1
@@ -4270,7 +4263,6 @@ static void emit_asm_debug(BuildCtx *ctx)
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
 #endif
 #endif
-    /* TODO: FFI */
     break;
   default:  /* No other modes. */
     break;
