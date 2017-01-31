@@ -147,11 +147,7 @@
 |.macro ins_AND; lghi TMPR1, -1; xgr RD, TMPR1; .endmacro // RD = ~RD
 |
 |// Instruction decode+dispatch.
-|  // TODO: tune this, right now we always decode RA-D even if they aren't used.
 |.macro ins_NEXT
-|  // 32                 63
-|  // [  B |  C |  A | OP ]
-|  // [    D    |  A | OP ]
 |  llgc OP, 3(PC)
 |  llgh RD, 0(PC)
 |  llgc RA, 2(PC)
