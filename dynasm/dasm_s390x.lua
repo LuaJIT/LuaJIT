@@ -1270,32 +1270,33 @@ local function parse_template(params, template, nparams, pos)
 
   -- Process each character.
   local p = sub(template, 13)
-  if p == "RR" then
-    if #params > 1 then
-      op2 = op2 + shl(parse_reg(params[1]),4)
-    end
-    op2 = op2 + parse_reg(params[#params])
-    wputhw(op2)
-  elseif p == "RRE" then
-    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
-    wputhw(op1); wputhw(op2)
+  if p == "I" then
+    local imm_val, a = parse_imm8(params[1])
+    op2 = op2 + imm_val;
+    wputhw(op2);
+    if a then a() end
   elseif p == "RI-a" then
     op1 = op1 + shl(parse_reg(params[1]),4)
     wputhw(op1);
     parse_imm16(params[2])
-  elseif p == "RX-a" then
-    local d, x, b, a = parse_mem_bx(params[2])
-    op1 = op1 + shl(parse_reg(params[1]), 4) + x
-    op2 = op2 + shl(b, 12) + d
-    wputhw(op1); wputhw(op2);
-    if a then a() end
-  elseif p == "RXY-a" then
-    local d, x, b, a = parse_mem_bxy(params[2])
-    op0 = op0 + shl(parse_reg(params[1]), 4) + x
-    op1 = op1 + shl(b, 12) + band(d, 0xfff)
-    op2 = op2 + band(shr(d, 4), 0xff00)
-    wputhw(op0); wputhw(op1); wputhw(op2)
-    if a then a() end
+  elseif p == "RI-b" then
+    op1 = op1 + shl(parse_reg(params[1]),4)
+    wputhw(op1)
+    local mode, n, s = parse_label(params[2])
+    waction("REL_"..mode, n, s)
+  elseif p == "RI-c" then
+    if #params > 1 then
+      op1 = op1 + shl(parse_num(params[1]), 4)
+    end
+    wputhw(op1)
+    local mode, n, s = parse_label(params[#params])
+    waction("REL_"..mode, n, s)
+  elseif p == "RIE-e" then
+    op0 = op0 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw1(op0)
+    local mode, n, s = parse_label(params[3])
+    waction("REL_"..mode, n, s)
+    wputhw(op2)
   elseif p == "RIL-a" then
     op0 = op0 + shl(parse_reg(params[1]), 4)
     wputhw(op0);
@@ -1305,6 +1306,37 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op0);
     local mode, n, s = parse_label(params[2])
     waction("REL_"..mode, n, s)
+  elseif p == "RIL-c" then
+    if #params > 1 then
+      op0 = op0 + shl(parse_num(params[1]), 4)
+    end
+    wputhw(op0)
+    local mode, n, s = parse_label(params[#params])
+    waction("REL_"..mode, n, s)
+  elseif p == "RR" then
+    if #params > 1 then
+      op2 = op2 + shl(parse_reg(params[1]),4)
+    end
+    op2 = op2 + parse_reg(params[#params])
+    wputhw(op2)
+  elseif p == "RRD" then
+    wputhw(op1)
+    op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
+    wputhw(op2)
+  elseif p == "RRE" then
+    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw(op1); wputhw(op2)
+  elseif p == "RRF-b" then
+    wputhw(op1);
+    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + shl(parse_mask(params[4]),8)
+    wputhw(op2)
+  elseif p == "RRF-e" then
+    wputhw(op1)
+    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[2]),12) + parse_reg(params[3])
+    if params[4] then
+      op2 = op2 + shl(parse_mask2(params[4]),8)
+    end
+    wputhw(op2)
   elseif p == "RS-a" then
     if (params[3]) then
       local d, b, a = parse_mem_b(params[3])
@@ -1317,6 +1349,18 @@ local function parse_template(params, template, nparams, pos)
     end
     wputhw(op1); wputhw(op2)
     if a then a() end 
+  elseif p == "RS-b" then
+    local m = parse_mask(params[2])
+    local d, b, a = parse_mem_b(params[3])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + m
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2)
+    if a then a() end
+  elseif p == "RSI" then
+    op1 = op1 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    wputhw(op1)
+    local mode, n, s = parse_label(params[3])
+    waction("REL_"..mode, n, s)
   elseif p == "RSY-a" then
     local d, b, a = parse_mem_by(params[3])
     op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
@@ -1324,6 +1368,76 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + band(shr(d, 4), 0xff00)
     wputhw(op0); wputhw(op1); wputhw(op2)
     if a then a() end -- a() emits action.
+  elseif p == "RX-a" then
+    local d, x, b, a = parse_mem_bx(params[2])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + x
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1); wputhw(op2);
+    if a then a() end
+  elseif p == "RX-b" then
+    local d, x, b, a = parse_mem_bx(params[#params])
+    if #params > 1 then
+      op1 = op1 + shl(parse_num(params[1]), 4)
+    end
+    op1 = op1 + x
+    op2 = op2 + shl(b, 12) + d
+    wputhw(op1);wputhw(op2);
+    if a then a() end
+  elseif p == "RXE" then
+    local d, x, b, a = parse_mem_bx(params[2])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + x
+    op1 = op1 + shl(b, 12) + d
+    wputhw(op0);
+    wputhw(op1);
+    if a then a() end
+    wputhw(op2);
+  elseif p == "RXF" then
+    local d, x, b, a = parse_mem_bx(params[3])
+    op0 = op0 + shl(parse_reg(params[2]),4) + x
+    op1 = op1 + shl(b, 12) + d
+    wputhw(op0); wputhw(op1);
+    if a then a() end
+    op2 = op2 + shl(parse_reg(params[1]),12)
+    wputhw(op2)
+  elseif p == "RXY-a" then
+    local d, x, b, a = parse_mem_bxy(params[2])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + x
+    op1 = op1 + shl(b, 12) + band(d, 0xfff)
+    op2 = op2 + band(shr(d, 4), 0xff00)
+    wputhw(op0); wputhw(op1); wputhw(op2)
+    if a then a() end
+  elseif p == "S" then
+    wputhw(op1);
+    local d, b, a = parse_mem_b(params[1])
+    op2 = op2 + shl(b,12) + d;
+    wputhw(op2)
+    if a then a() end
+  elseif p == "SI" then
+    local imm_val, a = parse_imm8(params[2])
+    op1 = op1 + imm_val
+    wputhw(op1)
+    if a then a() end
+    local d, b, a = parse_mem_b(params[1])
+    op2 = op2 + shl(b,12) + d
+    wputhw(op2)
+    if a then a() end
+  elseif p == "SIL" then
+    wputhw(op0)
+    local d, b, a = parse_mem_b(params[1])
+    op1 = op1 + shl(b, 12) + d
+    wputhw(op1)
+    if a then a() end
+    parse_imm16(params[2])
+  elseif p == "SIY" then
+    local imm8,iact = parse_imm8(params[2])
+    op0 = op0 + shl(imm8, 8)
+    wputhw(op0);
+    if iact then iact() end
+    local d, b, a = parse_mem_by(params[1])
+    op1 = op1 + shl(b, 12) + band(d, 0xfff)
+    op2 = op2 + band(shr(d, 4), 0xff00)
+    wputhw(op1); wputhw(op2)
+    if a then a() end 
   elseif p == "SS-a" then
     local d1, l1, b1, d1a, l1a = parse_mem_lb(params[1])
     local d2, b2, d2a = parse_mem_b(params[2])
@@ -1351,121 +1465,6 @@ local function parse_template(params, template, nparams, pos)
     if d1a then d1a() end
     wputhw(op2)
     if d2a then d2a() end
-  elseif p == "SIL" then
-    wputhw(op0)
-    local d, b, a = parse_mem_b(params[1])
-    op1 = op1 + shl(b, 12) + d
-    wputhw(op1)
-    if a then a() end
-    parse_imm16(params[2])
-  elseif p == "RRF-e" then
-    wputhw(op1)
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[2]),12) + parse_reg(params[3])
-    if params[4] then
-      op2 = op2 + shl(parse_mask2(params[4]),8)
-    end
-    wputhw(op2)
-  elseif p == "RXE" then
-    local d, x, b, a = parse_mem_bx(params[2])
-    op0 = op0 + shl(parse_reg(params[1]), 4) + x
-    op1 = op1 + shl(b, 12) + d
-    -- m3 is not present, so assumed its not part of the instruction since its not passed as a prameter
-    wputhw(op0);
-    wputhw(op1);
-    if a then a() end
-    wputhw(op2);
-  elseif p == "RRF-b" then
-    wputhw(op1);
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + shl(parse_mask(params[4]),8)
-    wputhw(op2)
-  elseif p =="S" then
-    wputhw(op1);
-    local d, b, a = parse_mem_b(params[1])
-    op2 = op2 + shl(b,12) + d;
-    wputhw(op2)
-    if a then a() end
-  elseif p =="I" then
-    local imm_val, a = parse_imm8(params[1])
-    op2 = op2 + imm_val;
-    wputhw(op2);
-    if a then a() end
-  elseif p == "RI-b" then
-    op1 = op1 + shl(parse_reg(params[1]),4)
-    wputhw(op1)
-    local mode, n, s = parse_label(params[2])
-    waction("REL_"..mode, n, s)
-  elseif p == "RI-c" then
-    if #params > 1 then
-      op1 = op1 + shl(parse_num(params[1]), 4)
-    end
-    wputhw(op1)
-    local mode, n, s = parse_label(params[#params])
-    waction("REL_"..mode, n, s)
-  elseif p == "RIL-c" then
-    if #params > 1 then
-      op0 = op0 + shl(parse_num(params[1]), 4)
-    end
-    wputhw(op0)
-    local mode, n, s = parse_label(params[#params])
-    waction("REL_"..mode, n, s)
-  elseif p == "RX-b" then
-    local d, x, b, a = parse_mem_bx(params[#params])
-    if #params > 1 then
-      op1 = op1 + shl(parse_num(params[1]), 4)
-    end
-    op1 = op1 + x
-    op2 = op2 + shl(b, 12) + d
-    wputhw(op1);wputhw(op2);
-    if a then a() end
-  elseif p == "RSI" then
-    op1 = op1 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
-    wputhw(op1)
-    local mode, n, s = parse_label(params[3])
-    waction("REL_"..mode, n, s)
-  elseif p == "RIE-e" then
-    op0 = op0 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
-    wputhw1(op0)
-    local mode, n, s = parse_label(params[3])
-    waction("REL_"..mode, n, s)
-    wputhw(op2)
-  elseif p == "SI" then
-    local imm_val, a = parse_imm8(params[2])
-    op1 = op1 + imm_val
-    wputhw(op1)
-    if a then a() end
-    local d, b, a = parse_mem_b(params[1])
-    op2 = op2 + shl(b,12) + d
-    wputhw(op2)
-    if a then a() end
-  elseif p == "RXF" then
-    local d, x, b, a = parse_mem_bx(params[3])
-    op0 = op0 + shl(parse_reg(params[2]),4) + x
-    op1 = op1 + shl(b, 12) + d
-    wputhw(op0); wputhw(op1);
-    if a then a() end
-    op2 = op2 + shl(parse_reg(params[1]),12)
-    wputhw(op2)
-  elseif p == "RRD" then
-    wputhw(op1)
-    op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
-    wputhw(op2)
-  elseif p == "RS-b" then
-    local m = parse_mask(params[2])
-    local d, b, a = parse_mem_b(params[3])
-    op1 = op1 + shl(parse_reg(params[1]), 4) + m
-    op2 = op2 + shl(b, 12) + d
-    wputhw(op1); wputhw(op2)
-    if a then a() end
-  elseif p == "SIY" then
-    local imm8,iact = parse_imm8(params[2])
-    op0 = op0 + shl(imm8, 8)
-    wputhw(op0);
-    if iact then iact() end
-    local d, b, a = parse_mem_by(params[1])
-    op1 = op1 + shl(b, 12) + band(d, 0xfff)
-    op2 = op2 + band(shr(d, 4), 0xff00)
-    wputhw(op1); wputhw(op2)
-    if a then a() end 
   else
     werror("unrecognized encoding")
   end
