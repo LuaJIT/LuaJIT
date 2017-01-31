@@ -88,8 +88,8 @@
 |.define SAVE_FPR8,	176(sp)
 |.define SAVE_PC,	168(sp)
 |.define SAVE_MULTRES,	160(sp)
-|.define TMP_STACK,	160(sp) // Overlaps SAVE_MULTRES
-|.define TMP_STACK_HI,	164(sp) // High 32-bits (to avoid SAVE_MULTRES).
+|.define SAVE_TMP,	160(sp) // Overlaps SAVE_MULTRES
+|.define SAVE_TMP_HI,	164(sp) // High 32-bits (to avoid SAVE_MULTRES).
 |
 |// Callee save area (allocated by interpreter).
 |.define CALLEESAVE,	000(sp) // <- sp in interpreter.
@@ -644,8 +644,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tgets:
   |  settp STR:RC, LJ_TSTR			// STR:RC = GCstr *
-  |  stg STR:RC, TMP_STACK
-  |  la RC, TMP_STACK
+  |  stg STR:RC, SAVE_TMP
+  |  la RC, SAVE_TMP
   |  llgc TMPR1, PC_OP
   |  cghi TMPR1, BC_GGET
   |  jne >1
@@ -657,8 +657,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_tgetb:
   |  llgc RC, PC_RC
   |  setint RC
-  |  stg RC, TMP_STACK
-  |  la RC, TMP_STACK
+  |  stg RC, SAVE_TMP
+  |  la RC, SAVE_TMP
   |  j >1
   |
   |->vmeta_tgetv:
@@ -714,8 +714,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tsets:
   |  settp STR:RC, LJ_TSTR			// STR:RC = GCstr *
-  |  stg STR:RC, TMP_STACK
-  |  la RC, TMP_STACK
+  |  stg STR:RC, SAVE_TMP
+  |  la RC, SAVE_TMP
   |  llgc TMPR0, PC_OP
   |  cghi TMPR0, BC_GSET
   |  jne >1
@@ -727,8 +727,8 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_tsetb:
   |  llgc RC, PC_RC
   |  setint RC
-  |  stg RC, TMP_STACK
-  |  la RC, TMP_STACK
+  |  stg RC, SAVE_TMP
+  |  la RC, SAVE_TMP
   |  j >1
   |
   |->vmeta_tsetv:
@@ -968,7 +968,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RA, 16(RA, BASE)		// RA previously set to RA*8.
   |->vmeta_call:			// Resolve and call __call metamethod.
   |  // BASE = old base, RA = new base, RC = nargs+1, PC = return
-  |  stg NARGS:RD, TMP_STACK		// Save RA, RC for us (not sure about this).
+  |  stg NARGS:RD, SAVE_TMP		// Save RA, RC for us (not sure about this).
   |  lgr RB, RA
   |  lg L:CARG1, SAVE_L
   |  stg BASE, L:CARG1->base
@@ -980,7 +980,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lgr RA, RB
   |  lg L:RB, SAVE_L
   |  lg BASE, L:RB->base
-  |  lg NARGS:RD, TMP_STACK
+  |  lg NARGS:RD, SAVE_TMP
   |  lg LFUNC:RB, -16(RA)
   |  aghi NARGS:RD, 1			// 32-bit on x64.
   |  // This is fragile. L->base must not move, KBASE must always be defined.
@@ -1367,7 +1367,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |  lg PC, -8(BASE)
   |  stg PC, SAVE_PC
-  |  stg L:RB, TMP_STACK
+  |  stg L:RB, SAVE_TMP
   |.if resume
   |  checktptp L:TMPR0, LJ_TTHREAD, ->fff_fallback
   |.endif
@@ -1413,13 +1413,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  jne <2
   |3:
   |  lgr CARG2, RA
-  |  lg L:CARG1, TMP_STACK
+  |  lg L:CARG1, SAVE_TMP
   |  lghi CARG3, 0
   |  lghi CARG4, 0
   |  brasl r14, ->vm_resume			// (lua_State *L, TValue *base, 0, 0)
   |
   |  lg L:RB, SAVE_L
-  |  lg L:PC, TMP_STACK
+  |  lg L:PC, SAVE_TMP
   |  lg BASE, L:RB->base
   |  stg L:RB, (DISPATCH_GL(cur_L))(DISPATCH)
   |  set_vmstate INTERP
@@ -1487,12 +1487,12 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |9:  // Handle stack expansion on return from yield.
-  |  lg L:RA, TMP_STACK
+  |  lg L:RA, SAVE_TMP
   |  stg KBASE, L:RA->top		// Undo coroutine stack clearing.
   |  lgr CARG2, PC
   |  lgr CARG1, L:RB
   |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
-  |  lg L:PC, TMP_STACK
+  |  lg L:PC, SAVE_TMP
   |  lg BASE, L:RB->base
   |  j <4				// Retry the stack move.
   |.endmacro
@@ -1635,9 +1635,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  j ->fff_resf0
   |
   |.ffunc_n math_frexp
-  |  la CARG1, TMP_STACK
+  |  la CARG1, SAVE_TMP
   |  brasl r14, extern frexp
-  |  llgf RB, TMP_STACK
+  |  llgf RB, SAVE_TMP
   |  lg PC, -8(BASE)
   |  stdy f0, -16(BASE)
   |  setint RB
@@ -1715,9 +1715,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  lg RB, 0(BASE)
   |  checkint RB, ->fff_fallback
   |  clfi RB, 255;  jh ->fff_fallback
-  |  strvh RB, TMP_STACK		// Store [c,0].
+  |  strvh RB, SAVE_TMP		// Store [c,0].
   |  lghi TMPR1, 1
-  |  la RD, TMP_STACK			// Points to stack. Little-endian.
+  |  la RD, SAVE_TMP			// Points to stack. Little-endian.
   |->fff_newstr:
   |  lg L:RB, SAVE_L
   |  stg BASE, L:RB->base
@@ -1975,7 +1975,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->fff_gcstep:			// Call GC step function.
   |  // BASE = new base, RD = nargs+1
-  |  stg r14, TMP_STACK			// Save return address
+  |  stg r14, SAVE_TMP			// Save return address
   |  lg L:RB, SAVE_L
   |  stg PC, SAVE_PC			// Redundant (but a defined value).
   |  stg BASE, L:RB->base
@@ -1989,7 +1989,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  sgr RD, BASE
   |  srlg RD, RD, 3
   |  aghi NARGS:RD, 1
-  |  lg r14, TMP_STACK			// Restore return address.
+  |  lg r14, SAVE_TMP			// Restore return address.
   |  br r14
   |
   |//-----------------------------------------------------------------------
@@ -3297,10 +3297,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  tm TAB:TMPR1->nomm, 1<<MM_newindex
     |  je ->vmeta_tsets			// 'no __newindex' flag NOT set: check.
     |6:
-    |  stg ITYPE, TMP_STACK
+    |  stg ITYPE, SAVE_TMP
     |  lg L:CARG1, SAVE_L
     |  stg BASE, L:CARG1->base
-    |  la CARG3, TMP_STACK
+    |  la CARG3, SAVE_TMP
     |  lgr CARG2, TAB:RB
     |  stg PC, SAVE_PC
     |  brasl r14, extern lj_tab_newkey	// (lua_State *L, GCtab *t, TValue *k)
@@ -3661,13 +3661,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  stg RA, L:RB->top
     |  stg PC, SAVE_PC
     |  sgr TMPR1, BASE			// Need delta, because BASE may change.
-    |  st TMPR1, TMP_STACK_HI
+    |  st TMPR1, SAVE_TMP_HI
     |  llgf CARG2, SAVE_MULTRES
     |  aghi CARG2, -1
     |  lgr CARG1, L:RB
     |  brasl r14, extern lj_state_growstack	// (lua_State *L, int n)
     |  lg BASE, L:RB->base
-    |  lgf TMPR1, TMP_STACK_HI
+    |  lgf TMPR1, SAVE_TMP_HI
     |  lg RA, L:RB->top
     |  agr TMPR1, BASE
     |  j <6
