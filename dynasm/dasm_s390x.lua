@@ -1251,13 +1251,13 @@ for cond,c in pairs(map_cond) do
   -- Extended mnemonics for branches.
   -- TODO: replace 'B' with correct encoding.
   -- brc
-  map_op["j"..cond.."_1"] = "0000"..tohex(0xa7040000+shl(c, 20)).."w"
+  map_op["j"..cond.."_1"] = "0000"..tohex(0xa7040000+shl(c, 20)).."RI-c"
   -- brcl
-  map_op["jg"..cond.."_1"] = tohex(0xc0040000+shl(c, 20)).."0000".."x"
+  map_op["jg"..cond.."_1"] = tohex(0xc0040000+shl(c, 20)).."0000".."RIL-c"
   -- bc
-  map_op["b"..cond.."_1"] = "0000"..tohex(0x47000000+shl(c, 20)).."y"
+  map_op["b"..cond.."_1"] = "0000"..tohex(0x47000000+shl(c, 20)).."RX-b"
   -- bcr
-  map_op["b"..cond.."r_1"] = "0000"..tohex(0x0700+shl(c, 4)).."z"
+  map_op["b"..cond.."r_1"] = "0000"..tohex(0x0700+shl(c, 4)).."RR"
 end
 ------------------------------------------------------------------------------
 -- Handle opcodes defined with template strings.
@@ -1271,7 +1271,10 @@ local function parse_template(params, template, nparams, pos)
   -- Process each character.
   local p = sub(template, 13)
   if p == "RR" then
-    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    if #params > 1 then
+      op2 = op2 + shl(parse_reg(params[1]),4)
+    end
+    op2 = op2 + parse_reg(params[#params])
     wputhw(op2)
   elseif p == "RRE" then
     op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
@@ -1286,7 +1289,6 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + shl(b, 12) + d
     wputhw(op1); wputhw(op2);
     if a then a() end
-  elseif p == "RX-b" then
   elseif p == "RXY-a" then
     local d, x, b, a = parse_mem_bxy(params[2])
     op0 = op0 + shl(parse_reg(params[1]), 4) + x
@@ -1294,8 +1296,6 @@ local function parse_template(params, template, nparams, pos)
     op2 = op2 + band(shr(d, 4), 0xff00)
     wputhw(op0); wputhw(op1); wputhw(op2)
     if a then a() end
-  elseif p == "m" then
-
   elseif p == "RIL-a" then
     op0 = op0 + shl(parse_reg(params[1]), 4)
     wputhw(op0);
@@ -1395,18 +1395,25 @@ local function parse_template(params, template, nparams, pos)
     local mode, n, s = parse_label(params[2])
     waction("REL_"..mode, n, s)
   elseif p == "RI-c" then
-    op1 = op1 + shl(parse_num(params[1]),4)
+    if #params > 1 then
+      op1 = op1 + shl(parse_num(params[1]), 4)
+    end
     wputhw(op1)
-    local mode, n, s = parse_label(params[2])
+    local mode, n, s = parse_label(params[#params])
     waction("REL_"..mode, n, s)
   elseif p == "RIL-c" then
-    op0 = op0 + shl(parse_num(params[1]),4)
-    wputhhw(op0)
-    local mode, n, s = parse_label(params[2])
+    if #params > 1 then
+      op0 = op0 + shl(parse_num(params[1]), 4)
+    end
+    wputhw(op0)
+    local mode, n, s = parse_label(params[#params])
     waction("REL_"..mode, n, s)
   elseif p == "RX-b" then
-    local d, x, b, a = parse_mem_bx(params[2])
-    op1 = op1 + shl(parse_num(params[1]), 4) + x
+    local d, x, b, a = parse_mem_bx(params[#params])
+    if #params > 1 then
+      op1 = op1 + shl(parse_num(params[1]), 4)
+    end
+    op1 = op1 + x
     op2 = op2 + shl(b, 12) + d
     wputhw(op1);wputhw(op2);
     if a then a() end
@@ -1441,23 +1448,6 @@ local function parse_template(params, template, nparams, pos)
   elseif p == "RRD" then
     wputhw(op1)
     op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
-    wputhw(op2)
-  elseif p == "w" then
-    local mode, n, s = parse_label(params[1])
-    wputhw(op1)
-    waction("REL_"..mode, n, s)
-  elseif p == "x" then
-    local mode, n, s = parse_label(params[1])
-    wputhw(op0)
-    waction("REL_"..mode, n, s)
-  elseif p == "y" then
-    local d, x, b, a = parse_mem_bx(params[1])
-    op1 = op1 + x
-    op2 = op2 + shl(b, 12) + d
-    wputhw(op1); wputhw(op2);
-    if a then a() end -- a() emits action.
-  elseif p == "z" then
-    op2 = op2 + parse_reg(params[1])
     wputhw(op2)
   elseif p == "RS-b" then
     local m = parse_mask(params[2])
