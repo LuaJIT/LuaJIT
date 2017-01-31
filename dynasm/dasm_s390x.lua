@@ -49,7 +49,7 @@ local maxsecpos = 25 -- Keep this low, to avoid excessively long C lines.
 -- Action name -> action number.
 local map_action = {}
 local max_action = 0
-for n,name in ipairs(action_names) do
+for n, name in ipairs(action_names) do
   map_action[name] = n-1
   max_action = n
 end
@@ -68,7 +68,7 @@ local secpos = 1
 -- Dump action names and numbers.
 local function dumpactions(out)
   out:write("DynASM encoding engine action codes:\n")
-  for n,name in ipairs(action_names) do
+  for n, name in ipairs(action_names) do
     local num = map_action[name]
     out:write(format("  %-10s %02X  %d\n", name, num, num))
   end
@@ -89,7 +89,7 @@ local function writeactions(out, name)
   if nn == 0 then nn = 1; actlist[0] = map_action.STOP end
   out:write("static const unsigned short ", name, "[", nn, "] = {")
   local esc = false -- also need to escape for action arguments
-  for i = 1,nn do
+  for i = 1, nn do
     assert(out:write("\n  0x", sub(tohex(actlist[i]), 5, 8)))
     if i ~= nn then assert(out:write(",")) end
     local name = action_names[actlist[i]+1]
@@ -160,7 +160,7 @@ local function dumpglobals(out, lvl)
   local t = {}
   for name, n in pairs(map_global) do t[n] = name end
   out:write("Global labels:\n")
-  for i=20,next_global-1 do
+  for i=20, next_global-1 do
     out:write(format("  %s\n", t[i]))
   end
   out:write("\n")
@@ -171,7 +171,7 @@ local function writeglobals(out, prefix)
   local t = {}
   for name, n in pairs(map_global) do t[n] = name end
   out:write("enum {\n")
-  for i=20,next_global-1 do
+  for i=20, next_global-1 do
     out:write("  ", prefix, t[i], ",\n")
   end
   out:write("  ", prefix, "_MAX\n};\n")
@@ -182,7 +182,7 @@ local function writeglobalnames(out, name)
   local t = {}
   for name, n in pairs(map_global) do t[n] = name end
   out:write("static const char *const ", name, "[] = {\n")
-  for i=20,next_global-1 do
+  for i=20, next_global-1 do
     out:write("  \"", t[i], "\",\n")
   end
   out:write("  (const char *)0\n};\n")
@@ -206,7 +206,7 @@ end})
 -- Dump extern labels.
 local function dumpexterns(out, lvl)
   out:write("Extern labels:\n")
-  for i=0,next_extern-1 do
+  for i=0, next_extern-1 do
     out:write(format("  %s\n", map_extern_[i]))
   end
   out:write("\n")
@@ -215,7 +215,7 @@ end
 -- Write extern label names.
 local function writeexternnames(out, name)
   out:write("static const char *const ", name, "[] = {\n")
-  for i=0,next_extern-1 do
+  for i=0, next_extern-1 do
     out:write("  \"", map_extern_[i], "\",\n")
   end
   out:write("  (const char *)0\n};\n")
@@ -443,7 +443,7 @@ local function parse_mem_lb(arg)
   return dval, lval, parse_reg(b), dact, lact
 end
 
-local function parse_mem_l2b(arg,high_l)
+local function parse_mem_l2b(arg, high_l)
   local reg = "r1?[0-9]"
   local d, l, b = match(arg, "^(.*)%s*%(%s*(.*)%s*,%s*("..reg..")%s*%)$")
   if not d then
@@ -474,7 +474,7 @@ local function parse_mem_l2b(arg,high_l)
     if high_l then
     lact = function() waction("LEN4HR", nil, l) end
     else
-    lact = function() waction("LEN4LR",nil,l) end
+    lact = function() waction("LEN4LR", nil, l) end
     end
   end
   return dval, lval, parse_reg(b), dact, lact
@@ -519,7 +519,7 @@ local function parse_imm8(imm)
     end
     return imm_val, nil
   end
-  return 0, function() waction("IMM8",nil,imm) end
+  return 0, function() waction("IMM8", nil, imm) end
 end
 
 local function parse_mask(mask)
@@ -1247,7 +1247,7 @@ map_op = {
   xr_2 =	"000000001700RR",
   xy_2 =	"e30000000057RXY-a",
 }
-for cond,c in pairs(map_cond) do
+for cond, c in pairs(map_cond) do
   -- Extended mnemonics for branches.
   -- TODO: replace 'B' with correct encoding.
   -- brc
@@ -1272,15 +1272,15 @@ local function parse_template(params, template, nparams, pos)
   local p = sub(template, 13)
   if p == "I" then
     local imm_val, a = parse_imm8(params[1])
-    op2 = op2 + imm_val;
-    wputhw(op2);
+    op2 = op2 + imm_val
+    wputhw(op2)
     if a then a() end
   elseif p == "RI-a" then
-    op1 = op1 + shl(parse_reg(params[1]),4)
-    wputhw(op1);
+    op1 = op1 + shl(parse_reg(params[1]), 4)
+    wputhw(op1)
     parse_imm16(params[2])
   elseif p == "RI-b" then
-    op1 = op1 + shl(parse_reg(params[1]),4)
+    op1 = op1 + shl(parse_reg(params[1]), 4)
     wputhw(op1)
     local mode, n, s = parse_label(params[2])
     waction("REL_"..mode, n, s)
@@ -1292,7 +1292,7 @@ local function parse_template(params, template, nparams, pos)
     local mode, n, s = parse_label(params[#params])
     waction("REL_"..mode, n, s)
   elseif p == "RIE-e" then
-    op0 = op0 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    op0 = op0 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
     wputhw1(op0)
     local mode, n, s = parse_label(params[3])
     waction("REL_"..mode, n, s)
@@ -1303,7 +1303,7 @@ local function parse_template(params, template, nparams, pos)
     parse_imm32(params[2])
   elseif p == "RIL-b" then
     op0 = op0 + shl(parse_reg(params[1]), 4)
-    wputhw(op0);
+    wputhw(op0)
     local mode, n, s = parse_label(params[2])
     waction("REL_"..mode, n, s)
   elseif p == "RIL-c" then
@@ -1315,26 +1315,26 @@ local function parse_template(params, template, nparams, pos)
     waction("REL_"..mode, n, s)
   elseif p == "RR" then
     if #params > 1 then
-      op2 = op2 + shl(parse_reg(params[1]),4)
+      op2 = op2 + shl(parse_reg(params[1]), 4)
     end
     op2 = op2 + parse_reg(params[#params])
     wputhw(op2)
   elseif p == "RRD" then
     wputhw(op1)
-    op2 = op2 + shl(parse_reg(params[1]),12) + shl(parse_reg(params[2]),4) + parse_reg(params[3])
+    op2 = op2 + shl(parse_reg(params[1]), 12) + shl(parse_reg(params[2]), 4) + parse_reg(params[3])
     wputhw(op2)
   elseif p == "RRE" then
-    op2 = op2 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    op2 = op2 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
     wputhw(op1); wputhw(op2)
   elseif p == "RRF-b" then
-    wputhw(op1);
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_reg(params[2]),12) + parse_reg(params[3]) + shl(parse_mask(params[4]),8)
+    wputhw(op1)
+    op2 = op2 + shl(parse_reg(params[1]), 4) + shl(parse_reg(params[2]), 12) + parse_reg(params[3]) + shl(parse_mask(params[4]), 8)
     wputhw(op2)
   elseif p == "RRF-e" then
     wputhw(op1)
-    op2 = op2 + shl(parse_reg(params[1]),4) + shl(parse_mask(params[2]),12) + parse_reg(params[3])
+    op2 = op2 + shl(parse_reg(params[1]), 4) + shl(parse_mask(params[2]), 12) + parse_reg(params[3])
     if params[4] then
-      op2 = op2 + shl(parse_mask2(params[4]),8)
+      op2 = op2 + shl(parse_mask2(params[4]), 8)
     end
     wputhw(op2)
   elseif p == "RS-a" then
@@ -1357,7 +1357,7 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op1); wputhw(op2)
     if a then a() end
   elseif p == "RSI" then
-    op1 = op1 + shl(parse_reg(params[1]),4) + parse_reg(params[2])
+    op1 = op1 + shl(parse_reg(params[1]), 4) + parse_reg(params[2])
     wputhw(op1)
     local mode, n, s = parse_label(params[3])
     waction("REL_"..mode, n, s)
@@ -1372,7 +1372,7 @@ local function parse_template(params, template, nparams, pos)
     local d, x, b, a = parse_mem_bx(params[2])
     op1 = op1 + shl(parse_reg(params[1]), 4) + x
     op2 = op2 + shl(b, 12) + d
-    wputhw(op1); wputhw(op2);
+    wputhw(op1); wputhw(op2)
     if a then a() end
   elseif p == "RX-b" then
     local d, x, b, a = parse_mem_bx(params[#params])
@@ -1381,23 +1381,22 @@ local function parse_template(params, template, nparams, pos)
     end
     op1 = op1 + x
     op2 = op2 + shl(b, 12) + d
-    wputhw(op1);wputhw(op2);
+    wputhw(op1); wputhw(op2)
     if a then a() end
   elseif p == "RXE" then
     local d, x, b, a = parse_mem_bx(params[2])
     op0 = op0 + shl(parse_reg(params[1]), 4) + x
     op1 = op1 + shl(b, 12) + d
-    wputhw(op0);
-    wputhw(op1);
+    wputhw(op0); wputhw(op1)
     if a then a() end
     wputhw(op2);
   elseif p == "RXF" then
     local d, x, b, a = parse_mem_bx(params[3])
-    op0 = op0 + shl(parse_reg(params[2]),4) + x
+    op0 = op0 + shl(parse_reg(params[2]), 4) + x
     op1 = op1 + shl(b, 12) + d
-    wputhw(op0); wputhw(op1);
+    wputhw(op0); wputhw(op1)
     if a then a() end
-    op2 = op2 + shl(parse_reg(params[1]),12)
+    op2 = op2 + shl(parse_reg(params[1]), 12)
     wputhw(op2)
   elseif p == "RXY-a" then
     local d, x, b, a = parse_mem_bxy(params[2])
@@ -1409,7 +1408,7 @@ local function parse_template(params, template, nparams, pos)
   elseif p == "S" then
     wputhw(op1);
     local d, b, a = parse_mem_b(params[1])
-    op2 = op2 + shl(b,12) + d;
+    op2 = op2 + shl(b, 12) + d
     wputhw(op2)
     if a then a() end
   elseif p == "SI" then
@@ -1418,7 +1417,7 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op1)
     if a then a() end
     local d, b, a = parse_mem_b(params[1])
-    op2 = op2 + shl(b,12) + d
+    op2 = op2 + shl(b, 12) + d
     wputhw(op2)
     if a then a() end
   elseif p == "SIL" then
@@ -1429,9 +1428,9 @@ local function parse_template(params, template, nparams, pos)
     if a then a() end
     parse_imm16(params[2])
   elseif p == "SIY" then
-    local imm8,iact = parse_imm8(params[2])
+    local imm8, iact = parse_imm8(params[2])
     op0 = op0 + shl(imm8, 8)
-    wputhw(op0);
+    wputhw(op0)
     if iact then iact() end
     local d, b, a = parse_mem_by(params[1])
     op1 = op1 + shl(b, 12) + band(d, 0xfff)
@@ -1451,11 +1450,11 @@ local function parse_template(params, template, nparams, pos)
     wputhw(op2)
     if d2a then d2a() end
   elseif p == "SS-b" then
-    local high_l=true;
-    local d1, l1, b1, d1a, l1a = parse_mem_l2b(params[1],high_l)
-    high_l=false;
-    local d2, l2, b2, d2a, l2a = parse_mem_l2b(params[2],high_l)
-    op0 = op0 + shl(l1,4) + l2
+    local high_l = true
+    local d1, l1, b1, d1a, l1a = parse_mem_l2b(params[1], high_l)
+    high_l = false
+    local d2, l2, b2, d2a, l2a = parse_mem_l2b(params[2], high_l)
+    op0 = op0 + shl(l1, 4) + l2
     op1 = op1 + shl(b1, 12) + d1
     op2 = op2 + shl(b2, 12) + d2
     wputhw(op0)
@@ -1529,7 +1528,7 @@ end
 -- Pseudo-opcodes for data storage.
 map_op[".long_*"] = function(params)
   if not params then return "imm..." end
-  for _,p in ipairs(params) do
+  for _, p in ipairs(params) do
     local n = tonumber(p)
     if not n then werror("bad immediate `"..p.."'") end
     if n < 0 then n = n + 2^32 end
@@ -1545,7 +1544,7 @@ map_op[".align_1"] = function(params)
   if align then
     local x = align
     -- Must be a power of 2 in the range (2 ... 256).
-    for i=1,8 do
+    for i=1, 8 do
       x = x / 2
       if x == 1 then
 	waction("ALIGN", align-1, nil, 1) -- Action halfword is 2**n-1.
@@ -1588,7 +1587,7 @@ local function dumptypes(out, lvl)
   for name in pairs(map_type) do t[#t+1] = name end
   sort(t)
   out:write("Type definitions:\n")
-  for _,name in ipairs(t) do
+  for _, name in ipairs(t) do
     local tp = map_type[name]
     local reg = tp.reg or ""
     out:write(format("  %-20s %-20s %s\n", name, tp.ctype, reg))
