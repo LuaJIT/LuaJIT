@@ -605,15 +605,15 @@ MSize LJ_FASTCALL lj_tab_nexta(GCtab *t, MSize k)
 }
 
 
-LJ_FUNCA cTValue *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n)
+LJ_FUNCA const Node *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n)
 {
   const Node *nodeend = noderef(t->node)+t->hmask;
   for (n++; n <= nodeend; n++) {
     if (!tvisnil(&n->val)) {
-      return &n->key;
+      return n;
     }
   }
-  return niltv(L);
+  return &G(L)->nilnode;
 }
 
 

@@ -68,7 +68,7 @@ LJ_FUNC TValue *lj_tab_set(lua_State *L, GCtab *t, cTValue *key);
   (inarray((t), (key)) ? arrayslot((t), (key)) : lj_tab_setinth(L, (t), (key)))
 
 LJ_FUNCA MSize LJ_FASTCALL lj_tab_nexta(GCtab *t, MSize k);
-LJ_FUNCA cTValue *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n);
+LJ_FUNCA const Node *LJ_FASTCALL lj_tab_nexth(lua_State *L, GCtab *t, const Node *n);
 LJ_FUNCA int lj_tab_next(lua_State *L, GCtab *t, TValue *key);
 LJ_FUNCA MSize LJ_FASTCALL lj_tab_len(GCtab *t);
 

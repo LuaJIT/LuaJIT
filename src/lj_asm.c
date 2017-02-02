@@ -1685,7 +1685,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_LREF: asm_lref(as, ir); break;
 
   /* Loads and stores. */
-  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
+  case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD: case IR_HKLOAD:
     asm_ahuvload(as, ir);
     break;
   case IR_FLOAD: asm_fload(as, ir); break;

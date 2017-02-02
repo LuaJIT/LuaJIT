@@ -1523,6 +1523,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     RegSet allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
     Reg dest = ra_dest(as, ir, allow);
     asm_fuseahuref(as, ir->op1, RSET_GPR);
+    if (ir->o == IR_HKLOAD) as->mrm.ofs += offsetof(Node, key);
 #if LJ_GC64
     if (irt_isaddr(ir->t)) {
       emit_shifti(as, XOg_SHR|REX_64, dest, 17);
@@ -1550,6 +1551,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     }
 #endif
     asm_fuseahuref(as, ir->op1, gpr);
+    if (ir->o == IR_HKLOAD) as->mrm.ofs += offsetof(Node, key);
   }
   /* Always do the type check, even if the load result is unused. */
   as->mrm.ofs += 4;
