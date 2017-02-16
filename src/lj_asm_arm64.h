@@ -176,7 +176,7 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow,
 	  }
 	} else {
 	  Reg base = ra_alloc1(as, ir->op1, allow);
-	  *ofsp = FUSE_REG|ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, base));
+	  *ofsp = FUSE_REG|ra_alloc1(as, ir->op2, rset_exclude(allow, base));
 	  return base;
 	}
       }
