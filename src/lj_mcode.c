@@ -206,7 +206,7 @@ static void mcode_protect(jit_State *J, int prot)
 
 #if LJ_TARGET_X64
 #define mcode_validptr(p)	((p) && (uintptr_t)(p) < (uintptr_t)1<<47)
-#elif LJ_TARGET_ARM64
+#elif LJ_TARGET_ARM64 || LJ_TARGET_MIPS64
 /* We have no clue about the valid VA range. It could be 39 - 52 bits. */
 #define mcode_validptr(p)	(p)
 #else
@@ -224,8 +224,8 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   */
 #if LJ_TARGET_MIPS
   /* Use the middle of the 256MB-aligned region. */
-  uintptr_t target = ((uintptr_t)(void *)lj_vm_exit_handler & 0xf0000000u) +
-		     0x08000000u;
+  uintptr_t target = ((uintptr_t)(void *)lj_vm_exit_handler &
+		      ~(uintptr_t)0x0fffffffu) + 0x08000000u;
 #else
   uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler & ~(uintptr_t)0xffff;
 #endif
