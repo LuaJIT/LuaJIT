@@ -433,6 +433,11 @@
 #define LJ_NO_SYSTEM		1
 #endif
 
+#if !defined(LUAJIT_NO_UNWIND) && __GNU_COMPACT_EH__
+/* NYI: no support for compact unwind specification, yet. */
+#define LUAJIT_NO_UNWIND	1
+#endif
+
 #if defined(LUAJIT_NO_UNWIND) || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
 #define LJ_NO_UNWIND		1
 #endif

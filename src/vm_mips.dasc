@@ -4170,6 +4170,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 2\n"
 	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
 #endif
+#if !LJ_NO_UNWIND
     fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
     fprintf(ctx->fp,
 	"\t.globl lj_err_unwind_dwarf\n"
@@ -4237,6 +4238,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0xd\n\t.uleb128 0x10\n"
 	"\t.align 2\n"
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
 #endif
     break;
   default:
