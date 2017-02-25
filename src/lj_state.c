@@ -225,6 +225,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
     return NULL;
   }
   L->status = 0;
+  G2J(g)->prngstate = rand();
   return L;
 }
 
