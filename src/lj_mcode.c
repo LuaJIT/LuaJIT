@@ -233,7 +233,10 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   /* First try a contiguous area below the last one. */
   uintptr_t hint = J->mcarea ? (uintptr_t)J->mcarea - sz : 0;
   int i;
-  for (i = 0; i < 32; i++) {  /* 32 attempts ought to be enough ... */
+  /* Do at most LJ_TARGET_JUMPRANGE iterations as a heuristic to try harder for
+  ** bigger allocation pools (i.e. higher LJ_TARGET_JUMPRANGE values), but don't
+  ** waste CPU cycles for smaller pools that can be easily exhausted. */
+  for (i = 0; i < LJ_TARGET_JUMPRANGE; i++) {
     if (mcode_validptr(hint)) {
       void *p = mcode_alloc_at(J, hint, sz, MCPROT_GEN);
 
