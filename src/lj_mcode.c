@@ -244,9 +244,9 @@ static void *mcode_alloc(jit_State *J, size_t sz)
     }
     /* Next try probing pseudo-random addresses. */
     do {
-      hint = (0x78fb ^ LJ_PRNG_BITS(J, 15)) << 16;  /* 64K aligned. */
-    } while (!(hint + sz < range));
-    hint = target + hint - (range>>1);
+      hint = LJ_PRNG_BITS(J, LJ_TARGET_JUMPRANGE-16) << 16;  /* 64K aligned. */
+    } while (!(hint + sz < range*2));
+    hint = target + hint - range;
   }
   lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
   return NULL;
