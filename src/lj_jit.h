@@ -452,6 +452,10 @@ typedef struct jit_State {
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
   uint32_t prngstate;	/* PRNG state. */
 
+  uintptr_t target; /* target address for mcode_alloc() */
+  uintptr_t range;  /* allocation range for mcode_alloc() */
+  uintptr_t allocbase; /* allocation base addred for mcode_alloc() */
+
 #ifdef LUAJIT_ENABLE_TABLE_BUMP
   RBCHashEntry rbchash[RBCHASH_SLOTS];  /* Reverse bytecode map. */
 #endif
