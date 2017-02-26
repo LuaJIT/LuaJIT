@@ -630,6 +630,34 @@ static int luaopen_jit_profile(lua_State *L)
 
 #endif
 
+/* -- jit.vmprofile module  ----------------------------------------------- */
+
+#ifdef LUAJIT_VMPROFILE
+
+#define LJLIB_MODULE_jit_vmprofile
+
+LJLIB_CF(jit_vmprofile_start)
+{
+  luaJIT_vmprofile_start(L);
+  return 0;
+}
+
+LJLIB_CF(jit_vmprofile_stop)
+{
+  luaJIT_vmprofile_stop(L);
+  return 0;
+}
+
+#include "lj_libdef.h"
+
+static int luaopen_jit_vmprofile(lua_State *L)
+{
+  LJ_LIB_REG(L, NULL, jit_vmprofile);
+  return 1;
+}
+
+#endif
+
 /* -- JIT compiler initialization ----------------------------------------- */
 
 #if LJ_HASJIT
@@ -764,6 +792,10 @@ LUALIB_API int luaopen_jit(lua_State *L)
 #if LJ_HASPROFILE
   lj_lib_prereg(L, LUA_JITLIBNAME ".profile", luaopen_jit_profile,
 		tabref(L->env));
+#endif
+#ifdef LUAJIT_VMPROFILE
+  lj_lib_prereg(L, LUA_JITLIBNAME ".vmprofile", luaopen_jit_vmprofile,
+                tabref(L->env));
 #endif
 #ifndef LUAJIT_DISABLE_JITUTIL
   lj_lib_prereg(L, LUA_JITLIBNAME ".util", luaopen_jit_util, tabref(L->env));
