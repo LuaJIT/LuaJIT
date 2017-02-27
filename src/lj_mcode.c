@@ -204,7 +204,9 @@ static void mcode_protect(jit_State *J, int prot)
 
 /* -- MCode area allocation ----------------------------------------------- */
 
-#if LJ_TARGET_X64
+#if LJ_TARGET_X64 && defined(__sun__)
+#define mcode_validptr(p)	(p)
+#elif LJ_TARGET_X64
 #define mcode_validptr(p)	((p) && (uintptr_t)(p) < (uintptr_t)1<<47)
 #else
 #define mcode_validptr(p)	((p) && (uintptr_t)(p) < 0xffff0000)
