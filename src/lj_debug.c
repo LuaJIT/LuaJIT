@@ -40,6 +40,11 @@ cTValue *lj_debug_frame(lua_State *L, int level, int *size)
       if (frame_isvarg(frame))
 	level++;  /* Skip vararg pseudo-frame. */
       frame = frame_prevd(frame);
+
+      /* bail on infinite loop */
+      if (frame == nextframe) {
+       break;
+      }
     }
   }
   *size = level;
