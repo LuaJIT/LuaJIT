@@ -118,6 +118,40 @@ void lj_str_resize(lua_State *L, MSize newmask)
   g->strhash = newhash;
 }
 
+#if LUAJIT_SMART_STRINGS
+static LJ_AINLINE uint32_t
+lj_fullhash(const uint8_t *v, MSize len)
+{
+  MSize a = 0, b = 0;
+  MSize c = 0xcafedead;
+  MSize d = 0xdeadbeef;
+  MSize h = len;
+  lua_assert(len >= 12);
+  for(; len>8; len-=8, v+=8) {
+    a ^= lj_getu32(v);
+    b ^= lj_getu32(v+4);
+    c += a;
+    d += b;
+    a = lj_rol(a, 5) ^ d;
+    b = lj_rol(b, 7) ^ c;
+    c = lj_rol(c, 24) + a;
+    d = lj_rol(d, 1) + b;
+  }
+  a ^= lj_getu32(v+len-8);
+  b ^= lj_getu32(v+len-4);
+  c += b; c -= lj_rol(a, 9);
+  d += a; d -= lj_rol(b, 18);
+  h -= lj_rol(a^b,7);
+  h += c; h += lj_rol(d,13);
+  d ^= c;  d -= lj_rol(c,25);
+  h ^= d; h -= lj_rol(d,16);
+  c ^= h; c -= lj_rol(h,4);
+  d ^= c;  d -= lj_rol(c,14);
+  h ^= d; h -= lj_rol(d,24);
+  return h;
+}
+#endif
+
 /* Intern a string and return string object. */
 GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
 {
@@ -126,6 +160,10 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   GCobj *o;
   MSize len = (MSize)lenx;
   MSize a, b, h = len;
+  uint8_t strflags = 0;
+#if LUAJIT_SMART_STRINGS
+  unsigned collisions = 0;
+#endif
   if (lenx >= LJ_MAX_STR)
     lj_err_msg(L, LJ_ERR_STROV);
   g = G(L);
@@ -149,27 +187,115 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   h ^= b; h -= lj_rol(b, 16);
   /* Check if the string has already been interned. */
   o = gcref(g->strhash[h & g->strmask]);
+#if LUAJIT_SMART_STRINGS
+/*
+** The default "fast" string hash function samples only a few positions
+** in a string, the remaining bytes don't affect the function's result.
+** The function performs well for short strings; however long strings
+** can yield extremely high collision rates.
+**
+** An adaptive schema was implemented. Two hash functions are used
+** simultaneously. A bucket is picked based on the output of the fast
+** hash function. If an item is to be inserted in a collision chain
+** longer than a certain threshold, another bucket is picked based on
+** the stronger hash function. Since two hash functions are used
+** simultaneously, insert should consider two buckets. The second bucket
+** is often NOT considered thanks to the bloom filter. The filter is
+** rebuilt during GC cycle.
+**
+** Parameters below were tuned on a set of benchmarks. Max_collisions is
+** also backed by theory: the expected maximum length of a collision
+** chain in a hash table with the fill factor of 1.0 is
+** O(log(N)/log(log(N))), assuming uniformly distributed random keys.
+** The upper bound for N=65,000 is 10, hence 40 is a clear indication of
+** an anomaly.
+**/
+#define max_collisions 40
+#define inc_collision_soft() (collisions++)
+/* If different strings yield the same hash sum, grow counter faster. */
+#define inc_collision_hard() (collisions+=1+(len>>4), 1)
+#else
+#define inc_collision_hard() (1)
+#define inc_collision_soft()
+#endif
   if (LJ_LIKELY((((uintptr_t)str+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && inc_collision_hard() &&
+                      str_fastcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
       }
       o = gcnext(o);
+      inc_collision_soft();
     }
   } else {  /* Slow path: end of string is too close to a page boundary. */
     while (o != NULL) {
       GCstr *sx = gco2str(o);
-      if (sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+      if (sx->hash == h && sx->len == len && inc_collision_hard() &&
+                      memcmp(str, strdata(sx), len) == 0) {
 	/* Resurrect if dead. Can only happen with fixstring() (keywords). */
 	if (isdead(g, o)) flipwhite(o);
 	return sx;  /* Return existing string. */
       }
       o = gcnext(o);
+      inc_collision_soft();
     }
   }
+#if LUAJIT_SMART_STRINGS
+  /* "Fast" hash function consumes all bytes of a string <= 12 bytes. */
+  if (len > 12) {
+    /*
+    ** The bloom filter is keyed with the high 12 bits of the fast
+    ** hash sum. The filter is rebuilt during GC cycle. It's beneficial
+    ** to have these bits readily available and avoid hash sum
+    ** recalculation during GC. High 6 bits are included in the "full"
+    ** hash sum, and bits 19-25 are stored in s->strflags.
+    **/
+    int search_fullh =
+       bloomtest(g->strbloom.cur[0], h>>(sizeof(h)*8- 6)) != 0 &&
+       bloomtest(g->strbloom.cur[1], h>>(sizeof(h)*8-12)) != 0;
+    if (LJ_UNLIKELY(search_fullh || collisions > max_collisions)) {
+      MSize fh = lj_fullhash((const uint8_t*)str, len);
+#define high6mask ((~(MSize)0)<<(sizeof(MSize)*8-6))
+      fh = (fh >> 6) | (h & high6mask);
+      if (search_fullh) {
+	/* Recheck if the string has already been interned with "harder" hash. */
+	o = gcref(g->strhash[fh & g->strmask]);
+	if (LJ_LIKELY((((uintptr_t)str+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4)) {
+	  while (o != NULL) {
+	    GCstr *sx = gco2str(o);
+	    if (sx->hash == fh && sx->len == len && str_fastcmp(str, strdata(sx), len) == 0) {
+	      /* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	      if (isdead(g, o)) flipwhite(o);
+	      return sx;  /* Return existing string. */
+	    }
+	    o = gcnext(o);
+	  }
+	} else {  /* Slow path: end of string is too close to a page boundary. */
+	  while (o != NULL) {
+	    GCstr *sx = gco2str(o);
+	    if (sx->hash == fh && sx->len == len && memcmp(str, strdata(sx), len) == 0) {
+	      /* Resurrect if dead. Can only happen with fixstring() (keywords). */
+	      if (isdead(g, o)) flipwhite(o);
+	      return sx;  /* Return existing string. */
+	    }
+	    o = gcnext(o);
+	  }
+	}
+      }
+      if (collisions > max_collisions) {
+	strflags = 0xc0 | ((h>>(sizeof(h)*8-12))&0x3f);
+	bloomset(g->strbloom.cur[0], h>>(sizeof(h)*8- 6));
+	bloomset(g->strbloom.cur[1], h>>(sizeof(h)*8-12));
+	bloomset(g->strbloom.new[0], h>>(sizeof(h)*8- 6));
+	bloomset(g->strbloom.new[1], h>>(sizeof(h)*8-12));
+	h = fh;
+      }
+    }
+  }
+#endif
   /* Nope, create a new string. */
   s = lj_mem_newt(L, sizeof(GCstr)+len+1, GCstr);
   newwhite(g, s);
@@ -177,6 +303,7 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
   s->len = len;
   s->hash = h;
   s->reserved = 0;
+  s->strflags = strflags;
   memcpy(strdatawr(s), str, len);
   strdatawr(s)[len] = '\0';  /* Zero-terminate string. */
   /* Add it to string hash table. */

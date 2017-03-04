@@ -409,6 +409,33 @@ static GCRef *gc_sweep(global_State *g, GCRef *p, uint32_t lim)
   return p;
 }
 
+/* Full sweep of a string chain. */
+static GCRef *gc_sweep_str_chain(global_State *g, GCRef *p)
+{
+  /* Mask with other white and LJ_GC_FIXED. Or LJ_GC_SFIXED on shutdown. */
+  int ow = otherwhite(g);
+  GCobj *o;
+  while ((o = gcref(*p)) != NULL) {
+    if (((o->gch.marked ^ LJ_GC_WHITES) & ow)) {  /* Black or current white? */
+      lua_assert(!isdead(g, o) || (o->gch.marked & LJ_GC_FIXED));
+      makewhite(g, o);  /* Value is alive, change to the current white. */
+#if LUAJIT_SMART_STRINGS
+      if (strsmart(&o->str)) {
+	/* must match lj_str_new */
+	bloomset(g->strbloom.new[0], o->str.hash >> (sizeof(o->str.hash)*8-6));
+	bloomset(g->strbloom.new[1], o->str.strflags);
+      }
+#endif
+      p = &o->gch.nextgc;
+    } else {  /* Otherwise value is dead, free it. */
+      lua_assert(isdead(g, o) || ow == LJ_GC_SFIXED);
+      setgcrefr(*p, o->gch.nextgc);
+      lj_str_free(g, &o->str);
+    }
+  }
+  return p;
+}
+
 /* Check whether we can clear a key or a value slot from a table. */
 static int gc_mayclear(cTValue *o, int val)
 {
@@ -624,12 +651,21 @@ static size_t gc_onestep(lua_State *L)
     atomic(g, L);
     g->gc.state = GCSsweepstring;  /* Start of sweep phase. */
     g->gc.sweepstr = 0;
+#if LUAJIT_SMART_STRINGS
+    g->strbloom.new[0] = 0;
+    g->strbloom.new[1] = 0;
+#endif
     return 0;
   case GCSsweepstring: {
     GCSize old = g->gc.total;
-    gc_fullsweep(g, &g->strhash[g->gc.sweepstr++]);  /* Sweep one chain. */
-    if (g->gc.sweepstr > g->strmask)
+    gc_sweep_str_chain(g, &g->strhash[g->gc.sweepstr++]);  /* Sweep one chain. */
+    if (g->gc.sweepstr > g->strmask) {
       g->gc.state = GCSsweep;  /* All string hash chains sweeped. */
+#if LUAJIT_SMART_STRINGS
+      g->strbloom.cur[0] = g->strbloom.new[0];
+      g->strbloom.cur[1] = g->strbloom.new[1];
+#endif
+    }
     lua_assert(old >= g->gc.total);
     g->gc.estimate -= old - g->gc.total;
     return GCSWEEPCOST;
