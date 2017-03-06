@@ -3915,7 +3915,7 @@ f->sizelocvars=fs->nlocvars;
 luaM_reallocvector(L,f->upvalues,f->sizeupvalues,f->nups,TString*);
 f->sizeupvalues=f->nups;
 ls->fs=fs->prev;
-if(fs)anchor_token(ls);
+anchor_token(ls);
 L->top-=2;
 }
 static Proto*luaY_parser(lua_State*L,ZIO*z,Mbuffer*buff,const char*name){
