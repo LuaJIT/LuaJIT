@@ -204,10 +204,7 @@ static void mcode_protect(jit_State *J, int prot)
 
 /* -- MCode area allocation ----------------------------------------------- */
 
-#if LJ_TARGET_X64
-#define mcode_validptr(p)	((p) && (uintptr_t)(p) < (uintptr_t)1<<47)
-#elif LJ_TARGET_ARM64 || LJ_TARGET_MIPS64
-/* We have no clue about the valid VA range. It could be 39 - 52 bits. */
+#if LJ_64
 #define mcode_validptr(p)	(p)
 #else
 #define mcode_validptr(p)	((p) && (uintptr_t)(p) < 0xffff0000)
@@ -233,7 +230,8 @@ static void *mcode_alloc(jit_State *J, size_t sz)
   /* First try a contiguous area below the last one. */
   uintptr_t hint = J->mcarea ? (uintptr_t)J->mcarea - sz : 0;
   int i;
-  for (i = 0; i < 32; i++) {  /* 32 attempts ought to be enough ... */
+  /* Limit probing iterations, depending on the available pool size. */
+  for (i = 0; i < LJ_TARGET_JUMPRANGE; i++) {
     if (mcode_validptr(hint)) {
       void *p = mcode_alloc_at(J, hint, sz, MCPROT_GEN);
 
@@ -242,11 +240,11 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 	return p;
       if (p) mcode_free(J, p, sz);  /* Free badly placed area. */
     }
-    /* Next try probing pseudo-random addresses. */
+    /* Next try probing 64K-aligned pseudo-random addresses. */
     do {
-      hint = (0x78fb ^ LJ_PRNG_BITS(J, 15)) << 16;  /* 64K aligned. */
-    } while (!(hint + sz < range));
-    hint = target + hint - (range>>1);
+      hint = LJ_PRNG_BITS(J, LJ_TARGET_JUMPRANGE-16) << 16;
+    } while (!(hint + sz < range+range));
+    hint = target + hint - range;
   }
   lj_trace_err(J, LJ_TRERR_MCODEAL);  /* Give up. OS probably ignores hints? */
   return NULL;
