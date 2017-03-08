@@ -204,7 +204,8 @@ void dasm_put(Dst_DECL, int start, ...)
       case DASM_SPACE: p++; ofs += n; break;
       case DASM_SETLABEL: b[pos-2] = -0x40000000; break;  /* Neg. label ofs. */
       case DASM_VREG: CK((n&-8) == 0 && (n != 4 || (*p&1) == 0), RANGE_VREG);
-	if (*p++ == 1 && *p == DASM_DISP) mrm = n; continue;
+	if (*p++ == 1 && *p == DASM_DISP) mrm = n;
+	continue;
       }
       mrm = 4;
     } else {
