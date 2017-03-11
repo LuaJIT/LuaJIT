@@ -353,6 +353,9 @@ static LexToken lex_scan(LexState *ls, TValue *tv)
     case '>':
       lex_next(ls);
       if (ls->c != '=') return '>'; else { lex_next(ls); return TK_ge; }
+    case '/':
+      lex_next(ls);
+      if (ls->c != '/') return '/'; else { lex_next(ls); return TK_idiv; }
     case '~':
       lex_next(ls);
       if (ls->c != '=') return '~'; else { lex_next(ls); return TK_ne; }
