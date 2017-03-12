@@ -564,6 +564,12 @@ TRef lj_opt_narrow_idiv(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
   TRef tmp;
   rb = conv_str_tonum(J, rb, vb);
   rc = conv_str_tonum(J, rc, vc);
+  if ((LJ_DUALNUM || (J->flags & JIT_F_OPT_NARROW)) &&
+      tref_isinteger(rb) && tref_isinteger(rc) &&
+      (tvisint(vc) ? intV(vc) != 0 : !tviszero(vc))) {
+    emitir(IRTGI(IR_NE), rc, lj_ir_kint(J, 0));
+    return emitir(IRTI(IR_IDIV), rb, rc);
+  }
   /* b // c ==> floor(b/c) */
   rb = lj_ir_tonum(J, rb);
   rc = lj_ir_tonum(J, rc);
