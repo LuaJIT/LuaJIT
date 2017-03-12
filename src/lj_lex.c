@@ -349,10 +349,12 @@ static LexToken lex_scan(LexState *ls, TValue *tv)
       if (ls->c != '=') return '='; else { lex_next(ls); return TK_eq; }
     case '<':
       lex_next(ls);
-      if (ls->c != '=') return '<'; else { lex_next(ls); return TK_le; }
+      if (ls->c == '=') { lex_next(ls); return TK_le; } else
+      if (ls->c == '<') { lex_next(ls); return TK_shl; } else return '<';
     case '>':
       lex_next(ls);
-      if (ls->c != '=') return '>'; else { lex_next(ls); return TK_ge; }
+      if (ls->c == '=') { lex_next(ls); return TK_ge; } else
+      if (ls->c == '>') { lex_next(ls); return TK_shr; } else return '>';
     case '/':
       lex_next(ls);
       if (ls->c != '/') return '/'; else { lex_next(ls); return TK_idiv; }
