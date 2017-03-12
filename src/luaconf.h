@@ -141,7 +141,7 @@
 #include <assert.h>
 #endif
 #ifdef LUA_USE_ASSERT
-#define lua_assert(x)		assert(x)
+#define lua_assert		assert
 #endif
 #ifdef LUA_USE_APICHECK
 #define luai_apicheck(L, o)	{ (void)L; assert(o); }

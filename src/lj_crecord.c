@@ -42,6 +42,22 @@
 #define emitconv(a, dt, st, flags) \
   emitir(IRT(IR_CONV, (dt)), (a), (st)|((dt) << 5)|(flags))
 
+/* Get the underlying type of a C bitfield */
+static CTypeID ctype_underlying_type(CTypeID info) {
+  CTypeID id;
+  lua_assert(ctype_isbitfield(info));
+  switch (ctype_bitcsz(info)) {
+  case 1: id = CTID_INT8; break;
+  case 2: id = CTID_INT16; break;
+  case 4: id = CTID_INT32; break;
+  default:
+    /* VM doesn't support bitfields of size > 8 bytes */
+    lua_assert(0); return 0;
+  }
+  /* Each unsigned id is the signed id plus 1 */
+  return ((info & CTF_UNSIGNED) != 0) + id;
+}
+
 /* -- C type checks ------------------------------------------------------- */
 
 static GCcdata *argv2cdata(jit_State *J, TRef tr, cTValue *o)
@@ -542,6 +558,22 @@ static TRef crec_ct_ct(jit_State *J, CType *d, CType *s, TRef dp, TRef sp,
   return 0;
 }
 
+/* Load a C type from a bitfield ------------------------------------------ */
+static TRef crec_bitfield_load(jit_State *J, CTypeID sid, TRef tr) {
+  uint32_t pos = ctype_bitpos(sid);
+  uint32_t bsz = ctype_bitbsz(sid);
+  lua_assert(ctype_isbitfield(sid));
+  lua_assert(bsz > 0 && "Zero sized bitfield is invalid");
+  if (!(sid & CTF_BOOL)) {
+    CTSize shift = 32 - bsz;
+    tr = emitir(IRT(IR_BSHL, IRT_INT), tr, lj_ir_kint(J, shift - pos));
+    return emitir(IRT(IR_BSHR, IRT_INT), tr, lj_ir_kint(J, shift));
+    /* if crosses container boundary: interpreter will throw */
+  } else {
+    lj_trace_err(J, LJ_TRERR_NYICONV);
+  }
+}
+
 /* -- Convert C type to TValue (load) ------------------------------------- */
 
 static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
@@ -554,12 +586,18 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
     if (t == IRT_CDATA)
       goto err_nyi;  /* NYI: copyval of >64 bit integers. */
     tr = emitir(IRT(IR_XLOAD, t), sp, 0);
+    if (ctype_isbitfield(sid)) {
+      tr = crec_bitfield_load(J, sid, tr);
+      if (sid & CTF_BOOL)
+	goto boolfield;
+    }
     if (t == IRT_FLOAT || t == IRT_U32) {  /* Keep uint32_t/float as numbers. */
       return emitconv(tr, IRT_NUM, t, 0);
     } else if (t == IRT_I64 || t == IRT_U64) {  /* Box 64 bit integer. */
       sp = tr;
       lj_needsplit(J);
     } else if ((sinfo & CTF_BOOL)) {
+boolfield:
       /* Assume not equal to zero. Fixup and emit pending guard later. */
       lj_ir_set(J, IRTGI(IR_NE), tr, lj_ir_kint(J, 0));
       J->postproc = LJ_POST_FIXGUARD;
@@ -585,6 +623,7 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
     emitir(IRT(IR_XSTORE, t), ptr, tr2);
     return dp;
   } else {
+    lua_assert(!ctype_isbitfield(sinfo));
     /* NYI: copyval of vectors. */
   err_nyi:
     lj_trace_err(J, LJ_TRERR_NYICONV);
@@ -759,7 +798,8 @@ void LJ_FASTCALL recff_cdata_index(jit_State *J, RecordFFData *rd)
   CTState *cts = ctype_ctsG(J2G(J));
   CType *ct = ctype_raw(cts, cd->ctypeid);
   CTypeID sid = 0;
-
+  int isbitfield = 0;
+  CTypeID bitfield_val = 0;
   /* Resolve pointer or reference for cdata object. */
   if (ctype_isptr(ct->info)) {
     IRType t = (LJ_64 && ct->size == 8) ? IRT_P64 : IRT_P32;
@@ -836,7 +876,11 @@ again:
 	  J->base[0] = lj_ir_kint(J, (int32_t)fct->size);
 	  return;  /* Interpreter will throw for newindex. */
 	} else if (ctype_isbitfield(fct->info)) {
-	  lj_trace_err(J, LJ_TRERR_NYICONV);
+	  if (rd->data != 0)
+	    lj_trace_err(J, LJ_TRERR_NYICONV);
+	  isbitfield = 1;
+	  bitfield_val = fct->info;
+	  sid = ctype_underlying_type(bitfield_val);
 	} else {
 	  lua_assert(ctype_isfield(fct->info));
 	  sid = ctype_cid(fct->info);
@@ -882,7 +926,7 @@ again:
     ct = ctype_child(cts, ct);  /* Skip attributes. */
 
   if (rd->data == 0) {  /* __index metamethod. */
-    J->base[0] = crec_tv_ct(J, ct, sid, ptr);
+    J->base[0] = crec_tv_ct(J, ct, isbitfield ? bitfield_val : sid, ptr);
   } else {  /* __newindex metamethod. */
     rd->nres = 0;
     J->needsnap = 1;
