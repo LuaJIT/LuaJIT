@@ -103,18 +103,21 @@
   _(SUBVN,	dst,	var,	num,	sub) \
   _(MULVN,	dst,	var,	num,	mul) \
   _(DIVVN,	dst,	var,	num,	div) \
+  _(IDIVVN,	dst,	var,	num,	idiv) \
   _(MODVN,	dst,	var,	num,	mod) \
   \
   _(ADDNV,	dst,	var,	num,	add) \
   _(SUBNV,	dst,	var,	num,	sub) \
   _(MULNV,	dst,	var,	num,	mul) \
   _(DIVNV,	dst,	var,	num,	div) \
+  _(IDIVNV,	dst,	var,	num,	idiv) \
   _(MODNV,	dst,	var,	num,	mod) \
   \
   _(ADDVV,	dst,	var,	var,	add) \
   _(SUBVV,	dst,	var,	var,	sub) \
   _(MULVV,	dst,	var,	var,	mul) \
   _(DIVVV,	dst,	var,	var,	div) \
+  _(IDIVVV,	dst,	var,	var,	idiv) \
   _(MODVV,	dst,	var,	var,	mod) \
   \
   _(POW,	dst,	var,	var,	pow) \

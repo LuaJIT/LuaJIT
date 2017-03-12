@@ -3022,6 +3022,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  vm_round vm_ceil,  1, JIT
   |  vm_round vm_trunc, 2, JIT
   |
+  |// FP idiv x//y. Called by BC_IDIV* and vm_arith.
+  |->vm_idiv:
+  |// Args in xmm0/xmm1, return value in xmm0.
+  |  divsd xmm0, xmm1
+  |  call ->vm_floor
+  |  ret
+  |
   |// FP modulo x%y. Called by BC_MOD* and vm_arith.
   |->vm_mod:
   |// Args in xmm0/xmm1, return value in xmm0.
@@ -3869,6 +3876,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_DIVVN: case BC_DIVNV: case BC_DIVVV:
     |  ins_arith divsd
+    break;
+  case BC_IDIVVN:
+    |  ins_arithpre movsd, xmm1
+    |->BC_IDIVVN_Z:
+    |  call ->vm_idiv
+    |  ins_arithpost
+    |  ins_next
+    break;
+  case BC_IDIVNV: case BC_IDIVVV:
+    |  ins_arithpre movsd, xmm1
+    |  jmp ->BC_IDIVVN_Z			// Avoid 3 copies. It's slow anyway.
     break;
   case BC_MODVN:
     |  ins_arithpre movsd, xmm1
