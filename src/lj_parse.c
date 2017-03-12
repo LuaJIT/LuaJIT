@@ -2031,6 +2031,7 @@ static BinOpr token2binop(LexToken tok)
   case '-':	return OPR_SUB;
   case '*':	return OPR_MUL;
   case '/':	return OPR_DIV;
+  case TK_idiv:	return OPR_IDIV;
   case '%':	return OPR_MOD;
   case '^':	return OPR_POW;
   case TK_concat: return OPR_CONCAT;
@@ -2051,7 +2052,8 @@ static const struct {
   uint8_t left;		/* Left priority. */
   uint8_t right;	/* Right priority. */
 } priority[] = {
-  {6,6}, {6,6}, {7,7}, {7,7}, {7,7},	/* ADD SUB MUL DIV MOD */
+  {6,6}, {6,6},				/* ADD SUB */
+  {7,7}, {7,7}, {7,7}, {7,7},		/* MUL DIV IDIV MOD */
   {10,9}, {5,4},			/* POW CONCAT (right associative) */
   {3,3}, {3,3},				/* EQ NE */
   {3,3}, {3,3}, {3,3}, {3,3},		/* LT GE GT LE */
