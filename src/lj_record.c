@@ -2204,12 +2204,14 @@ void lj_record_ins(jit_State *J)
     }
     break;
 
-  case BC_ADDNV: case BC_SUBNV: case BC_MULNV: case BC_DIVNV: case BC_MODNV:
+  case BC_ADDNV: case BC_SUBNV: case BC_MULNV: case BC_DIVNV: case BC_IDIVNV: case BC_MODNV:
     /* Swap rb/rc and rbv/rcv. rav is temp. */
     ix.tab = rc; ix.key = rc = rb; rb = ix.tab;
     copyTV(J->L, rav, rbv);
     copyTV(J->L, rbv, rcv);
     copyTV(J->L, rcv, rav);
+    if (op == BC_IDIVNV)
+      goto recidiv;
     if (op == BC_MODNV)
       goto recmod;
     /* fallthrough */
@@ -2223,6 +2225,14 @@ void lj_record_ins(jit_State *J)
       rc = rec_mm_arith(J, &ix, mm);
     break;
     }
+
+  case BC_IDIVVN: case BC_IDIVVV:
+  recidiv:
+    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+      rc = lj_opt_narrow_idiv(J, rb, rc, rbv, rcv);
+    else
+      rc = rec_mm_arith(J, &ix, MM_idiv);
+    break;
 
   case BC_MODVN: case BC_MODVV:
   recmod:

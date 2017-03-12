@@ -558,6 +558,19 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
   return emitir(IRTN(IR_NEG), rc, lj_ir_ksimd(J, LJ_KSIMD_NEG));
 }
 
+/* Narrowing of idiv operator. */
+TRef lj_opt_narrow_idiv(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
+{
+  TRef tmp;
+  rb = conv_str_tonum(J, rb, vb);
+  rc = conv_str_tonum(J, rc, vc);
+  /* b // c ==> floor(b/c) */
+  rb = lj_ir_tonum(J, rb);
+  rc = lj_ir_tonum(J, rc);
+  tmp = emitir(IRTN(IR_DIV), rb, rc);
+  return emitir(IRTN(IR_FPMATH), tmp, IRFPM_FLOOR);
+}
+
 /* Narrowing of modulo operator. */
 TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
 {
