@@ -142,7 +142,10 @@ LJ_FUNC TRef LJ_FASTCALL lj_opt_narrow_cindex(jit_State *J, TRef key);
 #endif
 LJ_FUNC TRef lj_opt_narrow_arith(jit_State *J, TRef rb, TRef rc,
 				 TValue *vb, TValue *vc, IROp op);
+LJ_FUNC TRef lj_opt_narrow_bitwise(jit_State *J, TRef rb, TRef rc,
+				   TValue *vb, TValue *vc, IROp op);
 LJ_FUNC TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc);
+LJ_FUNC TRef lj_opt_narrow_bnot(jit_State *J, TRef rc, TValue *vc);
 LJ_FUNC TRef lj_opt_narrow_idiv(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc);
 LJ_FUNC TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc);
 LJ_FUNC TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc);

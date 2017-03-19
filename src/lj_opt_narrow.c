@@ -546,6 +546,17 @@ TRef lj_opt_narrow_arith(jit_State *J, TRef rb, TRef rc,
   return emitir(IRTN(op), rb, rc);
 }
 
+/* Narrowing of bitwise operations. */
+TRef lj_opt_narrow_bitwise(jit_State *J, TRef rb, TRef rc,
+			 TValue *vb, TValue *vc, IROp op)
+{
+  rb = conv_str_tonum(J, rb, vb);
+  rc = conv_str_tonum(J, rc, vc);
+  if (!tref_isnum(rb)) rb = emitir(IRTN(IR_CONV), rb, IRCONV_NUM_INT);
+  if (!tref_isnum(rc)) rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
+  return emitir(IRTN(op), rb, rc);
+}
+
 /* Narrowing of unary minus operator. */
 TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
 {
@@ -556,6 +567,13 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
     rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
   }
   return emitir(IRTN(IR_NEG), rc, lj_ir_ksimd(J, LJ_KSIMD_NEG));
+}
+
+/* Narrowing of unary bnot operator. */
+TRef lj_opt_narrow_bnot(jit_State *J, TRef rc, TValue *vc)
+{
+  rc = conv_str_tonum(J, rc, vc);
+  return emitir(IRTN(IR_BNOT), rc, 0);
 }
 
 /* Narrowing of idiv operator. */

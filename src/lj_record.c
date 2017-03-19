@@ -2249,6 +2249,36 @@ void lj_record_ins(jit_State *J)
       rc = rec_mm_arith(J, &ix, MM_pow);
     break;
 
+  /* -- Bitwise ops ---------------------------------------------------- */
+
+  case BC_BNOT:
+    if (tref_isnumber_str(rc)) {
+      rc = lj_opt_narrow_bnot(J, rc, rcv);
+    } else {
+      ix.tab = rc;
+      copyTV(J->L, &ix.tabv, rcv);
+      rc = rec_mm_arith(J, &ix, MM_bnot);
+    }
+    break;
+
+  case BC_BANDNV: case BC_BORNV: case BC_BXORNV: case BC_SHLNV: case BC_SHRNV:
+    /* Swap rb/rc and rbv/rcv. rav is temp. */
+    ix.tab = rc; ix.key = rc = rb; rb = ix.tab;
+    copyTV(J->L, rav, rbv);
+    copyTV(J->L, rbv, rcv);
+    copyTV(J->L, rcv, rav);
+    /* fallthrough */
+  case BC_BANDVN: case BC_BORVN: case BC_BXORVN: case BC_SHLVN: case BC_SHRVN:
+  case BC_BANDVV: case BC_BORVV: case BC_BXORVV: case BC_SHLVV: case BC_SHRVV: {
+    MMS mm = bcmode_mm(op);
+    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+      rc = lj_opt_narrow_bitwise(J, rb, rc, rbv, rcv,
+			         (int)mm - (int)MM_band + (int)IR_BAND);
+    else
+      rc = rec_mm_arith(J, &ix, mm);
+    break;
+    }
+
   /* -- Miscellaneous ops ------------------------------------------------- */
 
   case BC_CAT:
