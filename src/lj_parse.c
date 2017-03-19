@@ -2037,6 +2037,11 @@ static BinOpr token2binop(LexToken tok)
   case TK_idiv:	return OPR_IDIV;
   case '%':	return OPR_MOD;
   case '^':	return OPR_POW;
+  case '&':	return OPR_BAND;
+  case '|':	return OPR_BOR;
+  case '~':	return OPR_BXOR;
+  case TK_shl:	return OPR_SHL;
+  case TK_shr:	return OPR_SHR;
   case TK_concat: return OPR_CONCAT;
   case TK_ne:	return OPR_NE;
   case TK_eq:	return OPR_EQ;
@@ -2055,15 +2060,17 @@ static const struct {
   uint8_t left;		/* Left priority. */
   uint8_t right;	/* Right priority. */
 } priority[] = {
-  {6,6}, {6,6},				/* ADD SUB */
-  {7,7}, {7,7}, {7,7}, {7,7},		/* MUL DIV IDIV MOD */
-  {10,9}, {5,4},			/* POW CONCAT (right associative) */
+  {10, 10}, {10, 10},			/* ADD SUB */
+  {11, 11}, {11, 11}, {11, 11}, {11, 11},/* MUL DIV IDIV MOD */
+  {6,6}, {4,4}, {5,5},			/* BAND BOR BXOR */
+  {7,7}, {7,7},				/* SHL SHR */
+  {14, 13}, {9, 8},			/* POW CONCAT (right associative) */
   {3,3}, {3,3},				/* EQ NE */
   {3,3}, {3,3}, {3,3}, {3,3},		/* LT GE GT LE */
   {2,2}, {1,1}				/* AND OR */
 };
 
-#define UNARY_PRIORITY		8  /* Priority for unary operators. */
+#define UNARY_PRIORITY		12  /* Priority for unary operators. */
 
 /* Forward declaration. */
 static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit);
