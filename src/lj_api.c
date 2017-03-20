@@ -1032,7 +1032,7 @@ static TValue *api_call_base(lua_State *L, int nargs)
 
 LUA_API void lua_call(lua_State *L, int nargs, int nresults)
 {
-  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
+  api_check(L, L->status == LUA_OK || L->status == LUA_ERRERR);
   api_checknelems(L, nargs+1);
   lj_vm_call(L, api_call_base(L, nargs), nresults+1);
 }
@@ -1043,7 +1043,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
   uint8_t oldh = hook_save(g);
   ptrdiff_t ef;
   int status;
-  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
+  api_check(L, L->status == LUA_OK || L->status == LUA_ERRERR);
   api_checknelems(L, nargs+1);
   if (errfunc == 0) {
     ef = 0;
@@ -1075,7 +1075,7 @@ LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   int status;
-  api_check(L, L->status == 0 || L->status == LUA_ERRERR);
+  api_check(L, L->status == LUA_OK || L->status == LUA_ERRERR);
   status = lj_vm_cpcall(L, func, ud, cpcall);
   if (status) hook_restore(g, oldh);
   return status;
@@ -1140,7 +1140,7 @@ LUA_API int lua_resume(lua_State *L, int nargs)
 {
   if (L->cframe == NULL && L->status <= LUA_YIELD)
     return lj_vm_resume(L,
-      L->status == 0 ? api_call_base(L, nargs) : L->top - nargs,
+      L->status == LUA_OK ? api_call_base(L, nargs) : L->top - nargs,
       0, 0);
   L->top = L->base;
   setstrV(L, L->top, lj_err_str(L, LJ_ERR_COSUSP));
