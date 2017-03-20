@@ -286,7 +286,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	}
 	rm = ra_alloc1(as, lref, allow);
 	rn = ra_alloc1(as, rref, rset_exclude(allow, rm));
-	emit_dnm(as, (ai^A64I_LS_R), rd, rn, rm);
+	emit_dnm(as, (ai^A64I_LS_R), (rd & 31), rn, rm);
 	return;
       }
     } else if (ir->o == IR_STRREF) {
