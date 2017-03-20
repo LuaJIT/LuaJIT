@@ -112,6 +112,11 @@ LUA_API void lua_xmove(lua_State *from, lua_State *to, int n)
   from->top = f;
 }
 
+LUA_API const lua_Number *lua_version (lua_State *L) {
+  static const lua_Number version = LUA_VERSION_NUM;
+  return &version;
+}
+
 /* -- Stack manipulation -------------------------------------------------- */
 
 LUA_API int lua_gettop(lua_State *L)
