@@ -377,7 +377,7 @@
 #endif
 #elif LJ_TARGET_ARM64
 #if __clang__
-#if (__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)
+#if ((__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)) && !defined(__NX_TOOLCHAIN_MAJOR__)
 #error "Need at least Clang 3.5 or newer"
 #endif
 #else
