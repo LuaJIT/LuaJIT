@@ -71,7 +71,11 @@ typedef unsigned int uintptr_t;
 #define LJ_MAX_IDXCHAIN	100		/* __index/__newindex chain limit. */
 #define LJ_STACK_EXTRA	(5+2*LJ_FR2)	/* Extra stack space (metamethods). */
 
+#if defined(__powerpc64__) && _CALL_ELF != 2
+#define LJ_NUM_CBPAGE	4		/* Number of FFI callback pages. */
+#else
 #define LJ_NUM_CBPAGE	1		/* Number of FFI callback pages. */
+#endif
 
 /* Minimum table/buffer sizes. */
 #define LJ_MIN_GLOBAL	6		/* Min. global table size (hbits). */
