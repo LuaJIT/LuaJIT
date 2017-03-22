@@ -66,7 +66,7 @@ int64_t lj_vm_foldbitwise(int64_t x, int64_t y, int op)
   case IR_BXOR - IR_BAND: return x^y; break;
   case IR_BSHL - IR_BAND: return x<<y; break;
   case IR_BSHR - IR_BAND: return x>>y; break;
-  default: return x;
+  default: return ~x; /* IR_BNOT */
   }
 }
 

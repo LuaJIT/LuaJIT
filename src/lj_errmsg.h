@@ -33,6 +33,7 @@ ERRDEF(SETLOOP,	"loop in settable")
 ERRDEF(OPCALL,	"call")
 ERRDEF(OPINDEX,	"index")
 ERRDEF(OPARITH,	"perform arithmetic on")
+ERRDEF(OPBIT,	"perform bitwise operation on")
 ERRDEF(OPCAT,	"concatenate")
 ERRDEF(OPLEN,	"get length of")
 
