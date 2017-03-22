@@ -997,7 +997,7 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
       lua_assert(e->k == VNONRELOC);
     }
   } else {
-    lua_assert(op == BC_UNM || op == BC_LEN);
+    lua_assert(op == BC_UNM || op == BC_LEN || op == BC_BNOT);
     if (op == BC_UNM && !expr_hasjump(e)) {  /* Constant-fold negations. */
 #if LJ_HASFFI
       if (e->k == VKCDATA) {  /* Fold in-place since cdata is not interned. */
@@ -1023,6 +1023,24 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
 	  o->u64 ^= U64x(80000000,00000000);
 	  return;
 	}
+      }
+    }
+    if (op == BC_BNOT && !expr_hasjump(e)) {  /* Constant-fold. */
+#if LJ_HASFFI
+      if (e->k == VKCDATA) {  /* Fold in-place since cdata is not interned. */
+	GCcdata *cd = cdataV(&e->u.nval);
+	int64_t *p = (int64_t *)cdataptr(cd);
+	if (cd->ctypeid == CTID_INT64 || cd->ctypeid == CTID_UINT64) {
+	  *p = ~*p;
+	  return;
+	}
+      } else
+#endif
+      if (expr_isnumk(e)) {
+	TValue *o = expr_numtv(e);
+	int32_t k = numV(o);
+	setintV(o, ~k);
+	return;
       }
     }
     expr_toanyreg(fs, e);
@@ -2134,6 +2152,8 @@ static void expr_unop(LexState *ls, ExpDesc *v)
     op = BC_UNM;
   } else if (ls->tok == '#') {
     op = BC_LEN;
+  } else if (ls->tok == '~') {
+    op = BC_BNOT;
   } else {
     expr_simple(ls, v);
     return;
