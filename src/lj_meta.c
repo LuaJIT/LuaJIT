@@ -234,17 +234,26 @@ TValue *lj_meta_arith(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
   }
 }
 
-static cTValue *str2int(cTValue *o, TValue *n)
+static cTValue *str2int(lua_State *L, cTValue *o, TValue *n)
 {
   if (tvisint(o))
     return o;
-  else if (tvisnum(o))
-    return (setintV(n, (int32_t)numV(o)), n);
-  else if (tvisstr(o) && lj_strscan_num(strV(o), n))
+  else if (tvisnum(o)) {
+    int32_t k = (int32_t)numV(o);
+    if ((lua_Number)k != numV(o))
+      lj_err_msg(L, LJ_ERR_NOINT);
+    setintV(n, k);
+    return n;
+  } else if (tvisstr(o) && lj_strscan_num(strV(o), n))
     if (tvisint(n))
       return n;
-    else
-      return (setintV(n, (int32_t)numV(n)), n);
+    else {
+      int32_t k = (int32_t)numV(n);
+      if ((lua_Number)k != numV(n))
+	lj_err_msg(L, LJ_ERR_NOINT);
+      setintV(n, k);
+      return n;
+    }
   else
     return NULL;
 }
@@ -256,8 +265,8 @@ TValue *lj_meta_bitwise(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
   MMS mm = bcmode_mm(op);
   TValue tempb, tempc;
   cTValue *b, *c;
-  if ((b = str2int(rb, &tempb)) != NULL &&
-      (c = str2int(rc, &tempc)) != NULL) {  /* Try coercion first. */
+  if ((b = str2int(L, rb, &tempb)) != NULL &&
+      (c = str2int(L, rc, &tempc)) != NULL) {  /* Try coercion first. */
     setintV(ra, lj_vm_foldbitwise(numV(b), numV(c), (int)mm-MM_band));
     return NULL;
   } else {
@@ -265,7 +274,7 @@ TValue *lj_meta_bitwise(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc,
     if (tvisnil(mo)) {
       mo = lj_meta_lookup(L, rc, mm);
       if (tvisnil(mo)) {
-	if (str2int(rb, &tempb) == NULL) rc = rb;
+	if (str2num(rb, &tempb) == NULL) rc = rb;
 	lj_err_optype(L, rc, LJ_ERR_OPBIT);
 	return NULL;  /* unreachable */
       }

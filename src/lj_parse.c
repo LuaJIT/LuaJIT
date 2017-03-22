@@ -802,6 +802,8 @@ static int foldbitwise(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   if (expr_isnumk(e1)) {
     TValue *o1 = expr_numtv(e1);
     v1 = numV(o1);
+    if ((lua_Number)v1 != numV(o1))
+      lj_err_msg(fs->L, LJ_ERR_NOINT);
   }
   else return 0;
 #if LJ_HASFFI
@@ -815,6 +817,8 @@ static int foldbitwise(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   if (expr_isnumk(e2)) {
     TValue *o2 = expr_numtv(e2);
     v2 = numV(o2);
+    if ((lua_Number)v2 != numV(o2))
+      lj_err_msg(fs->L, LJ_ERR_NOINT);
   }
   else return 0;
 
@@ -1039,6 +1043,8 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
       if (expr_isnumk(e)) {
 	TValue *o = expr_numtv(e);
 	int32_t k = numV(o);
+	if ((lua_Number)k != numV(o))
+	  lj_err_msg(fs->L, LJ_ERR_NOINT);
 	setintV(o, ~k);
 	return;
       }
