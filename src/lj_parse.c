@@ -786,11 +786,60 @@ static int foldarith(BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   return 1;
 }
 
+/* Try constant-folding of bitwise operators. */
+static int foldbitwise(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
+{
+  int64_t v1, v2, n;
+  if (expr_hasjump(e1) || expr_hasjump(e2)) return 0;
+#if LJ_HASFFI
+  if (e1->k == VKCDATA) {
+    GCcdata *cd1 = cdataV(&e1->u.nval);
+    if (cd1->ctypeid != CTID_INT64 && cd1->ctypeid != CTID_UINT64)
+      return 0;
+    v1 = *(int64_t *)cdataptr(cd1);
+  } else
+#endif
+  if (expr_isnumk(e1)) {
+    TValue *o1 = expr_numtv(e1);
+    v1 = numV(o1);
+  }
+  else return 0;
+#if LJ_HASFFI
+  if (e2->k == VKCDATA) {
+    GCcdata *cd2 = cdataV(&e2->u.nval);
+    if (cd2->ctypeid != CTID_INT64 && cd2->ctypeid != CTID_UINT64)
+      return 0;
+    v2 = *(int64_t *)cdataptr(cd2);
+  } else
+#endif
+  if (expr_isnumk(e2)) {
+    TValue *o2 = expr_numtv(e2);
+    v2 = numV(o2);
+  }
+  else return 0;
+
+  n = lj_vm_foldbitwise(v1, v2, (int)opr-OPR_BAND);
+#if LJ_HASFFI
+  if (e1->k == VKCDATA) {
+    GCcdata *cd1 = cdataV(&e1->u.nval);
+    *(int64_t *)cdataptr(cd1) = n;
+  } else if (e2->k == VKCDATA) {
+    GCcdata *cd2 = cdataV(&e1->u.nval);
+    *(int64_t *)cdataptr(cd2) = n;
+    memcpy(e1, e2, sizeof(ExpDesc));
+  } else
+#endif
+  setintV(&e1->u.nval, n);
+  return 1;
+}
+
 /* Emit arithmetic operator. */
 static void bcemit_arith(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
 {
   BCReg rb, rc, t;
   uint32_t op;
+  if (opr >= OPR_BAND && opr <= OPR_SHR && foldbitwise(fs, opr, e1, e2))
+    return;
   if (foldarith(opr, e1, e2))
     return;
   if (opr == OPR_POW) {
