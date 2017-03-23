@@ -511,7 +511,11 @@ static int lj_cf_package_module(lua_State *L)
   lua_pushvalue(L, -1);
   setfenv(L);
   dooptions(L, loaded - 1);
+#if LJ_52
+  return 1;
+#else
   return 0;
+#endif
 }
 
 static int lj_cf_package_seeall(lua_State *L)
