@@ -231,6 +231,12 @@ LUA_API int lua_iscfunction(lua_State *L, int idx)
   return tvisfunc(o) && !isluafunc(funcV(o));
 }
 
+LUA_API int lua_isinteger (lua_State *L, int idx) {
+  cTValue *o = index2adr(L, idx);
+  return tvisint(o) ||
+        (tvisnumber(o) && ((lua_Number)(lua_Integer)numV(o) == numV(o)));
+}
+
 LUA_API int lua_isnumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);

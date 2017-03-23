@@ -94,6 +94,21 @@ LJLIB_ASM(math_min)		LJLIB_REC(math_minmax IR_MIN)
 }
 LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
 
+LJLIB_CF(math_type)
+{
+  if (lua_type(L, 1) == LUA_TNUMBER) {
+      if (lua_isinteger(L, 1))
+        lua_pushliteral(L, "integer");
+      else
+        lua_pushliteral(L, "float");
+  }
+  else {
+    luaL_checkany(L, 1);
+    lua_pushnil(L);
+  }
+  return 1;
+}
+
 LJLIB_PUSH(3.14159265358979323846) LJLIB_SET(pi)
 LJLIB_PUSH(1e310) LJLIB_SET(huge)
 

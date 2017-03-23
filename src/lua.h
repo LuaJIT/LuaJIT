@@ -347,6 +347,8 @@ LUA_API void *lua_upvalueid (lua_State *L, int idx, int n);
 LUA_API void lua_upvaluejoin (lua_State *L, int idx1, int n1, int idx2, int n2);
 LUA_API int lua_loadx (lua_State *L, lua_Reader reader, void *dt,
 		       const char *chunkname, const char *mode);
+/* From Lua 5.3. */
+LUA_API int lua_isinteger (lua_State *L, int idx);
 
 
 struct lua_Debug {
