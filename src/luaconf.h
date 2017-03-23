@@ -79,7 +79,7 @@
 #define LUA_IGMARK	"-"
 #define LUA_PATH_CONFIG \
   LUA_DIRSEP "\n" LUA_PATHSEP "\n" LUA_PATH_MARK "\n" \
-  LUA_EXECDIR "\n" LUA_IGMARK
+  LUA_EXECDIR "\n" LUA_IGMARK "\n"
 
 /* Quoting in error messages. */
 #define LUA_QL(x)	"'" x "'"
