@@ -157,28 +157,37 @@ LUA_API void lua_insert(lua_State *L, int idx)
   copyTV(L, p, L->top);
 }
 
-LUA_API void lua_replace(lua_State *L, int idx)
-{
-  api_checknelems(L, 1);
+static void moveto (lua_State *L, TValue *fr, int idx) {
   if (idx == LUA_GLOBALSINDEX) {
-    api_check(L, tvistab(L->top-1));
+    api_check(L, tvistab(fr));
     /* NOBARRIER: A thread (i.e. L) is never black. */
-    setgcref(L->env, obj2gco(tabV(L->top-1)));
+    setgcref(L->env, obj2gco(tabV(fr)));
   } else if (idx == LUA_ENVIRONINDEX) {
     GCfunc *fn = curr_func(L);
     if (fn->c.gct != ~LJ_TFUNC)
       lj_err_msg(L, LJ_ERR_NOENV);
-    api_check(L, tvistab(L->top-1));
-    setgcref(fn->c.env, obj2gco(tabV(L->top-1)));
-    lj_gc_barrier(L, fn, L->top-1);
+    api_check(L, tvistab(fr));
+    setgcref(fn->c.env, obj2gco(tabV(fr)));
+    lj_gc_barrier(L, fn, fr);
   } else {
     TValue *o = index2adr(L, idx);
     api_checkvalidindex(L, o);
-    copyTV(L, o, L->top-1);
+    copyTV(L, o, fr);
     if (idx < LUA_GLOBALSINDEX)  /* Need a barrier for upvalues. */
-      lj_gc_barrier(L, curr_func(L), L->top-1);
+      lj_gc_barrier(L, curr_func(L), fr);
   }
+}
+
+LUA_API void lua_replace (lua_State *L, int idx) {
+  api_checknelems(L, 1);
+  moveto(L, L->top - 1, idx);
   L->top--;
+}
+
+LUA_API void lua_copy (lua_State *L, int fromidx, int toidx) {
+  TValue *fr;
+  fr = index2adr(L, fromidx);
+  moveto(L, fr, toidx);
 }
 
 LUA_API void lua_pushvalue(lua_State *L, int idx)
