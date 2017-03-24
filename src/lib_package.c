@@ -193,8 +193,7 @@ static void **ll_register(lua_State *L, const char *path)
     lua_pop(L, 1);
     plib = (void **)lua_newuserdata(L, sizeof(void *));
     *plib = NULL;
-    luaL_getmetatable(L, "_LOADLIB");
-    lua_setmetatable(L, -2);
+    luaL_setmetatable(L, "_LOADLIB");
     lua_pushfstring(L, "LOADLIB: %s", path);
     lua_pushvalue(L, -2);
     lua_settable(L, LUA_REGISTRYINDEX);
