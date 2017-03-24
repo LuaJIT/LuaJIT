@@ -175,6 +175,12 @@ LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
   return lua_tostring(L, -1);
 }
 
+LUALIB_API void luaL_setmetatable(lua_State *L, const char *tname)
+{
+  luaL_getmetatable(L, tname);
+  lua_setmetatable(L, -2);
+}
+
 /* -- Buffer handling ----------------------------------------------------- */
 
 #define bufflen(B)	((size_t)((B)->p - (B)->buffer))
