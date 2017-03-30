@@ -872,7 +872,7 @@ LUA_API void lua_upvaluejoin(lua_State *L, int idx1, int n1, int idx2, int n2)
   lj_gc_objbarrier(L, fn1, gcref(fn1->l.uvptr[n1]));
 }
 
-LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
+LUALIB_API void *luaL_testudata(lua_State *L, int idx, const char *tname)
 {
   cTValue *o = index2adr(L, idx);
   if (tvisudata(o)) {
@@ -881,8 +881,14 @@ LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
     if (tv && tvistab(tv) && tabV(tv) == tabref(ud->metatable))
       return uddata(ud);
   }
-  lj_err_argtype(L, idx, tname);
-  return NULL;  /* unreachable */
+  return NULL;  /* value is not a userdata with a metatable */
+}
+
+LUALIB_API void *luaL_checkudata(lua_State *L, int idx, const char *tname)
+{
+  void *p = luaL_testudata(L, idx, tname);
+  if (p == NULL) lj_err_argtype(L, idx, tname);
+  return p;
 }
 
 /* -- Object setters ------------------------------------------------------ */
