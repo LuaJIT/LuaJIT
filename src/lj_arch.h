@@ -215,9 +215,14 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM64
 
-#define LJ_ARCH_NAME		"arm64"
 #define LJ_ARCH_BITS		64
+#if defined(__AARCH64EB__)
+#define LJ_ARCH_NAME		"arm64be"
+#define LJ_ARCH_ENDIAN		LUAJIT_BE
+#else
+#define LJ_ARCH_NAME		"arm64"
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
+#endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
@@ -409,9 +414,6 @@
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
 #elif LJ_TARGET_ARM64
-#if defined(__AARCH64EB__)
-#error "No support for big-endian ARM64"
-#endif
 #if defined(_ILP32)
 #error "No support for ILP32 model on ARM64"
 #endif
