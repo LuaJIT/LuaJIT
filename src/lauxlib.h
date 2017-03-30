@@ -85,6 +85,9 @@ LUALIB_API int (luaL_loadbufferx) (lua_State *L, const char *buff, size_t sz,
 				   const char *name, const char *mode);
 LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,
 				int level);
+LUALIB_API void (luaL_setfuncs) (lua_State *L, const luaL_Reg *l, int nup);
+LUALIB_API void (luaL_pushmodule) (lua_State *L, const char *modname,
+				   int sizehint);
 
 
 /*
@@ -113,6 +116,11 @@ LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,
 #define luaL_getmetatable(L,n)	(lua_getfield(L, LUA_REGISTRYINDEX, (n)))
 
 #define luaL_opt(L,f,n,d)	(lua_isnoneornil(L,(n)) ? (d) : f(L,(n)))
+
+/* From Lua 5.2. */
+#define luaL_newlibtable(L, l) \
+	lua_createtable(L, 0, sizeof(l)/sizeof((l)[0]) - 1)
+#define luaL_newlib(L, l)	(luaL_newlibtable(L, l), luaL_setfuncs(L, l, 0))
 
 /*
 ** {======================================================

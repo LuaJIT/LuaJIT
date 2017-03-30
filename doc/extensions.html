@@ -312,6 +312,20 @@ indexes for varargs.</li>
 <li><tt>debug.getupvalue()</tt> and <tt>debug.setupvalue()</tt> handle
 C&nbsp;functions.</li>
 <li><tt>debug.upvalueid()</tt> and <tt>debug.upvaluejoin()</tt>.</li>
+<li>Lua/C API extensions:
+<tt>lua_upvalueid()</tt>
+<tt>lua_upvaluejoin()</tt>
+<tt>lua_loadx()</tt>
+<tt>luaL_fileresult()</tt>
+<tt>luaL_execresult()</tt>
+<tt>luaL_loadfilex()</tt>
+<tt>luaL_loadbufferx()</tt>
+<tt>luaL_traceback()</tt>
+<tt>luaL_setfuncs()</tt>
+<tt>luaL_pushmodule()</tt>
+<tt>luaL_newlibtable()</tt>
+<tt>luaL_newlib()</tt>
+</li>
 <li>Command line option <tt>-E</tt>.</li>
 <li>Command line checks <tt>__tostring</tt> for errors.</li>
 </ul>
@@ -338,6 +352,7 @@ exit status.</li>
 <li><tt>debug.getuservalue()</tt> and <tt>debug.setuservalue()</tt>.</li>
 <li>Remove <tt>math.mod()</tt>, <tt>string.gfind()</tt>.</li>
 <li><tt>package.searchers</tt>.</li>
+<li><tt>module()</tt> returns the module table.</li>
 </ul>
 <p>
 Note: this provides only partial compatibility with Lua 5.2 at the
