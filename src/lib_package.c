@@ -193,8 +193,7 @@ static void **ll_register(lua_State *L, const char *path)
     lua_pop(L, 1);
     plib = (void **)lua_newuserdata(L, sizeof(void *));
     *plib = NULL;
-    luaL_getmetatable(L, "_LOADLIB");
-    lua_setmetatable(L, -2);
+    luaL_setmetatable(L, "_LOADLIB");
     lua_pushfstring(L, "LOADLIB: %s", path);
     lua_pushvalue(L, -2);
     lua_settable(L, LUA_REGISTRYINDEX);
@@ -572,8 +571,7 @@ LUALIB_API int luaopen_package(lua_State *L)
   lj_lib_pushcf(L, lj_cf_package_unloadlib, 1);
   lua_setfield(L, -2, "__gc");
   luaL_register(L, LUA_LOADLIBNAME, package_lib);
-  lua_pushvalue(L, -1);
-  lua_replace(L, LUA_ENVIRONINDEX);
+  lua_copy(L, -1, LUA_ENVIRONINDEX);
   lua_createtable(L, sizeof(package_loaders)/sizeof(package_loaders[0])-1, 0);
   for (i = 0; package_loaders[i] != NULL; i++) {
     lj_lib_pushcf(L, package_loaders[i], 1);
