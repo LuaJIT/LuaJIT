@@ -475,7 +475,7 @@ LJVM_O= lj_vm.o
 LJVM_BOUT= $(LJVM_S)
 LJVM_MODE= elfasm
 
-LJLIB_O= lib_base.o lib_math.o lib_bit.o lib_string.o lib_table.o \
+LJLIB_O= lib_base.o lib_coro.o lib_math.o lib_bit.o lib_string.o lib_table.o \
 	 lib_io.o lib_os.o lib_package.o lib_debug.o lib_jit.o lib_ffi.o
 LJLIB_C= $(LJLIB_O:.o=.c)
 
