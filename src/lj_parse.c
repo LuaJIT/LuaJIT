@@ -766,6 +766,27 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
 
 /* -- Bytecode emitter for operators -------------------------------------- */
 
+/* Emit call. */
+static void bcemit_call(FuncState *fs, ExpDesc *e, ExpDesc *args)
+{
+  BCIns ins;
+  BCReg base;
+  BCLine line = fs->ls->linenumber;
+  lua_assert(e->k == VNONRELOC);
+  base = e->u.s.info;  /* Base register for call. */
+  if (args->k == VCALL) {
+    ins = BCINS_ABC(BC_CALLM, base, 2, args->u.s.aux - base - 1 - LJ_FR2);
+  } else {
+    if (args->k != VVOID)
+      expr_tonextreg(fs, args);
+    ins = BCINS_ABC(BC_CALL, base, 2, fs->freereg - base - LJ_FR2);
+  }
+  expr_init(e, VCALL, bcemit_INS(fs, ins));
+  e->u.s.aux = base;
+  fs->bcbase[fs->pc - 1].line = line;
+  fs->freereg = base+1;  /* Leave one result by default. */
+}
+
 /* Try constant-folding of arithmetic operators. */
 static int foldarith(BinOpr opr, ExpDesc *e1, ExpDesc *e2)
 {
@@ -1886,12 +1907,9 @@ static BCReg expr_list(LexState *ls, ExpDesc *v)
 }
 
 /* Parse function argument list. */
-static void parse_args(LexState *ls, ExpDesc *e)
+static void parse_args(LexState *ls, ExpDesc *args)
 {
   FuncState *fs = ls->fs;
-  ExpDesc args;
-  BCIns ins;
-  BCReg base;
   BCLine line = ls->linenumber;
   if (ls->tok == '(') {
 #if !LJ_52
@@ -1900,36 +1918,23 @@ static void parse_args(LexState *ls, ExpDesc *e)
 #endif
     lj_lex_next(ls);
     if (ls->tok == ')') {  /* f(). */
-      args.k = VVOID;
+      args->k = VVOID;
     } else {
-      expr_list(ls, &args);
-      if (args.k == VCALL)  /* f(a, b, g()) or f(a, b, ...). */
-	setbc_b(bcptr(fs, &args), 0);  /* Pass on multiple results. */
+      expr_list(ls, args);
+      if (args->k == VCALL)  /* f(a, b, g()) or f(a, b, ...). */
+	setbc_b(bcptr(fs, args), 0);  /* Pass on multiple results. */
     }
     lex_match(ls, ')', '(', line);
   } else if (ls->tok == '{') {
-    expr_table(ls, &args);
+    expr_table(ls, args);
   } else if (ls->tok == TK_string) {
-    expr_init(&args, VKSTR, 0);
-    args.u.sval = strV(&ls->tokval);
+    expr_init(args, VKSTR, 0);
+    args->u.sval = strV(&ls->tokval);
     lj_lex_next(ls);
   } else {
     err_syntax(ls, LJ_ERR_XFUNARG);
     return;  /* Silence compiler. */
   }
-  lua_assert(e->k == VNONRELOC);
-  base = e->u.s.info;  /* Base register for call. */
-  if (args.k == VCALL) {
-    ins = BCINS_ABC(BC_CALLM, base, 2, args.u.s.aux - base - 1 - LJ_FR2);
-  } else {
-    if (args.k != VVOID)
-      expr_tonextreg(fs, &args);
-    ins = BCINS_ABC(BC_CALL, base, 2, fs->freereg - base - LJ_FR2);
-  }
-  expr_init(e, VCALL, bcemit_INS(fs, ins));
-  e->u.s.aux = base;
-  fs->bcbase[fs->pc - 1].line = line;
-  fs->freereg = base+1;  /* Leave one result by default. */
 }
 
 /* Parse primary expression. */
@@ -1957,15 +1962,18 @@ static void expr_primary(LexState *ls, ExpDesc *v)
       expr_bracket(ls, &key);
       expr_index(fs, v, &key);
     } else if (ls->tok == ':') {
-      ExpDesc key;
+      ExpDesc key, args;
       lj_lex_next(ls);
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
-      parse_args(ls, v);
+      parse_args(ls, &args);
+      bcemit_call(fs, v, &args);
     } else if (ls->tok == '(' || ls->tok == TK_string || ls->tok == '{') {
+      ExpDesc args;
       expr_tonextreg(fs, v);
       if (LJ_FR2) bcreg_reserve(fs, 1);
-      parse_args(ls, v);
+      parse_args(ls, &args);
+      bcemit_call(fs, v, &args);
     } else {
       break;
     }
