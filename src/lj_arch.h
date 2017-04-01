@@ -72,6 +72,8 @@
 #define LUAJIT_OS	LUAJIT_OS_BSD
 #elif (defined(__sun__) && defined(__svr4__))
 #define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif defined(__HAIKU__)
+#define LUAJIT_OS	LUAJIT_OS_POSIX
 #elif defined(__CYGWIN__)
 #define LJ_TARGET_CYGWIN	1
 #define LUAJIT_OS	LUAJIT_OS_POSIX
