@@ -83,6 +83,7 @@
 
 #include "lib_aux.c"
 #include "lib_base.c"
+#include "lib_coro.c"
 #include "lib_math.c"
 #include "lib_string.c"
 #include "lib_table.c"

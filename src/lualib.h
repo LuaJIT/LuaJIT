@@ -23,6 +23,7 @@
 #define LUA_FFILIBNAME	"ffi"
 
 LUALIB_API int luaopen_base(lua_State *L);
+LUALIB_API int luaopen_coroutine(lua_State *L);
 LUALIB_API int luaopen_math(lua_State *L);
 LUALIB_API int luaopen_string(lua_State *L);
 LUALIB_API int luaopen_table(lua_State *L);

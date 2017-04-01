@@ -17,6 +17,7 @@
 
 static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
+  { LUA_COLIBNAME,	luaopen_coroutine },
   { LUA_LOADLIBNAME,	luaopen_package },
   { LUA_TABLIBNAME,	luaopen_table },
   { LUA_IOLIBNAME,	luaopen_io },
