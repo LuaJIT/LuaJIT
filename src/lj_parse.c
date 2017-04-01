@@ -766,6 +766,21 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
 
 /* -- Bytecode emitter for operators -------------------------------------- */
 
+static void expr_index(FuncState *fs, ExpDesc *t, ExpDesc *e);
+
+static void index4emulated (LexState *ls, const char *libname, const char *fctname, ExpDesc *v)
+{
+  FuncState *fs = ls->fs;
+  ExpDesc key;
+  expr_init(v, VGLOBAL, 0);
+  v->u.sval = lj_str_newz(ls->L, libname);
+  expr_toanyreg(fs, v);
+  expr_init(&key, VKSTR, 0);
+  key.u.sval = lj_str_newz(ls->L, fctname);
+  expr_toval(fs, &key);
+  expr_index(fs, v, &key);
+}
+
 /* Emit call. */
 static void bcemit_call(FuncState *fs, ExpDesc *e, ExpDesc *args)
 {
@@ -890,6 +905,37 @@ static void bcemit_comp(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   eret->k = VJMP;
 }
 
+/* Emit bitwise operator. */
+static void bcemit_bitwise(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
+{
+  ExpDesc e;
+  switch (opr) {
+    case OPR_BAND:
+      index4emulated(fs->ls, "bit", "band", &e);
+      break;
+    case OPR_BOR:
+      index4emulated(fs->ls, "bit", "bor", &e);
+      break;
+    case OPR_BXOR:
+      index4emulated(fs->ls, "bit", "bxor", &e);
+      break;
+    case OPR_SHL:
+      index4emulated(fs->ls, "bit", "lshift", &e);
+      break;
+    case OPR_SHR:
+      index4emulated(fs->ls, "bit", "rshift", &e);
+      break;
+    default:
+      lua_assert(0);
+  }
+  expr_tonextreg(fs, &e);
+  if (LJ_FR2) bcreg_reserve(fs, 1);
+  expr_tonextreg(fs, e1);
+  expr_tonextreg(fs, e2);
+  bcemit_call(fs, &e, e2);
+  *e1 = e;
+}
+
 /* Fixup left side of binary operator. */
 static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
 {
@@ -901,6 +947,9 @@ static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
     expr_tonextreg(fs, e);
   } else if (op == OPR_EQ || op == OPR_NE) {
     if (!expr_isk_nojump(e)) expr_toanyreg(fs, e);
+  } else if (op == OPR_BAND || op == OPR_BOR || op == OPR_BXOR ||
+	     op == OPR_SHL || op == OPR_SHR || op == OPR_IDIV) {
+    /* nothing */
   } else {
     if (!expr_isnumk_nojump(e)) expr_toanyreg(fs, e);
   }
@@ -935,6 +984,18 @@ static void bcemit_binop(FuncState *fs, BinOpr op, ExpDesc *e1, ExpDesc *e2)
       e1->u.s.info = bcemit_ABC(fs, BC_CAT, 0, e1->u.s.info, e2->u.s.info);
     }
     e1->k = VRELOCABLE;
+  } else if (op == OPR_IDIV) {
+    ExpDesc e;
+    index4emulated(fs->ls, "math", "floor", &e);
+    expr_tonextreg(fs, &e);
+    if (LJ_FR2) bcreg_reserve(fs, 1);
+    if (!expr_isnumk_nojump(e1)) expr_toanyreg(fs, e1);
+    bcemit_binop(fs, OPR_DIV, e1, e2);
+    bcemit_call(fs, &e, e1);
+    *e1 = e;
+  } else if (op == OPR_BAND || op == OPR_BOR || op == OPR_BXOR ||
+	     op == OPR_SHL || op == OPR_SHR) {
+    bcemit_bitwise(fs, op, e1, e2);
   } else {
     lua_assert(op == OPR_NE || op == OPR_EQ ||
 	       op == OPR_LT || op == OPR_GE || op == OPR_LE || op == OPR_GT);
@@ -2094,6 +2155,16 @@ static void expr_unop(LexState *ls, ExpDesc *v)
     op = BC_UNM;
   } else if (ls->tok == '#') {
     op = BC_LEN;
+  } else if (ls->tok == '~') {
+    /* BNOT */
+    ExpDesc args;
+    lj_lex_next(ls);
+    index4emulated(ls, "bit", "bnot", v);
+    expr_tonextreg(ls->fs, v);
+    if (LJ_FR2) bcreg_reserve(ls->fs, 1);
+    expr_binop(ls, &args, UNARY_PRIORITY);
+    bcemit_call(ls->fs, v, &args);
+    return;
   } else {
     expr_simple(ls, v);
     return;
