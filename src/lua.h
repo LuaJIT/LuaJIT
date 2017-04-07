@@ -351,6 +351,9 @@ LUA_API int lua_loadx (lua_State *L, lua_Reader reader, void *dt,
 LUA_API const lua_Number *lua_version (lua_State *L);
 LUA_API void lua_copy (lua_State *L, int fromidx, int toidx);
 
+/* From Lua 5.3. */
+LUA_API int lua_isyieldable (lua_State *L);
+
 
 struct lua_Debug {
   int event;
