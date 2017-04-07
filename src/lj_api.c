@@ -1000,6 +1000,12 @@ LUA_API int lua_setmetatable(lua_State *L, int idx)
   return 1;
 }
 
+LUALIB_API void luaL_setmetatable(lua_State *L, const char *tname)
+{
+  lua_getfield(L, LUA_REGISTRYINDEX, tname);
+  lua_setmetatable(L, -2);
+}
+
 LUA_API int lua_setfenv(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
