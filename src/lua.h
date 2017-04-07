@@ -350,6 +350,8 @@ LUA_API int lua_loadx (lua_State *L, lua_Reader reader, void *dt,
 		       const char *chunkname, const char *mode);
 LUA_API const lua_Number *lua_version (lua_State *L);
 LUA_API void lua_copy (lua_State *L, int fromidx, int toidx);
+LUA_API lua_Number lua_tonumberx (lua_State *L, int idx, int *isnum);
+LUA_API lua_Integer lua_tointegerx (lua_State *L, int idx, int *isnum);
 
 /* From Lua 5.3. */
 LUA_API int lua_isyieldable (lua_State *L);

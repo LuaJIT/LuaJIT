@@ -342,6 +342,22 @@ LUA_API lua_Number lua_tonumber(lua_State *L, int idx)
     return 0;
 }
 
+LUA_API lua_Number lua_tonumberx(lua_State *L, int idx, int *ok)
+{
+  cTValue *o = index2adr(L, idx);
+  TValue tmp;
+  if (LJ_LIKELY(tvisnumber(o))) {
+    if (ok) *ok = 1;
+    return numberVnum(o);
+  } else if (tvisstr(o) && lj_strscan_num(strV(o), &tmp)) {
+    if (ok) *ok = 1;
+    return numV(&tmp);
+  } else {
+    if (ok) *ok = 0;
+    return 0;
+  }
+}
+
 LUALIB_API lua_Number luaL_checknumber(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
@@ -379,9 +395,38 @@ LUA_API lua_Integer lua_tointeger(lua_State *L, int idx)
     if (!(tvisstr(o) && lj_strscan_number(strV(o), &tmp)))
       return 0;
     if (tvisint(&tmp))
-      return (lua_Integer)intV(&tmp);
+      return intV(&tmp);
     n = numV(&tmp);
   }
+#if LJ_64
+  return (lua_Integer)n;
+#else
+  return lj_num2int(n);
+#endif
+}
+
+LUA_API lua_Integer lua_tointegerx(lua_State *L, int idx, int *ok)
+{
+  cTValue *o = index2adr(L, idx);
+  TValue tmp;
+  lua_Number n;
+  if (LJ_LIKELY(tvisint(o))) {
+    if (ok) *ok = 1;
+    return intV(o);
+  } else if (LJ_LIKELY(tvisnum(o))) {
+    n = numV(o);
+  } else {
+    if (!(tvisstr(o) && lj_strscan_number(strV(o), &tmp))) {
+      if (ok) *ok = 0;
+      return 0;
+    }
+    if (tvisint(&tmp)) {
+      if (ok) *ok = 1;
+      return intV(&tmp);
+    }
+    n = numV(&tmp);
+  }
+  if (ok) *ok = 1;
 #if LJ_64
   return (lua_Integer)n;
 #else
