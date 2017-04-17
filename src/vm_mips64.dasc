@@ -2327,7 +2327,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
   |  load_got lj_dispatch_profile
-  |   sd MULTRES, SAVE_MULTRES
+  |   sw MULTRES, SAVE_MULTRES
   |  move CARG2, PC
   |   sd BASE, L->base
   |  call_intern lj_dispatch_profile	// (lua_State *L, const BCIns *pc)
@@ -2423,7 +2423,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    .FPU lui TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |  dsll MULTRES, CRET1, 3
   |  cleartp LFUNC:RB
-  |  sd MULTRES, SAVE_MULTRES
+  |  sw MULTRES, SAVE_MULTRES
   |    li TISNIL, LJ_TNIL
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
   |    .FPU mtc1 TMP3, TOBIT
