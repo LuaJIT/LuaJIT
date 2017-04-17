@@ -1947,7 +1947,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  stp d30, d31, [sp, #30*8]
   |  ldr CARG1, [sp, #64*8]	// Load original value of lr.
   |   add CARG3, sp, #64*8	// Recompute original value of sp.
-  |    mv_vmstate CARG4, EXIT
+  |    mv_vmstate CARG4w, EXIT
   |   stp xzr, CARG3, [sp, #62*8]	// Store 0/sp in RID_LR/RID_SP.
   |  sub CARG1, CARG1, lr
   |   ldr L, GL->cur_L
@@ -1955,7 +1955,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldr BASE, GL->jit_base
   |  sub CARG1, CARG1, #2
   |   ldr CARG2w, [lr]		// Load trace number.
-  |    st_vmstate CARG4
+  |    st_vmstate CARG4w
   |.if ENDIAN_BE
   |   rev32 CARG2, CARG2
   |.endif
@@ -1994,12 +1994,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   str BASE, L->base
   |  ldr CARG2, LFUNC:CARG2->pc
   |   str xzr, GL->jit_base
-  |    mv_vmstate CARG4, INTERP
+  |    mv_vmstate CARG4w, INTERP
   |  ldr KBASE, [CARG2, #PC2PROTO(k)]
   |  // Modified copy of ins_next which handles function header dispatch, too.
   |  ldrb RBw, [PC, # OFS_OP]
   |   ldr INSw, [PC], #4
-  |    st_vmstate CARG4
+  |    st_vmstate CARG4w
   |  cmp RBw, #BC_FUNCC+2		// Fast function?
   |   add TMP1, GL, INS, uxtb #3
   |  bhs >4
@@ -3702,9 +3702,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if JIT
     |  // RA = base (ignored), RC = traceno
     |  ldr CARG1, [GL, #GL_J(trace)]
-    |   mov CARG2, #0  // Traces on ARM64 don't store the trace #, so use 0.
+    |   mov CARG2w, #0  // Traces on ARM64 don't store the trace #, so use 0.
     |  ldr TRACE:RC, [CARG1, RC, lsl #3]
-    |   st_vmstate CARG2
+    |   st_vmstate CARG2w
     |  ldr RA, TRACE:RC->mcode
     |   str BASE, GL->jit_base
     |   str L, GL->tmpbuf.L
