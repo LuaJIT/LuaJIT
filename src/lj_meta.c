@@ -422,6 +422,7 @@ TValue *lj_meta_comp(lua_State *L, cTValue *o1, cTValue *o2, int op)
 }
 
 /* Helper for ISTYPE and ISNUM. Implicit coercion or error. */
+// FIXME(zw) should we handle wrap lightud specially here?
 void lj_meta_istype(lua_State *L, BCReg ra, BCReg tp)
 {
   L->top = curr_topL(L);

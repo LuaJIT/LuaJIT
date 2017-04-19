@@ -383,7 +383,7 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 static CLibrary *clib_new(lua_State *L, GCtab *mt)
 {
   GCtab *t = lj_tab_new(L, 0, 0);
-  GCudata *ud = lj_udata_new(L, sizeof(CLibrary), t);
+  GCudata *ud = lj_udata_new(L, sizeof(CLibrary), t, UDTYPE_USERDATA);
   CLibrary *cl = (CLibrary *)uddata(ud);
   cl->cache = t;
   ud->udtype = UDTYPE_FFI_CLIB;

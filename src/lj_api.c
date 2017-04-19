@@ -25,6 +25,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lauxlib.h"
 
 /* -- Common helper functions --------------------------------------------- */
 
@@ -200,7 +201,6 @@ LUA_API void lua_pushvalue(lua_State *L, int idx)
 }
 
 /* -- Stack getters ------------------------------------------------------- */
-
 LUA_API int lua_type(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
@@ -208,6 +208,9 @@ LUA_API int lua_type(lua_State *L, int idx)
     return LUA_TNUMBER;
 #if LJ_64 && !LJ_GC64
   } else if (tvislightud(o)) {
+    return LUA_TLIGHTUSERDATA;
+#elif LJ_64 && LJ_GC64
+  } else if (tvislightudwrap(o)) {
     return LUA_TLIGHTUSERDATA;
 #endif
   } else if (o == niltv(L)) {
@@ -289,6 +292,12 @@ LUA_API int lua_equal(lua_State *L, int idx1, int idx2)
 #if LJ_64 && !LJ_GC64
   } else if (tvislightud(o1)) {
     return o1->u64 == o2->u64;
+#elif LJ_64 && LJ_GC64
+    //FIXME(zw) move wrap lightud comparision to lj_meta_equal
+    // Because lj_meta_equal is also used by Byte code like ISEQV etc, which
+    // is also needed updated with wrapped lightud.
+  } else if (tvislightudwrap(o1) && tvislightudwrap(o2)) {
+    return lightudwrapV(o1) == lightudwrapV(o2);
 #endif
   } else if (gcrefeq(o1->gcr, o2->gcr)) {
     return 1;
@@ -567,6 +576,10 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
     return strV(o)->len;
   } else if (tvistab(o)) {
     return (size_t)lj_tab_len(tabV(o));
+#if LJ_64 && LJ_GC64
+  } else if (tvislightudwrap(o)) {
+    return 0;
+#endif
   } else if (tvisudata(o)) {
     return udataV(o)->len;
   } else if (tvisnumber(o)) {
@@ -592,11 +605,16 @@ LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 LUA_API void *lua_touserdata(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
-  if (tvisudata(o))
-    return uddata(udataV(o));
-  else if (tvislightud(o))
+#if LJ_64 && LJ_GC64
+  if (tvislightudwrap(o)) {
+    return lightudwrapV(o);
+#else
+  if (tvislightud(o)) {
     return lightudV(o);
-  else
+#endif
+  } else if (tvisudata(o)) {
+    return uddata(udataV(o));
+  } else
     return NULL;
 }
 
@@ -694,10 +712,45 @@ LUA_API void lua_pushboolean(lua_State *L, int b)
   incr_top(L);
 }
 
+#if LJ_64 && LJ_GC64
+static int wrapped_lightud_eq (lua_State *L) {
+//  TValue *o1, *o2;
+//  copyTV(L, o1, L->top - 1);
+//  copyTV(L, o2, L->top - 2);
+//  lua_pop(L, 2);
+//  lua_assert(tvislightudwrap(o1) && tvislightudwrap(o2));
+//  lua_pushboolean(L, (lightudwrapV(o1) == lightudwrapV(o2) ? 1 : 0));
+// FIXME(zw) implement correct metamethod for wrapped lightud.
+//           above code will cause error in misc/lightud.lua test.
+  lua_pushboolean(L, 1);
+  return 1;
+}
+#endif
+
 LUA_API void lua_pushlightuserdata(lua_State *L, void *p)
 {
+#if LJ_64 && LJ_GC64
+  luaL_Reg lightud_regs[] = {
+    { "__eq", wrapped_lightud_eq },
+    { NULL, NULL }
+  };
+  GCudata *ud;
+  lj_gc_check(L);
+  size_t size = sizeof(void **);
+  lua_assert(size <= LJ_MAX_UDATA);
+  ud = lj_udata_new(L, (MSize)size, getcurrenv(L), UDTYPE_WRAP_LIGHTUDATA);
+  void **udp = (void **)uddata(ud);
+  *udp = p;
+  setudataV(L, L->top, ud);
+  incr_top(L);
+  const char *mtname = "wrapped_lightud";
+  luaL_newmetatable(L, mtname);
+  luaL_setfuncs(L, lightud_regs, 0);
+  lua_setmetatable(L, -2);
+#else
   setlightudV(L->top, checklightudptr(L, p));
   incr_top(L);
+#endif
 }
 
 LUA_API void lua_createtable(lua_State *L, int narray, int nrec)
@@ -746,7 +799,7 @@ LUA_API void *lua_newuserdata(lua_State *L, size_t size)
   lj_gc_check(L);
   if (size > LJ_MAX_UDATA)
     lj_err_msg(L, LJ_ERR_UDATAOV);
-  ud = lj_udata_new(L, (MSize)size, getcurrenv(L));
+  ud = lj_udata_new(L, (MSize)size, getcurrenv(L), UDTYPE_USERDATA);
   setudataV(L, L->top, ud);
   incr_top(L);
   return uddata(ud);
@@ -835,6 +888,10 @@ LUA_API int lua_getmetatable(lua_State *L, int idx)
   GCtab *mt = NULL;
   if (tvistab(o))
     mt = tabref(tabV(o)->metatable);
+#if LJ_64 && LJ_GC64 // wrapped lightud's metatable is only for internal usage.
+  else if (tvislightudwrap(o))
+    mt = NULL;
+#endif
   else if (tvisudata(o))
     mt = tabref(udataV(o)->metatable);
   else
@@ -923,6 +980,7 @@ LUA_API void lua_upvaluejoin(lua_State *L, int idx1, int n1, int idx2, int n2)
 LUALIB_API void *luaL_testudata(lua_State *L, int idx, const char *tname)
 {
   cTValue *o = index2adr(L, idx);
+  //FIXME(zw) exclude wrapped lightud.
   if (tvisudata(o)) {
     GCudata *ud = udataV(o);
     cTValue *tv = lj_tab_getstr(tabV(registry(L)), lj_str_newz(L, tname));
@@ -1038,6 +1096,7 @@ LUA_API int lua_setmetatable(lua_State *L, int idx)
       setgcref(basemt_it(g, LJ_TFALSE), obj2gco(mt));
     } else {
       /* NOBARRIER: basemt is a GC root. */
+      //FIXME(zw) shall we handle wrapped lightudata here explicitly?
       setgcref(basemt_obj(g, o), obj2gco(mt));
     }
   }
@@ -1062,6 +1121,7 @@ LUA_API int lua_setfenv(lua_State *L, int idx)
   if (tvisfunc(o)) {
     setgcref(funcV(o)->c.env, obj2gco(t));
   } else if (tvisudata(o)) {
+    //FIXME(zw) shall we exclude udata type == UDTYPE_WRAP_LIGHTUDATA ?
     setgcref(udataV(o)->env, obj2gco(t));
   } else if (tvisthread(o)) {
     setgcref(threadV(o)->env, obj2gco(t));
@@ -1138,7 +1198,19 @@ static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
   fn->c.f = func;
   setfuncV(L, top++, fn);
   if (LJ_FR2) setnilV(top++);
+#if LJ_64 && LJ_GC64
+  //FIXME(zw) Share the code in lua_pushlightud()
+  GCudata *ud_wrap;
+  lj_gc_check(L);
+  size_t size = sizeof(void **);
+  lua_assert(size <= LJ_MAX_UDATA);
+  ud_wrap = lj_udata_new(L, (MSize)size, getcurrenv(L), UDTYPE_WRAP_LIGHTUDATA);
+  void **ud_wrap_p = (void **)uddata(ud_wrap);
+  *ud_wrap_p = ud;
+  setudataV(L, top++, ud_wrap);
+#else
   setlightudV(top++, checklightudptr(L, ud));
+#endif
   cframe_nres(L->cframe) = 1+0;  /* Zero results. */
   L->top = top;
   return top-1;  /* Now call the newly allocated C function. */

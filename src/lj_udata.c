@@ -10,13 +10,13 @@
 #include "lj_gc.h"
 #include "lj_udata.h"
 
-GCudata *lj_udata_new(lua_State *L, MSize sz, GCtab *env)
+GCudata *lj_udata_new(lua_State *L, MSize sz, GCtab *env, UDType type)
 {
   GCudata *ud = lj_mem_newt(L, sizeof(GCudata) + sz, GCudata);
   global_State *g = G(L);
   newwhite(g, ud);  /* Not finalized. */
   ud->gct = ~LJ_TUDATA;
-  ud->udtype = UDTYPE_USERDATA;
+  ud->udtype = type;
   ud->len = sz;
   /* NOBARRIER: The GCudata is new (marked white). */
   setgcrefnull(ud->metatable);

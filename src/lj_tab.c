@@ -34,6 +34,10 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 #else
 #define hashgcref(t, r)		hashlohi((t), gcrefu(r), gcrefu(r) + HASH_BIAS)
 #endif
+#if LJ_64 && LJ_GC64
+#define hashlightudwrap(t, v) \
+  hashlohi((t), (uint32_t)(v), (uint32_t)((v) >> 32))
+#endif
 
 /* Hash an arbitrary key and return its anchor position in the hash table. */
 static Node *hashkey(const GCtab *t, cTValue *key)
@@ -45,6 +49,11 @@ static Node *hashkey(const GCtab *t, cTValue *key)
     return hashnum(t, key);
   else if (tvisbool(key))
     return hashmask(t, boolV(key));
+#if LJ_64 && LJ_GC64
+  else if (tvislightudwrap(key)) {
+    return hashlightudwrap(t, (uint64_t)lightudwrapV(key));
+  }
+#endif
   else
     return hashgcref(t, key->gcr);
   /* Only hash 32 bits of lightuserdata on a 64 bit CPU. Good enough? */

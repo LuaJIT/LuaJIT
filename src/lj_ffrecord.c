@@ -1123,7 +1123,7 @@ static TRef recff_io_fp(jit_State *J, TRef *udp, int32_t id)
 #endif
   } else {  /* fp:method() */
     ud = J->base[0];
-    if (!tref_isudata(ud))
+    if (!tref_isudata(ud)) //FIXME(zw) exclude wrapped lightud here?
       lj_trace_err(J, LJ_TRERR_BADTYPE);
     tr = emitir(IRT(IR_FLOAD, IRT_U8), ud, IRFL_UDATA_UDTYPE);
     emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, UDTYPE_IO_FILE));
@@ -1180,7 +1180,7 @@ static void LJ_FASTCALL recff_debug_getmetatable(jit_State *J, RecordFFData *rd)
   if (tref_istab(tr)) {
     mt = tabref(tabV(&rd->argv[0])->metatable);
     mtref = emitir(IRT(IR_FLOAD, IRT_TAB), tr, IRFL_TAB_META);
-  } else if (tref_isudata(tr)) {
+  } else if (tref_isudata(tr)) { //FIXME(zw) exclude wrapped lightud here.
     mt = tabref(udataV(&rd->argv[0])->metatable);
     mtref = emitir(IRT(IR_FLOAD, IRT_TAB), tr, IRFL_UDATA_META);
   } else {

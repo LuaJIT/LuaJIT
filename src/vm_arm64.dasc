@@ -2738,6 +2738,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    ldr CARG2, UPVAL:CARG1->v
     |  ldrb TMP2w, UPVAL:CARG1->marked
     |  ldrb TMP0w, UPVAL:CARG1->closed
+    |  // FIXME(zw) is it OK to let wrapped lightud (it is actually udata) be
+    |  //           managed by GC?
+    |  //           if not, we should un-wrapped it here. And update
+    |  //           rec_upvalue() and UREFO/UREFC IR implementation accordingly.
     |    asr ITYPE, CARG3, #47
     |   str CARG3, [CARG2]
     |    add ITYPE, ITYPE, #-LJ_TISGCV

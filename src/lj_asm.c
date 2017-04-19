@@ -1003,6 +1003,7 @@ static int32_t asm_stack_adjust(ASMState *as)
 }
 
 /* Must match with hash*() in lj_tab.c. */
+//FIXME(zw) un-wrap wrapped lightud like in hash().
 static uint32_t ir_khash(IRIns *ir)
 {
   uint32_t lo, hi;

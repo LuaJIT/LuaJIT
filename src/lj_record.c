@@ -945,6 +945,7 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     /* The metatables of special userdata objects are treated as immutable. */
     if (udtype != UDTYPE_USERDATA) {
       cTValue *mo;
+      //FIXME(zw) add checking for UDTYPE_WRAP_LIGHTUDATA.
       if (LJ_HASFFI && udtype == UDTYPE_FFI_CLIB) {
 	/* Specialize to the C library namespace object. */
 	emitir(IRTG(IR_EQ, IRT_PGC), ix->tab, lj_ir_kptr(J, udataV(&ix->tabv)));

@@ -123,6 +123,7 @@ LJLIB_ASM(ipairs)		LJLIB_REC(xpairs 1)
 
 /* -- Base library: getters and setters ----------------------------------- */
 
+//FIXME(zw) update getmetatable to return NULL for wrapped lightud.
 LJLIB_ASM_(getmetatable)	LJLIB_REC(.)
 /* Recycle the lj_lib_checkany(L, 1) from assert. */
 

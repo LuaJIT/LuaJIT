@@ -25,6 +25,11 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
   if (itype(o1) == itype(o2)) {
     if (tvispri(o1))
       return 1;
+#if LJ_64 && LJ_GC64
+    if (tvislightudwrap(o1) && tvislightudwrap(o2)) {
+      return lightudwrapV(o1) == lightudwrapV(o2);
+    }
+#endif
     if (!tvisnum(o1))
       return gcrefeq(o1->gcr, o2->gcr);
   } else if (!tvisnumber(o1) || !tvisnumber(o2)) {
@@ -36,11 +41,16 @@ int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2)
 /* Return pointer to object or its object data. */
 const void * LJ_FASTCALL lj_obj_ptr(cTValue *o)
 {
-  if (tvisudata(o))
-    return uddata(udataV(o));
-  else if (tvislightud(o))
+#if LJ_64 && LJ_GC64
+  if (tvislightudwrap(o)) {
+    return lightudwrapV(o);
+#else
+  if (tvislightud(o)) {
     return lightudV(o);
-  else if (LJ_HASFFI && tviscdata(o))
+#endif
+  } else if (tvisudata(o)) {
+    return uddata(udataV(o));
+  } else if (LJ_HASFFI && tviscdata(o))
     return cdataptr(cdataV(o));
   else if (tvisgcv(o))
     return gcV(o);

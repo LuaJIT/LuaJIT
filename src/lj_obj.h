@@ -316,12 +316,15 @@ typedef struct GCudata {
 } GCudata;
 
 /* Userdata types. */
-enum {
-  UDTYPE_USERDATA,	/* Regular userdata. */
-  UDTYPE_IO_FILE,	/* I/O library FILE. */
-  UDTYPE_FFI_CLIB,	/* FFI C library namespace. */
+typedef enum {
+  UDTYPE_USERDATA,	 /* Regular userdata. */
+  UDTYPE_IO_FILE,	 /* I/O library FILE. */
+  UDTYPE_FFI_CLIB,	 /* FFI C library namespace. */
+#if LJ_64 && LJ_GC64
+  UDTYPE_WRAP_LIGHTUDATA,/* Userdata for lightuserdata wrapping. */
+#endif
   UDTYPE__MAX
-};
+} UDType;
 
 #define uddata(u)	((void *)((u)+1))
 #define sizeudata(u)	(sizeof(struct GCudata)+(u)->len)
@@ -748,6 +751,10 @@ typedef union GCobj {
 #define tvisbool(o)	(tvisfalse(o) || tvistrue(o))
 #if LJ_64 && !LJ_GC64
 #define tvislightud(o)	(((int32_t)itype(o) >> 15) == -2)
+#elif LJ_64 && LJ_GC64
+#define tvislightudwrap(o) \
+  (tvisudata(o) && udataV(o)->udtype == UDTYPE_WRAP_LIGHTUDATA)
+#define tvislightud(o)	(itype(o) == LJ_TLIGHTUD)
 #else
 #define tvislightud(o)	(itype(o) == LJ_TLIGHTUD)
 #endif
@@ -783,6 +790,9 @@ typedef union GCobj {
 #if LJ_64 && !LJ_GC64
 #define itypemap(o) \
   (tvisnumber(o) ? ~LJ_TNUMX : tvislightud(o) ? ~LJ_TLIGHTUD : ~itype(o))
+#elif LJ_64 && LJ_GC64
+#define itypemap(o) \
+  (tvisnumber(o) ? ~LJ_TNUMX : tvislightudwrap(o) ? ~LJ_TLIGHTUD : ~itype(o))
 #else
 #define itypemap(o)	(tvisnumber(o) ? ~LJ_TNUMX : ~itype(o))
 #endif
@@ -795,8 +805,14 @@ typedef union GCobj {
 #endif
 #define boolV(o)	check_exp(tvisbool(o), (LJ_TFALSE - itype(o)))
 #if LJ_64
+//FIXME(zw) Replace lightudV(o) by lightudwrapV(o) when lightud are replaced by
+//          wrapped lightud on all LJ_GC64 enabled architectures.
 #define lightudV(o) \
   check_exp(tvislightud(o), (void *)((o)->u64 & U64x(00007fff,ffffffff)))
+#if LJ_GC64
+#define lightudwrapV(o) \
+  check_exp(tvislightudwrap(o), *(void **)uddata(udataV(o)))
+#endif
 #else
 #define lightudV(o)	check_exp(tvislightud(o), gcrefp((o)->gcr, void))
 #endif

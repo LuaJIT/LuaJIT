@@ -608,9 +608,14 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
   } else if (tvisudata(o)) {
     GCudata *ud = udataV(o);
     tmpptr = uddata(ud);
+#if LJ_64 && LJ_GC64
+    if (ud->udtype == UDTYPE_IO_FILE || ud->udtype == UDTYPE_WRAP_LIGHTUDATA)
+      tmpptr = *(void **)tmpptr;
+#else
     if (ud->udtype == UDTYPE_IO_FILE)
       tmpptr = *(void **)tmpptr;
-  } else if (tvislightud(o)) {
+#endif
+} else if (tvislightud(o)) {
     tmpptr = lightudV(o);
   } else if (tvisfunc(o)) {
     void *p = lj_ccallback_new(cts, d, funcV(o));

@@ -205,6 +205,7 @@ IRFPMDEF(FPMENUM)
   _(UDATA_META,	offsetof(GCudata, metatable)) \
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
+  _(UDATA_WRAP_LIGHTUDATA, sizeof(GCudata)) \
   _(CDATA_CTYPEID, offsetof(GCcdata, ctypeid)) \
   _(CDATA_PTR,	sizeof(GCcdata)) \
   _(CDATA_INT, sizeof(GCcdata)) \

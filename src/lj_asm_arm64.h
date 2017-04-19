@@ -715,6 +715,7 @@ static void asm_aref(ASMState *as, IRIns *ir)
 **   } while ((n = nextnode(n)));
 **   return niltv(L);
 */
+//FIXME(zw) un-wrap wrapped lightud like in hashkey().
 static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 {
   RegSet allow = RSET_GPR;
@@ -890,6 +891,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   } else if (irt_isnum(irkey->t)) {
     k = ir_knum(irkey)->u64;
   } else {
+    //FIXME(zw) should we handle wrapped lightud in hrefk?
     k = ((uint64_t)irt_toitype(irkey->t) << 47) | (uint64_t)ir_kgc(irkey);
   }
   emit_nm(as, A64I_CMPx, key, ra_allock(as, k, allow));
@@ -1125,6 +1127,8 @@ static void asm_sload(ASMState *as, IRIns *ir)
     dest = ra_dest(as, ir, irt_isnum(t) ? RSET_FPR : allow);
     base = ra_alloc1(as, REF_BASE, rset_clear(allow, dest));
     if (irt_isaddr(t)) {
+    //FIXME(zw) when sload's result is not used in hash key (used like in EQ),
+    //Should we un-wrap at SLOAD or delay the un-wrapping to usage (like in EQ)?
       emit_dn(as, A64I_ANDx^emit_isk13(LJ_GCVMASK, 1), dest, dest);
     } else if ((ir->op2 & IRSLOAD_CONVERT)) {
       if (irt_isint(t)) {
@@ -1646,6 +1650,7 @@ static void asm_fpcomp(ASMState *as, IRIns *ir)
 /* Integer comparisons. */
 static void asm_intcomp(ASMState *as, IRIns *ir)
 {
+  //FIXME(zw) wrapped lightud should be un-wrapped before EQ/NE comparison.
   A64CC oldcc, cc = (asm_compmap[ir->o] & 15);
   A64Ins ai = irt_is64(ir->t) ? A64I_CMPx : A64I_CMPw;
   IRRef lref = ir->op1, rref = ir->op2;
