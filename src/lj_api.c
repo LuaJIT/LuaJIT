@@ -1144,8 +1144,19 @@ static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
   return top-1;  /* Now call the newly allocated C function. */
 }
 
-LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
+static TValue *cpcall2(lua_State *L, lua_CFunction func, void *ud)
 {
+  GCfunc *fn = lj_func_newC(L, 0, getcurrenv(L));
+  fn->c.f = func;
+  setfuncV(L, L->top++, fn);
+  if (LJ_FR2) setnilV(L->top++);
+  void **udp = (void **)lua_newuserdata(L, sizeof(void **));
+  *udp = ud;
+  cframe_nres(L->cframe) = 1+0;  /* Zero results. */
+  return L->top-1;  /* Now call the newly allocated C function. */
+}
+
+static int cpcall_help(lua_State *L, lua_CFunction func, void *ud, lua_CPFunction cpcall) {
   global_State *g = G(L);
   uint8_t oldh = hook_save(g);
   int status;
@@ -1153,6 +1164,16 @@ LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
   status = lj_vm_cpcall(L, func, ud, cpcall);
   if (status) hook_restore(g, oldh);
   return status;
+}
+
+LUA_API int lua_cpcall(lua_State *L, lua_CFunction func, void *ud)
+{
+  return cpcall_help(L, func, ud, cpcall);
+}
+
+LUA_API int lua_cpcall2(lua_State *L, lua_CFunction func, void *ud)
+{
+  return cpcall_help(L, func, ud, cpcall2);
 }
 
 LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
@@ -1289,4 +1310,3 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocd = ud;
   g->allocf = f;
 }
-
