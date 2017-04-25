@@ -591,6 +591,20 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
   }
 }
 
+LUA_API size_t lua_rawlen(lua_State *L, int idx)
+{
+  TValue *o = index2adr(L, idx);
+  if (tvisstr(o)) {
+    return strV(o)->len;
+  } else if (tvistab(o)) {
+    return (size_t)lj_tab_len(tabV(o));
+  } else if (tvisudata(o)) {
+    return udataV(o)->len;
+  } else {
+    return 0;
+  }
+}
+
 LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
