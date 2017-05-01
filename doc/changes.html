@@ -74,6 +74,30 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.1.0-beta3">LuaJIT 2.1.0-beta3 &mdash; 2017-05-01</h2>
+<ul>
+<li>Rewrite memory block allocator.</li>
+<li>Add various extension from Lua 5.2/5.3.</li>
+<li>Remove old Lua 5.0 compatibility defines.</li>
+<li>Set arg table before evaluating <tt>LUA_INIT</tt> and <tt>-e</tt> chunks.</li>
+<li>Fix FOLD rules for <tt>math.abs()</tt> and FP negation.</li>
+<li>Fix soft-float <tt>math.abs()</tt> and negation.</li>
+<li>Fix formatting of some small denormals at low precision.</li>
+<li>LJ_GC64: Add JIT compiler support.</li>
+<li>x64/LJ_GC64: Add JIT compiler backend.</li>
+<li>x86/x64: Generate BMI2 shifts and rotates, if available.</li>
+<li>Windows/x86: Add full exception interoperability.</li>
+<li>ARM64: Add big-endian support.</li>
+<li>ARM64: Add JIT compiler backend.</li>
+<li>MIPS: Fix <tt>TSETR</tt> barrier.</li>
+<li>MIPS: Support MIPS16 interlinking.</li>
+<li>MIPS soft-float: Fix code generation for <tt>HREF</tt>.</li>
+<li>MIPS64: Add MIPS64 hard-float JIT compiler backend.</li>
+<li>MIPS64: Add MIPS64 hard-float/soft-float support to interpreter.</li>
+<li>FFI: Compile bitfield loads/stores.</li>
+<li>Various fixes common with the 2.0 branch.</li>
+</ul>
+
 <h2 id="LuaJIT-2.1.0-beta2">LuaJIT 2.1.0-beta2 &mdash; 2016-03-03</h2>
 <ul>
 <li>Enable trace stitching.</li>
@@ -149,7 +173,7 @@ Please take a look at the commit history for more details.
 <li>Remove internal <tt>__mode = "K"</tt> and replace with safe check.</li>
 <li>Add "proto" field to <tt>jit.util.funcinfo()</tt>.</li>
 <li>Fix GC step size calculation.</li>
-<li>Initialize <tt>uv->immutable</tt> for upvalues of loaded chunks.</li>
+<li>Initialize <tt>uv-&gt;immutable</tt> for upvalues of loaded chunks.</li>
 <li>Fix for cdata vs. non-cdata arithmetics/comparisons.</li>
 <li>Drop leftover regs in 'for' iterator assignment, too.</li>
 <li>Fix PHI remarking in SINK pass.</li>
