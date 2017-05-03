@@ -1,6 +1,6 @@
 /*
 ** Error handling.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_err_c
@@ -509,7 +509,7 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
   global_State *g = G(L);
   lj_trace_abort(g);
   setmref(g->jit_base, NULL);
-  L->status = 0;
+  L->status = LUA_OK;
 #if LJ_UNWIND_EXT
   err_raise_ext(errcode);
   /*

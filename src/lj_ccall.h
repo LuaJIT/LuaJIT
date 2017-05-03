@@ -1,6 +1,6 @@
 /*
 ** FFI C call handling.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_CCALL_H
@@ -79,8 +79,8 @@ typedef union FPRArg {
 typedef intptr_t GPRArg;
 typedef union FPRArg {
   double d;
-  float f;
-  uint32_t u32;
+  struct { LJ_ENDIAN_LOHI(float f; , float g;) };
+  struct { LJ_ENDIAN_LOHI(uint32_t lo; , uint32_t hi;) };
 } FPRArg;
 
 #elif LJ_TARGET_PPC

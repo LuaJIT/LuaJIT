@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- Verbose mode of the LuaJIT compiler.
 --
--- Copyright (C) 2005-2016 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -99,7 +99,7 @@ end
 local function dump_trace(what, tr, func, pc, otr, oex)
   if what == "start" then
     startloc = fmtfunc(func, pc)
-    startex = otr and "("..otr.."/"..oex..") " or ""
+    startex = otr and "("..otr.."/"..(oex == -1 and "stitch" or oex)..") " or ""
   else
     if what == "abort" then
       local loc = fmtfunc(func, pc)

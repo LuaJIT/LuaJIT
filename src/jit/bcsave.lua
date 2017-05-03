@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT module to save/list bytecode.
 --
--- Copyright (C) 2005-2016 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -63,8 +63,8 @@ local map_type = {
 }
 
 local map_arch = {
-  x86 = true, x64 = true, arm = true, arm64 = true, ppc = true,
-  mips = true, mipsel = true,
+  x86 = true, x64 = true, arm = true, arm64 = true, arm64be = true,
+  ppc = true, mips = true, mipsel = true,
 }
 
 local map_os = {
@@ -200,7 +200,7 @@ typedef struct {
 ]]
   local symname = LJBC_PREFIX..ctx.modname
   local is64, isbe = false, false
-  if ctx.arch == "x64" or ctx.arch == "arm64" then
+  if ctx.arch == "x64" or ctx.arch == "arm64" or ctx.arch == "arm64be" then
     is64 = true
   elseif ctx.arch == "ppc" or ctx.arch == "mips" then
     isbe = true
@@ -237,9 +237,9 @@ typedef struct {
   hdr.eendian = isbe and 2 or 1
   hdr.eversion = 1
   hdr.type = f16(1)
-  hdr.machine = f16(({ x86=3, x64=62, arm=40, arm64=183, ppc=20, mips=8, mipsel=8 })[ctx.arch])
+  hdr.machine = f16(({ x86=3, x64=62, arm=40, arm64=183, arm64be=183, ppc=20, mips=8, mipsel=8 })[ctx.arch])
   if ctx.arch == "mips" or ctx.arch == "mipsel" then
-    hdr.flags = 0x50001006
+    hdr.flags = f32(0x50001006)
   end
   hdr.version = f32(1)
   hdr.shofs = fofs(ffi.offsetof(o, "sect"))

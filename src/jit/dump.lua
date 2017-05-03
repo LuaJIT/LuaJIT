@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT compiler dump module.
 --
--- Copyright (C) 2005-2016 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -85,7 +85,7 @@ local nexitsym = 0
 local function fillsymtab_tr(tr, nexit)
   local t = {}
   symtabmt.__index = t
-  if jit.arch == "mips" or jit.arch == "mipsel" then
+  if jit.arch:sub(1, 4) == "mips" then
     t[traceexitstub(tr, 0)] = "exit"
     return
   end
@@ -338,6 +338,8 @@ local function formatk(tr, idx, sn)
   elseif t == 21 then -- int64_t
     s = sub(tostring(k), 1, -3)
     if sub(s, 1, 1) ~= "-" then s = "+"..s end
+  elseif sn == 0x1057fff then -- SNAP(1, SNAP_FRAME | SNAP_NORESTORE, REF_NIL)
+    return "----" -- Special case for LJ_FR2 slot 1.
   else
     s = tostring(k) -- For primitives.
   end
@@ -554,7 +556,7 @@ local function dump_trace(what, tr, func, pc, otr, oex)
   if what == "start" then
     if dumpmode.H then out:write('<pre class="ljdump">\n') end
     out:write("---- TRACE ", tr, " ", what)
-    if otr then out:write(" ", otr, "/", oex) end
+    if otr then out:write(" ", otr, "/", oex == -1 and "stitch" or oex) end
     out:write(" ", fmtfunc(func, pc), "\n")
   elseif what == "stop" or what == "abort" then
     out:write("---- TRACE ", tr, " ", what)
@@ -653,7 +655,8 @@ end
 local function dumpon(opt, outfile)
   if active then dumpoff() end
 
-  local colormode = os.getenv("COLORTERM") and "A" or "T"
+  local term = os.getenv("TERM")
+  local colormode = (term and term:match("color") or os.getenv("COLORTERM")) and "A" or "T"
   if opt then
     opt = gsub(opt, "[TAH]", function(mode) colormode = mode; return ""; end)
   end

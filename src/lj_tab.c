@@ -1,6 +1,6 @@
 /*
 ** Table handling.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -28,7 +28,6 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 
 #define hashlohi(t, lo, hi)	hashmask((t), hashrot((lo), (hi)))
 #define hashnum(t, o)		hashlohi((t), (o)->u32.lo, ((o)->u32.hi << 1))
-#define hashptr(t, p)		hashlohi((t), u32ptr(p), u32ptr(p) + HASH_BIAS)
 #if LJ_GC64
 #define hashgcref(t, r) \
   hashlohi((t), (uint32_t)gcrefu(r), (uint32_t)(gcrefu(r) >> 32))

@@ -1,6 +1,6 @@
 /*
 ** Common definitions for the JIT compiler.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_JIT_H
@@ -337,6 +337,10 @@ enum {
 #endif
 #if LJ_TARGET_MIPS
   LJ_K64_2P31,		/* 2^31 */
+#if LJ_64
+  LJ_K64_2P63,		/* 2^63 */
+  LJ_K64_M2P64,		/* -2^64 */
+#endif
 #endif
   LJ_K64__MAX,
 };
@@ -351,6 +355,10 @@ enum {
 #endif
 #if LJ_TARGET_PPC || LJ_TARGET_MIPS
   LJ_K32_2P31,		/* 2^31 */
+#endif
+#if LJ_TARGET_MIPS64
+  LJ_K32_2P63,		/* 2^63 */
+  LJ_K32_M2P64,		/* -2^64 */
 #endif
   LJ_K32__MAX
 };

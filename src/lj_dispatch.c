@@ -1,6 +1,6 @@
 /*
 ** Instruction dispatch handling.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_dispatch_c
@@ -267,7 +267,7 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
   case LUAJIT_MODE_FUNC:
   case LUAJIT_MODE_ALLFUNC:
   case LUAJIT_MODE_ALLSUBFUNC: {
-    cTValue *tv = idx == 0 ? frame_prev(L->base-1) :
+    cTValue *tv = idx == 0 ? frame_prev(L->base-1)-LJ_FR2 :
 		  idx > 0 ? L->base + (idx-1) : L->top + idx;
     GCproto *pt;
     if ((idx == 0 || tvisfunc(tv)) && isluafunc(&gcval(tv)->fn))

@@ -1,6 +1,6 @@
 /*
 ** Math library.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include <math.h>
@@ -221,10 +221,6 @@ LUALIB_API int luaopen_math(lua_State *L)
   rs = (RandomState *)lua_newuserdata(L, sizeof(RandomState));
   rs->valid = 0;  /* Use lazy initialization to save some time on startup. */
   LJ_LIB_REG(L, LUA_MATHLIBNAME, math);
-#if defined(LUA_COMPAT_MOD) && !LJ_52
-  lua_getfield(L, -1, "fmod");
-  lua_setfield(L, -2, "mod");
-#endif
   return 1;
 }
 
