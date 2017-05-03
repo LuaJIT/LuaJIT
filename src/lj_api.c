@@ -9,6 +9,8 @@
 #define lj_api_c
 #define LUA_CORE
 
+#include "lauxlib.h"
+
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
@@ -1217,6 +1219,18 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
     return 1;
   }
   return 0;
+}
+
+LUALIB_API int luaL_len(lua_State *L, int idx)
+{
+  int l;
+  int isnum;
+  lua_len(L, idx);
+  l = (int)lua_tointegerx(L, -1, &isnum);
+  if (!isnum)
+    luaL_error(L, "object length is not a number");
+  lua_pop(L, 1);  /* remove object */
+  return l;
 }
 
 /* -- Coroutine yield and resume ------------------------------------------ */
