@@ -1221,12 +1221,12 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
   return 0;
 }
 
-LUALIB_API int luaL_len(lua_State *L, int idx)
+LUALIB_API lua_Integer luaL_len(lua_State *L, int idx)
 {
-  int l;
+  lua_Integer l;
   int isnum;
   lua_len(L, idx);
-  l = (int)lua_tointegerx(L, -1, &isnum);
+  l = lua_tointegerx(L, -1, &isnum);
   if (!isnum)
     luaL_error(L, "object length is not a number");
   lua_pop(L, 1);  /* remove object */

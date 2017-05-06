@@ -274,7 +274,7 @@ static int pushargs(lua_State *L)
   lua_getglobal(L, "arg");
   if (!lua_istable(L, -1))
     luaL_error(L, "'arg' is not a table");
-  n = luaL_len(L, -1);
+  n = (int)luaL_len(L, -1);
   luaL_checkstack(L, n + 3, "too many arguments to script");
   for (i = 1; i <= n; i++)
     lua_rawgeti(L, -i, i);
