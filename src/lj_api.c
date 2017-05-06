@@ -790,6 +790,26 @@ LUA_API void lua_concat(lua_State *L, int n)
   /* else n == 1: nothing to do. */
 }
 
+LUA_API void lua_len (lua_State *L, int idx)
+{
+  TValue *o = index2adr(L, idx);
+  api_checkvalidindex(L, o);
+  if (tvisstr(o)) {
+    setnumV(L->top, strV(o)->len);
+  } else if (tvistab(o) && (!LJ_52 || tvisnil(lj_meta_lookup(L, o, MM_len)))) {
+    setnumV(L->top, lj_tab_len(tabV(o)));
+  } else {
+    TValue *v;
+    L->top = lj_meta_len(L, o);
+    L->top += 2;
+    lj_vm_call(L, L->top-2, 1+1);
+    L->top -= 2+LJ_FR2;
+    v = L->top+1+LJ_FR2;
+    copyTV(L, L->top, v);
+  }
+  incr_top(L);
+}
+
 /* -- Object getters ------------------------------------------------------ */
 
 LUA_API void lua_gettable(lua_State *L, int idx)
