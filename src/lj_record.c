@@ -81,9 +81,9 @@ static void rec_check_slots(jit_State *J)
   BCReg s, nslots = J->baseslot + J->maxslot;
   int32_t depth = 0;
   cTValue *base = J->L->base - J->baseslot;
-  lua_assert(J->baseslot >= 1 && J->baseslot < LJ_MAX_JSLOTS);
+  lua_assert(J->baseslot >= 1);
   lua_assert(J->baseslot == 1 || (J->slot[J->baseslot-1] & TREF_FRAME));
-  lua_assert(nslots < LJ_MAX_JSLOTS);
+  lua_assert(nslots <= LJ_MAX_JSLOTS);
   for (s = 0; s < nslots; s++) {
     TRef tr = J->slot[s];
     if (tr) {
