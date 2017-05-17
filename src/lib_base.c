@@ -545,6 +545,12 @@ LJLIB_CF(coroutine_status)
   return 1;
 }
 
+LJLIB_CF(coroutine_isyieldable)
+{
+  setboolV(L->top++, cframe_canyield(L->cframe));
+  return 1;
+}
+
 LJLIB_CF(coroutine_running)
 {
 #if LJ_52
