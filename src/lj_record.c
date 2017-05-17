@@ -731,6 +731,8 @@ void lj_record_call(jit_State *J, BCReg func, ptrdiff_t nargs)
   J->framedepth++;
   J->base += func+1+LJ_FR2;
   J->baseslot += func+1+LJ_FR2;
+  if (J->baseslot + J->maxslot >= LJ_MAX_JSLOTS)
+    lj_trace_err(J, LJ_TRERR_STACKOV);
 }
 
 /* Record tail call. */
