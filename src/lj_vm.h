@@ -35,6 +35,7 @@ LJ_ASMF int lj_vm_cpuid(uint32_t f, uint32_t res[4]);
 void lj_vm_cachesync(void *start, void *end);
 #endif
 LJ_ASMF double lj_vm_foldarith(double x, double y, int op);
+LJ_ASMF int64_t lj_vm_foldbitwise(int64_t x, int64_t y, int op);
 #if LJ_HASJIT
 LJ_ASMF double lj_vm_foldfpm(double x, int op);
 #endif
@@ -71,6 +72,7 @@ LJ_ASMF double lj_vm_log2(double);
 #define lj_vm_log2	log2
 #endif
 #if !(defined(_LJ_DISPATCH_H) && LJ_TARGET_MIPS)
+LJ_ASMF int32_t LJ_FASTCALL lj_vm_idivi(int32_t, int32_t);
 LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t, int32_t);
 #endif
 

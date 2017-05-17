@@ -70,6 +70,7 @@
   _(SUB,	N , ref, ref) \
   _(MUL,	C , ref, ref) \
   _(DIV,	N , ref, ref) \
+  _(IDIV,	N , ref, ref) \
   _(MOD,	N , ref, ref) \
   _(POW,	N , ref, ref) \
   _(NEG,	N , ref, ref) \

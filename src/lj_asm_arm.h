@@ -1499,6 +1499,7 @@ static void asm_mul(ASMState *as, IRIns *ir)
 #define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 #endif
 
+#define asm_idiv(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_idivi)
 #define asm_mod(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_modi)
 
 static void asm_neg(ASMState *as, IRIns *ir)

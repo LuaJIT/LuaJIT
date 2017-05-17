@@ -16,6 +16,7 @@
 /* Need our own global offset table for the dreaded MIPS calling conventions. */
 
 #ifndef _LJ_VM_H
+LJ_ASMF int32_t LJ_FASTCALL lj_vm_idivi(int32_t a, int32_t b);
 LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b);
 #endif
 
@@ -44,11 +45,11 @@ extern double __divdf3(double a, double b);
 #define GOTDEF(_) \
   _(floor) _(ceil) _(trunc) _(log) _(log10) _(exp) _(sin) _(cos) _(tan) \
   _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
-  _(pow) _(fmod) _(ldexp) _(lj_vm_modi) \
+  _(pow) _(fmod) _(ldexp) _(lj_vm_modi) _(lj_vm_idivi) \
   _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_dispatch_stitch) \
   _(lj_dispatch_profile) _(lj_err_throw) \
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \
-  _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) \
+  _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) _(lj_meta_bitwise) \
   _(lj_meta_call) _(lj_meta_cat) _(lj_meta_comp) _(lj_meta_equal) \
   _(lj_meta_for) _(lj_meta_istype) _(lj_meta_len) _(lj_meta_tget) \
   _(lj_meta_tset) _(lj_state_growstack) _(lj_strfmt_number) \

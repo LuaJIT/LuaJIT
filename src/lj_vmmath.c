@@ -43,6 +43,7 @@ double lj_vm_foldarith(double x, double y, int op)
   case IR_SUB - IR_ADD: return x-y; break;
   case IR_MUL - IR_ADD: return x*y; break;
   case IR_DIV - IR_ADD: return x/y; break;
+  case IR_IDIV - IR_ADD: return lj_vm_floor(x/y); break;
   case IR_MOD - IR_ADD: return x-lj_vm_floor(x/y)*y; break;
   case IR_POW - IR_ADD: return pow(x, y); break;
   case IR_NEG - IR_ADD: return -x; break;
@@ -55,6 +56,29 @@ double lj_vm_foldarith(double x, double y, int op)
 #endif
   default: return x;
   }
+}
+
+int64_t lj_vm_foldbitwise(int64_t x, int64_t y, int op)
+{
+  switch (op) {
+  case IR_BAND - IR_BAND: return x&y; break;
+  case IR_BOR  - IR_BAND: return x|y; break;
+  case IR_BXOR - IR_BAND: return x^y; break;
+  case IR_BSHL - IR_BAND: return x<<y; break;
+  case IR_BSHR - IR_BAND: return x>>y; break;
+  default: return ~x; /* IR_BNOT */
+  }
+}
+
+int32_t LJ_FASTCALL lj_vm_idivi(int32_t a, int32_t b)
+{
+  uint32_t y, ua, ub;
+  lua_assert(b != 0);  /* This must be checked before using this function. */
+  ua = a < 0 ? (uint32_t)-a : (uint32_t)a;
+  ub = b < 0 ? (uint32_t)-b : (uint32_t)b;
+  y = ua / ub;
+  if ((a^b) < 0) y = -y;
+  return (int32_t)y;
 }
 
 #if (LJ_HASJIT && !(LJ_TARGET_ARM || LJ_TARGET_ARM64 || LJ_TARGET_PPC)) || LJ_TARGET_MIPS

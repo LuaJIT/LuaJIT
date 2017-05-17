@@ -2206,12 +2206,14 @@ void lj_record_ins(jit_State *J)
     }
     break;
 
-  case BC_ADDNV: case BC_SUBNV: case BC_MULNV: case BC_DIVNV: case BC_MODNV:
+  case BC_ADDNV: case BC_SUBNV: case BC_MULNV: case BC_DIVNV: case BC_IDIVNV: case BC_MODNV:
     /* Swap rb/rc and rbv/rcv. rav is temp. */
     ix.tab = rc; ix.key = rc = rb; rb = ix.tab;
     copyTV(J->L, rav, rbv);
     copyTV(J->L, rbv, rcv);
     copyTV(J->L, rcv, rav);
+    if (op == BC_IDIVNV)
+      goto recidiv;
     if (op == BC_MODNV)
       goto recmod;
     /* fallthrough */
@@ -2225,6 +2227,14 @@ void lj_record_ins(jit_State *J)
       rc = rec_mm_arith(J, &ix, mm);
     break;
     }
+
+  case BC_IDIVVN: case BC_IDIVVV:
+  recidiv:
+    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+      rc = lj_opt_narrow_idiv(J, rb, rc, rbv, rcv);
+    else
+      rc = rec_mm_arith(J, &ix, MM_idiv);
+    break;
 
   case BC_MODVN: case BC_MODVV:
   recmod:
@@ -2240,6 +2250,36 @@ void lj_record_ins(jit_State *J)
     else
       rc = rec_mm_arith(J, &ix, MM_pow);
     break;
+
+  /* -- Bitwise ops ---------------------------------------------------- */
+
+  case BC_BNOT:
+    if (tref_isnumber_str(rc)) {
+      rc = lj_opt_narrow_bnot(J, rc, rcv);
+    } else {
+      ix.tab = rc;
+      copyTV(J->L, &ix.tabv, rcv);
+      rc = rec_mm_arith(J, &ix, MM_bnot);
+    }
+    break;
+
+  case BC_BANDNV: case BC_BORNV: case BC_BXORNV: case BC_SHLNV: case BC_SHRNV:
+    /* Swap rb/rc and rbv/rcv. rav is temp. */
+    ix.tab = rc; ix.key = rc = rb; rb = ix.tab;
+    copyTV(J->L, rav, rbv);
+    copyTV(J->L, rbv, rcv);
+    copyTV(J->L, rcv, rav);
+    /* fallthrough */
+  case BC_BANDVN: case BC_BORVN: case BC_BXORVN: case BC_SHLVN: case BC_SHRVN:
+  case BC_BANDVV: case BC_BORVV: case BC_BXORVV: case BC_SHLVV: case BC_SHRVV: {
+    MMS mm = bcmode_mm(op);
+    if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
+      rc = lj_opt_narrow_bitwise(J, rb, rc, rbv, rcv,
+			         (int)mm - (int)MM_band + (int)IR_BAND);
+    else
+      rc = rec_mm_arith(J, &ix, mm);
+    break;
+    }
 
   /* -- Miscellaneous ops ------------------------------------------------- */
 

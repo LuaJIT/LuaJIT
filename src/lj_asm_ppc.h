@@ -1245,6 +1245,7 @@ static void asm_mul(ASMState *as, IRIns *ir)
 }
 
 #define asm_div(as, ir)		asm_fparith(as, ir, PPCI_FDIV)
+#define asm_idiv(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_idivi)
 #define asm_mod(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_modi)
 #define asm_pow(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_powi)
 
