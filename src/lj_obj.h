@@ -310,7 +310,7 @@ typedef struct GCudata {
   uint8_t udtype;	/* Userdata type. */
   uint8_t unused2;
   GCRef env;		/* Should be at same offset in GCfunc. */
-  MSize len;		/* Size of payload. */
+  GCSize len;		/* Size of payload. */
   GCRef metatable;	/* Must be at same offset in GCtab. */
   uint32_t align1;	/* To force 8 byte alignment of the payload. */
 } GCudata;
