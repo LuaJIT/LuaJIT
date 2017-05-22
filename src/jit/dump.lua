@@ -582,7 +582,7 @@ local function dump_trace(what, tr, func, pc, otr, oex)
 end
 
 -- Dump recorded bytecode.
-local function dump_record(tr, func, pc, depth, callee)
+local function dump_record(_, func, pc, depth, callee)
   if depth ~= recdepth then
     recdepth = depth
     recprefix = rep(" .", depth)
