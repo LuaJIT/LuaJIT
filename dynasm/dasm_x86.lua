@@ -1413,6 +1413,15 @@ local map_op = {
   movntsd_2 =	"xr/qo:nF20F2BRm",
   movntss_2 =	"xr/do:F30F2BRm",
   -- popcnt is also in SSE4.2
+
+  -- AES-NI
+  aesdec_2 =	"rmo:660F38DErM",
+  aesdeclast_2 = "rmo:660F38DFrM",
+  aesenc_2 =	"rmo:660F38DCrM",
+  aesenclast_2 = "rmo:660F38DDrM",
+  aesimc_2 =	"rmo:660F38DBrM",
+  aeskeygenassist_3 = "rmio:660F3ADFrMU",
+  pclmulqdq_3 =	"rmio:660F3A44rMU",
 }
 
 ------------------------------------------------------------------------------
