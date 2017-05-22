@@ -56,6 +56,9 @@ LJLIB_ASM(assert)		LJLIB_REC(.)
 LJLIB_PUSH("nil")
 LJLIB_PUSH("boolean")
 LJLIB_PUSH(top-1)  /* boolean */
+#if LJ_TARGET_ARM64
+LJLIB_PUSH("userdata")
+#endif
 LJLIB_PUSH("userdata")
 LJLIB_PUSH("string")
 LJLIB_PUSH("upval")

@@ -7,7 +7,11 @@
 #include "lj_obj.h"
 #include "lj_bc.h"
 #include "lj_lib.h"
+#if LJ_TARGET_ARM64
+#include "buildvm_libbc_arm64.h"
+#else
 #include "buildvm_libbc.h"
+#endif
 
 /* Context for library definitions. */
 static uint8_t obuf[8192];
@@ -385,6 +389,8 @@ void emit_lib(BuildCtx *ctx)
 	  ok = LJ_HASJIT;
 	else if (!strcmp(buf, "#if LJ_HASFFI\n"))
 	  ok = LJ_HASFFI;
+        else if (!strcmp(buf, "#if LJ_TARGET_ARM64\n"))
+          ok = (LUAJIT_ARCH_ARM64 == LUAJIT_TARGET);
 	if (!ok) {
 	  int lvl = 1;
 	  while (fgets(buf, sizeof(buf), fp) != NULL) {

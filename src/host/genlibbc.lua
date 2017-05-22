@@ -15,9 +15,11 @@ local format = string.format
 
 local isbe = (string.byte(string.dump(function() end), 5) % 2 == 1)
 
+local arm64_target = false
+
 local function usage(arg)
   io.stderr:write("Usage: ", arg and arg[0] or "genlibbc",
-		  " [-o buildvm_libbc.h] lib_*.c\n")
+		  " [-o buildvm_libbc.h] [--arm64] lib_*.c\n")
   os.exit(1)
 end
 
@@ -26,11 +28,16 @@ local function parse_arg(arg)
   if not (arg and arg[1]) then
     usage(arg)
   end
-  if arg[1] == "-o" then
-    outfile = arg[2]
-    if not outfile then usage(arg) end
-    table.remove(arg, 1)
-    table.remove(arg, 1)
+  while arg[1] == "-o" or arg[1] == "--arm64" do
+    if arg[1] == "-o" then
+      outfile = arg[2]
+      if not outfile then usage(arg) end
+      table.remove(arg, 1)
+      table.remove(arg, 1)
+    elseif arg[1] == "--arm64" then
+      arm64_target = true
+      table.remove(arg, 1)
+    end
   end
   return outfile
 end
@@ -74,11 +81,6 @@ local function read_uleb128(p)
   return p, v
 end
 
--- ORDER LJ_T
-local name2itype = {
-  str = 5, func = 9, tab = 12, int = 14, num = 15
-}
-
 local BC = {}
 for i=0,#bcnames/6-1 do
   BC[string.gsub(string.sub(bcnames, i*6+1, i*6+6), " ", "")] = i
@@ -97,6 +99,18 @@ local function fixup_dump(dump, fixup)
   p = read_uleb128(p)
   p, sizebc = read_uleb128(p)
   local rawtab = {}
+  -- ORDER LJ_T
+  local name2itype
+  if arm64_target == true then
+    -- Because CHECK_num is not found anywhere, num type is omitted.
+    name2itype = {
+      str = 6, func = 10, tab = 13, int = 15
+    }
+  else
+    name2itype = {
+      str = 5, func = 9, tab = 12, int = 14, num = 15
+    }
+  end
   for i=0,sizebc-1 do
     local op = p[xop]
     if op == BC.KSHORT then
