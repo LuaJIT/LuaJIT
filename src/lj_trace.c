@@ -30,6 +30,7 @@
 #include "lj_vm.h"
 #include "lj_vmevent.h"
 #include "lj_target.h"
+#include "lj_fopen.h"
 
 /* -- Error handling ------------------------------------------------------ */
 
@@ -109,7 +110,7 @@ static void perftools_addtrace(GCtrace *T)
   if (!fp) {
     char fname[40];
     sprintf(fname, "/tmp/perf-%d.map", getpid());
-    if (!(fp = fopen(fname, "w"))) return;
+    if (!(fp = _lua_fopen(fname, "w"))) return;
     setlinebuf(fp);
   }
   fprintf(fp, "%lx %x TRACE_%d::%s:%u\n",
