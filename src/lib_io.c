@@ -25,6 +25,7 @@
 #include "lj_strfmt.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
+#include "lj_fopen.h"
 
 /* Userdata payload for I/O file. */
 typedef struct IOFileUD {
@@ -84,7 +85,7 @@ static IOFileUD *io_file_open(lua_State *L, const char *mode)
 {
   const char *fname = strdata(lj_lib_checkstr(L, 1));
   IOFileUD *iof = io_file_new(L);
-  iof->fp = fopen(fname, mode);
+  iof->fp = _lua_fopen(fname, mode);
   if (iof->fp == NULL)
     luaL_argerror(L, 1, lj_strfmt_pushf(L, "%s: %s", fname, strerror(errno)));
   return iof;
@@ -400,7 +401,7 @@ LJLIB_CF(io_open)
   GCstr *s = lj_lib_optstr(L, 2);
   const char *mode = s ? strdata(s) : "r";
   IOFileUD *iof = io_file_new(L);
-  iof->fp = fopen(fname, mode);
+  iof->fp = _lua_fopen(fname, mode);
   return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 }
 
