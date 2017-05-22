@@ -1018,6 +1018,10 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
   api_checknelems(L, 1);
   name = lj_debug_uvnamev(f, (uint32_t)(n-1), &val);
   if (name) {
+    /* Flush cache, as the upvalue might have PROTO_UV_IMMUTABLE set, which
+       doesn't take the debug library into account. But not during __gc. */
+    if (lj_trace_flushall(L))
+      lj_err_caller(L, LJ_ERR_NOGCMM);
     L->top--;
     copyTV(L, val, L->top);
     lj_gc_barrier(L, funcV(f), L->top);

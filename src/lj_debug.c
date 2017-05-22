@@ -13,6 +13,7 @@
 #include "lj_tab.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#include "lj_trace.h"
 #include "lj_bc.h"
 #include "lj_vm.h"
 #if LJ_HASJIT
@@ -426,8 +427,14 @@ LUA_API const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n)
 {
   const char *name = NULL;
   TValue *o = debug_localname(L, ar, &name, (BCReg)n);
-  if (name)
+  if (name) {
+    /* Flush cache, as the local might be aliased by an upvalue with
+       PROTO_UV_IMMUTABLE set, and said flag doesn't take the debug library
+       into account. But not during __gc. */
+    if (lj_trace_flushall(L))
+      lj_err_caller(L, LJ_ERR_NOGCMM);
     copyTV(L, o, L->top-1);
+  }
   L->top--;
   return name;
 }
