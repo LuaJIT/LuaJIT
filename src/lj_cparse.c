@@ -1059,7 +1059,7 @@ static void cp_decl_gccattribute(CPState *cp, CPDecl *decl)
     if (cp->tok == CTOK_IDENT) {
       GCstr *attrstr = cp->str;
       cp_next(cp);
-      switch (attrstr->hash) {
+      switch (lj_str_fast_hash(attrstr)) {
       case H_(64a9208e,8ce14319): case H_(8e6331b2,95a282af):  /* aligned */
 	cp_decl_align(cp, decl);
 	break;
@@ -1718,16 +1718,16 @@ static void cp_pragma(CPState *cp, BCLine pragmaline)
 {
   cp_next(cp);
   if (cp->tok == CTOK_IDENT &&
-      cp->str->hash == H_(e79b999f,42ca3e85))  {  /* pack */
+      !strcmp(strdata(cp->str), "pack")) {  /* pack */
     cp_next(cp);
     cp_check(cp, '(');
     if (cp->tok == CTOK_IDENT) {
-      if (cp->str->hash == H_(738e923c,a1b65954)) {  /* push */
+      if (!strcmp(strdata(cp->str), "push")) {  /* push */
 	if (cp->curpack < CPARSE_MAX_PACKSTACK) {
 	  cp->packstack[cp->curpack+1] = cp->packstack[cp->curpack];
 	  cp->curpack++;
 	}
-      } else if (cp->str->hash == H_(6c71cf27,6c71cf27)) {  /* pop */
+      } else if (!strcmp(strdata(cp->str), "pop")) {  /* pop */
 	if (cp->curpack > 0) cp->curpack--;
       } else {
 	cp_errmsg(cp, cp->tok, LJ_ERR_XSYMBOL);
