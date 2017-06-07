@@ -65,10 +65,9 @@ static Reg ra_alloc2(ASMState *as, IRIns *ir, RegSet allow)
 static void asm_sparejump_setup(ASMState *as)
 {
   MCode *mxp = as->mcbot;
-  /* Assumes sizeof(MCLink) == 8. */
-  if (((uintptr_t)mxp & (LJ_PAGESIZE-1)) == 8) {
+  if (((uintptr_t)mxp & (LJ_PAGESIZE-1)) == sizeof(MCLink)) {
     lua_assert(MIPSI_NOP == 0);
-    memset(mxp+2, 0, MIPS_SPAREJUMP*8);
+    memset(mxp, 0, MIPS_SPAREJUMP*2*sizeof(MCode));
     mxp += MIPS_SPAREJUMP*2;
     lua_assert(mxp < as->mctop);
     lj_mcode_sync(as->mcbot, mxp);
@@ -1947,7 +1946,9 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
 	  if (!cstart) cstart = p-1;
 	} else {  /* Branch out of range. Use spare jump slot in mcarea. */
 	  int i;
-	  for (i = 2; i < 2+MIPS_SPAREJUMP*2; i += 2) {
+	  for (i = (int)(sizeof(MCLink)/sizeof(MCode));
+	       i < (int)(sizeof(MCLink)/sizeof(MCode)+MIPS_SPAREJUMP*2);
+	       i += 2) {
 	    if (mcarea[i] == tjump) {
 	      delta = mcarea+i - p;
 	      goto patchbranch;
