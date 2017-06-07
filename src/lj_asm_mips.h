@@ -2466,7 +2466,11 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   MCode tjump = MIPSI_J|(((uintptr_t)target>>2)&0x03ffffffu);
   for (p++; p < pe; p++) {
     if (*p == exitload) {  /* Look for load of exit number. */
-      if (((p[-1] ^ (px-p)) & 0xffffu) == 0) {  /* Look for exitstub branch. */
+      /* Look for exitstub branch. Yes, this covers all used branch variants. */
+      if (((p[-1] ^ (px-p)) & 0xffffu) == 0 &&
+	  ((p[-1] & 0xf0000000u) == MIPSI_BEQ ||
+	   (p[-1] & 0xfc1e0000u) == MIPSI_BLTZ ||
+	   (p[-1] & 0xffe00000u) == MIPSI_BC1F)) {
 	ptrdiff_t delta = target - p;
 	if (((delta + 0x8000) >> 16) == 0) {  /* Patch in-range branch. */
 	patchbranch:
