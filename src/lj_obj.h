@@ -924,6 +924,9 @@ static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
 
 #if LJ_SOFTFP
 LJ_ASMF int32_t lj_vm_tobit(double x);
+#if LJ_TARGET_MIPS64
+LJ_ASMF int32_t lj_vm_tointg(double x);
+#endif
 #endif
 
 static LJ_AINLINE int32_t lj_num2bit(lua_Number n)

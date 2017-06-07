@@ -337,9 +337,6 @@
 #define LJ_ARCH_BITS		32
 #define LJ_TARGET_MIPS32	1
 #else
-#if LJ_ABI_SOFTFP || !LJ_ARCH_HASFPU
-#define LJ_ARCH_NOJIT		1	/* NYI */
-#endif
 #define LJ_ARCH_BITS		64
 #define LJ_TARGET_MIPS64	1
 #define LJ_TARGET_GC64		1
@@ -512,6 +509,7 @@
 #define LJ_ABI_SOFTFP		0
 #endif
 #define LJ_SOFTFP		(!LJ_ARCH_HASFPU)
+#define LJ_SOFTFP32		(LJ_SOFTFP && LJ_32)
 
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
 #define LJ_LE			0

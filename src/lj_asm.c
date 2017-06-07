@@ -338,7 +338,7 @@ static Reg ra_rematk(ASMState *as, IRRef ref)
   ra_modified(as, r);
   ir->r = RID_INIT;  /* Do not keep any hint. */
   RA_DBGX((as, "remat     $i $r", ir, r));
-#if !LJ_SOFTFP
+#if !LJ_SOFTFP32
   if (ir->o == IR_KNUM) {
     emit_loadk64(as, r, ir);
   } else
@@ -1305,7 +1305,7 @@ static void asm_call(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
 }
 
-#if !LJ_SOFTFP
+#if !LJ_SOFTFP32
 static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_pow];
@@ -1652,10 +1652,10 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_MUL: asm_mul(as, ir); break;
   case IR_MOD: asm_mod(as, ir); break;
   case IR_NEG: asm_neg(as, ir); break;
-#if LJ_SOFTFP
+#if LJ_SOFTFP32
   case IR_DIV: case IR_POW: case IR_ABS:
   case IR_ATAN2: case IR_LDEXP: case IR_FPMATH: case IR_TOBIT:
-    lua_assert(0);  /* Unused for LJ_SOFTFP. */
+    lua_assert(0);  /* Unused for LJ_SOFTFP32. */
     break;
 #else
   case IR_DIV: asm_div(as, ir); break;
