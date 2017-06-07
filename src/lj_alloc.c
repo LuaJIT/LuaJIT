@@ -343,7 +343,7 @@ static void *CALL_MMAP(size_t size)
 }
 #endif
 
-#if (defined(__FreeBSD__) || defined(__FreeBSD_kernel__)) && !LJ_TARGET_PS4
+#if ((defined(__FreeBSD__) && __FreeBSD__ < 10) || defined(__FreeBSD_kernel__)) && !LJ_TARGET_PS4
 
 #include <sys/resource.h>
 
