@@ -54,27 +54,18 @@ LJLIB_LUA(table_getn) /*
   end
 */
 
-LJLIB_CF(table_maxn)
-{
-  GCtab *t = lj_lib_checktab(L, 1);
-  TValue *array = tvref(t->array);
-  Node *node;
-  lua_Number m = 0;
-  ptrdiff_t i;
-  for (i = (ptrdiff_t)t->asize - 1; i >= 0; i--)
-    if (!tvisnil(&array[i])) {
-      m = (lua_Number)(int32_t)i;
-      break;
-    }
-  node = noderef(t->node);
-  for (i = (ptrdiff_t)t->hmask; i >= 0; i--)
-    if (!tvisnil(&node[i].val) && tvisnumber(&node[i].key)) {
-      lua_Number n = numberVnum(&node[i].key);
-      if (n > m) m = n;
-    }
-  setnumV(L->top-1, m);
-  return 1;
-}
+LJLIB_LUA(table_maxn) /*
+  function(t)
+    CHECK_tab(t)
+    local m = 0
+    for k, v in PAIRS(t) do
+      if type(k) == 'number' and k > m then
+        m = k
+      end
+    end
+    return m
+  end
+*/
 
 LJLIB_CF(table_insert)		LJLIB_REC(.)
 {
