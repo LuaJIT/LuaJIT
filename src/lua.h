@@ -103,6 +103,8 @@ typedef LUA_NUMBER lua_Number;
 /* type for integer functions */
 typedef LUA_INTEGER lua_Integer;
 
+/* unsigned integer type */
+typedef unsigned long int lua_Unsigned;
 
 
 /*
