@@ -54,7 +54,7 @@ LJLIB_LUA(table_getn) /*
   end
 */
 
-LJLIB_CF(table_maxn)
+LJLIB_CF(table_maxn)		LJLIB_REC(.)
 {
   GCtab *t = lj_lib_checktab(L, 1);
   TValue *array = tvref(t->array);

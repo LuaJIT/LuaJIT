@@ -663,3 +663,21 @@ MSize LJ_FASTCALL lj_tab_len(GCtab *t)
   return unbound_search(t, j);
 }
 
+lua_Number LJ_FASTCALL lj_tab_maxn(GCtab *t)
+{
+  lua_Number m = 0;
+  ptrdiff_t i;
+  for (i = (ptrdiff_t)t->asize; i >= 0; i--)
+    if (!tvisnil(arrayslot(t, i))) {
+      m = (lua_Number)i;
+      break;
+    }
+  for (i = (ptrdiff_t)t->hmask; i >=0; i--) {
+    Node *node = &noderef(t->node)[i];
+    if (!tvisnil(&node->val) && tvisnum(&node->key)) {
+      lua_Number n = numV(&node->key);
+      if (n > m) m = n;
+    }
+  }
+  return m;
+}
