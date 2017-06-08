@@ -29,6 +29,7 @@
 #define _LUAJIT_H
 
 #include "lua.h"
+#include "lj_def.h"
 
 #define LUAJIT_VERSION		"LuaJIT 2.1.0-beta3"
 #define LUAJIT_VERSION_NUM	20100  /* Version 2.1.0 = 02.01.00. */
@@ -72,6 +73,12 @@ LUA_API void luaJIT_profile_start(lua_State *L, const char *mode,
 LUA_API void luaJIT_profile_stop(lua_State *L);
 LUA_API const char *luaJIT_profile_dumpstack(lua_State *L, const char *fmt,
 					     int depth, size_t *len);
+
+/* Trace profiling API. */
+LUA_API void luaJIT_traceprofile_start(lua_State *L, int interval);
+LUA_API void luaJIT_traceprofile_stop(lua_State *L);
+LUA_API uint64_t *luaJIT_traceprofile_vmstats(lua_State *L);
+
 
 /* Enforce (dynamic) linker error for version mismatches. Call from main. */
 LUA_API void LUAJIT_VERSION_SYM(void);
