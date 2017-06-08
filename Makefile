@@ -85,6 +85,7 @@ FILE_SO= libluajit.so
 FILE_MAN= luajit.1
 FILE_PC= luajit.pc
 FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h
+FILES_LMOD= utf8.lua
 FILES_JITLIB= bc.lua bcsave.lua dump.lua p.lua v.lua zone.lua \
 	      dis_x86.lua dis_x64.lua dis_arm.lua dis_arm64.lua \
 	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
@@ -129,6 +130,7 @@ install: $(INSTALL_DEP)
 	  $(INSTALL_F) $(FILE_PC).tmp $(INSTALL_PC) && \
 	  $(RM) $(FILE_PC).tmp
 	cd src && $(INSTALL_F) $(FILES_INC) $(INSTALL_INC)
+	cd src && $(INSTALL_F) $(FILES_LMOD) $(INSTALL_LMOD)
 	cd src/jit && $(INSTALL_F) $(FILES_JITLIB) $(INSTALL_JITLIB)
 	@echo "==== Successfully installed LuaJIT $(VERSION) to $(PREFIX) ===="
 	@echo ""
@@ -144,6 +146,9 @@ uninstall:
 	$(UNINSTALL) $(INSTALL_T) $(INSTALL_STATIC) $(INSTALL_DYN) $(INSTALL_SHORT1) $(INSTALL_SHORT2) $(INSTALL_MAN)/$(FILE_MAN) $(INSTALL_PC)
 	for file in $(FILES_JITLIB); do \
 	  $(UNINSTALL) $(INSTALL_JITLIB)/$$file; \
+	  done
+	for file in $(FILES_LMOD); do \
+	  $(UNINSTALL) $(INSTALL_LMOD)/$$file; \
 	  done
 	for file in $(FILES_INC); do \
 	  $(UNINSTALL) $(INSTALL_INC)/$$file; \

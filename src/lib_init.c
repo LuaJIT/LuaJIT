@@ -26,6 +26,7 @@ static const luaL_Reg lj_lib_load[] = {
   { LUA_DBLIBNAME,	luaopen_debug },
   { LUA_BITLIBNAME,	luaopen_bit },
   { LUA_JITLIBNAME,	luaopen_jit },
+  { LUA_UTF8LIBNAME,	luaopen_utf8 }, /* require base, string, debug, bit */
   { NULL,		NULL }
 };
 
