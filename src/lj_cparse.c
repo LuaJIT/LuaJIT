@@ -1069,7 +1069,7 @@ static void cp_decl_gccattribute(CPState *cp, CPDecl *decl)
     if (cp->tok == CTOK_IDENT) {
       GCstr *attrstr = cp->str;
       cp_next(cp);
-      switch (attrstr->hash) {
+      switch (lj_str_indep_hash(attrstr)) {
       case H_(64a9208e,8ce14319): case H_(8e6331b2,95a282af):  /* aligned */
 	cp_decl_align(cp, decl);
 	break;
@@ -1138,7 +1138,7 @@ static void cp_decl_msvcattribute(CPState *cp, CPDecl *decl)
   while (cp->tok == CTOK_IDENT) {
     GCstr *attrstr = cp->str;
     cp_next(cp);
-    switch (attrstr->hash) {
+    switch (lj_str_indep_hash(attrstr)) {
     case H_(bc2395fa,98f267f8):  /* align */
       cp_decl_align(cp, decl);
       break;
@@ -1728,16 +1728,16 @@ static void cp_pragma(CPState *cp, BCLine pragmaline)
 {
   cp_next(cp);
   if (cp->tok == CTOK_IDENT &&
-      cp->str->hash == H_(e79b999f,42ca3e85))  {  /* pack */
+      (lj_str_indep_hash(cp->str)) == H_(e79b999f,42ca3e85))  {  /* pack */
     cp_next(cp);
     cp_check(cp, '(');
     if (cp->tok == CTOK_IDENT) {
-      if (cp->str->hash == H_(738e923c,a1b65954)) {  /* push */
+      if (lj_str_indep_hash(cp->str) == H_(738e923c,a1b65954)) {  /* push */
 	if (cp->curpack < CPARSE_MAX_PACKSTACK) {
 	  cp->packstack[cp->curpack+1] = cp->packstack[cp->curpack];
 	  cp->curpack++;
 	}
-      } else if (cp->str->hash == H_(6c71cf27,6c71cf27)) {  /* pop */
+      } else if (lj_str_indep_hash(cp->str) == H_(6c71cf27,6c71cf27)) {  /* pop */
 	if (cp->curpack > 0) cp->curpack--;
       } else {
 	cp_errmsg(cp, cp->tok, LJ_ERR_XSYMBOL);
@@ -1787,12 +1787,12 @@ static void cp_decl_multi(CPState *cp)
 	cp_line(cp, hashline);
 	continue;
       } else if (tok == CTOK_IDENT &&
-		 cp->str->hash == H_(187aab88,fcb60b42)) { /* line */
+		 lj_str_indep_hash(cp->str) == H_(187aab88,fcb60b42)) { /* line */
 	if (cp_next(cp) != CTOK_INTEGER) cp_err_token(cp, tok);
 	cp_line(cp, hashline);
 	continue;
       } else if (tok == CTOK_IDENT &&
-	  cp->str->hash == H_(f5e6b4f8,1d509107)) { /* pragma */
+	  lj_str_indep_hash(cp->str) == H_(f5e6b4f8,1d509107)) { /* pragma */
 	cp_pragma(cp, hashline);
 	continue;
       } else {

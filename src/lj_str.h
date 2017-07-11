@@ -24,4 +24,6 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 #define lj_str_newz(L, s)	(lj_str_new(L, s, strlen(s)))
 #define lj_str_newlit(L, s)	(lj_str_new(L, "" s, sizeof(s)-1))
 
+MSize lj_str_indep_hash(GCstr *str);
+
 #endif

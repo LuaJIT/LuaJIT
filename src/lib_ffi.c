@@ -727,7 +727,7 @@ LJLIB_CF(ffi_abi)	LJLIB_REC(.)
 {
   GCstr *s = lj_lib_checkstr(L, 1);
   int b = 0;
-  switch (s->hash) {
+  switch (lj_str_indep_hash(s)) {
 #if LJ_64
   case H_(849858eb,ad35fd06): b = 1; break;  /* 64bit */
 #else
