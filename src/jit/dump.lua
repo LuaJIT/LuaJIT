@@ -55,6 +55,8 @@
 
 -- Cache some library functions and objects.
 local jit = require("jit")
+local ffi = require("ffi")
+local ffiC = ffi.C
 assert(jit.version_num == 20005, "LuaJIT core/library version mismatch")
 local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
@@ -76,6 +78,25 @@ local bcline, disass
 local active, out, dumpmode
 
 ------------------------------------------------------------------------------
+
+-- If we're on Windows 10, enable the VT100 terminal mode
+-- to enable colorized ANSI output
+local function attempt_win10_vt100()
+  ffi.cdef([[
+    void* GetStdHandle(int nStdHandle);
+    int SetConsoleMode(void* hConsoleHandle, int mode);
+    enum {
+      STD_OUTPUT_HANDLE = -11,
+      ENABLE_PROCESSED_OUTPUT = 0x1,
+      ENABLE_WRAP_AT_EOL_OUTPUT = 0x2,
+      ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x4,
+    };
+  ]])
+  ffiC.SetConsoleMode(ffiC.GetStdHandle(ffiC.STD_OUTPUT_HANDLE),
+    ffiC.ENABLE_PROCESSED_OUTPUT +
+    ffiC.ENABLE_WRAP_AT_EOL_OUTPUT +
+    ffiC.ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+end
 
 local symtabmt = { __index = false }
 local symtab = {}
@@ -680,6 +701,9 @@ local function dumpon(opt, outfile)
   if colormode == "A" then
     colorize = colorize_ansi
     irtype = irtype_ansi
+    if jit.os == "Windows" then
+      attempt_win10_vt100()
+    end
   elseif colormode == "H" then
     colorize = colorize_html
     irtype = irtype_html
