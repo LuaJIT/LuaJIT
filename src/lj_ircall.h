@@ -287,7 +287,7 @@ LJ_DATA const CCallInfo lj_ir_callinfo[IRCALL__MAX+1];
 #define fp64_f2l __aeabi_f2lz
 #define fp64_f2ul __aeabi_f2ulz
 #endif
-#elif LJ_TARGET_MIPS
+#elif LJ_TARGET_MIPS || LJ_TARGET_PPC
 #define softfp_add __adddf3
 #define softfp_sub __subdf3
 #define softfp_mul __muldf3

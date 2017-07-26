@@ -387,6 +387,24 @@
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex by value in 2 or 4 GPRs. */
 
+#define CCALL_HANDLE_GPR \
+  /* Try to pass argument in GPRs. */ \
+  if (n > 1) { \
+    lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
+    if (ctype_isinteger(d->info) || ctype_isfp(d->info)) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+    else if (ngpr + n > maxgpr) \
+      ngpr = maxgpr;  /* Prevent reordering. */ \
+  } \
+  if (ngpr + n <= maxgpr) { \
+    dp = &cc->gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  } \
+
+#if LJ_ABI_SOFTFP
+#define CCALL_HANDLE_REGARG  CCALL_HANDLE_GPR
+#else
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
     if (nfpr + 1 <= CCALL_NARG_FPR) { \
@@ -395,24 +413,16 @@
       d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
       goto done; \
     } \
-  } else {  /* Try to pass argument in GPRs. */ \
-    if (n > 1) { \
-      lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
-      if (ctype_isinteger(d->info)) \
-	ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
-      else if (ngpr + n > maxgpr) \
-	ngpr = maxgpr;  /* Prevent reordering. */ \
-    } \
-    if (ngpr + n <= maxgpr) { \
-      dp = &cc->gpr[ngpr]; \
-      ngpr += n; \
-      goto done; \
-    } \
+  } else { \
+    CCALL_HANDLE_GPR \
   }
+#endif
 
+#if !LJ_ABI_SOFTFP
 #define CCALL_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     ctr = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */
+#endif
 
 #elif LJ_TARGET_MIPS32
 /* -- MIPS o32 calling conventions ---------------------------------------- */
@@ -1080,7 +1090,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
 
-#if LJ_TARGET_X64 || LJ_TARGET_PPC
+#if LJ_TARGET_X64 || (LJ_TARGET_PPC && !LJ_ABI_SOFTFP)
   cc->nfpr = nfpr;  /* Required for vararg functions. */
 #endif
   cc->nsp = nsp;

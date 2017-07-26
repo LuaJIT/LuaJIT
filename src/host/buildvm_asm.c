@@ -338,7 +338,7 @@ void emit_asm(BuildCtx *ctx)
 #if !(LJ_TARGET_PS3 || LJ_TARGET_PSVITA)
     fprintf(ctx->fp, "\t.section .note.GNU-stack,\"\"," ELFASM_PX "progbits\n");
 #endif
-#if LJ_TARGET_PPC && !LJ_TARGET_PS3
+#if LJ_TARGET_PPC && !LJ_TARGET_PS3 && !LJ_ABI_SOFTFP
     /* Hard-float ABI. */
     fprintf(ctx->fp, "\t.gnu_attribute 4, 1\n");
 #endif

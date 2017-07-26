@@ -419,6 +419,23 @@ void lj_ccallback_mcode_free(CTState *cts)
 
 #elif LJ_TARGET_PPC
 
+#define CALLBACK_HANDLE_GPR \
+  if (n > 1) { \
+    lua_assert(((LJ_ABI_SOFTFP && ctype_isnum(cta->info)) ||  /* double. */ \
+		ctype_isinteger(cta->info)) && n == 2);  /* int64_t. */ \
+    ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+  } \
+  if (ngpr + n <= maxgpr) { \
+    sp = &cts->cb.gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  }
+
+#if LJ_ABI_SOFTFP
+#define CALLBACK_HANDLE_REGARG \
+  CALLBACK_HANDLE_GPR \
+  UNUSED(isfp);
+#else
 #define CALLBACK_HANDLE_REGARG \
   if (isfp) { \
     if (nfpr + 1 <= CCALL_NARG_FPR) { \
@@ -427,20 +444,15 @@ void lj_ccallback_mcode_free(CTState *cts)
       goto done; \
     } \
   } else {  /* Try to pass argument in GPRs. */ \
-    if (n > 1) { \
-      lua_assert(ctype_isinteger(cta->info) && n == 2);  /* int64_t. */ \
-      ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
-    } \
-    if (ngpr + n <= maxgpr) { \
-      sp = &cts->cb.gpr[ngpr]; \
-      ngpr += n; \
-      goto done; \
-    } \
+    CALLBACK_HANDLE_GPR \
   }
+#endif
 
+#if !LJ_ABI_SOFTFP
 #define CALLBACK_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     *(double *)dp = *(float *)dp;  /* FPRs always hold doubles. */
+#endif
 
 #elif LJ_TARGET_MIPS32
 

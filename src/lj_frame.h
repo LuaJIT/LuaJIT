@@ -226,7 +226,7 @@ enum { LJ_CONT_TAILCALL, LJ_CONT_FFI_CALLBACK };  /* Special continuations. */
 #define CFRAME_OFS_L		36
 #define CFRAME_OFS_PC		32
 #define CFRAME_OFS_MULTRES	28
-#define CFRAME_SIZE		272
+#define CFRAME_SIZE		(LJ_ARCH_HASFPU ? 272 : 128)
 #define CFRAME_SHIFT_MULTRES	3
 #endif
 #elif LJ_TARGET_MIPS32

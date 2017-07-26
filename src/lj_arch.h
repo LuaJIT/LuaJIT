@@ -254,6 +254,29 @@
 #else
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_NAME		"ppc"
+
+#if !defined(LJ_ARCH_HASFPU)
+#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+#define LJ_ARCH_HASFPU		0
+#else
+#define LJ_ARCH_HASFPU		1
+#endif
+#endif
+
+#if !defined(LJ_ABI_SOFTFP)
+#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+#define LJ_ABI_SOFTFP		1
+#else
+#define LJ_ABI_SOFTFP		0
+#endif
+#endif
+#endif
+
+#if LJ_ABI_SOFTFP
+#define LJ_ARCH_NOJIT		1  /* NYI */
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
+#else
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
 #endif
 
 #define LJ_TARGET_PPC		1
@@ -262,7 +285,6 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
 
 #if LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC32ON64	1
@@ -415,16 +437,13 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
-#error "No support for PowerPC CPUs without double-precision FPU"
-#endif
 #if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
 #error "No support for little-endian PPC32"
 #endif
 #if LJ_ARCH_PPC64
 #error "No support for PowerPC 64 bit mode (yet)"
 #endif
-#ifdef __NO_FPRS__
+#if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS32
