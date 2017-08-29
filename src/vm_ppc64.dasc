@@ -2360,17 +2360,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Caveat: needs special frame unwinding, see below.
   |.if FFI
   |  .type CCSTATE, CCallState, CARG1
-  |  lwz TMP1, CCSTATE->spadj
   |    mflr TMP0
   |   lbz CARG2, CCSTATE->nsp
   |   lbz CARG3, CCSTATE->nfpr
-  |  neg TMP1, TMP1
   |    std TMP0, 16(sp)
   |   cmpdi cr1, CARG3, 0
   |   std TOCREG, 24(sp)
   |  mr TMP2, sp
   |   addic. CARG2, CARG2, -1
-  |  stdux sp, sp, TMP1
+  |  stdu sp, -CFRAME_SPACE(sp)
   |   crnot 4*cr1+eq, 4*cr1+eq		// For vararg calls.
   |  std r14, -8(TMP2)
   |  std CCSTATE, -16(TMP2)
@@ -4381,8 +4379,7 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
-  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
-  int i, lr_offset = -16 >> 2;
+  int i;
   switch (ctx->mode) {
   case BUILD_elfasm:
     fprintf(ctx->fp, "\t.section .debug_frame,\"\",@progbits\n");
@@ -4394,11 +4391,12 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.byte 0x1\n"			/* Version */
 	"\t.string \"\"\n"		/* augmentation */
 	"\t.uleb128 0x1\n"		/* code_alignment_factor */
-	"\t.sleb128 -4\n"		/* data_alignment_factor */
+	"\t.sleb128 -8\n"		/* data_alignment_factor */
 	"\t.byte 65\n"			/* return_address_register (LR) */
-	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"	/* DW_CFA_def_cfa */
+	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 %d\n"	/* DW_CFA_def_cfa */
 	"\t.align 2\n"
-	".LECIE0:\n\n");
+	".LECIE0:\n\n",
+        CFRAME_SIZE);
     fprintf(ctx->fp,
 	".LSFDE0:\n"			/* Frame Description Entry (FDE) */
 	"\t.long .LEFDE0-.LASFDE0\n"	/* length */
@@ -4407,11 +4405,17 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long .Lbegin\n"		/* initial_location */
 	"\t.long %d\n"			/* address_range */
 	"\t.byte 0xe\n\t.uleb128 %d\n"	/* DW_CFA_def_cfa_offset */
-	/* DW_CFA_offset_extended_sf */
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 %d\n"
-	/* DW_CFA_offset_extended */
-	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
-	fcofs, CFRAME_SIZE, lr_offset);
+	/* DW_CFA_offset_extended_sf (TOC) */
+	"\t.byte 0x11\n\t.uleb128 2\n\t.sleb128 %d\n"
+
+        /* DW_CFA_val_expression of size 9 for LR register */
+	"\t.byte 0x16\n\t.uleb128 65\n\t.uleb128 9\n"
+	"\t.byte 0x70\n\t.uleb128 1\n\t.sleb128 0\n"    /* DW_OP_breg */
+	"\t.byte 0x06\n"                /* DW_OP_deref */
+	"\t.byte 0x11\n\t.sleb128 16\n" /* DW_OP_consts */
+	"\t.byte 0x22\n"                /* DW_OP_plus */
+	"\t.byte 0x06\n",               /* DW_OP_deref */
+	(int)ctx->codesz, CFRAME_SIZE, 24 / -8);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"	/* DW_CFA_offset from r14 to r31 */
@@ -4420,94 +4424,6 @@ static void emit_asm_debug(BuildCtx *ctx)
     fprintf(ctx->fp,
 	"\t.align 2\n"
 	".LEFDE0:\n\n");
-#if LJ_HASFFI
-    fprintf(ctx->fp,
-	".LSFDE1:\n"			/* Frame Description Entry (FDE) */
-	"\t.long .LEFDE1-.LASFDE1\n"	/* length */
-	".LASFDE1:\n"
-	"\t.long .Lframe0\n"		/* CIE_ptr */
-	"\t.long lj_vm_ffi_call\n"	/* initial_location */
-	"\t.long %d\n"			/* address_range */
-	/* DW_CFA_offset_extended_sf */
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 %d\n"
-	"\t.byte 0x8e\n\t.uleb128 2\n"	/* DW_CFA_offset */
-	"\t.byte 0xd\n\t.uleb128 0xe\n"	/* DW_CFA_def_cfa_register */
-	"\t.align 2\n"
-	".LEFDE1:\n\n", (int)ctx->codesz - fcofs, lr_offset);
-#endif
-#if !LJ_NO_UNWIND
-    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
-    fprintf(ctx->fp,
-	".Lframe1:\n"
-	"\t.long .LECIE1-.LSCIE1\n"	/* length */
-	".LSCIE1:\n"			/* Common Information Entry (CIE) */
-	"\t.long 0\n"			/* CIE_Id */
-	"\t.byte 0x1\n"			/* Version */
-	"\t.string \"zPR\"\n"		/* augmentation string */
-	"\t.uleb128 0x1\n"		/* code_alignment_factor */
-	"\t.sleb128 -4\n"		/* data_alignment_factor */
-	"\t.byte 65\n"			/* return_address_register (LR) */
-	"\t.uleb128 6\n"			/* augmentation length */
-	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-	"\t.long lj_err_unwind_dwarf-.\n"
-	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"	/* DW_CFA_def_cfa */
-	"\t.align 2\n"
-	".LECIE1:\n\n");
-    fprintf(ctx->fp,
-	".LSFDE2:\n"
-	"\t.long .LEFDE2-.LASFDE2\n"
-	".LASFDE2:\n"
-	"\t.long .LASFDE2-.Lframe1\n"
-	"\t.long .Lbegin-.\n"
-	"\t.long %d\n"
-	"\t.uleb128 0\n"			/* augmentation length */
-	"\t.byte 0xe\n\t.uleb128 %d\n"		/* DW_CFA_def_cfa_offset */
-	/* DW_CFA_offset_extended_sf */
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 %d\n"
-	/* DW_CFA_offset_extended */
-	"\t.byte 0x5\n\t.uleb128 70\n\t.uleb128 55\n",
-	fcofs, CFRAME_SIZE, lr_offset);
-    for (i = 14; i <= 31; i++)
-      fprintf(ctx->fp,
-	"\t.byte %d\n\t.uleb128 %d\n"	/* DW_CFA_offset from r14 to r31 */
-	"\t.byte %d\n\t.uleb128 %d\n",	/* DW_CFA_offset from f14 to f31 */
-	0x80+i, 38+2*(31-i), 0x80+32+i, 2+2*(31-i));
-    fprintf(ctx->fp,
-	"\t.align 2\n"
-	".LEFDE2:\n\n");
-#if LJ_HASFFI
-    fprintf(ctx->fp,
-	".Lframe2:\n"
-	"\t.long .LECIE2-.LSCIE2\n"
-	".LSCIE2:\n"			/* Common Information Entry (CIE) */
-	"\t.long 0\n"			/* CIE_Id */
-	"\t.byte 0x1\n"			/* Version */
-	"\t.string \"zR\"\n"		/* augmentation string */
-	"\t.uleb128 0x1\n"		/* code_alignment_factor */
-	"\t.sleb128 -4\n"		/* data_alignment_factor */
-	"\t.byte 65\n"			/* return_address_register (LR) */
-	"\t.uleb128 1\n"			/* augmentation length */
-	"\t.byte 0x1b\n"			/* pcrel|sdata4 */
-	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"	/* DW_CFA_def_cfa */
-	"\t.align 2\n"
-	".LECIE2:\n\n");
-    fprintf(ctx->fp,
-	".LSFDE3:\n"
-	"\t.long .LEFDE3-.LASFDE3\n"
-	".LASFDE3:\n"
-	"\t.long .LASFDE3-.Lframe2\n"
-	"\t.long lj_vm_ffi_call-.\n"
-	"\t.long %d\n"
-	"\t.uleb128 0\n"			/* augmentation length */
-	/* DW_CFA_offset_extended_sf */
-	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 %d\n"
-	"\t.byte 0x8e\n\t.uleb128 2\n"	/* DW_CFA_offset */
-	"\t.byte 0xd\n\t.uleb128 0xe\n"	/* DW_CFA_def_cfa_register */
-	"\t.align 2\n"
-	".LEFDE3:\n\n", (int)ctx->codesz - fcofs, lr_offset);
-#endif
-#endif
     break;
   default:
     break;
