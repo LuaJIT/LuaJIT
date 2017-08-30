@@ -2286,11 +2286,12 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
-  |// Handler for callback functions. Callback slot number in r11, g in r12.
+  |// Handler for callback functions. Callback slot number in r11, g in r0.
   |->vm_ffi_callback:
   |.if FFI
   |.type CTSTATE, CTState, PC
   |  pic_code_setup vm_ffi_callback
+  |  mr r12, r0 // Use r12 as saveregs overwrites r0
   |  saveregs
   |  ld CTSTATE, GL:r12->ctype_state
   |   addi DISPATCH, r12, GG_G2DISP
