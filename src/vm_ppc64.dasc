@@ -1488,9 +1488,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |  lbz TMP0, L:CARG1->status
   |   ld TMP1, L:CARG1->cframe
-  |     la TMP3, L:CARG1->base
-  |     ld TMP2, 0(TMP3)
-  |     ld CARG2, 8(TMP3)
+  |     ld TMP2, L:CARG1->base
+  |     ld CARG2, L:CARG1->top
   |  cmpldi cr0, TMP0, LUA_YIELD
   |     add TMP3, CARG2, TMP0
   |   cmpldi cr1, TMP1, 0
