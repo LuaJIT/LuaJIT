@@ -387,6 +387,7 @@ static Reg asm_fuseloadk64(ASMState *as, IRIns *ir)
       ir->i = (int32_t)(as->mctop - as->mcbot);
       as->mcbot += 8;
       as->mclim = as->mcbot + MCLIM_REDZONE;
+      lj_mcode_commitbot(as->J, as->mcbot);
     }
     as->mrm.ofs = (int32_t)mcpofs(as, as->mctop - ir->i);
     as->mrm.base = RID_RIP;
