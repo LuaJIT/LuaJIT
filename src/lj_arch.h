@@ -273,7 +273,6 @@
 #endif
 
 #if LJ_ABI_SOFTFP
-#define LJ_ARCH_NOJIT		1  /* NYI */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 #else
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
