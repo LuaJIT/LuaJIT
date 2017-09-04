@@ -4390,39 +4390,40 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.long 0xffffffff\n"		/* CIE_Id */
 	"\t.byte 0x1\n"			/* Version */
 	"\t.string \"\"\n"		/* augmentation */
-	"\t.uleb128 0x1\n"		/* code_alignment_factor */
+	"\t.uleb128 4\n"		/* code_alignment_factor */
 	"\t.sleb128 -8\n"		/* data_alignment_factor */
 	"\t.byte 65\n"			/* return_address_register (LR) */
-	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 %d\n"	/* DW_CFA_def_cfa */
-	"\t.align 2\n"
-	".LECIE0:\n\n",
-        CFRAME_SIZE);
+	/* DW_CFA_def_cfa */
+	"\t.byte 0xc\n\t.uleb128 1\n\t.uleb128 0\n"
+	"\t.align 3\n"
+	".LECIE0:\n\n");
     fprintf(ctx->fp,
 	".LSFDE0:\n"			/* Frame Description Entry (FDE) */
 	"\t.long .LEFDE0-.LASFDE0\n"	/* length */
 	".LASFDE0:\n"
 	"\t.long .Lframe0\n"		/* CIE_ptr */
-	"\t.long .Lbegin\n"		/* initial_location */
-	"\t.long %d\n"			/* address_range */
-	"\t.byte 0xe\n\t.uleb128 %d\n"	/* DW_CFA_def_cfa_offset */
-	/* DW_CFA_offset_extended_sf (TOC) */
-	"\t.byte 0x11\n\t.uleb128 2\n\t.sleb128 %d\n"
+	"\t.quad .Lbegin\n"		/* initial_location */
+	"\t.quad %d\n"			/* address_range */
 
-        /* DW_CFA_val_expression of size 9 for LR register */
-	"\t.byte 0x16\n\t.uleb128 65\n\t.uleb128 9\n"
-	"\t.byte 0x70\n\t.uleb128 1\n\t.sleb128 0\n"    /* DW_OP_breg */
-	"\t.byte 0x06\n"                /* DW_OP_deref */
-	"\t.byte 0x11\n\t.sleb128 16\n" /* DW_OP_consts */
-	"\t.byte 0x22\n"                /* DW_OP_plus */
-	"\t.byte 0x06\n",               /* DW_OP_deref */
-	(int)ctx->codesz, CFRAME_SIZE, 24 / -8);
+	/* DW_CFA_def_cfa_offset */
+	"\t.byte 0xe\n\t.uleb128 %d\n"
+
+	/* DW_CFA_offset_extended_sf $lr */
+	"\t.byte 0x11\n\t.uleb128 65\n\t.sleb128 %d\n"
+
+	/* DW_CFA_offset (TOC) */
+	"\t.byte 0x82\n\t.uleb128 %d\n",
+
+	(int)ctx->codesz, CFRAME_SIZE, 16/-8, (24-400)/-8);
     for (i = 14; i <= 31; i++)
       fprintf(ctx->fp,
 	"\t.byte %d\n\t.uleb128 %d\n"	/* DW_CFA_offset from r14 to r31 */
 	"\t.byte %d\n\t.uleb128 %d\n",	/* DW_CFA_offset from f14 to f31 */
-	0x80+i, 38+2*(31-i), 0x80+32+i, 2+2*(31-i));
+	// SAVE_GPR_ SAVE_FPR_
+	0x80+i, (112-400)/-8 + 14-i, 0x80+32+i, (256-400)/-8 + 14-i);
+
     fprintf(ctx->fp,
-	"\t.align 2\n"
+	"\t.align 3\n"
 	".LEFDE0:\n\n");
     break;
   default:
