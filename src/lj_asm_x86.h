@@ -1759,7 +1759,7 @@ static void asm_sload(ASMState *as, IRIns *ir)
       emit_i8(as, irt_toitype(t));
       emit_rr(as, XO_ARITHi8, XOg_CMP, tmp);
       emit_shifti(as, XOg_SAR|REX_64, tmp, 47);
-      emit_rmro(as, XO_MOV, tmp|REX_64, base, ofs+4);
+      emit_rmro(as, XO_MOV, tmp|REX_64, base, ofs);
 #else
     } else {
       emit_i8(as, irt_toitype(t));
