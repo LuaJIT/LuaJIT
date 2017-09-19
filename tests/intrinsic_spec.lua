@@ -1140,7 +1140,7 @@ end)
 context("Intrinsic CSE", function()
 
   it("cse 1 input, same arg", function()
-    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add3")
     
     local function add3mul2(a)
       return ffi.C.add3(a)+ffi.C.add3(a)
@@ -1150,7 +1150,7 @@ context("Intrinsic CSE", function()
   end)
   
   it("cse 1 input, diff args", function()
-    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add3")
     
     local function add3mul2(a, b)
       return ffi.C.add3(a)+ffi.C.add3(b)
@@ -1162,7 +1162,7 @@ context("Intrinsic CSE", function()
   
   
   it("cse 1 input, same and diff args", function()
-    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add_imm3")
+    assert_cdef([[int32_t add3(int32_t n) __mcode("830mU", 3);]], "add3")
     
     local function add3mul2(a, b)
       return ffi.C.add3(a)+ffi.C.add3(b)+ffi.C.add3(a)
