@@ -759,7 +759,7 @@ static int lj_popcnt(uint32_t i)
 #define align16(n) ((n + 16) & ~(16 - 1))
 
 static int32_t alignsp(int32_t spadj, RegSet savereg) {
-  int32_t gprsave = lj_popcnt(savereg & RSET_GPR) * sizeof(intptr_t);
+  int32_t gprsave = lj_popcnt(savereg & RSET_GPR_DISPATCH) * sizeof(intptr_t);
 
   if (NEEDSFP && rset_test(savereg, RID_EBP)) {
     gprsave -= sizeof(intptr_t);
@@ -898,6 +898,29 @@ static Reg intrinsic_scratch(ASMState *as, RegSet allow)
   return r;
 }
 
+static void emit_tvload_gco(ASMState *as, Reg base, Reg temp, int32_t ofs)
+{
+#if LJ_GC64
+  emit_shifti(as, XOg_SHR|REX_64, temp, 17);
+
+  as->mrm.base = base;
+  as->mrm.idx = RID_NONE;
+  as->mrm.ofs = ofs;
+  if ((as->flags & JIT_F_BMI2))
+  {
+    emit_i8(as, 47);
+    emit_mrm(as, XV_RORX|VEX_64, temp, RID_MRM);
+  }
+  else
+  {
+    emit_shifti(as, XOg_ROR|REX_64, temp, 47);
+    emit_mrm(as, XO_MOV, temp|REX_64, RID_MRM);
+  }
+#else
+  emit_rmro(as, XO_MOV, temp, base, ofs);
+#endif
+}
+
 static void emit_savegpr(ASMState *as, Reg reg, Reg base, int ofs)
 {
   Reg temp, r = reg_rid(reg);
@@ -924,7 +947,7 @@ static void emit_savegpr(ASMState *as, Reg reg, Reg base, int ofs)
   temp = intrinsic_scratch(as, RSET_GPR);
   /* Save the register into a cdata who's pointer is inside a TValue on the Lua stack */
   emit_rmro(as, XO_MOVto, r, temp, sizeof(GCcdata));
-  emit_rmro(as, XO_MOV, temp, base, ofs);
+  emit_tvload_gco(as, base, temp, ofs);
 }
 
 static void emit_loadfpr(ASMState *as, uint32_t reg, Reg base, int ofs)
@@ -994,7 +1017,7 @@ static void emit_savefpr(ASMState *as, Reg reg, Reg base, int ofs)
 
     /* Save the register into a cdata who's pointer is inside a TValue on the Lua stack */
     emit_rmro(as, op, r, temp, sizeof(GCcdata));
-    emit_rmro(as, XO_MOV, temp, base, ofs);
+    emit_tvload_gco(as, base, temp, ofs);
   }
 }
 
