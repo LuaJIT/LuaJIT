@@ -780,6 +780,8 @@ int lj_intrinsic_fromcdef(lua_State *L, CTypeID fid, GCstr *opstr, uint32_t imm)
       /* Use opcode unmodified in its SSE form */
       intrins->flags &= ~INTRINSFLAG_VEX;
     }
+  } else if(!LJ_64 && (intrins->flags & INTRINSFLAG_REXW)) {
+    intrins->flags &= ~INTRINSFLAG_REXW;
   }
 #endif
 

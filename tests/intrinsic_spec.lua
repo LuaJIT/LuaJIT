@@ -429,7 +429,7 @@ context("__mcode", function()
   end) 
   
   it("output pointers", function() 
-    assert_cdef([[const char* addptr(const char* nptr, int32_t n) __mcode("03rM");]], "addptr")
+    assert_cdef([[const char* addptr(const char* nptr, int32_t n) __mcode("03rMX");]], "addptr")
     local s = "0123456789abcdefghijklmnopqrstvwxyz"
     
     local ptr = ffi.C.addptr(s, 0)
