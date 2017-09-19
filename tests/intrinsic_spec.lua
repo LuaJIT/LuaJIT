@@ -119,6 +119,27 @@ context("nop inout", function()
   end)
 
 if ffi.arch == "x64" then
+  it("gpr_gc64disp", function()       
+    assert_cdef([[void dispin(int64_t rax, int64_t rbx) __mcode("90_E") __reglist(out, int64_t rax)]], "dispin")
+
+    local function test_dispin(i, r1)
+        return (ffi.C.dispin(i, i + r1))
+    end
+    --Check that the dispatch register is restored if it was an input register
+    assert_jit(-3, test_dispin, -3, 999)
+    
+    --xor rb,rbx
+    assert_cdef([[void dispmod() __mcode("?E") __reglist(mod, rbx)]])
+    
+    local dispmod = ffi.intrinsic("dispmod", "\x48\x31\xDB", 3)  
+    local function test_dispmod(r1, r2, r3, r4, r5, r6, r7)
+        dispmod()
+        return r1 + r2 + r3 + r4 + r5 + r6 + r7
+    end
+    -- Check that the dispatched register is restored if its in the modifed register list
+    assert_jit(28, test_dispmod, 1, 2, 3, 4, 5, 6, 7)
+  end)
+
   it("gpr64", function()
     assert_cdef([[void gpr64_1(int64_t rdx) __mcode("90_E") __reglist(out, int64_t rdx)]], "gpr64_1")
 

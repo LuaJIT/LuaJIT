@@ -420,6 +420,22 @@ static void emit_loadu64(ASMState *as, Reg r, uint64_t u64)
 }
 #endif
 
+static void emit_loadisp(ASMState *as)
+{
+  uint64_t dispaddr = (uintptr_t)J2GG(as->J)->dispatch;
+  Reg ra = RID_DISPATCH;
+  if (checku32(dispaddr)) {
+    emit_loadi(as, ra, (int32_t)dispaddr);
+  } else {  /* Full-size 64 bit load. */
+    MCode *p = as->mcp;
+    *(uint64_t *)(p-8) = dispaddr;
+    p[-9] = (MCode)(XI_MOVri+(ra&7));
+    p[-10] = 0x48 + ((ra>>3)&1);
+    p -= 10;
+    as->mcp = p;
+  }
+}
+
 /* op r, [addr] */
 static void emit_rma(ASMState *as, x86Op xo, Reg rr, const void *addr)
 {

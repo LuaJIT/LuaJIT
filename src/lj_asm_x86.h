@@ -673,6 +673,7 @@ typedef struct IntrinsInfo {
   RegSet inset, outset, modset;
   /* First CARG ref used as limit for duplicate load checking when fusing */
   IRRef a1; 
+  int32_t indisp; /* Input register that overwrites the dispatch register */
 } IntrinsInfo;
 
 static int asm_swaprefs(ASMState *as, IRIns *ir, IRRef lref, IRRef rref);
@@ -681,6 +682,24 @@ static void asm_asmsetupargs(ASMState *as, IntrinsInfo *ininfo)
 {
   MSize n;
   CIntrinsic *intrins = ininfo->intrins;
+  int32_t gc64disp = -1;
+  /* Dispatch register is overwritten last */
+  if (ininfo->indisp != -1)
+  {
+    IRRef ref = ininfo->args[ininfo->indisp];
+    IRIns *ir = IR(ref);
+    lua_assert(reg_rid(ininfo->inregs[ininfo->indisp]) == RID_DISPATCH);
+
+    if (ra_hasreg(ir->r)) {
+      ra_noweak(as, ir->r);
+      emit_movrr(as, ir, RID_DISPATCH, ir->r);
+    } else {
+      /* Dynamic registers should never end up here */
+      lua_assert(!intrin_regmode(intrins) || ininfo->indisp >= intrins->dyninsz);
+      Reg r = ra_allocref(as, ref, RSET_GPR & ~ininfo->inset);
+      emit_movrr(as, ir, RID_DISPATCH, ir->r);
+    }
+  }
 
   /* move or load args into input registers */
   for (n = 0; n < intrins->insz; n++) {
@@ -691,6 +710,9 @@ static void asm_asmsetupargs(ASMState *as, IntrinsInfo *ininfo)
     /* Skip any dynamic registers already setup by opcode intrinsics */
     if (ininfo->inregs[n] == 0xff) {
       lua_assert(n < intrins->dyninsz);
+      continue;
+    } else if(ra_regbl(r)) {
+      /* Defer overwriting the dispatch register until the end */
       continue;
     }
 
@@ -818,7 +840,13 @@ static void asm_intrin_opcode(ASMState *as, IRIns *ir, IntrinsInfo *ininfo)
       ** will corrupt it */
       if (dynreg == DYNREG_OPEXT)
         rset_clear(allow, RID_EBP);
-      asm_fusexref(as, rref, allow);
+      /* Don't try to fuse if the GC64 dispatch register is an input register */
+      if (ininfo->indisp == -1)
+      {
+        asm_fusexref(as, rref, allow);
+      } else {
+        as->mrm.base = ra_allocref(as, rref, allow);
+      }
     } else {
       as->mrm.base = IR(rref)->r;
     }
@@ -889,6 +917,7 @@ int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo
   RegSet evict = 0, outset = 0, aout = 0;
   int32_t i = intrin_regmode(intrins) ? intrins->dyninsz : 0;
   int32_t dynout = intrin_dynrout(intrins) ? 1 : 0;
+  int32_t gc64disp = -1;
   int used = 0;
 
   /* Gather the output register IR instructions */
@@ -915,7 +944,7 @@ int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo
   }
   
   if (!used && !intrin_sideeff(intrins)) {
-    /* IR is dead code */
+    /* IR is dead code if non of the output registers are used */
     return 0;
   }
   evict = ininfo->modset;
@@ -928,13 +957,20 @@ int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo
 
     ininfo->inset |= RID2RSET(r);
     /* Don't evict if the arg was allocated the correct register */
-    if (!rset_test(as->freeset, r) && arg->r != r) {
+    if (!rset_test(as->freeset, r) && arg->r != r && !ra_regbl(r)) {
       evict |= RID2RSET(r);
+    } else if(ra_regbl(r)) {
+      ininfo->indisp = i;
     }
   }
 
   for (i = dynout; i < intrins->outsz; i++) {
-    outset |= RID2RSET(reg_rid(intrins->out[i]));
+    Reg r = reg_rid(intrins->out[i]);
+    if(!ra_regbl(r)){
+      outset |= RID2RSET(r);
+    } else {
+      gc64disp = i;
+    }
   }
   ininfo->outset = outset;
   /* Don't evict register that currently have our output values live in them */
@@ -952,6 +988,8 @@ int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo
       IRIns *irret = IR(results[i]);
       Reg r = intrins->out[i];
 
+      if(LJ_GC64 && i == gc64disp)
+        continue;      
       if (!ra_used(irret) || (!rset_test(as->freeset, r) && irret->r != r)) {
         ra_evictset(as, RID2RSET(r));
         if (!ra_used(irret))
@@ -960,6 +998,18 @@ int asm_intrin_results(ASMState *as, IRIns *ir, CIntrinsic* intrins, IntrinsInfo
 
       ra_destreg(as, irret, r);
     }
+  }
+
+  if (gc64disp != -1)
+  {
+    IRIns *dispreg = IR(results[gc64disp]);
+    /* Don't overwrite any fixed out registers since there marked free at this point but still live */
+    Reg r = ra_dest(as, dispreg, RSET_GPR & ~ininfo->inset); 
+    emit_loadisp(as);
+    emit_movrr(as, dispreg, r, RID_DISPATCH); 
+  } else if(ininfo->indisp != -1) {
+    /* Dispatch register was modified or was an input register so restore it right after the intrinsic */
+    emit_loadisp(as);
   }
 
   return 1;
@@ -977,6 +1027,7 @@ static void asm_intrinsic(ASMState *as, IRIns *ir, IRIns *asmend)
   ininfo.intrins = intrins;
   ininfo.modset = intrin_getmodrset(cts, intrins);
   ininfo.asmend = asmend;
+  ininfo.indisp = -1;
   memcpy(ininfo.inregs, intrins->in, sizeof(ininfo.inregs));
 
   if (!intrins->wrapped) {

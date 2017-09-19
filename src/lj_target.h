@@ -26,6 +26,8 @@ typedef uint32_t Reg;
 
 #define ra_noreg(r)		((r) & RID_NONE)
 #define ra_hasreg(r)		(!((r) & RID_NONE))
+/* Is the register black listed from being allocated in the JIT */
+#define ra_regbl(r) (LJ_GC64 && LUAJIT_TARGET == LUAJIT_ARCH_X64 && r == RID_DISPATCH)
 
 /* The ra_hashint() macro assumes a previous test for ra_noreg(). */
 #define ra_hashint(r)		((r) < RID_SUNK)
