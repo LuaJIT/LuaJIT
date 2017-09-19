@@ -378,14 +378,14 @@ local function setasserteq(func)
   asserteq = func
 end
 
-require("jit.opt").start("hotloop=2")
+require("jit.opt").start("hotloop=2", "minstitch=60000")
 --force the loop and function header in testjit to abort and be patched
 local dummyfunc = function() return "" end
 for i=1,30 do
   pcall(testsingle, "", dummyfunc, "")
 end
 
-require("jit.opt").start("hotloop=6")
+require("jit.opt").start("hotloop=6", "minstitch=0")
 
 return {
   testsingle = testsingle,
