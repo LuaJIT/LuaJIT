@@ -421,7 +421,8 @@ int dasm_encode(Dst_DECL, void *buffer)
 	}
 	case DASM_REL_LG: p++; if (n >= 0) goto rel_pc;
 	  b++; n = (int)(ptrdiff_t)D->globals[-n];
-	case DASM_REL_A: rel_a: n -= (int)(ptrdiff_t)(cp+4); goto wd; /* !x64 */
+	case DASM_REL_A: rel_a:
+	  n -= (unsigned int)(ptrdiff_t)(cp+4); goto wd; /* !x64 */
 	case DASM_REL_PC: rel_pc: {
 	  int shrink = *b++;
 	  int *pb = DASM_POS2PTR(D, n); if (*pb < 0) { n = pb[1]; goto rel_a; }
