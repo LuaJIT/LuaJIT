@@ -2015,6 +2015,7 @@ static void asm_setup_regsp(ASMState *as)
     ir->prev = REGSP_INIT;
     if (irt_is64(ir->t) && ir->o != IR_KNULL) {
 #if LJ_GC64
+      /* The false-positive of irt_is64() for ASMREF_L (REF_NIL) is OK here. */
       ir->i = 0;  /* Will become non-zero only for RIP-relative addresses. */
 #else
       /* Make life easier for backends by putting address of constant in i. */
