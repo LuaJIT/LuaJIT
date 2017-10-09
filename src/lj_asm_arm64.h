@@ -870,7 +870,13 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   int32_t kofs = ofs + (int32_t)offsetof(Node, key);
   int bigofs = !emit_checkofs(A64I_LDRx, ofs);
   RegSet allow = RSET_GPR;
-  Reg dest = (ra_used(ir) || bigofs) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
+  Reg dest;
+  if (ra_used(ir) || bigofs) {
+    dest = ra_dest(as, ir, RSET_GPR);
+    rset_clear(allow, dest);
+  } else {
+    dest = RID_NONE;
+  }
   Reg node = ra_alloc1(as, ir->op1, allow);
   Reg key = ra_scratch(as, rset_clear(allow, node));
   Reg idx = node;
@@ -879,7 +885,6 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   rset_clear(allow, key);
   if (bigofs) {
     idx = dest;
-    rset_clear(allow, dest);
     kofs = (int32_t)offsetof(Node, key);
   } else if (ra_hasreg(dest)) {
     emit_opk(as, A64I_ADDx, dest, node, ofs, allow);
