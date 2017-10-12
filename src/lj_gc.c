@@ -26,11 +26,18 @@
 #endif
 #include "lj_trace.h"
 #include "lj_vm.h"
+#include "lj_vmevent.h"
 
 #define GCSTEPSIZE	1024u
 #define GCSWEEPMAX	40
 #define GCSWEEPCOST	10
 #define GCFINALIZECOST	100
+
+static void gc_setstate(global_State *g, int newstate)
+{
+  lj_vmevent_callback(mainthread(g), VMEVENT_GC_STATECHANGE, (void*)(uintptr_t)newstate);
+  g->gc.state = newstate;
+}
 
 /* Macros to set GCobj colors and flags. */
 #define white2gray(x)		((x)->gch.marked &= (uint8_t)~LJ_GC_WHITES)
@@ -94,7 +101,7 @@ static void gc_mark_start(global_State *g)
   gc_markobj(g, tabref(mainthread(g)->env));
   gc_marktv(g, &g->registrytv);
   gc_mark_gcroot(g);
-  g->gc.state = GCSpropagate;
+  gc_setstate(g, GCSpropagate);
 }
 
 /* Mark open upvalues. */
@@ -614,20 +621,21 @@ static size_t gc_onestep(lua_State *L)
   case GCSpropagate:
     if (gcref(g->gc.gray) != NULL)
       return propagatemark(g);  /* Propagate one gray object. */
-    g->gc.state = GCSatomic;  /* End of mark phase. */
+    gc_setstate(g, GCSatomic); /* End of mark phase. */
     return 0;
   case GCSatomic:
     if (tvref(g->jit_base))  /* Don't run atomic phase on trace. */
       return LJ_MAX_MEM;
     atomic(g, L);
-    g->gc.state = GCSsweepstring;  /* Start of sweep phase. */
+    gc_setstate(g, GCSsweepstring);  /* Start of sweep phase. */
     g->gc.sweepstr = 0;
     return 0;
   case GCSsweepstring: {
     GCSize old = g->gc.total;
     gc_fullsweep(g, &g->strhash[g->gc.sweepstr++]);  /* Sweep one chain. */
-    if (g->gc.sweepstr > g->strmask)
-      g->gc.state = GCSsweep;  /* All string hash chains sweeped. */
+    if (g->gc.sweepstr > g->strmask) {
+      gc_setstate(g, GCSsweep);  /* All string hash chains sweeped. */
+    }
     lua_assert(old >= g->gc.total);
     g->gc.estimate -= old - g->gc.total;
     return GCSWEEPCOST;
@@ -641,12 +649,12 @@ static size_t gc_onestep(lua_State *L)
       if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
 	lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
       if (gcref(g->gc.mmudata)) {  /* Need any finalizations? */
-	g->gc.state = GCSfinalize;
+	gc_setstate(g, GCSfinalize);
 #if LJ_HASFFI
 	g->gc.nocdatafin = 1;
 #endif
       } else {  /* Otherwise skip this phase to help the JIT. */
-	g->gc.state = GCSpause;  /* End of GC cycle. */
+	gc_setstate(g, GCSpause);  /* End of GC cycle. */
 	g->gc.debt = 0;
       }
     }
@@ -664,7 +672,7 @@ static size_t gc_onestep(lua_State *L)
 #if LJ_HASFFI
     if (!g->gc.nocdatafin) lj_tab_rehash(L, ctype_ctsG(g)->finalizer);
 #endif
-    g->gc.state = GCSpause;  /* End of GC cycle. */
+    gc_setstate(g, GCSpause);  /* End of GC cycle. */
     g->gc.debt = 0;
     return 0;
   default:
@@ -737,14 +745,14 @@ void lj_gc_fullgc(lua_State *L)
     setgcrefnull(g->gc.gray);  /* Reset lists from partial propagation. */
     setgcrefnull(g->gc.grayagain);
     setgcrefnull(g->gc.weak);
-    g->gc.state = GCSsweepstring;  /* Fast forward to the sweep phase. */
+    gc_setstate(g, GCSsweepstring);  /* Fast forward to the sweep phase. */
     g->gc.sweepstr = 0;
   }
   while (g->gc.state == GCSsweepstring || g->gc.state == GCSsweep)
     gc_onestep(L);  /* Finish sweep. */
   lua_assert(g->gc.state == GCSfinalize || g->gc.state == GCSpause);
   /* Now perform a full GC. */
-  g->gc.state = GCSpause;
+  gc_setstate(g, GCSpause);
   do { gc_onestep(L); } while (g->gc.state != GCSpause);
   g->gc.threshold = (g->gc.estimate/100) * g->gc.pause;
   g->vmstate = ostate;
