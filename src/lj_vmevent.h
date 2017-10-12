@@ -7,6 +7,7 @@
 #define _LJ_VMEVENT_H
 
 #include "lj_obj.h"
+#include "lj_dispatch.h"
 
 /* Registry key for VM event handler table. */
 #define LJ_VMEVENTS_REGKEY	"_VMEVENTS"
@@ -30,9 +31,25 @@ typedef enum {
   LJ_VMEVENT__MAX
 } VMEvent;
 
+typedef enum VMEvent2{
+  VMEVENT_SHUTDOWN,
+  VMEVENT_LOADSTRING,
+  VMEVENT_BC,
+  VMEVENT_TRACE_START,
+  VMEVENT_TRACE_STOP,
+  VMEVENT_TRACE_ABORT,
+  VMEVENT_TRACE_EXIT,
+  VMEVENT_TRACE_FLUSH,
+  VMEVENT_RECORD,
+  VMEVENT_PROTO_BLACKLISTED,
+  VMEVENT__MAX
+} VMEvent2;
+
 #ifdef LUAJIT_DISABLE_VMEVENT
 #define lj_vmevent_send(L, ev, args)		UNUSED(L)
 #define lj_vmevent_send_(L, ev, args, post)	UNUSED(L)
+#define lj_vmevent_send_trace(L, ev, args, post)	UNUSED(L)
+#define lj_vmevent_send2(L, ev, callbackarg, args)	UNUSED(L)
 #else
 #define lj_vmevent_send(L, ev, args) \
   if (G(L)->vmevmask & VMEVENT_MASK(LJ_VMEVENT_##ev)) { \
@@ -43,6 +60,9 @@ typedef enum {
     } \
   }
 #define lj_vmevent_send_(L, ev, args, post) \
+  if(L2J(L)->vmevent_cb != NULL){\
+    L2J(L)->vmevent_cb(L2J(L)->vmevent_data, L, VMEVENT_##ev, 0);\
+  }\
   if (G(L)->vmevmask & VMEVENT_MASK(LJ_VMEVENT_##ev)) { \
     ptrdiff_t argbase = lj_vmevent_prepare(L, LJ_VMEVENT_##ev); \
     if (argbase) { \
@@ -51,6 +71,23 @@ typedef enum {
       post \
     } \
   }
+
+#define lj_vmevent_callback(L, ev, args) \
+  if(L2J(L)->vmevent_cb != NULL){\
+    L2J(L)->vmevent_cb(L2J(L)->vmevent_data, L, ev, args);\
+  }
+
+#define lj_vmevent_send2(L, ev, callbackarg, args) \
+  if(L2J(L)->vmevent_cb != NULL){\
+    L2J(L)->vmevent_cb(L2J(L)->vmevent_data, L, VMEVENT_##ev, callbackarg);\
+  }\
+  lj_vmevent_send(L, ev, args) 
+
+#define lj_vmevent_send_trace(L, subevent, args) \
+  if(L2J(L)->vmevent_cb != NULL){\
+    L2J(L)->vmevent_cb(L2J(L)->vmevent_data, L, VMEVENT_TRACE_##subevent, 0);\
+  }\
+  lj_vmevent_send(L, TRACE, args)
 
 LJ_FUNC ptrdiff_t lj_vmevent_prepare(lua_State *L, VMEvent ev);
 LJ_FUNC void lj_vmevent_call(lua_State *L, ptrdiff_t argbase);

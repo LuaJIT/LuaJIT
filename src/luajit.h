@@ -73,6 +73,13 @@ LUA_API void luaJIT_profile_stop(lua_State *L);
 LUA_API const char *luaJIT_profile_dumpstack(lua_State *L, const char *fmt,
 					     int depth, size_t *len);
 
+/* Low-level VM event callback API. */
+typedef void(*luaJIT_vmevent_callback)(void *data, lua_State *L,
+                                       int eventid, void *eventdata);
+
+LUA_API int luaJIT_vmevent_sethook(lua_State *L, luaJIT_vmevent_callback cb, void *data);
+LUA_API luaJIT_vmevent_callback luaJIT_vmevent_gethook(lua_State *L, void **data);
+
 /* Enforce (dynamic) linker error for version mismatches. Call from main. */
 LUA_API void LUAJIT_VERSION_SYM(void);
 
