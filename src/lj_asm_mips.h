@@ -859,6 +859,9 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   Reg dest = ra_dest(as, ir, allow);
   Reg tab = ra_alloc1(as, ir->op1, rset_clear(allow, dest));
   Reg key = RID_NONE, type = RID_NONE, tmpnum = RID_NONE, tmp1 = RID_TMP, tmp2;
+#if LJ_64
+  Reg cmp64 = RID_NONE;
+#endif
   IRRef refkey = ir->op2;
   IRIns *irkey = IR(refkey);
   int isk = irref_isk(refkey);
@@ -901,6 +904,26 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 #endif
   tmp2 = ra_scratch(as, allow);
   rset_clear(allow, tmp2);
+#if LJ_64
+  if (LJ_SOFTFP || !irt_isnum(kt)) {
+    /* Allocate cmp64 register used for 64-bit comparisons */
+    if (LJ_SOFTFP && irt_isnum(kt)) {
+      cmp64 = key;
+    } else if (!isk && irt_isaddr(kt)) {
+      cmp64 = tmp2;
+    } else {
+      int64_t k;
+      if (isk && irt_isaddr(kt)) {
+	k = ((int64_t)irt_toitype(irkey->t) << 47) | irkey[1].tv.u64;
+      } else {
+	lua_assert(irt_ispri(kt) && !irt_isnil(kt));
+	k = ~((int64_t)~irt_toitype(ir->t) << 47);
+      }
+      cmp64 = ra_allock(as, k, allow);
+      rset_clear(allow, cmp64);
+    }
+  }
+#endif
 
   /* Key not found in chain: jump to exit (if merged) or load niltv. */
   l_end = emit_label(as);
@@ -943,24 +966,9 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     emit_dta(as, MIPSI_DSRA32, tmp1, tmp1, 15);
     emit_tg(as, MIPSI_DMTC1, tmp1, tmpnum);
     emit_tsi(as, MIPSI_LD, tmp1, dest, (int32_t)offsetof(Node, key.u64));
-  } else if (LJ_SOFTFP && irt_isnum(kt)) {
-    emit_branch(as, MIPSI_BEQ, tmp1, key, l_end);
-    emit_tsi(as, MIPSI_LD, tmp1, dest, (int32_t)offsetof(Node, key.u64));
-  } else if (irt_isaddr(kt)) {
-    Reg refk = tmp2;
-    if (isk) {
-      int64_t k = ((int64_t)irt_toitype(irkey->t) << 47) | irkey[1].tv.u64;
-      refk = ra_allock(as, k, allow);
-      rset_clear(allow, refk);
-    }
-    emit_branch(as, MIPSI_BEQ, tmp1, refk, l_end);
-    emit_tsi(as, MIPSI_LD, tmp1, dest, offsetof(Node, key));
   } else {
-    Reg pri = ra_allock(as, ~((int64_t)~irt_toitype(ir->t) << 47), allow);
-    rset_clear(allow, pri);
-    lua_assert(irt_ispri(kt) && !irt_isnil(kt));
-    emit_branch(as, MIPSI_BEQ, tmp1, pri, l_end);
-    emit_tsi(as, MIPSI_LD, tmp1, dest, offsetof(Node, key));
+    emit_branch(as, MIPSI_BEQ, tmp1, cmp64, l_end);
+    emit_tsi(as, MIPSI_LD, tmp1, dest, (int32_t)offsetof(Node, key.u64));
   }
   *l_loop = MIPSI_BNE | MIPSF_S(tmp1) | ((as->mcp-l_loop-1) & 0xffffu);
   if (!isk && irt_isaddr(kt)) {
