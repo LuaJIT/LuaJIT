@@ -141,6 +141,17 @@ LJLIB_CF(jit_attach)
   return 0;
 }
 
+LJLIB_CF(jit_prngstate)
+{
+  jit_State *J = L2J(L);
+  int32_t cur = (int32_t)J->prngstate;
+  if (L->base < L->top && !tvisnil(L->base)) {
+    J->prngstate = (uint32_t)lj_lib_checkint(L, 1);
+  }
+  setintV(L->top++, cur);
+  return 1;
+}
+
 LJLIB_PUSH(top-5) LJLIB_SET(os)
 LJLIB_PUSH(top-4) LJLIB_SET(arch)
 LJLIB_PUSH(top-3) LJLIB_SET(version_num)
