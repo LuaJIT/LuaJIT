@@ -124,30 +124,45 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
 static int io_file_readnum(lua_State *L, FILE *fp)
 {
   lua_Number d;
-  if (fscanf(fp, LUA_NUMBER_SCAN, &d) == 1) {
-    if (LJ_DUALNUM) {
-      int32_t i = lj_num2int(d);
-      if (d == (lua_Number)i && !tvismzero((cTValue *)&d)) {
-	setintV(L->top++, i);
-	return 1;
-      }
+  int rc;
+  for (;;) {
+    rc = fscanf(fp, LUA_NUMBER_SCAN, &d);
+    if (LJ_LIKELY(rc == 1)) break;
+    if (ferror(fp)) {
+      if (errno == EINTR) { clearerr(fp); continue; }
+      return 0;
     }
-    setnumV(L->top++, d);
-    return 1;
-  } else {
-    setnilV(L->top++);
+    L->top++;
     return 0;
   }
+  if (LJ_DUALNUM) {
+    int32_t i = lj_num2int(d);
+    if (d == (lua_Number)i && !tvismzero((cTValue *)&d)) {
+      setintV(L->top++, i);
+      return 1;
+    }
+  }
+  setnumV(L->top++, d);
+  return 1;
 }
 
 static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
 {
-  MSize m = LUAL_BUFFERSIZE, n = 0, ok = 0;
-  char *buf;
+  MSize m = LUAL_BUFFERSIZE, n = 0, ok = 0, size = 0;
+  char *buf, *rc;
   for (;;) {
-    buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
-    if (fgets(buf+n, m-n, fp) == NULL) break;
-    n += (MSize)strlen(buf+n);
+    buf = lj_buf_tmp(L, m) + n;
+    size = m - n;
+    for (;;) {
+      rc = fgets(buf, size, fp);
+      if (LJ_LIKELY(rc != NULL)) break;
+      if (ferror(fp)) {
+        if (errno == EINTR) { clearerr(fp); continue; }
+        lj_gc_check(L);
+        return 0;
+      }
+    }
+    n += (MSize)strlen(buf);
     ok |= n;
     if (n && buf[n-1] == '\n') { n -= chop; break; }
     if (n >= m - 64) m += m;
@@ -162,9 +177,14 @@ static void io_file_readall(lua_State *L, FILE *fp)
   MSize m, n;
   for (m = LUAL_BUFFERSIZE, n = 0; ; m += m) {
     char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
-    n += (MSize)fread(buf+n, 1, m-n, fp);
-    if (n != m) {
-      setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+    for (;;) {
+      n += (MSize)fread(buf+n, 1, m-n, fp);
+      if (n == m) break;
+      if (LJ_UNLIKELY(ferror(fp))) {
+        if (errno == EINTR) { clearerr(fp); continue; }
+      } else {
+        setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+      }
       lj_gc_check(L);
       return;
     }
@@ -175,10 +195,18 @@ static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
 {
   if (m) {
     char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
-    MSize n = (MSize)fread(buf, 1, m, fp);
-    setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+    MSize n;
+    for (;;) {
+      n = (MSize)fread(buf, 1, m, fp);
+      if (LJ_UNLIKELY(ferror(fp))) {
+        if (errno == EINTR) { clearerr(fp); continue; }
+      } else {
+        setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
+      }
+      break;
+    }
     lj_gc_check(L);
-    return (n > 0 || m == 0);
+    return n > 0;
   } else {
     int c = getc(fp);
     ungetc(c, fp);
