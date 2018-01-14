@@ -850,20 +850,21 @@ LJLIB_CF(string_format)
     } else { /* format item */
       char form[MAX_FMTSPEC];  /* to store the format (`%...') */
       char buff[MAX_FMTITEM];  /* to store the formatted item */
+      int n = 0;
       if (++arg > top)
 	luaL_argerror(L, arg, lj_obj_typename[0]);
       strfrmt = scanformat(L, strfrmt, form);
       switch (*strfrmt++) {
       case 'c':
-	sprintf(buff, form, lj_lib_checkint(L, arg));
+	n = sprintf(buff, form, lj_lib_checkint(L, arg));
 	break;
       case 'd':  case 'i':
 	addintlen(form);
-	sprintf(buff, form, num2intfrm(L, arg));
+	n = sprintf(buff, form, num2intfrm(L, arg));
 	break;
       case 'o':  case 'u':  case 'x':  case 'X':
 	addintlen(form);
-	sprintf(buff, form, num2uintfrm(L, arg));
+	n = sprintf(buff, form, num2uintfrm(L, arg));
 	break;
       case 'e':  case 'E': case 'f': case 'g': case 'G': case 'a': case 'A': {
 	TValue tv;
@@ -880,10 +881,10 @@ LJLIB_CF(string_format)
 	  nbuf[len] = '\0';
 	  for (p = form; *p < 'A' && *p != '.'; p++) ;
 	  *p++ = 's'; *p = '\0';
-	  sprintf(buff, form, nbuf);
+	  n = sprintf(buff, form, nbuf);
 	  break;
 	}
-	sprintf(buff, form, (double)tv.n);
+	n = sprintf(buff, form, (double)tv.n);
 	break;
 	}
       case 'q':
@@ -902,14 +903,14 @@ LJLIB_CF(string_format)
 	  luaL_addvalue(&b);
 	  continue;
 	}
-	sprintf(buff, form, strdata(str));
+	n = sprintf(buff, form, strdata(str));
 	break;
 	}
       default:
 	lj_err_callerv(L, LJ_ERR_STRFMTO, *(strfrmt -1));
 	break;
       }
-      luaL_addlstring(&b, buff, strlen(buff));
+      luaL_addlstring(&b, buff, n);
     }
   }
   luaL_pushresult(&b);
