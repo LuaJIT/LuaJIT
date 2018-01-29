@@ -100,8 +100,8 @@ static void sink_mark_ins(jit_State *J)
 	   (LJ_32 && ir+1 < irlast && (ir+1)->o == IR_HIOP &&
 	    !sink_checkphi(J, ir, (ir+1)->op2))))
 	irt_setmark(ir->t);  /* Mark ineligible allocation. */
-      /* fallthrough */
 #endif
+      /* fallthrough */
     case IR_USTORE:
       irt_setmark(IR(ir->op2)->t);  /* Mark stored value. */
       break;

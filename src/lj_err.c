@@ -153,6 +153,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
       if ((frame-1)->u32.lo == LJ_CONT_FFI_CALLBACK)
 	goto unwind_c;
 #endif
+      /* fallthrough */
     case FRAME_VARG:  /* Vararg frame. */
       frame = frame_prevd(frame);
       break;
