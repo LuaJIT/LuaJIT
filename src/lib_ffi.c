@@ -193,7 +193,7 @@ LJLIB_CF(ffi_meta___eq)		LJLIB_REC(cdata_arith MM_eq)
 
 LJLIB_CF(ffi_meta___len)	LJLIB_REC(cdata_arith MM_len)
 {
-  return ffi_arith(L);
+  return lj_carith_len(L);
 }
 
 LJLIB_CF(ffi_meta___lt)		LJLIB_REC(cdata_arith MM_lt)
