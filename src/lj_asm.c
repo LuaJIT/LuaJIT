@@ -2142,9 +2142,12 @@ static void asm_setup_regsp(ASMState *as)
 	if (ir->op2 != REF_NIL && as->evenspill < 4)
 	  as->evenspill = 4;  /* lj_cdata_newv needs 4 args. */
       }
+      /* fallthrough */
 #else
+      /* fallthrough */
     case IR_CNEW:
 #endif
+      /* fallthrough */
     case IR_TNEW: case IR_TDUP: case IR_CNEWI: case IR_TOSTR:
     case IR_BUFSTR:
       ir->prev = REGSP_HINT(RID_RET);
@@ -2165,6 +2168,7 @@ static void asm_setup_regsp(ASMState *as)
     case IR_LDEXP:
 #endif
 #endif
+      /* fallthrough */
     case IR_POW:
       if (!LJ_SOFTFP && irt_isnum(ir->t)) {
 	if (inloop)
@@ -2176,7 +2180,7 @@ static void asm_setup_regsp(ASMState *as)
 	continue;
 #endif
       }
-      /* fallthrough for integer POW */
+      /* fallthrough */ /* for integer POW */
     case IR_DIV: case IR_MOD:
       if (!irt_isnum(ir->t)) {
 	ir->prev = REGSP_HINT(RID_RET);
@@ -2213,6 +2217,7 @@ static void asm_setup_regsp(ASMState *as)
     case IR_BSHL: case IR_BSHR: case IR_BSAR:
       if ((as->flags & JIT_F_BMI2))  /* Except if BMI2 is available. */
 	break;
+      /* fallthrough */
     case IR_BROL: case IR_BROR:
       if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r)) {
 	IR(ir->op2)->r = REGSP_HINT(RID_ECX);
