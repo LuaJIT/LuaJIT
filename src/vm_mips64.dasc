@@ -2661,7 +2661,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.  slt CRET1, CARG2, CARG1
   |8:
   |  jr ra
-  |.  nop
+  |.  li CRET1, 0
   |9:
   |  jr ra
   |.  move CRET1, CRET2
