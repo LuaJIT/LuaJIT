@@ -11,6 +11,7 @@
 #if LJ_HASFFI
 
 LJ_FUNC int lj_carith_op(lua_State *L, MMS mm);
+LJ_FUNC int lj_carith_len(lua_State *L);
 
 #if LJ_32 && LJ_HASJIT
 LJ_FUNC int64_t lj_carith_mul64(int64_t x, int64_t k);

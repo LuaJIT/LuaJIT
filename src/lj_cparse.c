@@ -590,28 +590,34 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	k->id = k2.id > k3.id ? k2.id : k3.id;
 	continue;
       }
+      /* fallthrough */
     case 1:
       if (cp_opt(cp, CTOK_OROR)) {
 	cp_expr_sub(cp, &k2, 2); k->i32 = k->u32 || k2.u32; k->id = CTID_INT32;
 	continue;
       }
+      /* fallthrough */
     case 2:
       if (cp_opt(cp, CTOK_ANDAND)) {
 	cp_expr_sub(cp, &k2, 3); k->i32 = k->u32 && k2.u32; k->id = CTID_INT32;
 	continue;
       }
+      /* fallthrough */
     case 3:
       if (cp_opt(cp, '|')) {
 	cp_expr_sub(cp, &k2, 4); k->u32 = k->u32 | k2.u32; goto arith_result;
       }
+      /* fallthrough */
     case 4:
       if (cp_opt(cp, '^')) {
 	cp_expr_sub(cp, &k2, 5); k->u32 = k->u32 ^ k2.u32; goto arith_result;
       }
+      /* fallthrough */
     case 5:
       if (cp_opt(cp, '&')) {
 	cp_expr_sub(cp, &k2, 6); k->u32 = k->u32 & k2.u32; goto arith_result;
       }
+      /* fallthrough */
     case 6:
       if (cp_opt(cp, CTOK_EQ)) {
 	cp_expr_sub(cp, &k2, 7); k->i32 = k->u32 == k2.u32; k->id = CTID_INT32;
@@ -620,6 +626,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	cp_expr_sub(cp, &k2, 7); k->i32 = k->u32 != k2.u32; k->id = CTID_INT32;
 	continue;
       }
+      /* fallthrough */
     case 7:
       if (cp_opt(cp, '<')) {
 	cp_expr_sub(cp, &k2, 8);
@@ -654,6 +661,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	k->id = CTID_INT32;
 	continue;
       }
+      /* fallthrough */
     case 8:
       if (cp_opt(cp, CTOK_SHL)) {
 	cp_expr_sub(cp, &k2, 9); k->u32 = k->u32 << k2.u32;
@@ -666,6 +674,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	  k->u32 = k->u32 >> k2.u32;
 	continue;
       }
+      /* fallthrough */
     case 9:
       if (cp_opt(cp, '+')) {
 	cp_expr_sub(cp, &k2, 10); k->u32 = k->u32 + k2.u32;
@@ -675,6 +684,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
       } else if (cp_opt(cp, '-')) {
 	cp_expr_sub(cp, &k2, 10); k->u32 = k->u32 - k2.u32; goto arith_result;
       }
+      /* fallthrough */
     case 10:
       if (cp_opt(cp, '*')) {
 	cp_expr_unary(cp, &k2); k->u32 = k->u32 * k2.u32; goto arith_result;
