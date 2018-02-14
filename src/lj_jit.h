@@ -1,6 +1,6 @@
 /*
 ** Common definitions for the JIT compiler.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_JIT_H
@@ -157,6 +157,12 @@ typedef uint8_t MCode;
 #else
 typedef uint32_t MCode;
 #endif
+
+/* Linked list of MCode areas. */
+typedef struct MCLink {
+  MCode *next;		/* Next area. */
+  size_t size;		/* Size of current area. */
+} MCLink;
 
 /* Stack snapshot header. */
 typedef struct SnapShot {
@@ -337,6 +343,10 @@ enum {
 #endif
 #if LJ_TARGET_MIPS
   LJ_K64_2P31,		/* 2^31 */
+#if LJ_64
+  LJ_K64_2P63,		/* 2^63 */
+  LJ_K64_M2P64,		/* -2^64 */
+#endif
 #endif
   LJ_K64__MAX,
 };
@@ -352,6 +362,10 @@ enum {
 #if LJ_TARGET_PPC || LJ_TARGET_MIPS
   LJ_K32_2P31,		/* 2^31 */
 #endif
+#if LJ_TARGET_MIPS64
+  LJ_K32_2P63,		/* 2^63 */
+  LJ_K32_M2P64,		/* -2^64 */
+#endif
   LJ_K32__MAX
 };
 
@@ -360,7 +374,7 @@ enum {
   ((TValue *)(((intptr_t)&J->ksimd[2*(n)] + 15) & ~(intptr_t)15))
 
 /* Set/reset flag to activate the SPLIT pass for the current trace. */
-#if LJ_SOFTFP || (LJ_32 && LJ_HASFFI)
+#if LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI)
 #define lj_needsplit(J)		(J->needsplit = 1)
 #define lj_resetsplit(J)	(J->needsplit = 0)
 #else
@@ -423,7 +437,7 @@ typedef struct jit_State {
   MSize sizesnapmap;	/* Size of temp. snapshot map buffer. */
 
   PostProc postproc;	/* Required post-processing after execution. */
-#if LJ_SOFTFP || (LJ_32 && LJ_HASFFI)
+#if LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI)
   uint8_t needsplit;	/* Need SPLIT pass. */
 #endif
   uint8_t retryrec;	/* Retry recording. */

@@ -1,6 +1,6 @@
 /*
 ** SPLIT: Split 64 bit IR instructions into 32 bit IR instructions.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_split_c
@@ -8,7 +8,7 @@
 
 #include "lj_obj.h"
 
-#if LJ_HASJIT && (LJ_SOFTFP || (LJ_32 && LJ_HASFFI))
+#if LJ_HASJIT && (LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI))
 
 #include "lj_err.h"
 #include "lj_buf.h"
@@ -436,7 +436,8 @@ static void split_ir(jit_State *J)
 	nir->o = IR_CONV;  /* Pass through loword. */
 	nir->op2 = (IRT_INT << 5) | IRT_INT;
 	hi = split_emit(J, IRT(ir->o == IR_NEG ? IR_BXOR : IR_BAND, IRT_SOFTFP),
-			hisubst[ir->op1], hisubst[ir->op2]);
+	       hisubst[ir->op1],
+	       lj_ir_kint(J, (int32_t)(0x7fffffffu + (ir->o == IR_NEG))));
 	break;
       case IR_SLOAD:
 	if ((nir->op2 & IRSLOAD_CONVERT)) {  /* Convert from int to number. */

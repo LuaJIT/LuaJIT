@@ -1,6 +1,6 @@
 /*
 ** FFI C call handling.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -301,7 +301,7 @@
   unsigned int cl = ccall_classify_struct(cts, ctr); \
   if ((cl & 4)) { /* Combine float HFA from separate registers. */ \
     CTSize i = (cl >> 8) - 1; \
-    do { ((uint32_t *)dp)[i] = cc->fpr[i].u32; } while (i--); \
+    do { ((uint32_t *)dp)[i] = cc->fpr[i].lo; } while (i--); \
   } else { \
     if (cl > 1) sp = (uint8_t *)&cc->fpr[0]; \
     memcpy(dp, sp, ctr->size); \
@@ -331,7 +331,7 @@
 
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex by value in separate (!) FPRs or on stack. */ \
-  isfp = ctr->size == 2*sizeof(float) ? 2 : 1;
+  isfp = sz == 2*sizeof(float) ? 2 : 1;
 
 #define CCALL_HANDLE_REGARG \
   if (LJ_TARGET_IOS && isva) { \
@@ -359,6 +359,13 @@
     } \
   }
 
+#if LJ_BE
+#define CCALL_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    sp = (uint8_t *)&cc->fpr[0].f;
+#endif
+
+
 #elif LJ_TARGET_PPC
 /* -- PPC calling conventions --------------------------------------------- */
 
@@ -380,6 +387,24 @@
 #define CCALL_HANDLE_COMPLEXARG \
   /* Pass complex by value in 2 or 4 GPRs. */
 
+#define CCALL_HANDLE_GPR \
+  /* Try to pass argument in GPRs. */ \
+  if (n > 1) { \
+    lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
+    if (ctype_isinteger(d->info) || ctype_isfp(d->info)) \
+      ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
+    else if (ngpr + n > maxgpr) \
+      ngpr = maxgpr;  /* Prevent reordering. */ \
+  } \
+  if (ngpr + n <= maxgpr) { \
+    dp = &cc->gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  } \
+
+#if LJ_ABI_SOFTFP
+#define CCALL_HANDLE_REGARG  CCALL_HANDLE_GPR
+#else
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
     if (nfpr + 1 <= CCALL_NARG_FPR) { \
@@ -388,24 +413,16 @@
       d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
       goto done; \
     } \
-  } else {  /* Try to pass argument in GPRs. */ \
-    if (n > 1) { \
-      lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
-      if (ctype_isinteger(d->info)) \
-	ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
-      else if (ngpr + n > maxgpr) \
-	ngpr = maxgpr;  /* Prevent reordering. */ \
-    } \
-    if (ngpr + n <= maxgpr) { \
-      dp = &cc->gpr[ngpr]; \
-      ngpr += n; \
-      goto done; \
-    } \
+  } else { \
+    CCALL_HANDLE_GPR \
   }
+#endif
 
+#if !LJ_ABI_SOFTFP
 #define CCALL_HANDLE_RET \
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     ctr = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */
+#endif
 
 #elif LJ_TARGET_MIPS32
 /* -- MIPS o32 calling conventions ---------------------------------------- */
@@ -865,7 +882,8 @@ noth:  /* Not a homogeneous float/double aggregate. */
   return 0;  /* Struct is in GPRs. */
 }
 
-void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp, int ft)
+static void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp,
+			      int ft)
 {
   if (LJ_ABI_SOFTFP ? ft :
       ((ft & 3) == FTYPE_FLOAT || (ft >> 2) == FTYPE_FLOAT)) {
@@ -1068,9 +1086,16 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 	*(int32_t *)dp = d->size == 1 ? (int32_t)*(int8_t *)dp :
 					(int32_t)*(int16_t *)dp;
     }
+#if LJ_TARGET_ARM64 && LJ_BE
+    if (isfp && d->size == sizeof(float))
+      ((float *)dp)[1] = ((float *)dp)[0];  /* Floats occupy high slot. */
+#endif
+#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE)
+    if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info)
 #if LJ_TARGET_MIPS64
-    if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info) ||
-	 (isfp && nsp == 0)) && d->size <= 4) {
+	 || (isfp && nsp == 0)
+#endif
+	 ) && d->size <= 4) {
       *(int64_t *)dp = (int64_t)*(int32_t *)dp;  /* Sign-extend to 64 bit. */
     }
 #endif
@@ -1111,7 +1136,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   }
   if (fid) lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too few arguments. */
 
-#if LJ_TARGET_X64 || LJ_TARGET_PPC
+#if LJ_TARGET_X64 || (LJ_TARGET_PPC && !LJ_ABI_SOFTFP)
   cc->nfpr = nfpr;  /* Required for vararg functions. */
 #endif
   cc->nsp = nsp;

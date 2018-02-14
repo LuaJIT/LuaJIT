@@ -7,7 +7,7 @@
 # Also works with MinGW and Cygwin on Windows.
 # Please check msvcbuild.bat for building with MSVC on Windows.
 #
-# Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+# Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 ##############################################################################
 
 MAJVER=  2
@@ -109,6 +109,9 @@ XCFLAGS=
 # default mode. Please see LJ_ARCH_NUMMODE in lj_arch.h for details.
 #XCFLAGS+= -DLUAJIT_NUMMODE=1
 #XCFLAGS+= -DLUAJIT_NUMMODE=2
+#
+# Enable GC64 mode for x64.
+#XCFLAGS+= -DLUAJIT_ENABLE_GC64
 #
 ##############################################################################
 
@@ -242,6 +245,9 @@ ifneq (,$(findstring LJ_TARGET_S390X ,$(TARGET_TESTARCH)))
   TARGET_LJARCH= s390x
 else
 ifneq (,$(findstring LJ_TARGET_ARM64 ,$(TARGET_TESTARCH)))
+  ifneq (,$(findstring __AARCH64EB__ ,$(TARGET_TESTARCH)))
+    TARGET_ARCH= -D__AARCH64EB__=1
+  endif
   TARGET_LJARCH= arm64
 else
 ifneq (,$(findstring LJ_TARGET_PPC ,$(TARGET_TESTARCH)))
@@ -306,6 +312,7 @@ ifeq (Windows,$(TARGET_SYS))
   TARGET_XSHLDFLAGS= -shared
   TARGET_DYNXLDOPTS=
 else
+  TARGET_AR+= 2>/dev/null
 ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null -fno-stack-protector 2>/dev/null || echo 1))
   TARGET_XCFLAGS+= -fno-stack-protector
 endif
@@ -314,7 +321,6 @@ ifeq (Darwin,$(TARGET_SYS))
     export MACOSX_DEPLOYMENT_TARGET=10.4
   endif
   TARGET_STRIP+= -x
-  TARGET_AR+= 2>/dev/null
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
@@ -325,7 +331,6 @@ ifeq (Darwin,$(TARGET_SYS))
 else
 ifeq (iOS,$(TARGET_SYS))
   TARGET_STRIP+= -x
-  TARGET_AR+= 2>/dev/null
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)

@@ -2,7 +2,7 @@
 ** FOLD: Constant Folding, Algebraic Simplifications and Reassociation.
 ** ABCelim: Array Bounds Check Elimination.
 ** CSE: Common-Subexpression Elimination.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_fold_c
@@ -173,8 +173,6 @@ LJFOLD(ADD KNUM KNUM)
 LJFOLD(SUB KNUM KNUM)
 LJFOLD(MUL KNUM KNUM)
 LJFOLD(DIV KNUM KNUM)
-LJFOLD(NEG KNUM KNUM)
-LJFOLD(ABS KNUM KNUM)
 LJFOLD(ATAN2 KNUM KNUM)
 LJFOLD(LDEXP KNUM KNUM)
 LJFOLD(MIN KNUM KNUM)
@@ -184,6 +182,15 @@ LJFOLDF(kfold_numarith)
   lua_Number a = knumleft;
   lua_Number b = knumright;
   lua_Number y = lj_vm_foldarith(a, b, fins->o - IR_ADD);
+  return lj_ir_knum(J, y);
+}
+
+LJFOLD(NEG KNUM FLOAD)
+LJFOLD(ABS KNUM FLOAD)
+LJFOLDF(kfold_numabsneg)
+{
+  lua_Number a = knumleft;
+  lua_Number y = lj_vm_foldarith(a, a, fins->o - IR_ADD);
   return lj_ir_knum(J, y);
 }
 
@@ -347,6 +354,11 @@ static uint64_t kfold_int64arith(uint64_t k1, uint64_t k2, IROp op)
   case IR_BAND: k1 &= k2; break;
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
+  case IR_BSHL: k1 <<= (k2 & 63); break;
+  case IR_BSHR: k1 = (int32_t)((uint32_t)k1 >> (k2 & 63)); break;
+  case IR_BSAR: k1 >>= (k2 & 63); break;
+  case IR_BROL: k1 = (int32_t)lj_rol((uint32_t)k1, (k2 & 63)); break;
+  case IR_BROR: k1 = (int32_t)lj_ror((uint32_t)k1, (k2 & 63)); break;
 #endif
   default: UNUSED(k2); lua_assert(0); break;
   }
@@ -436,14 +448,14 @@ LJFOLDF(kfold_int64comp)
 #if LJ_HASFFI
   uint64_t a = ir_k64(fleft)->u64, b = ir_k64(fright)->u64;
   switch ((IROp)fins->o) {
-  case IR_LT: return CONDFOLD(a < b);
-  case IR_GE: return CONDFOLD(a >= b);
-  case IR_LE: return CONDFOLD(a <= b);
-  case IR_GT: return CONDFOLD(a > b);
-  case IR_ULT: return CONDFOLD((uint64_t)a < (uint64_t)b);
-  case IR_UGE: return CONDFOLD((uint64_t)a >= (uint64_t)b);
-  case IR_ULE: return CONDFOLD((uint64_t)a <= (uint64_t)b);
-  case IR_UGT: return CONDFOLD((uint64_t)a > (uint64_t)b);
+  case IR_LT: return CONDFOLD((int64_t)a < (int64_t)b);
+  case IR_GE: return CONDFOLD((int64_t)a >= (int64_t)b);
+  case IR_LE: return CONDFOLD((int64_t)a <= (int64_t)b);
+  case IR_GT: return CONDFOLD((int64_t)a > (int64_t)b);
+  case IR_ULT: return CONDFOLD(a < b);
+  case IR_UGE: return CONDFOLD(a >= b);
+  case IR_ULE: return CONDFOLD(a <= b);
+  case IR_UGT: return CONDFOLD(a > b);
   default: lua_assert(0); return FAILFOLD;
   }
 #else
@@ -911,13 +923,13 @@ LJFOLDF(shortcut_round)
   return NEXTFOLD;
 }
 
-LJFOLD(ABS ABS KNUM)
+LJFOLD(ABS ABS FLOAD)
 LJFOLDF(shortcut_left)
 {
   return LEFTFOLD;  /* f(g(x)) ==> g(x) */
 }
 
-LJFOLD(ABS NEG KNUM)
+LJFOLD(ABS NEG FLOAD)
 LJFOLDF(shortcut_dropleft)
 {
   PHIBARRIER(fleft);
@@ -1215,7 +1227,7 @@ LJFOLDF(simplify_conv_sext)
   if (ref == J->scev.idx) {
     IRRef lo = J->scev.dir ? J->scev.start : J->scev.stop;
     lua_assert(irt_isint(J->scev.t));
-    if (lo && IR(lo)->i + ofs >= 0) {
+    if (lo && IR(lo)->o == IR_KINT && IR(lo)->i + ofs >= 0) {
     ok_reduce:
 #if LJ_TARGET_X64
       /* Eliminate widening. All 32 bit ops do an implicit zero-extension. */
@@ -1653,6 +1665,14 @@ LJFOLDF(simplify_shiftk_andk)
     fins->op2 = (IRRef1)lj_ir_kint(J, k);
     fins->ot = IRTI(IR_BAND);
     return RETRYFOLD;
+  } else if (irk->o == IR_KINT64) {
+    uint64_t k = kfold_int64arith(ir_k64(irk)->u64, fright->i, (IROp)fins->o);
+    IROpT ot = fleft->ot;
+    fins->op1 = fleft->op1;
+    fins->op1 = (IRRef1)lj_opt_fold(J);
+    fins->op2 = (IRRef1)lj_ir_kint64(J, k);
+    fins->ot = ot;
+    return RETRYFOLD;
   }
   return NEXTFOLD;
 }
@@ -1666,6 +1686,47 @@ LJFOLDF(simplify_andk_shiftk)
       kfold_intop(-1, irk->i, (IROp)fleft->o) == fright->i)
     return LEFTFOLD;  /* (i o k1) & k2 ==> i, if (-1 o k1) == k2 */
   return NEXTFOLD;
+}
+
+LJFOLD(BAND BOR KINT)
+LJFOLD(BOR BAND KINT)
+LJFOLDF(simplify_andor_k)
+{
+  IRIns *irk = IR(fleft->op2);
+  PHIBARRIER(fleft);
+  if (irk->o == IR_KINT) {
+    int32_t k = kfold_intop(irk->i, fright->i, (IROp)fins->o);
+    /* (i | k1) & k2 ==> i & k2, if (k1 & k2) == 0. */
+    /* (i & k1) | k2 ==> i | k2, if (k1 | k2) == -1. */
+    if (k == (fins->o == IR_BAND ? 0 : -1)) {
+      fins->op1 = fleft->op1;
+      return RETRYFOLD;
+    }
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(BAND BOR KINT64)
+LJFOLD(BOR BAND KINT64)
+LJFOLDF(simplify_andor_k64)
+{
+#if LJ_HASFFI
+  IRIns *irk = IR(fleft->op2);
+  PHIBARRIER(fleft);
+  if (irk->o == IR_KINT64) {
+    uint64_t k = kfold_int64arith(ir_k64(irk)->u64,
+				  ir_k64(fright)->u64, (IROp)fins->o);
+    /* (i | k1) & k2 ==> i & k2, if (k1 & k2) == 0. */
+    /* (i & k1) | k2 ==> i | k2, if (k1 | k2) == -1. */
+    if (k == (fins->o == IR_BAND ? (uint64_t)0 : ~(uint64_t)0)) {
+      fins->op1 = fleft->op1;
+      return RETRYFOLD;
+    }
+  }
+  return NEXTFOLD;
+#else
+  UNUSED(J); lua_assert(0); return FAILFOLD;
+#endif
 }
 
 /* -- Reassociation ------------------------------------------------------- */

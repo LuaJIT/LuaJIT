@@ -1,6 +1,6 @@
 /*
 ** String formatting for floating-point numbers.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 ** Contributed by Peter Cawley.
 */
 
@@ -138,7 +138,7 @@ static uint32_t nd_mul2k(uint32_t* nd, uint32_t ndhi, uint32_t k,
     }
     if (carry_in) {
       nd[++ndhi] = carry_in; carry_in = 0;
-      if(start++ == ndlo) ++ndlo;
+      if (start++ == ndlo) ++ndlo;
     }
     k -= ND_MUL2K_MAX_SHIFT;
   }

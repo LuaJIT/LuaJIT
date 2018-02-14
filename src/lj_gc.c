@@ -1,6 +1,6 @@
 /*
 ** Garbage collector.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -169,12 +169,19 @@ static int gc_traverse_tab(global_State *g, GCtab *t)
     while ((c = *modestr++)) {
       if (c == 'k') weak |= LJ_GC_WEAKKEY;
       else if (c == 'v') weak |= LJ_GC_WEAKVAL;
-      else if (c == 'K') weak = (int)(~0u & ~LJ_GC_WEAKVAL);
     }
-    if (weak > 0) {  /* Weak tables are cleared in the atomic phase. */
-      t->marked = (uint8_t)((t->marked & ~LJ_GC_WEAK) | weak);
-      setgcrefr(t->gclist, g->gc.weak);
-      setgcref(g->gc.weak, obj2gco(t));
+    if (weak) {  /* Weak tables are cleared in the atomic phase. */
+#if LJ_HASFFI
+      CTState *cts = ctype_ctsG(g);
+      if (cts && cts->finalizer == t) {
+	weak = (int)(~0u & ~LJ_GC_WEAKVAL);
+      } else
+#endif
+      {
+	t->marked = (uint8_t)((t->marked & ~LJ_GC_WEAK) | weak);
+	setgcrefr(t->gclist, g->gc.weak);
+	setgcref(g->gc.weak, obj2gco(t));
+      }
     }
   }
   if (weak == LJ_GC_WEAK)  /* Nothing to mark if both keys/values are weak. */

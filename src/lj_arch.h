@@ -1,6 +1,6 @@
 /*
 ** Target architecture selection.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_ARCH_H
@@ -78,7 +78,7 @@
        defined(__NetBSD__) || defined(__OpenBSD__) || \
        defined(__DragonFly__)) && !defined(__ORBIS__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
-#elif (defined(__sun__) && defined(__svr4__))
+#elif (defined(__sun__) && defined(__svr4__)) || defined(__HAIKU__)
 #define LUAJIT_OS	LUAJIT_OS_POSIX
 #elif defined(__CYGWIN__)
 #define LJ_TARGET_CYGWIN	1
@@ -205,7 +205,7 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
-#if __ARM_ARCH____ARM_ARCH_8__ || __ARM_ARCH_8A__
+#if __ARM_ARCH_8__ || __ARM_ARCH_8A__
 #define LJ_ARCH_VERSION		80
 #elif __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
 #define LJ_ARCH_VERSION		70
@@ -219,9 +219,14 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM64
 
-#define LJ_ARCH_NAME		"arm64"
 #define LJ_ARCH_BITS		64
+#if defined(__AARCH64EB__)
+#define LJ_ARCH_NAME		"arm64be"
+#define LJ_ARCH_ENDIAN		LUAJIT_BE
+#else
+#define LJ_ARCH_NAME		"arm64"
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
+#endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
@@ -230,7 +235,6 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_TARGET_GC64		1
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
-#define LJ_ARCH_NOJIT		1	/* NYI */
 
 #define LJ_ARCH_VERSION		80
 
@@ -254,6 +258,28 @@
 #else
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_NAME		"ppc"
+
+#if !defined(LJ_ARCH_HASFPU)
+#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+#define LJ_ARCH_HASFPU		0
+#else
+#define LJ_ARCH_HASFPU		1
+#endif
+#endif
+
+#if !defined(LJ_ABI_SOFTFP)
+#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+#define LJ_ABI_SOFTFP		1
+#else
+#define LJ_ABI_SOFTFP		0
+#endif
+#endif
+#endif
+
+#if LJ_ABI_SOFTFP
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
+#else
+#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
 #endif
 
 #define LJ_TARGET_PPC		1
@@ -262,7 +288,6 @@
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNIFYROT	1	/* Want only IR_BROL. */
-#define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
 
 #if LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC32ON64	1
@@ -340,7 +365,6 @@
 #define LJ_ARCH_BITS		64
 #define LJ_TARGET_MIPS64	1
 #define LJ_TARGET_GC64		1
-#define LJ_ARCH_NOJIT		1	/* NYI */
 #endif
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
@@ -395,7 +419,7 @@
 #endif
 #elif LJ_TARGET_ARM64
 #if __clang__
-#if (__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)
+#if ((__clang_major__ < 3) || ((__clang_major__ == 3) && __clang_minor__ < 5)) && !defined(__NX_TOOLCHAIN_MAJOR__)
 #error "Need at least Clang 3.5 or newer"
 #endif
 #else
@@ -427,23 +451,17 @@
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
 #endif
 #elif LJ_TARGET_ARM64
-#if defined(__AARCH64EB__)
-#error "No support for big-endian ARM64"
-#endif
 #if defined(_ILP32)
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
-#error "No support for PowerPC CPUs without double-precision FPU"
-#endif
 #if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
 #error "No support for little-endian PPC32"
 #endif
 #if LJ_ARCH_PPC64
 #error "No support for PowerPC 64 bit mode (yet)"
 #endif
-#ifdef __NO_FPRS__
+#if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
 #elif LJ_TARGET_MIPS32
@@ -528,6 +546,7 @@
 #define LJ_ABI_SOFTFP		0
 #endif
 #define LJ_SOFTFP		(!LJ_ARCH_HASFPU)
+#define LJ_SOFTFP32		(LJ_SOFTFP && LJ_32)
 
 #if LJ_ARCH_ENDIAN == LUAJIT_BE
 #define LJ_LE			0

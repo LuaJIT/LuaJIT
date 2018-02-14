@@ -1,6 +1,6 @@
 /*
 ** IR assembler (SSA IR -> machine code).
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_asm_c
@@ -91,7 +91,7 @@ typedef struct ASMState {
   MCode *realign;	/* Realign loop if not NULL. */
 
 #ifdef RID_NUM_KREF
-  int32_t krefk[RID_NUM_KREF];
+  intptr_t krefk[RID_NUM_KREF];
 #endif
   IRRef1 phireg[RID_MAX];  /* PHI register references. */
   uint16_t parentmap[LJ_MAX_JSLOTS];  /* Parent instruction to RegSP map. */
@@ -144,7 +144,7 @@ static LJ_AINLINE void checkmclim(ASMState *as)
 #define ra_krefreg(ref)		((Reg)(RID_MIN_KREF + (Reg)(ref)))
 #define ra_krefk(as, ref)	(as->krefk[(ref)])
 
-static LJ_AINLINE void ra_setkref(ASMState *as, Reg r, int32_t k)
+static LJ_AINLINE void ra_setkref(ASMState *as, Reg r, intptr_t k)
 {
   IRRef ref = (IRRef)(r - RID_MIN_KREF);
   as->krefk[ref] = k;
@@ -171,6 +171,8 @@ IRFLDEF(FLOFS)
 #include "lj_emit_x86.h"
 #elif LJ_TARGET_ARM
 #include "lj_emit_arm.h"
+#elif LJ_TARGET_ARM64
+#include "lj_emit_arm64.h"
 #elif LJ_TARGET_PPC
 #include "lj_emit_ppc.h"
 #elif LJ_TARGET_MIPS
@@ -322,7 +324,11 @@ static Reg ra_rematk(ASMState *as, IRRef ref)
     lua_assert(!rset_test(as->freeset, r));
     ra_free(as, r);
     ra_modified(as, r);
+#if LJ_64
+    emit_loadu64(as, r, ra_krefk(as, ref));
+#else
     emit_loadi(as, r, ra_krefk(as, ref));
+#endif
     return r;
   }
   ir = IR(ref);
@@ -332,7 +338,7 @@ static Reg ra_rematk(ASMState *as, IRRef ref)
   ra_modified(as, r);
   ir->r = RID_INIT;  /* Do not keep any hint. */
   RA_DBGX((as, "remat     $i $r", ir, r));
-#if !LJ_SOFTFP
+#if !LJ_SOFTFP32
   if (ir->o == IR_KNUM) {
     emit_loadk64(as, r, ir);
   } else
@@ -524,7 +530,7 @@ static void ra_evictk(ASMState *as)
 
 #ifdef RID_NUM_KREF
 /* Allocate a register for a constant. */
-static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
+static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow)
 {
   /* First try to find a register which already holds the same constant. */
   RegSet pick, work = ~as->freeset & RSET_GPR;
@@ -533,9 +539,31 @@ static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
     IRRef ref;
     r = rset_pickbot(work);
     ref = regcost_ref(as->cost[r]);
+#if LJ_64
+    if (ref < ASMREF_L) {
+      if (ra_iskref(ref)) {
+	if (k == ra_krefk(as, ref))
+	  return r;
+      } else {
+	IRIns *ir = IR(ref);
+	if ((ir->o == IR_KINT64 && k == (int64_t)ir_kint64(ir)->u64) ||
+#if LJ_GC64
+	    (ir->o == IR_KINT && k == ir->i) ||
+	    (ir->o == IR_KGC && k == (intptr_t)ir_kgc(ir)) ||
+	    ((ir->o == IR_KPTR || ir->o == IR_KKPTR) &&
+	     k == (intptr_t)ir_kptr(ir))
+#else
+	    (ir->o != IR_KINT64 && k == ir->i)
+#endif
+	   )
+	  return r;
+      }
+    }
+#else
     if (ref < ASMREF_L &&
 	k == (ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i))
       return r;
+#endif
     rset_clear(work, r);
   }
   pick = as->freeset & allow;
@@ -555,7 +583,7 @@ static Reg ra_allock(ASMState *as, int32_t k, RegSet allow)
 }
 
 /* Allocate a specific register for a constant. */
-static void ra_allockreg(ASMState *as, int32_t k, Reg r)
+static void ra_allockreg(ASMState *as, intptr_t k, Reg r)
 {
   Reg kr = ra_allock(as, k, RID2RSET(r));
   if (kr != r) {
@@ -989,7 +1017,11 @@ static uint32_t ir_khash(IRIns *ir)
   } else {
     lua_assert(irt_isgcv(ir->t));
     lo = u32ptr(ir_kgc(ir));
+#if LJ_GC64
+    hi = (uint32_t)(u64ptr(ir_kgc(ir)) >> 32) | (irt_toitype(ir->t) << 15);
+#else
     hi = lo + HASH_BIAS;
+#endif
   }
   return hashrot(lo, hi);
 }
@@ -1087,7 +1119,7 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_buf_putstr];
   IRRef args[3];
   IRIns *irs;
-  int kchar = -1;
+  int kchar = -129;
   args[0] = ir->op1;  /* SBuf * */
   args[1] = ir->op2;  /* GCstr * */
   irs = IR(ir->op2);
@@ -1095,7 +1127,7 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   if (irs->o == IR_KGC) {
     GCstr *s = ir_kstr(irs);
     if (s->len == 1) {  /* Optimize put of single-char string constant. */
-      kchar = strdata(s)[0];
+      kchar = (int8_t)strdata(s)[0];  /* Signed! */
       args[1] = ASMREF_TMP1;  /* int, truncated to char */
       ci = &lj_ir_callinfo[IRCALL_lj_buf_putchar];
     }
@@ -1122,7 +1154,7 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
   if (args[1] == ASMREF_TMP1) {
     Reg tmp = ra_releasetmp(as, ASMREF_TMP1);
-    if (kchar == -1)
+    if (kchar == -129)
       asm_tvptr(as, tmp, irs->op1);
     else
       ra_allockreg(as, kchar, tmp);
@@ -1277,7 +1309,7 @@ static void asm_call(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
 }
 
-#if !LJ_SOFTFP
+#if !LJ_SOFTFP32
 static void asm_fppow(ASMState *as, IRIns *ir, IRRef lref, IRRef rref)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_pow];
@@ -1563,6 +1595,8 @@ static void asm_loop(ASMState *as)
 #include "lj_asm_x86.h"
 #elif LJ_TARGET_ARM
 #include "lj_asm_arm.h"
+#elif LJ_TARGET_ARM64
+#include "lj_asm_arm64.h"
 #elif LJ_TARGET_PPC
 #include "lj_asm_ppc.h"
 #elif LJ_TARGET_MIPS
@@ -1624,10 +1658,10 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_MUL: asm_mul(as, ir); break;
   case IR_MOD: asm_mod(as, ir); break;
   case IR_NEG: asm_neg(as, ir); break;
-#if LJ_SOFTFP
+#if LJ_SOFTFP32
   case IR_DIV: case IR_POW: case IR_ABS:
   case IR_ATAN2: case IR_LDEXP: case IR_FPMATH: case IR_TOBIT:
-    lua_assert(0);  /* Unused for LJ_SOFTFP. */
+    lua_assert(0);  /* Unused for LJ_SOFTFP32. */
     break;
 #else
   case IR_DIV: asm_div(as, ir); break;
@@ -1983,6 +2017,7 @@ static void asm_setup_regsp(ASMState *as)
     ir->prev = REGSP_INIT;
     if (irt_is64(ir->t) && ir->o != IR_KNULL) {
 #if LJ_GC64
+      /* The false-positive of irt_is64() for ASMREF_L (REF_NIL) is OK here. */
       ir->i = 0;  /* Will become non-zero only for RIP-relative addresses. */
 #else
       /* Make life easier for backends by putting address of constant in i. */
@@ -2109,9 +2144,12 @@ static void asm_setup_regsp(ASMState *as)
 	if (ir->op2 != REF_NIL && as->evenspill < 4)
 	  as->evenspill = 4;  /* lj_cdata_newv needs 4 args. */
       }
+      /* fallthrough */
 #else
+      /* fallthrough */
     case IR_CNEW:
 #endif
+      /* fallthrough */
     case IR_TNEW: case IR_TDUP: case IR_CNEWI: case IR_TOSTR:
     case IR_BUFSTR:
       ir->prev = REGSP_HINT(RID_RET);
@@ -2132,6 +2170,7 @@ static void asm_setup_regsp(ASMState *as)
     case IR_LDEXP:
 #endif
 #endif
+      /* fallthrough */
     case IR_POW:
       if (!LJ_SOFTFP && irt_isnum(ir->t)) {
 	if (inloop)
@@ -2143,7 +2182,7 @@ static void asm_setup_regsp(ASMState *as)
 	continue;
 #endif
       }
-      /* fallthrough for integer POW */
+      /* fallthrough */ /* for integer POW */
     case IR_DIV: case IR_MOD:
       if (!irt_isnum(ir->t)) {
 	ir->prev = REGSP_HINT(RID_RET);
@@ -2180,6 +2219,7 @@ static void asm_setup_regsp(ASMState *as)
     case IR_BSHL: case IR_BSHR: case IR_BSAR:
       if ((as->flags & JIT_F_BMI2))  /* Except if BMI2 is available. */
 	break;
+      /* fallthrough */
     case IR_BROL: case IR_BROR:
       if (!irref_isk(ir->op2) && !ra_hashint(IR(ir->op2)->r)) {
 	IR(ir->op2)->r = REGSP_HINT(RID_ECX);
@@ -2365,6 +2405,9 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   if (!as->loopref)
     asm_tail_fixup(as, T->link);  /* Note: this may change as->mctop! */
   T->szmcode = (MSize)((char *)as->mctop - (char *)as->mcp);
+#if LJ_TARGET_MCODE_FIXUP
+  asm_mcode_fixup(T->mcode, T->szmcode);
+#endif
   lj_mcode_sync(T->mcode, origtop);
 }
 

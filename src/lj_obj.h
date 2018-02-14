@@ -1,6 +1,6 @@
 /*
 ** LuaJIT VM tags, values and objects.
-** Copyright (C) 2005-2016 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -924,6 +924,9 @@ static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
 
 #if LJ_SOFTFP
 LJ_ASMF int32_t lj_vm_tobit(double x);
+#if LJ_TARGET_MIPS64
+LJ_ASMF int32_t lj_vm_tointg(double x);
+#endif
 #endif
 
 static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
