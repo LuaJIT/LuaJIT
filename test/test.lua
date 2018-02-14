@@ -210,19 +210,21 @@ print("Length of string1 is ",string.len(string1))
 print("Repeated String",string.rep(string1,3))
 print("********************************************")
 
-print("****************OS Functions *******")
+print("****************Table Functions *******")
 fruits = {"banana","orange","apple"}
 print("Table contents are ")
 for key,value in ipairs(fruits) do print(value) end
 print("Concatenated string ",table.concat(fruits))
 print("Concatenated string ",table.concat(fruits,", "))
 print("Concatenated string ",table.concat(fruits,", ", 2,3))
-print("Inserting new fruit Mango")
+print("Inserting new fruit mango")
 table.insert(fruits,"mango")
 for key,value in ipairs(fruits) do print(value) end
 print("Concatenated string ",table.concat(fruits,", "))
 print("The maximum elements in table is",table.maxn(fruits))
-print("The maximum elements in table is",table.remove(fruits))
-fruits = {"banana","orange","apple","grapes"}
-print("The maximum elements in table is",table.sort(fruits))
+print("Table contents after sorting are ",table.sort(fruits))
+for key,value in ipairs(fruits) do print(value) end
+print("Removing the last element from the table:" ,table.remove(fruits))
+print("Table contents are ")
+for key,value in ipairs(fruits) do print(value) end
 print("********************************************")
