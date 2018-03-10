@@ -122,7 +122,7 @@ install: $(INSTALL_DEP)
 	cd src && test -f $(FILE_SO) && \
 	  $(INSTALL_X) $(FILE_SO) $(INSTALL_DYN) && \
 	  $(LDCONFIG) $(INSTALL_LIB) && \
-	  $(SYMLINK) $(INSTALL_SONAME) $(INSTALL_SHORT1) && \
+	  $(SYMLINK) $(INSTALL_SOSHORT2) $(INSTALL_SHORT1) && \
 	  $(SYMLINK) $(INSTALL_SONAME) $(INSTALL_SHORT2) || :
 	cd etc && $(INSTALL_F) $(FILE_MAN) $(INSTALL_MAN)
 	cd etc && $(SED_PC) $(FILE_PC) > $(FILE_PC).tmp && \
