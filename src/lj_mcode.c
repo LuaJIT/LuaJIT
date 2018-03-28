@@ -62,11 +62,21 @@ void lj_mcode_sync(void *start, void *end)
 
 #define MCPROT_RW	PAGE_READWRITE
 #define MCPROT_RX	PAGE_EXECUTE_READ
+#if !LJ_TARGET_UWP
 #define MCPROT_RWX	PAGE_EXECUTE_READWRITE
+#endif
+
+#if LJ_TARGET_UWP
+#define VIRTUAL_ALLOC VirtualAllocFromApp
+#define VIRTUAL_PROTECT VirtualProtectFromApp
+#else
+#define VIRTUAL_ALLOC VirtualAlloc
+#define VIRTUAL_PROTECT VirtualProtect
+#endif
 
 static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, DWORD prot)
 {
-  void *p = VirtualAlloc((void *)hint, sz,
+  void *p = VIRTUAL_ALLOC((void *)hint, sz,
 			 MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN, prot);
   if (!p && !hint)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
@@ -82,7 +92,7 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 static int mcode_setprot(void *p, size_t sz, DWORD prot)
 {
   DWORD oprot;
-  return !VirtualProtect(p, sz, prot, &oprot);
+  return !VIRTUAL_PROTECT(p, sz, prot, &oprot);
 }
 
 #elif LJ_TARGET_POSIX
@@ -255,8 +265,8 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 /* All memory addresses are reachable by relative jumps. */
 static void *mcode_alloc(jit_State *J, size_t sz)
 {
-#ifdef __OpenBSD__
-  /* Allow better executable memory allocation for OpenBSD W^X mode. */
+#if defined(__OpenBSD__) || LJ_TARGET_UWP
+  /* Allow better executable memory allocation for OpenBSD & UWP W^X mode. */
   void *p = mcode_alloc_at(J, 0, sz, MCPROT_RUN);
   if (p && mcode_setprot(p, sz, MCPROT_GEN)) {
     mcode_free(J, p, sz);

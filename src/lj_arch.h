@@ -135,6 +135,10 @@
 #define LJ_TARGET_GC64		1
 #endif
 
+#ifdef _UWP
+#define LJ_TARGET_UWP		1
+#endif
+
 #define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
 #define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
 #define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
@@ -474,6 +478,12 @@
 /* Ditto for the consoles. Complain to Sony or MS, not me. */
 #ifndef LUAJIT_ENABLE_JIT
 #define LJ_OS_NOJIT		1
+#endif
+#endif
+
+#if LJ_TARGET_UWP
+#if LJ_ARCH_BITS == 64
+#define LJ_TARGET_GC64	1
 #endif
 #endif
 

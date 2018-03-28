@@ -569,8 +569,15 @@ static int pmain(lua_State *L)
   return 0;
 }
 
+#if LJ_TARGET_UWP
+int __cdecl main()
+{
+  int argc = __argc;
+  char **argv = __argv;
+#else
 int main(int argc, char **argv)
 {
+#endif
   int status;
   lua_State *L = lua_open();
   if (L == NULL) {

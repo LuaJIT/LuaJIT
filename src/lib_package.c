@@ -76,6 +76,22 @@ static const char *ll_bcsym(void *lib, const char *sym)
 BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
 #endif
 
+HMODULE LoadPackagedLibraryA(LPCSTR lpFileName)
+{
+  DWORD error = GetLastError();
+  wchar_t wbuffer[256];
+  HANDLE ret = NULL;
+
+  // Successful conversion
+  if(MultiByteToWideChar(CP_ACP, 0, lpFileName, -1, wbuffer, 256) > 0)
+  {
+    ret = LoadPackagedLibrary(wbuffer, 0);
+  }
+
+  SetLastError(error);
+  return ret;
+}
+
 #undef setprogdir
 
 static void setprogdir(lua_State *L)
@@ -119,7 +135,11 @@ static void ll_unloadlib(void *lib)
 
 static void *ll_load(lua_State *L, const char *path, int gl)
 {
+#if LJ_TARGET_UWP
+  HINSTANCE lib = LoadPackagedLibraryA(path);
+#else
   HINSTANCE lib = LoadLibraryExA(path, NULL, 0);
+#endif
   if (lib == NULL) pusherror(L);
   UNUSED(gl);
   return lib;
@@ -132,16 +152,25 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
   return f;
 }
 
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+
 static const char *ll_bcsym(void *lib, const char *sym)
 {
   if (lib) {
     return (const char *)GetProcAddress((HINSTANCE)lib, sym);
   } else {
-    HINSTANCE h = GetModuleHandleA(NULL);
+    HINSTANCE h;
+#if LJ_TARGET_UWP
+    h = (HINSTANCE)&__ImageBase;
+#else
+    h = GetModuleHandleA(NULL);
+#endif
     const char *p = (const char *)GetProcAddress(h, sym);
+#if !LJ_TARGET_UWP
     if (p == NULL && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 					(const char *)ll_bcsym, &h))
       p = (const char *)GetProcAddress(h, sym);
+#endif
     return p;
   }
 }

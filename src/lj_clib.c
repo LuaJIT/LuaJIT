@@ -153,16 +153,20 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
 #endif
 
+HMODULE extern LoadPackagedLibraryA(LPCSTR lpFileName);
+
 #define CLIB_DEFHANDLE	((void *)-1)
 
 /* Default libraries. */
 enum {
   CLIB_HANDLE_EXE,
+#if !LJ_TARGET_UWP
   CLIB_HANDLE_DLL,
   CLIB_HANDLE_CRT,
   CLIB_HANDLE_KERNEL32,
   CLIB_HANDLE_USER32,
   CLIB_HANDLE_GDI32,
+#endif
   CLIB_HANDLE_MAX
 };
 
@@ -208,7 +212,11 @@ static const char *clib_extname(lua_State *L, const char *name)
 static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
   DWORD oldwerr = GetLastError();
+#if LJ_TARGET_UWP
+  void *h = (void *)LoadPackagedLibraryA(clib_extname(L, name));
+#else
   void *h = (void *)LoadLibraryExA(clib_extname(L, name), NULL, 0);
+#endif
   if (!h) clib_error(L, "cannot load module " LUA_QS ": %s", name);
   SetLastError(oldwerr);
   UNUSED(global);
@@ -218,6 +226,7 @@ static void *clib_loadlib(lua_State *L, const char *name, int global)
 static void clib_unloadlib(CLibrary *cl)
 {
   if (cl->handle == CLIB_DEFHANDLE) {
+#if !LJ_TARGET_UWP
     MSize i;
     for (i = CLIB_HANDLE_KERNEL32; i < CLIB_HANDLE_MAX; i++) {
       void *h = clib_def_handle[i];
@@ -226,10 +235,13 @@ static void clib_unloadlib(CLibrary *cl)
 	FreeLibrary((HINSTANCE)h);
       }
     }
+#endif
   } else if (cl->handle) {
     FreeLibrary((HINSTANCE)cl->handle);
   }
 }
+
+EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
@@ -240,6 +252,9 @@ static void *clib_getsym(CLibrary *cl, const char *name)
       HINSTANCE h = (HINSTANCE)clib_def_handle[i];
       if (!(void *)h) {  /* Resolve default library handles (once). */
 	switch (i) {
+#if LJ_TARGET_UWP
+	case CLIB_HANDLE_EXE: h = (HINSTANCE)&__ImageBase;
+#else
 	case CLIB_HANDLE_EXE: GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, NULL, &h); break;
 	case CLIB_HANDLE_DLL:
 	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -252,6 +267,7 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 	case CLIB_HANDLE_KERNEL32: h = LoadLibraryExA("kernel32.dll", NULL, 0); break;
 	case CLIB_HANDLE_USER32: h = LoadLibraryExA("user32.dll", NULL, 0); break;
 	case CLIB_HANDLE_GDI32: h = LoadLibraryExA("gdi32.dll", NULL, 0); break;
+#endif
 	}
 	if (!h) continue;
 	clib_def_handle[i] = (void *)h;

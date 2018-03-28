@@ -163,11 +163,17 @@ static void *DIRECT_MMAP(size_t size)
 
 #else
 
+#if LJ_TARGET_UWP
+#define VIRTUAL_ALLOC VirtualAllocFromApp
+#else
+#define VIRTUAL_ALLOC VirtualAlloc
+#endif
+
 /* Win32 MMAP via VirtualAlloc */
 static void *CALL_MMAP(size_t size)
 {
   DWORD olderr = GetLastError();
-  void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  void *ptr = VIRTUAL_ALLOC(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
   SetLastError(olderr);
   return ptr ? ptr : MFAIL;
 }
@@ -176,7 +182,7 @@ static void *CALL_MMAP(size_t size)
 static void *DIRECT_MMAP(size_t size)
 {
   DWORD olderr = GetLastError();
-  void *ptr = VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN,
+  void *ptr = VIRTUAL_ALLOC(0, size, MEM_RESERVE|MEM_COMMIT|MEM_TOP_DOWN,
 			   PAGE_READWRITE);
   SetLastError(olderr);
   return ptr ? ptr : MFAIL;
