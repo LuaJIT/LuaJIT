@@ -116,11 +116,11 @@ call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" %VCTARGETARCH% uwp
 
 @if "%1"=="debug" (
   @shift
-  @set VSCONFIG=Debug
+  @set VSCONFIG=%VSCONFIG% /p:Configuration=Debug
   @set "LJCOMPILE=%LJCOMPILE% /Zi /MDd /Od"
   @set LJLINK=%LJLINK% /debug /opt:ref /opt:icf /incremental:no
 ) else (
-  @set VSCONFIG=Release
+  @set VSCONFIG=%VSCONFIG% /p:Configuration=Release
   @set "LJCOMPILE=%LJCOMPILE% /MD /O2"
 )
 
@@ -134,13 +134,10 @@ call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" %VCTARGETARCH% uwp
 @goto :MTDLL
 
 :STATIC
+@set VSCONFIG=%VSCONFIG% /p:DynamicLinkLuaJIT=false
 %LJCOMPILE% lj_*.c lib_*.c
 @if errorlevel 1 goto :BAD
 %LJLIB% /OUT:%LJLIBNAME% lj_*.obj lib_*.obj
-@if errorlevel 1 goto :BAD
-
-@REM Only build the UWP application with the static library
-msbuild /p:Configuration=%VSCONFIG% uwp
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 
@@ -153,6 +150,9 @@ msbuild /p:Configuration=%VSCONFIG% uwp
 :MTDLL
 if exist %LJDLLNAME%.manifest^
   %LJMT% -manifest %LJDLLNAME%.manifest -outputresource:%LJDLLNAME%;2
+
+msbuild %VSCONFIG% uwp
+@if errorlevel 1 goto :BAD
 
 @del *.obj *.manifest minilua.exe buildvm.exe
 @del host\buildvm_arch.h
