@@ -21,6 +21,11 @@
 #undef LJ_AINLINE
 #define LJ_AINLINE
 
+#ifdef __MINGW32__
+#define random()  ((long) rand())
+#define srandom(seed)  srand(seed)
+#endif
+
 static const uint64_t* cast_uint64p(const char* str)
 {
   return (const uint64_t*)(void*)str;
