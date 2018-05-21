@@ -402,6 +402,31 @@
     goto done; \
   } \
 
+#if LJ_ARCH_PPC64
+#define CCALL_HANDLE_REGARG \
+  if (isva) {  /* only GPRs will be used on C ellipsis operator */ \
+    goto gpr; \
+  } \
+  else { \
+    if (isfp) {  /* Try to pass argument in FPRs. */ \
+      if (nfpr + 1 <= CCALL_NARG_FPR) { \
+	dp = &cc->fpr[nfpr]; \
+	nfpr += 1; \
+	d = ctype_get(cts, CTID_DOUBLE);  /* FPRs always hold doubles. */ \
+	if (ngpr + 1 <= maxgpr) \
+	  ngpr += 1;  /* align GPRs */ \
+	else if (nsp + 1 <= CCALL_MAXSTACK) \
+	  nsp += 1; /* align save area slots */ \
+	else \
+	  goto err_nyi; /* Too many args */ \
+	goto done; \
+      } \
+    } else {  /* Try to pass argument in GPRs. */ \
+  gpr: \
+      CCALL_HANDLE_GPR \
+    } \
+  }
+#else	/* 32 bits */
 #if LJ_ABI_SOFTFP
 #define CCALL_HANDLE_REGARG  CCALL_HANDLE_GPR
 #else
@@ -416,7 +441,8 @@
   } else { \
     CCALL_HANDLE_GPR \
   }
-#endif
+#endif /* LJ_ABI_SOFTFP */
+#endif /* LJ_ARCH_PPC64 */
 
 #if !LJ_ABI_SOFTFP
 #define CCALL_HANDLE_RET \
