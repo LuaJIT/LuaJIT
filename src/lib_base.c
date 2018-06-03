@@ -42,11 +42,13 @@
 
 LJLIB_ASM(assert)		LJLIB_REC(.)
 {
-  GCstr *s;
   lj_lib_checkany(L, 1);
-  s = lj_lib_optstr(L, 2);
-  if (s)
-    lj_err_callermsg(L, strdata(s));
+  if (L->base+1 < L->top) {
+    if (tvisstr(L->top-1))
+      lj_err_callermsg(L, strVdata(L->top-1));
+    else
+      lj_err_run(L);
+  }
   else
     lj_err_caller(L, LJ_ERR_ASSERT);
   return FFH_UNREACHABLE;
