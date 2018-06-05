@@ -135,6 +135,13 @@
 #define LJ_TARGET_GC64		1
 #endif
 
+#ifdef _UWP
+#define LJ_TARGET_UWP		1
+#if LUAJIT_TARGET == LUAJIT_ARCH_X64
+#define LJ_TARGET_GC64		1
+#endif
+#endif
+
 #define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
 #define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
 #define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
@@ -568,6 +575,18 @@
 
 #if defined(LUAJIT_NO_UNWIND) || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
 #define LJ_NO_UNWIND		1
+#endif
+
+#if LJ_TARGET_WINDOWS
+#if LJ_TARGET_UWP
+#define LJ_WIN_VALLOC	VirtualAllocFromApp
+#define LJ_WIN_VPROTECT	VirtualProtectFromApp
+extern void *LJ_WIN_LOADLIBA(const char *path);
+#else
+#define LJ_WIN_VALLOC	VirtualAlloc
+#define LJ_WIN_VPROTECT	VirtualProtect
+#define LJ_WIN_LOADLIBA(path)	LoadLibraryExA((path), NULL, 0)
+#endif
 #endif
 
 /* Compatibility with Lua 5.1 vs. 5.2. */
