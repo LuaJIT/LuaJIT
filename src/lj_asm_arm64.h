@@ -869,14 +869,12 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   int32_t ofs = (int32_t)(kslot->op2 * sizeof(Node));
   int32_t kofs = ofs + (int32_t)offsetof(Node, key);
   int bigofs = !emit_checkofs(A64I_LDRx, ofs);
-  RegSet allow = RSET_GPR;
   Reg dest = (ra_used(ir) || bigofs) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
-  Reg node = ra_alloc1(as, ir->op1, allow);
-  Reg key = ra_scratch(as, rset_clear(allow, node));
-  Reg idx = node;
+  Reg node = ra_alloc1(as, ir->op1, RSET_GPR);
+  Reg key, idx = node;
+  RegSet allow = rset_exclude(RSET_GPR, node);
   uint64_t k;
   lua_assert(ofs % sizeof(Node) == 0);
-  rset_clear(allow, key);
   if (bigofs) {
     idx = dest;
     rset_clear(allow, dest);
@@ -892,7 +890,8 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   } else {
     k = ((uint64_t)irt_toitype(irkey->t) << 47) | (uint64_t)ir_kgc(irkey);
   }
-  emit_nm(as, A64I_CMPx, key, ra_allock(as, k, allow));
+  key = ra_scratch(as, allow);
+  emit_nm(as, A64I_CMPx, key, ra_allock(as, k, rset_exclude(allow, key)));
   emit_lso(as, A64I_LDRx, key, idx, kofs);
   if (bigofs)
     emit_opk(as, A64I_ADDx, dest, node, ofs, RSET_GPR);

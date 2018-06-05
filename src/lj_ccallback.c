@@ -267,7 +267,7 @@ static void callback_mcode_new(CTState *cts)
   if (CALLBACK_MAX_SLOT == 0)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #if LJ_TARGET_WINDOWS
-  p = VirtualAlloc(NULL, sz, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  p = LJ_WIN_VALLOC(NULL, sz, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
   if (!p)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #elif LJ_TARGET_POSIX
@@ -285,7 +285,7 @@ static void callback_mcode_new(CTState *cts)
 #if LJ_TARGET_WINDOWS
   {
     DWORD oprot;
-    VirtualProtect(p, sz, PAGE_EXECUTE_READ, &oprot);
+    LJ_WIN_VPROTECT(p, sz, PAGE_EXECUTE_READ, &oprot);
   }
 #elif LJ_TARGET_POSIX
   mprotect(p, sz, (PROT_READ|PROT_EXEC));

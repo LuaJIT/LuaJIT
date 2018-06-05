@@ -1182,15 +1182,16 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc xpcall
   |     ldp CARG1, CARG2, [BASE]
   |  ldrb TMP0w, GL->hookmask
-  |   subs NARGS8:RC, NARGS8:RC, #16
+  |   subs NARGS8:TMP1, NARGS8:RC, #16
   |   blo ->fff_fallback
   |    mov RB, BASE
-  |    add BASE, BASE, #24
   |     asr ITYPE, CARG2, #47
   |  ubfx TMP0w, TMP0w, #HOOK_ACTIVE_SHIFT, #1
   |     cmn ITYPE, #-LJ_TFUNC
   |  add PC, TMP0, #24+FRAME_PCALL
   |     bne ->fff_fallback		// Traceback must be a function.
+  |   mov NARGS8:RC, NARGS8:TMP1
+  |    add BASE, BASE, #24
   |     stp CARG2, CARG1, [RB]		// Swap function and traceback.
   |   cbz NARGS8:RC, ->vm_call_dispatch
   |  b <1

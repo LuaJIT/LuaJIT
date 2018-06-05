@@ -1879,6 +1879,8 @@ void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
       d = ctype_get(cts, CTID_DOUBLE);
     J->base[0] = crec_ct_tv(J, d, 0, J->base[0], &rd->argv[0]);
   } else {
+    /* Specialize to the ctype that couldn't be converted. */
+    argv2cdata(J, J->base[0], &rd->argv[0]);
     J->base[0] = TREF_NIL;
   }
 }

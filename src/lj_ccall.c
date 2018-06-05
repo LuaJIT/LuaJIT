@@ -848,7 +848,8 @@ noth:  /* Not a homogeneous float/double aggregate. */
   return 0;  /* Struct is in GPRs. */
 }
 
-void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp, int ft)
+static void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp,
+			      int ft)
 {
   if (LJ_ABI_SOFTFP ? ft :
       ((ft & 3) == FTYPE_FLOAT || (ft >> 2) == FTYPE_FLOAT)) {

@@ -274,10 +274,12 @@ static void emit_movmroi(ASMState *as, Reg base, int32_t ofs, int32_t i)
 /* mov r, i / xor r, r */
 static void emit_loadi(ASMState *as, Reg r, int32_t i)
 {
-  /* XOR r,r is shorter, but modifies the flags. This is bad for HIOP. */
+  /* XOR r,r is shorter, but modifies the flags. This is bad for HIOP/jcc. */
   if (i == 0 && !(LJ_32 && (IR(as->curins)->o == IR_HIOP ||
 			    (as->curins+1 < as->T->nins &&
-			     IR(as->curins+1)->o == IR_HIOP)))) {
+			     IR(as->curins+1)->o == IR_HIOP))) &&
+		!((*as->mcp == 0x0f && (as->mcp[1] & 0xf0) == XI_JCCn) ||
+		  (*as->mcp & 0xf0) == XI_JCCs)) {
     emit_rr(as, XO_ARITH(XOg_XOR), r, r);
   } else {
     MCode *p = as->mcp;

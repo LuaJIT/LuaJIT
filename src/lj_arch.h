@@ -135,6 +135,13 @@
 #define LJ_TARGET_GC64		1
 #endif
 
+#ifdef _UWP
+#define LJ_TARGET_UWP		1
+#if LUAJIT_TARGET == LUAJIT_ARCH_X64
+#define LJ_TARGET_GC64		1
+#endif
+#endif
+
 #define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
 #define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
 #define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
@@ -201,7 +208,7 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
-#if __ARM_ARCH____ARM_ARCH_8__ || __ARM_ARCH_8A__
+#if __ARM_ARCH_8__ || __ARM_ARCH_8A__
 #define LJ_ARCH_VERSION		80
 #elif __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
 #define LJ_ARCH_VERSION		70
@@ -273,7 +280,6 @@
 #endif
 
 #if LJ_ABI_SOFTFP
-#define LJ_ARCH_NOJIT		1  /* NYI */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 #else
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL_SINGLE
@@ -437,11 +443,8 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if !LJ_ARCH_PPC64 && LJ_ARCH_ENDIAN == LUAJIT_LE
+#if !LJ_ARCH_PPC64 && (defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN)))
 #error "No support for little-endian PPC32"
-#endif
-#if LJ_ARCH_PPC64
-#error "No support for PowerPC 64 bit mode (yet)"
 #endif
 #if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
@@ -572,6 +575,18 @@
 
 #if defined(LUAJIT_NO_UNWIND) || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
 #define LJ_NO_UNWIND		1
+#endif
+
+#if LJ_TARGET_WINDOWS
+#if LJ_TARGET_UWP
+#define LJ_WIN_VALLOC	VirtualAllocFromApp
+#define LJ_WIN_VPROTECT	VirtualProtectFromApp
+extern void *LJ_WIN_LOADLIBA(const char *path);
+#else
+#define LJ_WIN_VALLOC	VirtualAlloc
+#define LJ_WIN_VPROTECT	VirtualProtect
+#define LJ_WIN_LOADLIBA(path)	LoadLibraryExA((path), NULL, 0)
+#endif
 #endif
 
 /* Compatibility with Lua 5.1 vs. 5.2. */
