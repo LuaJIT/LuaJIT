@@ -225,6 +225,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
     return NULL;
   }
   L->status = LUA_OK;
+  L->exdata = NULL;
   return L;
 }
 
@@ -284,6 +285,7 @@ lua_State *lj_state_new(lua_State *L)
   setgcrefr(L1->env, L->env);
   stack_init(L1, L);  /* init stack */
   lua_assert(iswhite(obj2gco(L1)));
+  L1->exdata = L->exdata;
   return L1;
 }
 

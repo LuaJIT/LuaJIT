@@ -1290,3 +1290,12 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+LUA_API void lua_setexdata(lua_State *L, void *exdata)
+{
+  L->exdata = exdata;
+}
+
+LUA_API void *lua_getexdata(lua_State *L)
+{
+  return L->exdata;
+}

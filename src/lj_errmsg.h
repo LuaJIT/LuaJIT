@@ -181,6 +181,7 @@ ERRDEF(FFI_CBACKOV,	"too many callbacks")
 #endif
 ERRDEF(FFI_NYIPACKBIT,	"NYI: packed bit fields")
 ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
+ERRDEF(FFI_NOTLOAD,	"ffi module not loaded (yet)")
 #endif
 
 #undef ERRDEF

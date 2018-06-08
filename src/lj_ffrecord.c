@@ -28,6 +28,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_cdata.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -1103,6 +1104,21 @@ static void LJ_FASTCALL recff_table_clear(jit_State *J, RecordFFData *rd)
     lj_ir_call(J, IRCALL_lj_tab_clear, tr);
     J->needsnap = 1;
   }  /* else: Interpreter will throw. */
+}
+
+/* -- thread library fast functions ------------------------------------------ */
+
+void LJ_FASTCALL recff_thread_exdata(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (!tr) {
+    TRef trl = emitir(IRT(IR_LREF, IRT_THREAD), 0, 0);
+    TRef trp = emitir(IRT(IR_FLOAD, IRT_PTR), trl, IRFL_THREAD_EXDATA);
+    TRef trid = lj_ir_kint(J, CTID_P_VOID);
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, trp);
+    return;
+  }
+  recff_nyiu(J, rd);  /* this case is too rare to be interesting */
 }
 
 /* -- I/O library fast functions ------------------------------------------ */
