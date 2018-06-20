@@ -1975,6 +1975,10 @@ static void asm_mcode_fixup(MCode *mcode, MSize size)
 #define LJ_TARGET_MCODE_FIXUP	1
 #endif
 
+#define valid_S26(d)		((((d) + (1<<25)) >> 26) == 0)
+#define valid_S19(d)		((((d) + (1<<18)) >> 19) == 0)
+#define valid_S14(d)		((((d) + (1<<13)) >> 14) == 0)
+
 /* -- Trace patching ------------------------------------------------------ */
 
 /* Patch exit jumps of existing machine code to a new target. */
@@ -1982,7 +1986,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
 {
   MCode *p = T->mcode;
   MCode *pe = (MCode *)((char *)p + T->szmcode);
-  MCode *cstart = NULL, *cend = p;
+  MCode *cstart = NULL;
   MCode *mcarea = lj_mcode_patch(J, p, 0);
   MCode *px = exitstub_trace_addr(T, exitno);
   for (; p < pe; p++) {
@@ -1990,32 +1994,43 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     MCode ins = A64I_LE(*p);
     if ((ins & 0xff000000u) == 0x54000000u &&
 	((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
-      /* Patch bcc exitstub. */
-      *p = A64I_LE((ins & 0xff00001fu) | (((target-p)<<5) & 0x00ffffe0u));
-      cend = p+1;
-      if (!cstart) cstart = p;
+      /* Patch bcc exitstub if within 1MB */
+      ptrdiff_t delta = target - p;
+      if (valid_S19(delta)) {
+	*p = A64I_LE((ins & 0xff00001fu) | A64F_S19(delta));
+	if (!cstart) cstart = p;
+      }
     } else if ((ins & 0xfc000000u) == 0x14000000u &&
 	       ((ins ^ (px-p)) & 0x03ffffffu) == 0) {
       /* Patch b exitstub. */
+      lua_assert(valid_S26(target-p));
       *p = A64I_LE((ins & 0xfc000000u) | ((target-p) & 0x03ffffffu));
-      cend = p+1;
       if (!cstart) cstart = p;
     } else if ((ins & 0x7e000000u) == 0x34000000u &&
 	       ((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
-      /* Patch cbz/cbnz exitstub. */
-      *p = A64I_LE((ins & 0xff00001f) | (((target-p)<<5) & 0x00ffffe0u));
-      cend = p+1;
-      if (!cstart) cstart = p;
+      /* Patch cbz/cbnz exitstub if within 1MB. */
+      ptrdiff_t delta = target - p;
+      if (valid_S19(delta)) {
+	*p = A64I_LE((ins & 0xff00001f) | A64F_S19(delta));
+	if (!cstart) cstart = p;
+      }
     } else if ((ins & 0x7e000000u) == 0x36000000u &&
 	       ((ins ^ ((px-p)<<5)) & 0x0007ffe0u) == 0) {
-      /* Patch tbz/tbnz exitstub. */
-      *p = A64I_LE((ins & 0xfff8001fu) | (((target-p)<<5) & 0x0007ffe0u));
-      cend = p+1;
-      if (!cstart) cstart = p;
+      /* Patch tbz/tbnz exitstub if within 32kB. */
+      ptrdiff_t delta = target - p;
+      if (valid_S14(delta)) {
+	*p = A64I_LE((ins & 0xfff8001fu) | ((delta<<5) & 0x0007ffe0u));
+	if (!cstart) cstart = p;
+      }
     }
   }
-  lua_assert(cstart != NULL);
-  lj_mcode_sync(cstart, cend);
+  {
+    ptrdiff_t delta = target - px;
+    lua_assert(valid_S26(delta));
+    *px = A64I_B | ((uint32_t)delta & 0x03ffffffu);
+    if (!cstart) cstart = px;
+  }
+  lj_mcode_sync(cstart, px + 1);
   lj_mcode_patch(J, mcarea, 1);
 }
 
