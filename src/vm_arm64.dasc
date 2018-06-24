@@ -2780,7 +2780,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:  // Check if string is white and ensure upvalue is closed.
     |  ldrb TMP0w, UPVAL:CARG1->closed
     |    tst TMP1w, #LJ_GC_WHITES	// iswhite(str)
-    |  ccmp TMP0w, #0, #0, ne
+    |  ccmp TMP0w, #0, #4, ne
     |  beq <1
     |  // Crossed a write barrier. Move the barrier forward.
     |  mov CARG1, GL
