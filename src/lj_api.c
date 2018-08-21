@@ -752,6 +752,26 @@ LUA_API void *lua_newuserdata(lua_State *L, size_t size)
   return uddata(ud);
 }
 
+#if LJ_HASFFI
+#include "lj_cdata.h"
+
+LUA_API void *lua_newcdata(lua_State *L, int id, size_t size)
+{
+  CTState *cts = ctype_cts(L);
+  GCcdata *cd = lj_cdata_new(cts, id, size);
+  setcdataV(L, L->top, cd);
+  incr_top(L);
+  lj_gc_check(L);
+  return cdataptr(cd);
+}
+
+LUA_API void lua_pushcdataptr(lua_State *L, const void *ptr)
+{
+  const void **cd = lua_newcdata(L, CTID_P_CVOID, sizeof(ptr));
+  *cd = ptr;
+}
+#endif
+
 LUA_API void lua_concat(lua_State *L, int n)
 {
   api_checknelems(L, n);

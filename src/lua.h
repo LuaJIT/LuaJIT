@@ -184,6 +184,9 @@ LUA_API void *(lua_newuserdata) (lua_State *L, size_t sz);
 LUA_API int   (lua_getmetatable) (lua_State *L, int objindex);
 LUA_API void  (lua_getfenv) (lua_State *L, int idx);
 
+LUA_API void *lua_newcdata (lua_State *L, int ctid, size_t size);
+LUA_API void  lua_pushcdataptr (lua_State *L, const void *ptr);
+
 
 /*
 ** set functions (stack -> Lua)
