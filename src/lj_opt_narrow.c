@@ -555,7 +555,7 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
       return emitir(IRTGI(IR_SUBOV), lj_ir_kint(J, 0), rc);
     rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
   }
-  return emitir(IRTN(IR_NEG), rc, lj_ir_knum_neg(J));
+  return emitir(IRTN(IR_NEG), rc, lj_ir_ksimd(J, LJ_KSIMD_NEG));
 }
 
 /* Narrowing of modulo operator. */

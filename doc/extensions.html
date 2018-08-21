@@ -57,6 +57,8 @@ td.excinterop {
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
 <a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
 </li></ul>
 </li><li>
 <a href="status.html">Status</a>
@@ -112,6 +114,9 @@ bit.lshift bit.rshift bit.arshift bit.rol  bit.ror  bit.bswap
 This module is a LuaJIT built-in &mdash; you don't need to download or
 install Lua BitOp. The Lua BitOp site has full documentation for all
 <a href="http://bitop.luajit.org/api.html"><span class="ext">&raquo;</span>&nbsp;Lua BitOp API functions</a>.
+The FFI adds support for
+<a href="ext_ffi_semantics.html#cdata_arith">64&nbsp;bit bitwise operations</a>,
+using the same API functions.
 </p>
 <p>
 Please make sure to <tt>require</tt> the module before using any of
@@ -145,6 +150,11 @@ LuaJIT adds some
 <a href="ext_c_api.html">extra functions to the Lua/C API</a>.
 </p>
 
+<h3 id="profiler">Profiler</h3>
+<p>
+LuaJIT has an <a href="ext_profiler.html">integrated profiler</a>.
+</p>
+
 <h2 id="library">Enhanced Standard Library Functions</h2>
 
 <h3 id="xpcall"><tt>xpcall(f, err [,args...])</tt> passes arguments</h3>
@@ -172,7 +182,7 @@ in <tt>"-inf"</tt>.
 <h3 id="tonumber"><tt>tonumber()</tt> etc. use builtin string to number conversion</h3>
 <p>
 All string-to-number conversions consistently convert integer and
-floating-point inputs in decimal and hexadecimal on all platforms.
+floating-point inputs in decimal, hexadecimal and binary on all platforms.
 <tt>strtod()</tt> is <em>not</em> used anymore, which avoids numerous
 problems with poor C library implementations. The builtin conversion
 function provides full precision according to the IEEE-754 standard, it
@@ -195,6 +205,37 @@ bytecode compatibility versions must match. Bytecode stays compatible
 for dot releases (x.y.0 &rarr; x.y.1), but may change with major or
 minor releases (2.0 &rarr; 2.1) or between any beta release. Foreign
 bytecode (e.g. from Lua 5.1) is incompatible and cannot be loaded.
+</p>
+<p>
+Note: <tt>LJ_GC64</tt> mode requires a different frame layout, which implies
+a different, incompatible bytecode format for ports that use this mode (e.g.
+ARM64 or MIPS64) or when explicitly enabled for x64. This may be rectified
+in the future.
+</p>
+
+<h3 id="table_new"><tt>table.new(narray, nhash)</tt> allocates a pre-sized table</h3>
+<p>
+An extra library function <tt>table.new()</tt> can be made available via
+<tt>require("table.new")</tt>. This creates a pre-sized table, just like
+the C API equivalent <tt>lua_createtable()</tt>. This is useful for big
+tables if the final table size is known and automatic table resizing is
+too expensive.
+</p>
+
+<h3 id="table_clear"><tt>table.clear(tab)</tt> clears a table</h3>
+<p>
+An extra library function <tt>table.clear()</tt> can be made available
+via <tt>require("table.clear")</tt>. This clears all keys and values
+from a table, but preserves the allocated array/hash sizes. This is
+useful when a table, which is linked from multiple places, needs to be
+cleared and/or when recycling a table for use by the same context. This
+avoids managing backlinks, saves an allocation and the overhead of
+incremental array/hash part growth.
+</p>
+<p>
+Please note this function is meant for very specific situations. In most
+cases it's better to replace the (usually single) link with a new table
+and let the GC do its work.
 </p>
 
 <h3 id="math_random">Enhanced PRNG for <tt>math.random()</tt></h3>
@@ -270,6 +311,26 @@ indexes for varargs.</li>
 <li><tt>debug.getupvalue()</tt> and <tt>debug.setupvalue()</tt> handle
 C&nbsp;functions.</li>
 <li><tt>debug.upvalueid()</tt> and <tt>debug.upvaluejoin()</tt>.</li>
+<li>Lua/C API extensions:
+<tt>lua_version()</tt>
+<tt>lua_upvalueid()</tt>
+<tt>lua_upvaluejoin()</tt>
+<tt>lua_loadx()</tt>
+<tt>lua_copy()</tt>
+<tt>lua_tonumberx()</tt>
+<tt>lua_tointegerx()</tt>
+<tt>luaL_fileresult()</tt>
+<tt>luaL_execresult()</tt>
+<tt>luaL_loadfilex()</tt>
+<tt>luaL_loadbufferx()</tt>
+<tt>luaL_traceback()</tt>
+<tt>luaL_setfuncs()</tt>
+<tt>luaL_pushmodule()</tt>
+<tt>luaL_newlibtable()</tt>
+<tt>luaL_newlib()</tt>
+<tt>luaL_testudata()</tt>
+<tt>luaL_setmetatable()</tt>
+</li>
 <li>Command line option <tt>-E</tt>.</li>
 <li>Command line checks <tt>__tostring</tt> for errors.</li>
 </ul>
@@ -295,6 +356,8 @@ exit status.</li>
 <li><tt>debug.setmetatable()</tt> returns object.</li>
 <li><tt>debug.getuservalue()</tt> and <tt>debug.setuservalue()</tt>.</li>
 <li>Remove <tt>math.mod()</tt>, <tt>string.gfind()</tt>.</li>
+<li><tt>package.searchers</tt>.</li>
+<li><tt>module()</tt> returns the module table.</li>
 </ul>
 <p>
 Note: this provides only partial compatibility with Lua 5.2 at the
@@ -302,6 +365,21 @@ language and Lua library level. LuaJIT is API+ABI-compatible with
 Lua&nbsp;5.1, which prevents implementing features that would otherwise
 break the Lua/C API and ABI (e.g. <tt>_ENV</tt>).
 </p>
+
+<h2 id="lua53">Extensions from Lua 5.3</h2>
+<p>
+LuaJIT supports some extensions from Lua&nbsp;5.3:
+<ul>
+<li>Unicode escape <tt>'\u{XX...}'</tt> embeds the UTF-8 encoding in string literals.</li>
+<li>The argument table <tt>arg</tt> can be read (and modified) by <tt>LUA_INIT</tt> and <tt>-e</tt> chunks.</li>
+<li><tt>io.read()</tt> and <tt>file:read()</tt> accept formats with or without a leading <tt>*</tt>.</li>
+<li><tt>assert()</tt> accepts any type of error object.</li>
+<li><tt>table.move(a1, f, e, t [,a2])</tt>.</li>
+<li><tt>coroutine.isyieldable()</tt>.</li>
+<li>Lua/C API extensions:
+<tt>lua_isyieldable()</tt>
+</li>
+</ul>
 
 <h2 id="exceptions">C++ Exception Interoperability</h2>
 <p>
@@ -317,25 +395,30 @@ the toolchain used to compile LuaJIT:
 </tr>
 <tr class="odd separate">
 <td class="excplatform">POSIX/x64, DWARF2 unwinding</td>
-<td class="exccompiler">GCC 4.3+</td>
+<td class="exccompiler">GCC 4.3+, Clang</td>
 <td class="excinterop"><b style="color: #00a000;">Full</b></td>
 </tr>
 <tr class="even">
-<td class="excplatform">Other platforms, DWARF2 unwinding</td>
-<td class="exccompiler">GCC</td>
-<td class="excinterop"><b style="color: #c06000;">Limited</b></td>
+<td class="excplatform">ARM <tt>-DLUAJIT_UNWIND_EXTERNAL</tt></td>
+<td class="exccompiler">GCC, Clang</td>
+<td class="excinterop"><b style="color: #00a000;">Full</b></td>
 </tr>
 <tr class="odd">
+<td class="excplatform">Other platforms, DWARF2 unwinding</td>
+<td class="exccompiler">GCC, Clang</td>
+<td class="excinterop"><b style="color: #c06000;">Limited</b></td>
+</tr>
+<tr class="even">
 <td class="excplatform">Windows/x64</td>
 <td class="exccompiler">MSVC or WinSDK</td>
 <td class="excinterop"><b style="color: #00a000;">Full</b></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td class="excplatform">Windows/x86</td>
 <td class="exccompiler">Any</td>
-<td class="excinterop"><b style="color: #a00000;">No</b></td>
+<td class="excinterop"><b style="color: #00a000;">Full</b></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td class="excplatform">Other platforms</td>
 <td class="exccompiler">Other compilers</td>
 <td class="excinterop"><b style="color: #a00000;">No</b></td>
@@ -384,14 +467,6 @@ C++ destructors.</li>
 <li>Lua errors <b>cannot</b> be caught on the C++ side.</li>
 <li>Throwing Lua errors across C++ frames will <b>not</b> call
 C++ destructors.</li>
-<li>Additionally, on Windows/x86 with SEH-based C++&nbsp;exceptions:
-it's <b>not</b> safe to throw a Lua error across any frames containing
-a C++ function with any try/catch construct or using variables with
-(implicit) destructors. This also applies to any functions which may be
-inlined in such a function. It doesn't matter whether <tt>lua_error()</tt>
-is called inside or outside of a try/catch or whether any object actually
-needs to be destroyed: the SEH chain is corrupted and this will eventually
-lead to the termination of the process.</li>
 </ul>
 <br class="flush">
 </div>

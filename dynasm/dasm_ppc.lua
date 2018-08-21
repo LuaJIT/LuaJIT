@@ -1,17 +1,19 @@
 ------------------------------------------------------------------------------
--- DynASM PPC module.
+-- DynASM PPC/PPC64 module.
 --
 -- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
+--
+-- Support for various extensions contributed by Caio Souza Oliveira.
 ------------------------------------------------------------------------------
 
 -- Module information:
 local _info = {
   arch =	"ppc",
   description =	"DynASM PPC module",
-  version =	"1.3.0",
-  vernum =	 10300,
-  release =	"2011-05-05",
+  version =	"1.4.0",
+  vernum =	 10400,
+  release =	"2015-10-18",
   author =	"Mike Pall",
   license =	"MIT",
 }
@@ -39,7 +41,7 @@ local wline, werror, wfatal, wwarn
 local action_names = {
   "STOP", "SECTION", "ESC", "REL_EXT",
   "ALIGN", "REL_LG", "LABEL_LG",
-  "REL_PC", "LABEL_PC", "IMM",
+  "REL_PC", "LABEL_PC", "IMM", "IMMSH"
 }
 
 -- Maximum number of section buffer positions for dasm_put().
@@ -228,8 +230,18 @@ local map_cond = {
 
 ------------------------------------------------------------------------------
 
+local map_op, op_template
+
+local function op_alias(opname, f)
+  return function(params, nparams)
+    if not params then return "-> "..opname:sub(1, -3) end
+    f(params, nparams)
+    op_template(params, map_op[opname], nparams)
+  end
+end
+
 -- Template strings for PPC instructions.
-local map_op = {
+map_op = {
   tdi_3 =	"08000000ARI",
   twi_3 =	"0c000000ARI",
   mulli_3 =	"1c000000RRI",
@@ -297,6 +309,250 @@ local map_op = {
   std_2 =	"f8000000RD",
   stdu_2 =	"f8000001RD",
 
+  subi_3 =	op_alias("addi_3", function(p) p[3] = "-("..p[3]..")" end),
+  subis_3 =	op_alias("addis_3", function(p) p[3] = "-("..p[3]..")" end),
+  subic_3 =	op_alias("addic_3", function(p) p[3] = "-("..p[3]..")" end),
+  ["subic._3"] = op_alias("addic._3", function(p) p[3] = "-("..p[3]..")" end),
+
+  rotlwi_3 =	op_alias("rlwinm_5", function(p)
+    p[4] = "0"; p[5] = "31"
+  end),
+  rotrwi_3 =	op_alias("rlwinm_5", function(p)
+    p[3] = "32-("..p[3]..")"; p[4] = "0"; p[5] = "31"
+  end),
+  rotlw_3 =	op_alias("rlwnm_5", function(p)
+    p[4] = "0"; p[5] = "31"
+  end),
+  slwi_3 =	op_alias("rlwinm_5", function(p)
+    p[5] = "31-("..p[3]..")"; p[4] = "0"
+  end),
+  srwi_3 =	op_alias("rlwinm_5", function(p)
+    p[4] = p[3]; p[3] = "32-("..p[3]..")"; p[5] = "31"
+  end),
+  clrlwi_3 =	op_alias("rlwinm_5", function(p)
+    p[4] = p[3]; p[3] = "0"; p[5] = "31"
+  end),
+  clrrwi_3 =	op_alias("rlwinm_5", function(p)
+    p[5] = "31-("..p[3]..")"; p[3] = "0"; p[4] = "0"
+  end),
+
+  -- Primary opcode 4:
+  mulhhwu_3 =		"10000010RRR.",
+  machhwu_3 =		"10000018RRR.",
+  mulhhw_3 =		"10000050RRR.",
+  nmachhw_3 =		"1000005cRRR.",
+  machhwsu_3 =		"10000098RRR.",
+  machhws_3 =		"100000d8RRR.",
+  nmachhws_3 =		"100000dcRRR.",
+  mulchwu_3 =		"10000110RRR.",
+  macchwu_3 =		"10000118RRR.",
+  mulchw_3 =		"10000150RRR.",
+  macchw_3 =		"10000158RRR.",
+  nmacchw_3 =		"1000015cRRR.",
+  macchwsu_3 =		"10000198RRR.",
+  macchws_3 =		"100001d8RRR.",
+  nmacchws_3 =		"100001dcRRR.",
+  mullhw_3 =		"10000350RRR.",
+  maclhw_3 =		"10000358RRR.",
+  nmaclhw_3 =		"1000035cRRR.",
+  maclhwsu_3 =		"10000398RRR.",
+  maclhws_3 =		"100003d8RRR.",
+  nmaclhws_3 =		"100003dcRRR.",
+  machhwuo_3 =		"10000418RRR.",
+  nmachhwo_3 =		"1000045cRRR.",
+  machhwsuo_3 =		"10000498RRR.",
+  machhwso_3 =		"100004d8RRR.",
+  nmachhwso_3 =		"100004dcRRR.",
+  macchwuo_3 =		"10000518RRR.",
+  macchwo_3 =		"10000558RRR.",
+  nmacchwo_3 =		"1000055cRRR.",
+  macchwsuo_3 =		"10000598RRR.",
+  macchwso_3 =		"100005d8RRR.",
+  nmacchwso_3 =		"100005dcRRR.",
+  maclhwo_3 =		"10000758RRR.",
+  nmaclhwo_3 =		"1000075cRRR.",
+  maclhwsuo_3 =		"10000798RRR.",
+  maclhwso_3 =		"100007d8RRR.",
+  nmaclhwso_3 =		"100007dcRRR.",
+
+  vaddubm_3 =		"10000000VVV",
+  vmaxub_3 =		"10000002VVV",
+  vrlb_3 =		"10000004VVV",
+  vcmpequb_3 =		"10000006VVV",
+  vmuloub_3 =		"10000008VVV",
+  vaddfp_3 =		"1000000aVVV",
+  vmrghb_3 =		"1000000cVVV",
+  vpkuhum_3 =		"1000000eVVV",
+  vmhaddshs_4 =		"10000020VVVV",
+  vmhraddshs_4 =	"10000021VVVV",
+  vmladduhm_4 =		"10000022VVVV",
+  vmsumubm_4 =		"10000024VVVV",
+  vmsummbm_4 =		"10000025VVVV",
+  vmsumuhm_4 =		"10000026VVVV",
+  vmsumuhs_4 =		"10000027VVVV",
+  vmsumshm_4 =		"10000028VVVV",
+  vmsumshs_4 =		"10000029VVVV",
+  vsel_4 =		"1000002aVVVV",
+  vperm_4 =		"1000002bVVVV",
+  vsldoi_4 =		"1000002cVVVP",
+  vpermxor_4 =		"1000002dVVVV",
+  vmaddfp_4 =		"1000002eVVVV~",
+  vnmsubfp_4 =		"1000002fVVVV~",
+  vaddeuqm_4 =		"1000003cVVVV",
+  vaddecuq_4 =		"1000003dVVVV",
+  vsubeuqm_4 =		"1000003eVVVV",
+  vsubecuq_4 =		"1000003fVVVV",
+  vadduhm_3 =		"10000040VVV",
+  vmaxuh_3 =		"10000042VVV",
+  vrlh_3 =		"10000044VVV",
+  vcmpequh_3 =		"10000046VVV",
+  vmulouh_3 =		"10000048VVV",
+  vsubfp_3 =		"1000004aVVV",
+  vmrghh_3 =		"1000004cVVV",
+  vpkuwum_3 =		"1000004eVVV",
+  vadduwm_3 =		"10000080VVV",
+  vmaxuw_3 =		"10000082VVV",
+  vrlw_3 =		"10000084VVV",
+  vcmpequw_3 =		"10000086VVV",
+  vmulouw_3 =		"10000088VVV",
+  vmuluwm_3 =		"10000089VVV",
+  vmrghw_3 =		"1000008cVVV",
+  vpkuhus_3 =		"1000008eVVV",
+  vaddudm_3 =		"100000c0VVV",
+  vmaxud_3 =		"100000c2VVV",
+  vrld_3 =		"100000c4VVV",
+  vcmpeqfp_3 =		"100000c6VVV",
+  vcmpequd_3 =		"100000c7VVV",
+  vpkuwus_3 =		"100000ceVVV",
+  vadduqm_3 =		"10000100VVV",
+  vmaxsb_3 =		"10000102VVV",
+  vslb_3 =		"10000104VVV",
+  vmulosb_3 =		"10000108VVV",
+  vrefp_2 =		"1000010aV-V",
+  vmrglb_3 =		"1000010cVVV",
+  vpkshus_3 =		"1000010eVVV",
+  vaddcuq_3 =		"10000140VVV",
+  vmaxsh_3 =		"10000142VVV",
+  vslh_3 =		"10000144VVV",
+  vmulosh_3 =		"10000148VVV",
+  vrsqrtefp_2 =		"1000014aV-V",
+  vmrglh_3 =		"1000014cVVV",
+  vpkswus_3 =		"1000014eVVV",
+  vaddcuw_3 =		"10000180VVV",
+  vmaxsw_3 =		"10000182VVV",
+  vslw_3 =		"10000184VVV",
+  vmulosw_3 =		"10000188VVV",
+  vexptefp_2 =		"1000018aV-V",
+  vmrglw_3 =		"1000018cVVV",
+  vpkshss_3 =		"1000018eVVV",
+  vmaxsd_3 =		"100001c2VVV",
+  vsl_3 =		"100001c4VVV",
+  vcmpgefp_3 =		"100001c6VVV",
+  vlogefp_2 =		"100001caV-V",
+  vpkswss_3 =		"100001ceVVV",
+  vadduhs_3 =		"10000240VVV",
+  vminuh_3 =		"10000242VVV",
+  vsrh_3 =		"10000244VVV",
+  vcmpgtuh_3 =		"10000246VVV",
+  vmuleuh_3 =		"10000248VVV",
+  vrfiz_2 =		"1000024aV-V",
+  vsplth_3 =		"1000024cVV3",
+  vupkhsh_2 =		"1000024eV-V",
+  vminuw_3 =		"10000282VVV",
+  vminud_3 =		"100002c2VVV",
+  vcmpgtud_3 =		"100002c7VVV",
+  vrfim_2 =		"100002caV-V",
+  vcmpgtsb_3 =		"10000306VVV",
+  vcfux_3 =		"1000030aVVA~",
+  vaddshs_3 =		"10000340VVV",
+  vminsh_3 =		"10000342VVV",
+  vsrah_3 =		"10000344VVV",
+  vcmpgtsh_3 =		"10000346VVV",
+  vmulesh_3 =		"10000348VVV",
+  vcfsx_3 =		"1000034aVVA~",
+  vspltish_2 =		"1000034cVS",
+  vupkhpx_2 =		"1000034eV-V",
+  vaddsws_3 =		"10000380VVV",
+  vminsw_3 =		"10000382VVV",
+  vsraw_3 =		"10000384VVV",
+  vcmpgtsw_3 =		"10000386VVV",
+  vmulesw_3 =		"10000388VVV",
+  vctuxs_3 =		"1000038aVVA~",
+  vspltisw_2 =		"1000038cVS",
+  vminsd_3 =		"100003c2VVV",
+  vsrad_3 =		"100003c4VVV",
+  vcmpbfp_3 =		"100003c6VVV",
+  vcmpgtsd_3 =		"100003c7VVV",
+  vctsxs_3 =		"100003caVVA~",
+  vupklpx_2 =		"100003ceV-V",
+  vsububm_3 =		"10000400VVV",
+  ["bcdadd._4"] =	"10000401VVVy.",
+  vavgub_3 =		"10000402VVV",
+  vand_3 =		"10000404VVV",
+  ["vcmpequb._3"] =	"10000406VVV",
+  vmaxfp_3 =		"1000040aVVV",
+  vsubuhm_3 =		"10000440VVV",
+  ["bcdsub._4"] =	"10000441VVVy.",
+  vavguh_3 =		"10000442VVV",
+  vandc_3 =		"10000444VVV",
+  ["vcmpequh._3"] =	"10000446VVV",
+  vminfp_3 =		"1000044aVVV",
+  vpkudum_3 =		"1000044eVVV",
+  vsubuwm_3 =		"10000480VVV",
+  vavguw_3 =		"10000482VVV",
+  vor_3 =		"10000484VVV",
+  ["vcmpequw._3"] =	"10000486VVV",
+  vpmsumw_3 =		"10000488VVV",
+  ["vcmpeqfp._3"] =	"100004c6VVV",
+  ["vcmpequd._3"] =	"100004c7VVV",
+  vpkudus_3 =		"100004ceVVV",
+  vavgsb_3 =		"10000502VVV",
+  vavgsh_3 =		"10000542VVV",
+  vorc_3 =		"10000544VVV",
+  vbpermq_3 =		"1000054cVVV",
+  vpksdus_3 =		"1000054eVVV",
+  vavgsw_3 =		"10000582VVV",
+  vsld_3 =		"100005c4VVV",
+  ["vcmpgefp._3"] =	"100005c6VVV",
+  vpksdss_3 =		"100005ceVVV",
+  vsububs_3 =		"10000600VVV",
+  mfvscr_1 =		"10000604V--",
+  vsum4ubs_3 =		"10000608VVV",
+  vsubuhs_3 =		"10000640VVV",
+  mtvscr_1 =		"10000644--V",
+  ["vcmpgtuh._3"] =	"10000646VVV",
+  vsum4shs_3 =		"10000648VVV",
+  vupkhsw_2 =		"1000064eV-V",
+  vsubuws_3 =		"10000680VVV",
+  vshasigmaw_4 =	"10000682VVYp",
+  veqv_3 =		"10000684VVV",
+  vsum2sws_3 =		"10000688VVV",
+  vmrgow_3 =		"1000068cVVV",
+  vshasigmad_4 =	"100006c2VVYp",
+  vsrd_3 =		"100006c4VVV",
+  ["vcmpgtud._3"] =	"100006c7VVV",
+  vupklsw_2 =		"100006ceV-V",
+  vupkslw_2 =		"100006ceV-V",
+  vsubsbs_3 =		"10000700VVV",
+  vclzb_2 =		"10000702V-V",
+  vpopcntb_2 =		"10000703V-V",
+  ["vcmpgtsb._3"] =	"10000706VVV",
+  vsum4sbs_3 =		"10000708VVV",
+  vsubshs_3 =		"10000740VVV",
+  vclzh_2 =		"10000742V-V",
+  vpopcnth_2 =		"10000743V-V",
+  ["vcmpgtsh._3"] =	"10000746VVV",
+  vsubsws_3 =		"10000780VVV",
+  vclzw_2 =		"10000782V-V",
+  vpopcntw_2 =		"10000783V-V",
+  ["vcmpgtsw._3"] =	"10000786VVV",
+  vsumsws_3 =		"10000788VVV",
+  vmrgew_3 =		"1000078cVVV",
+  vclzd_2 =		"100007c2V-V",
+  vpopcntd_2 =		"100007c3V-V",
+  ["vcmpbfp._3"] =	"100007c6VVV",
+  ["vcmpgtsd._3"] =	"100007c7VVV",
+
   -- Primary opcode 19:
   mcrf_2 =	"4c000000XX",
   isync_0 =	"4c00012c",
@@ -316,6 +572,8 @@ local map_op = {
   bclrl_2 =	"4c000021AA",
   bcctr_2 =	"4c000420AA",
   bcctrl_2 =	"4c000421AA",
+  bctar_2 =	"4c000460AA",
+  bctarl_2 =	"4c000461AA",
   blr_0 =	"4e800020",
   blrl_0 =	"4e800021",
   bctr_0 =	"4e800420",
@@ -327,6 +585,7 @@ local map_op = {
   cmpd_3 =	"7c200000XRR",
   cmpd_2 =	"7c200000-RR",
   tw_3 =	"7c000008ARR",
+  lvsl_3 =	"7c00000cVRR",
   subfc_3 =	"7c000010RRR.",
   subc_3 =	"7c000010RRR~.",
   mulhdu_3 =	"7c000012RRR.",
@@ -351,50 +610,68 @@ local map_op = {
   cmplw_2 =	"7c000040-RR",
   cmpld_3 =	"7c200040XRR",
   cmpld_2 =	"7c200040-RR",
+  lvsr_3 =	"7c00004cVRR",
   subf_3 =	"7c000050RRR.",
   sub_3 =	"7c000050RRR~.",
+  lbarx_3 =	"7c000068RR0R",
   ldux_3 =	"7c00006aRR0R",
   dcbst_2 =	"7c00006c-RR",
   lwzux_3 =	"7c00006eRR0R",
   cntlzd_2 =	"7c000074RR~",
   andc_3 =	"7c000078RR~R.",
   td_3 =	"7c000088ARR",
+  lvewx_3 =	"7c00008eVRR",
   mulhd_3 =	"7c000092RRR.",
+  addg6s_3 =	"7c000094RRR",
   mulhw_3 =	"7c000096RRR.",
+  dlmzb_3 =	"7c00009cRR~R.",
   ldarx_3 =	"7c0000a8RR0R",
   dcbf_2 =	"7c0000ac-RR",
   lbzx_3 =	"7c0000aeRR0R",
+  lvx_3 =	"7c0000ceVRR",
   neg_2 =	"7c0000d0RR.",
+  lharx_3 =	"7c0000e8RR0R",
   lbzux_3 =	"7c0000eeRR0R",
   popcntb_2 =	"7c0000f4RR~",
   not_2 =	"7c0000f8RR~%.",
   nor_3 =	"7c0000f8RR~R.",
+  stvebx_3 =	"7c00010eVRR",
   subfe_3 =	"7c000110RRR.",
   sube_3 =	"7c000110RRR~.",
   adde_3 =	"7c000114RRR.",
   stdx_3 =	"7c00012aRR0R",
-  stwcx_3 =	"7c00012cRR0R.",
+  ["stwcx._3"] =	"7c00012dRR0R.",
   stwx_3 =	"7c00012eRR0R",
   prtyw_2 =	"7c000134RR~",
+  stvehx_3 =	"7c00014eVRR",
   stdux_3 =	"7c00016aRR0R",
+  ["stqcx._3"] =	"7c00016dR:R0R.",
   stwux_3 =	"7c00016eRR0R",
   prtyd_2 =	"7c000174RR~",
+  stvewx_3 =	"7c00018eVRR",
   subfze_2 =	"7c000190RR.",
   addze_2 =	"7c000194RR.",
-  stdcx_3 =	"7c0001acRR0R.",
+  ["stdcx._3"] =	"7c0001adRR0R.",
   stbx_3 =	"7c0001aeRR0R",
+  stvx_3 =	"7c0001ceVRR",
   subfme_2 =	"7c0001d0RR.",
   mulld_3 =	"7c0001d2RRR.",
   addme_2 =	"7c0001d4RR.",
   mullw_3 =	"7c0001d6RRR.",
   dcbtst_2 =	"7c0001ec-RR",
   stbux_3 =	"7c0001eeRR0R",
+  bpermd_3 =	"7c0001f8RR~R",
+  lvepxl_3 =	"7c00020eVRR",
   add_3 =	"7c000214RRR.",
+  lqarx_3 =	"7c000228R:R0R",
   dcbt_2 =	"7c00022c-RR",
   lhzx_3 =	"7c00022eRR0R",
+  cdtbcd_2 =	"7c000234RR~",
   eqv_3 =	"7c000238RR~R.",
+  lvepx_3 =	"7c00024eVRR",
   eciwx_3 =	"7c00026cRR0R",
   lhzux_3 =	"7c00026eRR0R",
+  cbcdtd_2 =	"7c000274RR~",
   xor_3 =	"7c000278RR~R.",
   mfspefscr_1 =	"7c0082a6R",
   mfxer_1 =	"7c0102a6R",
@@ -404,8 +681,12 @@ local map_op = {
   lhax_3 =	"7c0002aeRR0R",
   mftb_1 =	"7c0c42e6R",
   mftbu_1 =	"7c0d42e6R",
+  lvxl_3 =	"7c0002ceVRR",
   lwaux_3 =	"7c0002eaRR0R",
   lhaux_3 =	"7c0002eeRR0R",
+  popcntw_2 =	"7c0002f4RR~",
+  divdeu_3 =	"7c000312RRR.",
+  divweu_3 =	"7c000316RRR.",
   sthx_3 =	"7c00032eRR0R",
   orc_3 =	"7c000338RR~R.",
   ecowx_3 =	"7c00036cRR0R",
@@ -420,10 +701,14 @@ local map_op = {
   mtctr_1 =	"7c0903a6R",
   dcbi_2 =	"7c0003ac-RR",
   nand_3 =	"7c0003b8RR~R.",
+  dsn_2 =	"7c0003c6-RR",
+  stvxl_3 =	"7c0003ceVRR",
   divd_3 =	"7c0003d2RRR.",
   divw_3 =	"7c0003d6RRR.",
+  popcntd_2 =	"7c0003f4RR~",
   cmpb_3 =	"7c0003f8RR~R.",
   mcrxr_1 =	"7c000400X",
+  lbdx_3 =	"7c000406RRR",
   subfco_3 =	"7c000410RRR.",
   subco_3 =	"7c000410RRR~.",
   addco_3 =	"7c000414RRR.",
@@ -433,16 +718,20 @@ local map_op = {
   lfsx_3 =	"7c00042eFR0R",
   srw_3 =	"7c000430RR~R.",
   srd_3 =	"7c000436RR~R.",
+  lhdx_3 =	"7c000446RRR",
   subfo_3 =	"7c000450RRR.",
   subo_3 =	"7c000450RRR~.",
   lfsux_3 =	"7c00046eFR0R",
+  lwdx_3 =	"7c000486RRR",
   lswi_3 =	"7c0004aaRR0A",
   sync_0 =	"7c0004ac",
   lwsync_0 =	"7c2004ac",
   ptesync_0 =	"7c4004ac",
   lfdx_3 =	"7c0004aeFR0R",
+  lddx_3 =	"7c0004c6RRR",
   nego_2 =	"7c0004d0RR.",
   lfdux_3 =	"7c0004eeFR0R",
+  stbdx_3 =	"7c000506RRR",
   subfeo_3 =	"7c000510RRR.",
   subeo_3 =	"7c000510RRR~.",
   addeo_3 =	"7c000514RRR.",
@@ -450,27 +739,42 @@ local map_op = {
   stswx_3 =	"7c00052aRR0R",
   stwbrx_3 =	"7c00052cRR0R",
   stfsx_3 =	"7c00052eFR0R",
+  sthdx_3 =	"7c000546RRR",
+  ["stbcx._3"] =	"7c00056dRRR",
   stfsux_3 =	"7c00056eFR0R",
+  stwdx_3 =	"7c000586RRR",
   subfzeo_2 =	"7c000590RR.",
   addzeo_2 =	"7c000594RR.",
   stswi_3 =	"7c0005aaRR0A",
+  ["sthcx._3"] =	"7c0005adRRR",
   stfdx_3 =	"7c0005aeFR0R",
+  stddx_3 =	"7c0005c6RRR",
   subfmeo_2 =	"7c0005d0RR.",
   mulldo_3 =	"7c0005d2RRR.",
   addmeo_2 =	"7c0005d4RR.",
   mullwo_3 =	"7c0005d6RRR.",
   dcba_2 =	"7c0005ec-RR",
   stfdux_3 =	"7c0005eeFR0R",
+  stvepxl_3 =	"7c00060eVRR",
   addo_3 =	"7c000614RRR.",
   lhbrx_3 =	"7c00062cRR0R",
+  lfdpx_3 =	"7c00062eF:RR",
   sraw_3 =	"7c000630RR~R.",
   srad_3 =	"7c000634RR~R.",
+  lfddx_3 =	"7c000646FRR",
+  stvepx_3 =	"7c00064eVRR",
   srawi_3 =	"7c000670RR~A.",
   sradi_3 =	"7c000674RR~H.",
   eieio_0 =	"7c0006ac",
   lfiwax_3 =	"7c0006aeFR0R",
+  divdeuo_3 =	"7c000712RRR.",
+  divweuo_3 =	"7c000716RRR.",
   sthbrx_3 =	"7c00072cRR0R",
+  stfdpx_3 =	"7c00072eF:RR",
   extsh_2 =	"7c000734RR~.",
+  stfddx_3 =	"7c000746FRR",
+  divdeo_3 =	"7c000752RRR.",
+  divweo_3 =	"7c000756RRR.",
   extsb_2 =	"7c000774RR~.",
   divduo_3 =	"7c000792RRR.",
   divwou_3 =	"7c000796RRR.",
@@ -481,6 +785,40 @@ local map_op = {
   divwo_3 =	"7c0007d6RRR.",
   dcbz_2 =	"7c0007ec-RR",
 
+  ["tbegin._1"] =	"7c00051d1",
+  ["tbegin._0"] =	"7c00051d",
+  ["tend._1"] =		"7c00055dY",
+  ["tend._0"] =		"7c00055d",
+  ["tendall._0"] =	"7e00055d",
+  tcheck_1 =		"7c00059cX",
+  ["tsr._1"] =		"7c0005dd1",
+  ["tsuspend._0"] =	"7c0005dd",
+  ["tresume._0"] =	"7c2005dd",
+  ["tabortwc._3"] =	"7c00061dARR",
+  ["tabortdc._3"] =	"7c00065dARR",
+  ["tabortwci._3"] =	"7c00069dARS",
+  ["tabortdci._3"] =	"7c0006ddARS",
+  ["tabort._1"] =	"7c00071d-R-",
+  ["treclaim._1"] =	"7c00075d-R",
+  ["trechkpt._0"] =	"7c0007dd",
+
+  lxsiwzx_3 =	"7c000018QRR",
+  lxsiwax_3 =	"7c000098QRR",
+  mfvsrd_2 =	"7c000066-Rq",
+  mfvsrwz_2 =	"7c0000e6-Rq",
+  stxsiwx_3 =	"7c000118QRR",
+  mtvsrd_2 =	"7c000166QR",
+  mtvsrwa_2 =	"7c0001a6QR",
+  lxvdsx_3 =	"7c000298QRR",
+  lxsspx_3 =	"7c000418QRR",
+  lxsdx_3 =	"7c000498QRR",
+  stxsspx_3 =	"7c000518QRR",
+  stxsdx_3 =	"7c000598QRR",
+  lxvw4x_3 =	"7c000618QRR",
+  lxvd2x_3 =	"7c000698QRR",
+  stxvw4x_3 =	"7c000718QRR",
+  stxvd2x_3 =	"7c000798QRR",
+
   -- Primary opcode 30:
   rldicl_4 =	"78000000RR~HM.",
   rldicr_4 =	"78000004RR~HM.",
@@ -488,6 +826,34 @@ local map_op = {
   rldimi_4 =	"7800000cRR~HM.",
   rldcl_4 =	"78000010RR~RM.",
   rldcr_4 =	"78000012RR~RM.",
+
+  rotldi_3 =	op_alias("rldicl_4", function(p)
+    p[4] = "0"
+  end),
+  rotrdi_3 =	op_alias("rldicl_4", function(p)
+    p[3] = "64-("..p[3]..")"; p[4] = "0"
+  end),
+  rotld_3 =	op_alias("rldcl_4", function(p)
+    p[4] = "0"
+  end),
+  sldi_3 =	op_alias("rldicr_4", function(p)
+    p[4] = "63-("..p[3]..")"
+  end),
+  srdi_3 =	op_alias("rldicl_4", function(p)
+    p[4] = p[3]; p[3] = "64-("..p[3]..")"
+  end),
+  clrldi_3 =	op_alias("rldicl_4", function(p)
+    p[4] = p[3]; p[3] = "0"
+  end),
+  clrrdi_3 =	op_alias("rldicr_4", function(p)
+    p[4] = "63-("..p[3]..")"; p[3] = "0"
+  end),
+
+  -- Primary opcode 56:
+  lq_2 =	"e0000000R:D", -- NYI: displacement must be divisible by 8.
+
+  -- Primary opcode 57:
+  lfdp_2 =	"e4000000F:D", -- NYI: displacement must be divisible by 4.
 
   -- Primary opcode 59:
   fdivs_3 =	"ec000024FFF.",
@@ -501,6 +867,200 @@ local map_op = {
   fmadds_4 =	"ec00003aFFFF~.",
   fnmsubs_4 =	"ec00003cFFFF~.",
   fnmadds_4 =	"ec00003eFFFF~.",
+  fcfids_2 =	"ec00069cF-F.",
+  fcfidus_2 =	"ec00079cF-F.",
+
+  dadd_3 =	"ec000004FFF.",
+  dqua_4 =	"ec000006FFFZ.",
+  dmul_3 =	"ec000044FFF.",
+  drrnd_4 =	"ec000046FFFZ.",
+  dscli_3 =	"ec000084FF6.",
+  dquai_4 =	"ec000086SF~FZ.",
+  dscri_3 =	"ec0000c4FF6.",
+  drintx_4 =	"ec0000c61F~FZ.",
+  dcmpo_3 =	"ec000104XFF",
+  dtstex_3 =	"ec000144XFF",
+  dtstdc_3 =	"ec000184XF6",
+  dtstdg_3 =	"ec0001c4XF6",
+  drintn_4 =	"ec0001c61F~FZ.",
+  dctdp_2 =	"ec000204F-F.",
+  dctfix_2 =	"ec000244F-F.",
+  ddedpd_3 =	"ec000284ZF~F.",
+  dxex_2 =	"ec0002c4F-F.",
+  dsub_3 =	"ec000404FFF.",
+  ddiv_3 =	"ec000444FFF.",
+  dcmpu_3 =	"ec000504XFF",
+  dtstsf_3 =	"ec000544XFF",
+  drsp_2 =	"ec000604F-F.",
+  dcffix_2 =	"ec000644F-F.",
+  denbcd_3 =	"ec000684YF~F.",
+  diex_3 =	"ec0006c4FFF.",
+
+  -- Primary opcode 60:
+  xsaddsp_3 =		"f0000000QQQ",
+  xsmaddasp_3 =		"f0000008QQQ",
+  xxsldwi_4 =		"f0000010QQQz",
+  xsrsqrtesp_2 =	"f0000028Q-Q",
+  xssqrtsp_2 =		"f000002cQ-Q",
+  xxsel_4 =		"f0000030QQQQ",
+  xssubsp_3 =		"f0000040QQQ",
+  xsmaddmsp_3 =		"f0000048QQQ",
+  xxpermdi_4 =		"f0000050QQQz",
+  xsresp_2 =		"f0000068Q-Q",
+  xsmulsp_3 =		"f0000080QQQ",
+  xsmsubasp_3 =		"f0000088QQQ",
+  xxmrghw_3 =		"f0000090QQQ",
+  xsdivsp_3 =		"f00000c0QQQ",
+  xsmsubmsp_3 =		"f00000c8QQQ",
+  xsadddp_3 =		"f0000100QQQ",
+  xsmaddadp_3 =		"f0000108QQQ",
+  xscmpudp_3 =		"f0000118XQQ",
+  xscvdpuxws_2 =	"f0000120Q-Q",
+  xsrdpi_2 =		"f0000124Q-Q",
+  xsrsqrtedp_2 =	"f0000128Q-Q",
+  xssqrtdp_2 =		"f000012cQ-Q",
+  xssubdp_3 =		"f0000140QQQ",
+  xsmaddmdp_3 =		"f0000148QQQ",
+  xscmpodp_3 =		"f0000158XQQ",
+  xscvdpsxws_2 =	"f0000160Q-Q",
+  xsrdpiz_2 =		"f0000164Q-Q",
+  xsredp_2 =		"f0000168Q-Q",
+  xsmuldp_3 =		"f0000180QQQ",
+  xsmsubadp_3 =		"f0000188QQQ",
+  xxmrglw_3 =		"f0000190QQQ",
+  xsrdpip_2 =		"f00001a4Q-Q",
+  xstsqrtdp_2 =		"f00001a8X-Q",
+  xsrdpic_2 =		"f00001acQ-Q",
+  xsdivdp_3 =		"f00001c0QQQ",
+  xsmsubmdp_3 =		"f00001c8QQQ",
+  xsrdpim_2 =		"f00001e4Q-Q",
+  xstdivdp_3 =		"f00001e8XQQ",
+  xvaddsp_3 =		"f0000200QQQ",
+  xvmaddasp_3 =		"f0000208QQQ",
+  xvcmpeqsp_3 =		"f0000218QQQ",
+  xvcvspuxws_2 =	"f0000220Q-Q",
+  xvrspi_2 =		"f0000224Q-Q",
+  xvrsqrtesp_2 =	"f0000228Q-Q",
+  xvsqrtsp_2 =		"f000022cQ-Q",
+  xvsubsp_3 =		"f0000240QQQ",
+  xvmaddmsp_3 =		"f0000248QQQ",
+  xvcmpgtsp_3 =		"f0000258QQQ",
+  xvcvspsxws_2 =	"f0000260Q-Q",
+  xvrspiz_2 =		"f0000264Q-Q",
+  xvresp_2 =		"f0000268Q-Q",
+  xvmulsp_3 =		"f0000280QQQ",
+  xvmsubasp_3 =		"f0000288QQQ",
+  xxspltw_3 =		"f0000290QQg~",
+  xvcmpgesp_3 =		"f0000298QQQ",
+  xvcvuxwsp_2 =		"f00002a0Q-Q",
+  xvrspip_2 =		"f00002a4Q-Q",
+  xvtsqrtsp_2 =		"f00002a8X-Q",
+  xvrspic_2 =		"f00002acQ-Q",
+  xvdivsp_3 =		"f00002c0QQQ",
+  xvmsubmsp_3 =		"f00002c8QQQ",
+  xvcvsxwsp_2 =		"f00002e0Q-Q",
+  xvrspim_2 =		"f00002e4Q-Q",
+  xvtdivsp_3 =		"f00002e8XQQ",
+  xvadddp_3 =		"f0000300QQQ",
+  xvmaddadp_3 =		"f0000308QQQ",
+  xvcmpeqdp_3 =		"f0000318QQQ",
+  xvcvdpuxws_2 =	"f0000320Q-Q",
+  xvrdpi_2 =		"f0000324Q-Q",
+  xvrsqrtedp_2 =	"f0000328Q-Q",
+  xvsqrtdp_2 =		"f000032cQ-Q",
+  xvsubdp_3 =		"f0000340QQQ",
+  xvmaddmdp_3 =		"f0000348QQQ",
+  xvcmpgtdp_3 =		"f0000358QQQ",
+  xvcvdpsxws_2 =	"f0000360Q-Q",
+  xvrdpiz_2 =		"f0000364Q-Q",
+  xvredp_2 =		"f0000368Q-Q",
+  xvmuldp_3 =		"f0000380QQQ",
+  xvmsubadp_3 =		"f0000388QQQ",
+  xvcmpgedp_3 =		"f0000398QQQ",
+  xvcvuxwdp_2 =		"f00003a0Q-Q",
+  xvrdpip_2 =		"f00003a4Q-Q",
+  xvtsqrtdp_2 =		"f00003a8X-Q",
+  xvrdpic_2 =		"f00003acQ-Q",
+  xvdivdp_3 =		"f00003c0QQQ",
+  xvmsubmdp_3 =		"f00003c8QQQ",
+  xvcvsxwdp_2 =		"f00003e0Q-Q",
+  xvrdpim_2 =		"f00003e4Q-Q",
+  xvtdivdp_3 =		"f00003e8XQQ",
+  xsnmaddasp_3 =	"f0000408QQQ",
+  xxland_3 =		"f0000410QQQ",
+  xscvdpsp_2 =		"f0000424Q-Q",
+  xscvdpspn_2 =		"f000042cQ-Q",
+  xsnmaddmsp_3 =	"f0000448QQQ",
+  xxlandc_3 =		"f0000450QQQ",
+  xsrsp_2 =		"f0000464Q-Q",
+  xsnmsubasp_3 =	"f0000488QQQ",
+  xxlor_3 =		"f0000490QQQ",
+  xscvuxdsp_2 =		"f00004a0Q-Q",
+  xsnmsubmsp_3 =	"f00004c8QQQ",
+  xxlxor_3 =		"f00004d0QQQ",
+  xscvsxdsp_2 =		"f00004e0Q-Q",
+  xsmaxdp_3 =		"f0000500QQQ",
+  xsnmaddadp_3 =	"f0000508QQQ",
+  xxlnor_3 =		"f0000510QQQ",
+  xscvdpuxds_2 =	"f0000520Q-Q",
+  xscvspdp_2 =		"f0000524Q-Q",
+  xscvspdpn_2 =		"f000052cQ-Q",
+  xsmindp_3 =		"f0000540QQQ",
+  xsnmaddmdp_3 =	"f0000548QQQ",
+  xxlorc_3 =		"f0000550QQQ",
+  xscvdpsxds_2 =	"f0000560Q-Q",
+  xsabsdp_2 =		"f0000564Q-Q",
+  xscpsgndp_3 =		"f0000580QQQ",
+  xsnmsubadp_3 =	"f0000588QQQ",
+  xxlnand_3 =		"f0000590QQQ",
+  xscvuxddp_2 =		"f00005a0Q-Q",
+  xsnabsdp_2 =		"f00005a4Q-Q",
+  xsnmsubmdp_3 =	"f00005c8QQQ",
+  xxleqv_3 =		"f00005d0QQQ",
+  xscvsxddp_2 =		"f00005e0Q-Q",
+  xsnegdp_2 =		"f00005e4Q-Q",
+  xvmaxsp_3 =		"f0000600QQQ",
+  xvnmaddasp_3 =	"f0000608QQQ",
+  ["xvcmpeqsp._3"] =	"f0000618QQQ",
+  xvcvspuxds_2 =	"f0000620Q-Q",
+  xvcvdpsp_2 =		"f0000624Q-Q",
+  xvminsp_3 =		"f0000640QQQ",
+  xvnmaddmsp_3 =	"f0000648QQQ",
+  ["xvcmpgtsp._3"] =	"f0000658QQQ",
+  xvcvspsxds_2 =	"f0000660Q-Q",
+  xvabssp_2 =		"f0000664Q-Q",
+  xvcpsgnsp_3 =		"f0000680QQQ",
+  xvnmsubasp_3 =	"f0000688QQQ",
+  ["xvcmpgesp._3"] =	"f0000698QQQ",
+  xvcvuxdsp_2 =		"f00006a0Q-Q",
+  xvnabssp_2 =		"f00006a4Q-Q",
+  xvnmsubmsp_3 =	"f00006c8QQQ",
+  xvcvsxdsp_2 =		"f00006e0Q-Q",
+  xvnegsp_2 =		"f00006e4Q-Q",
+  xvmaxdp_3 =		"f0000700QQQ",
+  xvnmaddadp_3 =	"f0000708QQQ",
+  ["xvcmpeqdp._3"] =	"f0000718QQQ",
+  xvcvdpuxds_2 =	"f0000720Q-Q",
+  xvcvspdp_2 =		"f0000724Q-Q",
+  xvmindp_3 =		"f0000740QQQ",
+  xvnmaddmdp_3 =	"f0000748QQQ",
+  ["xvcmpgtdp._3"] =	"f0000758QQQ",
+  xvcvdpsxds_2 =	"f0000760Q-Q",
+  xvabsdp_2 =		"f0000764Q-Q",
+  xvcpsgndp_3 =		"f0000780QQQ",
+  xvnmsubadp_3 =	"f0000788QQQ",
+  ["xvcmpgedp._3"] =	"f0000798QQQ",
+  xvcvuxddp_2 =		"f00007a0Q-Q",
+  xvnabsdp_2 =		"f00007a4Q-Q",
+  xvnmsubmdp_3 =	"f00007c8QQQ",
+  xvcvsxddp_2 =		"f00007e0Q-Q",
+  xvnegdp_2 =		"f00007e4Q-Q",
+
+  -- Primary opcode 61:
+  stfdp_2 =	"f4000000F:D", -- NYI: displacement must be divisible by 4.
+
+  -- Primary opcode 62:
+  stq_2 =	"f8000002R:D", -- NYI: displacement must be divisible by 8.
 
   -- Primary opcode 63:
   fdiv_3 =	"fc000024FFF.",
@@ -526,8 +1086,12 @@ local map_op = {
   frsp_2 =	"fc000018F-F.",
   fctiw_2 =	"fc00001cF-F.",
   fctiwz_2 =	"fc00001eF-F.",
+  ftdiv_2 =	"fc000100X-F.",
+  fctiwu_2 =	"fc00011cF-F.",
+  fctiwuz_2 =	"fc00011eF-F.",
   mtfsfi_2 =	"fc00010cAA", -- NYI: upshift.
   fnabs_2 =	"fc000110F-F.",
+  ftsqrt_2 =	"fc000140X-F.",
   fabs_2 =	"fc000210F-F.",
   frin_2 =	"fc000310F-F.",
   friz_2 =	"fc000350F-F.",
@@ -537,7 +1101,38 @@ local map_op = {
   -- NYI: mtfsf, mtfsb0, mtfsb1.
   fctid_2 =	"fc00065cF-F.",
   fctidz_2 =	"fc00065eF-F.",
+  fmrgow_3 =	"fc00068cFFF",
   fcfid_2 =	"fc00069cF-F.",
+  fctidu_2 =	"fc00075cF-F.",
+  fctiduz_2 =	"fc00075eF-F.",
+  fmrgew_3 =	"fc00078cFFF",
+  fcfidu_2 =	"fc00079cF-F.",
+
+  daddq_3 =	"fc000004F:F:F:.",
+  dquaq_4 =	"fc000006F:F:F:Z.",
+  dmulq_3 =	"fc000044F:F:F:.",
+  drrndq_4 =	"fc000046F:F:F:Z.",
+  dscliq_3 =	"fc000084F:F:6.",
+  dquaiq_4 =	"fc000086SF:~F:Z.",
+  dscriq_3 =	"fc0000c4F:F:6.",
+  drintxq_4 =	"fc0000c61F:~F:Z.",
+  dcmpoq_3 =	"fc000104XF:F:",
+  dtstexq_3 =	"fc000144XF:F:",
+  dtstdcq_3 =	"fc000184XF:6",
+  dtstdgq_3 =	"fc0001c4XF:6",
+  drintnq_4 =	"fc0001c61F:~F:Z.",
+  dctqpq_2 =	"fc000204F:-F:.",
+  dctfixq_2 =	"fc000244F:-F:.",
+  ddedpdq_3 =	"fc000284ZF:~F:.",
+  dxexq_2 =	"fc0002c4F:-F:.",
+  dsubq_3 =	"fc000404F:F:F:.",
+  ddivq_3 =	"fc000444F:F:F:.",
+  dcmpuq_3 =	"fc000504XF:F:",
+  dtstsfq_3 =	"fc000544XF:F:",
+  drdpq_2 =	"fc000604F:-F:.",
+  dcffixq_2 =	"fc000644F:-F:.",
+  denbcdq_3 =	"fc000684YF:~F:.",
+  diexq_3 =	"fc0006c4F:FF:.",
 
   -- Primary opcode 4, SPE APU extension:
   evaddw_3 =		"10000200RRR",
@@ -822,7 +1417,7 @@ local map_op = {
 do
   local t = {}
   for k,v in pairs(map_op) do
-    if sub(v, -1) == "." then
+    if type(v) == "string" and sub(v, -1) == "." then
       local v2 = sub(v, 1, 7)..char(byte(v, 8)+1)..sub(v, 9, -2)
       t[sub(k, 1, -3).."."..sub(k, -2)] = v2
     end
@@ -884,6 +1479,24 @@ local function parse_fpr(expr)
   werror("bad register name `"..expr.."'")
 end
 
+local function parse_vr(expr)
+  local r = match(expr, "^v([1-3]?[0-9])$")
+  if r then
+    r = tonumber(r)
+    if r <= 31 then return r end
+  end
+  werror("bad register name `"..expr.."'")
+end
+
+local function parse_vs(expr)
+  local r = match(expr, "^vs([1-6]?[0-9])$")
+  if r then
+    r = tonumber(r)
+    if r <= 63 then return r end
+  end
+  werror("bad register name `"..expr.."'")
+end
+
 local function parse_cr(expr)
   local r = match(expr, "^cr([0-7])$")
   if r then return tonumber(r) end
@@ -900,8 +1513,30 @@ local function parse_cond(expr)
   werror("bad condition bit name `"..expr.."'")
 end
 
+local parse_ctx = {}
+
+local loadenv = setfenv and function(s)
+  local code = loadstring(s, "")
+  if code then setfenv(code, parse_ctx) end
+  return code
+end or function(s)
+  return load(s, "", nil, parse_ctx)
+end
+
+-- Try to parse simple arithmetic, too, since some basic ops are aliases.
+local function parse_number(n)
+  local x = tonumber(n)
+  if x then return x end
+  local code = loadenv("return "..n)
+  if code then
+    local ok, y = pcall(code)
+    if ok then return y end
+  end
+  return nil
+end
+
 local function parse_imm(imm, bits, shift, scale, signed)
-  local n = tonumber(imm)
+  local n = parse_number(imm)
   if n then
     local m = sar(n, scale)
     if shl(m, scale) == n then
@@ -914,7 +1549,8 @@ local function parse_imm(imm, bits, shift, scale, signed)
       end
     end
     werror("out of range immediate `"..imm.."'")
-  elseif match(imm, "^r([1-3]?[0-9])$") or
+  elseif match(imm, "^[rfv]([1-3]?[0-9])$") or
+	 match(imm, "^vs([1-6]?[0-9])$") or
 	 match(imm, "^([%w_]+):(r[1-3]?[0-9])$") then
     werror("expected immediate operand, got register")
   else
@@ -924,11 +1560,11 @@ local function parse_imm(imm, bits, shift, scale, signed)
 end
 
 local function parse_shiftmask(imm, isshift)
-  local n = tonumber(imm)
+  local n = parse_number(imm)
   if n then
     if shr(n, 6) == 0 then
-      local lsb = band(imm, 31)
-      local msb = imm - lsb
+      local lsb = band(n, 31)
+      local msb = n - lsb
       return isshift and (shl(lsb, 11)+shr(msb, 4)) or (shl(lsb, 6)+msb)
     end
     werror("out of range immediate `"..imm.."'")
@@ -936,7 +1572,8 @@ local function parse_shiftmask(imm, isshift)
 	 match(imm, "^([%w_]+):(r[1-3]?[0-9])$") then
     werror("expected immediate operand, got register")
   else
-    werror("NYI: parameterized 64 bit shift/mask")
+    waction("IMMSH", isshift and 1 or 0, imm)
+    return 0;
   end
 end
 
@@ -1011,7 +1648,7 @@ end
 ------------------------------------------------------------------------------
 
 -- Handle opcodes defined with template strings.
-map_op[".template__"] = function(params, template, nparams)
+op_template = function(params, template, nparams)
   if not params then return sub(template, 9) end
   local op = tonumber(sub(template, 1, 8), 16)
   local n, rs = 1, 26
@@ -1027,6 +1664,15 @@ map_op[".template__"] = function(params, template, nparams)
       rs = rs - 5; op = op + shl(parse_gpr(params[n]), rs); n = n + 1
     elseif p == "F" then
       rs = rs - 5; op = op + shl(parse_fpr(params[n]), rs); n = n + 1
+    elseif p == "V" then
+      rs = rs - 5; op = op + shl(parse_vr(params[n]), rs); n = n + 1
+    elseif p == "Q" then
+      local vs = parse_vs(params[n]); n = n + 1; rs = rs - 5
+      local sh = rs == 6 and 2 or 3 + band(shr(rs, 1), 3)
+      op = op + shl(band(vs, 31), rs) + shr(band(vs, 32), sh)
+    elseif p == "q" then
+      local vs = parse_vs(params[n]); n = n + 1
+      op = op + shl(band(vs, 31), 21) + shr(band(vs, 32), 5)
     elseif p == "A" then
       rs = rs - 5; op = op + parse_imm(params[n], 5, rs, 0, false); n = n + 1
     elseif p == "S" then
@@ -1047,6 +1693,26 @@ map_op[".template__"] = function(params, template, nparams)
       rs = rs - 5; op = op + shl(parse_cond(params[n]), rs); n = n + 1
     elseif p == "X" then
       rs = rs - 5; op = op + shl(parse_cr(params[n]), rs+2); n = n + 1
+    elseif p == "1" then
+      rs = rs - 5; op = op + parse_imm(params[n], 1, rs, 0, false); n = n + 1
+    elseif p == "g" then
+      rs = rs - 5; op = op + parse_imm(params[n], 2, rs, 0, false); n = n + 1
+    elseif p == "3" then
+      rs = rs - 5; op = op + parse_imm(params[n], 3, rs, 0, false); n = n + 1
+    elseif p == "P" then
+      rs = rs - 5; op = op + parse_imm(params[n], 4, rs, 0, false); n = n + 1
+    elseif p == "p" then
+      op = op + parse_imm(params[n], 4, rs, 0, false); n = n + 1
+    elseif p == "6" then
+      rs = rs - 6; op = op + parse_imm(params[n], 6, rs, 0, false); n = n + 1
+    elseif p == "Y" then
+      rs = rs - 5; op = op + parse_imm(params[n], 1, rs+4, 0, false); n = n + 1
+    elseif p == "y" then
+      rs = rs - 5; op = op + parse_imm(params[n], 1, rs+3, 0, false); n = n + 1
+    elseif p == "Z" then
+      rs = rs - 5; op = op + parse_imm(params[n], 2, rs+3, 0, false); n = n + 1
+    elseif p == "z" then
+      rs = rs - 5; op = op + parse_imm(params[n], 2, rs+2, 0, false); n = n + 1
     elseif p == "W" then
       op = op + parse_cr(params[n]); n = n + 1
     elseif p == "G" then
@@ -1071,6 +1737,8 @@ map_op[".template__"] = function(params, template, nparams)
       local lo = band(op, mm)
       local hi = band(op, shl(mm, 5))
       op = op - lo - hi + shl(lo, 5) + shr(hi, 5)
+    elseif p == ":" then
+      if band(shr(op, rs), 1) ~= 0 then werror("register pair expected") end
     elseif p == "-" then
       rs = rs - 5
     elseif p == "." then
@@ -1081,6 +1749,8 @@ map_op[".template__"] = function(params, template, nparams)
   end
   wputpos(pos, op)
 end
+
+map_op[".template__"] = op_template
 
 ------------------------------------------------------------------------------
 

@@ -41,7 +41,7 @@
 
 -- Cache some library functions and objects.
 local jit = require("jit")
-assert(jit.version_num == 20005, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20100, "LuaJIT core/library version mismatch")
 local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
 local bit = require("bit")
@@ -179,13 +179,12 @@ local function bcliston(outfile)
 end
 
 -- Public module functions.
-module(...)
-
-line = bcline
-dump = bcdump
-targets = bctargets
-
-on = bcliston
-off = bclistoff
-start = bcliston -- For -j command line option.
+return {
+  line = bcline,
+  dump = bcdump,
+  targets = bctargets,
+  on = bcliston,
+  off = bclistoff,
+  start = bcliston -- For -j command line option.
+}
 

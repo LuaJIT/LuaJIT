@@ -19,8 +19,10 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_state.h"
+#include "lj_strfmt.h"
 #include "lj_ff.h"
 #include "lj_lib.h"
 
@@ -84,7 +86,7 @@ static IOFileUD *io_file_open(lua_State *L, const char *mode)
   IOFileUD *iof = io_file_new(L);
   iof->fp = fopen(fname, mode);
   if (iof->fp == NULL)
-    luaL_argerror(L, 1, lj_str_pushf(L, "%s: %s", fname, strerror(errno)));
+    luaL_argerror(L, 1, lj_strfmt_pushf(L, "%s: %s", fname, strerror(errno)));
   return iof;
 }
 
@@ -97,7 +99,7 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
     int stat = -1;
 #if LJ_TARGET_POSIX
     stat = pclose(iof->fp);
-#elif LJ_TARGET_WINDOWS
+#elif LJ_TARGET_WINDOWS && !LJ_TARGET_XBOXONE && !LJ_TARGET_UWP
     stat = _pclose(iof->fp);
 #else
     lua_assert(0);
@@ -145,7 +147,7 @@ static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
   MSize m = LUAL_BUFFERSIZE, n = 0, ok = 0;
   char *buf;
   for (;;) {
-    buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    buf = lj_buf_tmp(L, m);
     if (fgets(buf+n, m-n, fp) == NULL) break;
     n += (MSize)strlen(buf+n);
     ok |= n;
@@ -161,7 +163,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
 {
   MSize m, n;
   for (m = LUAL_BUFFERSIZE, n = 0; ; m += m) {
-    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    char *buf = lj_buf_tmp(L, m);
     n += (MSize)fread(buf+n, 1, m-n, fp);
     if (n != m) {
       setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
@@ -174,7 +176,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
 static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
 {
   if (m) {
-    char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, m);
+    char *buf = lj_buf_tmp(L, m);
     MSize n = (MSize)fread(buf, 1, m, fp);
     setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
     lj_gc_check(L);
@@ -201,13 +203,12 @@ static int io_file_read(lua_State *L, FILE *fp, int start)
     for (n = start; nargs-- && ok; n++) {
       if (tvisstr(L->base+n)) {
 	const char *p = strVdata(L->base+n);
-	if (p[0] != '*')
-	  lj_err_arg(L, n+1, LJ_ERR_INVOPT);
-	if (p[1] == 'n')
+	if (p[0] == '*') p++;
+	if (p[0] == 'n')
 	  ok = io_file_readnum(L, fp);
-	else if ((p[1] & ~0x20) == 'L')
-	  ok = io_file_readline(L, fp, (p[1] == 'l'));
-	else if (p[1] == 'a')
+	else if ((p[0] & ~0x20) == 'L')
+	  ok = io_file_readline(L, fp, (p[0] == 'l'));
+	else if (p[0] == 'a')
 	  io_file_readall(L, fp);
 	else
 	  lj_err_arg(L, n+1, LJ_ERR_INVFMT);
@@ -230,19 +231,11 @@ static int io_file_write(lua_State *L, FILE *fp, int start)
   cTValue *tv;
   int status = 1;
   for (tv = L->base+start; tv < L->top; tv++) {
-    if (tvisstr(tv)) {
-      MSize len = strV(tv)->len;
-      status = status && (fwrite(strVdata(tv), 1, len, fp) == len);
-    } else if (tvisint(tv)) {
-      char buf[LJ_STR_INTBUF];
-      char *p = lj_str_bufint(buf, intV(tv));
-      size_t len = (size_t)(buf+LJ_STR_INTBUF-p);
-      status = status && (fwrite(p, 1, len, fp) == len);
-    } else if (tvisnum(tv)) {
-      status = status && (fprintf(fp, LUA_NUMBER_FMT, numV(tv)) > 0);
-    } else {
+    MSize len;
+    const char *p = lj_strfmt_wstrnum(L, tv, &len);
+    if (!p)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
-    }
+    status = status && (fwrite(p, 1, len, fp) == len);
   }
   if (LJ_52 && status) {
     L->top = L->base+1;
@@ -413,7 +406,7 @@ LJLIB_CF(io_open)
 
 LJLIB_CF(io_popen)
 {
-#if LJ_TARGET_POSIX || LJ_TARGET_WINDOWS
+#if LJ_TARGET_POSIX || (LJ_TARGET_WINDOWS && !LJ_TARGET_XBOXONE && !LJ_TARGET_UWP)
   const char *fname = strdata(lj_lib_checkstr(L, 1));
   GCstr *s = lj_lib_optstr(L, 2);
   const char *mode = s ? strdata(s) : "r";

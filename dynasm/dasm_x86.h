@@ -170,7 +170,7 @@ void dasm_put(Dst_DECL, int start, ...)
   dasm_State *D = Dst_REF;
   dasm_ActList p = D->actionlist + start;
   dasm_Section *sec = D->section;
-  int pos = sec->pos, ofs = sec->ofs, mrm = 4;
+  int pos = sec->pos, ofs = sec->ofs, mrm = -1;
   int *b;
 
   if (pos >= sec->epos) {
@@ -193,7 +193,7 @@ void dasm_put(Dst_DECL, int start, ...)
       b[pos++] = n;
       switch (action) {
       case DASM_DISP:
-	if (n == 0) { if ((mrm&7) == 4) mrm = p[-2]; if ((mrm&7) != 5) break; }
+	if (n == 0) { if (mrm < 0) mrm = p[-2]; if ((mrm&7) != 5) break; }
 	/* fallthrough */
       case DASM_IMM_DB: if (((n+128)&-256) == 0) goto ob; /* fallthrough */
       case DASM_REL_A: /* Assumes ptrdiff_t is int. !x64 */
@@ -204,11 +204,17 @@ void dasm_put(Dst_DECL, int start, ...)
       case DASM_IMM_W: CK((n&-65536) == 0, RANGE_I); ofs += 2; break;
       case DASM_SPACE: p++; ofs += n; break;
       case DASM_SETLABEL: b[pos-2] = -0x40000000; break;  /* Neg. label ofs. */
-      case DASM_VREG: CK((n&-8) == 0 && (n != 4 || (*p&1) == 0), RANGE_VREG);
-	if (*p++ == 1 && *p == DASM_DISP) mrm = n;
+      case DASM_VREG: CK((n&-16) == 0 && (n != 4 || (*p>>5) != 2), RANGE_VREG);
+	if (*p < 0x40 && p[1] == DASM_DISP) mrm = n;
+	if (*p < 0x20 && (n&7) == 4) ofs++;
+	switch ((*p++ >> 3) & 3) {
+	case 3: n |= b[pos-3]; /* fallthrough */
+	case 2: n |= b[pos-2]; /* fallthrough */
+	case 1: if (n <= 7) { b[pos-1] |= 0x10; ofs--; }
+	}
 	continue;
       }
-      mrm = 4;
+      mrm = -1;
     } else {
       int *pl, n;
       switch (action) {
@@ -399,7 +405,27 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_IMM_WB: if (((n+128)&-256) == 0) goto db; else mark = NULL;
 	  /* fallthrough */
 	case DASM_IMM_W: dasmw(n); break;
-	case DASM_VREG: { int t = *p++; if (t >= 2) n<<=3; cp[-1] |= n; break; }
+	case DASM_VREG: {
+	  int t = *p++;
+	  unsigned char *ex = cp - (t&7);
+	  if ((n & 8) && t < 0xa0) {
+	    if (*ex & 0x80) ex[1] ^= 0x20 << (t>>6); else *ex ^= 1 << (t>>6);
+	    n &= 7;
+	  } else if (n & 0x10) {
+	    if (*ex & 0x80) {
+	      *ex = 0xc5; ex[1] = (ex[1] & 0x80) | ex[2]; ex += 2;
+	    }
+	    while (++ex < cp) ex[-1] = *ex;
+	    if (mark) mark--;
+	    cp--;
+	    n &= 7;
+	  }
+	  if (t >= 0xc0) n <<= 4;
+	  else if (t >= 0x40) n <<= 3;
+	  else if (n == 4 && t < 0x20) { cp[-1] ^= n; *cp++ = 0x20; }
+	  cp[-1] ^= n;
+	  break;
+	}
 	case DASM_REL_LG: p++; if (n >= 0) goto rel_pc;
 	  b++; n = (int)(ptrdiff_t)D->globals[-n];
 	  /* fallthrough */

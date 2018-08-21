@@ -27,6 +27,7 @@ ptrdiff_t lj_vmevent_prepare(lua_State *L, VMEvent ev)
     if (tv && tvisfunc(tv)) {
       lj_state_checkstack(L, LUA_MINSTACK);
       setfuncV(L, L->top++, funcV(tv));
+      if (LJ_FR2) setnilV(L->top++);
       return savestack(L, L->top);
     }
   }

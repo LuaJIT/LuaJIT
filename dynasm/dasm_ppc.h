@@ -1,5 +1,5 @@
 /*
-** DynASM PPC encoding engine.
+** DynASM PPC/PPC64 encoding engine.
 ** Copyright (C) 2005-2017 Mike Pall. All rights reserved.
 ** Released under the MIT license. See dynasm.lua for full copyright notice.
 */
@@ -21,7 +21,7 @@ enum {
   /* The following actions need a buffer position. */
   DASM_ALIGN, DASM_REL_LG, DASM_LABEL_LG,
   /* The following actions also have an argument. */
-  DASM_REL_PC, DASM_LABEL_PC, DASM_IMM,
+  DASM_REL_PC, DASM_LABEL_PC, DASM_IMM, DASM_IMMSH,
   DASM__MAX
 };
 
@@ -244,6 +244,10 @@ void dasm_put(Dst_DECL, int start, ...)
 #endif
 	b[pos++] = n;
 	break;
+      case DASM_IMMSH:
+	CK((n >> 6) == 0, RANGE_I);
+	b[pos++] = n;
+	break;
       }
     }
   }
@@ -299,7 +303,7 @@ int dasm_link(Dst_DECL, size_t *szp)
 	case DASM_ALIGN: ofs -= (b[pos++] + ofs) & (ins & 255); break;
 	case DASM_REL_LG: case DASM_REL_PC: pos++; break;
 	case DASM_LABEL_LG: case DASM_LABEL_PC: b[pos++] += ofs; break;
-	case DASM_IMM: pos++; break;
+	case DASM_IMM: case DASM_IMMSH: pos++; break;
 	}
       }
       stop: (void)0;
@@ -366,6 +370,9 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_LABEL_PC: break;
 	case DASM_IMM:
 	  cp[-1] |= (n & ((1<<((ins>>5)&31))-1)) << (ins&31);
+	  break;
+	case DASM_IMMSH:
+	  cp[-1] |= (ins & 1) ? ((n&31)<<11)|((n&32)>>4) : ((n&31)<<6)|(n&32);
 	  break;
 	default: *cp++ = ins; break;
 	}

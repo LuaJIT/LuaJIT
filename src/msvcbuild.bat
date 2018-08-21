@@ -20,6 +20,7 @@
 @set LJLIB=lib /nologo /nodefaultlib
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
+@set DASC=vm_x86.dasc
 @set LJDLLNAME=lua51.dll
 @set LJLIBNAME=lua51.lib
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c
@@ -37,8 +38,14 @@ if exist minilua.exe.manifest^
 @if errorlevel 8 goto :X64
 @set DASMFLAGS=-D WIN -D JIT -D FFI
 @set LJARCH=x86
+@set LJCOMPILE=%LJCOMPILE% /arch:SSE2
 :X64
-minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h vm_x86.dasc
+@if "%1" neq "gc64" goto :NOGC64
+@shift
+@set DASC=vm_x64.dasc
+@set LJCOMPILE=%LJCOMPILE% /DLUAJIT_ENABLE_GC64
+:NOGC64
+minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
 %LJCOMPILE% /I "." /I %DASMDIR% host\buildvm*.c
@@ -66,7 +73,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1" neq "debug" goto :NODEBUG
 @shift
 @set LJCOMPILE=%LJCOMPILE% /Zi
-@set LJLINK=%LJLINK% /debug
+@set LJLINK=%LJLINK% /debug /opt:ref /opt:icf /incremental:no
 :NODEBUG
 @if "%1"=="amalg" goto :AMALGDLL
 @if "%1"=="static" goto :STATIC
