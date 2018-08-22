@@ -755,10 +755,10 @@ LUA_API void *lua_newuserdata(lua_State *L, size_t size)
 #if LJ_HASFFI
 #include "lj_cdata.h"
 
-LUA_API void *lua_newcdata(lua_State *L, int id, size_t size)
+LUA_API void *lua_newcdata(lua_State *L, int ctid, size_t size)
 {
   CTState *cts = ctype_cts(L);
-  GCcdata *cd = lj_cdata_new(cts, id, size);
+  GCcdata *cd = lj_cdata_new(cts, ctid, size);
   setcdataV(L, L->top, cd);
   incr_top(L);
   lj_gc_check(L);
@@ -770,6 +770,39 @@ LUA_API void lua_pushcdataptr(lua_State *L, const void *ptr)
   const void **cd = lua_newcdata(L, CTID_P_CVOID, sizeof(ptr));
   *cd = ptr;
 }
+
+#include "lj_cparse.h"
+LUA_API int lua_getctid(lua_State *L, int narg)
+{
+  cTValue *o = index2adr(L, narg);
+
+  if (tvisnumber(o)) {
+    return lua_tointeger(L, narg);
+  }
+
+  if (tvisstr(o)) {
+    const char *s = lua_tostring(L, narg);
+    CPState cp;
+    int errcode;
+    cp.L = L;
+    cp.cts = ctype_cts(L);
+    cp.srcname = s;
+    cp.p = s;
+    cp.param = NULL;
+    cp.mode = CPARSE_MODE_ABSTRACT|CPARSE_MODE_NOIMPLICIT;
+    errcode = lj_cparse(&cp);
+    if (errcode) lj_err_throw(L, errcode);  /* Propagate errors. */
+    return cp.val.id;
+  }
+
+  if (tviscdata(o)) {
+    GCcdata *cd = cdataV(o);
+    return cd->ctypeid == CTID_CTYPEID ? *(CTypeID *)cdataptr(cd) : cd->ctypeid;
+  }
+
+  lj_err_argtype(L, narg, "C type");
+}
+
 #endif
 
 LUA_API void lua_concat(lua_State *L, int n)
