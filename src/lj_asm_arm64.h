@@ -1008,7 +1008,8 @@ static void asm_xload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
   lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
-  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
+  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1,
+               rset_exclude(RSET_GPR, dest));
 }
 
 static void asm_xstore(ASMState *as, IRIns *ir)
