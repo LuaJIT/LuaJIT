@@ -14,8 +14,8 @@
 @if not defined INCLUDE goto :FAIL
 
 @setlocal
-@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
-@set LJLINK=link /nologo
+@set LJCOMPILE=cl /nologo /MP /Zi /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
+@set LJLINK=link /nologo /DEBUG
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
 @set DASMDIR=..\dynasm
@@ -75,8 +75,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 
 @if "%2" neq "debug" goto :NODEBUG
 @shift
-@set LJCOMPILE=%LJCOMPILE% /Zi
-@set LJLINK=%LJLINK% /debug /opt:ref /opt:icf /incremental:no
+@set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no
 :NODEBUG
 @if "%2"=="amalg" goto :AMALGDLL
 @if "%2"=="static" goto :STATIC
