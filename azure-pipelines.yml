@@ -18,3 +18,16 @@ jobs:
         buildMode: gc64
   steps:
   - template: ./windows.yml
+
+- job: Linux
+  pool:
+    vmImage: 'ubuntu-18.04'
+  strategy:
+    maxParallel: 3
+    matrix:
+      Linux_x64:
+        buildFlags:
+      Linux_x64_GC64:
+        buildFlags: -DLUAJIT_ENABLE_GC64
+  steps:
+  - template: ./linux.yml

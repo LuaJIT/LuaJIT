@@ -1,0 +1,5 @@
+steps:
+  - script: |
+     cd src
+     make -j  XCFLAGS="$(buildFlags)"
+    displayName: Linux Build
