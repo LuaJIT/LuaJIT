@@ -3,3 +3,8 @@ steps:
      cd src
      make -j  XCFLAGS="$(buildFlags)"
     displayName: Linux Build
+
+  - script: |
+     cd test
+     ../src/luajit test.lua
+    displayName: Linux Tests

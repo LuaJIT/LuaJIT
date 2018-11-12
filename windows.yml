@@ -7,3 +7,8 @@ steps:
      cd src
      call msvcbuild.bat $(buildMode)
     displayName: Windows Build - $(VC_ARCH).
+
+  - script: |
+     cd test
+     ..\src\luajit.exe test.lua
+    displayName: Windows Tests - $(VC_ARCH).
