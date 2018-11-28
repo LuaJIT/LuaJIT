@@ -295,9 +295,18 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
       } else if (asm_isk32(as, ir->op1, &ofs)) {
 	ref = ir->op2;
       } else {
-	Reg rn = ra_alloc1(as, ir->op1, allow);
-	IRIns *irr = IR(ir->op2);
+	IRRef ref1 = ir->op1;
+	IRRef ref2 = ir->op2;
+	Reg rn;
+	IRIns *irr;
 	uint32_t m;
+
+	if (irref_isk(ir->op1)) {
+	  ref1 = ir->op2;
+	  ref2 = ir->op1;
+	}
+	rn = ra_alloc1(as, ref1, allow);
+	irr = IR(ref2);
 	if (irr+1 == ir && !ra_used(irr) &&
 	    irr->o == IR_ADD && irref_isk(irr->op2)) {
 	  ofs = sizeof(GCstr) + IR(irr->op2)->i;
@@ -307,7 +316,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	    goto skipopm;
 	  }
 	}
-	m = asm_fuseopm(as, 0, ir->op2, rset_exclude(allow, rn));
+	m = asm_fuseopm(as, 0, ref2, rset_exclude(allow, rn));
 	ofs = sizeof(GCstr);
       skipopm:
 	emit_lso(as, ai, rd, rd, ofs);
@@ -1008,8 +1017,7 @@ static void asm_xload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
   lua_assert(!(ir->op2 & IRXLOAD_UNALIGNED));
-  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1,
-               rset_exclude(RSET_GPR, dest));
+  asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
 }
 
 static void asm_xstore(ASMState *as, IRIns *ir)
