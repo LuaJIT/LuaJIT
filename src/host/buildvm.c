@@ -96,7 +96,7 @@ static void emit_raw(BuildCtx *ctx)
 static const char *sym_decorate(BuildCtx *ctx,
 				const char *prefix, const char *suffix)
 {
-  char name[256];
+  static char name[2048];
   char *p;
 #if LJ_64
   const char *symprefix = ctx->mode == BUILD_machasm ? "_" : "";
@@ -124,7 +124,7 @@ static const char *sym_decorate(BuildCtx *ctx,
   return p;
 }
 
-#define NRELOCSYM	(sizeof(extnames)/sizeof(extnames[0])-1)
+#define NRELOCSYM	(sizeof(extnames)/sizeof(extnames[0]))
 
 static int relocmap[NRELOCSYM];
 
@@ -430,7 +430,7 @@ ok:
 
 int main(int argc, char **argv)
 {
-  BuildCtx ctx_;
+  BuildCtx ctx_ = {0};
   BuildCtx *ctx = &ctx_;
   int status, binmode;
 

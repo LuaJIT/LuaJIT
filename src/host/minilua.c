@@ -330,12 +330,12 @@ struct UpVal*next;
 typedef struct CClosure{
 GCObject*next;lu_byte tt;lu_byte marked;lu_byte isC;lu_byte nupvalues;GCObject*gclist;struct Table*env;
 lua_CFunction f;
-TValue upvalue[1];
+TValue upvalue[4];
 }CClosure;
 typedef struct LClosure{
 GCObject*next;lu_byte tt;lu_byte marked;lu_byte isC;lu_byte nupvalues;GCObject*gclist;struct Table*env;
 struct Proto*p;
-UpVal*upvals[1];
+UpVal*upvals[4];
 }LClosure;
 typedef union Closure{
 CClosure c;

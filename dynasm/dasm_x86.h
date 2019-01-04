@@ -73,7 +73,7 @@ struct dasm_State {
   size_t codesize;		/* Total size of all code sections. */
   int maxsection;		/* 0 <= sectionidx < maxsection. */
   int status;			/* Status code. */
-  dasm_Section sections[1];	/* All sections. Alloc-extended. */
+  dasm_Section sections[DASM_MAXSECPOS];	/* All sections. Alloc-extended. */
 };
 
 /* The size of the core structure depends on the max. number of sections. */
