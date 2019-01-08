@@ -207,8 +207,17 @@ LUALIB_API char *luaL_prepbuffer(luaL_Buffer *B)
 
 LUALIB_API void luaL_addlstring(luaL_Buffer *B, const char *s, size_t l)
 {
-  while (l--)
-    luaL_addchar(B, *s++);
+  lua_State *L = B->L;
+  if (l <= bufffree(B)) {  /* fit into buffer? */
+    memcpy(B->p, s, l);  /* put it there */
+    B->p += l;
+  }
+  else {
+    emptybuffer(B);
+    lua_pushlstring(L, s, l);
+    B->lvl++;  /* add new value into B stack */
+    adjuststack(B);
+  }
 }
 
 LUALIB_API void luaL_addstring(luaL_Buffer *B, const char *s)
