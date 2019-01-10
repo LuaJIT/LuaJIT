@@ -165,6 +165,10 @@ else
     HOST_SYS= Windows
     HOST_MSYS= mingw
   endif
+  ifneq (,$(findstring MSYS,$(HOST_SYS)))
+    HOST_SYS= Windows
+    HOST_MSYS= mingw
+  endif
   ifneq (,$(findstring CYGWIN,$(HOST_SYS)))
     HOST_SYS= Windows
     HOST_MSYS= cygwin
