@@ -9,8 +9,8 @@
 
 @setlocal
 @echo ---- Host compiler ----
-@set LJCOMPILE=cl /nologo /c /MD /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /DLUAJIT_ENABLE_GC64
-@set LJLINK=link /nologo
+@set LJCOMPILE=cl /nologo /c /MD /Ox /GL /Oi /Ob2 /fp:fast /W3 /MP /D_CRT_SECURE_NO_DEPRECATE /DLUAJIT_ENABLE_GC64
+@set LJLINK=link /nologo /LTCG
 @set LJMT=mt /nologo
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
@@ -60,7 +60,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @cd /D "%CWD%"
 @shift
 
-@set LJCOMPILE="cl" /nologo /c /W3 /GF /Gm- /GR- /GS- /Gy /openmp- /D_CRT_SECURE_NO_DEPRECATE /D_LIB /D_UNICODE /D_DURANGO
+@set LJCOMPILE="cl" /nologo /c /MP /W3 /GF /Gm- /GR- /GS- /Gy /openmp- /D_CRT_SECURE_NO_DEPRECATE /D_LIB /D_DURANGO
 @set LJLIB="lib" /nologo
 
 @if "%1"=="debug" (
@@ -68,7 +68,8 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
   @set LJCOMPILE=%LJCOMPILE% /Zi /MDd /Od
   @set LJLINK=%LJLINK% /debug 
 ) else (
-  @set LJCOMPILE=%LJCOMPILE% /MD /O2 /DNDEBUG
+  @set LJCOMPILE=%LJCOMPILE% /MD /DNDEBUG /Ox /GL /Oi /Ob2 /fp:fast /arch:AVX /favor:AMD64 /Gw
+  @set LJLINK=%LJLINK% /LTCG
 )
 
 @if "%1"=="amalg" goto :AMALG

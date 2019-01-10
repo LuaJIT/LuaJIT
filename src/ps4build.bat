@@ -21,8 +21,8 @@
 
 @setlocal
 @rem ---- Host compiler ----
-@set LJCOMPILE=cl /nologo /c /MD /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE
-@set LJLINK=link /nologo
+@set LJCOMPILE=cl /nologo /c /Ox /Oi /Ot /GL /Ob2 /W3 /MP /MD /D_CRT_SECURE_NO_DEPRECATE
+@set LJLINK=link /nologo /LTCG
 @set LJMT=mt /nologo
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
@@ -51,7 +51,7 @@ if exist minilua.exe.manifest^
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
-%LJCOMPILE% /I "." /I %DASMDIR% %GC64% -DLUAJIT_TARGET=LUAJIT_ARCH_X64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND host\buildvm*.c
+%LJCOMPILE% /I "." /I %DASMDIR% %GC64% -DLUAJIT_TARGET=LUAJIT_ARCH_X64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND -DLJ_TARGET_CONSOLE=1 host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
@@ -75,7 +75,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 
 @rem ---- Cross compiler ----
 @set LJCOMPILE="%SCE_ORBIS_SDK_DIR%\host_tools\bin\orbis-clang" -c -Wall -DLUAJIT_DISABLE_FFI %GC64%
-@set LJLIB="%SCE_ORBIS_SDK_DIR%\host_tools\bin\orbis-ar" rcus
+@set LJLIB="%SCE_ORBIS_SDK_DIR%\host_tools\bin\orbis-snarl" rcus
 @set INCLUDE=""
 
 orbis-as -o lj_vm.o lj_vm.s
@@ -86,7 +86,7 @@ orbis-as -o lj_vm.o lj_vm.s
 @set TARGETLIB=libluajitD_ps4.a
 goto :BUILD
 :NODEBUG
-@set LJCOMPILE=%LJCOMPILE% -O2
+@set LJCOMPILE=%LJCOMPILE% -O3 -ffast-math -flto -fno-rtti -fno-exceptions -fomit-frame-pointer
 @set TARGETLIB=libluajit_ps4.a
 :BUILD
 del %TARGETLIB%
