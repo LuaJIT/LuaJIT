@@ -185,6 +185,7 @@ LJLIB_CF(os_date)
 #endif
   } else {
 #if LJ_TARGET_POSIX
+    tzset();
     stm = localtime_r(&t, &rtm);
 #else
     stm = localtime(&t);
