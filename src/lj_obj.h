@@ -661,6 +661,10 @@ struct lua_State {
   void *cframe;		/* End of C stack frame chain. */
   MSize stacksize;	/* True stack size (incl. LJ_STACK_EXTRA). */
   void *exdata;	        /* user extra data pointer. added by OpenResty */
+#if LJ_TARGET_ARM
+  uint32_t unused1;
+  uint32_t unused2;
+#endif
 };
 
 #define G(L)			(mref(L->glref, global_State))
