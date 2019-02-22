@@ -57,6 +57,9 @@ typedef struct ASMState {
   RegSet modset;	/* Set of registers modified inside the loop. */
   RegSet weakset;	/* Set of weakly referenced registers. */
   RegSet phiset;	/* Set of PHI registers. */
+  RegSet rematset;	/* Set of registers considered safe to use for
+			   rematerialization. A separate check must be done to
+			   ensure that the register is a constant. */
 
   uint32_t flags;	/* Copy of JIT compiler flags. */
   int loopinv;		/* Loop branch inversion (0:no, 1:yes, 2:yes+CC_P). */
@@ -293,7 +296,8 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 
 /* -- Register allocator -------------------------------------------------- */
 
-#define ra_free(as, r)		rset_set(as->freeset, (r))
+#define ra_free(as, r)		(rset_set(as->freeset, (r)), \
+				 rset_set(as->rematset, (r)))
 #define ra_modified(as, r)	rset_set(as->modset, (r))
 #define ra_weak(as, r)		rset_set(as->weakset, (r))
 #define ra_noweak(as, r)	rset_clear(as->weakset, (r))
@@ -305,7 +309,7 @@ static void ra_setup(ASMState *as)
 {
   Reg r;
   /* Initially all regs (except the stack pointer) are free for use. */
-  as->freeset = RSET_INIT;
+  as->freeset = as->rematset = RSET_INIT;
   as->modset = RSET_EMPTY;
   as->weakset = RSET_EMPTY;
   as->phiset = RSET_EMPTY;
@@ -538,6 +542,8 @@ static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow)
   while (work) {
     IRRef ref;
     r = rset_pickbot(work);
+    if (r & ~as->rematset)
+      goto unsuitable;
     ref = regcost_ref(as->cost[r]);
 #if LJ_64
     if (ref < ASMREF_L) {
@@ -564,6 +570,7 @@ static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow)
 	k == (ra_iskref(ref) ? ra_krefk(as, ref) : IR(ref)->i))
       return r;
 #endif
+  unsuitable:
     rset_clear(work, r);
   }
   pick = as->freeset & allow;
@@ -650,6 +657,54 @@ static Reg ra_alloc1(ASMState *as, IRRef ref, RegSet allow)
   /* Note: allow is ignored if the register is already allocated. */
   if (ra_noreg(r)) r = ra_allocref(as, ref, allow);
   ra_noweak(as, r);
+  return r;
+}
+
+/* Allocate a register on-demand.  Guard against constant rematerialization by
+   marking the register as unusable for rematerialization if it is being used
+   by dest. */
+static Reg ra_alloc_rematsafe(ASMState *as, IRRef ref, Reg dest, RegSet allow)
+{
+  Reg r;
+  int64_t k;
+  IRIns *ir = IR(ref);
+
+  if (!irref_isk(ref))
+    return ra_alloc1(as, ref, allow);
+
+  switch(ir->o) {
+  case IR_KNULL:
+    k = 0;
+    break;
+  case IR_KINT:
+    k = ir->i;
+    break;
+  case IR_KNUM:
+    k = (int64_t)ir_kint64(ir)->u64;
+    break;
+#if LJ_64
+  case IR_KINT64:
+    k = (int64_t)ir_kint64(ir)->u64;
+    break;
+#if LJ_GC64
+  case IR_KGC:
+    k = (intptr_t)ir_kgc(ir);
+    break;
+  case IR_KPTR:
+  case IR_KKPTR:
+    k = (intptr_t)ir_kptr(ir);
+    break;
+#endif
+#endif
+  default:
+    return ra_alloc1(as, ref, allow);
+  }
+
+  r = ra_allock(as, k, allow);
+
+  if (r == dest)
+    rset_clear(as->rematset, r);
+
   return r;
 }
 

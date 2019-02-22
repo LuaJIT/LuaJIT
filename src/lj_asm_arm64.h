@@ -284,8 +284,8 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	} else {
 	  ai |= A64I_LS_LSLx;
 	}
-	rm = ra_alloc1(as, lref, allow);
-	rn = ra_alloc1(as, rref, rset_exclude(allow, rm));
+	rm = ra_alloc_rematsafe(as, lref, rd, allow);
+	rn = ra_alloc_rematsafe(as, rref, rd, rset_exclude(allow, rm));
 	emit_dnm(as, (ai^A64I_LS_R), (rd & 31), rn, rm);
 	return;
       }
@@ -295,7 +295,16 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
       } else if (asm_isk32(as, ir->op1, &ofs)) {
 	ref = ir->op2;
       } else {
-	Reg rn = ra_alloc1(as, ir->op1, allow);
+	IRRef ref1 = ir->op1;
+	IRRef ref2 = ir->op2;
+	Reg rn;
+
+	if (irref_isk(ir->op1)) {
+	  ref1 = ir->op2;
+	  ref2 = ir->op1;
+	}
+
+	rn = ra_alloc_rematsafe(as, ref1, rd, allow);
 	IRIns *irr = IR(ir->op2);
 	uint32_t m;
 	if (irr+1 == ir && !ra_used(irr) &&
@@ -307,7 +316,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	    goto skipopm;
 	  }
 	}
-	m = asm_fuseopm(as, 0, ir->op2, rset_exclude(allow, rn));
+	m = asm_fuseopm(as, 0, ref2, rset_exclude(allow, rn));
 	ofs = sizeof(GCstr);
       skipopm:
 	emit_lso(as, ai, rd, rd, ofs);
@@ -316,14 +325,14 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
       }
       ofs += sizeof(GCstr);
       if (!emit_checkofs(ai, ofs)) {
-	Reg rn = ra_alloc1(as, ref, allow);
-	Reg rm = ra_allock(as, ofs, rset_exclude(allow, rn));
+	Reg rn = ra_alloc_rematsafe(as, ref, rd, allow);
+	Reg rm = ra_alloc_rematsafe(as, ofs, rd, rset_exclude(allow, rn));
 	emit_dnm(as, (ai^A64I_LS_R)|A64I_LS_UXTWx, rd, rn, rm);
 	return;
       }
     }
   }
-  base = ra_alloc1(as, ref, allow);
+  base = ra_alloc_rematsafe(as, ref, rd, allow);
   emit_lso(as, ai, (rd & 31), base, ofs);
 }
 
