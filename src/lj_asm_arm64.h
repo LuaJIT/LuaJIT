@@ -305,20 +305,8 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	}
 
 	rn = ra_alloc_rematsafe(as, ref1, rd, allow);
-	IRIns *irr = IR(ir->op2);
-	uint32_t m;
-	if (irr+1 == ir && !ra_used(irr) &&
-	    irr->o == IR_ADD && irref_isk(irr->op2)) {
-	  ofs = sizeof(GCstr) + IR(irr->op2)->i;
-	  if (emit_checkofs(ai, ofs)) {
-	    Reg rm = ra_alloc1(as, irr->op1, rset_exclude(allow, rn));
-	    m = A64F_M(rm) | A64F_EX(A64EX_SXTW);
-	    goto skipopm;
-	  }
-	}
-	m = asm_fuseopm(as, 0, ref2, rset_exclude(allow, rn));
+	uint32_t m = asm_fuseopm(as, 0, ref2, rset_exclude(allow, rn));
 	ofs = sizeof(GCstr);
-      skipopm:
 	emit_lso(as, ai, rd, rd, ofs);
 	emit_dn(as, A64I_ADDx^m, rd, rn);
 	return;
