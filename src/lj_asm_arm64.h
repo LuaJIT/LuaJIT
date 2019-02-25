@@ -1007,10 +1007,30 @@ static void asm_xload(ASMState *as, IRIns *ir)
   asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
 }
 
+static int maybe_zero_val(ASMState *as, IRRef ref)
+{
+  IRIns *ir = IR(ref);
+
+  switch(ir->o) {
+  case IR_KNULL:
+    return 1;
+  case IR_KINT:
+    return 0 == ir->i;
+  case IR_KINT64:
+    return 0 == ir_kint64(ir)->u64;
+  }
+
+  return 0;
+}
+
 static void asm_xstore(ASMState *as, IRIns *ir)
 {
   if (ir->r != RID_SINK) {
-    Reg src = ra_alloc1(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
+    Reg src;
+    if (irref_isk(ir->op2) && maybe_zero_val(as, ir->op2))
+      src = RID_ZERO;
+    else
+      src = ra_alloc1(as, ir->op2, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
     asm_fusexref(as, asm_fxstoreins(ir), src, ir->op1,
 		 rset_exclude(RSET_GPR, src));
   }
@@ -1198,7 +1218,12 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   /* Initialize immutable cdata object. */
   if (ir->o == IR_CNEWI) {
     int32_t ofs = sizeof(GCcdata);
-    Reg r = ra_alloc1(as, ir->op2, allow);
+    Reg r;
+    if (irref_isk(ir->op2) && maybe_zero_val(as, ir->op2))
+      r = RID_ZERO;
+    else
+      r = ra_alloc1(as, ir->op2, allow);
+
     lua_assert(sz == 4 || sz == 8);
     emit_lso(as, sz == 8 ? A64I_STRx : A64I_STRw, r, RID_RET, ofs);
   } else if (ir->op2 != REF_NIL) {  /* Create VLA/VLS/aligned cdata. */
@@ -1214,7 +1239,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
 
   /* Initialize gct and ctypeid. lj_mem_newgco() already sets marked. */
   {
-    Reg r = (id < 65536) ? RID_X1 : ra_allock(as, id, allow);
+    Reg r = id == 0 ? RID_ZERO : (id < 65536) ? RID_X1 : ra_allock(as, id, allow);
     emit_lso(as, A64I_STRB, RID_TMP, RID_RET, offsetof(GCcdata, gct));
     emit_lso(as, A64I_STRH, r, RID_RET, offsetof(GCcdata, ctypeid));
     emit_d(as, A64I_MOVZw | A64F_U16(~LJ_TCDATA), RID_TMP);
