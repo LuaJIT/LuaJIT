@@ -384,6 +384,7 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
       cd = lj_cdata_new(cts, id, CTSIZE_PTR);
       *(void **)cdataptr(cd) = p;
       setcdataV(L, tv, cd);
+      lj_gc_anybarriert(L, cl->cache);
     }
   }
   return tv;
