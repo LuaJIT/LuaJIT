@@ -1,0 +1,29 @@
+array3d 200
+binary-trees 13
+chameneos 1e6
+coroutine-ring 3e6
+euler14-bit 5e6
+fannkuch 10
+fasta 2e6
+k-nucleotide 5e5 FASTA_500000
+life
+mandelbrot 2000
+mandelbrot-bit 2000
+md5 5000
+nbody 1e6
+nsieve 9
+nsieve-bit 9
+nsieve-bit-fp 9
+partialsums 2e6
+pidigits-nogmp 2000
+ray 4
+recursive-ack 9
+recursive-fib 37
+revcomp 1e6 FASTA_1000000
+scimark-fft 2000
+scimark-lu 300
+scimark-sor 5000
+scimark-sparse 5e3
+series 1500
+spectral-norm 1000
+sum-file 1000 SUMCOL_1000

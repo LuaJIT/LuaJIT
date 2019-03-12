@@ -1,0 +1,6 @@
+concat.lua
+insert.lua
+new.lua +table.new
+pack.lua +compat5.2
+remove.lua
+sort.lua

@@ -1,0 +1,1 @@
+return "canary is alive"

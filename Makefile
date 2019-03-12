@@ -106,14 +106,14 @@ endif
 
 ##############################################################################
 
-INSTALL_DEP= src/luajit
+LUAJIT_BIN= src/luajit
 
-default all $(INSTALL_DEP):
+default all $(LUAJIT_BIN):
 	@echo "==== Building LuaJIT $(VERSION) ===="
 	$(MAKE) -C src
 	@echo "==== Successfully built LuaJIT $(VERSION) ===="
 
-install: $(INSTALL_DEP)
+install: $(LUAJIT_BIN)
 	@echo "==== Installing LuaJIT $(VERSION) to $(PREFIX) ===="
 	$(MKDIR) $(INSTALL_DIRS)
 	cd src && $(INSTALL_X) $(FILE_T) $(INSTALL_T)
@@ -152,6 +152,17 @@ uninstall:
 	$(RMDIR) $(UNINSTALL_DIRS) || :
 	@echo "==== Successfully uninstalled LuaJIT $(VERSION) from $(PREFIX) ===="
 
+check: $(LUAJIT_BIN)
+	@echo "==== Running tests for LuaJIT $(VERSION) ===="
+	cd test && ../$^ test.lua
+	@echo "==== All tests for LuaJIT $(VERSION) succeeded ===="
+
+# It is assumed that libluajit.a is built in the process of building LUAJIT_BIN.
+bench: $(LUAJIT_BIN)
+	@echo "==== Running benchmark for LuaJIT $(VERSION) ===="
+	make -C bench FILE_A=$(FILE_A)
+	@echo "==== Successfully finished running benchmark for LuaJIT $(VERSION) ===="
+
 ##############################################################################
 
 amalg:
@@ -161,6 +172,6 @@ amalg:
 clean:
 	$(MAKE) -C src clean
 
-.PHONY: all install amalg clean
+.PHONY: all install amalg clean bench check
 
 ##############################################################################

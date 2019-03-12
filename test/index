@@ -1,0 +1,6 @@
+lang
+lib
+bc +luajit>=2
+computations.lua
+trace +jit
+opt +jit

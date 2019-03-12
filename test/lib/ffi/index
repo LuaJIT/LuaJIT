@@ -1,0 +1,12 @@
+bit64.lua +luajit>=2.1
+cdata_var.lua
+copy_fill.lua
+err.lua
+istype.lua
+jit_array.lua
+jit_complex.lua
+jit_misc.lua
+jit_struct.lua
+meta_tostring.lua
+redir.lua
+type_punning.lua

@@ -1,0 +1,17 @@
+This list of contributors is gleaned from the git commit log for the LuaJIT,
+bench_lua and LuaJIT-test-cleanup projects.  If your name should be on this
+list but is missing, please reach out to Siddhesh Poyarekar to get your name
+added.
+
+The project was created and a bulk of the code has been written by Mike Pall.
+Other contributors to the code base include the following:
+
+bandhu
+Dibyendu Majumdar
+Lesley De Cruz
+Patrick Galizia
+Peter Cawley
+Sameera Deshpande
+Siddhesh Poyarekar
+Vlad Krasnov
+William Adams
