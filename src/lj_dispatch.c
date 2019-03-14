@@ -45,6 +45,18 @@ static const ASMFunction dispatch_got[] = {
 #undef GOTFUNC
 #endif
 
+#if LJ_TARGET_PPC
+#include <math.h>
+LJ_FUNCA_NORET void LJ_FASTCALL lj_ffh_coroutine_wrap_err(lua_State *L,
+							  lua_State *co);
+
+#define GOTFUNC(name)	(ASMFunction)name,
+static const ASMFunction dispatch_got[] = {
+  GOTDEF(GOTFUNC)
+};
+#undef GOTFUNC
+#endif
+
 /* Initialize instruction dispatch table and hot counters. */
 void lj_dispatch_init(GG_State *GG)
 {
@@ -64,6 +76,9 @@ void lj_dispatch_init(GG_State *GG)
   for (i = 0; i < GG_NUM_ASMFF; i++)
     GG->bcff[i] = BCINS_AD(BC__MAX+i, 0, 0);
 #if LJ_TARGET_MIPS
+  memcpy(GG->got, dispatch_got, LJ_GOT__MAX*4);
+#endif
+#if LJ_TARGET_PPC
   memcpy(GG->got, dispatch_got, LJ_GOT__MAX*4);
 #endif
 }
