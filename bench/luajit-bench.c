@@ -39,6 +39,7 @@
 #include <argp.h>
 #include <sys/param.h>
 #include <string.h>
+#include <time.h>
 
 #include "lua.h"
 #include "lualib.h"
