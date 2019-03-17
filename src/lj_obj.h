@@ -944,12 +944,18 @@ static LJ_AINLINE int32_t lj_num2bit(lua_Number n)
 
 static LJ_AINLINE uint64_t lj_num2u64(lua_Number n)
 {
+  /* Undefined behaviour. This is deliberately not a full check because we
+     don't want to slow down compliant code. */
+  lua_assert(n >= -9223372036854775809.0);
 #ifdef _MSC_VER
   if (n >= 9223372036854775808.0)  /* They think it's a feature. */
     return (uint64_t)(int64_t)(n - 18446744073709551616.0);
   else
 #endif
-    return (uint64_t)n;
+    if (n > -1.0)
+      return (uint64_t)n;
+    else
+      return (uint64_t)(int64_t)n;
 }
 
 static LJ_AINLINE int32_t numberVint(cTValue *o)
