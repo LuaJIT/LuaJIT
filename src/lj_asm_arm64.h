@@ -1510,7 +1510,7 @@ static void asm_mod(ASMState *as, IRIns *ir)
 static void asm_neg(ASMState *as, IRIns *ir)
 {
   if (irt_isnum(ir->t)) {
-    if (!asm_fusenmadd(as, ir, A64I_FNMADDd))
+    if (!asm_fusenmadd(as, ir, A64I_FNMADDd, A64I_FNMSUBd))
       asm_fpunary(as, ir, A64I_FNEGd);
     return;
   }
