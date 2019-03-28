@@ -594,14 +594,28 @@ static void asm_conv(ASMState *as, IRIns *ir)
     } else {
       Reg left = ra_alloc1(as, lref, RSET_FPR);
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      A64Ins ai = irt_is64(ir->t) ?
-	(st == IRT_NUM ?
-	 (irt_isi64(ir->t) ? A64I_FCVT_S64_F64 : A64I_FCVT_U64_F64) :
-	 (irt_isi64(ir->t) ? A64I_FCVT_S64_F32 : A64I_FCVT_U64_F32)) :
-	(st == IRT_NUM ?
-	 (irt_isint(ir->t) ? A64I_FCVT_S32_F64 : A64I_FCVT_U32_F64) :
-	 (irt_isint(ir->t) ? A64I_FCVT_S32_F32 : A64I_FCVT_U32_F32));
-      emit_dn(as, ai, dest, (left & 31));
+
+      A64Ins ai_signed = st == IRT_NUM ?
+        (irt_is64(ir->t) ? A64I_FCVT_S64_F64 : A64I_FCVT_S32_F64) :
+        (irt_is64(ir->t) ? A64I_FCVT_S64_F32 : A64I_FCVT_S32_F32);
+
+      if (irt_isi64(ir->t) || irt_isint(ir->t))
+        emit_dn(as, ai_signed, dest, (left & 31));
+      else {
+        A64Ins ai_unsigned = st == IRT_NUM ?
+          (irt_is64(ir->t) ? A64I_FCVT_U64_F64 : A64I_FCVT_U32_F64) :
+          (irt_is64(ir->t) ? A64I_FCVT_U64_F32 : A64I_FCVT_U32_F32);
+
+        MCLabel l_done = emit_label(as);
+        emit_dn(as, ai_unsigned, dest, (left & 31));
+        MCLabel l_signed = emit_label(as);
+	emit_jmp(as, l_done);
+        emit_dn(as, ai_signed, dest, (left & 31));
+        /* The valid range for float to unsigned int conversion is (-1.0,
+           UINT{,64}_MAX-1), but we just compare with 0 to save a load. */
+        emit_cond_branch(as, CC_PL, l_signed);
+        emit_nm(as, st == IRT_NUM ? A64I_FCMPZd : A64I_FCMPZs, left & 31, 0);
+      }
     }
   } else if (st >= IRT_I8 && st <= IRT_U16) { /* Extend to 32 bit integer. */
     Reg dest = ra_dest(as, ir, RSET_GPR);
