@@ -196,7 +196,13 @@ void lj_cconv_ct_ct(CTState *cts, CType *d, CType *s,
       else if (dsize == 2) *(int16_t *)dp = (int16_t)i;
       else *(int8_t *)dp = (int8_t)i;
     } else if (dsize == 4) {
-      *(uint32_t *)dp = (uint32_t)n;
+      /* Undefined behaviour. This is deliberately not a full check because we
+       * don't want to slow down compliant code. */
+      lua_assert(n >= -2147483649.0);
+      if (n > -1.0)
+        *(uint32_t *)dp = (uint32_t)n;
+      else
+        *(uint32_t *)dp = (uint32_t)(int32_t)n;
     } else if (dsize == 8) {
       if (!(dinfo & CTF_UNSIGNED))
 	*(int64_t *)dp = (int64_t)n;
