@@ -490,7 +490,8 @@ have some extra methods:
 Free the resources associated with a callback. The associated Lua
 function is unanchored and may be garbage collected. The callback
 function pointer is no longer valid and must not be called anymore
-(it may be reused by a subsequently created callback).
+(it may be reused by a subsequently created callback). It is safe
+to call <tt>cb:free()</tt> when that callback is currently executing.
 </p>
 
 <h3 id="callback_set"><tt>cb:set(func)</tt></h3>
