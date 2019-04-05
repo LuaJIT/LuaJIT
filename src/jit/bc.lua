@@ -141,6 +141,38 @@ local function bcdump(func, out, all, lineinfo)
     end
   end
   out:write(format("-- BYTECODE -- %s-%d\n", fi.loc, fi.lastlinedefined))
+
+  for n=-1,-1000000000,-1 do
+    local kc = funck(func, n)
+    if not kc then break end
+
+    local typ = type(kc)
+    if typ == "string" then
+      kc = format(#kc > 40 and '"%.40s"~' or '"%s"', gsub(kc, "%c", ctlsub))
+      out:write(format("KGC    %d    %s\n", -(n + 1), kc))
+    elseif typ == "proto" then
+      local fi = funcinfo(kc)
+      if fi.ffid then
+	kc = vmdef.ffnames[fi.ffid]
+      else
+	kc = fi.loc
+      end
+      out:write(format("KGC    %d    %s\n", -(n + 1), kc))
+    elseif typ == "table" then
+      out:write(format("KGC    %d    table\n", -(n + 1)))
+    else
+      -- error("unknown KGC type: " .. typ)
+    end
+  end
+
+  for n=1,1000000000 do
+    local kc = funck(func, n)
+    if not kc then break end
+    if type(kc) == "number" then
+      out:write(format("KN    %d    %s\n", n, kc))
+    end
+  end
+
   local target = bctargets(func)
   for pc=1,1000000000 do
     local s = bcline(func, pc, target[pc] and "=>", lineinfo)
