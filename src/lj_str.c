@@ -119,7 +119,8 @@ void lj_str_resize(lua_State *L, MSize newmask)
 }
 
 static MSize
-lj_str_original_hash(const char *str, size_t lenx) {
+lj_str_original_hash(const char *str, size_t lenx)
+{
   MSize len = (MSize)lenx;
   MSize a, b, h = len;
 
@@ -147,7 +148,8 @@ lj_str_original_hash(const char *str, size_t lenx) {
 }
 
 MSize
-lj_str_indep_hash(GCstr *str) {
+lj_str_indep_hash(GCstr *str)
+{
   return lj_str_original_hash(strdata(str), str->len);
 }
 
@@ -224,4 +226,3 @@ void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s)
   g->strnum--;
   lj_mem_free(g, s, sizestring(s));
 }
-

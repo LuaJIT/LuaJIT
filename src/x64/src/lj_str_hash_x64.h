@@ -203,7 +203,7 @@ static LJ_AINLINE uint32_t get_random_pos_unsafe(uint32_t chunk_sz_order,
 }
 
 static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
-                                                  uint32_t len)
+    uint32_t len)
 {
   uint32_t chunk_num, chunk_sz, chunk_sz_log2, i, pos1, pos2;
   uint64_t h1, h2, v;
