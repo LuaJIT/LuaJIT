@@ -1108,6 +1108,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       else
         *(int64_t *)dp = (int64_t)*(int32_t *)dp;
     }
+#else
+    UNUSED(onstack);
 #endif
 #if LJ_TARGET_X64 && LJ_ABI_WIN
     if (isva) {  /* Windows/x64 mirrors varargs in both register sets. */
