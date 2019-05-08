@@ -1412,13 +1412,28 @@ static void asm_intop(ASMState *as, IRIns *ir, ARMIns ai)
   emit_dn(as, ai^m, dest, left);
 }
 
+static ARMIns maybe_drop_zero_cmp(ASMState *as, ARMIns ai)
+{
+  if (as->flagmcp == as->mcp) {  /* Try to drop cmp r, #0. */
+    uint32_t cc = (as->mcp[1] >> 28);
+    as->flagmcp = NULL;
+    if (cc <= CC_NE) {
+      as->mcp++;
+      ai |= ARMI_S;
+    } else if (cc == CC_GE) {
+      *++as->mcp ^= ((CC_GE^CC_PL) << 28);
+      ai |= ARMI_S;
+    } else if (cc == CC_LT) {
+      *++as->mcp ^= ((CC_LT^CC_MI) << 28);
+      ai |= ARMI_S;
+    }  /* else: other conds don't work with bit ops. */
+  }
+  return ai;
+}
+
 static void asm_intop_s(ASMState *as, IRIns *ir, ARMIns ai)
 {
-  if (as->flagmcp == as->mcp) {  /* Drop cmp r, #0. */
-    as->flagmcp = NULL;
-    as->mcp++;
-    ai |= ARMI_S;
-  }
+  ai = maybe_drop_zero_cmp(as, ai);
   asm_intop(as, ir, ai);
 }
 
@@ -1514,20 +1529,7 @@ static void asm_neg(ASMState *as, IRIns *ir)
 
 static void asm_bitop(ASMState *as, IRIns *ir, ARMIns ai)
 {
-  if (as->flagmcp == as->mcp) {  /* Try to drop cmp r, #0. */
-    uint32_t cc = (as->mcp[1] >> 28);
-    as->flagmcp = NULL;
-    if (cc <= CC_NE) {
-      as->mcp++;
-      ai |= ARMI_S;
-    } else if (cc == CC_GE) {
-      *++as->mcp ^= ((CC_GE^CC_PL) << 28);
-      ai |= ARMI_S;
-    } else if (cc == CC_LT) {
-      *++as->mcp ^= ((CC_LT^CC_MI) << 28);
-      ai |= ARMI_S;
-    }  /* else: other conds don't work with bit ops. */
-  }
+  ai = maybe_drop_zero_cmp(as, ai);
   if (ir->op2 == 0) {
     Reg dest = ra_dest(as, ir, RSET_GPR);
     uint32_t m = asm_fuseopm(as, ai, ir->op1, RSET_GPR);
