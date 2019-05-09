@@ -180,7 +180,8 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	}
 	ref = store->prev;
       }
-      lua_assert(ir->o != IR_TNEW || irt_isnil(fins->t));
+      if (ir->o == IR_TNEW && !irt_isnil(fins->t))
+	return 0;  /* Type instability in loop-carried dependency. */
       if (irt_ispri(fins->t)) {
 	return TREF_PRI(irt_type(fins->t));
       } else if (irt_isnum(fins->t) || (LJ_DUALNUM && irt_isint(fins->t)) ||
