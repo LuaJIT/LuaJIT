@@ -10,3 +10,4 @@ jit_struct.lua
 meta_tostring.lua
 redir.lua
 type_punning.lua
+unsink_64_kptr.lua

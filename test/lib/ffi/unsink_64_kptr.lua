@@ -21,6 +21,8 @@ end
 
 -- Loop over the function to make it compile and take a trace exit
 -- during the final iteration.
-for i = 1, 1000 do
-  fn(i)
+do --- unsink 64-bit pointers
+  for i = 1, 1000 do
+    fn(i)
+  end
 end
