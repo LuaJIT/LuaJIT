@@ -14,7 +14,7 @@
 #define LUA_LIB
 
 #include "lua.h"
-#include "lauxlib.h"
+#include "luaxlib.h"
 
 #include "lj_obj.h"
 #include "lj_err.h"

@@ -7,7 +7,7 @@
 #define LUA_LIB
 
 #include "lua.h"
-#include "lauxlib.h"
+#include "luaxlib.h"
 #include "lualib.h"
 
 #include "lj_arch.h"

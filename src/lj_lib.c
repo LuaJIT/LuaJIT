@@ -6,7 +6,7 @@
 #define lj_lib_c
 #define LUA_CORE
 
-#include "lauxlib.h"
+#include "luaxlib.h"
 
 #include "lj_obj.h"
 #include "lj_gc.h"

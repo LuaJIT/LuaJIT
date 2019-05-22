@@ -26,7 +26,7 @@
 #endif
 
 #include "lua.h"
-#include "lauxlib.h"
+#include "luaxlib.h"
 
 #include "lj_gc.c"
 #include "lj_err.c"
