@@ -155,8 +155,10 @@ static void print_jit_status(lua_State *L)
 
 static void createargtable(lua_State *L, char **argv, int argc, int argf)
 {
-  int i;
-  lua_createtable(L, argc - argf, argf);
+  int i, narg;
+  if (argf == argc) argf = 0;  /* no script name? */
+  narg = argc - (argf + 1);  /* number of positive indices */
+  lua_createtable(L, narg, argf + 1);
   for (i = 0; i < argc; i++) {
     lua_pushstring(L, argv[i]);
     lua_rawseti(L, -2, i - argf);
