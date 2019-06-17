@@ -121,8 +121,11 @@ end
 
 do --- pre-5.2 package +lua<5.2
   assert(package.loaders)
-  assert(not package.searchers)
   assert(package.seeall)
+end
+
+do --- 5.2 compat package +compat5.2
+  assert(package.searchers)
 end
 
 do --- 5.2 package +lua>=5.2
