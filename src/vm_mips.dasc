@@ -399,7 +399,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  xori AT, TMP0, FRAME_C
   |   and TMP2, PC, TMP2
   |  bnez AT, ->vm_returnp
-  |   subu TMP2, BASE, TMP2		// TMP2 = previous base.
+  |.  subu TMP2, BASE, TMP2		// TMP2 = previous base.
   |
   |  addiu TMP1, RD, -8
   |   sw TMP2, L->base
