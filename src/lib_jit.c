@@ -141,18 +141,20 @@ LJLIB_CF(jit_attach)
   return 0;
 }
 
-#if LJ_HASJIT
 LJLIB_CF(jit_prngstate)
 {
+#if LJ_HASJIT
   jit_State *J = L2J(L);
   int32_t cur = (int32_t)J->prngstate;
   if (L->base < L->top && !tvisnil(L->base)) {
     J->prngstate = (uint32_t)lj_lib_checkint(L, 1);
   }
+#else
+  int32_t cur = 0;
+#endif
   setintV(L->top++, cur);
   return 1;
 }
-#endif
 
 LJLIB_PUSH(top-5) LJLIB_SET(os)
 LJLIB_PUSH(top-4) LJLIB_SET(arch)
