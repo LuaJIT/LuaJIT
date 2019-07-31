@@ -1949,6 +1949,17 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
   IRIns *ir;
   asm_head_lreg(as);
   ir = IR(REF_BASE);
+
+  /* IRRefs that get into the side trace from the parent trace may restore
+   * REF_BASE under severe register pressure and thus reach here holding on to
+   * the register.  Restore such references so that REF_BASE gets RID_BASE back
+   * when it tries to allocate below.  */
+  if (!ra_hasreg(ir->r)) {
+    Reg r = ra_gethint(ir->r);
+    if (!rset_test(as->freeset, r))
+      ra_restore(as, regcost_ref(as->cost[r]));
+  }
+
   if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
     ra_spill(as, ir);
   if (ra_hasspill(irp->s)) {
