@@ -769,6 +769,14 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   uint32_t khash;
   MCLabel l_end, l_loop, l_next;
   rset_clear(allow, tab);
+  Reg tisnum = RID_TMP;
+
+  /* Allocate register early and clear it from the allowed set since it gets
+   * used multiple times during the loop.  */
+  if (irt_isnum(kt) && !isk) {
+    tisnum = ra_allock(as, LJ_TISNUM << 15, allow);
+    rset_clear(allow, tisnum);
+  }
 
   if (!isk) {
     key = ra_alloc1(as, ir->op2, irt_isnum(kt) ? RSET_FPR : allow);
@@ -819,9 +827,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 	emit_nm(as, A64I_CMPx, key, tmp);
       emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.u64));
     } else {
-      Reg tisnum = ra_allock(as, LJ_TISNUM << 15, allow);
       Reg ftmp = ra_scratch(as, rset_exclude(RSET_FPR, key));
-      rset_clear(allow, tisnum);
       emit_nm(as, A64I_FCMPd, key, ftmp);
       emit_dn(as, A64I_FMOV_D_R, (ftmp & 31), (tmp & 31));
       emit_cond_branch(as, CC_LO, l_next);
