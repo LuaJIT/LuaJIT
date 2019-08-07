@@ -17,11 +17,10 @@ do --- default value: JIT off
     end
     saved_q = q
   end
-  print(saved_q)
   assert(saved_q == nil)
 end
 
-do --- default value: JIT on
+do --- default value: JIT on +jit
   jit.opt.start("minstitch=100000", "hotloop=2")
   jit.on()
   local saved_q
@@ -32,7 +31,6 @@ do --- default value: JIT on
     end
     saved_q = q
   end
-  print(saved_q)
   assert(saved_q == nil)
 end
 
@@ -49,7 +47,6 @@ do --- sanity: JIT off
     end
     saved_q = q
   end
-  print(ptr)
   assert(tostring(ptr) == "cdata<void *>: 0xefdeaddeadbeef")
   assert(tostring(saved_q) == "cdata<void *>: 0xefdeaddeadbeef")
 end
@@ -88,7 +85,7 @@ do --- coroutines: JIT off
   assert(tostring(exdata()) == "cdata<void *>: 0xefdeadbeed")
 end
 
-do --- reading: JIT on
+do --- reading: JIT on +jit
   jit.opt.start("minstitch=100000", "hotloop=2")
   local u64 = ffi.new("uintptr_t", 0xefdeaddeadbeefLL)
   local ptr = ffi.cast("void *", u64)
@@ -105,7 +102,7 @@ do --- reading: JIT on
   assert(tostring(saved_q) == "cdata<void *>: 0xefdeaddeadbeef")
 end
 
-do --- writing: JIT on
+do --- writing: JIT on +jit
   jit.opt.start("minstitch=100000", "hotloop=2")
   local u64 = ffi.new("uintptr_t", 0xefdeaddeadbeefLL)
   local ptr = ffi.cast("void *", u64)
@@ -132,7 +129,7 @@ do --- Check number of arguments: JIT off
   assert(nargs(exdata()) == 1)
 end
 
-do --- Check number of arguments: JIT on
+do --- Check number of arguments: JIT on +jit
   jit.opt.start("minstitch=100000", "hotloop=2")
   local select = select
   local u64 = ffi.new("uintptr_t", 0xefdeaddeadbeefLL)
