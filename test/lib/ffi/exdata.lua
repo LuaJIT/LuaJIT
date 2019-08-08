@@ -47,8 +47,7 @@ do --- sanity: JIT off
     end
     saved_q = q
   end
-  assert(tostring(ptr) == "cdata<void *>: 0xefdeaddeadbeef")
-  assert(tostring(saved_q) == "cdata<void *>: 0xefdeaddeadbeef")
+  assert(ptr == saved_q)
 end
 
 do --- coroutines: JIT off
@@ -71,18 +70,18 @@ do --- coroutines: JIT off
 
   local ok, data = coroutine.resume(co)
   assert(ok)
-  assert(tostring(data) == "cdata<void *>: 0xefdeadbeef")
+  assert(data == ptr)
 
   ok, data = coroutine.resume(co)
   assert(ok)
-  assert(tostring(data) == "cdata<void *>: 0xefdeadbef0")
+  assert(data == ptr2)
 
   exdata(ptr3)
 
   ok, data = coroutine.resume(co)
   assert(ok)
-  assert(tostring(data) == "cdata<void *>: 0xefdeadbef0")
-  assert(tostring(exdata()) == "cdata<void *>: 0xefdeadbeed")
+  assert(data == ptr2)
+  assert(exdata() == ptr3)
 end
 
 do --- reading: JIT on +jit
@@ -98,8 +97,7 @@ do --- reading: JIT on +jit
     end
     saved_q = q
   end
-  assert(tostring(ptr) == "cdata<void *>: 0xefdeaddeadbeef")
-  assert(tostring(saved_q) == "cdata<void *>: 0xefdeaddeadbeef")
+  assert(ptr == saved_q)
 end
 
 do --- writing: JIT on +jit
@@ -115,8 +113,7 @@ do --- writing: JIT on +jit
     end
     saved_q = q
   end
-  assert(tostring(ptr) == "cdata<void *>: 0xefdeaddeadbeef")
-  assert(tostring(saved_q) == "cdata<void *>: 0xefdeaddeadbeef")
+  assert(ptr == saved_q)
 end
 
 do --- Check number of arguments: JIT off
