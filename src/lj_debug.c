@@ -429,7 +429,7 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
   GCfunc *fn;
   if (*what == '>') {
     TValue *func = L->top - 1;
-    api_check(L, tvisfunc(func));
+    if (!tvisfunc(func)) return 0;
     fn = funcV(func);
     L->top--;
     what++;
