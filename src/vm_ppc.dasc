@@ -1850,9 +1850,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ble >2				// Not in array part?
   |.if FPU
   |  lfdux f0, TMP1, TMP3
-  |.if ENDIAN_LE
   |  lwz TMP2, WORD_HI(TMP1)
-  |.endif
   |.else
   |  lwzux TMP2, TMP1, TMP3
   |  lwz TMP3, WORD_HI(TMP1)
