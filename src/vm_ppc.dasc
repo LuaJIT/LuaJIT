@@ -1525,7 +1525,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmplw TMP1, TMP2
   |.if FPU
   |   lfd f0, 0(TMP1)
-  |   stfd f0, 0(TMP1)
+  |   stfd f0, -8(TMP1)
   |.else
   |   lwz CARG1, 0(TMP1)
   |   lwz CARG2, 4(TMP1)
