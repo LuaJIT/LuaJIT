@@ -3174,7 +3174,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_exit_handler:
   |.if JIT
-  |  addi sp, TMP0, sp, -(EXIT_OFFSET+32*8+32*PSIZE)
+  |  addi sp, sp, -(EXIT_OFFSET+32*8+32*PSIZE)
   |  saver 3 // CARG1
   |  saver 4 // CARG2
   |  saver 5 // CARG3
