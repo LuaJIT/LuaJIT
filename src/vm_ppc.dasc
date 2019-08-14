@@ -1517,22 +1517,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  bge cr1, ->fff_fallback
   |   stw CARG3, WORD_HI(RA)
   |  addi RD, NARGS8:RC, 8		// Compute (nresults+1)*8.
-  |.if not ENDIAN_LE
   |  addi TMP1, BASE, 8
   |  add TMP2, RA, NARGS8:RC
-  |.endif
   |   stw CARG1, WORD_LO(RA)
   |  beq ->fff_res			// Done if exactly 1 argument.
-  |.if ENDIAN_LE
-  |  li TMP1, 8
-  |  subi RC, RC, 8
-  |.endif
   |1:
-  |.if ENDIAN_LE
-  |  cmplw TMP1, RC
-  |   lfdx f0, BASE, TMP1
-  |   stfdx f0, RA, TMP1
-  |.else
   |  cmplw TMP1, TMP2
   |.if FPU
   |   lfd f0, 0(TMP1)
@@ -1542,7 +1531,6 @@ static void build_subroutines(BuildCtx *ctx)
   |   lwz CARG2, 4(TMP1)
   |   stw CARG1, -8(TMP1)
   |   stw CARG2, -4(TMP1)
-  |.endif
   |.endif
   |    addi TMP1, TMP1, 8
   |  bney <1
