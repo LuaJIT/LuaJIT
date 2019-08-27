@@ -769,13 +769,29 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   uint32_t khash;
   MCLabel l_end, l_loop, l_next;
   rset_clear(allow, tab);
-  Reg tisnum = RID_TMP;
+  Reg tisnum = RID_TMP, scr = RID_NONE, type = RID_NONE, ftmp = RID_NONE;
 
-  /* Allocate register early and clear it from the allowed set since it gets
-   * used multiple times during the loop.  */
-  if (irt_isnum(kt) && !isk) {
-    tisnum = ra_allock(as, LJ_TISNUM << 15, allow);
-    rset_clear(allow, tisnum);
+  /* Allocate registers before emitting loop code.  Allocating inline will
+   * result in spills and restores getting into the loop body.  */
+  if (irt_isnum(kt)) {
+    if (!isk) {
+      tisnum = ra_allock(as, LJ_TISNUM << 15, allow);
+      rset_clear(allow, tisnum);
+      ftmp = ra_scratch(as, rset_exclude(RSET_FPR, key));
+    }
+  } else if (irt_isaddr(kt)) {
+    if (isk) {
+      int64_t kk = ((int64_t)irt_toitype(irkey->t) << 47) | irkey[1].tv.u64;
+      scr = ra_allock(as, kk, allow);
+    } else {
+      scr = ra_scratch(as, allow);
+    }
+    rset_clear(allow, scr);
+  } else {
+    lua_assert(irt_ispri(kt) && !irt_isnil(kt));
+    type = ra_allock(as, ~((int64_t)~irt_toitype(ir->t) << 47), allow);
+    scr = ra_scratch(as, rset_clear(allow, type));
+    rset_clear(allow, scr);
   }
 
   if (!isk) {
@@ -827,7 +843,6 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 	emit_nm(as, A64I_CMPx, key, tmp);
       emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.u64));
     } else {
-      Reg ftmp = ra_scratch(as, rset_exclude(RSET_FPR, key));
       emit_nm(as, A64I_FCMPd, key, ftmp);
       emit_dn(as, A64I_FMOV_D_R, (ftmp & 31), (tmp & 31));
       emit_cond_branch(as, CC_LO, l_next);
@@ -835,24 +850,15 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.n));
     }
   } else if (irt_isaddr(kt)) {
-    Reg scr;
     if (isk) {
-      int64_t kk = ((int64_t)irt_toitype(irkey->t) << 47) | irkey[1].tv.u64;
-      scr = ra_allock(as, kk, allow);
       emit_nm(as, A64I_CMPx, scr, tmp);
       emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.u64));
     } else {
-      scr = ra_scratch(as, allow);
       emit_nm(as, A64I_CMPx, tmp, scr);
       emit_lso(as, A64I_LDRx, scr, dest, offsetof(Node, key.u64));
     }
-    rset_clear(allow, scr);
   } else {
-    Reg type, scr;
     lua_assert(irt_ispri(kt) && !irt_isnil(kt));
-    type = ra_allock(as, ~((int64_t)~irt_toitype(ir->t) << 47), allow);
-    scr = ra_scratch(as, rset_clear(allow, type));
-    rset_clear(allow, scr);
     emit_nm(as, A64I_CMPw, scr, type);
     emit_lso(as, A64I_LDRx, scr, dest, offsetof(Node, key));
   }
