@@ -26,4 +26,10 @@ LJ_FUNC void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s);
 
 MSize lj_str_indep_hash(GCstr *str);
 
+typedef MSize (*lj_str_hashfn) (const char *, size_t);
+
+extern lj_str_hashfn lj_str_hash;
+
+extern MSize lj_str_hash_default(const char *str, size_t lenx);
+
 #endif

@@ -5,18 +5,18 @@
  * to 128 bytes of given string.
  */
 
-#ifndef _LJ_STR_HASH_X64_H_
-#define _LJ_STR_HASH_X64_H_
-
-#if defined(__SSE4_2__) && defined(__x86_64) && defined(__GNUC__)
-
 #include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <time.h>
 #include <smmintrin.h>
 
-#include "../../lj_def.h"
+#include "lj_def.h"
+#include "lj_str.h"
+
+#if defined(__SSE4_2__) && defined(__x86_64) && defined(__GNUC__)
+#define lj_crc32_u32 _mm_crc32_u32
+#define lj_crc32_u64 _mm_crc32_u64
 
 #undef LJ_AINLINE
 #define LJ_AINLINE
@@ -48,7 +48,7 @@ static LJ_AINLINE uint32_t lj_str_hash_1_4(const char* str, uint32_t len)
   v = (v << 8) | str[len >> 1];
   v = (v << 8) | str[len - 1];
   v = (v << 8) | len;
-  return _mm_crc32_u32(0, v);
+  return lj_crc32_u32(0, v);
 #else
   uint32_t a, b, h = len;
 
@@ -78,9 +78,9 @@ static LJ_AINLINE uint32_t lj_str_hash_4_16(const char* str, uint32_t len)
     v2 = *cast_uint32p(str + len - 4);
   }
 
-  h = _mm_crc32_u32(0, len);
-  h = _mm_crc32_u64(h, v1);
-  h = _mm_crc32_u64(h, v2);
+  h = lj_crc32_u32(0, len);
+  h = lj_crc32_u64(h, v1);
+  h = lj_crc32_u64(h, v2);
   return h;
 }
 
@@ -90,18 +90,18 @@ static uint32_t lj_str_hash_16_128(const char* str, uint32_t len)
   uint64_t h1, h2;
   uint32_t i;
 
-  h1 = _mm_crc32_u32(0, len);
+  h1 = lj_crc32_u32(0, len);
   h2 = 0;
 
   for (i = 0; i < len - 16; i += 16) {
-    h1 += _mm_crc32_u64(h1, *cast_uint64p(str + i));
-    h2 += _mm_crc32_u64(h2, *cast_uint64p(str + i + 8));
+    h1 += lj_crc32_u64(h1, *cast_uint64p(str + i));
+    h2 += lj_crc32_u64(h2, *cast_uint64p(str + i + 8));
   };
 
-  h1 = _mm_crc32_u64(h1, *cast_uint64p(str + len - 16));
-  h2 = _mm_crc32_u64(h2, *cast_uint64p(str + len - 8));
+  h1 = lj_crc32_u64(h1, *cast_uint64p(str + len - 16));
+  h2 = lj_crc32_u64(h2, *cast_uint64p(str + len - 8));
 
-  return _mm_crc32_u32(h1, h2);
+  return lj_crc32_u32(h1, h2);
 }
 
 /* **************************************************************************
@@ -155,8 +155,8 @@ static void x64_init_random(void)
   }
 
   /* Init seed */
-  seed = _mm_crc32_u32(0, getpid());
-  seed = _mm_crc32_u32(seed, time(NULL));
+  seed = lj_crc32_u32(0, getpid());
+  seed = lj_crc32_u32(seed, time(NULL));
   srandom(seed);
 
   /* Now start to populate the random_pos[][]. */
@@ -216,7 +216,7 @@ static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
   pos1 = get_random_pos_unsafe(chunk_sz_log2, 0);
   pos2 = get_random_pos_unsafe(chunk_sz_log2, 1);
 
-  h1 = _mm_crc32_u32(0, len);
+  h1 = lj_crc32_u32(0, len);
   h2 = 0;
 
   /* loop over 14 chunks, 2 chunks at a time */
@@ -224,29 +224,29 @@ static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
        chunk_ptr += chunk_sz, i++) {
 
     v = *cast_uint64p(chunk_ptr + pos1);
-    h1 = _mm_crc32_u64(h1, v);
+    h1 = lj_crc32_u64(h1, v);
 
     v = *cast_uint64p(chunk_ptr + chunk_sz + pos2);
-    h2 = _mm_crc32_u64(h2, v);
+    h2 = lj_crc32_u64(h2, v);
   }
 
   /* the last two chunks */
   v = *cast_uint64p(chunk_ptr + pos1);
-  h1 = _mm_crc32_u64(h1, v);
+  h1 = lj_crc32_u64(h1, v);
 
   v = *cast_uint64p(chunk_ptr + chunk_sz - 8 - pos2);
-  h2 = _mm_crc32_u64(h2, v);
+  h2 = lj_crc32_u64(h2, v);
 
   /* process the trailing part */
-  h1 = _mm_crc32_u64(h1, *cast_uint64p(str));
-  h2 = _mm_crc32_u64(h2, *cast_uint64p(str + len - 8));
+  h1 = lj_crc32_u64(h1, *cast_uint64p(str));
+  h2 = lj_crc32_u64(h2, *cast_uint64p(str + len - 8));
 
-  h1 = _mm_crc32_u32(h1, h2);
+  h1 = lj_crc32_u32(h1, h2);
   return h1;
 }
 
 /* NOTE: the "len" should not be zero */
-static LJ_AINLINE uint32_t lj_str_hash(const char* str, size_t len)
+static LJ_AINLINE uint32_t lj_str_hash_opt(const char* str, size_t len)
 {
   if (len < 128) {
     if (len >= 16) { /* [16, 128) */
@@ -264,8 +264,36 @@ static LJ_AINLINE uint32_t lj_str_hash(const char* str, size_t len)
   return lj_str_hash_128_above(str, len);
 }
 
-#define LJ_ARCH_STR_HASH lj_str_hash
+lj_str_hashfn lj_str_hash = lj_str_hash_opt;
 #else
-#undef LJ_ARCH_STR_HASH
+lj_str_hashfn lj_str_hash = lj_str_hash_default;
 #endif
-#endif /*_LJ_STR_HASH_X64_H_*/
+
+MSize
+lj_str_hash_default(const char *str, size_t lenx)
+{
+  MSize len = (MSize)lenx;
+  MSize a, b, h = len;
+
+  /* Compute string hash. Constants taken from lookup3 hash by Bob Jenkins. */
+  if (len >= 4) {  /* Caveat: unaligned access! */
+    a = lj_getu32(str);
+    h ^= lj_getu32(str+len-4);
+    b = lj_getu32(str+(len>>1)-2);
+    h ^= b; h -= lj_rol(b, 14);
+    b += lj_getu32(str+(len>>2)-1);
+  } else if (len > 0) {
+    a = *(const uint8_t *)str;
+    h ^= *(const uint8_t *)(str+len-1);
+    b = *(const uint8_t *)(str+(len>>1));
+    h ^= b; h -= lj_rol(b, 14);
+  } else {
+    return 0;
+  }
+
+  a ^= h; a -= lj_rol(h, 11);
+  b ^= a; b -= lj_rol(a, 25);
+  h ^= b; h -= lj_rol(b, 16);
+
+  return h;
+}
