@@ -509,7 +509,14 @@ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o \
 	  lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o \
 	  lj_carith.o lj_clib.o lj_cparse.o \
 	  lj_lib.o lj_alloc.o lib_aux.o \
-	  $(LJLIB_O) lib_init.o lj_str_hash.o
+	  $(LJLIB_O) lib_init.o lj_init.o
+
+ifeq (x64,$(TARGET_LJARCH))
+  LJCORE_O += lj_str_hash.o
+  lj_str_hash-CFLAGS = -msse4.2
+endif
+
+F_CFLAGS = $($(patsubst %.c,%-CFLAGS,$<))
 
 LJVMCORE_O= $(LJVM_O) $(LJCORE_O)
 LJVMCORE_DYNO= $(LJVMCORE_O:.o=_dyn.o)
@@ -693,8 +700,8 @@ lj_folddef.h: $(BUILDVM_T) lj_opt_fold.c
 
 %.o: %.c
 	$(E) "CC        $@"
-	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) -c -o $(@:.o=_dyn.o) $<
-	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) -c -o $@ $<
+	$(Q)$(TARGET_DYNCC) $(TARGET_ACFLAGS) $(F_CFLAGS) -c -o $(@:.o=_dyn.o) $<
+	$(Q)$(TARGET_CC) $(TARGET_ACFLAGS) $(F_CFLAGS) -c -o $@ $<
 
 %.o: %.S
 	$(E) "ASM       $@"

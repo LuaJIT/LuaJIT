@@ -32,4 +32,6 @@ extern lj_str_hashfn lj_str_hash;
 
 extern MSize lj_str_hash_default(const char *str, size_t lenx);
 
+extern void lj_str_hash_init(uint32_t flags);
+
 #endif

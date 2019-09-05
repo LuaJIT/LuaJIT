@@ -191,6 +191,9 @@
 #ifdef LUAJIT_ENABLE_GC64
 #define LJ_TARGET_GC64		1
 #endif
+#ifdef __GNUC__
+#define LJ_HAS_OPTIMISED_HASH	1
+#endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
 

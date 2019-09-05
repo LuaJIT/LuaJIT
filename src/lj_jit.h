@@ -20,6 +20,7 @@
 #define JIT_F_PREFER_IMUL	0x00000080
 #define JIT_F_LEA_AGU		0x00000100
 #define JIT_F_BMI2		0x00000200
+#define JIT_F_SSE4_2		0x00000400
 
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_SSE2

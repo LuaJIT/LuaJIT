@@ -189,6 +189,11 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   GG_State *GG = (GG_State *)f(ud, NULL, 0, sizeof(GG_State));
   lua_State *L = &GG->L;
   global_State *g = &GG->g;
+  extern uint32_t LJ_CPU_FLAGS;
+
+#ifdef LJ_HAS_OPTIMISED_HASH
+  lj_str_hash_init (LJ_CPU_FLAGS);
+#endif
   if (GG == NULL || !checkptrGC(GG)) return NULL;
   memset(GG, 0, sizeof(GG_State));
   L->gct = ~LJ_TTHREAD;

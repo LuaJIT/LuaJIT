@@ -13,8 +13,14 @@
 
 #include "lj_def.h"
 #include "lj_str.h"
+#include "lj_jit.h"
+#include "lj_arch.h"
 
-#if defined(__SSE4_2__) && defined(__x86_64) && defined(__GNUC__)
+#ifdef LJ_HAS_OPTIMISED_HASH
+#if !defined(__SSE4_2__)
+#error "This file must be built with -msse4.2"
+#endif
+
 #define lj_crc32_u32 _mm_crc32_u32
 #define lj_crc32_u64 _mm_crc32_u64
 
@@ -144,7 +150,7 @@ static LJ_AINLINE uint32_t log2_floor(uint32_t n)
 /* This function is to populate `random_pos` such that random_pos[i][*]
  * contains random value in the range of [2**i, 2**(i+1)).
  */
-static void x64_init_random(void)
+static void str_hash_init_random(void)
 {
   int i, seed, rml;
 
@@ -184,11 +190,6 @@ static void x64_init_random(void)
   }
 }
 #undef POW2_MASK
-
-void __attribute__((constructor)) x64_init_random_constructor()
-{
-    x64_init_random();
-}
 
 /* Return a pre-computed random number in the range of [1**chunk_sz_order,
  * 1**(chunk_sz_order+1)). It is "unsafe" in the sense that the return value
@@ -264,36 +265,11 @@ static LJ_AINLINE uint32_t lj_str_hash_opt(const char* str, size_t len)
   return lj_str_hash_128_above(str, len);
 }
 
-lj_str_hashfn lj_str_hash = lj_str_hash_opt;
-#else
-lj_str_hashfn lj_str_hash = lj_str_hash_default;
-#endif
-
-MSize
-lj_str_hash_default(const char *str, size_t lenx)
+void lj_str_hash_init(uint32_t flags)
 {
-  MSize len = (MSize)lenx;
-  MSize a, b, h = len;
-
-  /* Compute string hash. Constants taken from lookup3 hash by Bob Jenkins. */
-  if (len >= 4) {  /* Caveat: unaligned access! */
-    a = lj_getu32(str);
-    h ^= lj_getu32(str+len-4);
-    b = lj_getu32(str+(len>>1)-2);
-    h ^= b; h -= lj_rol(b, 14);
-    b += lj_getu32(str+(len>>2)-1);
-  } else if (len > 0) {
-    a = *(const uint8_t *)str;
-    h ^= *(const uint8_t *)(str+len-1);
-    b = *(const uint8_t *)(str+(len>>1));
-    h ^= b; h -= lj_rol(b, 14);
-  } else {
-    return 0;
+  if (flags & JIT_F_SSE4_2) {
+    lj_str_hash = lj_str_hash_opt;
+    str_hash_init_random();
   }
-
-  a ^= h; a -= lj_rol(h, 11);
-  b ^= a; b -= lj_rol(a, 25);
-  h ^= b; h -= lj_rol(b, 16);
-
-  return h;
 }
+#endif
