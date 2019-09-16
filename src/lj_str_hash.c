@@ -16,7 +16,7 @@
 #include "lj_jit.h"
 #include "lj_arch.h"
 
-#ifdef LJ_HAS_OPTIMISED_HASH
+#if defined(LJ_HAS_OPTIMISED_HASH) || defined(SMOKETEST)
 #if !defined(__SSE4_2__)
 #error "This file must be built with -msse4.2"
 #endif
@@ -268,7 +268,9 @@ static LJ_AINLINE uint32_t lj_str_hash_opt(const char* str, size_t len)
 void lj_str_hash_init(uint32_t flags)
 {
   if (flags & JIT_F_SSE4_2) {
+#ifndef SMOKETEST
     lj_str_hash = lj_str_hash_opt;
+#endif
     str_hash_init_random();
   }
 }

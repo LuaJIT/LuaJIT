@@ -24,7 +24,7 @@ CXXFLAGS := -O3 -MD -g -msse4.2 -Wall -I../src -I../../../src
 test: $(TEST_PROGRAM)
 	@echo "some unit test"
 	$(VALGRIND) ./$(TEST_PROGRAM)
-	./unit_test.sh
+	bash ./unit_test.sh
 
 	@echo "smoke test"
 	../../luajit test_str_comp.lua
