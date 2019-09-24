@@ -4538,7 +4538,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addi BASEP4, BASE, 4
     |.endif
     |  lwzx CARG1, BASE_HI, RB
-    |  lwzx CARG3, BASE, RC
+    |  lwzx CARG3, BASE_HI, RC
     |.if FPU
     |   lfdx FARG1, BASE, RB
     |   lfdx FARG2, BASE, RC
