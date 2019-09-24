@@ -2,6 +2,7 @@ metatable.lua
 byte.lua
 char.lua
 dump.lua
+find.lua
 format
 len.lua
 lower_upper.lua
