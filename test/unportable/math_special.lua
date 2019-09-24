@@ -31,24 +31,29 @@ local powcheck = {
   "+inf +inf +inf +inf +1 +1 +0 +0 nan",
   "nan nan nan nan +1 nan nan nan nan",
 }
-for j=1,#inp do
-  local y = inp[j]
-  check(function(x) return x^y end, powcheck[j])
+
+do --- math.pow
+  for j=1,#inp do
+    local y = inp[j]
+    check(function(x) return x^y end, powcheck[j])
+  end
 end
 
-check(math.abs, "+0 +0 +0.5 +0.5 +1 +1 +inf +inf nan")
-check(math.floor, "+0 -0 +0 -1 +1 -1 +inf -inf nan")
-check(math.ceil, "+0 -0 +1 -0 +1 -1 +inf -inf nan")
-check(math.sqrt, "+0 -0 +0.70711 nan +1 nan +inf nan nan")
-check(math.sin, "+0 -0 +0.47943 -0.47943 +0.84147 -0.84147 nan nan nan")
-check(math.cos, "+1 +1 +0.87758 +0.87758 +0.5403 +0.5403 nan nan nan")
-check(math.tan, "+0 -0 +0.5463 -0.5463 +1.5574 -1.5574 nan nan nan")
-check(math.asin, "+0 -0 +0.5236 -0.5236 +1.5708 -1.5708 nan nan nan")
-check(math.acos, "+1.5708 +1.5708 +1.0472 +2.0944 +0 +3.1416 nan nan nan")
-check(math.atan, "+0 -0 +0.46365 -0.46365 +0.7854 -0.7854 +1.5708 -1.5708 nan")
-check(math.log, "-inf -inf -0.69315 nan +0 nan +inf nan nan")
-check(math.log10, "-inf -inf -0.30103 nan +0 nan +inf nan nan")
-check(math.exp, "+1 +1 +1.6487 +0.60653 +2.7183 +0.36788 +inf +0 nan")
+do --- math functions
+  check(math.abs, "+0 +0 +0.5 +0.5 +1 +1 +inf +inf nan")
+  check(math.floor, "+0 -0 +0 -1 +1 -1 +inf -inf nan")
+  check(math.ceil, "+0 -0 +1 -0 +1 -1 +inf -inf nan")
+  check(math.sqrt, "+0 -0 +0.70711 nan +1 nan +inf nan nan")
+  check(math.sin, "+0 -0 +0.47943 -0.47943 +0.84147 -0.84147 nan nan nan")
+  check(math.cos, "+1 +1 +0.87758 +0.87758 +0.5403 +0.5403 nan nan nan")
+  check(math.tan, "+0 -0 +0.5463 -0.5463 +1.5574 -1.5574 nan nan nan")
+  check(math.asin, "+0 -0 +0.5236 -0.5236 +1.5708 -1.5708 nan nan nan")
+  check(math.acos, "+1.5708 +1.5708 +1.0472 +2.0944 +0 +3.1416 nan nan nan")
+  check(math.atan, "+0 -0 +0.46365 -0.46365 +0.7854 -0.7854 +1.5708 -1.5708 nan")
+  check(math.log, "-inf -inf -0.69315 nan +0 nan +inf nan nan")
+  check(math.log10, "-inf -inf -0.30103 nan +0 nan +inf nan nan")
+  check(math.exp, "+1 +1 +1.6487 +0.60653 +2.7183 +0.36788 +inf +0 nan")
+end
 
 -- Pointless: deg, rad, min, max, pow
 -- LATER: %, fmod, frexp, ldexp, modf, sinh, cosh, tanh
