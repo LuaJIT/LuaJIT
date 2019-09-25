@@ -1,4 +1,4 @@
-do --- find relative
+do --- find relative +jit
   jit.opt.start("hotloop=1")
   for _ = 1, 20 do
     local value = "abc"
