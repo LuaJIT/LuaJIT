@@ -623,7 +623,7 @@ default all:	$(TARGET_T)
 
 amalg:
 	@grep "^[+|]" ljamalg.c
-	$(MAKE) all "LJCORE_O=ljamalg.o"
+	$(MAKE) all "LJCORE_O=ljamalg.o lj_str_hash.o"
 
 clean:
 	$(HOST_RM) $(ALL_RM)
