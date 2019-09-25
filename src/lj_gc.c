@@ -20,6 +20,7 @@
 #include "lj_meta.h"
 #include "lj_state.h"
 #include "lj_frame.h"
+#include "lj_dispatch.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
 #include "lj_cdata.h"
