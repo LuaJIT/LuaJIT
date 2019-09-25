@@ -5,6 +5,9 @@
  * to 128 bytes of given string.
  */
 
+#include "lj_arch.h"
+
+#if defined(LJ_HAS_OPTIMISED_HASH) || defined(SMOKETEST)
 #include <stdint.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -14,9 +17,6 @@
 #include "lj_def.h"
 #include "lj_str.h"
 #include "lj_jit.h"
-#include "lj_arch.h"
-
-#if defined(LJ_HAS_OPTIMISED_HASH) || defined(SMOKETEST)
 #if !defined(__SSE4_2__)
 #error "This file must be built with -msse4.2"
 #endif

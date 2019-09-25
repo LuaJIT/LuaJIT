@@ -509,10 +509,9 @@ LJCORE_O= lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o \
 	  lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o \
 	  lj_carith.o lj_clib.o lj_cparse.o \
 	  lj_lib.o lj_alloc.o lib_aux.o \
-	  $(LJLIB_O) lib_init.o lj_init.o
+	  $(LJLIB_O) lib_init.o lj_init.o lj_str_hash.o
 
 ifeq (x64,$(TARGET_LJARCH))
-  LJCORE_O += lj_str_hash.o
   lj_str_hash-CFLAGS = -msse4.2
 endif
 
