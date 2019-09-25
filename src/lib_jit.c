@@ -666,8 +666,8 @@ JIT_PARAMDEF(JIT_PARAMINIT)
 /* Initialize JIT compiler. */
 static void jit_init(lua_State *L)
 {
-  extern uint32_t LJ_CPU_FLAGS;
 #if LJ_HASJIT
+  extern uint32_t LJ_CPU_FLAGS;
   jit_State *J = L2J(L);
   /* Check for required instruction set support on x86 (unnecessary on x64). */
 #if LJ_TARGET_X86
