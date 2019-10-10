@@ -28,6 +28,8 @@
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
 
+int luaJIT_compat52 = LJ_52;
+
 /* -- Common helper functions --------------------------------------------- */
 
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
