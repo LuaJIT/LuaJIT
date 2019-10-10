@@ -151,7 +151,7 @@ local function bcdump(func, out, all, lineinfo)
       kc = format(#kc > 40 and '"%.40s"~' or '"%s"', gsub(kc, "%c", ctlsub))
       out:write(format("KGC    %d    %s\n", -(n + 1), kc))
     elseif typ == "proto" then
-      local fi = funcinfo(kc)
+      fi = funcinfo(kc)
       if fi.ffid then
 	kc = vmdef.ffnames[fi.ffid]
       else
