@@ -15,6 +15,9 @@
 #include "lua.h"
 
 
+#define luaL_getn(L,i)          ((int)lua_objlen(L, i))
+#define luaL_setn(L,i,j)        ((void)0)  /* no op! */
+
 /* extra error code for `luaL_load' */
 #define LUA_ERRFILE     (LUA_ERRERR+1)
 
@@ -54,10 +57,6 @@ LUALIB_API int (luaL_error) (lua_State *L, const char *fmt, ...);
 
 LUALIB_API int (luaL_checkoption) (lua_State *L, int narg, const char *def,
                                    const char *const lst[]);
-
-/* pre-defined references */
-#define LUA_NOREF       (-2)
-#define LUA_REFNIL      (-1)
 
 LUALIB_API int (luaL_ref) (lua_State *L, int t);
 LUALIB_API void (luaL_unref) (lua_State *L, int t, int ref);
@@ -157,5 +156,22 @@ LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 
 
 /* }====================================================== */
+
+
+/* compatibility with ref system */
+
+/* pre-defined references */
+#define LUA_NOREF       (-2)
+#define LUA_REFNIL      (-1)
+
+#define lua_ref(L,lock) ((lock) ? luaL_ref(L, LUA_REGISTRYINDEX) : \
+      (lua_pushstring(L, "unlocked references are obsolete"), lua_error(L), 0))
+
+#define lua_unref(L,ref)        luaL_unref(L, LUA_REGISTRYINDEX, (ref))
+
+#define lua_getref(L,ref)       lua_rawgeti(L, LUA_REGISTRYINDEX, (ref))
+
+
+#define luaL_reg	luaL_Reg
 
 #endif
