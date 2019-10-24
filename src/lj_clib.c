@@ -119,6 +119,9 @@ static void *clib_loadlib(lua_State *L, const char *name, int global)
 		   RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
   if (!h) {
     const char *e, *err = dlerror();
+    /* Per the standard definition of `dlerror`, this should always be safe, but we have
+     * observed `dlerror()` returning NULL on Android 7.1.1 SDK 25 (Oculus Quest) anyway,
+     * which causes a crash. */
     if (err && *err == '/' && (e = strchr(err, ':')) &&
 	(name = clib_resolve_lds(L, strdata(lj_str_new(L, err, e-err))))) {
       h = dlopen(name, RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
