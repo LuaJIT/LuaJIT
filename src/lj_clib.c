@@ -119,12 +119,14 @@ static void *clib_loadlib(lua_State *L, const char *name, int global)
 		   RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
   if (!h) {
     const char *e, *err = dlerror();
-    if (*err == '/' && (e = strchr(err, ':')) &&
+    if (err && *err == '/' && (e = strchr(err, ':')) &&
 	(name = clib_resolve_lds(L, strdata(lj_str_new(L, err, e-err))))) {
       h = dlopen(name, RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
       if (h) return h;
       err = dlerror();
     }
+    if (!err) /* Tolerate nonstandard dlerror implementations */
+      err = "Unknown dlopen error";
     lj_err_callermsg(L, err);
   }
   return h;
