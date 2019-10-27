@@ -1577,7 +1577,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jh ->fff_fallback
   |  brasl r14, ->vm_ .. func
   |  cfdbr RB, 0, f0
-  |  jo ->fff_resf0
+  |  jnlh ->fff_resf0                   // branch on cc0 or cc3
   |  llgfr RB, RB
   |  j ->fff_resi
   |.endmacro
@@ -2106,14 +2106,8 @@ static void build_subroutines(BuildCtx *ctx)
   |// Value to round is in f0. May clobber f0-f7 and r0. Return address is r14.
   |.macro vm_round, name, mask
   |->name:
-  |  lghi r0, 1
-  |  cdfbr f1, r0
-  |  didbr f0, f2, f1, mask // f0=remainder, f2=quotient.
-  |  jnle >1
-  |  ldr f0, f2
+  |  fidbra f0, mask, f0, 0
   |  br r14
-  |1: // partial remainder (sanity check)
-  |  stg r0, 0
   |.endmacro
   |
   |  vm_round vm_floor, 7 // Round towards -inf.
