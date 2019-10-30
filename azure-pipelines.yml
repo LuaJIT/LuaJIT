@@ -26,8 +26,10 @@ jobs:
     maxParallel: 3
     matrix:
       Linux_x64:
-        buildFlags:
+        buildFlags: -DLUA_USE_ASSERT
       Linux_x64_GC64:
-        buildFlags: -DLUAJIT_ENABLE_GC64
+        buildFlags: -DLUA_USE_ASSERT -DLUAJIT_ENABLE_GC64
+      Linux_x64_NoJIT:
+        buildFlags: -DLUA_USE_ASSERT -DLUAJIT_DISABLE_JIT
   steps:
   - template: ./linux.yml
