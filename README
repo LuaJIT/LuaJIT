@@ -1,13 +1,11 @@
-LuaJIT
-======
+moonjit
+=======
 
-This is an integrtion fork of the original
-[LuaJIT project](https://repo.or.cz/w/luajit-2.0.git) authored by Mike Pall
-with the aim of providing a quicker paced and more inclusive development
-workflow for LuaJIT.  The original README is preserved below for posterity.
-This repo will attempt to remain in sync with developments in the original
-LuaJIT but will allow space to innovate and fix bugs so as to provide
-continuity for people interested in the project.
+moonjit is a fork of the [LuaJIT project](https://repo.or.cz/w/luajit-2.0.git)
+authored by Mike Pall with the aim of providing a quicker paced and more
+inclusive development workflow for LuaJIT.  The original README is preserved
+below for now. This fork is an attempt to provide continuity for users of the
+original LuaJIT but will allow space to innovate and fix bugs.
 
 LuaJIT is Copyright (c) 2005-2019 Mike Pall and various contributors.  The list
 of contributors may be found via the git log and from the CONTRIBUTORS file in
@@ -16,14 +14,7 @@ the top level of these sources, which is updated on a regular basis.
 Branches
 --------
 
-The original LuaJIT project had two supported versions in v2.0 and v2.1.  These
-were tracked using three branches, master, v2.0 and v2.1, where master is used
-for v2.0 bug fixes and v2.0 simply tracks master.  This is confusing and does
-not allow space for new development, so this project has a slightly different
-branch layout that helps unblock development and also track the original
-LuaJIT.
-
-This repo has the following main branches:
+The project repository on github has the following main branches:
 
   * master: This is where new features and language support will land.  This may
   diverge from the original LuaJIT, although as the goal of this project
@@ -34,7 +25,6 @@ This repo has the following main branches:
 
 The upstream master branch currently only tracks the v2.0 branch (or vice
 versa, we may never know!) so it is ignored.
-
 
 Additional Features
 -------------------
