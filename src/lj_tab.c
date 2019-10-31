@@ -474,7 +474,6 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
     lua_assert(freenode != &G(L)->nilnode);
     collide = hashkey(t, &n->key);
     if (collide != n) {  /* Colliding node not the main node? */
-      Node *nn;
       while (noderef(collide->next) != n)  /* Find predecessor. */
 	collide = nextnode(collide);
       setmref(collide->next, freenode);  /* Relink chain. */
@@ -484,63 +483,39 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
       freenode->next = n->next;
       setmref(n->next, NULL);
       setnilV(&n->val);
-      /*
-      ** Nodes after n might have n as their main node, and need rechaining
-      ** back onto n. We make use of the following property of tables: for all
-      ** nodes m, at least one of the following four statements is true:
-      **  1. tvisnil(&m->key)  NB: tvisnil(&m->val) is a stronger statement
-      **  2. tvisstr(&m->key)
-      **  3. tvisstr(&main(m)->key)
-      **  4. main(m) == main(main(m))
-      ** Initially, we need to rechain any nn which has main(nn) == n. As
-      ** main(n) != n (because collide != n earlier), main(nn) == n requires
-      ** either statement 2 or statement 3 to be true about nn.
-      */
-      if (!tvisstr(&n->key)) {
-	/* Statement 3 is not true, so only need to consider string keys. */
-	while ((nn = nextnode(freenode))) {
-	  if (tvisstr(&nn->key) && !tvisnil(&nn->val) &&
-	      hashstr(t, strV(&nn->key)) == n) {
-	    goto rechain;
-	  }
-	  freenode = nn;
-	}
-      } else {
-	/* Statement 3 is true, so need to consider all types of key. */
-	while ((nn = nextnode(freenode))) {
-	  if (!tvisnil(&nn->val) && hashkey(t, &nn->key) == n) {
-	  rechain:
-	    freenode->next = nn->next;
-	    nn->next = n->next;
-	    setmref(n->next, nn);
-	    /*
-	    ** Rechaining one node onto n creates a new dilemma: we now need
-	    ** to rechain any nn which has main(nn) == n OR has main(nn) equal
-	    ** to any node which has already been rechained. Furthermore, at
-	    ** least one of n and n->next will have a string key, so all types
-	    ** of nn key need to be considered. Rather than testing whether
-	    ** main(nn) definitely _is_ in the new chain, we test whether it
-	    ** might _not_ be in the old chain, and if so re-link it into
-	    ** the correct chain.
-	    */
-	    while ((nn = nextnode(freenode))) {
-	      if (!tvisnil(&nn->val)) {
-		Node *mn = hashkey(t, &nn->key);
-		if (mn != freenode && mn != nn) {
-		  freenode->next = nn->next;
-		  nn->next = mn->next;
-		  setmref(mn->next, nn);
-		} else {
-		  freenode = nn;
-		}
+      /* Rechain pseudo-resurrected string keys with colliding hashes. */
+      while (nextnode(freenode)) {
+	Node *nn = nextnode(freenode);
+	if (tvisstr(&nn->key) && !tvisnil(&nn->val) &&
+	    hashstr(t, strV(&nn->key)) == n) {
+	  freenode->next = nn->next;
+	  nn->next = n->next;
+	  setmref(n->next, nn);
+	  /*
+	  ** Rechaining a resurrected string key creates a new dilemma:
+	  ** Another string key may have originally been resurrected via
+	  ** _any_ of the previous nodes as a chain anchor. Including
+	  ** a node that had to be moved, which makes them unreachable.
+	  ** It's not feasible to check for all previous nodes, so rechain
+	  ** any string key that's currently in a non-main positions.
+	  */
+	  while ((nn = nextnode(freenode))) {
+	    if (tvisstr(&nn->key) && !tvisnil(&nn->val)) {
+	      Node *mn = hashstr(t, strV(&nn->key));
+	      if (mn != freenode) {
+		freenode->next = nn->next;
+		nn->next = mn->next;
+		setmref(mn->next, nn);
 	      } else {
 		freenode = nn;
 	      }
+	    } else {
+	      freenode = nn;
 	    }
-	    break;
-	  } else {
-	    freenode = nn;
 	  }
+	  break;
+	} else {
+	  freenode = nn;
 	}
       }
     } else {  /* Otherwise use free node. */
