@@ -5,6 +5,5 @@ steps:
     displayName: Linux Build
 
   - script: |
-     cd src
-     make test
+     make check
     displayName: Linux Tests
