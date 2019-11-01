@@ -127,6 +127,8 @@ LUALIB_API const char *(luaL_tolstring) (lua_State *L, int idx, size_t *len);
 #define luaL_newlib(L, l)	(luaL_newlibtable(L, l), luaL_setfuncs(L, l, 0))
 
 /* From Lua 5.4 */
+#define luaL_argexpected(L,cond,arg,tname)	\
+		((void)((cond) || luaL_typerror(L, (arg), (tname))))
 #define luaL_typeerror(L,n,t)	luaL_typerror(L, (n), (t))
 
 /*
