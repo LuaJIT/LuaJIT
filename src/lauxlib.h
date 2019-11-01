@@ -126,6 +126,9 @@ LUALIB_API const char *(luaL_tolstring) (lua_State *L, int idx, size_t *len);
 	lua_createtable(L, 0, sizeof(l)/sizeof((l)[0]) - 1)
 #define luaL_newlib(L, l)	(luaL_newlibtable(L, l), luaL_setfuncs(L, l, 0))
 
+/* From Lua 5.4 */
+#define luaL_typeerror(L,n,t)	luaL_typerror(L, (n), (t))
+
 /*
 ** {======================================================
 ** Generic Buffer manipulation
