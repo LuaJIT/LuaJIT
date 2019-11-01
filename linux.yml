@@ -5,6 +5,6 @@ steps:
     displayName: Linux Build
 
   - script: |
-     cd test
-     ../src/luajit test.lua
+     cd src
+     make test
     displayName: Linux Tests
