@@ -10,8 +10,31 @@ uint32_t LJ_CPU_FLAGS = 0;
 #include <sys/utsname.h>
 #endif
 
+#ifdef _MSC_VER
+/*
+** Append a function pointer to the static constructor table executed by
+** the C runtime.
+** Based on https://stackoverflow.com/questions/1113409/attribute-constructor-equivalent-in-vc
+** see also https://docs.microsoft.com/en-us/cpp/c-runtime-library/crt-initialization.
+*/
+#pragma section(".CRT$XCU",read)
+#define LJ_INITIALIZER2_(f,p) \
+        static void f(void); \
+        __declspec(allocate(".CRT$XCU")) void (*f##_)(void) = f; \
+        __pragma(comment(linker,"/include:" p #f "_")) \
+        static void f(void)
+#ifdef _WIN64
+#define LJ_INITIALIZER(f) LJ_INITIALIZER2_(f,"")
+#else
+#define LJ_INITIALIZER(f) LJ_INITIALIZER2_(f,"_")
+#endif
+
+#else
+#define LJ_INITIALIZER(f) static void __attribute__((constructor)) f(void)
+#endif
+
 /* Arch-dependent CPU detection. */
-static void __attribute__((constructor)) lj_cpudetect(void)
+LJ_INITIALIZER(lj_cpudetect)
 {
   uint32_t flags = 0;
 #if LJ_TARGET_X86ORX64
