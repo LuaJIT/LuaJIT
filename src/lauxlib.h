@@ -165,6 +165,10 @@ LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 /* From Lua 5.2. */
 LUALIB_API void (luaL_pushresultsize) (luaL_Buffer *B, size_t sz);
 
+/* From Lua 5.4 */
+#define luaL_buffaddr(B)	((B)->p)
+#define luaL_bufflen(B)		((size_t)((B)->p - (B)->buffer))
+
 /* }====================================================== */
 
 #endif
