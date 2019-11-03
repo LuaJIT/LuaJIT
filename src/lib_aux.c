@@ -255,6 +255,12 @@ LUALIB_API void luaL_pushresult(luaL_Buffer *B)
   B->lvl = 1;
 }
 
+LUALIB_API void luaL_pushresultsize(luaL_Buffer *B, size_t sz)
+{
+  luaL_addsize(B, sz);
+  luaL_pushresult(B);
+}
+
 LUALIB_API void luaL_addvalue(luaL_Buffer *B)
 {
   lua_State *L = B->L;
