@@ -172,19 +172,25 @@ LUALIB_API int luaL_getsubtable(lua_State *L, int idx, const char *fname)
   }
 }
 
-LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
-				 const char *p, const char *r)
+LUALIB_API void luaL_addgsub(luaL_Buffer *b, const char *s,
+                             const char *p, const char *r)
 {
   const char *wild;
   size_t l = strlen(p);
+  while ((wild = strstr(s, p)) != NULL) {
+    luaL_addlstring(b, s, wild - s);  /* push prefix */
+    luaL_addstring(b, r);  /* push replacement in place of pattern */
+    s = wild + l;  /* continue after 'p' */
+  }
+  luaL_addstring(b, s);  /* push last suffix */
+}
+
+LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
+                                 const char *p, const char *r)
+{
   luaL_Buffer b;
   luaL_buffinit(L, &b);
-  while ((wild = strstr(s, p)) != NULL) {
-    luaL_addlstring(&b, s, (size_t)(wild - s));  /* push prefix */
-    luaL_addstring(&b, r);  /* push replacement in place of pattern */
-    s = wild + l;  /* continue after `p' */
-  }
-  luaL_addstring(&b, s);  /* push last suffix */
+  luaL_addgsub(&b, s, p, r);
   luaL_pushresult(&b);
   return lua_tostring(L, -1);
 }

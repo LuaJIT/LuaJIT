@@ -168,6 +168,8 @@ LUALIB_API void (luaL_pushresultsize) (luaL_Buffer *B, size_t sz);
 /* From Lua 5.4 */
 #define luaL_buffaddr(B)	((B)->p)
 #define luaL_bufflen(B)		((size_t)((B)->p - (B)->buffer))
+LUALIB_API void luaL_addgsub (luaL_Buffer *b, const char *s,
+                                     const char *p, const char *r);
 
 /* }====================================================== */
 
