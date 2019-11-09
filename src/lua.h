@@ -282,6 +282,8 @@ LUA_API void *lua_getexdata(lua_State *L);
 
 #define lua_tostring(L,i)	lua_tolstring(L, (i), NULL)
 
+/* From Lua 5.2. */
+#define lua_pushglobaltable(L)	lua_pushvalue(L, LUA_GLOBALSINDEX)
 
 
 /*
