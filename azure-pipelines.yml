@@ -27,9 +27,18 @@ jobs:
     matrix:
       Linux_x64:
         buildFlags: -DLUA_USE_ASSERT
+        makeFlags: all
       Linux_x64_GC64:
         buildFlags: -DLUA_USE_ASSERT -DLUAJIT_ENABLE_GC64
+        makeFlags: all
       Linux_x64_NoJIT:
         buildFlags: -DLUA_USE_ASSERT -DLUAJIT_DISABLE_JIT
+        makeFlags: all
+      Linux_x64_52COMPAT:
+        buildFlags: -DLUA_USE_ASSERT -DLUAJIT_ENABLE_LUA52COMPAT
+        makeFlags: all
+      Linux_x64_amalg:
+        buildFlags: -DLUA_USE_ASSERT
+        makeFlags: amalg
   steps:
   - template: ./linux.yml

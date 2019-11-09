@@ -1,7 +1,7 @@
 steps:
   - script: |
      cd src
-     make -j  XCFLAGS="$(buildFlags)"
+     make -j$(nproc) XCFLAGS="$(buildFlags)" "$(makeFlags)"
     displayName: Linux Build
 
   - script: |
