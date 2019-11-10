@@ -531,6 +531,20 @@ LJLIB_CF(print)
   return 0;
 }
 
+LJLIB_CF(warn)
+{
+  int n = lua_gettop(L);  /* number of arguments */
+  int i;
+  luaL_checkstring(L, 1);  /* at least one argument */
+  for (i = 2; i <= n; i++)
+    luaL_checkstring(L, i);  /* make sure all arguments are strings */
+  for (i = 1; i < n; i++)  /* compose warning */
+    lua_warning(L, lua_tostring(L, i), 1);
+  lua_warning(L, lua_tostring(L, n), 0);  /* close warning */
+  return 0;
+}
+
+
 LJLIB_PUSH(top-3)
 LJLIB_SET(_VERSION)
 
