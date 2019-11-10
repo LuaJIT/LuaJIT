@@ -1292,3 +1292,15 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+/* -- Warning ------------------------------------------------------------- */
+
+LUA_API void lua_setwarnf(lua_State *L, lua_WarnFunction f, void *ud)
+{
+  G(L)->ud_warn = ud;
+  G(L)->warnf = f;
+}
+
+LUA_API void lua_warning(lua_State *L, const char *msg, int tocont)
+{
+  luaE_warning(L, msg, tocont);
+}

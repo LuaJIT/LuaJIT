@@ -68,6 +68,13 @@ typedef void * (*lua_Alloc) (void *ud, void *ptr, size_t osize, size_t nsize);
 
 
 /*
+** Type for warning functions
+*/
+typedef void (*lua_WarnFunction) (void *ud, const char *msg, int tocont);
+
+
+
+/*
 ** basic types
 */
 #define LUA_TNONE		(-1)
@@ -214,6 +221,15 @@ LUA_API int (lua_dump) (lua_State *L, lua_Writer writer, void *data);
 LUA_API int  (lua_yield) (lua_State *L, int nresults);
 LUA_API int  (lua_resume) (lua_State *L, int narg);
 LUA_API int  (lua_status) (lua_State *L);
+
+
+/*
+** Warning-related functions
+*/
+/* From Lua 5.4 */
+LUA_API void (lua_setwarnf) (lua_State *L, lua_WarnFunction f, void *ud);
+LUA_API void (lua_warning)  (lua_State *L, const char *msg, int tocont);
+
 
 /*
 ** garbage-collection function and options

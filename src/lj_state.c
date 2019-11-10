@@ -200,6 +200,8 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   g->strempty.gct = ~LJ_TSTR;
   g->allocf = f;
   g->allocd = ud;
+  g->warnf = NULL;
+  g->ud_warn = NULL;
   setgcref(g->mainthref, obj2gco(L));
   setgcref(g->uvhead.prev, obj2gco(&g->uvhead));
   setgcref(g->uvhead.next, obj2gco(&g->uvhead));
@@ -298,3 +300,9 @@ void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L)
   lj_mem_freet(g, L);
 }
 
+void luaE_warning(lua_State *L, const char *msg, int tocont)
+{
+  lua_WarnFunction wf = G(L)->warnf;
+  if (wf != NULL)
+    wf(G(L)->ud_warn, msg, tocont);
+}

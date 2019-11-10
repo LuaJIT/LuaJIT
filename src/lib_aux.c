@@ -318,6 +318,36 @@ static int panic(lua_State *L)
   return 0;
 }
 
+/*
+** Emit a warning. '*warnstate' means:
+** 0 - warning system is off;
+** 1 - ready to start a new message;
+** 2 - previous message is to be continued.
+*/
+static void warnf(void *ud, const char *message, int tocont)
+{
+  int *warnstate = (int *)ud;
+  if (*warnstate != 2 && !tocont && *message == '@') {  /* control message? */
+    if (strcmp(message, "@off") == 0)
+      *warnstate = 0;
+    else if (strcmp(message, "@on") == 0)
+      *warnstate = 1;
+    return;
+  }
+  else if (*warnstate == 0)  /* warnings off? */
+    return;
+  if (*warnstate == 1)  /* previous message was the last? */
+    fputs("Lua warning: ", stderr);  /* start a new warning */
+  fputs(message, stderr);  /* write message */
+  if (tocont)  /* not the last part? */
+    *warnstate = 2;  /* to be continued */
+  else {  /* last part */
+    fputc('\n', stderr);  /* finish message with end-of-line */
+    *warnstate = 1;  /* ready to start a new message */
+  }
+  fflush(stderr);
+}
+
 #ifdef LUAJIT_USE_SYSMALLOC
 
 #if LJ_64 && !LJ_GC64 && !defined(LUAJIT_USE_VALGRIND)
@@ -339,7 +369,14 @@ static void *mem_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 LUALIB_API lua_State *luaL_newstate(void)
 {
   lua_State *L = lua_newstate(mem_alloc, NULL);
-  if (L) G(L)->panic = panic;
+  if (L) {
+    int *warnstate;  /* space for warning state */
+    G(L)->panic = panic;
+    warnstate = (int *)lua_newuserdata(L, sizeof(int));
+    luaL_ref(L, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
+    *warnstate = 0;  /* default is warnings off */
+    lua_setwarnf(L, warnf, warnstate);
+  }
   return L;
 }
 
@@ -357,7 +394,14 @@ LUALIB_API lua_State *luaL_newstate(void)
 #else
   L = lua_newstate(lj_alloc_f, ud);
 #endif
-  if (L) G(L)->panic = panic;
+  if (L) {
+    int *warnstate;  /* space for warning state */
+    G(L)->panic = panic;
+    warnstate = (int *)lua_newuserdata(L, sizeof(int));
+    luaL_ref(L, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
+    *warnstate = 0;  /* default is warnings off */
+    lua_setwarnf(L, warnf, warnstate);
+  }
   return L;
 }
 

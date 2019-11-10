@@ -32,4 +32,6 @@ LJ_FUNC void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L);
 LJ_FUNC lua_State *lj_state_newstate(lua_Alloc f, void *ud);
 #endif
 
+LJ_FUNC void luaE_warning(lua_State *L, const char *msg, int tocont);
+
 #endif

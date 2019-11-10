@@ -621,6 +621,8 @@ typedef struct global_State {
   MRef jit_base;	/* Current JIT code L->base or NULL. */
   MRef ctype_state;	/* Pointer to C type state. */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
+  lua_WarnFunction warnf;  /* warning function */
+  void *ud_warn;	/* auxiliary data to 'warnf' */
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
