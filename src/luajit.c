@@ -73,6 +73,7 @@ static void print_usage(void)
   "  -i        Enter interactive mode after executing " LUA_QL("script") ".\n"
   "  -v        Show version information.\n"
   "  -E        Ignore environment variables.\n"
+  "  -W       turn warnings on\n"
   "  --        Stop handling options.\n"
   "  -         Execute stdin and stop handling options.\n", stderr);
   fflush(stderr);
@@ -399,6 +400,7 @@ static int dobytecode(lua_State *L, char **argv)
 #define FLAGS_EXEC		4
 #define FLAGS_OPTION		8
 #define FLAGS_NOENV		16
+#define FLAGS_WARN		32
 
 static int collectargs(char **argv, int *flags)
 {
@@ -438,6 +440,9 @@ static int collectargs(char **argv, int *flags)
       return i+1;
     case 'E':
       *flags |= FLAGS_NOENV;
+      break;
+    case 'W':
+      *flags |= FLAGS_WARN;
       break;
     default: return -1;  /* invalid option */
     }
@@ -530,6 +535,10 @@ static int pmain(lua_State *L)
   if ((flags & FLAGS_NOENV)) {
     lua_pushboolean(L, 1);
     lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
+  }
+
+  if ((flags & FLAGS_WARN)) {
+    lua_warning(L, "@on", 0);  /* warnings on */
   }
 
   /* Stop collector during library initialization. */
