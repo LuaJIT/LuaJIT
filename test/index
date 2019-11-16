@@ -5,3 +5,4 @@ computations.lua
 trace +jit
 opt +jit
 unportable
+misc
