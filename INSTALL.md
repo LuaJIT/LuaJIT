@@ -30,7 +30,7 @@ Please read the instructions given in these files, before changing any settings.
 Moonjit on x64 currently uses 32 bit GC objects by default. `LJ_GC64` mode may
 be explicitly enabled: add `XCFLAGS=-DLUAJIT_ENABLE_GC64` to the make command
 or run `msvcbuild gc64` for MSVC/WinSDK. Please check the note about the
-[bytecode format differences](string_dump), too.
+[bytecode format differences](doc/extensions.md#string_dump), too.
 
 ## POSIX Systems (Linux, OSX, *BSD etc.)
 
