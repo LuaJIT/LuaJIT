@@ -125,6 +125,13 @@ LUA_API const lua_Number *lua_version(lua_State *L)
 
 /* -- Stack manipulation -------------------------------------------------- */
 
+LUA_API int lua_absindex (lua_State *L, int idx)
+{
+  return (idx > 0 || idx <= LUA_REGISTRYINDEX)
+         ? idx
+         : (int)(L->top - L->base) + idx + 1;
+}
+
 LUA_API int lua_gettop(lua_State *L)
 {
   return (int)(L->top - L->base);
