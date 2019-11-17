@@ -175,6 +175,7 @@ and Lua library level. moonjit is API+ABI-compatible with Lua 5.1, which
 prevents implementing features that would otherwise break the Lua/C API and ABI
 (e.g. `_ENV`).
 
+<a name="exceptions"></a>
 ### C++ Exception Interoperability
 
 moonjit has built-in support for interoperating with C++ exceptions. The
