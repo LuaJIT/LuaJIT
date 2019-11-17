@@ -1,0 +1,33 @@
+This list of contributors is gleaned from the git commit log for the LuaJIT,
+bench_lua, openresty/luajit2 and LuaJIT-test-cleanup projects for the purpose
+of recording the initial contributor set for the moonjit project.  This is not
+an exhaustive list of contributors because a number of patches seem to have
+gone into LuaJIT without crediting the author with anything more than a
+`Thanks`, which makes it unclear if the patch was written by the person thanked
+or the issue was reported or if the nature of contribution was anywhere in
+between.
+
+If your name should be on this list but is missing, please create a github
+issue to get your name added.
+
+abhay1722
+abhaysingh1722
+Alan Wu
+bandhu
+chronolaw
+Dibyendu Majumdar
+doujiang24
+Ilya Shipitsin
+Mike Pall
+Lesley De Cruz
+Patrick Galizia
+Peter Cawley
+Sameera Deshpande
+Shuxin Yang
+Siddhesh Poyarekar
+spacewander
+Thibault Charbonnier
+Vivien HENRIET
+Vlad Krasnov
+William Adams
+Yichun Zhang (agentzh)
