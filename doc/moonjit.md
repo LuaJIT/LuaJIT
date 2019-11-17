@@ -12,7 +12,7 @@ regular lua stand-alone executable. It supports the same basic options, too.
 `luajit -h` prints a short list of the available options. Please have a look at
 the [Lua manual](http://www.lua.org/manual/5.1/manual.html#6) for details.
 
-Moonjit has some additional options: 
+Moonjit has some additional options:
 
 <a name="b_opt"></a>
 ### `-b[options] input output`
@@ -30,7 +30,7 @@ accepted:
 * `-e` chunk: Use chunk string as input.
 * `- ` (a single minus sign): Use stdin as input and/or stdout as output.
 
-The output file type is auto-detected from the extension of the output file name: 
+The output file type is auto-detected from the extension of the output file name:
 
 * `c` — C source file, exported bytecode data.
 * `h` — C header file, static bytecode data.

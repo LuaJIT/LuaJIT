@@ -103,7 +103,8 @@ differences between Lua and C.
 ⑥ Now that we have defined our own sleep() function, we can just call it from
 plain Lua code. That wasn't so bad, huh? Turning these boring animated dots
 into a fascinating best-selling game is left as an exercise for the reader. :-)
-Accessing the zlib Compression Library
+
+## Accessing the zlib Compression Library
 
 The following code shows how to access the zlib compression library from Lua
 code. We'll define two convenience wrapper functions that take a string and

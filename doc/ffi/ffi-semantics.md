@@ -554,7 +554,8 @@ Memory areas returned by C functions (e.g. from malloc()) must be manually
 managed, of course (or use ffi.gc()). Pointers to cdata objects are
 indistinguishable from pointers returned by C functions (which is one of the
 reasons why the GC cannot follow them).
-Callbacks
+
+## Callbacks
 
 The moonjit FFI automatically generates special callback functions whenever a
 Lua function is converted to a C function pointer. This associates the
@@ -752,7 +753,8 @@ types, too.
 
 ## Current Status
 
-The initial release of the FFI library has some limitations and is missing some features. Most of these will be fixed in future releases.
+The initial release of the FFI library has some limitations and is missing some
+features. Most of these will be fixed in future releases.
 
 C language support is currently incomplete:
 

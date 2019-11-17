@@ -1,7 +1,8 @@
 # Moonjit Extensions and API
 
-Moonjit is fully upwards-compatible with Lua 5.1. It supports all standard Lua
-library functions and the full set of Lua/C API functions.
+Moonjit is fully upwards-compatible with Lua 5.1. It supports all [standard Lua
+library functions](http://www.lua.org/manual/5.1/manual.html#5) and the full
+set of [Lua/C API functions](http://www.lua.org/manual/5.1/manual.html#3).
 
 Moonjit is also fully ABI-compatible to Lua 5.1 at the linker/dynamic loader
 level. This means you can compile a C module against the standard Lua headers
@@ -18,7 +19,8 @@ Moonjit comes with several built-in extension modules:
 
 ### `bit.*` — Bitwise operations
 
-Moonjit supports all bitwise operations as defined by [Lua BitOp](https://bitop.luajit.org/):
+Moonjit supports all bitwise operations as defined by [Lua
+BitOp](https://bitop.luajit.org/):
 
 ```
 bit.tobit  bit.tohex  bit.bnot    bit.band bit.bor  bit.bxor
@@ -27,7 +29,8 @@ bit.lshift bit.rshift bit.arshift bit.rol  bit.ror  bit.bswap
 
 This module is a moonjit built-in — you don't need to download or install Lua
 BitOp. The Lua BitOp site has full documentation for all [Lua BitOp API
-functions](http://bitop.luajit.org/api.html).
+functions](http://bitop.luajit.org/api.html). The FFI adds support for 64 bit
+bitwise operations, using the same API functions.
 
 Please make sure to require the module before using any of its functions:
 
@@ -95,6 +98,31 @@ compatibility versions must match. Bytecode stays compatible for dot releases
 between any beta release. Foreign bytecode (e.g. from Lua 5.1) is incompatible
 and cannot be loaded.
 
+Note: `LJ_GC64` mode requires a different frame layout, which implies a
+different, incompatible bytecode format for ports that use this mode (e.g.
+ARM64 or MIPS64) or when explicitly enabled for x64. This may be rectified in
+the future.
+
+#### table.new(narray, nhash) allocates a pre-sized table
+
+An extra library function table.new() can be made available via
+`require("table.new")`. This creates a pre-sized table, just like the C API
+equivalent `lua_createtable()`. This is useful for big tables if the final
+table size is known and automatic table resizing is too expensive.
+
+#### table.clear(tab) clears a table
+
+An extra library function table.clear() can be made available via
+`require("table.clear")`. This clears all keys and values from a table, but
+preserves the allocated array/hash sizes. This is useful when a table, which is
+linked from multiple places, needs to be cleared and/or when recycling a table
+for use by the same context. This avoids managing backlinks, saves an
+allocation and the overhead of incremental array/hash part growth.
+
+Please note this function is meant for very specific situations. In most cases
+it's better to replace the (usually single) link with a new table and let the
+GC do its work.
+
 #### Enhanced PRNG for math.random()
 
 moonjit uses a Tausworthe PRNG with period 2^223 to implement math.random() and
@@ -151,8 +179,15 @@ that are unlikely to break existing code are unconditionally enabled:
 * `debug.getlocal()` and `debug.setlocal()` accept negative indexes for varargs.
 * `debug.getupvalue()` and `debug.setupvalue()` handle C functions.
 * `debug.upvalueid()` and `debug.upvaluejoin()`.
+* Lua/C API extensions: `lua_version()` `lua_upvalueid()` `lua_upvaluejoin()`
+  `lua_loadx()` `lua_copy()` `lua_tonumberx()` `lua_tointegerx()` `lua_len()`
+  `lua_rawlen()` `luaL_fileresult()` `luaL_execresult()` `luaL_loadfilex()`
+  `luaL_loadbufferx()` `luaL_traceback()` `luaL_setfuncs()` `luaL_pushmodule()`
+  `luaL_newlibtable()` `luaL_newlib()` `luaL_testudata()` `luaL_setmetatable()`
+  `luaL_len()`
 * Command line option `-E`.
 * Command line checks `__tostring` for errors.
+* String matching patterns may contain `\0` as a regular character.
 
 Other features are only enabled, if moonjit is built with
 `-DLUAJIT_ENABLE_LUA52COMPAT`:
@@ -169,11 +204,25 @@ Other features are only enabled, if moonjit is built with
 * `debug.setmetatable()` returns object.
 * `debug.getuservalue()` and `debug.setuservalue()`.
 * Remove `math.mod()`, `string.gfind()`.
+* package.searchers.
+* module() returns the module table.
 
 **Note**: this provides only partial compatibility with Lua 5.2 at the language
 and Lua library level. moonjit is API+ABI-compatible with Lua 5.1, which
 prevents implementing features that would otherwise break the Lua/C API and ABI
 (e.g. `_ENV`).
+
+### Extensions from Lua 5.3
+
+LuaJIT supports some extensions from Lua 5.3:
+
+* Unicode escape `'\u{XX...}'` embeds the UTF-8 encoding in string literals.
+* The argument table arg can be read (and modified) by `LUA_INIT` and `-e` chunks.
+* `io.read()` and `file:read()` accept formats with or without a leading `*`.
+* `assert()` accepts any type of error object.
+* `table.move(a1, f, e, t [,a2])`.
+* `coroutine.isyieldable()`.
+* Lua/C API extensions: `lua_isyieldable()`
 
 <a name="exceptions"></a>
 ### C++ Exception Interoperability
@@ -220,10 +269,3 @@ Other platforms 			| Other compilers	| No
 * C++ exceptions cannot be caught on the Lua side.
 * Lua errors cannot be caught on the C++ side.
 * Throwing Lua errors across C++ frames will not call C++ destructors.
-* Additionally, on Windows/x86 with SEH-based C++ exceptions: it's not safe to
-  throw a Lua error across any frames containing a C++ function with any
-  try/catch construct or using variables with (implicit) destructors. This also
-  applies to any functions which may be inlined in such a function. It doesn't
-  matter whether `lua_error()` is called inside or outside of a try/catch or
-  whether any object actually needs to be destroyed: the SEH chain is corrupted
-  and this will eventually lead to the termination of the process.

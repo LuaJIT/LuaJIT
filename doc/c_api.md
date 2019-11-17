@@ -101,3 +101,8 @@ static int myinit(lua_State *L)
 Note that you can only define a single global wrapper function, so be careful
 when using this mechanism from multiple C++ modules. Also note that this
 mechanism is not without overhead.
+
+## int luaJIT_compat52
+
+This symbol allows to know how luajit was built, ie. with or without
+`-DLUAJIT_ENABLE_LUA52COMPAT`.
