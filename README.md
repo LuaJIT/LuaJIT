@@ -11,10 +11,9 @@ development and maintenance.
 
 ## Documentation
 
-Documentation for moonjit is in [doc](doc), the index is below.  However, a lot
-of documentation is still unported and is in [doc.luajit](doc.luajit).  The
-technical content of this old documentation is still accurate and has been
-updated to reflect changes made in moonjit.
+Here is an index of the documentation for moonjit.  Old documentation for
+LuaJIT is unmaintained in [doc.luajit](doc.luajit) and is only there as a
+historical record.
 
 * [Installing moonjit](INSTALL.md)
 * [Running moonjit](doc/moonjit.md)
