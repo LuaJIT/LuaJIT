@@ -14,7 +14,7 @@ the [Lua manual](http://www.lua.org/manual/5.1/manual.html#6) for details.
 
 Moonjit has some additional options: 
 
-<a name="opt_b"></a>
+<a name="b_opt"></a>
 ### `-b[options] input output`
 
 This option saves or lists bytecode. The following additional options are
