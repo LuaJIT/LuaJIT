@@ -19,6 +19,10 @@ updated to reflect changes made in moonjit.
 * [Installing moonjit](INSTALL.md)
 * [Running moonjit](doc/moonjit.md)
 * [Moonjit/LuaJIT API and Extensions Reference](doc/extensions.md)
+* [Moonjit FFI](doc/ffi/ffi.md)
+  * [FFI Tutorial](doc/ffi/ffi-tutorial)
+  * [FFI API](doc/ffi/ffi-api.md)
+  * [FFI Semantics](doc/ffi/ffi-semantics.md)
 
 ## Current Status
 

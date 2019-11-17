@@ -62,11 +62,13 @@ as LuaJIT to support existing users of LuaJIT.
 Contains the version number of the moonjit core. Version xx.yy.zz is
 represented by the decimal number xxyyzz.
 
+<a name="jit_os"></a>
 ## jit.os
 
 Contains the target OS name: "Windows", "Linux", "OSX", "BSD", "POSIX" or
 "Other".
 
+<a name="jit_arch"></a>
 ## jit.arch
 
 Contains the target architecture name: "x86", "x64", "arm", "ppc", "ppcspe", or
