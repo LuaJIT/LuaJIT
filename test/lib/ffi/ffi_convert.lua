@@ -7,6 +7,7 @@ dofile("../common/ffi_util.inc")
 local tonumber = tonumber
 
 ffi.cdef[[
+typedef unsigned int u32;
 typedef struct bar_t {
   int v, w;
 } bar_t;
@@ -767,6 +768,18 @@ do
 
   -- assignment to function pointer
   x.ppf = ffi.C.strcpy
+end
+
+do
+local i = 1
+local sq = ffi.cast("u32", 42)
+
+for case = 1, 10 do
+    while i > 0 do
+        sq = ffi.cast("u32", sq * sq)
+	i = i / 2
+    end
+end
 end
 
 do
