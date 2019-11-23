@@ -80,8 +80,10 @@ The following steps need to be performed before tagging a moonjit release:
   the form:
   `assert(jit.version_num == xxxxxx, "LuaJIT core/library version mismatch")`
   where `xxxxxx` is the value of `LUAJIT_VERSION_NUM`.
-* Draft release notes based on changes between `HEAD` and the last tag.
-* Tag release and put in release notes on GitHub.
+* File a PR with these changes.
+* Draft release notes based on changes between `HEAD` and the last tag in a PR
+  comment and update it based on feedback.
+* On PR approval, Tag release and put in release notes on GitHub.
 * Update `PREREL` in [Makefile(Makefile) to `-dev` to indicate that development
   is now open.
 * Announce.
