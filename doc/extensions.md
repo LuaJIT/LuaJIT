@@ -181,10 +181,11 @@ that are unlikely to break existing code are unconditionally enabled:
 * `debug.upvalueid()` and `debug.upvaluejoin()`.
 * Lua/C API extensions: `lua_version()` `lua_upvalueid()` `lua_upvaluejoin()`
   `lua_loadx()` `lua_copy()` `lua_tonumberx()` `lua_tointegerx()` `lua_len()`
-  `lua_rawlen()` `luaL_fileresult()` `luaL_execresult()` `luaL_loadfilex()`
+  `lua_rawlen()` `lua_absindex()` `lua_pushglobal()`
+  `luaL_fileresult()` `luaL_execresult()` `luaL_loadfilex()`
   `luaL_loadbufferx()` `luaL_traceback()` `luaL_setfuncs()` `luaL_pushmodule()`
   `luaL_newlibtable()` `luaL_newlib()` `luaL_testudata()` `luaL_setmetatable()`
-  `luaL_len()`
+  `luaL_len()` `luaL_getsubtable()` `luaL_pushresultsize()` `luaL_tolstring()`
 * Command line option `-E`.
 * Command line checks `__tostring` for errors.
 * String matching patterns may contain `\0` as a regular character.
