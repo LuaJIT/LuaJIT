@@ -771,15 +771,15 @@ do
 end
 
 do
-local i = 1
-local sq = ffi.cast("u32", 42)
+  local i = 1
+  local sq = ffi.cast("u32", 42)
 
-for case = 1, 10 do
+  for case = 1, 10 do
     while i > 0 do
-        sq = ffi.cast("u32", sq * sq)
-	i = i / 2
+      sq = ffi.cast("u32", sq * sq)
+      i = i / 2
     end
-end
+  end
 end
 
 do
