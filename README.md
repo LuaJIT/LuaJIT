@@ -53,7 +53,24 @@ Please note the branches
   git commit -a -s
   git push origin my-changes
   ```
+* Write a detailed commit log message describing the issue you're fixing so that the information is retained for future reference. If you're fixing an issue, please mention the issue number as fixed using the annothation `Fixes: #NUM` in the body of the commit log.
 * Create a Pull Request on GitHub.
+
+### Testing
+
+moonjit has a built-in testsuite that can be exercised by running the following command:
+
+```
+make check
+```
+
+There is also a benchmark suite that can be run as follows:
+
+```
+make bench
+```
+
+If you're fixing a bug in moonjit, make sure you add a test case to exercise the bug so that it does not regress.  [test/README.md](test/README) has more details on how to execute and update the testsuite.
 
 ### Branches
 
