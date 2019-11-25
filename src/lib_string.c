@@ -752,10 +752,8 @@ again:
 ** Some sizes are better limited to fit in 'int', but must also fit in
 ** 'size_t'. (We assume that 'lua_Integer' cannot be smaller than 'int'.)
 */
-#define MAX_SIZET	((size_t)(~(size_t)0))
-
 #define MAXSIZE  \
-	(sizeof(size_t) < sizeof(int) ? MAX_SIZET : (size_t)(INT_MAX))
+	(sizeof(size_t) < sizeof(int) ? SIZE_MAX : (size_t)(INT_MAX))
 
 /*
 ** {======================================================
@@ -780,13 +778,6 @@ again:
 
 /* size of a lua_Integer */
 #define SZINT	((int)sizeof(lua_Integer))
-
-
-/* dummy union to get native endianness */
-static const union {
-  int dummy;
-  char little;  /* true iff machine is little endian */
-} nativeendian = {1};
 
 
 /* dummy structure to get native alignment requirements */
@@ -872,7 +863,7 @@ static int getnumlimit (Header *h, const char **fmt, int df) {
 */
 static void initheader (lua_State *L, Header *h) {
   h->L = L;
-  h->islittle = nativeendian.little;
+  h->islittle = LJ_LE;
   h->maxalign = 1;
 }
 
@@ -910,7 +901,7 @@ static KOption getoption (Header *h, const char **fmt, int *size) {
     case ' ': break;
     case '<': h->islittle = 1; break;
     case '>': h->islittle = 0; break;
-    case '=': h->islittle = nativeendian.little; break;
+    case '=': h->islittle = LJ_LE; break;
     case '!': h->maxalign = getnumlimit(h, fmt, MAXALIGN); break;
     default: luaL_error(h->L, "invalid format option '%c'", opt);
   }
@@ -977,7 +968,7 @@ static void packint (SBuf *sb, lua_Unsigned n,
 */
 static void copywithendian (volatile char *dest, volatile const char *src,
                             int size, int islittle) {
-  if (islittle == nativeendian.little) {
+  if (islittle == LJ_LE) {
     while (size-- != 0)
       *(dest++) = *(src++);
   }
