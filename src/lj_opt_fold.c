@@ -1260,10 +1260,9 @@ LJFOLDF(simplify_conv_narrow)
   IROp op = (IROp)fleft->o;
   IRType t = irt_type(fins->t);
   IRRef op1 = fleft->op1, op2 = fleft->op2, mode = fins->op2;
-  mode = (IRT_INT << IRCONV_DSH) | (mode & IRCONV_SRCMASK);
   PHIBARRIER(fleft);
-  op1 = emitir(IRTI(IR_CONV), op1, mode);
-  op2 = emitir(IRTI(IR_CONV), op2, mode);
+  op1 = emitir(IRT(IR_CONV, t), op1, mode);
+  op2 = emitir(IRT(IR_CONV, t), op2, mode);
   fins->ot = IRT(op, t);
   fins->op1 = op1;
   fins->op2 = op2;
