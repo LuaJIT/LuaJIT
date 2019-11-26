@@ -51,7 +51,7 @@ do --- 5.2 base rawlen +compat5.2
 end
 
 do --- math
-  check(math, "abs:acos:asin:atan:atan2:ceil:cos:cosh:deg:exp:floor:fmod:frexp:huge:ldexp:log:max:min:modf:pi:pow:rad:random:randomseed:sin:sinh:sqrt:tan:tanh", "log10:mod")
+  check(math, "abs:acos:asin:atan:atan2:ceil:cos:cosh:deg:exp:floor:fmod:frexp:huge:ldexp:log:max:maxinteger:min:mininteger:modf:pi:pow:rad:random:randomseed:sin:sinh:sqrt:tan:tanh:tointeger:type:ult", "log10:mod")
 end
 
 do --- pre-5.1 math +lua<5.1 -compat5.1

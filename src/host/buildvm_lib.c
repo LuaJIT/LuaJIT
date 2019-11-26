@@ -270,7 +270,7 @@ static void libdef_push(BuildCtx *ctx, char *p, int arg)
 	libdef_name(p+1, LIBINIT_STRING);
 	return;
       }
-    } else if (*p >= '0' && *p <= '9') {
+    } else if ((*p >= '0' && *p <= '9') || *p == '-') {
       char *ep;
       double d = strtod(p, &ep);
       if (*ep == '\0') {

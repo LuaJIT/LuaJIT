@@ -96,6 +96,51 @@ LJLIB_ASM_(math_max)		LJLIB_REC(math_minmax IR_MAX)
 
 LJLIB_PUSH(3.14159265358979323846) LJLIB_SET(pi)
 LJLIB_PUSH(1e310) LJLIB_SET(huge)
+LJLIB_PUSH(9007199254740992) LJLIB_SET(maxinteger)	/* 2^53 */
+LJLIB_PUSH(-9007199254740992) LJLIB_SET(mininteger)
+
+LJLIB_LUA(math_tointeger) /*
+  function(n)
+    if type(n) == 'number' and n <= 9007199254740992 and n >= -9007199254740992 and n % 1 == 0 then
+      return n
+    end
+    return nil
+  end
+*/
+
+LJLIB_LUA(math_type) /*
+  function(n)
+    if type(n) == 'number' then
+      if n <= 9007199254740992 and n >= -9007199254740992 and n % 1 == 0 then
+        return 'integer'
+      else
+        return 'float'
+      end
+    else
+      return nil
+    end
+  end
+*/
+
+LJLIB_LUA(math_ult) /*
+  function(m, n)
+    CHECK_num(m)
+    if m > 9007199254740992 or m < -9007199254740992 or m % 1 ~= 0 then
+        error("bad argument #1 to 'ult' (number has no integer representation)")
+    end
+    CHECK_num(n)
+    if n > 9007199254740992 or n < -9007199254740992 or n % 1 ~= 0 then
+        error("bad argument #2 to 'ult' (number has no integer representation)")
+    end
+    if m >= 0 and n < 0 then
+      return true
+    elseif m < 0 and n >= 0 then
+      return false
+    else
+      return m < n
+    end
+  end
+*/
 
 /* ------------------------------------------------------------------------ */
 

@@ -1,3 +1,6 @@
 abs.lua
 constants.lua
 random.lua
+tointeger.lua
+type.lua
+ult.lua
