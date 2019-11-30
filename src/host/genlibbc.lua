@@ -21,6 +21,14 @@ local function usage(arg)
   os.exit(1)
 end
 
+local function table_shift(t)
+  local len = #t
+  for i = 2, len do
+    t[i-1] = t[i]
+  end
+  t[len] = nil
+end
+
 local function parse_arg(arg)
   local outfile = "-"
   if not (arg and arg[1]) then
@@ -29,8 +37,8 @@ local function parse_arg(arg)
   if arg[1] == "-o" then
     outfile = arg[2]
     if not outfile then usage(arg) end
-    table.remove(arg, 1)
-    table.remove(arg, 1)
+    table_shift(arg)
+    table_shift(arg)
   end
   return outfile
 end
