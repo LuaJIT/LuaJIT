@@ -23,13 +23,13 @@ user-configurable settings:
 * `Makefile` has settings for installing moonjit (POSIX only).
 * `src/Makefile` has settings for compiling moonjit under POSIX, MinGW or
    Cygwin.
-* `src/msvcbuild.bat` has settings for compiling moonjit with MSVC or WinSDK.
+* `src/msvcbuild.bat` has settings for compiling moonjit with MSVC.
 
 Please read the instructions given in these files, before changing any settings.
 
 Moonjit on x64 currently uses 32 bit GC objects by default. `LJ_GC64` mode may
 be explicitly enabled: add `XCFLAGS=-DLUAJIT_ENABLE_GC64` to the make command
-or run `msvcbuild gc64` for MSVC/WinSDK. Please check the note about the
+or run `msvcbuild gc64` for MSVC. Please check the note about the
 [bytecode format differences](doc/extensions.md#string_dump), too.
 
 ## POSIX Systems (Linux, OSX, *BSD etc.)
@@ -96,72 +96,40 @@ Obviously the prefixes given during build and installation need to be the same.
 
 ## Windows Systems
 
-Either install one of the open source SDKs ([MinGW](https://mingw.org) or
-[Cygwin](https://cygwin.com)), which come with a modified GCC plus the required
-development headers.
-
-Or install Microsoft's Visual C++ (MSVC).  You only need the command line tools
-from the Windows SDK to build moonjit for x86 and x64.
+Either install one of the open source SDKs (e.g. [MinGW](http://mingw.org), [Cygwin](https://cygwin.com) or [MSYS2](https://www.msys2.org/)), which come with a modified GCC plus the required development headers or use Microsoft's Visual C++ (MSVC) by installing Microsoft Visual Studio.
 
 Next, download the source package and unpack it using an archive manager (e.g.
 the Windows Explorer) to a directory of your choice.
 
 ### Building with MSVC
 
-Open a "Visual Studio .NET Command Prompt", cd to the directory where you've
-unpacked the sources and run these commands:
+Open a x86 or x64 Visual Studio command prompt (e.g. "x64 Native Tools Command Prompt for VS 2019"), cd to the directory where you've unpacked the sources and run these commands:
 
 ```
 cd src
 msvcbuild
 ```
 
-Then follow the installation instructions below.
+Please note that Visual Studio 2015 or newer is recommended.
 
-### Building with the Windows SDK
+The script `msvcbuild` accepts different arguments (only one at a time) to customize the build process:
 
-Open a "Windows SDK Command Shell" and select the x86 compiler:
-
-```
-setenv /release /x86
-```
-
-Or select the x64 compiler:
-
-```
-setenv /release /x64
-```
-
-Then cd to the directory where you've unpacked the sources and run these commands:
-
-```
-cd src
-msvcbuild
-```
+* `gc64`: enable `LJ_GC64` mode.
+* `debug`: generate debug information.
+* `amalg`: enable amalgamated build.
+* `static`: create a static library and link `luajit.exe` statically.
 
 Then follow the installation instructions below.
 
-### Building with MinGW or Cygwin
+### Building with MinGW, Cygwin or MSYS2
 
-Open a command prompt window and make sure the MinGW or Cygwin programs are in
-your path. Then cd to the directory where you've unpacked the sources and run
-this command for MinGW:
-
-```
-mingw32-make
-```
-
-Or this command for Cygwin:
-
-```
-make
-```
+Moonjit can also be compiled using MinGW, Cygwin or MSYS2 and the [POSIX Makefile](#posix-systems-linux-osx-bsd-etc). Please consult the corresponding documentation of your toolchain for further information.
 
 Then follow the installation instructions below.
 
 ### Installing moonjit
 
-Copy `luajit.exe` and `lua51.dll` (built in the `src` directory) to a newly
+Copy `luajit.exe` and (if not build statically) `lua51.dll` (built in the `src` directory) to a newly
 created directory (any location is ok). Add `lua` and `lua\jit` directories
 below it and copy all Lua files from the `src\jit` directory of the
 distribution to the latter directory.
