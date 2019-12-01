@@ -93,7 +93,7 @@ The following steps need to be performed before tagging a moonjit release:
 * update `LUA_LJDIR` in [src/luaconf.h](src/luaconf.h)
 * Update `LUAJIT_VERSION`, `LUAJIT_VERSION_NUM` and `LUAJIT_VERSION_SYM` in
   [src/luajit.h](src/luajit.h)
-* Update version check assertions in scripts in [src/jit](src/jit).  The are of
+* Update version check assertions in scripts in [src/jit](src/jit). They are of
   the form:
   `assert(jit.version_num == xxxxxx, "LuaJIT core/library version mismatch")`
   where `xxxxxx` is the value of `LUAJIT_VERSION_NUM`.
