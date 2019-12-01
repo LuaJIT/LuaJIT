@@ -41,8 +41,8 @@ or `apt-get install gcc make` ought to be suficient.
 Download and unpack the current source package of moonjit:
 
 ```
-tar zxf moonjit-2.2.0.tar.gz
-cd moonjit-2.2.0
+tar zxf moonjit-2.1.2.tar.gz
+cd moonjit-2.1.2
 ```
 
 or clone the repo from github:
