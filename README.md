@@ -90,7 +90,7 @@ The following steps need to be performed before tagging a moonjit release:
 * Update `RELVER` to the new version number and set `PREREL` to an empty string
   in [Makefile](Makefile)
 * Update [etc/luajit.pc](etc/luajit.pc) with the new version
-* update `LUA_LJDIR` in [src/luaconf.h](src/luaconf.h)
+* Update `LUA_LJDIR` in [src/luaconf.h](src/luaconf.h)
 * Update `LUAJIT_VERSION`, `LUAJIT_VERSION_NUM` and `LUAJIT_VERSION_SYM` in
   [src/luajit.h](src/luajit.h)
 * Update version check assertions in scripts in [src/jit](src/jit). They are of
