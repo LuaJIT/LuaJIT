@@ -64,7 +64,7 @@ local map_type = {
 
 local map_arch = {
   x86 = true, x64 = true, arm = true, arm64 = true, arm64be = true,
-  ppc = true, mips = true, mipsel = true,
+  ppc = true, mips = true, mipsel = true, ppc64le = true,
 }
 
 local map_os = {
@@ -200,7 +200,7 @@ typedef struct {
 ]]
   local symname = LJBC_PREFIX..ctx.modname
   local is64, isbe = false, false
-  if ctx.arch == "x64" or ctx.arch == "arm64" or ctx.arch == "arm64be" then
+  if ctx.arch == "x64" or ctx.arch == "arm64" or ctx.arch == "arm64be" or ctx.arch == "ppc64le" then
     is64 = true
   elseif ctx.arch == "ppc" or ctx.arch == "mips" then
     isbe = true
@@ -237,7 +237,7 @@ typedef struct {
   hdr.eendian = isbe and 2 or 1
   hdr.eversion = 1
   hdr.type = f16(1)
-  hdr.machine = f16(({ x86=3, x64=62, arm=40, arm64=183, arm64be=183, ppc=20, mips=8, mipsel=8 })[ctx.arch])
+  hdr.machine = f16(({ x86=3, x64=62, arm=40, arm64=183, arm64be=183, ppc=20, ppc64le=21, mips=8, mipsel=8 })[ctx.arch])
   if ctx.arch == "mips" or ctx.arch == "mipsel" then
     hdr.flags = f32(0x50001006)
   end
@@ -355,7 +355,7 @@ typedef struct {
   -- Create PE object and fill in header.
   local o = ffi.new("PEobj")
   local hdr = o.hdr
-  hdr.arch = f16(({ x86=0x14c, x64=0x8664, arm=0x1c0, ppc=0x1f2, mips=0x366, mipsel=0x366 })[ctx.arch])
+  hdr.arch = f16(({ x86=0x14c, x64=0x8664, arm=0x1c0, ppc=0x1f2, ppc64le=0x1f2,  mips=0x366, mipsel=0x366 })[ctx.arch])
   hdr.nsects = f16(2)
   hdr.symtabofs = f32(ffi.offsetof(o, "sym0"))
   hdr.nsyms = f32(6)
