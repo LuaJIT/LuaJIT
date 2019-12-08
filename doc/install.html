@@ -116,14 +116,14 @@ operating systems, CPUs and compilers:
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">XCode 5.0+<br>Clang</td>
-<td class="compatos">MSVC, MSVC/EE<br>WinSDK<br>MinGW, Cygwin</td>
+<td class="compatos">MSVC<br>MinGW, Cygwin</td>
 </tr>
 <tr class="even">
 <td class="compatcpu">x64 (64 bit)</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos">GCC 4.2+<br>ORBIS (<a href="#ps4">PS4</a>)</td>
 <td class="compatos">XCode 5.0+<br>Clang</td>
-<td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0<br>Durango (<a href="#xboxone">Xbox One</a>)</td>
+<td class="compatos">MSVC<br>Durango (<a href="#xboxone">Xbox One</a>)</td>
 </tr>
 <tr class="odd">
 <td class="compatcpu"><a href="#cross2">ARMv5+<br>ARM9E+</a></td>
@@ -168,7 +168,7 @@ only).</li>
 <li><tt>src/Makefile</tt> has settings for <b>compiling</b> LuaJIT
 under POSIX, MinGW or Cygwin.</li>
 <li><tt>src/msvcbuild.bat</tt> has settings for compiling LuaJIT with
-MSVC or WinSDK.</li>
+MSVC (Visual Studio).</li>
 </ul>
 <p>
 Please read the instructions given in these files, before changing
@@ -253,17 +253,7 @@ Either install one of the open source SDKs
 (<a href="http://mingw.org/"><span class="ext">&raquo;</span>&nbsp;MinGW</a> or
 <a href="http://www.cygwin.com/"><span class="ext">&raquo;</span>&nbsp;Cygwin</a>), which come with a modified
 GCC plus the required development headers.
-</p>
-<p>
-Or install Microsoft's Visual C++ (MSVC). The freely downloadable
-<a href="http://www.microsoft.com/Express/VC/"><span class="ext">&raquo;</span>&nbsp;Express Edition</a>
-works just fine, but only contains an x86 compiler.
-</p>
-<p>
-The freely downloadable
-<a href="http://msdn.microsoft.com/en-us/windowsserver/bb980924.aspx"><span class="ext">&raquo;</span>&nbsp;Windows SDK</a>
-only comes with command line tools, but this is all you need to build LuaJIT.
-It contains x86 and x64 compilers.
+Or install Microsoft's Visual Studio (MSVC).
 </p>
 <p>
 Next, download the source package and unpack it using an archive manager
@@ -271,7 +261,7 @@ Next, download the source package and unpack it using an archive manager
 </p>
 <h3>Building with MSVC</h3>
 <p>
-Open a "Visual Studio .NET Command Prompt", <tt>cd</tt> to the
+Open a "Visual Studio Command Prompt" (either x86 or x64), <tt>cd</tt> to the
 directory where you've unpacked the sources and run these commands:
 </p>
 <pre class="code">
@@ -279,30 +269,7 @@ cd src
 msvcbuild
 </pre>
 <p>
-Then follow the installation instructions below.
-</p>
-<h3>Building with the Windows SDK</h3>
-<p>
-Open a "Windows SDK Command Shell" and select the x86 compiler:
-</p>
-<pre class="code">
-setenv /release /x86
-</pre>
-<p>
-Or select the x64 compiler:
-</p>
-<pre class="code">
-setenv /release /x64
-</pre>
-<p>
-Then <tt>cd</tt> to the directory where you've unpacked the sources
-and run these commands:
-</p>
-<pre class="code">
-cd src
-msvcbuild
-</pre>
-<p>
+Check the <tt>msvcbuild.bat</tt> file for more options.
 Then follow the installation instructions below.
 </p>
 <h3>Building with MinGW or Cygwin</h3>
