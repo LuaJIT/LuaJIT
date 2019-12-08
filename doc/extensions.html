@@ -208,9 +208,8 @@ bytecode (e.g. from Lua 5.1) is incompatible and cannot be loaded.
 </p>
 <p>
 Note: <tt>LJ_GC64</tt> mode requires a different frame layout, which implies
-a different, incompatible bytecode format for ports that use this mode (e.g.
-ARM64 or MIPS64) or when explicitly enabled for x64. This may be rectified
-in the future.
+a different, incompatible bytecode format for all 64 bit ports. This may be
+rectified in the future.
 </p>
 
 <h3 id="table_new"><tt>table.new(narray, nhash)</tt> allocates a pre-sized table</h3>

@@ -175,12 +175,11 @@ Please read the instructions given in these files, before changing
 any settings.
 </p>
 <p>
-LuaJIT on x64 currently uses 32 bit GC objects by default.
-<tt>LJ_GC64</tt> mode may be explicitly enabled:
-add <tt>XCFLAGS=-DLUAJIT_ENABLE_GC64</tt> to the make command or run
-<tt>msvcbuild gc64</tt> for MSVC/WinSDK. Please check the note
-about the <a href="extensions.html#string_dump">bytecode format</a>
-differences, too.
+All LuaJIT 64 bit ports use 64 bit GC objects by default (<tt>LJ_GC64</tt>).
+For x64, you can select the old 32-on-64 bit mode by adding
+<tt>XCFLAGS=-DLUAJIT_DISABLE_GC64</tt> to the make command.
+Please check the note about the
+<a href="extensions.html#string_dump">bytecode format</a> differences, too.
 </p>
 
 <h2 id="posix">POSIX Systems (Linux, OSX, *BSD etc.)</h2>

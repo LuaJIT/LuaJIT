@@ -5,6 +5,7 @@
 @rem Then cd to this directory and run this script. Use the following
 @rem options (in order), if needed. The default is a dynamic release build.
 @rem
+@rem   nogc64   disable LJ_GC64 mode for x64
 @rem   debug    emit debug symbols
 @rem   amalg    amalgamated build
 @rem   static   static linkage
@@ -20,7 +21,7 @@
 @set LJLIB=lib /nologo /nodefaultlib
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
-@set DASC=vm_x86.dasc
+@set DASC=vm_x64.dasc
 @set LJDLLNAME=lua51.dll
 @set LJLIBNAME=lua51.lib
 @set BUILDTYPE=release
@@ -37,15 +38,16 @@ if exist minilua.exe.manifest^
 @set LJARCH=x64
 @minilua
 @if errorlevel 8 goto :X64
+@set DASC=vm_x86.dasc
 @set DASMFLAGS=-D WIN -D JIT -D FFI
 @set LJARCH=x86
 @set LJCOMPILE=%LJCOMPILE% /arch:SSE2
 :X64
-@if "%1" neq "gc64" goto :NOGC64
+@if "%1" neq "nogc64" goto :GC64
 @shift
-@set DASC=vm_x64.dasc
-@set LJCOMPILE=%LJCOMPILE% /DLUAJIT_ENABLE_GC64
-:NOGC64
+@set DASC=vm_x86.dasc
+@set LJCOMPILE=%LJCOMPILE% /DLUAJIT_DISABLE_GC64
+:GC64
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
