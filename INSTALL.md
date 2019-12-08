@@ -72,8 +72,8 @@ add an extra prefix to the search paths by appending the `PREFIX` option, e.g.:
 make PREFIX=/home/myself/lj2
 ```
 
-**Note for OSX**: if the `MACOSX_DEPLOYMENT_TARGET` environment variable is not
-set, then it's forced to `10.4`.
+**Note for OSX**: You must set the `MACOSX_DEPLOYMENT_TARGET` environment
+variable to a value supported by your toolchain.
 
 ### Installing moonjit
 
