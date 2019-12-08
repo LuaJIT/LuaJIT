@@ -363,67 +363,25 @@ make HOST_CC="gcc -m32" CROSS=mips-linux-
 make HOST_CC="gcc -m32" CROSS=mipsel-linux-
 </pre>
 <p>
-You can cross-compile for <b id="android">Android</b> using the <a href="http://developer.android.com/sdk/ndk/index.html"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
-The environment variables need to match the install locations and the
-desired target platform. E.g. Android&nbsp;4.0 corresponds to ABI level&nbsp;14.
-For details check the folder <tt>docs</tt> in the NDK directory.
-</p>
-<p>
-Only a few common variations for the different CPUs, ABIs and platforms
-are listed. Please use your own judgement for which combination you want
-to build/deploy or which lowest common denominator you want to pick:
+You can cross-compile for <b id="android">Android</b> using the <a href="http://developer.android.com/ndk/"><span class="ext">&raquo;</span>&nbsp;Android NDK</a>.
+Please adapt the environment variables to match the install locations and the
+desired target platform. E.g. Android&nbsp;4.1 corresponds to ABI level&nbsp;16.
 </p>
 <pre class="code">
-# Android/ARM, armeabi (ARMv5TE soft-float), Android 2.2+ (Froyo)
-NDK=/opt/android/ndk
-NDKABI=8
-NDKVER=$NDK/toolchains/arm-linux-androideabi-4.6
-NDKP=$NDKVER/prebuilt/linux-x86/bin/arm-linux-androideabi-
-NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-arm"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF"
+# Android/ARM, armeabi-v7a (ARMv7 VFP), Android 4.1+ (JB)
 
-# Android/ARM, armeabi-v7a (ARMv7 VFP), Android 4.0+ (ICS)
-NDK=/opt/android/ndk
-NDKABI=14
-NDKVER=$NDK/toolchains/arm-linux-androideabi-4.6
-NDKP=$NDKVER/prebuilt/linux-x86/bin/arm-linux-androideabi-
-NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-arm"
-NDKARCH="-march=armv7-a -mfloat-abi=softfp -Wl,--fix-cortex-a8"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF $NDKARCH"
-
-# Android/MIPS, mips (MIPS32R1 hard-float), Android 4.0+ (ICS)
-NDK=/opt/android/ndk
-NDKABI=14
-NDKVER=$NDK/toolchains/mipsel-linux-android-4.6
-NDKP=$NDKVER/prebuilt/linux-x86/bin/mipsel-linux-android-
-NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-mips"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF"
-
-# Android/x86, x86 (i686 SSE3), Android 4.0+ (ICS)
-NDK=/opt/android/ndk
-NDKABI=14
-NDKVER=$NDK/toolchains/x86-4.6
-NDKP=$NDKVER/prebuilt/linux-x86/bin/i686-linux-android-
-NDKF="--sysroot $NDK/platforms/android-$NDKABI/arch-x86"
-make HOST_CC="gcc -m32" CROSS=$NDKP TARGET_FLAGS="$NDKF"
+NDKDIR=/opt/android/ndk
+NDKBIN=$NDKDIR/toolchains/llvm/prebuilt/linux-x86_64/bin
+NDKCROSS=$NDKBIN/arm-linux-androideabi-
+NDKCC=$NDKBIN/armv7a-linux-androideabi16-clang
+make HOST_CC="gcc -m32" CROSS=$NDKCROSS \
+     STATIC_CC=$NDKCC DYNAMIC_CC="$NDKCC -fPIC" \
+     TARGET_LD=$NDKCC
 </pre>
 <p>
-You can cross-compile for <b id="ios">iOS 3.0+</b> (iPhone/iPad) using the <a href="http://developer.apple.com/devcenter/ios/index.action"><span class="ext">&raquo;</span>&nbsp;iOS SDK</a>:
+Please use the LuaJIT 2.1 branch to compile for
+<b id="ios">iOS</b> (iPhone/iPad).
 </p>
-<p style="font-size: 8pt;">
-Note: <b>the JIT compiler is disabled for iOS</b>, because regular iOS Apps
-are not allowed to generate code at runtime. You'll only get the performance
-of the LuaJIT interpreter on iOS. This is still faster than plain Lua, but
-much slower than the JIT compiler. Please complain to Apple, not me.
-Or use Android. :-p
-</p>
-<pre class="code">
-ISDKP=$(xcrun --sdk iphoneos --show-sdk-path)
-ICC=$(xcrun --sdk iphoneos --find clang)
-ISDKF="-arch armv7 -isysroot $ISDKP"
-make DEFAULT_CC=clang HOST_CC="clang -m32 -arch i386" \
-     CROSS="$(dirname $ICC)/" TARGET_FLAGS="$ISDKF" TARGET_SYS=iOS
-</pre>
 
 <h3 id="consoles">Cross-compiling for consoles</h3>
 <p>
