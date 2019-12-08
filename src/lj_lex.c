@@ -138,7 +138,7 @@ static int lex_skipeq(LexState *ls)
   int count = 0;
   LexChar s = ls->c;
   lua_assert(s == '[' || s == ']');
-  while (lex_savenext(ls) == '=')
+  while (lex_savenext(ls) == '=' && count < 0x20000000)
     count++;
   return (ls->c == s) ? count : (-count) - 1;
 }
