@@ -129,7 +129,7 @@ Then follow the installation instructions below.
 
 ### Installing moonjit
 
-Copy `luajit.exe` and (if not build statically) `lua51.dll` (built in the `src` directory) to a newly
+Copy `luajit.exe` and (if not built statically) `lua51.dll` (built in the `src` directory) to a newly
 created directory (any location is ok). Add `lua` and `lua\jit` directories
 below it and copy all Lua files from the `src\jit` directory of the
 distribution to the latter directory.
