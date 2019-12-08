@@ -158,7 +158,6 @@ XCFLAGS=
 
 ifeq (Windows,$(findstring Windows,$(OS))$(MSYSTEM)$(TERM))
   HOST_SYS= Windows
-  HOST_RM= del
 else
   HOST_SYS:= $(shell uname -s)
   ifneq (,$(findstring MINGW,$(HOST_SYS)))
@@ -296,6 +295,7 @@ ifeq (Windows,$(TARGET_SYS))
   TARGET_STRIP+= --strip-unneeded
   TARGET_XSHLDFLAGS= -shared
   TARGET_DYNXLDOPTS=
+  HOST_RM= del
 else
   TARGET_AR+= 2>/dev/null
 ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null -fno-stack-protector 2>/dev/null || echo 1))
