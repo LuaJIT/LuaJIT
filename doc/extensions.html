@@ -212,6 +212,10 @@ for every call. The result is uniformly distributed between 0.0 and 1.0.
 It's correctly scaled up and rounded for <tt>math.random(n&nbsp;[,m])</tt> to
 preserve uniformity.
 </p>
+<p>
+Important: Neither this nor any other PRNG based on the simplistic
+<tt>math.random()</tt> API is suitable for cryptographic use.
+</p>
 
 <h3 id="io"><tt>io.*</tt> functions handle 64&nbsp;bit file offsets</h3>
 <p>
