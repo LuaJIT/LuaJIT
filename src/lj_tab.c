@@ -486,8 +486,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
       /* Rechain pseudo-resurrected string keys with colliding hashes. */
       while (nextnode(freenode)) {
 	Node *nn = nextnode(freenode);
-	if (tvisstr(&nn->key) && !tvisnil(&nn->val) &&
-	    hashstr(t, strV(&nn->key)) == n) {
+	if (!tvisnil(&nn->val) && hashkey(t, &nn->key) == n) {
 	  freenode->next = nn->next;
 	  nn->next = n->next;
 	  setmref(n->next, nn);
@@ -500,9 +499,9 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
 	  ** any string key that's currently in a non-main positions.
 	  */
 	  while ((nn = nextnode(freenode))) {
-	    if (tvisstr(&nn->key) && !tvisnil(&nn->val)) {
-	      Node *mn = hashstr(t, strV(&nn->key));
-	      if (mn != freenode) {
+	    if (!tvisnil(&nn->val)) {
+	      Node *mn = hashkey(t, &nn->key);
+	      if (mn != freenode && mn != nn) {
 		freenode->next = nn->next;
 		nn->next = mn->next;
 		setmref(mn->next, nn);
