@@ -153,12 +153,6 @@ lj_str_hash_default(const char *str, size_t lenx)
   return h;
 }
 
-MSize
-lj_str_indep_hash(GCstr *str)
-{
-  return lj_str_hash_default(strdata(str), str->len);
-}
-
 /* Intern a string and return string object. */
 GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
 {
