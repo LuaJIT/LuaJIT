@@ -290,8 +290,8 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
 }
 
 #if LJ_UNWIND_EXT
-#if LJ_TARGET_OSX || defined(__OpenBSD__)
-/* Sorry, no thread safety for OSX. Complain to Apple, not me. */
+#ifdef __OpenBSD__
+/* No thread safety for OpenBSD. */
 static _Unwind_Exception static_uex;
 #else
 static __thread _Unwind_Exception static_uex;
