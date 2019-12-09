@@ -225,9 +225,10 @@ LuaJIT supports some extensions from Lua 5.3:
 * `table.move(a1, f, e, t [,a2])`.
 * `coroutine.isyieldable()`.
 * `math.maxinteger`, `max.mininteger`, `math.tointeger(x)`, `math.type(x)`, `math.ult(m, n)`
-  (Currently, moonjit uses the same numeric type model than Lua 5.1 which is incompatible
-  with the Lua 5.3 one. So, these functions work only in the range [-2^53, 2^53].
-  `math.maxinteger` and `math.mininteger` give the limits of this range.)
+  **Note:** moonjit uses the same numeric type model as Lua 5.1 which is incompatible
+  with Lua 5.3. As a result, these functions work only in the range [-2^53,
+  2^53].  `math.maxinteger` and `math.mininteger` thus give the limits of this
+  range.
 * Lua/C API extensions: `lua_isyieldable()`
 
 <a name="exceptions"></a>
