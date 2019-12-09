@@ -295,18 +295,11 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
       } else if (asm_isk32(as, ir->op1, &ofs)) {
 	ref = ir->op2;
       } else {
-	IRRef ref1 = ir->op1;
-	IRRef ref2 = ir->op2;
-	Reg rn;
-	IRIns *irr;
+        Reg refk = irref_isk(ir->op1) ? ir->op1 : ir->op2;
+        Reg refv = irref_isk(ir->op1) ? ir->op2 : ir->op1;
+        Reg rn = ra_alloc1(as, refv, allow);
+        IRIns *irr = IR(refk);
 	uint32_t m;
-
-	if (irref_isk(ir->op1)) {
-	  ref1 = ir->op2;
-	  ref2 = ir->op1;
-	}
-	rn = ra_alloc1(as, ref1, allow);
-	irr = IR(ref2);
 	if (irr+1 == ir && !ra_used(irr) &&
 	    irr->o == IR_ADD && irref_isk(irr->op2)) {
 	  ofs = sizeof(GCstr) + IR(irr->op2)->i;
@@ -316,7 +309,7 @@ static void asm_fusexref(ASMState *as, A64Ins ai, Reg rd, IRRef ref,
 	    goto skipopm;
 	  }
 	}
-	m = asm_fuseopm(as, 0, ref2, rset_exclude(allow, rn));
+	m = asm_fuseopm(as, 0, refk, rset_exclude(allow, rn));
 	ofs = sizeof(GCstr);
       skipopm:
 	emit_lso(as, ai, rd, rd, ofs);
