@@ -502,7 +502,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
 	  while ((nn = nextnode(freenode))) {
 	    if (tvisstr(&nn->key) && !tvisnil(&nn->val)) {
 	      Node *mn = hashstr(t, strV(&nn->key));
-	      if (mn != freenode && mn != nn) {
+	      if (mn != freenode) {
 		freenode->next = nn->next;
 		nn->next = mn->next;
 		setmref(mn->next, nn);
