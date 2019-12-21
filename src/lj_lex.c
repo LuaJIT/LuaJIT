@@ -230,13 +230,22 @@ static void lex_string(LexState *ls, TValue *tv)
 	    if (!lj_char_isxdigit(ls->c)) goto err_xesc;
 	    c += 9;
 	  }
-	  if (c >= 0x110000) goto err_xesc;  /* Out of Unicode range. */
+	  if (c >= 0x80000000) goto err_xesc;  /* Out of Unicode range. */
 	} while (lex_next(ls) != '}');
 	if (c < 0x800) {
 	  if (c < 0x80) break;
 	  lex_save(ls, 0xc0 | (c >> 6));
 	} else {
-	  if (c >= 0x10000) {
+	  if (c >= 0x4000000) {
+	    lex_save(ls, 0xfc | (c >> 30));
+	    lex_save(ls, 0x80 | ((c >> 24) & 0x3f));
+	    lex_save(ls, 0x80 | ((c >> 18) & 0x3f));
+	    lex_save(ls, 0x80 | ((c >> 12) & 0x3f));
+	  } else if (c >= 0x200000) {
+	    lex_save(ls, 0xf8 | (c >> 24));
+	    lex_save(ls, 0x80 | ((c >> 18) & 0x3f));
+	    lex_save(ls, 0x80 | ((c >> 12) & 0x3f));
+	  } else if (c >= 0x10000) {
 	    lex_save(ls, 0xf0 | (c >> 18));
 	    lex_save(ls, 0x80 | ((c >> 12) & 0x3f));
 	  } else {
