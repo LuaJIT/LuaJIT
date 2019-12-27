@@ -1,19 +1,20 @@
+do --- check_gc_trace
 
-if not jit or not jit.status or not jit.status() then return end
+  if not jit or not jit.status or not jit.status() then return end
 
-collectgarbage()
-for j=1,100 do
-  loadstring("for i=1,100 do end")()
-end
-local jutil = require("jit.util")
-assert(jutil.traceinfo(90) == nil)
-collectgarbage()
-assert(jutil.traceinfo(1) == nil)
-assert(jutil.traceinfo(2) == nil)
-assert(jutil.traceinfo(3) == nil)
+  collectgarbage()
+  for j=1,100 do
+    loadstring("for i=1,100 do end")()
+  end
+  local jutil = require("jit.util")
+  assert(jutil.traceinfo(90) == nil)
+  collectgarbage()
+  assert(jutil.traceinfo(1) == nil)
+  assert(jutil.traceinfo(2) == nil)
+  assert(jutil.traceinfo(3) == nil)
 
-do
-  local f
+
+    local f
   local function reccb(tr)
     if f == nil then
       collectgarbage()

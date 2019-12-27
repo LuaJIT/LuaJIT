@@ -1,5 +1,5 @@
 
-do
+do --- gc_check
   local k
 
   collectgarbage()
