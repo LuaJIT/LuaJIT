@@ -95,7 +95,7 @@ The following steps need to be performed before tagging a moonjit release:
   [src/luajit.h](src/luajit.h)
 * Update version check assertions in scripts in [src/jit](src/jit). They are of
   the form:
-  `assert(jit.version_num == xxxxxx, "LuaJIT core/library version mismatch")`
+  `assert(jit.version_num == xxxxxx, "moonjit core/library version mismatch")`
   where `xxxxxx` is the value of `LUAJIT_VERSION_NUM`.
 * Update the source package name in [INSTALL.md](INSTALL.md).
 * File a PR with these changes.
