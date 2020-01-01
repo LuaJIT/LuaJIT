@@ -83,7 +83,7 @@ Here are the available moonjit control commands:
 * `-jdump` — Dumps the code and structures used in various compiler stages.
 * `-jp` — Start the integrated profiler.
 
-The `-jv` and `-jdump` commands are extension modules written in Lua. They are mainly used for debugging the JIT compiler itself. For a description of their options and output format, please read the comment block at the start of their source. They can be found in the `lib` directory of the source distribution or installed under the `jit` directory. By default this is `/usr/local/share/luajit-<version>/jit` on POSIX systems.
+The `-jv` and `-jdump` commands are extension modules written in Lua. They are mainly used for debugging the JIT compiler itself. For a description of their options and output format, please read the comment block at the start of their source. They can be found in the `lib` directory of the source distribution or installed under the `jit` directory. By default this is `/usr/local/share/moonjit-<version>/jit` on POSIX systems.
 
 ### `-O[level]`
 ### `-O[+]flag   -O-flag`

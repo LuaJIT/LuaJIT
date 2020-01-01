@@ -54,8 +54,9 @@ strings for CPU-specific features and enabled optimizations.
 
 ## jit.version
 
-Contains the moonjit version string.  Note that moonjit currently masquerades
-as LuaJIT to support existing users of LuaJIT.
+Contains the moonjit version string.  Note that moonjit 2.1.x releases
+masquerade as LuaJIT to support existing users of LuaJIT.  moonjit 2.2.0 and
+later no longer do this and identify as `moonjit`.
 
 ## jit.version\_num
 

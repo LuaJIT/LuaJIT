@@ -215,7 +215,7 @@ prevents implementing features that would otherwise break the Lua/C API and ABI
 
 ### Extensions from Lua 5.3
 
-LuaJIT supports some extensions from Lua 5.3:
+Moonjit supports some extensions from Lua 5.3:
 
 * Unicode escape `'\u{XX...}'` embeds the UTF-8 encoding in string literals.
 * The argument table arg can be read (and modified) by `LUA_INIT` and `-e` chunks.
