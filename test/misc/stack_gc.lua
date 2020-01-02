@@ -1,5 +1,5 @@
 
-do
+do --- stack-gc
   local t = setmetatable({}, { __index=function(t, k)
     k = k - 1
     if k == 0 then

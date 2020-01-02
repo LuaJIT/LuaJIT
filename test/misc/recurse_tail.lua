@@ -1,5 +1,5 @@
 
-do
+do  --- recurse-tail-1
   local tr1
   function tr1(n)
     if n <= 0 then return 0 end
@@ -8,7 +8,7 @@ do
   assert(tr1(200) == 0)
 end
 
-do
+do --- recurse-tail-2
   local tr1, tr2
   function tr1(n)
     if n <= 0 then return 0 end

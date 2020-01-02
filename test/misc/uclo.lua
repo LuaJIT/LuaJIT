@@ -48,12 +48,23 @@ local function test_func()
   assert(z2() == 10)
 end
 
-test_for()
-test_while()
-test_repeat()
-test_func()
+do --- test-for
+  test_for()
+end
 
-do
+do --- test-while
+  test_while()
+end
+
+do --- test-repeat
+  test_repeat()
+end
+
+do --- test-func
+  test_func()
+end
+
+do --- test-uclo-1
   local function f1(a)
     if a > 0 then
       local b = f1(a - 1)
@@ -77,7 +88,7 @@ do
 end
 
 -- Don't mark upvalue as immutable if written to after prototype definition.
-do
+do  --- mutability-after-prototype-defination
   local x = 1
   local function f()
     local y = 0

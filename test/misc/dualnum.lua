@@ -1,20 +1,20 @@
 
--- Positive overflow
-do
+
+do --- Positive overflow
   local x = 0
   for i=2147483446,2147483647,2 do x = x + 1 end
   assert(x == 101)
 end
 
--- Negative overflow
-do
+
+do --- Negative overflow
   local x = 0
   for i=-2147483447,-2147483648,-2 do x = x + 1 end
   assert(x == 101)
 end
 
--- SLOAD with number to integer conversion.
-do
+
+do --- SLOAD with number to integer conversion.
   local k = 1
   local a, b, c = 1/k, 20/k, 1/k
   for i=1,20 do
@@ -22,7 +22,7 @@ do
   end
 end
 
-do
+do --- Number comparison
   local function fmin(a, b)
     for i=1,100 do a = math.min(a, b) end
     return a
