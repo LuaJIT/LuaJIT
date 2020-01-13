@@ -48,6 +48,11 @@ static LJ_NOINLINE LexChar lex_more(LexState *ls)
   size_t sz;
   const char *p = ls->rfunc(ls->L, ls->rdata, &sz);
   if (p == NULL || sz == 0) return LEX_EOF;
+  if (sz >= LJ_MAX_BUF) {
+    if (sz != ~(size_t)0) lj_err_mem(ls->L);
+    sz = ~(uintptr_t)0 - (uintptr_t)p;
+    ls->endmark = 1;
+  }
   ls->pe = p + sz;
   ls->p = p + 1;
   return (LexChar)(uint8_t)p[0];
@@ -406,6 +411,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;
+  ls->endmark = 0;
   lex_next(ls);  /* Read-ahead first char. */
   if (ls->c == 0xef && ls->p + 2 <= ls->pe && (uint8_t)ls->p[0] == 0xbb &&
       (uint8_t)ls->p[1] == 0xbf) {  /* Skip UTF-8 BOM (if buffered). */
