@@ -80,6 +80,7 @@ static LJ_NOINLINE void bcread_fill(LexState *ls, MSize len, int need)
       ls->current = -1;  /* Only bad if we get called again. */
       break;
     }
+    if (size >= LJ_MAX_MEM - ls->sb.n) lj_err_mem(ls->L);
     if (ls->sb.n) {  /* Append to buffer. */
       MSize n = ls->sb.n + (MSize)size;
       bcread_resize(ls, n < len ? len : n);
@@ -467,7 +468,7 @@ GCproto *lj_bcread(LexState *ls)
     setprotoV(L, L->top, pt);
     incr_top(L);
   }
-  if ((int32_t)ls->n > 0 || L->top-1 != bcread_oldtop(L, ls))
+  if ((ls->n && !ls->endmark) || L->top-1 != bcread_oldtop(L, ls))
     bcread_error(ls, LJ_ERR_BCBAD);
   /* Pop off last prototype. */
   L->top--;
