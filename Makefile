@@ -14,9 +14,9 @@
 ##############################################################################
 
 MAJVER=  2
-MINVER=  2
+MINVER=  3
 RELVER=  0
-PREREL=
+PREREL= -dev
 VERSION= $(MAJVER).$(MINVER).$(RELVER)$(PREREL)
 ABIVER=  5.1
 
