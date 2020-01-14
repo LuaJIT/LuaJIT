@@ -51,6 +51,7 @@ static LJ_NOINLINE LexChar lex_more(LexState *ls)
   if (sz >= LJ_MAX_BUF) {
     if (sz != ~(size_t)0) lj_err_mem(ls->L);
     sz = ~(uintptr_t)0 - (uintptr_t)p;
+    if (sz >= LJ_MAX_BUF) sz = LJ_MAX_BUF-1;
     ls->endmark = 1;
   }
   ls->pe = p + sz;
