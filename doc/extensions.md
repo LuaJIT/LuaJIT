@@ -233,6 +233,106 @@ LuaJIT supports some extensions from Lua 5.3:
   `utf8.len(s [, i [, j]])`, `utf8.offset(s, n [, i])`
 * Lua/C API extensions: `lua_isyieldable()`, `luaopen_utf8()`
 
+### Extensions from OpenResty luajit2
+
+The following extensions were incorporated from luajit2, a LuaJIT fork
+maintained by the OpenResty project:
+
+#### thread.exdata
+**syntax:** *exdata = th_exdata(data?)*
+
+This API allows for embedding user data into a thread (`lua_State`).
+
+The retrieved `exdata` value on the Lua land is represented as a cdata object
+of the ctype `void*`.
+
+As of this version, retrieving the `exdata` (i.e. `th_exdata()` without any
+argument) can be JIT compiled.
+
+Usage:
+
+```lua
+local th_exdata = require "thread.exdata"
+
+th_exdata(0xdeadbeefLL)  -- set the exdata of the current Lua thread
+local exdata = th_exdata()  -- fetch the exdata of the current Lua thread
+```
+
+Also available are the following public C API functions for manipulating
+`exdata` on the C land:
+
+```C
+void lua_setexdata(lua_State *L, void *exdata);
+void *lua_getexdata(lua_State *L);
+```
+
+The `exdata` pointer is initialized to `NULL` when the main thread is created.
+Any child Lua thread will inherit its parent's `exdata`, but still can override
+it.
+
+**Note:** This API will not be available if LuaJIT is compiled with
+`-DLUAJIT_DISABLE_FFI`.
+
+**Note bis:** This API is used internally by the OpenResty core, and it is
+strongly discouraged to use it yourself in the context of OpenResty.
+
+#### jit.prngstate
+**syntax:** *state = jit.prngstate(state?)*
+
+Returns (and optionally sets) the current PRNG state (a Lua number) currently
+used by the JIT compiler.
+
+When the `state` argument is non-nil, it is expected to be a number, and will
+override the current PRNG state.
+
+Usage:
+
+```lua
+local state = jit.prngstate()
+local newstate = jit.prngstate(123456)
+```
+
+**Note:** This API has no effect if LuaJIT is compiled with
+`-DLUAJIT_DISABLE_JIT`, and will return `0`.
+
+#### -bl flag for jit.dump
+The bytecode option `l` was updated to display the constant tables of each Lua
+prototype.
+
+For example, `luajit -bl a.lua'` now produces bytecode dumps like below:
+
+```
+-- BYTECODE -- a.lua:0-48
+KGC    0    "print"
+KGC    1    "hi"
+KGC    2    table
+KGC    3    a.lua:17
+KN    1    1000000
+KN    2    1.390671161567e-309
+...
+```
+
+#### bytecode option L to display lua source line numbers
+The bytecode option `L` was added to display Lua sources line numbers.
+
+For example, `luajit -bL -e 'print(1)'` now produces bytecode dumps like below:
+
+```
+-- BYTECODE -- "print(1)":0-1
+0001     [1]    GGET     0   0      ; "print"
+0002     [1]    KSHORT   1   1
+0003     [1]    CALL     0   1   2
+0004     [1]    RET0     0   1
+```
+
+The `[N]` column corresponds to the Lua source line number. For example, `[1]`
+means "the first source line".
+
+#### Trace logging for debugging the JIT compiler
+Internal memory-buffer-based trace entry/exit/start-recording event logging,
+mainly for debugging bugs in the JIT compiler. it requires `-DLUA_USE_TRACE_LOGS`
+when building moonjit.
+
 <a name="exceptions"></a>
 ### C++ Exception Interoperability
 
