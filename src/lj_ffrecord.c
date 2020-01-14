@@ -867,6 +867,8 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
     for (i = 0; J->base[i] != 0; i++)
       tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, J->base[i]);
     J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  } else if (i == 0) {
+    J->base[0] = lj_ir_kstr(J, &J2G(J)->strempty);
   }
   UNUSED(rd);
 }
