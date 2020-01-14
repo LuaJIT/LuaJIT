@@ -270,7 +270,7 @@ The `exdata` pointer is initialized to `NULL` when the main thread is created.
 Any child Lua thread will inherit its parent's `exdata`, but still can override
 it.
 
-**Note:** This API will not be available if LuaJIT is compiled with
+**Note:** This API will not be available if moonjit is compiled with
 `-DLUAJIT_DISABLE_FFI`.
 
 **Note bis:** This API is used internally by the OpenResty core, and it is
@@ -292,7 +292,7 @@ local state = jit.prngstate()
 local newstate = jit.prngstate(123456)
 ```
 
-**Note:** This API has no effect if LuaJIT is compiled with
+**Note:** This API has no effect if moonjit is compiled with
 `-DLUAJIT_DISABLE_JIT`, and will return `0`.
 
 #### -bl flag for jit.dump
