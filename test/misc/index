@@ -23,7 +23,7 @@ stack_purge.lua
 stackov.lua
 tcall_base.lua
 tcall_loop.lua
-tonumber_scan.lua
+tonumber_scan.lua +ffi
 uclo.lua
 unordered_jit.lua
 wbarrier.lua

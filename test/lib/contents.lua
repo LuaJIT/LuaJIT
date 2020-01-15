@@ -18,8 +18,12 @@ local function check(m, expected, exclude)
   end
 end
 
-do --- base
+do --- base +ffi
   check(_G, "_G:_VERSION:arg:assert:collectgarbage:coroutine:debug:dofile:error:exdata:getmetatable:io:ipairs:load:loadfile:math:next:os:package:pairs:pcall:print:rawequal:rawget:rawset:require:select:setmetatable:string:table:tonumber:tostring:type:utf8:xpcall", "rawlen:bit:bit32:jit:gcinfo:setfenv:getfenv:loadstring:unpack:module:newproxy")
+end
+
+do --- base -ffi
+  check(_G, "_G:_VERSION:arg:assert:collectgarbage:coroutine:debug:dofile:error:getmetatable:io:ipairs:load:loadfile:math:next:os:package:pairs:pcall:print:rawequal:rawget:rawset:require:select:setmetatable:string:table:tonumber:tostring:type:utf8:xpcall", "rawlen:bit:bit32:jit:gcinfo:setfenv:getfenv:loadstring:unpack:module:newproxy")
 end
 
 do --- pre-5.2 base +lua<5.2
@@ -138,7 +142,7 @@ do --- package.loaders
   check(package.loaders or package.searchers, "1:2:3:4")
 end
 
-do --- package.loaded
+do --- package.loaded +ffi
   local loaded = {}
   for k, v in pairs(package.loaded) do
     if type(k) ~= "string" or (k:sub(1, 7) ~= "common." and k:sub(1, 4) ~= "jit.") then
@@ -146,6 +150,16 @@ do --- package.loaded
     end
   end
   check(loaded, "_G:coroutine:debug:io:math:os:package:string:table:thread.exdata", "bit:bit32:common:ffi:jit:table.new")
+end
+
+do --- package.loaded -ffi
+  local loaded = {}
+  for k, v in pairs(package.loaded) do
+    if type(k) ~= "string" or (k:sub(1, 7) ~= "common." and k:sub(1, 4) ~= "jit.") then
+      loaded[k] = v
+    end
+  end
+  check(loaded, "_G:coroutine:debug:io:math:os:package:string:table", "bit:bit32:common:ffi:jit:table.new")
 end
 
 do --- utf8
