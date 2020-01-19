@@ -149,6 +149,9 @@ uninstall:
 
 check: $(LUAJIT_BIN)
 	@echo "==== Running tests for moonjit $(VERSION) ===="
+	@echo "Creating ctest and cpptest"
+	$(MAKE) -C test
+	@echo "performing checks"
 	cd test && ../$^ test.lua
 	@echo "==== All tests for moonjit $(VERSION) succeeded ===="
 
@@ -166,6 +169,7 @@ amalg:
 
 clean:
 	$(MAKE) -C src clean
+	$(MAKE) -C test clean
 
 .PHONY: all install amalg clean bench check
 
