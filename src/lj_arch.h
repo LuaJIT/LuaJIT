@@ -296,9 +296,7 @@
 #define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOFFI		1
 #elif LJ_ARCH_BITS == 64
-#define LJ_ARCH_PPC64		1
-#define LJ_TARGET_GC64		1
-#define LJ_ARCH_NOJIT		1	/* NYI */
+#error "No support for PPC64"
 #endif
 
 #if _ARCH_PWR7
@@ -465,7 +463,7 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if !LJ_ARCH_PPC64 && (defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN)))
+#if defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN))
 #error "No support for little-endian PPC32"
 #endif
 #if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
