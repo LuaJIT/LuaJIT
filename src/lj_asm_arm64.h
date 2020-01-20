@@ -1,6 +1,6 @@
 /*
 ** ARM64 IR assembler (SSA IR -> machine code).
-** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2020 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Contributed by Djordje Kovacevic and Stefan Pejic from RT-RK.com.
 ** Sponsored by Cisco Systems, Inc.

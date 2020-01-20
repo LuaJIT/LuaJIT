@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- DynASM MIPS32/MIPS64 module.
 --
--- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2020 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 
@@ -14,7 +14,7 @@ local _info = {
   description =	"DynASM MIPS32/MIPS64 module",
   version =	"1.4.0",
   vernum =	 10400,
-  release =	"2016-05-24",
+  release =	"2020-01-20",
   author =	"Mike Pall",
   license =	"MIT",
 }
