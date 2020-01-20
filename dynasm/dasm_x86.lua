@@ -1852,7 +1852,7 @@ end
 
 ------------------------------------------------------------------------------
 
-local map_vexarg = { u = false, v = 1, V = 2 }
+local map_vexarg = { u = false, v = 1, V = 2, w = 3 }
 
 -- Process pattern string.
 local function dopattern(pat, args, sz, op, needrex)
