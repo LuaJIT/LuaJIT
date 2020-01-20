@@ -52,9 +52,17 @@
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_MIPSXXR2
 #if LJ_TARGET_MIPS32
+#if LJ_TARGET_MIPSR6
+#define JIT_F_CPUSTRING		"\010MIPS32R6"
+#else
 #define JIT_F_CPUSTRING		"\010MIPS32R2"
+#endif
+#else
+#if LJ_TARGET_MIPSR6
+#define JIT_F_CPUSTRING		"\010MIPS64R6"
 #else
 #define JIT_F_CPUSTRING		"\010MIPS64R2"
+#endif
 #endif
 #else
 #define JIT_F_CPU_FIRST		0
