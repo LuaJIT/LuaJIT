@@ -630,6 +630,7 @@ end
 -- Load architecture-specific module.
 local function loadarch(arch)
   if not match(arch, "^[%w_]+$") then return "bad arch name" end
+  _G._map_def = map_def
   local ok, m_arch = pcall(require, "dasm_"..arch)
   if not ok then return "cannot load module: "..m_arch end
   g_arch = m_arch

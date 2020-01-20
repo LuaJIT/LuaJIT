@@ -445,6 +445,9 @@ ifeq (arm,$(TARGET_LJARCH))
     DASM_AFLAGS+= -D IOS
   endif
 else
+ifneq (,$(findstring LJ_TARGET_MIPSR6 ,$(TARGET_TESTARCH)))
+  DASM_AFLAGS+= -D MIPSR6
+endif
 ifeq (ppc,$(TARGET_LJARCH))
   ifneq (,$(findstring LJ_ARCH_SQRT 1,$(TARGET_TESTARCH)))
     DASM_AFLAGS+= -D SQRT

@@ -2112,8 +2112,8 @@ static void asm_setup_regsp(ASMState *as)
 	  ir->prev = REGSP_HINT(RID_FPRET);
 	  continue;
 	}
-	/* fallthrough */
 #endif
+      /* fallthrough */
       case IR_CALLN: case IR_CALLXS:
 #if LJ_SOFTFP
       case IR_MIN: case IR_MAX:
