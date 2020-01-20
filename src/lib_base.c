@@ -503,7 +503,7 @@ LJLIB_CF(print)
     tv = L->top-1;
   }
   shortcut = (tvisfunc(tv) && funcV(tv)->c.ffid == FF_tostring)
-              && !gcrefu(basemt_it(G(L), LJ_TNUMX));
+	      && !gcrefu(basemt_it(G(L), LJ_TNUMX));
   for (i = 0; i < nargs; i++) {
     cTValue *o = &L->base[i];
     const char *str;
