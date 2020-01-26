@@ -621,7 +621,7 @@ LJLIB_CF(string_gsub)
   const char *p = luaL_checklstring(L, 2, &lp);
   int  tr = lua_type(L, 3);
   int max_s = luaL_optint(L, 4, (int)(srcl+1));
-  int anchor = (*p == '^') ? (p++, 1) : 0;
+  int anchor = (*p == '^');
   int n = 0;
   MatchState ms;
   luaL_Buffer b;
@@ -629,6 +629,9 @@ LJLIB_CF(string_gsub)
 	tr == LUA_TFUNCTION || tr == LUA_TTABLE))
     lj_err_arg(L, 3, LJ_ERR_NOSFT);
   luaL_buffinit(L, &b);
+  if (anchor) {
+    p++; lp--;  /* skip anchor character */
+  }
   ms.L = L;
   ms.src_init = src;
   ms.src_end = src+srcl;
