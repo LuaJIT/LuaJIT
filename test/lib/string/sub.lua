@@ -187,3 +187,8 @@ do --- jit sub i,i
   end
   assert(table.concat(t) == string.rep("..YY", 100))
 end
+
+do --- sub trim moonjit/moonjit#86
+  local s = "\n \t\tfoo bar\t "
+  assert(s:gsub("^%s*(.-)%s*$", "%1") == "foo bar")
+end
