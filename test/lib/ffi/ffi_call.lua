@@ -1,7 +1,7 @@
 
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
 local tonumber = tonumber
 
@@ -73,7 +73,7 @@ double __stdcall stdcall_dd(double a, double b);
 float __stdcall stdcall_ff(float a, float b);
 ]]
 
-local C = ffi.load("../clib/ctest")
+local C = ffi.load("clib/ctest")
 
 assert(C.call_i(-42) == -41)
 assert(C.call_ii(-42, 17) == -42+17)
@@ -94,7 +94,7 @@ assert(C.call_10f(-42.5, 17.125, 12345.5, 9987, -100.625, 11, 51, 0x123456, 338,
 
 assert(C.call_idifjd(-42, 17.125, 0x12345, -100.625, 12345678901234, -789012.75) == -42+17.125+0x12345-100.625+12345678901234-789012.75)
 
-do
+do  
   local a = ffi.new("int[10]", -42)
   assert(C.call_p_i(a) == -42+1)
   assert(tonumber(ffi.cast("intptr_t", C.call_p_p(a+3))) == tonumber(ffi.cast("intptr_t", a+4)))

@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
 ffi.cdef[[
 typedef struct { int a,b,c; } foo1_t;
@@ -9,7 +9,7 @@ void *malloc(size_t);
 struct incomplete;
 ]]
 
-do
+do   --- ffi-arith-prt-int
   local a = ffi.new("int[10]")
   local p1 = a+0
   p1[0] = 1;
@@ -52,16 +52,16 @@ do
   assert(p4[5] == 3)
   assert(p4[6] == 4)
   -- bad: adding two pointers or subtracting a pointer
-  fails(function(p1, p2) return p1 + p2 end, p1, p2)
-  fails(function(p1) return 1 - p1 end, p1)
+  ffi_util.fails(function(p1, p2) return p1 + p2 end, p1, p2)
+  ffi_util.fails(function(p1) return 1 - p1 end, p1)
   -- bad: subtracting different pointer types
-  fails(function(p1) return p1 - ffi.new("char[1]") end, p1)
+  ffi_util.fails(function(p1) return p1 - ffi.new("char[1]") end, p1)
   -- but different qualifiers are ok
   local b = ffi.cast("const int *", a+5)
   assert(b - a == 5)
 end
 
-do
+do  --- ffi-arith-ptr-type
   local p1 = ffi.cast("void *", 0)
   local p2 = ffi.cast("int *", 1)
   assert(p1 == p1)
@@ -71,7 +71,7 @@ do
   assert(p2 ~= nil)
 end
 
-do
+do  --- ffi-arith-prt-malloc
   local f1 = ffi.C.free
   local f2 = ffi.C.malloc
   local p1 = ffi.cast("void *", f1)
@@ -81,10 +81,10 @@ do
   assert(p1 == f1)
   assert(p1 ~= f2)
   assert(f1 < f2 or f1 > f2)
-  fails(function(f1) return f1 + 1 end, f1)
+  ffi_util.fails(function(f1) return f1 + 1 end, f1)
 end
 
-do
+do  --- ffi-arith-ptr-int-array
   local s = ffi.new("foo1_t[10]")
   local p1 = s+3
   p1.a = 1; p1.b = 2; p1.c = 3
@@ -96,10 +96,10 @@ do
   assert(p1 - p2 == -3)
 end
 
-do
+do  --- ffi-arith-ptr-struct
   local mem = ffi.new("int[1]")
   local p = ffi.cast("struct incomplete *", mem)
-  fails(function(p) return p+1 end, p)
+  ffi_util.fails(function(p) return p+1 end, p)
   local ok, err = pcall(function(p) return p[1] end, p)
   assert(not ok and err:match("size.*unknown"))
 end
