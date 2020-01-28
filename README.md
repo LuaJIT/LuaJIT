@@ -19,7 +19,7 @@ historical record.
 * [Running moonjit](doc/moonjit.md)
 * [Moonjit/LuaJIT API and Extensions Reference](doc/extensions.md)
 * [Moonjit FFI](doc/ffi/ffi.md)
-  * [FFI Tutorial](doc/ffi/ffi-tutorial)
+  * [FFI Tutorial](doc/ffi/ffi-tutorial.md)
   * [FFI API](doc/ffi/ffi-api.md)
   * [FFI Semantics](doc/ffi/ffi-semantics.md)
 
