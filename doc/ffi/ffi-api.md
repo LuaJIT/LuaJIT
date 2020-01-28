@@ -320,7 +320,8 @@ The C types for [callbacks](ffi-semantics.md#callback) have some extra methods:
 Free the resources associated with a callback. The associated Lua function is
 unanchored and may be garbage collected. The callback function pointer is no
 longer valid and must not be called anymore (it may be reused by a subsequently
-created callback).
+created callback). It is safe to call `cb:free()` when that callback is
+currently executing.
 
 ### cb:set(func)
 
