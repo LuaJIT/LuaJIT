@@ -10,15 +10,37 @@
 #if defined(LJ_HAS_OPTIMISED_HASH) || defined(SMOKETEST)
 #include <stdint.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <time.h>
 #include <smmintrin.h>
+
+#if defined(_MSC_VER)
+#include <process.h>
+/* Silence deprecated name warning */
+#define getpid _getpid
+#else
+#include <unistd.h>
+#endif
 
 #include "lj_def.h"
 #include "lj_str.h"
 #include "lj_jit.h"
+
+#if LUAJIT_TARGET == LUAJIT_ARCH_X86
+#error "Optimized hash not supported for x86 builds"
+#endif
+
+#if defined(_MSC_VER)
+/*
+ *  MSVC doesn't seem to restrict intrinsics used based on /arch: value set 
+ *  while clang-cl will error on it. 
+ */
+#if defined(__clang__) && !defined(__SSE4_2__)
+#error "This file must be built with /arch:AVX1 or higher"
+#endif
+#else
 #if !defined(__SSE4_2__)
 #error "This file must be built with -msse4.2"
+#endif
 #endif
 
 #define lj_crc32_u32 _mm_crc32_u32
@@ -27,7 +49,7 @@
 #undef LJ_AINLINE
 #define LJ_AINLINE
 
-#ifdef __MINGW32__
+#if defined(__MINGW32__) || defined(_MSC_VER)
 #define random()  ((long) rand())
 #define srandom(seed)  srand(seed)
 #endif
