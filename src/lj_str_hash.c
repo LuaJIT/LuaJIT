@@ -65,7 +65,7 @@ static const uint32_t* cast_uint32p(const char* str)
 }
 
 /* hash string with len in [1, 4) */
-static LJ_AINLINE uint32_t lj_str_hash_1_4(const char* str, uint32_t len)
+static LJ_AINLINE uint32_t lj_str_hash_1_4(const char* str, MSize len)
 {
 #if 0
   /* TODO: The if-1 part (i.e the original algorithm) is working better when
@@ -94,7 +94,7 @@ static LJ_AINLINE uint32_t lj_str_hash_1_4(const char* str, uint32_t len)
 }
 
 /* hash string with len in [4, 16) */
-static LJ_AINLINE uint32_t lj_str_hash_4_16(const char* str, uint32_t len)
+static LJ_AINLINE uint32_t lj_str_hash_4_16(const char* str, MSize len)
 {
   uint64_t v1, v2, h;
 
@@ -109,11 +109,11 @@ static LJ_AINLINE uint32_t lj_str_hash_4_16(const char* str, uint32_t len)
   h = lj_crc32_u32(0, len);
   h = lj_crc32_u64(h, v1);
   h = lj_crc32_u64(h, v2);
-  return h;
+  return (uint32_t)h;
 }
 
 /* hash string with length in [16, 128) */
-static uint32_t lj_str_hash_16_128(const char* str, uint32_t len)
+static uint32_t lj_str_hash_16_128(const char* str, MSize len)
 {
   uint64_t h1, h2;
   uint32_t i;
@@ -226,7 +226,7 @@ static LJ_AINLINE uint32_t get_random_pos_unsafe(uint32_t chunk_sz_order,
 }
 
 static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
-    uint32_t len)
+    MSize len)
 {
   uint32_t chunk_num, chunk_sz, chunk_sz_log2, i, pos1, pos2;
   uint64_t h1, h2, v;
@@ -265,11 +265,11 @@ static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
   h2 = lj_crc32_u64(h2, *cast_uint64p(str + len - 8));
 
   h1 = lj_crc32_u32(h1, h2);
-  return h1;
+  return (uint32_t)h1;
 }
 
 /* NOTE: the "len" should not be zero */
-static LJ_AINLINE uint32_t lj_str_hash_opt(const char* str, size_t len)
+static LJ_AINLINE uint32_t lj_str_hash_opt(const char* str, MSize len)
 {
   if (len < 128) {
     if (len >= 16) { /* [16, 128) */

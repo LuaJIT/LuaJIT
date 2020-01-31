@@ -125,7 +125,7 @@ lj_str_hashfn lj_str_hash = lj_str_hash_default;
 #endif
 
 MSize
-lj_str_hash_default(const char *str, size_t lenx)
+lj_str_hash_default(const char *str, MSize lenx)
 {
   MSize len = (MSize)lenx;
   MSize a, b, h = len;
@@ -169,7 +169,7 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
     return &g->strempty;
   }
 
-  h = lj_str_hash(str, lenx);
+  h = lj_str_hash(str, len);
 
   /* Check if the string has already been interned. */
   o = gcref(g->strhash[h & g->strmask]);
