@@ -191,7 +191,7 @@
 #ifdef LUAJIT_ENABLE_GC64
 #define LJ_TARGET_GC64		1
 #endif
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(_MSC_VER)
 #define LJ_HAS_OPTIMISED_HASH	1
 #endif
 

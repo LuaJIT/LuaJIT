@@ -25,9 +25,6 @@
 #include "lj_str.h"
 #include "lj_jit.h"
 
-#if LUAJIT_TARGET == LUAJIT_ARCH_X86
-#error "Optimized hash not supported for x86 builds"
-#endif
 
 #if defined(_MSC_VER)
 /*
