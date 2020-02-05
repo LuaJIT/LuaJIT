@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
-#include <smmintrin.h>
+#include <nmmintrin.h>
 
 #if defined(_MSC_VER)
 #include <process.h>
@@ -129,7 +129,7 @@ static uint32_t lj_str_hash_16_128(const char* str, MSize len)
   h1 = lj_crc32_u64(h1, *cast_uint64p(str + len - 16));
   h2 = lj_crc32_u64(h2, *cast_uint64p(str + len - 8));
 
-  return lj_crc32_u32(h1, h2);
+  return lj_crc32_u32((uint32_t)h1, (uint32_t)h2);
 }
 
 /* **************************************************************************
@@ -184,7 +184,7 @@ static void str_hash_init_random(void)
 
   /* Init seed */
   seed = lj_crc32_u32(0, getpid());
-  seed = lj_crc32_u32(seed, time(NULL));
+  seed = lj_crc32_u32(seed, (uint32_t)time(NULL));
   srandom(seed);
 
   /* Now start to populate the random_pos[][]. */
@@ -264,7 +264,7 @@ static LJ_NOINLINE uint32_t lj_str_hash_128_above(const char* str,
   h1 = lj_crc32_u64(h1, *cast_uint64p(str));
   h2 = lj_crc32_u64(h2, *cast_uint64p(str + len - 8));
 
-  h1 = lj_crc32_u32(h1, h2);
+  h1 = lj_crc32_u32((uint32_t)h1, (uint32_t)h2);
   return (uint32_t)h1;
 }
 
