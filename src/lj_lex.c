@@ -105,7 +105,7 @@ static void lex_number(LexState *ls, TValue *tv)
     lex_savenext(ls);
   }
   lex_save(ls, '\0');
-  fmt = lj_strscan_scan((const uint8_t *)sbufB(&ls->sb), tv,
+  fmt = lj_strscan_scan((const uint8_t *)sbufB(&ls->sb), sbuflen(&ls->sb)-1, tv,
 	  (LJ_DUALNUM ? STRSCAN_OPT_TOINT : STRSCAN_OPT_TONUM) |
 	  (LJ_HASFFI ? (STRSCAN_OPT_LL|STRSCAN_OPT_IMAG) : 0));
   if (LJ_DUALNUM && fmt == STRSCAN_INT) {
