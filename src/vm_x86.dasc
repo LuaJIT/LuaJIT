@@ -6182,7 +6182,7 @@ static void emit_asm_debug(BuildCtx *ctx)
     fprintf(ctx->fp, "\t.section .eh_frame,\"aw\",@progbits\n");
 #endif
 #else
-    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
+    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@unwind\n");
 #endif
     fprintf(ctx->fp,
 	".Lframe1:\n"
