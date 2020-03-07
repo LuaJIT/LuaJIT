@@ -35,5 +35,5 @@ cpptest:
 
 .PHONY: clean
 clean:
-	-${RM} clib/cpptest clib/test src/cpptest.o src/ctest.o
+	-${RM} clib/cpptest clib/ctest src/cpptest.o src/ctest.o
 
