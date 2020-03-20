@@ -221,19 +221,22 @@ const char *lj_debug_uvname(GCproto *pt, uint32_t idx)
 }
 
 /* Get name and value of upvalue. */
-const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp)
+const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp, GCobj **op)
 {
   if (tvisfunc(o)) {
     GCfunc *fn = funcV(o);
     if (isluafunc(fn)) {
       GCproto *pt = funcproto(fn);
       if (idx < pt->sizeuv) {
-	*tvp = uvval(&gcref(fn->l.uvptr[idx])->uv);
+	GCobj *uvo = gcref(fn->l.uvptr[idx]);
+	*tvp = uvval(&uvo->uv);
+	*op = uvo;
 	return lj_debug_uvname(pt, idx);
       }
     } else {
       if (idx < fn->c.nupvalues) {
 	*tvp = &fn->c.upvalue[idx];
+	*op = obj2gco(fn);
 	return "";
       }
     }
