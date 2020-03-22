@@ -13,7 +13,7 @@ TREDEF(STACKOV,	"trace too deep")
 TREDEF(SNAPOV,	"too many snapshots")
 TREDEF(BLACKL,	"blacklisted")
 TREDEF(RETRY,	"retry recording")
-TREDEF(NYIBC,	"NYI: bytecode %d")
+TREDEF(NYIBC,	"NYI: bytecode %s")
 
 /* Recording loop ops. */
 TREDEF(LLEAVE,	"leaving loop in root trace")
@@ -50,7 +50,7 @@ TREDEF(MCODEOV,	"machine code too long")
 TREDEF(MCODELM,	"hit mcode limit (retrying)")
 TREDEF(SPILLOV,	"too many spill slots")
 TREDEF(BADRA,	"inconsistent register allocation")
-TREDEF(NYIIR,	"NYI: cannot assemble IR instruction %d")
+TREDEF(NYIIR,	"NYI: cannot assemble IR instruction %s")
 TREDEF(NYIPHI,	"NYI: PHI shuffling too complex")
 TREDEF(NYICOAL,	"NYI: register coalescing too complex")
 

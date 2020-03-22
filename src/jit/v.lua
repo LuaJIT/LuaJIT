@@ -86,10 +86,28 @@ local function fmtfunc(func, pc)
   end
 end
 
+local function vmdef_name(id, message)
+  local targetTable;
+  if string.find(message, "bytecode %s", 1, true) then
+  	targetTable = "bcnames"
+  elseif string.find(message, "IR instruction %s", 1, true) then
+  	targetTable = "irnames"
+  else
+  	error("Unimplemented error message : " .. message)
+  end
+
+  -- 6 comes from "%-6s" in buildvm.c
+  return vmdef[targetTable]:sub(id * 6 + 1, id * 6 + 7):gsub("%s", "")
+end
+
 -- Format trace error message.
 local function fmterr(err, info)
   if type(err) == "number" then
-    if type(info) == "function" then info = fmtfunc(info) end
+  	local errmsg = vmdef.traceerr[err]
+    if type(info) == "function" then
+    	info = fmtfunc(info)
+    elseif errmsg:find("%s", 1, true) then
+    	info = vmdef_name(info, errmsg) end
     err = format(vmdef.traceerr[err], info)
   end
   return err
