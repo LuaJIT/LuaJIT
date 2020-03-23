@@ -291,6 +291,12 @@ static const char *const trace_errors[] = {
   NULL
 };
 
+static const char *const trace_errors_names[] = {
+#define TREDEF(name, msg)	#name,
+#include "lj_traceerr.h"
+  NULL
+};
+
 static const char *lower(char *buf, const char *s)
 {
   char *p = buf;
@@ -354,7 +360,11 @@ static void emit_vmdef(BuildCtx *ctx)
   fprintf(ctx->fp, "traceerr = {\n[0]=");
   for (i = 0; trace_errors[i]; i++)
     fprintf(ctx->fp, "\"%s\",\n", trace_errors[i]);
+  for (i = 0; trace_errors[i]; i++)
+    fprintf(ctx->fp, "%s = \"%s\",\n", trace_errors_names[i], trace_errors[i]);
   fprintf(ctx->fp, "},\n\n");
+
+
 }
 
 /* -- Argument parsing ---------------------------------------------------- */

@@ -86,15 +86,13 @@ local function fmtfunc(func, pc)
   end
 end
 
+local vmdef_name_table = {
+  [vmdef.traceerr.NYIBC] = "bcnames",
+  [vmdef.traceerr.NYIIR] = "irnames"
+}
+
 local function vmdef_name(id, message)
-  local targetTable;
-  if string.find(message, "bytecode %s", 1, true) then
-  	targetTable = "bcnames"
-  elseif string.find(message, "IR instruction %s", 1, true) then
-  	targetTable = "irnames"
-  else
-  	error("Unimplemented error message : " .. message)
-  end
+  local targetTable = assert(vmdef_name_table[message], "Error message not implemented : " .. message)
 
   -- 6 comes from "%-6s" in buildvm.c
   return vmdef[targetTable]:sub(id * 6 + 1, id * 6 + 7):gsub("%s", "")
