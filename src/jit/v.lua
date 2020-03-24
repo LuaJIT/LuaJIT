@@ -91,9 +91,7 @@ local vmdef_name_table = {
   [vmdef.traceerr.NYIIR] = "irnames"
 }
 
-local function vmdef_name(id, message)
-  local targetTable = assert(vmdef_name_table[message], "Error message not implemented : " .. message)
-
+local function vmdef_name(id, targetTable)
   -- 6 comes from "%-6s" in buildvm.c
   return vmdef[targetTable]:sub(id * 6 + 1, id * 6 + 7):gsub("%s", "")
 end
@@ -104,9 +102,13 @@ local function fmterr(err, info)
   	local errmsg = vmdef.traceerr[err]
     if type(info) == "function" then
     	info = fmtfunc(info)
-    elseif errmsg:find("%s", 1, true) then
-    	info = vmdef_name(info, errmsg) end
-    err = format(vmdef.traceerr[err], info)
+    else
+    	local targetTable = vmdef_name_table[errmsg]
+    	if targetTable then
+    		info = vmdef_name(info, targetTable)
+    	end
+    end
+    err = format(errmsg, info)
   end
   return err
 end
