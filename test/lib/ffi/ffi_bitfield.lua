@@ -1,8 +1,8 @@
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
-do
+do --- test-ffi-bitfield
   local x = ffi.new([[
     union {
       uint32_t u;

@@ -4,6 +4,9 @@ copy_fill.lua
 err.lua
 exdata.lua
 ffi_arith_ptr.lua
+ffi_bitfield.lua
+ffi_call.lua
+ffi_const.lua
 ffi_enum.lua
 ffi_jit_call.lua +luajit>=2.1
 ffi_parse_basic.lua

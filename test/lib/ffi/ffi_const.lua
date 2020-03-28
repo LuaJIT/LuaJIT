@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
 ffi.cdef[[
 typedef struct s_t {
@@ -41,72 +41,76 @@ typedef struct foo_t {
 } foo_t;
 ]]
 
-do
-  local foo_t = ffi.typeof("foo_t")
-  local x = foo_t()
 
-  -- constval
+local foo_t = ffi.typeof("foo_t")
+local x = foo_t()
+
+do --- test-ffi-const-constval
   assert(x.cc == 17)
-  fails(function(x) x.cc = 1 end, x)
+  ffi_util.fails(function(x) x.cc = 1 end, x)
   assert(x.CC == -37)
-  fails(function(x) x.CC = 1 end, x)
+  ffi_util.fails(function(x) x.CC = 1 end, x)
+end
 
-  -- fields
+do --- test-ffi-const-fields
   x.i = 1
-  fails(function(x) x.ci = 1 end, x)
+  ffi_util.fails(function(x) x.ci = 1 end, x)
   x.e = 1
-  fails(function(x) x.ce = 1 end, x)
+  ffi_util.fails(function(x) x.ce = 1 end, x)
+end
 
-  -- bitfields
+do  --- test-ffi-const-bitfields
   x.bi = 1
-  fails(function(x) x.cbi = 1 end, x)
+  ffi_util.fails(function(x) x.cbi = 1 end, x)
+end
 
-  -- arrays
+do --- test-ffi-const-arrays
   do
     local a = ffi.new("int[10]")
     a[0] = 1
     local ca = ffi.new("const int[10]")
-    fails(function(ca) ca[0] = 1 end, ca)
+    ffi_util.fails(function(ca) ca[0] = 1 end, ca)
   end
   x.a[0] = 1
-  fails(function(x) x.ca[0] = 1 end, x)
-  fails(function(x) x.a = x.ca end, x) -- incompatible type
-  fails(function(x) x.ca = x.a end, x)
-  fails(function(x) x.ca = {} end, x)
-  fails(function(x) x.cac = "abc" end, x)
+  ffi_util.fails(function(x) x.ca[0] = 1 end, x)
+  ffi_util.fails(function(x) x.a = x.ca end, x) -- incompatible type
+  ffi_util.fails(function(x) x.ca = x.a end, x)
+  ffi_util.fails(function(x) x.ca = {} end, x)
+  ffi_util.fails(function(x) x.cac = "abc" end, x)
+end
 
-  -- structs
+do  --- test-ffi-const-structs
   do
     local s = ffi.new("s_t")
     s.v = 1
     local cs = ffi.new("cs_t")
-    fails(function(cs) cs.v = 1 end, cs)
+    ffi_util.fails(function(cs) cs.v = 1 end, cs)
   end
   x.s.v = 1
-  fails(function(x) x.cs.v = 1 end, x)
+  ffi_util.fails(function(x) x.cs.v = 1 end, x)
   x.s = x.cs
-  fails(function(x) x.cs = x.s end, x)
-  fails(function(x) x.cs = {} end, x)
+  ffi_util.fails(function(x) x.cs = x.s end, x)
+  ffi_util.fails(function(x) x.cs = {} end, x)
 
   -- pseudo-const structs
   x.pcs1.v = 1
-  fails(function(x) x.pcs1.w = 1 end, x)
-  fails(function(x) x.pcs1 = x.pcs2 end, x)
-  fails(function(x) x.pcs1 = {} end, x)
+  ffi_util.fails(function(x) x.pcs1.w = 1 end, x)
+  ffi_util.fails(function(x) x.pcs1 = x.pcs2 end, x)
+  ffi_util.fails(function(x) x.pcs1 = {} end, x)
 
   -- transparent structs
   local y = x.ni
-  fails(function(x) x.ni = 1 end, x)
+  ffi_util.fails(function(x) x.ni = 1 end, x)
 
   -- complex subtype is implicitly const and doesn't inherit const attribute
   x.cx = 1
-  fails(function(x) x.ccx = 1 end, x)
+  ffi_util.fails(function(x) x.ccx = 1 end, x)
   do
     local cxa = ffi.new("complex[1]")
     local ccxa = ffi.new("const complex[1]")
     x.cp = cxa
     x.ccp = cxa
-    fails(function(x) x.cp = ccxa end, x)
+    ffi_util.fails(function(x) x.cp = ccxa end, x)
     x.ccp = ccxa
   end
 end
