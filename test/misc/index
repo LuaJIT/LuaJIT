@@ -9,7 +9,9 @@ fori_coerce.lua
 gc_trace.lua
 gc_rechain.lua
 gcstep.lua
+hook_line.lua
 hook_norecord.lua
+hook_record.lua
 hook_top.lua
 jit_flush.lua
 loop_unroll.lua
