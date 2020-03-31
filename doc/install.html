@@ -298,7 +298,21 @@ absolute path names &mdash; all modules are loaded relative to the
 directory where <tt>luajit.exe</tt> is installed
 (see <tt>src/luaconf.h</tt>).
 </p>
-
+<h3>Building and installing with vcpkg</h3>
+<p>
+Alternatively, you can build and install LuaJIT using vcpkg dependency manager:
+</p>
+<pre class="code">
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.bat
+./vcpkg integrate install
+./vcpkg install luajit
+</pre>
+<p>
+The luajit port in vcpkg is kept up to date by microsoft team members and community contributors.
+If the version is out of date, please create an issue or pull request on the vcpkg repository.
+</P>
 <h2 id="cross">Cross-compiling LuaJIT</h2>
 <p>
 First, let's clear up some terminology:
