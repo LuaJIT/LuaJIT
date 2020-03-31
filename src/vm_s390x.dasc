@@ -2534,8 +2534,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lg RB, 0(RD, BASE)
     |  srag RB, RB, 47
     |  load_false RC
-    |  cghi RB, LJ_TTRUE
-    |  je >1
+    |  clfi RB, LJ_TISTRUECOND
+    |  jl >1
     |  load_true RC
     |1:
     |  stg RC, 0(RA, BASE)
