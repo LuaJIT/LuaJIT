@@ -93,7 +93,7 @@ local vmdef_name_table = {
 
 local function vmdef_name(id, targetTable)
   -- 6 comes from "%-6s" in buildvm.c
-  return vmdef[targetTable]:sub(id * 6 + 1, id * 6 + 7):gsub("%s", "")
+  return vmdef[targetTable]:sub(id * 6 + 1, id * 6 + 6):gsub("%s", "")
 end
 
 -- Format trace error message.
