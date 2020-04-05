@@ -23,7 +23,8 @@ local function default_tags()
   end
 
   -- Libraries
-  for _, lib in ipairs{"bit", "ffi", "jit.profile", "table.new"} do
+  package.cpath = "./clib/?.so;" .. "clib\\?.dll" .. package.cpath
+  for _, lib in ipairs{"bit", "ffi", "jit.profile", "table.new", "ctest"} do
     if pcall(require, lib) then
       tags[lib] = true
     end

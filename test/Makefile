@@ -9,8 +9,8 @@ ifeq ($(OS),Windows_NT)
 	CTEST = clib/ctest.dll
 	CPPTEST = clib/cpptest.dll
 else
-	CTEST = clib/ctest
-	CPPTEST = clib/cpptest
+	CTEST = clib/ctest.so
+	CPPTEST = clib/cpptest.so
 	UNAME_S := $(shell uname -s)
 	ifeq ($(UNAME_S),Linux)
 		HOST = Linux
@@ -35,5 +35,5 @@ cpptest:
 
 .PHONY: clean
 clean:
-	-${RM} clib/cpptest clib/ctest src/cpptest.o src/ctest.o
+	-${RM} clib/cpptest.so clib/ctest.so src/cpptest.o src/ctest.o
 
