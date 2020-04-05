@@ -40,7 +40,7 @@ do --- ffi-jit-call
   local success = nil
   if jit and jit.os then
     if jit.os == "Linux" then
-      success, lib = pcall(ffi.load, "clib/ctest")
+      success, lib = pcall(ffi.load, "clib/ctest.so")
       assert(success)
     elseif jit.os == "Windows" then
         success, lib = pcall(ffi.load, "clib/ctest.dll")

@@ -18,7 +18,7 @@ local C = nil
 if jit and jit.os then
 
   if jit.os == "Linux" then
-    C = ffi.load("clib/ctest")
+    C = ffi.load("clib/ctest.so")
 
   elseif jit.os == "Windows" then
     -- need to create ctest.dll and load it without using pcall.
