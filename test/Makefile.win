@@ -1,0 +1,23 @@
+INTDIR=.\clib
+
+CC=$(CC) /nologo
+LINK=link /nologo /dll /NOIMPLIB ../src/lua51.lib
+CCCOMMON=/c /Fo"$(INTDIR)\\" /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /DLUA_BUILD_AS_DLL /MD /EHsc /I"..\src"
+CFLAGS=$(CFLAGS) /TC $(CCCOMMON)
+
+all: clib/cpptest.dll clib/ctest.dll
+
+{.\src}.c.obj:
+  $(CC) $(CFLAGS) $<
+
+{.\src}.cpp.obj:
+  $(CC) $(CCCOMMON) $<
+  
+clib/ctest.dll: clib/ctest.obj
+  $(LINK) -out:clib/ctest.dll $**
+
+clib/cpptest.dll: clib/cpptest.obj
+  $(LINK) -out:clib/cpptest.dll $**
+
+clean:
+	del clib\*.obj clib\*.dll clib\*.lib clib\*.exp
