@@ -227,7 +227,7 @@ LJLIB_CF(unpack)
 	      lj_lib_checkint(L, 3) : (int32_t)lj_tab_len(t);
   if (i > e) return 0;
   n = (uint32_t)e - (uint32_t)i;  // number of elements minus 1
-  if (n > (INT_MAX - 10) || !lua_checkstack(L, ++n))
+  if (n > (INT32_MAX - 10) || !lua_checkstack(L, ++n))
     lj_err_caller(L, LJ_ERR_UNPACK);
   do {
     cTValue *tv = lj_tab_getint(t, i);
