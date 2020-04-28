@@ -224,9 +224,11 @@ LJLIB_CF(unpack)
   int32_t n, i = lj_lib_optint(L, 2, 1);
   int32_t e = (L->base+3-1 < L->top && !tvisnil(L->base+3-1)) ?
 	      lj_lib_checkint(L, 3) : (int32_t)lj_tab_len(t);
+  uint32_t nu;
   if (i > e) return 0;
-  n = e - i + 1;
-  if (n <= 0 || !lua_checkstack(L, n))
+  nu = (uint32_t)e - (uint32_t)i;
+  n = (int32_t)(nu+1);
+  if (nu >= LUAI_MAXCSTACK || !lua_checkstack(L, n))
     lj_err_caller(L, LJ_ERR_UNPACK);
   do {
     cTValue *tv = lj_tab_getint(t, i);
