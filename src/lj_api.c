@@ -31,6 +31,48 @@
 #define api_checknelems(L, n)		api_check(L, (n) <= (L->top - L->base))
 #define api_checkvalidindex(L, i)	api_check(L, (i) != niltv(L))
 
+/* If LJ_64 and LJ_LIGHTUD_SEGMENTS are both set we will
+ * (1) require 4 byte alignment of incoming lightuserdata
+ * (2) use the lower two bits to support up to three 47bit segment bases
+ *     on a first-come, first-served basis, per global state.  If we see
+ *     light user data in more than those three (and 0 base) then we will
+ *     assert, which is better than nothing.
+ */
+static LJ_AINLINE void *lj_lightud_to_segment(lua_State *L, void *p) {
+#if defined(LJ_64) && defined(LJ_LIGHTUD_SEGMENTS)
+  // must be word-aligned input
+  int i;
+  uintptr_t *bases = G(L)->lightud_off;
+  if (0 != ((uintptr_t)p & 0x3ULL)) lj_err_msg(L, LJ_ERR_BADLU);
+  uintptr_t base = (uintptr_t)p & (~((1ULL << 47) - 1));
+  if (base == 0) return p;
+  for (i=0; i<3; i++) {
+    if (bases[i] == base) {
+      return (void *)(((uintptr_t)p - base) + i + 1);
+    }
+  }
+  /* new case where we need a new base */
+  for (i=0; i<3; i++) {
+    if (bases[i] == 0) {
+      bases[i] = base;
+      return (void *)(((uintptr_t)p - base) + i + 1);
+    }
+  }
+  lj_err_msg(L, LJ_ERR_BADLU);
+#endif
+  return p;
+}
+static LJ_AINLINE void *lj_lightud_from_segment(lua_State *L, void *p) {
+#if defined(LJ_64) && defined(LJ_LIGHTUD_SEGMENTS)
+  uintptr_t addr = (uintptr_t)p;
+  uintptr_t idx = addr & 0x3ULL;
+  if(idx == 0) return p;
+  return (void *)((addr ^ idx) + G(L)->lightud_off[idx-1]);
+#else
+  return p;
+#endif
+}
+
 static TValue *index2adr(lua_State *L, int idx)
 {
   if (idx > 0) {
@@ -595,7 +637,7 @@ LUA_API void *lua_touserdata(lua_State *L, int idx)
   if (tvisudata(o))
     return uddata(udataV(o));
   else if (tvislightud(o))
-    return lightudV(o);
+    return lj_lightud_from_segment(L, lightudV(o));
   else
     return NULL;
 }
@@ -696,7 +738,7 @@ LUA_API void lua_pushboolean(lua_State *L, int b)
 
 LUA_API void lua_pushlightuserdata(lua_State *L, void *p)
 {
-  setlightudV(L->top, checklightudptr(L, p));
+  setlightudV(L->top, checklightudptr(L, lj_lightud_to_segment(L, p)));
   incr_top(L);
 }
 

@@ -277,6 +277,10 @@ endif
 endif
 endif
 
+ifeq (SunOS,$(TARGET_SYS))
+  TARGET_XCFLAGS+= -DLJ_LIGHTUD_SEGMENTS
+endif
+
 ifneq (,$(findstring LJ_TARGET_PS3 1,$(TARGET_TESTARCH)))
   TARGET_SYS= PS3
   TARGET_ARCH+= -D__CELLOS_LV2__

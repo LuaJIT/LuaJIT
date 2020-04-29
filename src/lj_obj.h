@@ -621,6 +621,7 @@ typedef struct global_State {
   MRef jit_base;	/* Current JIT code L->base or NULL. */
   MRef ctype_state;	/* Pointer to C type state. */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
+  uintptr_t lightud_off[3];  /* up to three 47-bit base offsets */
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
