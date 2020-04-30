@@ -1159,6 +1159,28 @@ LUA_API const char *lua_setupvalue(lua_State *L, int idx, int n)
   return name;
 }
 
+LUALIB_API void luaL_requiref(lua_State *L, char const* modname,
+                    lua_CFunction openf, int glb) {
+  luaL_checkstack(L, 3, "not enough stack slots");
+  lua_getglobal(L, "package");
+  lua_getfield(L, -1, "loaded");
+  lua_pop(L, 1);
+  lua_getfield(L, -1, modname);
+  if (lua_isnil(L, -1) == 1) {
+    lua_pop(L, 1);
+    lua_pushcfunction(L, openf);
+    lua_pushstring(L, modname);
+    lua_call(L, 1, 1);
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -3, modname);
+  }
+  lua_remove(L, -2);
+  if (glb) {
+    lua_pushvalue(L, -1);
+    lua_setglobal(L, modname);
+  }
+}
+
 /* -- Calls --------------------------------------------------------------- */
 
 #if LJ_FR2

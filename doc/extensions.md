@@ -185,7 +185,8 @@ that are unlikely to break existing code are unconditionally enabled:
   `luaL_fileresult()` `luaL_execresult()` `luaL_loadfilex()`
   `luaL_loadbufferx()` `luaL_traceback()` `luaL_setfuncs()` `luaL_pushmodule()`
   `luaL_newlibtable()` `luaL_newlib()` `luaL_testudata()` `luaL_setmetatable()`
-  `luaL_len()` `luaL_getsubtable()` `luaL_pushresultsize()` `luaL_tolstring()`
+  `luaL_requiref()` `luaL_len()` `luaL_getsubtable()` `luaL_pushresultsize()`
+  `luaL_tolstring()`
 * Command line option `-E`.
 * Command line checks `__tostring` for errors.
 * String matching patterns may contain `\0` as a regular character.
