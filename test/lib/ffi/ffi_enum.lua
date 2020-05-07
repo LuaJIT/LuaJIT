@@ -19,13 +19,8 @@ if jit and jit.os then
 
   if jit.os == "Linux" then
     C = ffi.load("clib/ctest.so")
-
-  elseif jit.os == "Windows" then
-    -- need to create ctest.dll and load it without using pcall.
-    local success, lib = pcall(ffi.load, "clib/ctest.dll")
-    if not success then
-      return
-    end
+  else
+    return
   end
 
 end
