@@ -191,12 +191,12 @@ static LJ_NOINLINE void mcode_protfail(jit_State *J)
 }
 
 /* Change protection of MCode area. */
-static void mcode_protect(jit_State *J, int prot)
+static void mcode_protect(jit_State *J, MCodeArea *area, int prot)
 {
-  if (J->mcprot != prot) {
-    if (LJ_UNLIKELY(mcode_setprot(J->mcarea, J->szmcarea, prot)))
+  if (area->prot != prot) {
+    if (LJ_UNLIKELY(mcode_setprot(area->base, area->sz, prot)))
       mcode_protfail(J);
-    J->mcprot = prot;
+    area->prot = prot;
   }
 }
 
@@ -213,7 +213,7 @@ static void mcode_protect(jit_State *J, int prot)
 #ifdef LJ_TARGET_JUMPRANGE
 
 /* Get memory within relative jump distance of our code in 64 bit mode. */
-static void *mcode_alloc(jit_State *J, size_t sz)
+static void *mcode_alloc(jit_State *J, MCodeArea *area, size_t sz)
 {
   /* Target an address in the static assembler code (64K aligned).
   ** Try addresses within a distance of target-range/2+1MB..target+range/2-1MB.
@@ -228,7 +228,7 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 #endif
   const uintptr_t range = (1u << (LJ_TARGET_JUMPRANGE-1)) - (1u << 21);
   /* First try a contiguous area below the last one. */
-  uintptr_t hint = J->mcarea ? (uintptr_t)J->mcarea - sz : 0;
+  uintptr_t hint = area->base ? (uintptr_t)area->base - sz : 0;
   int i;
   /* Limit probing iterations, depending on the available pool size. */
   for (i = 0; i < LJ_TARGET_JUMPRANGE; i++) {
@@ -253,7 +253,7 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 #else
 
 /* All memory addresses are reachable by relative jumps. */
-static void *mcode_alloc(jit_State *J, size_t sz)
+static void *mcode_alloc(jit_State *J, MCodeArea *area, size_t sz)
 {
 #if defined(__OpenBSD__) || LJ_TARGET_UWP
   /* Allow better executable memory allocation for OpenBSD W^X mode. */
@@ -273,27 +273,28 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 /* -- MCode area management ----------------------------------------------- */
 
 /* Allocate a new MCode area. */
-static void mcode_allocarea(jit_State *J)
+static void mcode_allocarea(jit_State *J, MCodeArea *area)
 {
-  MCode *oldarea = J->mcarea;
+  MCode *oldarea = area->base;
+
   size_t sz = (size_t)J->param[JIT_P_sizemcode] << 10;
   sz = (sz + LJ_PAGESIZE-1) & ~(size_t)(LJ_PAGESIZE - 1);
-  J->mcarea = (MCode *)mcode_alloc(J, sz);
-  J->szmcarea = sz;
-  J->mcprot = MCPROT_GEN;
-  J->mctop = (MCode *)((char *)J->mcarea + J->szmcarea);
-  J->mcbot = (MCode *)((char *)J->mcarea + sizeof(MCLink));
-  ((MCLink *)J->mcarea)->next = oldarea;
-  ((MCLink *)J->mcarea)->size = sz;
-  J->szallmcarea += sz;
+  area->base = (MCode *)mcode_alloc(J, area, sz);
+  area->sz = sz;
+  area->prot = MCPROT_GEN;
+  area->top = (MCode *)((char *)area->base + area->sz);
+  area->bot = (MCode *)((char *)area->base + sizeof(MCLink));
+  ((MCLink *)area->base)->next = oldarea;
+  ((MCLink *)area->base)->size = sz;
+  area->szall += sz;
 }
 
-/* Free all MCode areas. */
-void lj_mcode_free(jit_State *J)
+/* Free an MCode areas. */
+void lj_mcode_free(jit_State *J, MCodeArea *area)
 {
-  MCode *mc = J->mcarea;
-  J->mcarea = NULL;
-  J->szallmcarea = 0;
+  MCode *mc = area->base;
+  area->base = NULL;
+  area->szall = 0;
   while (mc) {
     MCode *next = ((MCLink *)mc)->next;
     mcode_free(J, mc, ((MCLink *)mc)->size);
@@ -306,26 +307,29 @@ void lj_mcode_free(jit_State *J)
 /* Reserve the remainder of the current MCode area. */
 MCode *lj_mcode_reserve(jit_State *J, MCode **lim)
 {
-  if (!J->mcarea)
-    mcode_allocarea(J);
+  MCodeArea *area = J->curmcarea;
+  if (!area->base)
+    mcode_allocarea(J, area);
   else
-    mcode_protect(J, MCPROT_GEN);
-  *lim = J->mcbot;
-  return J->mctop;
+    mcode_protect(J, area, MCPROT_GEN);
+  *lim = area->bot;
+  return area->top;
 }
 
 /* Commit the top part of the current MCode area. */
 void lj_mcode_commit(jit_State *J, MCode *top)
 {
-  J->mctop = top;
-  mcode_protect(J, MCPROT_RUN);
+  MCodeArea *area = J->curmcarea;
+  area->top = top;
+  mcode_protect(J, area, MCPROT_RUN);
 }
 
 /* Abort the reservation. */
 void lj_mcode_abort(jit_State *J)
 {
-  if (J->mcarea)
-    mcode_protect(J, MCPROT_RUN);
+  MCodeArea *area = J->curmcarea;
+  if (area->base)
+    mcode_protect(J, area, MCPROT_RUN);
 }
 
 /* Set/reset protection to allow patching of MCode areas. */
@@ -335,17 +339,18 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
   UNUSED(J); UNUSED(ptr); UNUSED(finish);
   return NULL;
 #else
+  MCodeArea *area = J->curmcarea;
   if (finish) {
-    if (J->mcarea == ptr)
-      mcode_protect(J, MCPROT_RUN);
+    if (area->base == ptr)
+      mcode_protect(J, area, MCPROT_RUN);
     else if (LJ_UNLIKELY(mcode_setprot(ptr, ((MCLink *)ptr)->size, MCPROT_RUN)))
       mcode_protfail(J);
     return NULL;
   } else {
-    MCode *mc = J->mcarea;
+    MCode *mc = area->base;
     /* Try current area first to use the protection cache. */
-    if (ptr >= mc && ptr < (MCode *)((char *)mc + J->szmcarea)) {
-      mcode_protect(J, MCPROT_GEN);
+    if (ptr >= mc && ptr < (MCode *)((char *)mc + area->sz)) {
+      mcode_protect(J, area, MCPROT_GEN);
       return mc;
     }
     /* Otherwise search through the list of MCode areas. */
@@ -366,15 +371,16 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
 void lj_mcode_limiterr(jit_State *J, size_t need)
 {
   size_t sizemcode, maxmcode;
+  MCodeArea *area = J->curmcarea;
   lj_mcode_abort(J);
   sizemcode = (size_t)J->param[JIT_P_sizemcode] << 10;
   sizemcode = (sizemcode + LJ_PAGESIZE-1) & ~(size_t)(LJ_PAGESIZE - 1);
   maxmcode = (size_t)J->param[JIT_P_maxmcode] << 10;
   if ((size_t)need > sizemcode)
     lj_trace_err(J, LJ_TRERR_MCODEOV);  /* Too long for any area. */
-  if (J->szallmcarea + sizemcode > maxmcode)
+  if (area == &J->mcarea && area->szall + sizemcode > maxmcode)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
-  mcode_allocarea(J);
+  mcode_allocarea(J, area);
   lj_trace_err(J, LJ_TRERR_MCODELM);  /* Retry with new area. */
 }
 

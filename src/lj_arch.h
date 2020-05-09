@@ -578,6 +578,12 @@
 #define LJ_64			1
 #endif
 
+#if defined(LJ_TARGET_X86ORX64) && LJ_HASJIT && LJ_HASFFI
+#define LJ_HASINTRINSICS 1
+#else
+#define LJ_HASINTRINSICS 0
+#endif
+
 #ifndef LJ_TARGET_UNALIGNED
 #define LJ_TARGET_UNALIGNED	0
 #endif

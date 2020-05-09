@@ -16,6 +16,9 @@
 #include "lj_frame.h"
 #if LJ_HASFFI
 #include "lj_ctype.h"
+#if LJ_HASINTRINSICS
+#include "lj_intrinsic.h"
+#endif
 #endif
 #include "lj_ir.h"
 #include "lj_jit.h"
@@ -27,6 +30,7 @@
 #include "lj_asm.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
+#include "lj_err.h"
 #include "lj_target.h"
 
 #ifdef LUA_USE_ASSERT
@@ -136,6 +140,18 @@ static LJ_AINLINE void checkmclim(ASMState *as)
 #ifdef LUA_USE_ASSERT
   as->mcp_prev = as->mcp;
 #endif
+}
+
+MCode *asm_mcode(ASMState *as, void *mc, MSize sz)
+{
+  lua_assert(sz != 0 && sz < 0xffff && mc != NULL);
+  as->mcp -= sz;
+#ifdef LUA_USE_ASSERT
+  as->mcp_prev = as->mcp;
+#endif
+  if (LJ_UNLIKELY(as->mcp < as->mclim)) asm_mclimit(as);
+  memcpy(as->mcp, mc, sz);
+  return as->mcp;
 }
 
 #ifdef RID_NUM_KREF
@@ -493,6 +509,8 @@ static void ra_evictset(ASMState *as, RegSet drop)
   work = (drop & ~as->freeset);
   while (work) {
     Reg r = rset_pickbot(work);
+    lua_assert(!ra_regbl(r));
+    lua_assert(regcost_ref(as->cost[r]) != 0);
     ra_restore(as, regcost_ref(as->cost[r]));
     rset_clear(work, r);
     checkmclim(as);
@@ -1289,6 +1307,66 @@ static uint32_t asm_callx_flags(ASMState *as, IRIns *ir)
   return (nargs | (ir->t.irt << CCI_OTSHIFT));
 }
 
+#if LJ_HASINTRINSICS
+static RegSet asm_intrinsichints(ASMState *as, IRIns *ir)
+{
+  CTState *cts = ctype_ctsG(J2G(as->J));
+  CIntrinsic* intrins = lj_intrinsic_get(cts, ir->op2);
+  RegSet mod = intrin_getmodrset(cts, intrins);
+  IRIns *ira = IR(ir->op1), *irval;
+  int i;
+  int dynreg = intrin_regmode(intrins);
+
+  /* Propagate the fixed registers of the arguments to refs passed in for them */
+  for (i = intrins->insz-1; i >= 0; i--) {
+    Reg r = reg_rid(intrins->in[i]);
+
+    if (dynreg && i < intrins->dyninsz) {
+      /* Dynamic register so no hint needed */
+      ira = IR(ira->op1);
+      continue;
+    }
+
+    /* Don't confuse the register allocator with registers that you can't normally 
+    ** allocate 
+    */
+    if(!ra_regbl(r)){
+      rset_set(mod, r);
+    }  
+    
+    if (!irref_isk(ira->op2)) {
+      irval = IR(ira->op2);
+      
+      /* Back propagate the register to the arguments value if it has no register set */
+      if (irval->prev == REGSP_INIT && !ra_regbl(r)) {
+        irval->prev = REGSP_HINT(r);
+      }
+    }
+
+    ira = IR(ira->op1);
+  }
+
+  if (intrins->outsz > 0) {
+    i = intrin_dynrout(intrins) ? 1 : 0;
+
+    for (; i < intrins->outsz; i++) {
+      Reg r = reg_rid(intrins->out[0]);
+      if (!ra_regbl(r)) {
+        mod |= 1 << r;
+      }
+    }
+
+    if (intrin_dynrout(intrins) || ra_regbl(reg_rid(intrins->out[0]))) {
+      ir->prev = REGSP_INIT;
+    } else {
+      ir->prev = REGSP_HINT(reg_rid(intrins->out[0]));
+    }
+  }
+
+  return mod;
+}
+#endif
+
 static void asm_callid(ASMState *as, IRIns *ir, IRCallID id)
 {
   const CCallInfo *ci = &lj_ir_callinfo[id];
@@ -1726,6 +1804,10 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_CALLN: case IR_CALLL: case IR_CALLS: asm_call(as, ir); break;
   case IR_CALLXS: asm_callx(as, ir); break;
   case IR_CARG: break;
+  
+  case IR_INTRN: asm_intrinsic(as, ir, NULL); break;
+  case IR_ASMEND: asm_intrinsic(as, IR(ir->op2), ir); break;
+  case IR_ASMRET: break;
 
   default:
     setintV(&as->J->errinfo, ir->o);
@@ -2087,6 +2169,22 @@ static void asm_setup_regsp(ASMState *as)
 	as->modset |= RSET_SCRATCH;
       continue;
       }
+#if LJ_HASINTRINSICS
+    case IR_INTRN: {
+      Reg mod = asm_intrinsichints(as, ir);
+      if (inloop)
+        as->modset |= mod;
+      continue;
+    }
+
+    case IR_ASMRET: {
+      Reg r = reg_rid(ir->op2);
+      ir->prev = REGSP_HINT(r);
+      if (inloop)
+        rset_set(as->modset, r);
+      continue;
+    }
+#endif
     case IR_CALLN: case IR_CALLA: case IR_CALLL: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
       ir->prev = asm_setup_call_slots(as, ir, ci);
@@ -2407,6 +2505,478 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 #endif
   lj_mcode_sync(T->mcode, origtop);
 }
+
+#if LJ_HASINTRINSICS
+
+static void lj_asm_setup_intrins(jit_State *J, ASMState *as)
+{
+  MCodeArea *mcarea = &J->mcarea_intrins;
+  memset(as, 0, sizeof(ASMState));
+  as->J = J;
+  as->flags = J->flags;
+  as->freeset = ~0;
+  /* Switch to the intrinsic machine code area */
+  J->curmcarea = mcarea;
+
+  /* Reserve MCode memory. */
+  as->mctop = lj_mcode_reserve(J, &as->mcbot);
+  as->mcp = mcarea->top;
+#ifdef LUA_USE_ASSERT
+  as->mcp_prev = as->mcp;
+#endif
+  as->mclim = mcarea->bot + MCLIM_REDZONE;
+  as->mcloop = NULL;
+  as->flagmcp = NULL;
+}
+
+typedef struct IntrinBuildState {
+  uint8_t in[LJ_INTRINS_MAXREG], out[LJ_INTRINS_MAXREG];
+  RegSet inset, outset, modregs;
+  uint32_t spadj, contexspill, contexofs;
+  uint8_t outcontext;
+  char vzeroupper, fuse;
+} IntrinBuildState;
+
+static void intrins_setup(CIntrinsic *intrins, IntrinBuildState *info)
+{
+  MSize offset = 0, i;
+  int dynreg = intrin_regmode(intrins);
+  int dynout = intrin_dynrout(intrins);
+  memcpy(info->in, intrins->in, LJ_INTRINS_MAXREG);
+  memcpy(info->out, intrins->out, LJ_INTRINS_MAXREG);
+
+  info->contexofs = -1;
+  info->fuse = dynreg && 
+              !(intrins->flags & (INTRINSFLAG_NOFUSE|INTRINSFLAG_INDIRECT));
+
+  for (i = 0; i < intrins->insz; i++) {
+    Reg r = reg_rid(info->in[i]);
+    int isdyn = dynreg && i < intrins->dyninsz;
+    lua_assert(!isdyn || reg_isdyn(info->in[i]));
+    
+    if (reg_kind(info->in[i]) == REGKIND_V256)
+      info->vzeroupper = 1;
+
+    if (reg_isgpr(info->in[i])) {
+      if (!isdyn && r == RID_CONTEXT) {
+        /* Save the offset in the input context so we can load it last */
+        info->contexofs = offset;
+      }
+      offset += sizeof(intptr_t);
+    }
+
+    if (!isdyn) 
+      rset_set(info->inset, r);
+  }
+
+  for (i = 0; i < intrins->outsz; i++) {
+    if (reg_kind(info->out[i]) == REGKIND_V256)
+      info->vzeroupper = 1;
+    if (i == 0 && dynout) continue;
+
+    rset_set(info->outset, reg_rid(info->out[i]));
+  }
+
+  /* Don't try to fuse if a fixed register is the same as the input context */
+  if (info->contexofs != -1)
+    info->fuse = 0;
+
+  /* TODO: dynamic output context register selection */
+  info->outcontext = RID_OUTCONTEXT;
+  info->modregs |= info->outset|info->inset;
+}
+
+static void intrins_loadregs(ASMState *as, CIntrinsic *intrins, IntrinBuildState *info)
+{
+  uint32_t gpr = 0, fpr = 0, i;
+
+  as->freeset = ~info->inset;
+  rset_clear(as->freeset, RID_CONTEXT);
+
+  /* If the output content is needed but not spilled don't use it as a scratch */
+  if (intrins->outsz > 0 && !info->contexspill) {
+    rset_clear(as->freeset, info->outcontext);
+  }
+
+  /* Finally load the input register conflicting with the input context */
+  if (rset_test(info->inset, RID_CONTEXT) && info->contexofs != -1) {
+    lua_assert(!info->fuse);
+    emit_loadofsirt(as, IRT_INTP, RID_CONTEXT, RID_CONTEXT, info->contexofs);
+  }
+
+  /* Move values out the context into there respective input registers */
+  for (i = 0; i < intrins->insz; i++) {
+    uint32_t reg = info->in[i];
+    Reg r = reg_rid(reg);   
+    if (i == 0 && info->fuse) {
+      lua_assert(info->contexofs == -1);
+      /* The load is fused into the modrm of the opcode emitted in emit_intrins */
+      if (reg_isgpr(reg)) {
+        gpr++;
+      } else {
+        fpr++;
+      }
+      continue;
+    }
+
+    if (reg_isgpr(reg)) {
+      if (r != RID_CONTEXT)
+        emit_loadofsirt(as, IRT_INTP, r, RID_CONTEXT, gpr * sizeof(intptr_t));
+      gpr++;
+    } else {
+      emit_loadfpr(as, reg, RID_CONTEXT, 
+                   offsetof(RegContext, fpr) + (sizeof(double) * fpr));
+      fpr++;
+    }
+    checkmclim(as);
+    
+    if (r != RID_CONTEXT)
+      rset_set(as->freeset, r);
+  }
+}
+
+static void intrins_saveregs(ASMState *as, CIntrinsic *intrins, IntrinBuildState *info)
+{
+  MSize offset = 0, i;
+  Reg outcontext = info->outcontext;
+
+  /* All registers start as free because were emitting backwards */
+  as->freeset = RSET_INIT;
+  rset_clear(as->freeset, outcontext);
+
+  /* Save output registers into the context */
+  for (i = 0; i < intrins->outsz; i++) {
+    uint32_t reg = info->out[i];
+    Reg r = reg_rid(reg);
+
+    if (r != outcontext) {
+      /* Exclude this register from the scratch set since its now live */
+      rset_clear(as->freeset, r);
+
+      if (r < RID_MAX_GPR) {
+        emit_savegpr(as, reg, outcontext, offset);
+      } else {
+        emit_savefpr(as, reg, outcontext, offset);
+      }
+    }
+    checkmclim(as);
+    offset += sizeof(TValue);
+  }
+}
+
+/* Replace placeholder register ids with platform specific registers */
+static RegSet pickdynlist(uint8_t *list, MSize sz, RegSet freeset)
+{
+  MSize i;
+  RegSet free = freeset;
+
+  for (i = 0; i < sz; i++) {
+    RegSet rset = free & (reg_isgpr(list[i]) ? RSET_GPR : RSET_FPR);
+    Reg r;
+
+    /* Try to use scratch register first */
+    if ((rset & RSET_SCRATCH) != 0) {
+      rset = rset & RSET_SCRATCH;
+    }
+
+    r = rset_pickbot(rset);
+    lua_assert(rset_test(free, r));
+
+    list[i] = reg_setrid(list[i], r);
+    rset_clear(free, r);
+  }
+
+  /* Return register set of extra used registers */
+  return freeset & ~free;
+}
+
+/* 
+** Stack spill slots and gpr slots in the context are always the size of a native pointer 
+** The output context register is always spilled to a fixed stack offset
+** The output context by default is the Lua stack. Signed 32 bit out register
+** are directly written to it without any cdata boxing.
+** Vectors are always passed in as pointers including the output context where
+** the vector cdata is precreated and written to the stack before the wrapper is called.
+** Vector are assumed tobe always unaligned for now when emitting load/stores
+*/
+
+static void wrap_intrins(jit_State *J, CIntrinsic *intrins, IntrinWrapState *state)
+{
+  ASMState as_;
+  ASMState *as = &as_;
+  IntrinBuildState info;
+  AsmHeader *hdr;
+  MCode *asmofs = NULL, *origtop;
+  void* target = state->target;
+  uint8_t *in = info.in, *out = info.out;
+  int spadj = 0;
+  int dynreg = intrin_regmode(intrins);
+  Reg rout = RID_NONE, rin = RID_NONE, r3 = RID_NONE;
+
+  lj_asm_setup_intrins(J, as);
+  origtop = as->mctop;
+
+  memset(&info, 0, sizeof(info));
+  info.modregs = state->mod;
+  intrins_setup(intrins, &info);
+
+  /* Pick some ABI specific scratch registers for the opcode's input/output registers */
+  if (dynreg) {
+    RegSet scatch = RSET_ALL & ~info.inset;
+    int inofs = 0;
+    lua_assert(intrins->dyninsz <= intrins->insz);
+    /* Avoid unnecessary spill of the output context */
+    if (intrins->outsz != 0)
+      rset_clear(scatch, info.outcontext);
+
+    if (dynreg == DYNREG_OPEXT || dynreg == DYNREG_TWOSTORE || reg_isvec(in[0])) {
+      info.fuse = 0;
+    }
+
+    if (info.fuse) {
+      inofs++;
+      rin = RID_CONTEXT;
+      rset_clear(scatch, RID_CONTEXT);
+    }
+
+    if ((intrins->dyninsz-inofs) > 0) {
+      rset_clear(scatch, RID_CONTEXT);
+      /* Merge in registers used for dynamic input registers */
+      info.inset |= pickdynlist(in+inofs, intrins->dyninsz-inofs, scatch);
+    }
+
+    if (dynreg == DYNREG_VEX3)
+      r3 = reg_rid(in[1]);
+
+    if (rin == RID_NONE)
+      rin = reg_rid(in[0]);
+
+    /* Allocate the dynamic output register */
+    if (intrins->outsz > 0 && intrin_dynrout(intrins)) {
+      if (dynreg == DYNREG_INOUT || dynreg == DYNREG_TWOSTORE) {
+        rout = reg_rid(in[1]);
+        out[0] = reg_setrid(out[0], rout);
+      } else if (dynreg == DYNREG_OPEXT) {
+        /* Destructive single register opcode */
+        rout = out[0] = reg_setrid(out[0], rin);
+        /* Becomes non destructive in vex form*/
+        if (intrins->flags & INTRINSFLAG_VEX)
+          r3 = reg_rid(rout);
+      } else {
+        scatch = RSET_INIT & ~info.outset;
+        rset_clear(scatch, info.outcontext);
+        scatch = pickdynlist(out, 1, scatch);
+        rout = reg_rid(out[0]);
+      }
+
+      rset_set(info.outset, rout);
+    }
+
+    if (rout == RID_NONE && intrins->dyninsz > 1) {
+      lua_assert(reg_isdyn(intrins->in[1]));
+      rout = reg_rid(in[1]);
+    }
+
+    info.modregs |= info.inset|info.outset;
+  }
+
+  /* Used for picking scratch register when loading or saving boxed values */
+  as->modset = info.modregs|RID_CONTEXT;
+
+  /* Check if we need to save the register used to hold the pointer of the output context */
+  if (intrins->outsz > 0) {
+    info.contexspill = rset_test(as->modset, info.outcontext);
+    ra_modified(as, info.outcontext);
+  }
+
+  /* Embed the mcode after the wrapper */
+  if ((intrins->flags & INTRINSFLAG_CALLED) && state->targetsz) {
+    *--as->mcp = XI_RET;
+    target = asmofs = asm_mcode(as, target, state->targetsz);
+  }
+
+restart:
+  if (info.contexspill || rset_test(info.outset, info.outcontext)) {
+    /* add some extra space for context spill and temp spill */
+    spadj = sizeof(intptr_t)*2;
+  }
+
+  emit_epilogue(as, spadj, info.modregs, intrins->outsz);
+
+  /* Zero upper parts of ymm registers if any ymm register were used.
+  ** TODO: This shouldn't be need for some AMD cpus like Jaguar.
+  */
+  if (info.vzeroupper) {
+    as->mcp = emit_vop(XV_VZEROUPPER, 0, 0, 0, as->mcp, 1);
+  }
+
+  /* If one of the output registers was the same as the outcontext we will
+   * of saved the output value to the stack earlier, now save it into context
+   */
+  if (rset_test(info.outset, info.outcontext) && intrins->outsz > 0) {
+    MSize offset = 0, i;
+    /* Don't use the context register as a scratch register */
+    rset_clear(as->freeset, info.outcontext);
+    rset_clear(as->freeset, RID_RET);
+
+    for (i = 0; i < intrins->outsz; i++) {
+      if (reg_rid(intrins->out[i]) == info.outcontext) {
+        break;
+      }
+      offset += sizeof(TValue);
+    }
+
+    emit_savegpr(as, reg_setrid(intrins->out[i], RID_RET), RID_OUTCONTEXT, offset);
+    emit_loadofsirt(as, IRT_INTP, RID_RET, RID_SP, TEMPSPILL);
+  }
+
+  /* Save output registers into the context */
+  intrins_saveregs(as, intrins, &info);
+
+  /* Restore the context register if it was overwritten by the intrinsic or was
+  ** an input register 
+  */
+  if (rset_test(info.modregs, info.outcontext) && intrins->outsz > 0) {
+    emit_loadofsirt(as, IRT_INTP, info.outcontext, RID_SP, CONTEXTSPILL);
+  }
+
+  /* Save the value of the output context register if it listed as an output register */
+  if (rset_test(info.outset, info.outcontext)) {
+    emit_storeofsirt(as, IRT_INTP, info.outcontext, RID_SP, TEMPSPILL);
+  }
+
+#if LJ_TARGET_X86ORX64
+/* Setup modrm to tobe a load from the input context pointer we assume offset
+ * will be to the first value in either the gpr or fpr part of the context
+ * because the first input register should always be the dynamic one for opcodes 
+ */
+  as->mrm.idx = RID_NONE;
+  as->mrm.scale = XM_SCALE1;
+  as->mrm.ofs = 0;
+
+  if (dynreg) {
+    if (info.fuse || (intrins->flags & INTRINSFLAG_INDIRECT)) {
+      lua_assert(!reg_isvec(in[0]));
+      as->mrm.base = rin;
+      rin = RID_MRM;
+
+      if (info.fuse) {
+        /* Set the fused offset into the input context */
+        if (reg_isfp(in[0])) {
+          as->mrm.ofs = offsetof(RegContext, fpr);
+        } else {
+          as->mrm.ofs = offsetof(RegContext, gpr);
+        }
+      }
+    } else {
+      as->mrm.base = RID_NONE;
+      lua_assert(rin != RID_NONE);
+    }
+  } else if(intrins->flags & INTRINSFLAG_CALLED) {
+#if LJ_64
+    /* Pick a scratch register in case the relative distance for the call is
+    ** larger than a signed 32bit value
+    */
+    rin = intrinsic_scratch(as, RSET_GPR);
+#endif
+  }
+#endif
+
+  if (intrins->flags & INTRINSFLAG_CALLED) {
+    /* emit a call to the target which may be collocated after us */
+    emit_intrins(as, intrins, rin, (uintptr_t)target, 0);
+  } else if (dynreg) {
+    /* Write an opcode to the wrapper */
+    asmofs = emit_intrins(as, intrins, rin, rout, r3);
+  } else {
+    /* Append the user supplied machine code */
+    asmofs = asm_mcode(as, state->target, state->targetsz);
+  }
+  
+  /* Move values out the context into there respective input registers */
+  intrins_loadregs(as, intrins, &info);
+
+  /* Save the output context pointer if it will be overwritten */
+  if (rset_test(info.modregs, info.outcontext) && intrins->outsz > 0) {
+    emit_storeofsirt(as, IRT_INTP, info.outcontext, RID_SP, CONTEXTSPILL);
+  }
+
+  emit_prologue(as, spadj, info.modregs);
+
+  /* Check if we used any extra non scratch register needed for loading the 
+   * pointer of boxed values
+   */
+  if ((as->modset & ~RSET_SCRATCH) & ~info.modregs) {
+    info.modregs |= (as->modset & ~RSET_SCRATCH);
+    as->mcp = origtop;
+    /* Have to restart so we can emit the epilogue with the missing reg saves */
+    goto restart;
+  }
+
+  hdr = ((AsmHeader*)as->mcp)-1;
+  memset(hdr, 0, sizeof(AsmHeader));
+  hdr->totalzs = (uint32_t)(origtop-as->mcp);
+
+  /* Embed info before the code to support multiple versions of a user intrinsic intrinsic */
+  if ((intrins->flags & INTRINSFLAG_CALLEDIND) == INTRINSFLAG_CALLEDIND) {
+    hdr->target = (uintptr_t)target;
+  } else if (asmofs){
+    lua_assert((asmofs-as->mcp) < 0xffff);
+    hdr->asmofs = (uint16_t)(asmofs-as->mcp);
+    hdr->asmsz = state->targetsz;
+  }
+
+  as->mcp = (MCode*)hdr;
+
+  lj_mcode_sync(as->mcp, origtop);
+  lj_mcode_commit(J, as->mcp);
+  
+  /* Switch back the current machine code area to the jit one*/
+  J->curmcarea = &J->mcarea;
+
+  /* Return a pointer to the start of the wrapper */
+  state->wrapper = (hdr+1);
+}
+
+static TValue *wrap_intrins_cp(lua_State *L, lua_CFunction dummy, void *ud)
+{
+  IntrinWrapState *state = (IntrinWrapState*)ud;
+  UNUSED(dummy);
+  wrap_intrins(L2J(L), state->intrins, state);
+  return NULL;
+}
+
+int lj_asm_intrins(lua_State *L, IntrinWrapState *state)
+{
+  int errcode = 0;
+
+  while ((errcode = lj_vm_cpcall(L, NULL, state, wrap_intrins_cp)) != 0) {
+    jit_State *J = L2J(L);
+
+    lj_mcode_abort(J);
+    J->curmcarea = &J->mcarea;
+
+    if (errcode == LUA_ERRRUN){
+      if (tvisnumber(L->top-1)) {  /* Trace error? */
+        TraceError trerr = (TraceError)numberVint(L->top-1);
+        if (trerr == LJ_TRERR_MCODELM) {
+          /* mcarea reallocation try again */
+          L->top--;
+          continue;
+        }
+        return -(trerr+2);
+      } else {
+        return -1;
+      }
+    } else {
+      lj_err_throw(L, errcode);
+    }
+  }
+
+  return 0;
+}
+
+#endif
 
 #undef IR
 

@@ -60,6 +60,23 @@ enum {
   RID_MAX_FPR = RID_MAX,
   RID_NUM_GPR = RID_MAX_GPR - RID_MIN_GPR,
   RID_NUM_FPR = RID_MAX_FPR - RID_MIN_FPR,
+
+#if LJ_64
+#if LJ_ABI_WIN
+  RID_CONTEXT = RID_ECX,
+  RID_OUTCONTEXT = RID_EDX,
+#else
+  RID_CONTEXT = RID_EDI,
+  RID_OUTCONTEXT = RID_ESI,
+#endif
+#else
+  /* Fast call arguments */
+  RID_CONTEXT = RID_ECX,
+  RID_OUTCONTEXT = RID_EDX,
+#endif
+  /* Placeholder register ids for dynamic register entries in intrinsics */
+  RID_DYN_FPR = RID_MAX_FPR-1,
+  RID_DYN_GPR = RID_SP,
 };
 
 /* -- Register sets ------------------------------------------------------- */
@@ -68,6 +85,9 @@ enum {
 #define RSET_GPR	(RSET_RANGE(RID_MIN_GPR, RID_MAX_GPR) \
 			 - RID2RSET(RID_ESP) \
 			 - LJ_GC64*RID2RSET(RID_DISPATCH))
+#define RSET_GPR_DISPATCH (RSET_RANGE(RID_MIN_GPR, RID_MAX_GPR) \
+			   - RID2RSET(RID_ESP))
+
 #define RSET_FPR	(RSET_RANGE(RID_MIN_FPR, RID_MAX_FPR))
 #define RSET_ALL	(RSET_GPR|RSET_FPR)
 #define RSET_INIT	RSET_ALL
@@ -181,6 +201,14 @@ typedef struct {
   uint8_t scale;	/* Index scale (XM_SCALE1 .. XM_SCALE8). */
 } x86ModRM;
 
+typedef struct IntrinWrapState {
+  struct CIntrinsic *intrins;
+  RegSet mod;
+  void* target;
+  MSize targetsz;
+  void* wrapper;
+}IntrinWrapState;
+
 /* -- Opcodes ------------------------------------------------------------- */
 
 /* Macros to construct variable-length x86 opcodes. -(len+1) is in LSB. */
@@ -192,10 +220,26 @@ typedef struct {
 #define XO_f20f(o)	((uint32_t)(0x0ff2fc + (0x##o<<24)))
 #define XO_f30f(o)	((uint32_t)(0x0ff3fc + (0x##o<<24)))
 
+#define XV_0f(o)	((uint32_t)(0xf8c5c5 + (0x##o<<24)))
 #define XV_660f38(o)	((uint32_t)(0x79e2c4 + (0x##o<<24)))
 #define XV_f20f38(o)	((uint32_t)(0x7be2c4 + (0x##o<<24)))
 #define XV_f20f3a(o)	((uint32_t)(0x7be3c4 + (0x##o<<24)))
 #define XV_f30f38(o)	((uint32_t)(0x7ae2c4 + (0x##o<<24)))
+
+typedef enum VEXPP {
+  VEXPP_0f = 0,
+  VEXPP_66 = 1,
+  VEXPP_f3 = 2,
+  VEXPP_f2 = 3,
+} VEXPP;
+
+typedef enum VEXMAP {
+  VEXMAP_0F = 1,
+  VEXMAP_0F38 = 2,
+  VEXMAP_0F3A = 3,
+} VEXMAP;
+
+#define VEX_256 0x40000
 
 /* This list of x86 opcodes is not intended to be complete. Opcodes are only
 ** included when needed. Take a look at DynASM or jit.dis_x86 to see the
@@ -210,6 +254,7 @@ typedef enum {
   XI_JMP =	0xe9,
   XI_JMPs =	0xeb,
   XI_PUSH =	0x50, /* Really 50+r. */
+  XI_POP  =     0x58, /* Really 50+r. */
   XI_JCCs =	0x70, /* Really 7x. */
   XI_JCCn =	0x80, /* Really 0f8x. */
   XI_LEA =	0x8d,
@@ -222,6 +267,7 @@ typedef enum {
   XI_TESTb =	0x84,
   XI_TEST =	0x85,
   XI_INT3 =	0xcc,
+  XI_RET =      0xC3,
   XI_MOVmi =	0xc7,
   XI_GROUP5 =	0xff,
 
@@ -246,6 +292,10 @@ typedef enum {
   XV_SARX =	XV_f30f38(f7),
   XV_SHLX =	XV_660f38(f7),
   XV_SHRX =	XV_f20f38(f7),
+
+  XV_MOVUPS =    XV_0f(10),
+  XV_MOVUPSto =  XV_0f(11),
+  XV_VZEROUPPER = XV_0f(77),
 
   /* Variable-length opcodes. XO_* prefix. */
   XO_OR =	XO_(0b),
@@ -287,6 +337,9 @@ typedef enum {
   XO_MOVSSto =	XO_f30f(11),
   XO_MOVLPD =	XO_660f(12),
   XO_MOVAPS =	XO_0f(28),
+  XO_MOVAPSto = XO_0f(29),
+  XO_MOVUPS   = XO_0f(10),
+  XO_MOVUPSto = XO_0f(11),
   XO_XORPS =	XO_0f(57),
   XO_ANDPS =	XO_0f(54),
   XO_ADDSD =	XO_f20f(58),

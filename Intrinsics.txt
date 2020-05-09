@@ -1,0 +1,47 @@
+Register configuration for the opcode
+rM 1-2 dynamic input registers. Non VEX opcode are inferred to be destructive to the second input register.
+mR
+m Singe input Register/Mem with the register part of MorRM used asan extension to the opcode The last digit of the opcode will be stripped from the opcode and used as second register id. 
+rR Neither register supports fused load/store effectively the inverse of the Indirect flag.
+? Template intrinsic that has no opcode but instead a blob of user machine code. Created with ffi.intrinsic("intrinsicname", codeptr[, codesize]). The code is
+inlined when called in a trace, unless it has the Called flag set also. The code pointed to by the pointer passed in does not need tobe kept around either
+
+_ optional divider to avoid the parser mistaking mode flags as being part of the opcode.
+
+Op Mode Flags:
+
+s(Side effects) Has non memory side effects and should never be optimized away in the JIT.
+
+S(Memory side effects) Has observable memory side effects which needs a IR memory barrier to be emitted in the IR after intrinsic in the JIT.
+
+c(Commutative) Opcode is commutative allowing its 2 input values to be swapped to allow better code generation in the JIT.
+
+C(Called) Intrinsic should be emitted as a naked function that is called instead of copied into JITed code. Can be combined with Indirect flag to specify that
+ the passed in address to ffi.intrinsic is executable memory and shouldn't be copied to the wrapper.
+
+I(Indirect) Set the memory part of ModRM to always be in indirect(fused load/store) mode. The first input parameter should now be address of the value. 
+
+E(Explicit Registers) The names of the parameters in FFI definition of the intrinsic explicitly specify the register name/kind for the parameter there declared on. 
+See also explicit dynamic registers. Explicit dynamic registers must be declared before fixed registers.
+
+X(Extended register) Sets the REX.W bit for when emitting opcode which most the time is used to switch the register size from 32 to 64 bits or if opcode is VEX 
+encoded set the VEX.W bit instead.
+
+v(Vex) The opcode supports optionally being re-encoded in VEX form if AVX is supported by the processor. This can be set on most SSE opcodes. If they are destructive in SSE 
+form they are inferred to be non destructive in VEX form otherwise the VVVV register part of the opcode is set to 1111b.
+
+V(Force VEX) Opcode is only can only be encoded in VEX form. If the processor does not support AVX it will be flagged as unsupported but only triggers an error if you try access it from a C name space.
+
+P(Prefix byte) Emit a prefix byte like lock(0xf0) before the opcode. The prefix value is specified after the op/mode string inside __mcode("opmode", prefix).
+
+U(Immediate byte)  Emit a byte after the opcode and its modrm value. The value of the byte is specified like Prefix byte but if the opcode also declares a prefix byte it 
+will be the second number after the op/mode string __mcode("opmode", prefix, immediate).
+
+
+If the intrinsic has more than 1 dynamic output or fixed registers the intrinsic needs a __reglist entry after the __mcode definition __reglist(out, int eax)
+
+Dynamic place holder register names are gpr32, gpr64, xmmf = float, xmm = double, xmmv = 128 bit vector
+
+Fixed arrays can be passed in place of ffi vectors for intrinsic vector arguments. you can also declare vector argument as void* using explicit register "float vadd(void* xmmv, float4 xmmv)"
+
+The wrapper generated for intrinsics also preserve any callee saved registers 

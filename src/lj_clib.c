@@ -17,6 +17,7 @@
 #include "lj_cdata.h"
 #include "lj_clib.h"
 #include "lj_strfmt.h"
+#include "lj_intrinsic.h"
 
 /* -- OS-specific functions ----------------------------------------------- */
 
@@ -355,6 +356,13 @@ TValue *lj_clib_index(lua_State *L, CLibrary *cl, GCstr *name)
 	setnumV(tv, (lua_Number)(uint32_t)ct->size);
       else
 	setintV(tv, (int32_t)ct->size);
+    } else if(ctype_isintrinsic(ct->info)) {
+#if LJ_HASINTRINSICS
+      /* TODO: maybe move to ASM namespace only */
+      setcdataV(L, tv, lj_intrinsic_createffi(cts, ct));
+#else
+      lj_err_callermsg(L, "Intrinsics disabled");
+#endif
     } else {
       const char *sym = clib_extsym(cts, ct, name);
 #if LJ_TARGET_WINDOWS

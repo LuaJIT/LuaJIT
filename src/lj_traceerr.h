@@ -38,6 +38,7 @@ TREDEF(NYITMIX,	"NYI: mixed sparse/dense table")
 TREDEF(NOCACHE,	"symbol not in cache")
 TREDEF(NYICONV,	"NYI: unsupported C type conversion")
 TREDEF(NYICALL,	"NYI: unsupported C function type")
+TREDEF(NYIVEC,  "NYI: unsupported vector operation or type")
 
 /* Optimizations. */
 TREDEF(GFAIL,	"guard would always fail")

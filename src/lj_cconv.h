@@ -47,6 +47,7 @@ static LJ_AINLINE uint32_t cconv_idx(CTInfo info)
 #define CCF_FROMTV	0x00000002u
 #define CCF_SAME	0x00000004u
 #define CCF_IGNQUAL	0x00000008u
+#define CCF_INTRINS_ARG 0x00000010u
 
 #define CCF_ARG_SHIFT	8
 #define CCF_ARG(n)	((n) << CCF_ARG_SHIFT)

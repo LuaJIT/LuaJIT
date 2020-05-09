@@ -20,10 +20,11 @@
 #define JIT_F_PREFER_IMUL	0x00000080
 #define JIT_F_LEA_AGU		0x00000100
 #define JIT_F_BMI2		0x00000200
+#define JIT_F_AVX1		0x00000400
 
 /* Names for the CPU-specific flags. Must match the order above. */
 #define JIT_F_CPU_FIRST		JIT_F_SSE2
-#define JIT_F_CPUSTRING		"\4SSE2\4SSE3\6SSE4.1\3AMD\4ATOM\4BMI2"
+#define JIT_F_CPUSTRING		"\4SSE2\4SSE3\6SSE4.1\3AMD\4ATOM\4BMI2\4AVX1"
 #elif LJ_TARGET_ARM
 #define JIT_F_ARMV6_		0x00000010
 #define JIT_F_ARMV6T2_		0x00000020
@@ -397,6 +398,15 @@ typedef struct FoldState {
   IRIns right[2];	/* Instruction referenced by right operand. */
 } FoldState;
 
+typedef struct MCodeArea {
+  int prot;	/* Protection of current mcode area. */
+  MCode *base;	/* Base of current mcode area. */
+  MCode *top;	/* Top of current mcode area. */
+  MCode *bot;	/* Bottom of current mcode area. */
+  size_t sz;	/* Size of current mcode area. */
+  size_t szall;	/* Total size of all allocated mcode areas in this chain. */
+} MCodeArea;
+
 /* JIT compiler state. */
 typedef struct jit_State {
   GCtrace cur;		/* Current trace. */
@@ -482,12 +492,11 @@ typedef struct jit_State {
   BCIns *patchpc;	/* PC for pending re-patch. */
   BCIns patchins;	/* Instruction for pending re-patch. */
 
-  int mcprot;		/* Protection of current mcode area. */
-  MCode *mcarea;	/* Base of current mcode area. */
-  MCode *mctop;		/* Top of current mcode area. */
-  MCode *mcbot;		/* Bottom of current mcode area. */
-  size_t szmcarea;	/* Size of current mcode area. */
-  size_t szallmcarea;	/* Total size of all allocated mcode areas. */
+  MCodeArea mcarea;     /* JIT mcode area */
+#if LJ_HASINTRINSICS
+  MCodeArea mcarea_intrins; /* Intrinsic mcode area used for interpreter wrappers */
+#endif
+  MCodeArea *curmcarea; /* Current mcode area by default is mcarea */
 
   TValue errinfo;	/* Additional info element for trace errors. */
 

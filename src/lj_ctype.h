@@ -72,6 +72,7 @@ LJ_STATIC_ASSERT(((int)CT_STRUCT & (int)CT_ARRAY) == CT_STRUCT);
 #define CTF_VECTOR	0x08000000u	/* Vector: ARRAY. */
 #define CTF_COMPLEX	0x04000000u	/* Complex: ARRAY. */
 #define CTF_UNION	0x00800000u	/* Union: STRUCT. */
+#define CTF_INTRINS	0x04000000u	/* Intrinsic: FUNC. */
 #define CTF_VARARG	0x00800000u	/* Vararg: FUNC. */
 #define CTF_SSEREGPARM	0x00400000u	/* SSE register parameters: FUNC. */
 
@@ -170,6 +171,38 @@ typedef LJ_ALIGN(8) struct CCallback {
   MSize slot;			/* Current callback slot. */
 } CCallback;
 
+typedef int (LJ_FASTCALL *IntrinsicWrapper)(void *incontext, void* outcontext);
+
+typedef struct CIntrinsic {
+  IntrinsicWrapper wrapped;
+  union {
+    uint8_t in[8];
+    struct {
+      uint8_t opregs[5]; /* cmpxchg8b */
+      uint8_t immb;
+      uint8_t prefix; /* prefix byte see INTRINSFLAG_PREFIX */
+      uint8_t dyninsz; /* dynamic input register count */
+    };
+  };
+  union {
+    uint8_t out[8];
+    struct {
+      uint8_t oregs[4];
+      uint32_t opcode;
+    };
+  };
+  uint8_t insz;
+  uint8_t outsz;
+  uint16_t flags;
+  CTypeID1 id; 
+} CIntrinsic;
+
+typedef struct IntrinsicState {
+  CIntrinsic* tab; /* Intrinsic descriptor table. */
+  MSize sizetab;   /* Size of intrinsic table. */
+  MSize top;       /* Current top of Intrinsic table. */
+} IntrinsicState;
+
 /* C type state. */
 typedef struct CTState {
   CType *tab;		/* C type table. */
@@ -179,6 +212,7 @@ typedef struct CTState {
   global_State *g;	/* Global state. */
   GCtab *finalizer;	/* Map of cdata to finalizer. */
   GCtab *miscmap;	/* Map of -CTypeID to metatable and cb slot to func. */
+  IntrinsicState intr;	/* Intrinsic descriptor table. */
   CCallback cb;		/* Temporary callback state. */
   CTypeID1 hash[CTHASH_SIZE];  /* Hash anchors for C type table. */
 } CTState;
@@ -245,6 +279,9 @@ typedef struct CTState {
 #define ctype_isxattrib(info, at) \
   (((info) & (CTMASK_NUM|CTATTRIB(CTMASK_ATTRIB))) == \
    CTINFO(CT_ATTRIB, CTATTRIB(at)))
+
+#define ctype_isintrinsic(info) \
+  (((info) & (CTMASK_NUM|CTF_INTRINS)) == CTINFO(CT_FUNC, CTF_INTRINS))
 
 /* Target-dependent sizes and alignments. */
 #if LJ_64
@@ -344,7 +381,7 @@ CTTYDEF(CTTYIDDEF)
   CDSDEF(_) _(EXTENSION) _(ASM) _(ATTRIBUTE) \
   _(DECLSPEC) _(CCDECL) _(PTRSZ) \
   _(STRUCT) _(UNION) _(ENUM) \
-  _(SIZEOF) _(ALIGNOF)
+  _(SIZEOF) _(MCODE) _(REGLIST) _(ALIGNOF)
 
 /* C token numbers. */
 enum {
@@ -387,6 +424,7 @@ static LJ_AINLINE CTState *ctype_cts(lua_State *L)
 #define LJ_CTYPE_SAVE(cts)	CTState savects_ = *(cts)
 #define LJ_CTYPE_RESTORE(cts) \
   ((cts)->top = savects_.top, \
+   (cts)->intr.top = savects_.intr.top, \
    memcpy((cts)->hash, savects_.hash, sizeof(savects_.hash)))
 
 /* Check C type ID for validity when assertions are enabled. */
