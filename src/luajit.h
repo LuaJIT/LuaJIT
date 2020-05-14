@@ -31,6 +31,7 @@
 #include "lua.h"
 
 #define LUAJIT_VERSION		"moonjit 2.2.0"
+#define MOONJIT_VERSION		LUAJIT_VERSION
 #define LUAJIT_VERSION_NUM	20200  /* Version 2.2.0 = 02.02.00. */
 #define LUAJIT_VERSION_SYM	moonjit_version_2_2_0
 #define LUAJIT_COPYRIGHT	"Copyright (C) 2019-2020 moonjit developers"
