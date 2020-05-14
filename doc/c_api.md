@@ -14,6 +14,9 @@ Or for C++ code:
 #include "lua.hpp"
 ```
 
+Moonjit also defines a macro `MOONJIT_VERSION` to allow developers a convenient
+shortcut to differentiate from LuaJIT.
+
 ## `luaJIT_setmode(L, idx, mode)` — Control VM
 
 This is a C API extension to allow control of the VM from C code. The full
