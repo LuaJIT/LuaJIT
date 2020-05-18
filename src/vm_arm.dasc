@@ -699,6 +699,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_tsetr:
   |  str BASE, L->base
   |  .IOS mov RC, BASE
+  |  mov CARG1, L
   |  str PC, SAVE_PC
   |  bl extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
   |  // Returns TValue *.

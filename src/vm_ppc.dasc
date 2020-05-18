@@ -1083,6 +1083,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vmeta_tsetr:
   |  stp BASE, L->base
+  |  mr CARG1, L
   |  stw PC, SAVE_PC
   |  bl extern lj_tab_setinth  // (lua_State *L, GCtab *t, int32_t key)
   |  // Returns TValue *.
