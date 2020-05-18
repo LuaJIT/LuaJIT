@@ -1132,7 +1132,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(1), tmp);
   } else {
     emit_nm(as, A64I_CMPx | A64F_SH(A64SH_LSR, 32),
-	    ra_allock(as, (irt_toitype(ir->t) << 15) | 0x7fff, allow), tmp);
+	    ra_allock(as, (irt_toitype(ir->t) << 15) | 0x7fff, gpr), tmp);
   }
   if (ofs & FUSE_REG)
     emit_dnm(as, (A64I_LDRx^A64I_LS_R)|A64I_LS_UXTWx|A64I_LS_SH, tmp, idx, (ofs & 31));
