@@ -625,7 +625,6 @@ E= @echo
 default all:	$(TARGET_T)
 
 amalg:
-	@grep "^[+|]" ljamalg.c
 	$(MAKE) all "LJCORE_O=ljamalg.o lj_str_hash.o"
 
 clean:

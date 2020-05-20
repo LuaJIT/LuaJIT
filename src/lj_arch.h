@@ -215,13 +215,13 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
-#if __ARM_ARCH_8__ || __ARM_ARCH_8A__
+#if __ARM_ARCH == 8 || __ARM_ARCH_8__ || __ARM_ARCH_8A__
 #define LJ_ARCH_VERSION		80
-#elif __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
+#elif __ARM_ARCH == 7 || __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
 #define LJ_ARCH_VERSION		70
 #elif __ARM_ARCH_6T2__
 #define LJ_ARCH_VERSION		61
-#elif __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6K__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
+#elif __ARM_ARCH == 6 || __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6K__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
 #define LJ_ARCH_VERSION		60
 #else
 #define LJ_ARCH_VERSION		50

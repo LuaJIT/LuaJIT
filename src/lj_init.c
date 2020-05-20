@@ -38,44 +38,31 @@ LJ_INITIALIZER(lj_cpudetect)
 {
   uint32_t flags = 0;
 #if LJ_TARGET_X86ORX64
+
   uint32_t vendor[4];
   uint32_t features[4];
   if (lj_vm_cpuid(0, vendor) && lj_vm_cpuid(1, features)) {
-#if !LJ_HASJIT
-#define JIT_F_SSE2	2
-#endif
-    flags |= ((features[3] >> 26)&1) * JIT_F_SSE2;
-#if LJ_HASJIT
     flags |= ((features[2] >> 0)&1) * JIT_F_SSE3;
     flags |= ((features[2] >> 19)&1) * JIT_F_SSE4_1;
     flags |= ((features[2] >> 20)&1) * JIT_F_SSE4_2;
-    if (vendor[2] == 0x6c65746e) {  /* Intel. */
-      if ((features[0] & 0x0fff0ff0) == 0x000106c0)  /* Atom. */
-	flags |= JIT_F_LEA_AGU;
-    } else if (vendor[2] == 0x444d4163) {  /* AMD. */
-      uint32_t fam = (features[0] & 0x0ff00f00);
-      if (fam >= 0x00000f00)  /* K8, K10. */
-	flags |= JIT_F_PREFER_IMUL;
-    }
     if (vendor[0] >= 7) {
       uint32_t xfeatures[4];
       lj_vm_cpuid(7, xfeatures);
       flags |= ((xfeatures[1] >> 8)&1) * JIT_F_BMI2;
     }
-#endif
   }
+
 #elif LJ_TARGET_ARM
-#if LJ_HASJIT
+
   int ver = LJ_ARCH_VERSION;  /* Compile-time ARM CPU detection. */
 #if LJ_TARGET_LINUX
   if (ver < 70) {  /* Runtime ARM CPU detection. */
     struct utsname ut;
     uname(&ut);
     if (strncmp(ut.machine, "armv", 4) == 0) {
-      if (ut.machine[4] >= '7')
-	ver = 70;
-      else if (ut.machine[4] == '6')
-	ver = 60;
+      if (ut.machine[4] >= '8') ver = 80;
+      else if (ut.machine[4] == '7') ver = 70;
+      else if (ut.machine[4] == '6') ver = 60;
     }
   }
 #endif
@@ -83,20 +70,22 @@ LJ_INITIALIZER(lj_cpudetect)
 	   ver >= 61 ? JIT_F_ARMV6T2_ :
 	   ver >= 60 ? JIT_F_ARMV6_ : 0;
   flags |= LJ_ARCH_HASFPU == 0 ? 0 : ver >= 70 ? JIT_F_VFPV3 : JIT_F_VFPV2;
-#endif
+
 #elif LJ_TARGET_ARM64
+
   /* No optional CPU features to detect (for now). */
+
 #elif LJ_TARGET_PPC
-#if LJ_HASJIT
+
 #if LJ_ARCH_SQRT
   flags |= JIT_F_SQRT;
 #endif
 #if LJ_ARCH_ROUND
   flags |= JIT_F_ROUND;
 #endif
-#endif
+
 #elif LJ_TARGET_MIPS
-#if LJ_HASJIT
+
   /* Compile-time MIPS CPU detection. */
 #if LJ_ARCH_VERSION >= 20
   flags |= JIT_F_MIPSXXR2;
@@ -114,7 +103,7 @@ LJ_INITIALIZER(lj_cpudetect)
     if (x) flags |= JIT_F_MIPSXXR2;  /* Either 0x80000000 (R2) or 0 (R1). */
   }
 #endif
-#endif
+
 #elif LJ_TARGET_S390X
   /* No optional CPU features to detect (for now). */
 #else

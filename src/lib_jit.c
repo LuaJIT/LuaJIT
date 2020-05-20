@@ -104,8 +104,8 @@ LJLIB_CF(jit_status)
   jit_State *J = L2J(L);
   L->top = L->base;
   setboolV(L->top++, (J->flags & JIT_F_ON) ? 1 : 0);
-  flagbits_to_strings(L, J->flags, JIT_F_CPU_FIRST, JIT_F_CPUSTRING);
-  flagbits_to_strings(L, J->flags, JIT_F_OPT_FIRST, JIT_F_OPTSTRING);
+  flagbits_to_strings(L, J->flags, JIT_F_CPU, JIT_F_CPUSTRING);
+  flagbits_to_strings(L, J->flags, JIT_F_OPT, JIT_F_OPTSTRING);
   return (int)(L->top - L->base);
 #else
   setboolV(L->top++, 0);
@@ -492,7 +492,7 @@ static int jitopt_flag(jit_State *J, const char *str)
     str += str[2] == '-' ? 3 : 2;
     set = 0;
   }
-  for (opt = JIT_F_OPT_FIRST; ; opt <<= 1) {
+  for (opt = JIT_F_OPT; ; opt <<= 1) {
     size_t len = *(const uint8_t *)lst;
     if (len == 0)
       break;
@@ -661,7 +661,6 @@ JIT_PARAMDEF(JIT_PARAMINIT)
 #undef JIT_PARAMINIT
   0
 };
-#endif
 
 /* Initialize JIT compiler. */
 static void jit_init(lua_State *L)
@@ -679,10 +678,13 @@ static void jit_init(lua_State *L)
   lj_dispatch_update(G(L));
 #endif
 }
+#endif
 
 LUALIB_API int luaopen_jit(lua_State *L)
 {
+#if LJ_HASJIT
   jit_init(L);
+#endif
   lua_pushliteral(L, LJ_OS_NAME);
   lua_pushliteral(L, LJ_ARCH_NAME);
   lua_pushinteger(L, LUAJIT_VERSION_NUM);
