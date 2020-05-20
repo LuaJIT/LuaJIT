@@ -1214,13 +1214,8 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     emit_rmro(as, XO_MOV, dest|REX_GC64, tab, offsetof(GCtab, node));
   } else {
     emit_rmro(as, XO_ARITH(XOg_ADD), dest|REX_GC64, tab, offsetof(GCtab,node));
-    if ((as->flags & JIT_F_PREFER_IMUL)) {
-      emit_i8(as, sizeof(Node));
-      emit_rr(as, XO_IMULi8, dest, dest);
-    } else {
-      emit_shifti(as, XOg_SHL, dest, 3);
-      emit_rmrxo(as, XO_LEA, dest, dest, dest, XM_SCALE2, 0);
-    }
+    emit_shifti(as, XOg_SHL, dest, 3);
+    emit_rmrxo(as, XO_LEA, dest, dest, dest, XM_SCALE2, 0);
     if (isk) {
       emit_gri(as, XG_ARITHi(XOg_AND), dest, (int32_t)khash);
       emit_rmro(as, XO_MOV, dest, tab, offsetof(GCtab, hmask));
@@ -1279,7 +1274,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   lua_assert(ofs % sizeof(Node) == 0);
   if (ra_hasreg(dest)) {
     if (ofs != 0) {
-      if (dest == node && !(as->flags & JIT_F_LEA_AGU))
+      if (dest == node)
 	emit_gri(as, XG_ARITHi(XOg_ADD), dest|REX_GC64, ofs);
       else
 	emit_rmro(as, XO_LEA, dest|REX_GC64, node, ofs);
@@ -2180,8 +2175,7 @@ static void asm_add(ASMState *as, IRIns *ir)
 {
   if (irt_isnum(ir->t))
     asm_fparith(as, ir, XO_ADDSD);
-  else if ((as->flags & JIT_F_LEA_AGU) || as->flagmcp == as->mcp ||
-	   irt_is64(ir->t) || !asm_lea(as, ir))
+  else if (as->flagmcp == as->mcp || irt_is64(ir->t) || !asm_lea(as, ir))
     asm_intarith(as, ir, XOg_ADD);
 }
 
@@ -2903,7 +2897,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   MCode *target, *q;
   int32_t spadj = as->T->spadjust;
   if (spadj == 0) {
-    p -= ((as->flags & JIT_F_LEA_AGU) ? 7 : 6) + (LJ_64 ? 1 : 0);
+    p -= LJ_64 ? 7 : 6;
   } else {
     MCode *p1;
     /* Patch stack adjustment. */
@@ -2915,20 +2909,11 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
       p1 = p-9;
       *(int32_t *)p1 = spadj;
     }
-    if ((as->flags & JIT_F_LEA_AGU)) {
 #if LJ_64
-      p1[-4] = 0x48;
+    p1[-3] = 0x48;
 #endif
-      p1[-3] = (MCode)XI_LEA;
-      p1[-2] = MODRM(checki8(spadj) ? XM_OFS8 : XM_OFS32, RID_ESP, RID_ESP);
-      p1[-1] = MODRM(XM_SCALE1, RID_ESP, RID_ESP);
-    } else {
-#if LJ_64
-      p1[-3] = 0x48;
-#endif
-      p1[-2] = (MCode)(checki8(spadj) ? XI_ARITHi8 : XI_ARITHi);
-      p1[-1] = MODRM(XM_REG, XOg_ADD, RID_ESP);
-    }
+    p1[-2] = (MCode)(checki8(spadj) ? XI_ARITHi8 : XI_ARITHi);
+    p1[-1] = MODRM(XM_REG, XOg_ADD, RID_ESP);
   }
   /* Patch exit branch. */
   target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)lj_vm_exit_interp;
@@ -2959,7 +2944,7 @@ static void asm_tail_prep(ASMState *as)
     as->invmcp = as->mcp = p;
   } else {
     /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
-    as->mcp = p - (((as->flags & JIT_F_LEA_AGU) ? 7 : 6)  + (LJ_64 ? 1 : 0));
+    as->mcp = p - (LJ_64 ? 7 : 6);
     as->invmcp = NULL;
   }
 }
