@@ -1455,7 +1455,6 @@ static void asm_pow(ASMState *as, IRIns *ir)
 #define asm_mulov(as, ir)	asm_mul(as, ir)
 
 #define asm_abs(as, ir)		asm_fpunary(as, ir, A64I_FABS)
-#define asm_atan2(as, ir)	asm_callid(as, ir, IRCALL_atan2)
 #define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 
 static void asm_mod(ASMState *as, IRIns *ir)

@@ -1657,14 +1657,13 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_NEG: asm_neg(as, ir); break;
 #if LJ_SOFTFP32
   case IR_DIV: case IR_POW: case IR_ABS:
-  case IR_ATAN2: case IR_LDEXP: case IR_FPMATH: case IR_TOBIT:
+  case IR_LDEXP: case IR_FPMATH: case IR_TOBIT:
     lua_assert(0);  /* Unused for LJ_SOFTFP32. */
     break;
 #else
   case IR_DIV: asm_div(as, ir); break;
   case IR_POW: asm_pow(as, ir); break;
   case IR_ABS: asm_abs(as, ir); break;
-  case IR_ATAN2: asm_atan2(as, ir); break;
   case IR_LDEXP: asm_ldexp(as, ir); break;
   case IR_FPMATH: asm_fpmath(as, ir); break;
   case IR_TOBIT: asm_tobit(as, ir); break;
@@ -2158,11 +2157,6 @@ static void asm_setup_regsp(ASMState *as)
 	as->modset = RSET_SCRATCH;
       break;
 #if !LJ_SOFTFP
-    case IR_ATAN2:
-#if LJ_TARGET_X86
-      if (as->evenspill < 4)  /* Leave room to call atan2(). */
-	as->evenspill = 4;
-#endif
 #if !LJ_TARGET_X86ORX64
     case IR_LDEXP:
 #endif

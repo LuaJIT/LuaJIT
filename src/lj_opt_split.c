@@ -426,9 +426,6 @@ static void split_ir(jit_State *J)
 	}
 	hi = split_call_l(J, hisubst, oir, ir, IRCALL_lj_vm_floor + ir->op2);
 	break;
-      case IR_ATAN2:
-	hi = split_call_ll(J, hisubst, oir, ir, IRCALL_atan2);
-	break;
       case IR_LDEXP:
 	hi = split_call_li(J, hisubst, oir, ir, IRCALL_ldexp);
 	break;

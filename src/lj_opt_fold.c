@@ -173,7 +173,6 @@ LJFOLD(ADD KNUM KNUM)
 LJFOLD(SUB KNUM KNUM)
 LJFOLD(MUL KNUM KNUM)
 LJFOLD(DIV KNUM KNUM)
-LJFOLD(ATAN2 KNUM KNUM)
 LJFOLD(LDEXP KNUM KNUM)
 LJFOLD(MIN KNUM KNUM)
 LJFOLD(MAX KNUM KNUM)
@@ -211,6 +210,30 @@ LJFOLDF(kfold_fpmath)
   lua_Number a = knumleft;
   lua_Number y = lj_vm_foldfpm(a, fins->op2);
   return lj_ir_knum(J, y);
+}
+
+LJFOLD(CALLN KNUM any)
+LJFOLDF(kfold_fpcall1)
+{
+  const CCallInfo *ci = &lj_ir_callinfo[fins->op2];
+  if (CCI_TYPE(ci) == IRT_NUM) {
+    double y = ((double (*)(double))ci->func)(knumleft);
+    return lj_ir_knum(J, y);
+  }
+  return NEXTFOLD;
+}
+
+LJFOLD(CALLN CARG IRCALL_atan2)
+LJFOLDF(kfold_fpcall2)
+{
+  if (irref_isk(fleft->op1) && irref_isk(fleft->op2)) {
+    const CCallInfo *ci = &lj_ir_callinfo[fins->op2];
+    double a = ir_knum(IR(fleft->op1))->n;
+    double b = ir_knum(IR(fleft->op2))->n;
+    double y = ((double (*)(double, double))ci->func)(a, b);
+    return lj_ir_knum(J, y);
+  }
+  return NEXTFOLD;
 }
 
 LJFOLD(POW KNUM KINT)

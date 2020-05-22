@@ -21,6 +21,7 @@ typedef struct CCallInfo {
 
 #define CCI_OTSHIFT		16
 #define CCI_OPTYPE(ci)		((ci)->flags >> CCI_OTSHIFT)  /* Get op/type. */
+#define CCI_TYPE(ci)		(((ci)->flags>>CCI_OTSHIFT) & IRT_TYPE)
 #define CCI_OPSHIFT		24
 #define CCI_OP(ci)		((ci)->flags >> CCI_OPSHIFT)  /* Get op. */
 
@@ -172,6 +173,14 @@ typedef struct CCallInfo {
   _(ANY,	lj_mem_newgco,		2,  FS, PGC, CCI_L) \
   _(ANY,	lj_math_random_step, 1, FS, NUM, CCI_CASTU64) \
   _(ANY,	lj_vm_modi,		2,  FN, INT, 0) \
+  _(ANY,	log10,			1,   N, NUM, XA_FP) \
+  _(ANY,	exp,			1,   N, NUM, XA_FP) \
+  _(ANY,	sin,			1,   N, NUM, XA_FP) \
+  _(ANY,	cos,			1,   N, NUM, XA_FP) \
+  _(ANY,	tan,			1,   N, NUM, XA_FP) \
+  _(ANY,	asin,			1,   N, NUM, XA_FP) \
+  _(ANY,	acos,			1,   N, NUM, XA_FP) \
+  _(ANY,	atan,			1,   N, NUM, XA_FP) \
   _(ANY,	sinh,			1,   N, NUM, XA_FP) \
   _(ANY,	cosh,			1,   N, NUM, XA_FP) \
   _(ANY,	tanh,			1,   N, NUM, XA_FP) \
@@ -183,14 +192,9 @@ typedef struct CCallInfo {
   _(FPMATH,	lj_vm_ceil,		1,   N, NUM, XA_FP) \
   _(FPMATH,	lj_vm_trunc,		1,   N, NUM, XA_FP) \
   _(FPMATH,	sqrt,			1,   N, NUM, XA_FP) \
-  _(ANY,	exp,			1,   N, NUM, XA_FP) \
   _(ANY,	lj_vm_exp2,		1,   N, NUM, XA_FP) \
   _(ANY,	log,			1,   N, NUM, XA_FP) \
   _(ANY,	lj_vm_log2,		1,   N, NUM, XA_FP) \
-  _(ANY,	log10,			1,   N, NUM, XA_FP) \
-  _(ANY,	sin,			1,   N, NUM, XA_FP) \
-  _(ANY,	cos,			1,   N, NUM, XA_FP) \
-  _(ANY,	tan,			1,   N, NUM, XA_FP) \
   _(ANY,	lj_vm_powi,		2,   N, NUM, XA_FP) \
   _(ANY,	pow,			2,   N, NUM, XA2_FP) \
   _(ANY,	atan2,			2,   N, NUM, XA2_FP) \

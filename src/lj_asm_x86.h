@@ -1957,8 +1957,6 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
   }
 }
 
-#define asm_atan2(as, ir)	asm_callid(as, ir, IRCALL_atan2)
-
 static void asm_ldexp(ASMState *as, IRIns *ir)
 {
   int32_t ofs = sps_scale(ir->s);  /* Use spill slot or temp slots. */

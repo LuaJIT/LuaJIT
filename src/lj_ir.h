@@ -75,7 +75,6 @@
   _(NEG,	N , ref, ref) \
   \
   _(ABS,	N , ref, ref) \
-  _(ATAN2,	N , ref, ref) \
   _(LDEXP,	N , ref, ref) \
   _(MIN,	C , ref, ref) \
   _(MAX,	C , ref, ref) \
@@ -178,8 +177,7 @@ LJ_STATIC_ASSERT((int)IR_XLOAD + IRDELTA_L2S == (int)IR_XSTORE);
 /* FPMATH sub-functions. ORDER FPM. */
 #define IRFPMDEF(_) \
   _(FLOOR) _(CEIL) _(TRUNC)  /* Must be first and in this order. */ \
-  _(SQRT) _(EXP) _(EXP2) _(LOG) _(LOG2) _(LOG10) \
-  _(SIN) _(COS) _(TAN) \
+  _(SQRT) _(EXP2) _(LOG) _(LOG2) \
   _(OTHER)
 
 typedef enum {

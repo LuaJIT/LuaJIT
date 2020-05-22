@@ -563,7 +563,7 @@ static void LJ_FASTCALL recff_math_atan2(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);
   TRef tr2 = lj_ir_tonum(J, J->base[1]);
-  J->base[0] = emitir(IRTN(IR_ATAN2), tr, tr2);
+  J->base[0] = lj_ir_call(J, IRCALL_atan2, tr, tr2);
   UNUSED(rd);
 }
 
@@ -580,22 +580,7 @@ static void LJ_FASTCALL recff_math_ldexp(jit_State *J, RecordFFData *rd)
   UNUSED(rd);
 }
 
-/* Record math.asin, math.acos, math.atan. */
-static void LJ_FASTCALL recff_math_atrig(jit_State *J, RecordFFData *rd)
-{
-  TRef y = lj_ir_tonum(J, J->base[0]);
-  TRef x = lj_ir_knum_one(J);
-  uint32_t ffid = rd->data;
-  if (ffid != FF_math_atan) {
-    TRef tmp = emitir(IRTN(IR_MUL), y, y);
-    tmp = emitir(IRTN(IR_SUB), x, tmp);
-    tmp = emitir(IRTN(IR_FPMATH), tmp, IRFPM_SQRT);
-    if (ffid == FF_math_asin) { x = tmp; } else { x = y; y = tmp; }
-  }
-  J->base[0] = emitir(IRTN(IR_ATAN2), y, x);
-}
-
-static void LJ_FASTCALL recff_math_htrig(jit_State *J, RecordFFData *rd)
+static void LJ_FASTCALL recff_math_call(jit_State *J, RecordFFData *rd)
 {
   TRef tr = lj_ir_tonum(J, J->base[0]);
   J->base[0] = emitir(IRTN(IR_CALLN), tr, rd->data);
