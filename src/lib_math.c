@@ -45,7 +45,7 @@ LJLIB_ASM_(math_sinh)		LJLIB_REC(math_htrig IRCALL_sinh)
 LJLIB_ASM_(math_cosh)		LJLIB_REC(math_htrig IRCALL_cosh)
 LJLIB_ASM_(math_tanh)		LJLIB_REC(math_htrig IRCALL_tanh)
 LJLIB_ASM_(math_frexp)
-LJLIB_ASM_(math_modf)		LJLIB_REC(.)
+LJLIB_ASM_(math_modf)
 
 LJLIB_ASM(math_log)		LJLIB_REC(math_log)
 {

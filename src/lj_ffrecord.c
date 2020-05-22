@@ -601,22 +601,6 @@ static void LJ_FASTCALL recff_math_htrig(jit_State *J, RecordFFData *rd)
   J->base[0] = emitir(IRTN(IR_CALLN), tr, rd->data);
 }
 
-static void LJ_FASTCALL recff_math_modf(jit_State *J, RecordFFData *rd)
-{
-  TRef tr = J->base[0];
-  if (tref_isinteger(tr)) {
-    J->base[0] = tr;
-    J->base[1] = lj_ir_kint(J, 0);
-  } else {
-    TRef trt;
-    tr = lj_ir_tonum(J, tr);
-    trt = emitir(IRTN(IR_FPMATH), tr, IRFPM_TRUNC);
-    J->base[0] = trt;
-    J->base[1] = emitir(IRTN(IR_SUB), tr, trt);
-  }
-  rd->nres = 2;
-}
-
 static void LJ_FASTCALL recff_math_pow(jit_State *J, RecordFFData *rd)
 {
   J->base[0] = lj_opt_narrow_pow(J, J->base[0], J->base[1],
