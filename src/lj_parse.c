@@ -851,9 +851,12 @@ static void bcemit_comp(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
       e1 = e2; e2 = eret;  /* Swap operands. */
       op = ((op-BC_ISLT)^3)+BC_ISLT;
       expr_toval(fs, e1);
+      ra = expr_toanyreg(fs, e1);
+      rd = expr_toanyreg(fs, e2);
+    } else {
+      rd = expr_toanyreg(fs, e2);
+      ra = expr_toanyreg(fs, e1);
     }
-    rd = expr_toanyreg(fs, e2);
-    ra = expr_toanyreg(fs, e1);
     ins = BCINS_AD(op, ra, rd);
   }
   /* Using expr_free might cause asserts if the order is wrong. */
