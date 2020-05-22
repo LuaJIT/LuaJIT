@@ -551,8 +551,13 @@ TRef lj_opt_narrow_unm(jit_State *J, TRef rc, TValue *vc)
 {
   rc = conv_str_tonum(J, rc, vc);
   if (tref_isinteger(rc)) {
-    if ((uint32_t)numberVint(vc) != 0x80000000u)
-      return emitir(IRTGI(IR_SUBOV), lj_ir_kint(J, 0), rc);
+    uint32_t k = (uint32_t)numberVint(vc);
+    if ((LJ_DUALNUM || k != 0) && k != 0x80000000u) {
+      TRef zero = lj_ir_kint(J, 0);
+      if (!LJ_DUALNUM)
+	emitir(IRTGI(IR_NE), rc, zero);
+      return emitir(IRTGI(IR_SUBOV), zero, rc);
+    }
     rc = emitir(IRTN(IR_CONV), rc, IRCONV_NUM_INT);
   }
   return emitir(IRTN(IR_NEG), rc, lj_ir_ksimd(J, LJ_KSIMD_NEG));
