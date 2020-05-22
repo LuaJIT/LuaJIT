@@ -1510,7 +1510,6 @@ static void asm_mul(ASMState *as, IRIns *ir)
 #define asm_div(as, ir)		asm_fparith(as, ir, ARMI_VDIV_D)
 #define asm_pow(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_powi)
 #define asm_abs(as, ir)		asm_fpunary(as, ir, ARMI_VABS_D)
-#define asm_atan2(as, ir)	asm_callid(as, ir, IRCALL_atan2)
 #define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 #endif
 

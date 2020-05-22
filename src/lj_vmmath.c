@@ -48,7 +48,6 @@ double lj_vm_foldarith(double x, double y, int op)
   case IR_NEG - IR_ADD: return -x; break;
   case IR_ABS - IR_ADD: return fabs(x); break;
 #if LJ_HASJIT
-  case IR_ATAN2 - IR_ADD: return atan2(x, y); break;
   case IR_LDEXP - IR_ADD: return ldexp(x, (int)y); break;
   case IR_MIN - IR_ADD: return x < y ? x : y; break;
   case IR_MAX - IR_ADD: return x > y ? x : y; break;
@@ -129,14 +128,9 @@ double lj_vm_foldfpm(double x, int fpm)
   case IRFPM_CEIL: return lj_vm_ceil(x);
   case IRFPM_TRUNC: return lj_vm_trunc(x);
   case IRFPM_SQRT: return sqrt(x);
-  case IRFPM_EXP: return exp(x);
   case IRFPM_EXP2: return lj_vm_exp2(x);
   case IRFPM_LOG: return log(x);
   case IRFPM_LOG2: return lj_vm_log2(x);
-  case IRFPM_LOG10: return log10(x);
-  case IRFPM_SIN: return sin(x);
-  case IRFPM_COS: return cos(x);
-  case IRFPM_TAN: return tan(x);
   default: lua_assert(0);
   }
   return 0;

@@ -1838,7 +1838,6 @@ static void asm_abs(ASMState *as, IRIns *ir)
 }
 #endif
 
-#define asm_atan2(as, ir)	asm_callid(as, ir, IRCALL_atan2)
 #define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 
 static void asm_arithov(ASMState *as, IRIns *ir)
