@@ -1669,7 +1669,7 @@ static void asm_fpmin_max(ASMState *as, IRIns *ir, A64CC fcc)
   Reg dest = (ra_dest(as, ir, RSET_FPR) & 31);
   Reg right, left = ra_alloc2(as, ir, RSET_FPR);
   right = ((left >> 8) & 31); left &= 31;
-  emit_dnm(as, A64I_FCSELd | A64F_CC(fcc), dest, left, right);
+  emit_dnm(as, A64I_FCSELd | A64F_CC(fcc), dest, right, left);
   emit_nm(as, A64I_FCMPd, left, right);
 }
 
@@ -1681,8 +1681,8 @@ static void asm_min_max(ASMState *as, IRIns *ir, A64CC cc, A64CC fcc)
     asm_intmin_max(as, ir, cc);
 }
 
-#define asm_max(as, ir)		asm_min_max(as, ir, CC_GT, CC_HI)
-#define asm_min(as, ir)		asm_min_max(as, ir, CC_LT, CC_LO)
+#define asm_min(as, ir)		asm_min_max(as, ir, CC_LT, CC_PL)
+#define asm_max(as, ir)		asm_min_max(as, ir, CC_GT, CC_LE)
 
 /* -- Comparisons --------------------------------------------------------- */
 

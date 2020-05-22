@@ -1489,8 +1489,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <6
   |.endmacro
   |
-  |  math_minmax math_min, gt, hi
-  |  math_minmax math_max, lt, lo
+  |  math_minmax math_min, gt, pl
+  |  math_minmax math_max, lt, le
   |
   |//-- String library -----------------------------------------------------
   |

@@ -1840,7 +1840,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_res
   |
   |.macro math_minmax, name, cmovop, sseop
-  |  .ffunc name
+  |  .ffunc_1 name
   |  mov RAd, 2
   |.if DUALNUM
   |  mov RB, [BASE]

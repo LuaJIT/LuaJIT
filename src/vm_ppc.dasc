@@ -2476,12 +2476,12 @@ static void build_subroutines(BuildCtx *ctx)
   |6:
   |   addi SAVE0, SAVE0, 8
   |.if FPU
-  |  fsub f0, FARG1, FARG2
   |.if ismax
-  |  fsel FARG1, f0, FARG1, FARG2
+  |  fsub f0, FARG1, FARG2
   |.else
-  |  fsel FARG1, f0, FARG2, FARG1
+  |  fsub f0, FARG2, FARG1
   |.endif
+  |  fsel FARG1, f0, FARG1, FARG2
   |.else
   |  stw CARG1, SFSAVE_1
   |  stw CARG2, SFSAVE_2
@@ -2526,13 +2526,13 @@ static void build_subroutines(BuildCtx *ctx)
   |   checknum CARG2
   |  bge cr1, ->fff_resn
   |   bge ->fff_fallback
-  |  fsub f0, FARG1, FARG2
-  |   addi TMP1, TMP1, 8
   |.if ismax
-  |  fsel FARG1, f0, FARG1, FARG2
+  |  fsub f0, FARG1, FARG2
   |.else
-  |  fsel FARG1, f0, FARG2, FARG1
+  |  fsub f0, FARG2, FARG1
   |.endif
+  |   addi TMP1, TMP1, 8
+  |  fsel FARG1, f0, FARG1, FARG2
   |  b <1
   |.endif
   |.endmacro
