@@ -2233,7 +2233,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  xorps xmm4, xmm4; jmp <1			// Return +-Inf and +-0.
   |
   |.macro math_minmax, name, cmovop, sseop
-  |  .ffunc name
+  |  .ffunc_1 name
   |  mov RA, 2
   |  cmp dword [BASE+4], LJ_TISNUM
   |.if DUALNUM

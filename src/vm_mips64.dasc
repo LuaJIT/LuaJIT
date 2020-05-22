@@ -1852,18 +1852,26 @@ static void build_subroutines(BuildCtx *ctx)
   |.if MIPSR6
   |  fpins FRET1, FRET1, FARG1
   |.else
+  |.if fpins  // ismax
+  |  c.olt.d FARG1, FRET1
+  |.else
   |  c.olt.d FRET1, FARG1
-  |  fpins FRET1, FARG1
+  |.endif
+  |  movf.d FRET1, FARG1
   |.endif
   |.else
+  |.if fpins  // ismax
+  |  bal ->vm_sfcmpogt
+  |.else
   |  bal ->vm_sfcmpolt
+  |.endif
   |.  nop
   |.if MIPSR6
-  |  intins AT, CARG2, CRET1
-  |  intinsc CARG1, CARG1, CRET1
+  |  seleqz AT, CARG2, CRET1
+  |  selnez CARG1, CARG1, CRET1
   |  or CARG1, CARG1, AT
   |.else
-  |  intins CARG1, CARG2, CRET1
+  |  movz CARG1, CARG2, CRET1
   |.endif
   |.endif
   |  b <6
@@ -1889,8 +1897,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_minmax math_min, seleqz, selnez, min.d
   |  math_minmax math_max, selnez, seleqz, max.d
   |.else
-  |  math_minmax math_min, movz, _, movf.d
-  |  math_minmax math_max, movn, _, movt.d
+  |  math_minmax math_min, movz, _, 0
+  |  math_minmax math_max, movn, _, 1
   |.endif
   |
   |//-- String library -----------------------------------------------------
@@ -2108,7 +2116,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  dsllv CRET2, CRET2, TMP0	// Integer check.
   |  sextw AT, CRET1
   |  xor AT, CRET1, AT		// Range check.
-  |  jr ra
   |.if MIPSR6
   |  seleqz AT, AT, CRET2
   |  selnez CRET2, CRET2, CRET2
@@ -2809,6 +2816,34 @@ static void build_subroutines(BuildCtx *ctx)
   |.  move CRET1, CRET2
   |.endif
   |
+  |->vm_sfcmpogt:
+  |.if not FPU
+  |  dsll AT, CARG2, 1
+  |  dsll TMP0, CARG1, 1
+  |  or TMP1, AT, TMP0
+  |  beqz TMP1, >8			// Both args +-0: return 0.
+  |.  lui TMP1, 0xffe0
+  |  dsll TMP1, TMP1, 32
+  |   sltu AT, TMP1, AT
+  |   sltu TMP0, TMP1, TMP0
+  |  or TMP1, AT, TMP0
+  |  bnez TMP1, >9			// Either arg is NaN: return 0 or 1;
+  |.  and AT, CARG2, CARG1
+  |  bltz AT, >5			// Both args negative?
+  |.  nop
+  |  jr ra
+  |.  slt CRET1, CARG2, CARG1
+  |5:  // Swap conditions if both operands are negative.
+  |  jr ra
+  |.  slt CRET1, CARG1, CARG2
+  |8:
+  |  jr ra
+  |.  li CRET1, 0
+  |9:
+  |  jr ra
+  |.  li CRET1, 0
+  |.endif
+  |
   |// Soft-float comparison. Equivalent to c.ole.d a, b or c.ole.d b, a.
   |// Input: CARG1, CARG2, TMP3. Output: CRET1. Temporaries: AT, TMP0, TMP1.
   |->vm_sfcmpolex:
@@ -2840,34 +2875,29 @@ static void build_subroutines(BuildCtx *ctx)
   |.  li CRET1, 0
   |.endif
   |
-  |.macro sfmin_max, name, intins, intinsc
+  |.macro sfmin_max, name, fpcall
   |->vm_sf .. name:
   |.if JIT and not FPU
   |  move TMP2, ra
-  |  bal ->vm_sfcmpolt
+  |  bal ->fpcall
   |.  nop
   |  move ra, TMP2
   |  move TMP0, CRET1
   |  move CRET1, CARG1
   |.if MIPSR6
-  |  intins CRET1, CRET1, TMP0
-  |  intinsc TMP0, CARG2, TMP0
+  |  selnez CRET1, CRET1, TMP0
+  |  seleqz TMP0, CARG2, TMP0
   |  jr ra
   |.  or CRET1, CRET1, TMP0
   |.else
   |  jr ra
-  |.  intins CRET1, CARG2, TMP0
+  |.  movz CRET1, CARG2, TMP0
   |.endif
   |.endif
   |.endmacro
   |
-  |.if MIPSR6
-  |  sfmin_max min, selnez, seleqz
-  |  sfmin_max max, seleqz, selnez
-  |.else
-  |  sfmin_max min, movz, _
-  |  sfmin_max max, movn, _
-  |.endif
+  |  sfmin_max min, vm_sfcmpolt
+  |  sfmin_max max, vm_sfcmpogt
   |
   |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------

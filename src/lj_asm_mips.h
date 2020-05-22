@@ -2121,12 +2121,12 @@ static void asm_min_max(ASMState *as, IRIns *ir, int ismax)
     right = (left >> 8); left &= 255;
 #if !LJ_TARGET_MIPSR6
     if (dest == left) {
-      emit_fg(as, MIPSI_MOVT_D, dest, right);
+      emit_fg(as, MIPSI_MOVF_D, dest, right);
     } else {
-      emit_fg(as, MIPSI_MOVF_D, dest, left);
+      emit_fg(as, MIPSI_MOVT_D, dest, left);
       if (dest != right) emit_fg(as, MIPSI_MOV_D, dest, right);
     }
-    emit_fgh(as, MIPSI_C_OLT_D, 0, ismax ? left : right, ismax ? right : left);
+    emit_fgh(as, MIPSI_C_OLT_D, 0, ismax ? right : left, ismax ? left : right);
 #else
     emit_fgh(as, ismax ? MIPSI_MAX_D : MIPSI_MIN_D, dest, left, right);
 #endif

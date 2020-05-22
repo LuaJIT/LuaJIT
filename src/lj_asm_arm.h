@@ -1659,8 +1659,8 @@ static void asm_min_max(ASMState *as, IRIns *ir, int cc, int fcc)
     asm_intmin_max(as, ir, cc);
 }
 
-#define asm_min(as, ir)		asm_min_max(as, ir, CC_GT, CC_HI)
-#define asm_max(as, ir)		asm_min_max(as, ir, CC_LT, CC_LO)
+#define asm_min(as, ir)		asm_min_max(as, ir, CC_GT, CC_PL)
+#define asm_max(as, ir)		asm_min_max(as, ir, CC_LT, CC_LE)
 
 /* -- Comparisons --------------------------------------------------------- */
 
@@ -1852,7 +1852,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   } else if ((ir-1)->o == IR_MIN || (ir-1)->o == IR_MAX) {
     as->curins--;  /* Always skip the loword min/max. */
     if (uselo || usehi)
-      asm_sfpmin_max(as, ir-1, (ir-1)->o == IR_MIN ? CC_HI : CC_LO);
+      asm_sfpmin_max(as, ir-1, (ir-1)->o == IR_MIN ? CC_PL : CC_LE);
     return;
 #elif LJ_HASFFI
   } else if ((ir-1)->o == IR_CONV) {

@@ -1724,9 +1724,8 @@ static void asm_min_max(ASMState *as, IRIns *ir, int ismax)
     if (tmp == left || tmp == right)
       tmp = ra_scratch(as, rset_exclude(rset_exclude(rset_exclude(RSET_FPR,
 					dest), left), right));
-    emit_facb(as, PPCI_FSEL, dest, tmp,
-	      ismax ? left : right, ismax ? right : left);
-    emit_fab(as, PPCI_FSUB, tmp, left, right);
+    emit_facb(as, PPCI_FSEL, dest, tmp, left, right);
+    emit_fab(as, PPCI_FSUB, tmp, ismax ? left : right, ismax ? right : left);
   } else {
     Reg dest = ra_dest(as, ir, RSET_GPR);
     Reg tmp1 = RID_TMP, tmp2 = dest;
