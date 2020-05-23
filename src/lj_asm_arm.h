@@ -1268,8 +1268,6 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   ra_allockreg(as, (int32_t)(sz+sizeof(GCcdata)),
 	       ra_releasetmp(as, ASMREF_TMP1));
 }
-#else
-#define asm_cnew(as, ir)	((void)0)
 #endif
 
 /* -- Write barriers ------------------------------------------------------ */
@@ -1364,8 +1362,6 @@ static void asm_callround(ASMState *as, IRIns *ir, int id)
 
 static void asm_fpmath(ASMState *as, IRIns *ir)
 {
-  if (ir->op2 == IRFPM_EXP2 && asm_fpjoin_pow(as, ir))
-    return;
   if (ir->op2 <= IRFPM_TRUNC)
     asm_callround(as, ir, ir->op2);
   else if (ir->op2 == IRFPM_SQRT)
@@ -1507,13 +1503,9 @@ static void asm_mul(ASMState *as, IRIns *ir)
 #define asm_mulov(as, ir)	asm_mul(as, ir)
 
 #if !LJ_SOFTFP
-#define asm_div(as, ir)		asm_fparith(as, ir, ARMI_VDIV_D)
-#define asm_pow(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_powi)
+#define asm_fpdiv(as, ir)	asm_fparith(as, ir, ARMI_VDIV_D)
 #define asm_abs(as, ir)		asm_fpunary(as, ir, ARMI_VABS_D)
-#define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 #endif
-
-#define asm_mod(as, ir)		asm_callid(as, ir, IRCALL_lj_vm_modi)
 
 static void asm_neg(ASMState *as, IRIns *ir)
 {

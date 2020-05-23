@@ -593,10 +593,10 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
   /* Narrowing must be unconditional to preserve (-x)^i semantics. */
   if (tvisint(vc) || numisint(numV(vc))) {
     int checkrange = 0;
-    /* Split pow is faster for bigger exponents. But do this only for (+k)^i. */
+    /* pow() is faster for bigger exponents. But do this only for (+k)^i. */
     if (tref_isk(rb) && (int32_t)ir_knum(IR(tref_ref(rb)))->u32.hi >= 0) {
       int32_t k = numberVint(vc);
-      if (!(k >= -65536 && k <= 65536)) goto split_pow;
+      if (!(k >= -65536 && k <= 65536)) goto force_pow_num;
       checkrange = 1;
     }
     if (!tref_isinteger(rc)) {
@@ -607,19 +607,11 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
       TRef tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536));
       emitir(IRTGI(IR_ULE), tmp, lj_ir_kint(J, 2*65536));
     }
-    return emitir(IRTN(IR_POW), rb, rc);
+  } else {
+force_pow_num:
+    rc = lj_ir_tonum(J, rc);  /* Want POW(num, num), not POW(num, int). */
   }
-split_pow:
-  /* FOLD covers most cases, but some are easier to do here. */
-  if (tref_isk(rb) && tvispone(ir_knum(IR(tref_ref(rb)))))
-    return rb;  /* 1 ^ x ==> 1 */
-  rc = lj_ir_tonum(J, rc);
-  if (tref_isk(rc) && ir_knum(IR(tref_ref(rc)))->n == 0.5)
-    return emitir(IRTN(IR_FPMATH), rb, IRFPM_SQRT);  /* x ^ 0.5 ==> sqrt(x) */
-  /* Split up b^c into exp2(c*log2(b)). Assembler may rejoin later. */
-  rb = emitir(IRTN(IR_FPMATH), rb, IRFPM_LOG2);
-  rc = emitir(IRTN(IR_MUL), rb, rc);
-  return emitir(IRTN(IR_FPMATH), rc, IRFPM_EXP2);
+  return emitir(IRTN(IR_POW), rb, rc);
 }
 
 /* -- Predictive narrowing of induction variables ------------------------- */

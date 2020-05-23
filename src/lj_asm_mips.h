@@ -1607,8 +1607,6 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   ra_allockreg(as, (int32_t)(sz+sizeof(GCcdata)),
 	       ra_releasetmp(as, ASMREF_TMP1));
 }
-#else
-#define asm_cnew(as, ir)	((void)0)
 #endif
 
 /* -- Write barriers ------------------------------------------------------ */
@@ -1677,8 +1675,6 @@ static void asm_fpunary(ASMState *as, IRIns *ir, MIPSIns mi)
 #if !LJ_SOFTFP32
 static void asm_fpmath(ASMState *as, IRIns *ir)
 {
-  if (ir->op2 == IRFPM_EXP2 && asm_fpjoin_pow(as, ir))
-    return;
 #if !LJ_SOFTFP
   if (ir->op2 <= IRFPM_TRUNC)
     asm_callround(as, ir, IRCALL_lj_vm_floor + ir->op2);
@@ -1766,41 +1762,13 @@ static void asm_mul(ASMState *as, IRIns *ir)
   }
 }
 
-static void asm_mod(ASMState *as, IRIns *ir)
-{
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isint(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
-					  IRCALL_lj_carith_modu64);
-  else
-#endif
-    asm_callid(as, ir, IRCALL_lj_vm_modi);
-}
-
 #if !LJ_SOFTFP32
-static void asm_pow(ASMState *as, IRIns *ir)
+static void asm_fpdiv(ASMState *as, IRIns *ir)
 {
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isnum(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
-					  IRCALL_lj_carith_powu64);
-  else
-#endif
-    asm_callid(as, ir, IRCALL_lj_vm_powi);
-}
-
-static void asm_div(ASMState *as, IRIns *ir)
-{
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isnum(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
-					  IRCALL_lj_carith_divu64);
-  else
-#endif
 #if !LJ_SOFTFP
     asm_fparith(as, ir, MIPSI_DIV_D);
 #else
-  asm_callid(as, ir, IRCALL_softfp_div);
+    asm_callid(as, ir, IRCALL_softfp_div);
 #endif
 }
 #endif
@@ -1837,8 +1805,6 @@ static void asm_abs(ASMState *as, IRIns *ir)
   emit_tsml(as, MIPSI_DEXTM, dest, left, 30, 0);
 }
 #endif
-
-#define asm_ldexp(as, ir)	asm_callid(as, ir, IRCALL_ldexp)
 
 static void asm_arithov(ASMState *as, IRIns *ir)
 {
