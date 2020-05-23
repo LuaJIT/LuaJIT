@@ -79,13 +79,6 @@ double lj_vm_log2(double a)
 }
 #endif
 
-#ifdef LUAJIT_NO_EXP2
-double lj_vm_exp2(double a)
-{
-  return exp(a * 0.6931471805599453);
-}
-#endif
-
 #if !LJ_TARGET_X86ORX64
 /* Unsigned x^k. */
 static double lj_vm_powui(double x, uint32_t k)
@@ -128,7 +121,6 @@ double lj_vm_foldfpm(double x, int fpm)
   case IRFPM_CEIL: return lj_vm_ceil(x);
   case IRFPM_TRUNC: return lj_vm_trunc(x);
   case IRFPM_SQRT: return sqrt(x);
-  case IRFPM_EXP2: return lj_vm_exp2(x);
   case IRFPM_LOG: return log(x);
   case IRFPM_LOG2: return lj_vm_log2(x);
   default: lua_assert(0);

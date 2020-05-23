@@ -1843,8 +1843,6 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
   emit_loadi(as, ra_releasetmp(as, ASMREF_TMP1), (int32_t)(sz+sizeof(GCcdata)));
 }
-#else
-#define asm_cnew(as, ir)	((void)0)
 #endif
 
 /* -- Write barriers ------------------------------------------------------ */
@@ -1950,8 +1948,6 @@ static void asm_fpmath(ASMState *as, IRIns *ir)
 		    fpm == IRFPM_CEIL ? lj_vm_ceil_sse : lj_vm_trunc_sse);
       ra_left(as, RID_XMM0, ir->op1);
     }
-  } else if (fpm == IRFPM_EXP2 && asm_fpjoin_pow(as, ir)) {
-    /* Rejoined to pow(). */
   } else {
     asm_callid(as, ir, IRCALL_lj_vm_floor + fpm);
   }
@@ -1984,17 +1980,6 @@ static void asm_fppowi(ASMState *as, IRIns *ir)
   emit_call(as, lj_vm_powi_sse);
   ra_left(as, RID_XMM0, ir->op1);
   ra_left(as, RID_EAX, ir->op2);
-}
-
-static void asm_pow(ASMState *as, IRIns *ir)
-{
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isnum(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_powi64 :
-					  IRCALL_lj_carith_powu64);
-  else
-#endif
-    asm_fppowi(as, ir);
 }
 
 static int asm_swapops(ASMState *as, IRIns *ir)
@@ -2193,27 +2178,7 @@ static void asm_mul(ASMState *as, IRIns *ir)
     asm_intarith(as, ir, XOg_X_IMUL);
 }
 
-static void asm_div(ASMState *as, IRIns *ir)
-{
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isnum(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_divi64 :
-					  IRCALL_lj_carith_divu64);
-  else
-#endif
-    asm_fparith(as, ir, XO_DIVSD);
-}
-
-static void asm_mod(ASMState *as, IRIns *ir)
-{
-#if LJ_64 && LJ_HASFFI
-  if (!irt_isint(ir->t))
-    asm_callid(as, ir, irt_isi64(ir->t) ? IRCALL_lj_carith_modi64 :
-					  IRCALL_lj_carith_modu64);
-  else
-#endif
-    asm_callid(as, ir, IRCALL_lj_vm_modi);
-}
+#define asm_fpdiv(as, ir)	asm_fparith(as, ir, XO_DIVSD)
 
 static void asm_neg_not(ASMState *as, IRIns *ir, x86Group3 xg)
 {

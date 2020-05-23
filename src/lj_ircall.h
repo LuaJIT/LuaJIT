@@ -192,7 +192,6 @@ typedef struct CCallInfo {
   _(FPMATH,	lj_vm_ceil,		1,   N, NUM, XA_FP) \
   _(FPMATH,	lj_vm_trunc,		1,   N, NUM, XA_FP) \
   _(FPMATH,	sqrt,			1,   N, NUM, XA_FP) \
-  _(ANY,	lj_vm_exp2,		1,   N, NUM, XA_FP) \
   _(ANY,	log,			1,   N, NUM, XA_FP) \
   _(ANY,	lj_vm_log2,		1,   N, NUM, XA_FP) \
   _(ANY,	lj_vm_powi,		2,   N, NUM, XA_FP) \
