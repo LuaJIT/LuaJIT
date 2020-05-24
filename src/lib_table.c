@@ -40,9 +40,12 @@ LJLIB_LUA(table_foreach) /*
   function(t, f)
     CHECK_tab(t)
     CHECK_func(f)
-    for k, v in PAIRS(t) do
+    local next = next
+    local k, v = next(t)
+    while k ~= nil do
       local r = f(k, v)
       if r ~= nil then return r end
+      k, v = next(t, k)
     end
   end
 */

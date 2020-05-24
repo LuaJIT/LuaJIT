@@ -75,7 +75,7 @@ LJLIB_ASM_(type)		LJLIB_REC(.)
 /* This solves a circular dependency problem -- change FF_next_N as needed. */
 LJ_STATIC_ASSERT((int)FF_next == FF_next_N);
 
-LJLIB_ASM(next)
+LJLIB_ASM(next)			LJLIB_REC(.)
 {
   lj_lib_checktab(L, 1);
   return FFH_UNREACHABLE;

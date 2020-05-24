@@ -1514,6 +1514,68 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
   }
 }
 
+
+int lj_record_next(jit_State *J, RecordIndex *ix)
+{
+  if (!ix->key || tref_isnil(ix->key)) {
+    ix->key = lj_ir_call(J, IRCALL_lj_tab_nexta, ix->tab, lj_ir_kint(J, ~0u));
+    lj_snap_add(J);
+    TRef asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
+    emitir(IRTGI(IR_ABC), asizeref, ix->key);
+    {
+      TRef arr = emitir(IRT(IR_FLOAD, IRT_PGC), ix->tab, IRFL_TAB_ARRAY);
+      TRef aref = emitir(IRT(IR_AREF, IRT_PGC), arr, ix->key);
+      ix->val = emitir(IRTG(IR_ALOAD, itype2irt(&ix->valv)), aref, 0);
+    }
+    return 1;
+  }
+
+  GCtab *t = tabV(&ix->tabv);
+  if (lj_tab_next(J->L, t, &ix->keyv)) {   /* overrides ix->keyv and ix->valv */
+    if (tref_isnumber(ix->key)) {
+      int32_t k = numberVint(&ix->keyv);
+      if ((tvisint(&ix->keyv) || numV(&ix->keyv) == (lua_Number)k)
+	  && (MSize)k < t->asize
+      ) {
+	TRef ikey = lj_opt_narrow_index(J, ix->key);
+	ix->key = lj_ir_call(J, IRCALL_lj_tab_nexta, ix->tab, ikey);
+	lj_snap_add(J);
+	TRef asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
+	emitir(IRTGI(IR_ABC), asizeref, ix->key);
+	{
+	  TRef arr = emitir(IRT(IR_FLOAD, IRT_PGC), ix->tab, IRFL_TAB_ARRAY);
+	  TRef aref = emitir(IRT(IR_AREF, IRT_PGC), arr, ix->key);
+	  ix->val = emitir(IRTG(IR_ALOAD, itype2irt(&ix->valv)), aref, 0);
+	}
+	return 1;
+      }
+    }
+    TRef inkref = emitir(IRT(IR_HREF, IRT_PGC), ix->tab, ix->key);
+    TRef noderef = lj_ir_call(J, IRCALL_lj_tab_nexth, ix->tab, inkref);
+    ix->key = emitir(IRTG(IR_HKLOAD, itype2irt(&ix->keyv)), noderef, 0);
+    ix->val = emitir(IRTG(IR_HLOAD, itype2irt(&ix->valv)), noderef, 0);
+    return 1;
+  }
+
+  if (tref_isnumber(ix->key) && !t->hmask) {
+    TRef ikey = lj_opt_narrow_index(J, ix->key);
+    ix->key = lj_ir_call(J, IRCALL_lj_tab_nexta, ix->tab, ikey);
+    lj_snap_add(J);
+    TRef asizeref = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_ASIZE);
+    emitir(IRTGI(IR_ULT), asizeref, ix->key);
+    ix->val = TREF_NIL;
+    return 1;
+
+  } else {
+    TRef inkref = emitir(IRT(IR_HREF, IRT_PGC), ix->tab, ix->key);
+    TRef noderef = lj_ir_call(J, IRCALL_lj_tab_nexth, ix->tab, inkref);
+    ix->key = emitir(IRTG(IR_HKLOAD, IRT_NIL), noderef, 0);
+    ix->val = TREF_NIL;
+    return 1;
+  }
+  return 0;
+}
+
 static void rec_tsetm(jit_State *J, BCReg ra, BCReg rn, int32_t i)
 {
   RecordIndex ix;
