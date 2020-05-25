@@ -173,6 +173,7 @@ amalg:
 clean:
 	$(MAKE) -C src clean
 	$(MAKE) -C test clean
+	$(MAKE) -C bench clean
 
 .PHONY: all install amalg clean bench check
 
