@@ -115,7 +115,7 @@ XCFLAGS=
 #
 # Reproducible builds.  Enable this option if you need output to be the same
 # across CPUs.
-#LUAJIT_ENABLE_REPRODUCIBLE_BUILDS=0
+#LUAJIT_ENABLE_REPRODUCIBLE_BUILDS=1
 #
 # Enable hardware optimised hashing for string interning.  This uses runtime
 # detection of CPU features and if supported, selects a hash routine best
