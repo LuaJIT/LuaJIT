@@ -117,6 +117,10 @@ XCFLAGS=
 # across CPUs.
 #LUAJIT_ENABLE_REPRODUCIBLE_BUILDS=1
 #
+ifdef SOURCE_DATE_EPOCH
+  LUAJIT_ENABLE_REPRODUCIBLE_BUILDS=1
+endif
+#
 # Enable hardware optimised hashing for string interning.  This uses runtime
 # detection of CPU features and if supported, selects a hash routine best
 # suited for that microarchitecture.  This is disabled for reproducible builds
