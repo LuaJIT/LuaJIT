@@ -113,6 +113,17 @@ XCFLAGS=
 # Enable GC64 mode for x64.
 #XCFLAGS+= -DLUAJIT_ENABLE_GC64
 #
+# Reproducible builds.  Enable this option if you need output to be the same
+# across CPUs.
+#XCFLAGS += -DLUAJIT_ENABLE_REPRODUCIBLE_BUILDS
+#
+# Enable hardware optimised hashing for string interning.  This uses runtime
+# detection of CPU features and if supported, selects a hash routine best
+# suited for that microarchitecture.  This is disabled for reproducible builds
+# to allow for consistent string across CPUs.
+ifneq (1,$(LUAJIT_ENABLE_REPRODUCIBLE_BUILDS))
+XCFLAGS += -DLUAJIT_ENABLE_OPTIMISED_HASH=1
+endif
 ##############################################################################
 
 ##############################################################################

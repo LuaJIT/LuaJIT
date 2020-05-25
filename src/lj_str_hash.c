@@ -7,7 +7,7 @@
 
 #include "lj_arch.h"
 
-#if defined(LJ_HAS_OPTIMISED_HASH) || defined(SMOKETEST)
+#if LJ_HAS_OPTIMISED_HASH == 1 || defined(SMOKETEST)
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>

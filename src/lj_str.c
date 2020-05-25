@@ -97,7 +97,7 @@ void lj_str_resize(lua_State *L, MSize newmask)
   g->strhash = newhash;
 }
 
-#ifdef LJ_HAS_OPTIMISED_HASH
+#if LJ_HAS_OPTIMISED_HASH == 1
 lj_str_hashfn lj_str_hash = lj_str_hash_default;
 #else
 #define lj_str_hash lj_str_hash_default

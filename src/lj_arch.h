@@ -40,6 +40,8 @@
 #define LUAJIT_OS_BSD		4
 #define LUAJIT_OS_POSIX		5
 
+#define LJ_HAS_OPTIMISED_HASH	0
+
 /* Select native target if no target defined. */
 #ifndef LUAJIT_TARGET
 
@@ -192,7 +194,8 @@
 #define LJ_TARGET_GC64		1
 #endif
 #if defined(__GNUC__) || defined(_MSC_VER)
-#define LJ_HAS_OPTIMISED_HASH	1
+#undef LJ_HAS_OPTIMISED_HASH
+#define LJ_HAS_OPTIMISED_HASH	LUAJIT_ENABLE_OPTIMISED_HASH
 #endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM

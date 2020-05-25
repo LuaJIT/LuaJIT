@@ -190,7 +190,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
   lua_State *L = &GG->L;
   global_State *g = &GG->g;
 
-#ifdef LJ_HAS_OPTIMISED_HASH
+#if LJ_HAS_OPTIMISED_HASH == 1
   extern uint32_t LJ_CPU_FLAGS;
   lj_str_hash_init (LJ_CPU_FLAGS);
 #endif
