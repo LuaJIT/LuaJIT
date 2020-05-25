@@ -668,11 +668,6 @@ static void jit_init(lua_State *L)
 #if LJ_HASJIT
   extern uint32_t LJ_CPU_FLAGS;
   jit_State *J = L2J(L);
-  /* Check for required instruction set support on x86 (unnecessary on x64). */
-#if LJ_TARGET_X86
-  if (!(LJ_CPU_FLAGS & JIT_F_SSE2))
-    luaL_error(L, "CPU with SSE2 required");
-#endif
   J->flags = LJ_CPU_FLAGS | JIT_F_ON | JIT_F_OPT_DEFAULT;
   memcpy(J->param, jit_param_default, sizeof(J->param));
   lj_dispatch_update(G(L));
