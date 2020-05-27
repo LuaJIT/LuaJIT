@@ -1058,7 +1058,7 @@ static TRef rec_mm_len(jit_State *J, TRef tr, TValue *tv)
     lj_record_call(J, func, 2);
   } else {
     if (LJ_52 && tref_istab(tr))
-      return lj_ir_call(J, IRCALL_lj_tab_len, tr);
+      return emitir(IRTI(IR_ALEN), tr, TREF_NIL);
     lj_trace_err(J, LJ_TRERR_NOMM);
   }
   return 0;  /* No result yet. */
@@ -2191,7 +2191,7 @@ void lj_record_ins(jit_State *J)
     if (tref_isstr(rc))
       rc = emitir(IRTI(IR_FLOAD), rc, IRFL_STR_LEN);
     else if (!LJ_52 && tref_istab(rc))
-      rc = lj_ir_call(J, IRCALL_lj_tab_len, rc);
+      rc = emitir(IRTI(IR_ALEN), rc, TREF_NIL);
     else
       rc = rec_mm_len(J, rc, rcv);
     break;

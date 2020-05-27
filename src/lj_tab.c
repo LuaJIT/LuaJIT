@@ -639,49 +639,62 @@ int lj_tab_next(lua_State *L, GCtab *t, TValue *key)
 
 /* -- Table length calculation -------------------------------------------- */
 
-static MSize unbound_search(GCtab *t, MSize j)
+/* Compute table length. Slow path with mixed array/hash lookups. */
+LJ_NOINLINE static MSize tab_len_slow(GCtab *t, size_t hi)
 {
   cTValue *tv;
-  MSize i = j;  /* i is zero or a present index */
-  j++;
-  /* find `i' and `j' such that i is present and j is not */
-  while ((tv = lj_tab_getint(t, (int32_t)j)) && !tvisnil(tv)) {
-    i = j;
-    j *= 2;
-    if (j > (MSize)(INT_MAX-2)) {  /* overflow? */
-      /* table was built with bad purposes: resort to linear search */
-      i = 1;
-      while ((tv = lj_tab_getint(t, (int32_t)i)) && !tvisnil(tv)) i++;
-      return i - 1;
+  size_t lo = hi;
+  hi++;
+  /* Widening search for an upper bound. */
+  while ((tv = lj_tab_getint(t, (int32_t)hi)) && !tvisnil(tv)) {
+    lo = hi;
+    hi += hi;
+    if (hi > (size_t)(INT_MAX-2)) {  /* Punt and do a linear search. */
+      lo = 1;
+      while ((tv = lj_tab_getint(t, (int32_t)lo)) && !tvisnil(tv)) lo++;
+      return (MSize)(lo - 1);
     }
   }
-  /* now do a binary search between them */
-  while (j - i > 1) {
-    MSize m = (i+j)/2;
-    cTValue *tvb = lj_tab_getint(t, (int32_t)m);
-    if (tvb && !tvisnil(tvb)) i = m; else j = m;
+  /* Binary search to find a non-nil to nil transition. */
+  while (hi - lo > 1) {
+    size_t mid = (lo+hi) >> 1;
+    cTValue *tvb = lj_tab_getint(t, (int32_t)mid);
+    if (tvb && !tvisnil(tvb)) lo = mid; else hi = mid;
   }
-  return i;
+  return (MSize)lo;
 }
 
-/*
-** Try to find a boundary in table `t'. A `boundary' is an integer index
-** such that t[i] is non-nil and t[i+1] is nil (and 0 if t[1] is nil).
-*/
+/* Compute table length. Fast path. */
 MSize LJ_FASTCALL lj_tab_len(GCtab *t)
 {
-  MSize j = (MSize)t->asize;
-  if (j > 1 && tvisnil(arrayslot(t, j-1))) {
-    MSize i = 1;
-    while (j - i > 1) {
-      MSize m = (i+j)/2;
-      if (tvisnil(arrayslot(t, m-1))) j = m; else i = m;
+  size_t hi = (size_t)t->asize;
+  if (hi) hi--;
+  /* In a growing array the last array element is very likely nil. */
+  if (hi > 0 && LJ_LIKELY(tvisnil(arrayslot(t, hi)))) {
+    /* Binary search to find a non-nil to nil transition in the array. */
+    size_t lo = 0;
+    while (hi - lo > 1) {
+      size_t mid = (lo+hi) >> 1;
+      if (tvisnil(arrayslot(t, mid))) hi = mid; else lo = mid;
     }
-    return i-1;
+    return (MSize)lo;
   }
-  if (j) j--;
-  if (t->hmask <= 0)
-    return j;
-  return unbound_search(t, j);
+  /* Without a hash part, there's an implicit nil after the last element. */
+  return t->hmask ? tab_len_slow(t, hi) : (MSize)hi;
 }
+
+#if LJ_HASJIT
+/* Verify hinted table length or compute it. */
+MSize LJ_FASTCALL lj_tab_len_hint(GCtab *t, size_t hint)
+{
+  size_t asize = (size_t)t->asize;
+  cTValue *tv = arrayslot(t, hint);
+  if (LJ_LIKELY(hint+1 < asize)) {
+    if (LJ_LIKELY(!tvisnil(tv) && tvisnil(tv+1))) return (MSize)hint;
+  } else if (hint+1 <= asize && LJ_LIKELY(t->hmask == 0) && !tvisnil(tv)) {
+    return (MSize)hint;
+  }
+  return lj_tab_len(t);
+}
+#endif
 

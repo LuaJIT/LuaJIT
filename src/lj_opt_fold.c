@@ -2132,8 +2132,8 @@ LJFOLDX(lj_opt_fwd_hload)
 LJFOLD(ULOAD any)
 LJFOLDX(lj_opt_fwd_uload)
 
-LJFOLD(CALLL any IRCALL_lj_tab_len)
-LJFOLDX(lj_opt_fwd_tab_len)
+LJFOLD(ALEN any any)
+LJFOLDX(lj_opt_fwd_alen)
 
 /* Upvalue refs are really loads, but there are no corresponding stores.
 ** So CSE is ok for them, except for UREFO across a GC step (see below).

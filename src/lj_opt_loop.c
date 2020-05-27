@@ -352,10 +352,12 @@ static void loop_unroll(LoopState *lps)
 	    irr = IR(ref);
 	    goto phiconv;
 	  }
-	} else if (ref != REF_DROP && irr->o == IR_CONV &&
-		   ref > invar && irr->op1 < invar) {
-	  /* May need an extra PHI for a CONV. */
-	  ref = irr->op1;
+	} else if (ref != REF_DROP && ref > invar &&
+		   ((irr->o == IR_CONV && irr->op1 < invar) ||
+		    (irr->o == IR_ALEN && irr->op2 < invar &&
+					  irr->op2 != REF_NIL))) {
+	  /* May need an extra PHI for a CONV or ALEN hint. */
+	  ref = irr->o == IR_CONV ? irr->op1 : irr->op2;
 	  irr = IR(ref);
 	phiconv:
 	  if (ref < invar && !irref_isk(ref) && !irt_isphi(irr->t)) {
