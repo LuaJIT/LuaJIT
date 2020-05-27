@@ -1637,6 +1637,12 @@ static void asm_fuseequal(ASMState *as, IRIns *ir)
   }
 }
 
+static void asm_alen(ASMState *as, IRIns *ir)
+{
+  asm_callid(as, ir, ir->op2 == REF_NIL ? IRCALL_lj_tab_len :
+					  IRCALL_lj_tab_len_hint);
+}
+
 /* -- Instruction dispatch ------------------------------------------------ */
 
 /* Assemble a single instruction. */
@@ -1719,6 +1725,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_FLOAD: asm_fload(as, ir); break;
   case IR_XLOAD: asm_xload(as, ir); break;
   case IR_SLOAD: asm_sload(as, ir); break;
+  case IR_ALEN: asm_alen(as, ir); break;
 
   case IR_ASTORE: case IR_HSTORE: case IR_USTORE: asm_ahustore(as, ir); break;
   case IR_FSTORE: asm_fstore(as, ir); break;
