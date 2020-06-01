@@ -95,7 +95,6 @@ which features they require, and put on metadata appropriately.
 
 Some files/directories in this directory need some thought:
 
-  * `common/ffi_util.inc` - Needs renaming and being made `require`-able.
   * `lib/ffi` - Tests need converting to structure described in this document.
   * `lib/table/misc.lua` - Tests need organising and converting to structure
                            described in this document.
