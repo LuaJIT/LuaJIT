@@ -369,7 +369,8 @@ LJLIB_CF(debug_debug)
       return 0;
     if (luaL_loadbuffer(L, buffer, strlen(buffer), "=(debug command)") ||
 	lua_pcall(L, 0, 0, 0)) {
-      fputs(lua_tostring(L, -1), stderr);
+      const char *s = lua_tostring(L, -1);
+      fputs(s ? s : "(error object is not a string)", stderr);
       fputs("\n", stderr);
     }
     lua_settop(L, 0);  /* remove eventual returns */
