@@ -149,6 +149,9 @@ typedef struct FuncState {
 typedef enum BinOpr {
   OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, OPR_POW,  /* ORDER ARITH */
   OPR_CONCAT,
+  OPR_IDIV,
+  OPR_BAND, OPR_BOR, OPR_BXOR,
+  OPR_SHL, OPR_SHR,
   OPR_NE, OPR_EQ,
   OPR_LT, OPR_GE, OPR_LE, OPR_GT,
   OPR_AND, OPR_OR,
@@ -763,6 +766,42 @@ static void bcemit_branch_f(FuncState *fs, ExpDesc *e)
 
 /* -- Bytecode emitter for operators -------------------------------------- */
 
+static void expr_index(FuncState *fs, ExpDesc *t, ExpDesc *e);
+
+static void index4emulated (LexState *ls, const char *libname, const char *fctname, ExpDesc *v)
+{
+  FuncState *fs = ls->fs;
+  ExpDesc key;
+  expr_init(v, VGLOBAL, 0);
+  v->u.sval = lj_str_newz(ls->L, libname);
+  expr_toanyreg(fs, v);
+  expr_init(&key, VKSTR, 0);
+  key.u.sval = lj_str_newz(ls->L, fctname);
+  expr_toval(fs, &key);
+  expr_index(fs, v, &key);
+}
+
+/* Emit call. */
+static void bcemit_call(FuncState *fs, ExpDesc *e, ExpDesc *args)
+{
+  BCIns ins;
+  BCReg base;
+  BCLine line = fs->ls->linenumber;
+  lua_assert(e->k == VNONRELOC);
+  base = e->u.s.info;  /* Base register for call. */
+  if (args->k == VCALL) {
+    ins = BCINS_ABC(BC_CALLM, base, 2, args->u.s.aux - base - 1 - LJ_FR2);
+  } else {
+    if (args->k != VVOID)
+      expr_tonextreg(fs, args);
+    ins = BCINS_ABC(BC_CALL, base, 2, fs->freereg - base - LJ_FR2);
+  }
+  expr_init(e, VCALL, bcemit_INS(fs, ins));
+  e->u.s.aux = base;
+  fs->bcbase[fs->pc - 1].line = line;
+  fs->freereg = base+1;  /* Leave one result by default. */
+}
+
 /* Try constant-folding of arithmetic operators. */
 static int foldarith(BinOpr opr, ExpDesc *e1, ExpDesc *e2)
 {
@@ -869,6 +908,37 @@ static void bcemit_comp(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   eret->k = VJMP;
 }
 
+/* Emit bitwise operator. */
+static void bcemit_bitwise(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
+{
+  ExpDesc e;
+  switch (opr) {
+    case OPR_BAND:
+      index4emulated(fs->ls, "bit", "band", &e);
+      break;
+    case OPR_BOR:
+      index4emulated(fs->ls, "bit", "bor", &e);
+      break;
+    case OPR_BXOR:
+      index4emulated(fs->ls, "bit", "bxor", &e);
+      break;
+    case OPR_SHL:
+      index4emulated(fs->ls, "bit", "lshift", &e);
+      break;
+    case OPR_SHR:
+      index4emulated(fs->ls, "bit", "rshift", &e);
+      break;
+    default:
+      lua_assert(0);
+  }
+  expr_tonextreg(fs, &e);
+  if (LJ_FR2) bcreg_reserve(fs, 1);
+  expr_tonextreg(fs, e1);
+  expr_tonextreg(fs, e2);
+  bcemit_call(fs, &e, e2);
+  *e1 = e;
+}
+
 /* Fixup left side of binary operator. */
 static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
 {
@@ -880,6 +950,9 @@ static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
     expr_tonextreg(fs, e);
   } else if (op == OPR_EQ || op == OPR_NE) {
     if (!expr_isk_nojump(e)) expr_toanyreg(fs, e);
+  } else if (op == OPR_BAND || op == OPR_BOR || op == OPR_BXOR ||
+	     op == OPR_SHL || op == OPR_SHR || op == OPR_IDIV) {
+    /* nothing */
   } else {
     if (!expr_isnumk_nojump(e)) expr_toanyreg(fs, e);
   }
@@ -914,6 +987,18 @@ static void bcemit_binop(FuncState *fs, BinOpr op, ExpDesc *e1, ExpDesc *e2)
       e1->u.s.info = bcemit_ABC(fs, BC_CAT, 0, e1->u.s.info, e2->u.s.info);
     }
     e1->k = VRELOCABLE;
+  } else if (op == OPR_IDIV) {
+    ExpDesc e;
+    index4emulated(fs->ls, "math", "floor", &e);
+    expr_tonextreg(fs, &e);
+    if (LJ_FR2) bcreg_reserve(fs, 1);
+    if (!expr_isnumk_nojump(e1)) expr_toanyreg(fs, e1);
+    bcemit_binop(fs, OPR_DIV, e1, e2);
+    bcemit_call(fs, &e, e1);
+    *e1 = e;
+  } else if (op == OPR_BAND || op == OPR_BOR || op == OPR_BXOR ||
+	     op == OPR_SHL || op == OPR_SHR) {
+    bcemit_bitwise(fs, op, e1, e2);
   } else {
     lua_assert(op == OPR_NE || op == OPR_EQ ||
 	       op == OPR_LT || op == OPR_GE || op == OPR_LE || op == OPR_GT);
@@ -1886,12 +1971,9 @@ static BCReg expr_list(LexState *ls, ExpDesc *v)
 }
 
 /* Parse function argument list. */
-static void parse_args(LexState *ls, ExpDesc *e)
+static void parse_args(LexState *ls, ExpDesc *args)
 {
   FuncState *fs = ls->fs;
-  ExpDesc args;
-  BCIns ins;
-  BCReg base;
   BCLine line = ls->linenumber;
   if (ls->tok == '(') {
 #if !LJ_52
@@ -1900,36 +1982,23 @@ static void parse_args(LexState *ls, ExpDesc *e)
 #endif
     lj_lex_next(ls);
     if (ls->tok == ')') {  /* f(). */
-      args.k = VVOID;
+      args->k = VVOID;
     } else {
-      expr_list(ls, &args);
-      if (args.k == VCALL)  /* f(a, b, g()) or f(a, b, ...). */
-	setbc_b(bcptr(fs, &args), 0);  /* Pass on multiple results. */
+      expr_list(ls, args);
+      if (args->k == VCALL)  /* f(a, b, g()) or f(a, b, ...). */
+	setbc_b(bcptr(fs, args), 0);  /* Pass on multiple results. */
     }
     lex_match(ls, ')', '(', line);
   } else if (ls->tok == '{') {
-    expr_table(ls, &args);
+    expr_table(ls, args);
   } else if (ls->tok == TK_string) {
-    expr_init(&args, VKSTR, 0);
-    args.u.sval = strV(&ls->tokval);
+    expr_init(args, VKSTR, 0);
+    args->u.sval = strV(&ls->tokval);
     lj_lex_next(ls);
   } else {
     err_syntax(ls, LJ_ERR_XFUNARG);
     return;  /* Silence compiler. */
   }
-  lua_assert(e->k == VNONRELOC);
-  base = e->u.s.info;  /* Base register for call. */
-  if (args.k == VCALL) {
-    ins = BCINS_ABC(BC_CALLM, base, 2, args.u.s.aux - base - 1 - LJ_FR2);
-  } else {
-    if (args.k != VVOID)
-      expr_tonextreg(fs, &args);
-    ins = BCINS_ABC(BC_CALL, base, 2, fs->freereg - base - LJ_FR2);
-  }
-  expr_init(e, VCALL, bcemit_INS(fs, ins));
-  e->u.s.aux = base;
-  fs->bcbase[fs->pc - 1].line = line;
-  fs->freereg = base+1;  /* Leave one result by default. */
 }
 
 /* Parse primary expression. */
@@ -1957,15 +2026,18 @@ static void expr_primary(LexState *ls, ExpDesc *v)
       expr_bracket(ls, &key);
       expr_index(fs, v, &key);
     } else if (ls->tok == ':') {
-      ExpDesc key;
+      ExpDesc key, args;
       lj_lex_next(ls);
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
-      parse_args(ls, v);
+      parse_args(ls, &args);
+      bcemit_call(fs, v, &args);
     } else if (ls->tok == '(' || ls->tok == TK_string || ls->tok == '{') {
+      ExpDesc args;
       expr_tonextreg(fs, v);
       if (LJ_FR2) bcreg_reserve(fs, 1);
-      parse_args(ls, v);
+      parse_args(ls, &args);
+      bcemit_call(fs, v, &args);
     } else {
       break;
     }
@@ -2034,8 +2106,14 @@ static BinOpr token2binop(LexToken tok)
   case '-':	return OPR_SUB;
   case '*':	return OPR_MUL;
   case '/':	return OPR_DIV;
+  case TK_idiv:	return OPR_IDIV;
   case '%':	return OPR_MOD;
   case '^':	return OPR_POW;
+  case '&':	return OPR_BAND;
+  case '|':	return OPR_BOR;
+  case '~':	return OPR_BXOR;
+  case TK_shl:	return OPR_SHL;
+  case TK_shr:	return OPR_SHR;
   case TK_concat: return OPR_CONCAT;
   case TK_ne:	return OPR_NE;
   case TK_eq:	return OPR_EQ;
@@ -2054,14 +2132,18 @@ static const struct {
   uint8_t left;		/* Left priority. */
   uint8_t right;	/* Right priority. */
 } priority[] = {
-  {6,6}, {6,6}, {7,7}, {7,7}, {7,7},	/* ADD SUB MUL DIV MOD */
-  {10,9}, {5,4},			/* POW CONCAT (right associative) */
+  {10, 10}, {10, 10},			/* ADD SUB */
+  {11, 11}, {11, 11}, {11, 11},		/* MUL DIV MOD */
+  {14, 13}, {9, 8},			/* POW CONCAT (right associative) */
+  {11, 11},				/* IDIV */
+  {6,6}, {4,4}, {5,5},			/* BAND BOR BXOR */
+  {7,7}, {7,7},				/* SHL SHR */
   {3,3}, {3,3},				/* EQ NE */
   {3,3}, {3,3}, {3,3}, {3,3},		/* LT GE GT LE */
   {2,2}, {1,1}				/* AND OR */
 };
 
-#define UNARY_PRIORITY		8  /* Priority for unary operators. */
+#define UNARY_PRIORITY		12  /* Priority for unary operators. */
 
 /* Forward declaration. */
 static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit);
@@ -2076,6 +2158,16 @@ static void expr_unop(LexState *ls, ExpDesc *v)
     op = BC_UNM;
   } else if (ls->tok == '#') {
     op = BC_LEN;
+  } else if (ls->tok == '~') {
+    /* BNOT */
+    ExpDesc args;
+    lj_lex_next(ls);
+    index4emulated(ls, "bit", "bnot", v);
+    expr_tonextreg(ls->fs, v);
+    if (LJ_FR2) bcreg_reserve(ls->fs, 1);
+    expr_binop(ls, &args, UNARY_PRIORITY);
+    bcemit_call(ls->fs, v, &args);
+    return;
   } else {
     expr_simple(ls, v);
     return;
