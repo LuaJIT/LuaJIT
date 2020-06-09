@@ -32,6 +32,7 @@
 
 LJ_FUNC TValue *lj_lib_checkany(lua_State *L, int narg);
 LJ_FUNC GCstr *lj_lib_checkstr(lua_State *L, int narg);
+LJ_FUNC const char *lj_lib_checkstrorsbuf(lua_State *L, int narg, MSize *len);
 LJ_FUNC GCstr *lj_lib_optstr(lua_State *L, int narg);
 #if LJ_DUALNUM
 LJ_FUNC void lj_lib_checknumber(lua_State *L, int narg);

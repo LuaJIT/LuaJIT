@@ -19,12 +19,15 @@
 #define sbuflen(sb)	((MSize)(sbufP((sb)) - sbufB((sb))))
 #define sbufleft(sb)	((MSize)(sbufE((sb)) - sbufP((sb))))
 #define setsbufP(sb, q)	(setmref((sb)->p, (q)))
+#define setsbuflen(sb, len) (setmref((sb)->p, (sbufB(sb)+len)))
 #define setsbufL(sb, l)	(setmref((sb)->L, (l)))
 
 /* Buffer management */
 LJ_FUNC char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz);
 LJ_FUNC char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz);
+LJ_FUNC SBuf *LJ_FASTCALL lj_buf_reserve(SBuf *sb, MSize sz);
 LJ_FUNC void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb);
+LJ_FUNC SBuf *lj_buf_setlen(SBuf *sb, MSize len, int fill);
 LJ_FUNC char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz);
 
 static LJ_AINLINE void lj_buf_init(lua_State *L, SBuf *sb)
@@ -70,6 +73,13 @@ LJ_FUNC SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c);
 LJ_FUNC SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s);
 
+/* add a temporary null terminator after the last character in the buffer without advancing the position */
+static LJ_AINLINE SBuf *lj_buf_nullterm(SBuf *sb)
+{
+  *lj_buf_more(sb, 1) = 0;
+  return sb;
+}
+
 static LJ_AINLINE char *lj_buf_wmem(char *p, const void *q, MSize len)
 {
   return (char *)memcpy(p, q, len) + len;
@@ -82,16 +92,26 @@ static LJ_AINLINE void lj_buf_putb(SBuf *sb, int c)
   setsbufP(sb, p);
 }
 
+/* In-place buffer operations */
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_upper(SBuf *sb);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_lower(SBuf *sb);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_reverse(SBuf *sb);
+
 /* High-level buffer put operations */
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s);
 LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s);
+LJ_FUNCA SBuf * LJ_FASTCALL lj_buf_putbuf(SBuf *sb, SBuf *sb2);
+LJ_FUNCA SBuf *lj_buf_putbuf_range(SBuf *sb, SBuf *sbsrc, int32_t start, int32_t end);
+LJ_FUNCA SBuf *lj_buf_putstr_range(SBuf *sb, GCstr *s, int32_t start, int32_t end);
+LJ_FUNCA SBuf *lj_buf_putrang(SBuf *sb, const char *s, MSize len, int32_t start, int32_t end);
 LJ_FUNC SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep);
 LJ_FUNC SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep,
 			    int32_t i, int32_t e);
 
 /* Miscellaneous buffer operations */
 LJ_FUNCA GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb);
+LJ_FUNCA int LJ_FASTCALL lj_buf_eq(SBuf *sb1, SBuf *sb2);
 LJ_FUNC GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2);
 LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 

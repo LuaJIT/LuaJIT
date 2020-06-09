@@ -47,6 +47,14 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
   return sbufP(sb);
 }
 
+SBuf *LJ_FASTCALL lj_buf_reserve(SBuf *sb, MSize sz)
+{
+  if (sz > sbufleft(sb)) {
+    lj_buf_more2(sb, sz);
+  }
+  return sb;
+}
+
 void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
 {
   char *b = sbufB(sb);
@@ -60,11 +68,75 @@ void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
   }
 }
 
+SBuf* lj_buf_setlen(SBuf *sb, MSize len, int fill)
+{
+  MSize oldlen = sbuflen(sb);
+  lua_assert(len <= sbufsz(sb));
+
+  setsbuflen(sb, len);
+
+  if (len > oldlen && fill != -1) {
+    memset(sbufB(sb) + oldlen, fill, len-oldlen);
+  }
+
+  return sb;
+}
+
 char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
 {
   SBuf *sb = &G(L)->tmpbuf;
   setsbufL(sb, L);
   return lj_buf_need(sb, sz);
+}
+
+/* -- In-place buffer operations ------------------------------------- */
+
+SBuf * LJ_FASTCALL lj_buf_lower(SBuf *sb)
+{
+  char *p = sbufB(sb), *e = sbufP(sb);
+  for (; p < e; p++) {
+    uint32_t c = *(unsigned char *)p;
+#if LJ_TARGET_PPC
+    *p = c + ((c >= 'A' && c <= 'Z') << 5);
+#else
+    if (c >= 'A' && c <= 'Z') c += 0x20;
+    *p = c;
+#endif
+  }
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_upper(SBuf *sb)
+{
+  char *p = sbufB(sb), *e = sbufP(sb);
+  for (; p < e; p++) {
+    uint32_t c = *(unsigned char *)p;
+#if LJ_TARGET_PPC
+    *p = c - ((c >= 'a' && c <= 'z') << 5);
+#else
+    if (c >= 'a' && c <= 'z') c -= 0x20;
+    *p = c;
+#endif
+  }
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_reverse(SBuf *sb)
+{
+  char *start = sbufB(sb), *end = sbufP(sb)-1;
+
+  if (sbuflen(sb) <= 1) {
+    return sb;
+  }
+
+  while (start < end) {
+    int temp = *start;
+    *start = *end;
+    *end = temp;
+    start++;
+    end--;
+  }
+  return sb;
 }
 
 /* -- Low-level buffer put operations ------------------------------------- */
@@ -91,6 +163,49 @@ SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
   char *p = lj_buf_more(sb, len);
   p = lj_buf_wmem(p, strdata(s), len);
   setsbufP(sb, p);
+  return sb;
+}
+
+SBuf * LJ_FASTCALL lj_buf_putbuf(SBuf *sb, SBuf *sb2)
+{
+  MSize len = sbuflen(sb2);
+  char *p = lj_buf_more(sb, len);
+  p = lj_buf_wmem(p, sbufB(sb2), len);
+  setsbufP(sb, p);
+  return sb;
+}
+
+static LJ_AINLINE int32_t posrelat(int32_t pos, MSize len)
+{
+  /* relative string position: negative means back from end */
+  if (pos < 0) pos += len + 1;
+  return (pos >= 0) ? pos : 0;
+}
+
+SBuf *lj_buf_putrang(SBuf *sb, const char* s, MSize len, int32_t start, int32_t end)
+{
+  start = posrelat(start, len);
+  end = posrelat(end, len);
+
+  if (start < 1) start = 1;
+  if (end > (int32_t)len) end = (int32_t)len;
+
+  if (start <= end) {
+    lj_buf_putmem(sb, s + start - 1, end - start + 1);
+  }
+
+  return sb;
+}
+
+SBuf *lj_buf_putbuf_range(SBuf *sb, SBuf *sbsrc, int32_t start, int32_t end)
+{
+  lj_buf_putrang(sb, sbufB(sbsrc), sbuflen(sbsrc), start, end);
+  return sb;
+}
+
+SBuf *lj_buf_putstr_range(SBuf *sb, GCstr *s, int32_t start, int32_t end)
+{
+  lj_buf_putrang(sb, strdata(s), s->len, start, end);
   return sb;
 }
 
@@ -204,6 +319,47 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
   return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
+}
+
+static int fastcmp(const char *a, const char *b, MSize len)
+{
+  MSize i;
+  lua_assert(len > 0);
+
+  for (i = 0; i < len; i += 4) {
+    /* Note: innocuous access up to end of buffers + 3. */
+    uint32_t va = *(const uint32_t *)(a+i);
+    uint32_t vb = *(const uint32_t *)(b+i);
+    if (va != vb) {
+#if LJ_LE
+      va = lj_bswap(va); vb = lj_bswap(vb);
+#endif
+      i -= len;
+      if ((int32_t)i >= -3) {
+        va >>= 32+(i<<3); vb >>= 32+(i<<3);
+        if (va == vb) break;
+      }
+      return va < vb ? -1 : 1;
+    }
+  }
+
+  return 0;
+}
+
+int LJ_FASTCALL lj_buf_eq(SBuf *sb1, SBuf *sb2)
+{
+
+  if ((sbuflen(sb1)+sbuflen(sb2)) == 0){
+    return 1;
+  }else if (sbuflen(sb1) != sbuflen(sb2)) {
+    return 0;
+  }
+
+  if (sbufleft(sb1) >= 4 && sbufleft(sb2) >= 4) {
+    return fastcmp(sbufB(sb1), sbufB(sb2), sbuflen(sb1)) == 0;
+  } else {
+    return memcmp(sbufB(sb1), sbufB(sb2), sbuflen(sb1)) == 0;
+  }
 }
 
 /* Concatenate two strings. */

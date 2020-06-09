@@ -574,6 +574,43 @@ LJFOLDF(kfold_strcmp)
 ** fragments left over from CSE are eliminated by DCE.
 */
 
+LJFOLD(BUFHDR any any)
+LJFOLDF(bufhdr_fold)
+{
+  /* Reuse the last header for this buffer if its also a IRBUFHDR_MODIFY */
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) &&
+    fins->op2 == (IRBUFHDR_STRBUF|IRBUFHDR_MODIFY) && J->chain[IR_BUFHDR]) {
+    IRRef ref = J->chain[IR_BUFHDR];
+
+    /* Ignore the temp buffer since it can never be used in IRBUFHDR_MODIFY mode */
+    while (ref && (!(IR(ref)->op2 & IRBUFHDR_STRBUF) ||
+                    (IR(ref)->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_MODIFY)) {
+      if (IR(ref)->op1 == fins->op1) {
+        return ref;
+      }
+      ref = IR(ref)->prev;
+    }
+  }
+
+  return EMITFOLD;
+}
+
+LJFOLD(FLOAD any IRFL_SBUF_B)
+LJFOLD(FLOAD any IRFL_SBUF_P)
+LJFOLD(FLOAD any IRFL_SBUF_E)
+LJFOLDF(buf_fload)
+{
+  lua_assert(fleft->o == IR_BUFHDR && 
+             ((fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_MODIFY || 
+              (fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESIZE));
+
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
+    /* CSE limited up to our header for now */
+    return lj_opt_cselim(J, fins->op1);
+  }
+  return EMITFOLD;
+}
+
 /* BUFHDR is emitted like a store, see below. */
 
 LJFOLD(BUFPUT BUFHDR BUFSTR)
@@ -581,7 +618,8 @@ LJFOLDF(bufput_append)
 {
   /* New buffer, no other buffer op inbetween and same buffer? */
   if ((J->flags & JIT_F_OPT_FWD) &&
-      !(fleft->op2 & IRBUFHDR_APPEND) &&
+      !(fleft->op2 & IRBUFHDR_STRBUF) &&
+      (fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET &&
       fleft->prev == fright->op2 &&
       fleft->op1 == IR(fright->op2)->op1) {
     IRRef ref = fins->op1;
@@ -613,21 +651,63 @@ LJFOLDF(bufput_kgc)
   return EMITFOLD;  /* Always emit, CSE later. */
 }
 
+LJFOLD(BUFPUT any BUFSTR)
+LJFOLDF(bufput_fromtempbuf)
+{
+  IRRef ref, limit;
+
+  /* Only try to fold the string allocation if its from the temp buffer */
+  if ((IR(fright->op2)->op2 & IRBUFHDR_STRBUF) || LJ_UNLIKELY((J->flags & JIT_F_OPT_FWD) == 0)) {
+    return EMITFOLD;
+  }
+
+  ref = fins->op1;
+
+  while (IR(ref)->o != IR_BUFHDR) {
+    ref = IR(ref)->op1;
+  }
+
+  /* destination buffer needs tobe a string buffer */
+  if (!(IR(ref)->op2 & IRBUFHDR_STRBUF)) {
+    return EMITFOLD;
+  }
+  
+  limit = fins->op2;
+  ref = J->chain[IR_BUFHDR];
+ 
+  /* Try to find another interfering temp buffer use after the BUFSTR */
+  while (ref > limit) {
+    IRIns *ir = IR(ref);
+
+    if (!(ir->op2 & IRBUFHDR_STRBUF)) {
+      return EMITFOLD;
+    }
+    ref = ir->prev;
+  }
+
+  return lj_ir_call(J, IRCALL_lj_buf_putbuf, fins->op1, fright->op1); 
+}
+
 LJFOLD(BUFSTR any any)
 LJFOLDF(bufstr_kfold_cse)
 {
   lua_assert(fleft->o == IR_BUFHDR || fleft->o == IR_BUFPUT ||
-	     fleft->o == IR_CALLL);
+	     fleft->o == IR_CALLL || (fright->op2 & IRBUFHDR_STRBUF));
+
+  if ((fright->op2 & IRBUFHDR_STRBUF)) {
+    return EMITFOLD; /* tostring called on string buffer */
+  }
+
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fleft->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      if ((fleft->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET)  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
       fins->op1 = fleft->op1;
       fins->op2 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else if (fleft->o == IR_BUFPUT) {
       IRIns *irb = IR(fleft->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+      if (irb->o == IR_BUFHDR && (irb->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET)
 	return fleft->op2;  /* Shortcut for a single put operation. */
     }
   }
@@ -639,7 +719,7 @@ LJFOLDF(bufstr_kfold_cse)
       while (ira->o == irb->o && ira->op2 == irb->op2) {
 	lua_assert(ira->o == IR_BUFHDR || ira->o == IR_BUFPUT ||
 		   ira->o == IR_CALLL || ira->o == IR_CARG);
-	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
+	if (ira->o == IR_BUFHDR && (ira->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET && !(ira->op2 & IRBUFHDR_STRBUF))
 	  return ref;  /* CSE succeeded. */
 	if (ira->o == IR_CALLL && ira->op2 == IRCALL_lj_buf_puttab)
 	  break;
@@ -655,7 +735,7 @@ LJFOLDF(bufstr_kfold_cse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_reverse)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_upper)
 LJFOLD(CALLL CARG IRCALL_lj_buf_putstr_lower)
-LJFOLD(CALLL CARG IRCALL_lj_strfmt_putquoted)
+LJFOLD(CALLL CARG IRCALL_lj_strfmt_putquotedstr)
 LJFOLDF(bufput_kfold_op)
 {
   if (irref_isk(fleft->op2)) {
@@ -2422,7 +2502,6 @@ LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
 LJFOLD(CNEW any any)
 LJFOLD(XSNEW any any)
-LJFOLD(BUFHDR any any)
 LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */

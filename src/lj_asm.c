@@ -1088,12 +1088,12 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
   Reg sb = ra_dest(as, ir, RSET_GPR);
-  if ((ir->op2 & IRBUFHDR_APPEND)) {
+  if ((ir->op2 & IRBUFHDR_MODEMASK) != IRBUFHDR_RESET) {
     /* Rematerialize const buffer pointer instead of likely spill. */
     IRIns *irp = IR(ir->op1);
-    if (!(ra_hasreg(irp->r) || irp == ir-1 ||
+    if (!(ir->op2 & IRBUFHDR_STRBUF) && !(ra_hasreg(irp->r) || irp == ir-1 ||
 	  (irp == ir-2 && !ra_used(ir-1)))) {
-      while (!(irp->o == IR_BUFHDR && !(irp->op2 & IRBUFHDR_APPEND)))
+      while (!(irp->o == IR_BUFHDR && (irp->op2 & IRBUFHDR_MODEMASK) == IRBUFHDR_RESET))
 	irp = IR(irp->op1);
       if (irref_isk(irp->op1)) {
 	ra_weak(as, ra_allocref(as, ir->op1, RSET_GPR));
@@ -1649,7 +1649,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   /* Miscellaneous ops. */
   case IR_LOOP: asm_loop(as); break;
   case IR_NOP: case IR_XBAR: lua_assert(!ra_used(ir)); break;
-  case IR_USE:
+  case IR_USE: case IR_BUFTL:
     ra_alloc1(as, ir->op1, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR); break;
   case IR_PHI: asm_phi(as, ir); break;
   case IR_HIOP: asm_hiop(as, ir); break;

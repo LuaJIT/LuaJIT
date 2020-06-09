@@ -12,6 +12,7 @@
 
 /* String helpers. */
 LJ_FUNC int32_t LJ_FASTCALL lj_str_cmp(GCstr *a, GCstr *b);
+LJ_FUNC int32_t LJ_FASTCALL lj_str_eqbuf(GCstr *s, SBuf *sb);
 LJ_FUNC const char *lj_str_find(const char *s, const char *f,
 				MSize slen, MSize flen);
 LJ_FUNC int lj_str_haspattern(GCstr *s);

@@ -138,6 +138,8 @@ typedef struct CCallInfo {
 /* Function definitions for CALL* instructions. */
 #define IRCALLDEF(_) \
   _(ANY,	lj_str_cmp,		2,  FN, INT, CCI_NOFPRCLOBBER) \
+  _(ANY,	lj_str_eqbuf,        2,  FN, INT, 0) \
+  _(ANY,	lj_buf_eq,		2,  FN, INT, 0) \
   _(ANY,	lj_str_find,		4,   N, PGC, 0) \
   _(ANY,	lj_str_new,		3,   S, STR, CCI_L) \
   _(ANY,	lj_strscan_num,		2,  FN, INT, 0) \
@@ -146,15 +148,22 @@ typedef struct CCallInfo {
   _(ANY,	lj_strfmt_char,		2,  FN, STR, CCI_L) \
   _(ANY,	lj_strfmt_putint,	2,  FL, PGC, 0) \
   _(ANY,	lj_strfmt_putnum,	2,  FL, PGC, 0) \
-  _(ANY,	lj_strfmt_putquoted,	2,  FL, PGC, 0) \
+  _(ANY,	lj_strfmt_putquotedstr,	2,  FL, PGC, 0) \
   _(ANY,	lj_strfmt_putfxint,	3,   L, PGC, XA_64) \
   _(ANY,	lj_strfmt_putfnum_int,	3,   L, PGC, XA_FP) \
   _(ANY,	lj_strfmt_putfnum_uint,	3,   L, PGC, XA_FP) \
   _(ANY,	lj_strfmt_putfnum,	3,   L, PGC, XA_FP) \
   _(ANY,	lj_strfmt_putfstr,	3,   L, PGC, 0) \
+  _(ANY,	lj_strfmt_putfbuf,	3,   L, PGC, 0) \
   _(ANY,	lj_strfmt_putfchar,	3,   L, PGC, 0) \
+  _(ANY,	lj_buf_lower,		1,  FL, PGC, 0) \
+  _(ANY,	lj_buf_upper,		1,  FL, PGC, 0) \
+  _(ANY,	lj_buf_reverse,		1,  FL, PGC, 0) \
   _(ANY,	lj_buf_putmem,		3,   S, PGC, 0) \
-  _(ANY,	lj_buf_putstr,		2,  FL, PGC, 0) \
+  _(ANY,	lj_buf_putstr_range,	4,   L, PGC, 0) \
+  _(ANY,	lj_buf_putbuf_range,	4,   L, PGC, 0) \
+  _(ANY,	lj_buf_putstr,          2,  FL, PGC, 0) \
+  _(ANY,	lj_buf_putbuf,		2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putchar,		2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putstr_reverse,	2,  FL, PGC, 0) \
   _(ANY,	lj_buf_putstr_lower,	2,  FL, PGC, 0) \
@@ -162,6 +171,8 @@ typedef struct CCallInfo {
   _(ANY,	lj_buf_putstr_rep,	3,   L, PGC, 0) \
   _(ANY,	lj_buf_puttab,		5,   L, PGC, 0) \
   _(ANY,	lj_buf_tostr,		1,  FL, STR, 0) \
+  _(ANY,	lj_buf_setlen,		3,  S,  P32, 0) \
+  _(ANY,	lj_buf_reserve,		2,  FS, P32, 0) \
   _(ANY,	lj_tab_new_ah,		3,   A, TAB, CCI_L) \
   _(ANY,	lj_tab_new1,		2,  FS, TAB, CCI_L) \
   _(ANY,	lj_tab_dup,		2,  FS, TAB, CCI_L) \

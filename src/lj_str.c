@@ -11,6 +11,7 @@
 #include "lj_err.h"
 #include "lj_str.h"
 #include "lj_char.h"
+#include "lj_buf.h"
 
 /* -- String helpers ------------------------------------------------------ */
 
@@ -58,6 +59,23 @@ static LJ_AINLINE int str_fastcmp(const char *a, const char *b, MSize len)
   return 0;
 }
 
+int32_t LJ_FASTCALL lj_str_eqbuf(GCstr *s, SBuf *sb)
+{
+  char* buff = sbufB(sb);
+  MSize len = s->len;
+
+  if ((len + sbuflen(sb)) == 0) {
+    return 1;
+  }else if (s->len != sbuflen(sb)) {
+    return 0;
+  }
+
+  if (LJ_LIKELY((((uintptr_t)buff+len-1) & (LJ_PAGESIZE-1)) <= LJ_PAGESIZE-4) || sbufleft(sb) >= 4) {
+    return str_fastcmp(buff, strdata(s), len) == 0;
+  } else {  /* Slow path: end of string is too close to a page boundary. */
+    return memcmp(buff, strdata(s), len) == 0;
+  }
+}
 /* Find fixed string p inside string s. */
 const char *lj_str_find(const char *s, const char *p, MSize slen, MSize plen)
 {
