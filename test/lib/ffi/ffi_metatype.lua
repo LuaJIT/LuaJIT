@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
 ffi.cdef[[
 typedef struct { int x; } idx1_t;
@@ -14,20 +14,20 @@ local function ptreq(a, b)
   return ffi.cast("void *", a) == ffi.cast("void *", b)
 end
 
-do
+do --- test-metatype-index-in-metatable
   local nidx = {}
   local tp = ffi.metatype("idx1_t", {
     __index = { foo = 99, method = function(c, v) return v end },
     __newindex = nidx,
   })
 
-  fails(function() ffi.metatype("idx1_t", {}) end)
+  ffi_util.fails(function() ffi.metatype("idx1_t", {}) end)
 
   local s = tp(1234)
   assert(s.foo == 99)
   assert(s.x == 1234)
   -- bad field in __index metatable
-  fails(function(s) local x = s.bar end, s)
+  ffi_util.fails(function(s) local x = s.bar end, s)
   assert(s:method(123) == 123)
   s.bar = 42
   assert(nidx.bar == 42)
@@ -36,16 +36,16 @@ do
   assert(cs.foo == 99)
   assert(cs.x == 9876)
   -- write to const struct
-  fails(function(cs) cs.bar = 42 end, cs)
+  ffi_util.fails(function(cs) cs.bar = 42 end, cs)
 
   local cp = ffi.new("const idx1_t *", cs)
   assert(cp.foo == 99)
   assert(cp.x == 9876)
   -- write to const struct pointer
-  fails(function(cp) cp.bar = 42 end, cp)
+  ffi_util.fails(function(cp) cp.bar = 42 end, cp)
 end
 
-do
+do --- test-metatype-functions
   local uc, uk, uv
   local tp = ffi.metatype("idx2_t", {
     __index = function(c, k, x, y)
@@ -75,10 +75,10 @@ do
   assert(ptreq(p[0], p))
   assert(uc == nil and uk == nil and uv == nil); uc,uk,uv=nil,nil,nil
   -- pointer dereference has precedence
-  fails(function(p) p[0] = 11 end, p)
+  ffi_util.fails(function(p) p[0] = 11 end, p)
 end
 
-do
+do --- test-metatype-values
   local uc, uk, uv
   local ti, tn = {}, {}
   local tp = ffi.metatype("idx3_t", {
@@ -103,7 +103,7 @@ do
   uc, uk, uv = nil, nil, nil
 end
 
-do
+do --- test-metatype-arith
   local tp
   tp = ffi.metatype("arith_t", {
     __add = function(a, b) return tp(a.x+b.x, a.y+b.y) end,
@@ -150,7 +150,7 @@ do
   assert(p() == 30)
 
   local q = ffi.new("arith_t &", a)
-  fails(function(p) local y = q[0] + q[0] end, q)
+  ffi_util.fails(function(p) local y = q[0] + q[0] end, q)
   local h = q + q
   assert(h.x == 20 and h.y == 40)
 
@@ -174,7 +174,7 @@ do
   assert(x == 3000)
 end
 
-do
+do --- test-metatype-gc
   local count = 0
   local tp = ffi.metatype("gc_t", {
     __gc = function(x) count = count + 1 end,
@@ -206,7 +206,7 @@ do
   assert(count == 103)
 end
 
-do
+do --- test-metatype-struct
   local tp = ffi.metatype([[
 struct {
   static const int Z42 = 42;
@@ -221,22 +221,22 @@ struct {
   assert(tp.Z42 == 42)
   assert(tp.Z39 == 39)
   assert(tp.test(99) == 100)
-  fails(function() tp.Z42 = 1 end)
-  fails(function() tp.Z39 = 1 end)
+  ffi_util.fails(function() tp.Z42 = 1 end)
+  ffi_util.fails(function() tp.Z39 = 1 end)
   assert(tp.x == "hello") -- Not sure this is a good idea to allow that.
-  fails(function() tp.x = 1 end)
+  ffi_util.fails(function() tp.x = 1 end)
   local o = tp()
   assert(o.Z42 == 42)
   assert(o.Z39 == 39)
   assert(o.test(55) == 56)
-  fails(function() o.Z42 = 1 end)
-  fails(function() o.Z39 = 1 end)
+  ffi_util.fails(function() o.Z42 = 1 end)
+  ffi_util.fails(function() o.Z39 = 1 end)
   assert(o.x == -1)
   o.x = 5
   assert(o.x == 5)
 end
 
-do
+do --- test-metatype-struct-2
   local fb = ffi.new("struct { int x; }", 99)
   local xt = ffi.metatype("struct { }", { __index = fb })
   local o = xt()
