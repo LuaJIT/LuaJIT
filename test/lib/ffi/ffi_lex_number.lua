@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-dofile("../common/ffi_util.inc")
+local ffi_util = require("common.ffi_util")
 
 local function checklex(t)
   for i=1,1e9,2 do
@@ -37,15 +37,16 @@ checklex{
   "0-0i",			"-0i",
 }
 
-checkfail({
-  "0l",
-  "0lll",
-  "0u",
-  "0ul",
-  "0ulll",
-  "0wll",
-  "0xll",
-  ".0ll",
-  "0ii",
-}, function(s) assert(loadstring("return "..s)) end)
-
+do --- test-lex
+  ffi_util.checkfail({
+    "0l",
+    "0lll",
+    "0u",
+    "0ul",
+    "0ulll",
+    "0wll",
+    "0xll",
+    ".0ll",
+    "0ii",
+  }, function(s) assert(loadstring("return "..s)) end)
+end
