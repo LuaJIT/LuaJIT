@@ -1009,13 +1009,8 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
     }
     /* The cdata metatable is treated as immutable. */
     if (LJ_HASFFI && tref_iscdata(ix->tab)) goto immutable_mt;
-#if LJ_GC64
-    /* TODO: fix ARM32 asm_fload(), so we can use this for all archs. */
     ix->mt = mix.tab = lj_ir_ggfload(J, IRT_TAB,
       GG_OFS(g.gcroot[GCROOT_BASEMT+itypemap(&ix->tabv)]));
-#else
-    ix->mt = mix.tab = lj_ir_ktab(J, mt);
-#endif
     goto nocheck;
   }
   ix->mt = mt ? mix.tab : TREF_NIL;

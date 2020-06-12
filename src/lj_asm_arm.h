@@ -1007,14 +1007,15 @@ static ARMIns asm_fxstoreins(ASMState *as, IRIns *ir)
 
 static void asm_fload(ASMState *as, IRIns *ir)
 {
+  Reg dest = ra_dest(as, ir, RSET_GPR);
+  ARMIns ai = asm_fxloadins(as, ir);
+  Reg idx;
+  int32_t ofs;
   if (ir->op1 == REF_NIL) {  /* FLOAD from GG_State with offset. */
-    /* We can end up here if DCE is turned off. */
-    lj_assertA(!ra_used(ir), "NYI FLOAD GG_State");
+    idx = ra_allock(as, (int32_t)(ir->op2<<2) + (int32_t)J2GG(as->J), RSET_GPR);
+    ofs = 0;
   } else {
-    Reg dest = ra_dest(as, ir, RSET_GPR);
-    Reg idx = ra_alloc1(as, ir->op1, RSET_GPR);
-    ARMIns ai = asm_fxloadins(as, ir);
-    int32_t ofs;
+    idx = ra_alloc1(as, ir->op1, RSET_GPR);
     if (ir->op2 == IRFL_TAB_ARRAY) {
       ofs = asm_fuseabase(as, ir->op1);
       if (ofs) {  /* Turn the t->array load into an add for colocated arrays. */
@@ -1023,11 +1024,11 @@ static void asm_fload(ASMState *as, IRIns *ir)
       }
     }
     ofs = field_ofs[ir->op2];
-    if ((ai & 0x04000000))
-      emit_lso(as, ai, dest, idx, ofs);
-    else
-      emit_lsox(as, ai, dest, idx, ofs);
   }
+  if ((ai & 0x04000000))
+    emit_lso(as, ai, dest, idx, ofs);
+  else
+    emit_lsox(as, ai, dest, idx, ofs);
 }
 
 static void asm_fstore(ASMState *as, IRIns *ir)
