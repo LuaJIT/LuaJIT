@@ -18,6 +18,7 @@
 #include "lj_jit.h"
 #include "lj_iropt.h"
 #include "lj_ircall.h"
+#include "lj_dispatch.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)		(&J->cur.ir[(ref)])
@@ -56,8 +57,8 @@ static AliasRet aa_table(jit_State *J, IRRef ta, IRRef tb)
 {
   IRIns *taba = IR(ta), *tabb = IR(tb);
   int newa, newb;
-  lua_assert(ta != tb);
-  lua_assert(irt_istab(taba->t) && irt_istab(tabb->t));
+  lj_assertJ(ta != tb, "bad usage");
+  lj_assertJ(irt_istab(taba->t) && irt_istab(tabb->t), "bad usage");
   /* Disambiguate new allocations. */
   newa = (taba->o == IR_TNEW || taba->o == IR_TDUP);
   newb = (tabb->o == IR_TNEW || tabb->o == IR_TDUP);
@@ -99,7 +100,7 @@ static AliasRet aa_ahref(jit_State *J, IRIns *refa, IRIns *refb)
     /* Disambiguate array references based on index arithmetic. */
     int32_t ofsa = 0, ofsb = 0;
     IRRef basea = ka, baseb = kb;
-    lua_assert(refb->o == IR_AREF);
+    lj_assertJ(refb->o == IR_AREF, "expected AREF");
     /* Gather base and offset from t[base] or t[base+-ofs]. */
     if (keya->o == IR_ADD && irref_isk(keya->op2)) {
       basea = keya->op1;
@@ -117,8 +118,9 @@ static AliasRet aa_ahref(jit_State *J, IRIns *refa, IRIns *refb)
       return ALIAS_NO;  /* t[base+-o1] vs. t[base+-o2] and o1 != o2. */
   } else {
     /* Disambiguate hash references based on the type of their keys. */
-    lua_assert((refa->o==IR_HREF || refa->o==IR_HREFK || refa->o==IR_NEWREF) &&
-	       (refb->o==IR_HREF || refb->o==IR_HREFK || refb->o==IR_NEWREF));
+    lj_assertJ((refa->o==IR_HREF || refa->o==IR_HREFK || refa->o==IR_NEWREF) &&
+	       (refb->o==IR_HREF || refb->o==IR_HREFK || refb->o==IR_NEWREF),
+	       "bad xREF IR op %d or %d", refa->o, refb->o);
     if (!irt_sametype(keya->t, keyb->t))
       return ALIAS_NO;  /* Different key types. */
   }
@@ -192,7 +194,8 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	if (key->o == IR_KSLOT) key = IR(key->op1);
 	lj_ir_kvalue(J->L, &keyv, key);
 	tv = lj_tab_get(J->L, ir_ktab(IR(ir->op1)), &keyv);
-	lua_assert(itype2irt(tv) == irt_type(fins->t));
+	lj_assertJ(itype2irt(tv) == irt_type(fins->t),
+		   "mismatched type in constant table");
 	if (irt_isnum(fins->t))
 	  return lj_ir_knum_u64(J, tv->u64);
 	else if (LJ_DUALNUM && irt_isint(fins->t))

@@ -93,7 +93,7 @@ static void strscan_double(uint64_t x, TValue *o, int32_t ex2, int32_t neg)
   }
 
   /* Convert to double using a signed int64_t conversion, then rescale. */
-  lua_assert((int64_t)x >= 0);
+  lj_assertX((int64_t)x >= 0, "bad double conversion");
   n = (double)(int64_t)x;
   if (neg) n = -n;
   if (ex2) n = ldexp(n, ex2);
@@ -262,7 +262,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
     uint32_t hi = 0, lo = (uint32_t)(xip-xi);
     int32_t ex2 = 0, idig = (int32_t)lo + (ex10 >> 1);
 
-    lua_assert(lo > 0 && (ex10 & 1) == 0);
+    lj_assertX(lo > 0 && (ex10 & 1) == 0, "bad lo %d ex10 %d", lo, ex10);
 
     /* Handle simple overflow/underflow. */
     if (idig > 310/2) { if (neg) setminfV(o); else setpinfV(o); return fmt; }
@@ -528,7 +528,7 @@ int LJ_FASTCALL lj_strscan_num(GCstr *str, TValue *o)
 {
   StrScanFmt fmt = lj_strscan_scan((const uint8_t *)strdata(str), str->len, o,
 				   STRSCAN_OPT_TONUM);
-  lua_assert(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM);
+  lj_assertX(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM, "bad scan format");
   return (fmt != STRSCAN_ERROR);
 }
 
@@ -537,7 +537,8 @@ int LJ_FASTCALL lj_strscan_number(GCstr *str, TValue *o)
 {
   StrScanFmt fmt = lj_strscan_scan((const uint8_t *)strdata(str), str->len, o,
 				   STRSCAN_OPT_TOINT);
-  lua_assert(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM || fmt == STRSCAN_INT);
+  lj_assertX(fmt == STRSCAN_ERROR || fmt == STRSCAN_NUM || fmt == STRSCAN_INT,
+	     "bad scan format");
   if (fmt == STRSCAN_INT) setitype(o, LJ_TISNUM);
   return (fmt != STRSCAN_ERROR);
 }

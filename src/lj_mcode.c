@@ -351,7 +351,7 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
     /* Otherwise search through the list of MCode areas. */
     for (;;) {
       mc = ((MCLink *)mc)->next;
-      lua_assert(mc != NULL);
+      lj_assertJ(mc != NULL, "broken MCode area chain");
       if (ptr >= mc && ptr < (MCode *)((char *)mc + ((MCLink *)mc)->size)) {
 	if (LJ_UNLIKELY(mcode_setprot(mc, ((MCLink *)mc)->size, MCPROT_GEN)))
 	  mcode_protfail(J);

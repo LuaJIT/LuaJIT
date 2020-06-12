@@ -299,7 +299,8 @@ static void loop_unroll(LoopState *lps)
   loopmap = &J->cur.snapmap[loopsnap->mapofs];
   /* The PC of snapshot #0 and the loop snapshot must match. */
   psentinel = &loopmap[loopsnap->nent];
-  lua_assert(*psentinel == J->cur.snapmap[J->cur.snap[0].nent]);
+  lj_assertJ(*psentinel == J->cur.snapmap[J->cur.snap[0].nent],
+	     "mismatched PC for loop snapshot");
   *psentinel = SNAP(255, 0, 0);  /* Replace PC with temporary sentinel. */
 
   /* Start substitution with snapshot #1 (#0 is empty for root traces). */
@@ -372,7 +373,7 @@ static void loop_unroll(LoopState *lps)
   }
   if (!irt_isguard(J->guardemit))  /* Drop redundant snapshot. */
     J->cur.nsnapmap = (uint32_t)J->cur.snap[--J->cur.nsnap].mapofs;
-  lua_assert(J->cur.nsnapmap <= J->sizesnapmap);
+  lj_assertJ(J->cur.nsnapmap <= J->sizesnapmap, "bad snapshot map index");
   *psentinel = J->cur.snapmap[J->cur.snap[0].nent];  /* Restore PC. */
 
   loop_emit_phi(J, subst, phi, nphi, onsnap);

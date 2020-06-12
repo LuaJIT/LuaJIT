@@ -31,7 +31,7 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
 #endif
   /* Jump to exit handler which fills in the ExitState. */
   *mxp++ = XI_JMP; mxp += 4;
-  *((int32_t *)(mxp-4)) = jmprel(mxp, (MCode *)(void *)lj_vm_exit_handler);
+  *((int32_t *)(mxp-4)) = jmprel(as->J, mxp, (MCode *)(void *)lj_vm_exit_handler);
   /* Commit the code for this group (even if assembly fails later on). */
   lj_mcode_commitbot(as->J, mxp);
   as->mcbot = mxp;
@@ -60,7 +60,7 @@ static void asm_guardcc(ASMState *as, int cc)
   MCode *p = as->mcp;
   if (LJ_UNLIKELY(p == as->invmcp)) {
     as->loopinv = 1;
-    *(int32_t *)(p+1) = jmprel(p+5, target);
+    *(int32_t *)(p+1) = jmprel(as->J, p+5, target);
     target = p;
     cc ^= 1;
     if (as->realign) {
@@ -131,7 +131,7 @@ static IRRef asm_fuseabase(ASMState *as, IRRef ref)
   as->mrm.ofs = 0;
   if (irb->o == IR_FLOAD) {
     IRIns *ira = IR(irb->op1);
-    lua_assert(irb->op2 == IRFL_TAB_ARRAY);
+    lj_assertA(irb->op2 == IRFL_TAB_ARRAY, "expected FLOAD TAB_ARRAY");
     /* We can avoid the FLOAD of t->array for colocated arrays. */
     if (ira->o == IR_TNEW && ira->op1 <= LJ_MAX_COLOSIZE &&
 	!neverfuse(as) && noconflict(as, irb->op1, IR_NEWREF, 1)) {
@@ -150,7 +150,7 @@ static IRRef asm_fuseabase(ASMState *as, IRRef ref)
 static void asm_fusearef(ASMState *as, IRIns *ir, RegSet allow)
 {
   IRIns *irx;
-  lua_assert(ir->o == IR_AREF);
+  lj_assertA(ir->o == IR_AREF, "expected AREF");
   as->mrm.base = (uint8_t)ra_alloc1(as, asm_fuseabase(as, ir->op1), allow);
   irx = IR(ir->op2);
   if (irref_isk(ir->op2)) {
@@ -217,8 +217,9 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
       }
       break;
     default:
-      lua_assert(ir->o == IR_HREF || ir->o == IR_NEWREF || ir->o == IR_UREFO ||
-		 ir->o == IR_KKPTR);
+      lj_assertA(ir->o == IR_HREF || ir->o == IR_NEWREF || ir->o == IR_UREFO ||
+		 ir->o == IR_KKPTR,
+		 "bad IR op %d", ir->o);
       break;
     }
   }
@@ -230,9 +231,10 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
 /* Fuse FLOAD/FREF reference into memory operand. */
 static void asm_fusefref(ASMState *as, IRIns *ir, RegSet allow)
 {
-  lua_assert(ir->o == IR_FLOAD || ir->o == IR_FREF);
+  lj_assertA(ir->o == IR_FLOAD || ir->o == IR_FREF,
+	     "bad IR op %d", ir->o);
   as->mrm.idx = RID_NONE;
-  if (ir->op1 == REF_NIL) {
+  if (ir->op1 == REF_NIL) {  /* FLOAD from GG_State with offset. */
 #if LJ_GC64
     as->mrm.ofs = (int32_t)(ir->op2 << 2) - GG_OFS(dispatch);
     as->mrm.base = RID_DISPATCH;
@@ -271,7 +273,7 @@ static void asm_fusefref(ASMState *as, IRIns *ir, RegSet allow)
 static void asm_fusestrref(ASMState *as, IRIns *ir, RegSet allow)
 {
   IRIns *irr;
-  lua_assert(ir->o == IR_STRREF);
+  lj_assertA(ir->o == IR_STRREF, "bad IR op %d", ir->o);
   as->mrm.base = as->mrm.idx = RID_NONE;
   as->mrm.scale = XM_SCALE1;
   as->mrm.ofs = sizeof(GCstr);
@@ -378,9 +380,10 @@ static Reg asm_fuseloadk64(ASMState *as, IRIns *ir)
 	     checki32(mctopofs(as, k)) && checki32(mctopofs(as, k+1))) {
     as->mrm.ofs = (int32_t)mcpofs(as, k);
     as->mrm.base = RID_RIP;
-  } else {
+  } else {  /* Intern 64 bit constant at bottom of mcode. */
     if (ir->i) {
-      lua_assert(*k == *(uint64_t*)(as->mctop - ir->i));
+      lj_assertA(*k == *(uint64_t*)(as->mctop - ir->i),
+		 "bad interned 64 bit constant");
     } else {
       while ((uintptr_t)as->mcbot & 7) *as->mcbot++ = XI_INT3;
       *(uint64_t*)as->mcbot = *k;
@@ -420,12 +423,12 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
   }
   if (ir->o == IR_KNUM) {
     RegSet avail = as->freeset & ~as->modset & RSET_FPR;
-    lua_assert(allow != RSET_EMPTY);
+    lj_assertA(allow != RSET_EMPTY, "no register allowed");
     if (!(avail & (avail-1)))  /* Fuse if less than two regs available. */
       return asm_fuseloadk64(as, ir);
   } else if (ref == REF_BASE || ir->o == IR_KINT64) {
     RegSet avail = as->freeset & ~as->modset & RSET_GPR;
-    lua_assert(allow != RSET_EMPTY);
+    lj_assertA(allow != RSET_EMPTY, "no register allowed");
     if (!(avail & (avail-1))) {  /* Fuse if less than two regs available. */
       if (ref == REF_BASE) {
 #if LJ_GC64
@@ -606,7 +609,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 #endif
 	  emit_loadi(as, r, ir->i);
       } else {
-	lua_assert(rset_test(as->freeset, r));  /* Must have been evicted. */
+	/* Must have been evicted. */
+	lj_assertA(rset_test(as->freeset, r), "reg %d not free", r);
 	if (ra_hasreg(ir->r)) {
 	  ra_noweak(as, ir->r);
 	  emit_movrr(as, ir, r, ir->r);
@@ -615,7 +619,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 	}
       }
     } else if (irt_isfp(ir->t)) {  /* FP argument is on stack. */
-      lua_assert(!(irt_isfloat(ir->t) && irref_isk(ref)));  /* No float k. */
+      lj_assertA(!(irt_isfloat(ir->t) && irref_isk(ref)),
+		 "unexpected float constant");
       if (LJ_32 && (ofs & 4) && irref_isk(ref)) {
 	/* Split stores for unaligned FP consts. */
 	emit_movmroi(as, RID_ESP, ofs, (int32_t)ir_knum(ir)->u32.lo);
@@ -691,7 +696,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       ra_destpair(as, ir);
 #endif
     } else {
-      lua_assert(!irt_ispri(ir->t));
+      lj_assertA(!irt_ispri(ir->t), "PRI dest");
       ra_destreg(as, ir, RID_RET);
     }
   } else if (LJ_32 && irt_isfp(ir->t) && !(ci->flags & CCI_CASTU64)) {
@@ -810,8 +815,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
   int st64 = (st == IRT_I64 || st == IRT_U64 || (LJ_64 && st == IRT_P64));
   int stfp = (st == IRT_NUM || st == IRT_FLOAT);
   IRRef lref = ir->op1;
-  lua_assert(irt_type(ir->t) != st);
-  lua_assert(!(LJ_32 && (irt_isint64(ir->t) || st64)));  /* Handled by SPLIT. */
+  lj_assertA(irt_type(ir->t) != st, "inconsistent types for CONV");
+  lj_assertA(!(LJ_32 && (irt_isint64(ir->t) || st64)),
+	     "IR %04d has unsplit 64 bit type",
+	     (int)(ir - as->ir) - REF_BIAS);
   if (irt_isfp(ir->t)) {
     Reg dest = ra_dest(as, ir, RSET_FPR);
     if (stfp) {  /* FP to FP conversion. */
@@ -847,7 +854,8 @@ static void asm_conv(ASMState *as, IRIns *ir)
   } else if (stfp) {  /* FP to integer conversion. */
     if (irt_isguard(ir->t)) {
       /* Checked conversions are only supported from number to int. */
-      lua_assert(irt_isint(ir->t) && st == IRT_NUM);
+      lj_assertA(irt_isint(ir->t) && st == IRT_NUM,
+		 "bad type for checked CONV");
       asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
@@ -882,7 +890,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
     Reg left, dest = ra_dest(as, ir, RSET_GPR);
     RegSet allow = RSET_GPR;
     x86Op op;
-    lua_assert(irt_isint(ir->t) || irt_isu32(ir->t));
+    lj_assertA(irt_isint(ir->t) || irt_isu32(ir->t), "bad type for CONV EXT");
     if (st == IRT_I8) {
       op = XO_MOVSXb; allow = RSET_GPR8; dest |= FORCE_REX;
     } else if (st == IRT_U8) {
@@ -953,7 +961,7 @@ static void asm_conv_fp_int64(ASMState *as, IRIns *ir)
     emit_sjcc(as, CC_NS, l_end);
     emit_rr(as, XO_TEST, hi, hi);  /* Check if u64 >= 2^63. */
   } else {
-    lua_assert(((ir-1)->op2 & IRCONV_SRCMASK) == IRT_I64);
+    lj_assertA(((ir-1)->op2 & IRCONV_SRCMASK) == IRT_I64, "bad type for CONV");
   }
   emit_rmro(as, XO_FILDq, XOg_FILDq, RID_ESP, 0);
   /* NYI: Avoid narrow-to-wide store-to-load forwarding stall. */
@@ -967,8 +975,8 @@ static void asm_conv_int64_fp(ASMState *as, IRIns *ir)
   IRType st = (IRType)((ir-1)->op2 & IRCONV_SRCMASK);
   IRType dt = (((ir-1)->op2 & IRCONV_DSTMASK) >> IRCONV_DSH);
   Reg lo, hi;
-  lua_assert(st == IRT_NUM || st == IRT_FLOAT);
-  lua_assert(dt == IRT_I64 || dt == IRT_U64);
+  lj_assertA(st == IRT_NUM || st == IRT_FLOAT, "bad type for CONV");
+  lj_assertA(dt == IRT_I64 || dt == IRT_U64, "bad type for CONV");
   hi = ra_dest(as, ir, RSET_GPR);
   lo = ra_dest(as, ir-1, rset_exclude(RSET_GPR, hi));
   if (ra_used(ir-1)) emit_rmro(as, XO_MOV, lo, RID_ESP, 0);
@@ -1180,13 +1188,13 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_rmro(as, XO_CMP, tmp|REX_64, dest, offsetof(Node, key.u64));
     }
   } else {
-    lua_assert(irt_ispri(kt) && !irt_isnil(kt));
+    lj_assertA(irt_ispri(kt) && !irt_isnil(kt), "bad HREF key type");
     emit_u32(as, (irt_toitype(kt)<<15)|0x7fff);
     emit_rmro(as, XO_ARITHi, XOg_CMP, dest, offsetof(Node, key.it));
 #else
   } else {
     if (!irt_ispri(kt)) {
-      lua_assert(irt_isaddr(kt));
+      lj_assertA(irt_isaddr(kt), "bad HREF key type");
       if (isk)
 	emit_gmroi(as, XG_ARITHi(XOg_CMP), dest, offsetof(Node, key.gcr),
 		   ptr2addr(ir_kgc(irkey)));
@@ -1194,7 +1202,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 	emit_rmro(as, XO_CMP, key, dest, offsetof(Node, key.gcr));
       emit_sjcc(as, CC_NE, l_next);
     }
-    lua_assert(!irt_isnil(kt));
+    lj_assertA(!irt_isnil(kt), "bad HREF key type");
     emit_i8(as, irt_toitype(kt));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
 #endif
@@ -1209,7 +1217,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 #endif
 
   /* Load main position relative to tab->node into dest. */
-  khash = isk ? ir_khash(irkey) : 1;
+  khash = isk ? ir_khash(as, irkey) : 1;
   if (khash == 0) {
     emit_rmro(as, XO_MOV, dest|REX_GC64, tab, offsetof(GCtab, node));
   } else {
@@ -1271,7 +1279,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 #if !LJ_64
   MCLabel l_exit;
 #endif
-  lua_assert(ofs % sizeof(Node) == 0);
+  lj_assertA(ofs % sizeof(Node) == 0, "unaligned HREFK slot");
   if (ra_hasreg(dest)) {
     if (ofs != 0) {
       if (dest == node)
@@ -1288,7 +1296,8 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
     Reg key = ra_scratch(as, rset_exclude(RSET_GPR, node));
     emit_rmro(as, XO_CMP, key|REX_64, node,
 	       ofs + (int32_t)offsetof(Node, key.u64));
-    lua_assert(irt_isnum(irkey->t) || irt_isgcv(irkey->t));
+    lj_assertA(irt_isnum(irkey->t) || irt_isgcv(irkey->t),
+	       "bad HREFK key type");
     /* Assumes -0.0 is already canonicalized to +0.0. */
     emit_loadu64(as, key, irt_isnum(irkey->t) ? ir_knum(irkey)->u64 :
 #if LJ_GC64
@@ -1299,7 +1308,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 			  (uint64_t)(uint32_t)ptr2addr(ir_kgc(irkey)));
 #endif
   } else {
-    lua_assert(!irt_isnil(irkey->t));
+    lj_assertA(!irt_isnil(irkey->t), "bad HREFK key type");
 #if LJ_GC64
     emit_i32(as, (irt_toitype(irkey->t)<<15)|0x7fff);
     emit_rmro(as, XO_ARITHi, XOg_CMP, node,
@@ -1323,13 +1332,13 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 	       (int32_t)ir_knum(irkey)->u32.hi);
   } else {
     if (!irt_ispri(irkey->t)) {
-      lua_assert(irt_isgcv(irkey->t));
+      lj_assertA(irt_isgcv(irkey->t), "bad HREFK key type");
       emit_gmroi(as, XG_ARITHi(XOg_CMP), node,
 		 ofs + (int32_t)offsetof(Node, key.gcr),
 		 ptr2addr(ir_kgc(irkey)));
       emit_sjcc(as, CC_NE, l_exit);
     }
-    lua_assert(!irt_isnil(irkey->t));
+    lj_assertA(!irt_isnil(irkey->t), "bad HREFK key type");
     emit_i8(as, irt_toitype(irkey->t));
     emit_rmro(as, XO_ARITHi8, XOg_CMP, node,
 	      ofs + (int32_t)offsetof(Node, key.it));
@@ -1402,7 +1411,8 @@ static void asm_fxload(ASMState *as, IRIns *ir)
     if (LJ_64 && irt_is64(ir->t))
       dest |= REX_64;
     else
-      lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
+      lj_assertA(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t),
+		 "unsplit 64 bit load");
     xo = XO_MOV;
     break;
   }
@@ -1447,13 +1457,16 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
     case IRT_NUM: xo = XO_MOVSDto; break;
     case IRT_FLOAT: xo = XO_MOVSSto; break;
 #if LJ_64 && !LJ_GC64
-    case IRT_LIGHTUD: lua_assert(0);  /* NYI: mask 64 bit lightuserdata. */
+    case IRT_LIGHTUD:
+      /* NYI: mask 64 bit lightuserdata. */
+      lj_assertA(0, "store of lightuserdata");
 #endif
     default:
       if (LJ_64 && irt_is64(ir->t))
 	src |= REX_64;
       else
-	lua_assert(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t));
+	lj_assertA(irt_isint(ir->t) || irt_isu32(ir->t) || irt_isaddr(ir->t),
+		   "unsplit 64 bit store");
       xo = XO_MOVto;
       break;
     }
@@ -1467,8 +1480,8 @@ static void asm_fxstore(ASMState *as, IRIns *ir)
       emit_i8(as, k);
       emit_mrm(as, XO_MOVmib, 0, RID_MRM);
     } else {
-      lua_assert(irt_is64(ir->t) || irt_isint(ir->t) || irt_isu32(ir->t) ||
-		 irt_isaddr(ir->t));
+      lj_assertA(irt_is64(ir->t) || irt_isint(ir->t) || irt_isu32(ir->t) ||
+		 irt_isaddr(ir->t), "bad store type");
       emit_i32(as, k);
       emit_mrm(as, XO_MOVmi, REX_64IR(ir, 0), RID_MRM);
     }
@@ -1503,8 +1516,9 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
 #if LJ_GC64
   Reg tmp = RID_NONE;
 #endif
-  lua_assert(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t) ||
-	     (LJ_DUALNUM && irt_isint(ir->t)));
+  lj_assertA(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t) ||
+	     (LJ_DUALNUM && irt_isint(ir->t)),
+	     "bad load type %d", irt_type(ir->t));
 #if LJ_64 && !LJ_GC64
   if (irt_islightud(ir->t)) {
     Reg dest = asm_load_lightud64(as, ir, 1);
@@ -1551,7 +1565,8 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   as->mrm.ofs += 4;
   asm_guardcc(as, irt_isnum(ir->t) ? CC_AE : CC_NE);
   if (LJ_64 && irt_type(ir->t) >= IRT_NUM) {
-    lua_assert(irt_isinteger(ir->t) || irt_isnum(ir->t));
+    lj_assertA(irt_isinteger(ir->t) || irt_isnum(ir->t),
+	       "bad load type %d", irt_type(ir->t));
 #if LJ_GC64
     emit_u32(as, LJ_TISNUM << 15);
 #else
@@ -1633,13 +1648,14 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
 #endif
       emit_mrm(as, XO_MOVto, src, RID_MRM);
     } else if (!irt_ispri(irr->t)) {
-      lua_assert(irt_isaddr(ir->t) || (LJ_DUALNUM && irt_isinteger(ir->t)));
+      lj_assertA(irt_isaddr(ir->t) || (LJ_DUALNUM && irt_isinteger(ir->t)),
+		 "bad store type");
       emit_i32(as, irr->i);
       emit_mrm(as, XO_MOVmi, 0, RID_MRM);
     }
     as->mrm.ofs += 4;
 #if LJ_GC64
-    lua_assert(LJ_DUALNUM && irt_isinteger(ir->t));
+    lj_assertA(LJ_DUALNUM && irt_isinteger(ir->t), "bad store type");
     emit_i32(as, LJ_TNUMX << 15);
 #else
     emit_i32(as, (int32_t)irt_toitype(ir->t));
@@ -1654,10 +1670,13 @@ static void asm_sload(ASMState *as, IRIns *ir)
 		(!LJ_FR2 && (ir->op2 & IRSLOAD_FRAME) ? 4 : 0);
   IRType1 t = ir->t;
   Reg base;
-  lua_assert(!(ir->op2 & IRSLOAD_PARENT));  /* Handled by asm_head_side(). */
-  lua_assert(irt_isguard(t) || !(ir->op2 & IRSLOAD_TYPECHECK));
-  lua_assert(LJ_DUALNUM ||
-	     !irt_isint(t) || (ir->op2 & (IRSLOAD_CONVERT|IRSLOAD_FRAME)));
+  lj_assertA(!(ir->op2 & IRSLOAD_PARENT),
+	     "bad parent SLOAD"); /* Handled by asm_head_side(). */
+  lj_assertA(irt_isguard(t) || !(ir->op2 & IRSLOAD_TYPECHECK),
+	     "inconsistent SLOAD variant");
+  lj_assertA(LJ_DUALNUM ||
+	     !irt_isint(t) || (ir->op2 & (IRSLOAD_CONVERT|IRSLOAD_FRAME)),
+	     "bad SLOAD type");
   if ((ir->op2 & IRSLOAD_CONVERT) && irt_isguard(t) && irt_isint(t)) {
     Reg left = ra_scratch(as, RSET_FPR);
     asm_tointg(as, ir, left);  /* Frees dest reg. Do this before base alloc. */
@@ -1677,7 +1696,8 @@ static void asm_sload(ASMState *as, IRIns *ir)
     RegSet allow = irt_isnum(t) ? RSET_FPR : RSET_GPR;
     Reg dest = ra_dest(as, ir, allow);
     base = ra_alloc1(as, REF_BASE, RSET_GPR);
-    lua_assert(irt_isnum(t) || irt_isint(t) || irt_isaddr(t));
+    lj_assertA(irt_isnum(t) || irt_isint(t) || irt_isaddr(t),
+	       "bad SLOAD type %d", irt_type(t));
     if ((ir->op2 & IRSLOAD_CONVERT)) {
       t.irt = irt_isint(t) ? IRT_NUM : IRT_INT;  /* Check for original type. */
       emit_rmro(as, irt_isint(t) ? XO_CVTSI2SD : XO_CVTTSD2SI, dest, base, ofs);
@@ -1723,7 +1743,8 @@ static void asm_sload(ASMState *as, IRIns *ir)
     /* Need type check, even if the load result is unused. */
     asm_guardcc(as, irt_isnum(t) ? CC_AE : CC_NE);
     if (LJ_64 && irt_type(t) >= IRT_NUM) {
-      lua_assert(irt_isinteger(t) || irt_isnum(t));
+      lj_assertA(irt_isinteger(t) || irt_isnum(t),
+		 "bad SLOAD type %d", irt_type(t));
 #if LJ_GC64
       emit_u32(as, LJ_TISNUM << 15);
 #else
@@ -1775,7 +1796,8 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   CTInfo info = lj_ctype_info(cts, id, &sz);
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_mem_newgco];
   IRRef args[4];
-  lua_assert(sz != CTSIZE_INVALID || (ir->o == IR_CNEW && ir->op2 != REF_NIL));
+  lj_assertA(sz != CTSIZE_INVALID || (ir->o == IR_CNEW && ir->op2 != REF_NIL),
+	     "bad CNEW/CNEWI operands");
 
   as->gcsteps++;
   asm_setupresult(as, ir, ci);  /* GCcdata * */
@@ -1805,7 +1827,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
     int32_t ofs = sizeof(GCcdata);
     if (sz == 8) {
       ofs += 4; ir++;
-      lua_assert(ir->o == IR_HIOP);
+      lj_assertA(ir->o == IR_HIOP, "missing CNEWI HIOP");
     }
     do {
       if (irref_isk(ir->op2)) {
@@ -1819,7 +1841,7 @@ static void asm_cnew(ASMState *as, IRIns *ir)
       ofs -= 4; ir--;
     } while (1);
 #endif
-    lua_assert(sz == 4 || sz == 8);
+    lj_assertA(sz == 4 || sz == 8, "bad CNEWI size %d", sz);
   } else if (ir->op2 != REF_NIL) {  /* Create VLA/VLS/aligned cdata. */
     ci = &lj_ir_callinfo[IRCALL_lj_cdata_newv];
     args[0] = ASMREF_L;     /* lua_State *L */
@@ -1869,7 +1891,7 @@ static void asm_obar(ASMState *as, IRIns *ir)
   MCLabel l_end;
   Reg obj;
   /* No need for other object barriers (yet). */
-  lua_assert(IR(ir->op1)->o == IR_UREFC);
+  lj_assertA(IR(ir->op1)->o == IR_UREFC, "bad OBAR type");
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   args[0] = ASMREF_TMP1;  /* global_State *g */
@@ -1986,7 +2008,7 @@ static int asm_swapops(ASMState *as, IRIns *ir)
 {
   IRIns *irl = IR(ir->op1);
   IRIns *irr = IR(ir->op2);
-  lua_assert(ra_noreg(irr->r));
+  lj_assertA(ra_noreg(irr->r), "bad usage");
   if (!irm_iscomm(lj_ir_mode[ir->o]))
     return 0;  /* Can't swap non-commutative operations. */
   if (irref_isk(ir->op2))
@@ -2376,8 +2398,9 @@ static void asm_comp(ASMState *as, IRIns *ir)
     IROp leftop = (IROp)(IR(lref)->o);
     Reg r64 = REX_64IR(ir, 0);
     int32_t imm = 0;
-    lua_assert(irt_is64(ir->t) || irt_isint(ir->t) ||
-	       irt_isu32(ir->t) || irt_isaddr(ir->t) || irt_isu8(ir->t));
+    lj_assertA(irt_is64(ir->t) || irt_isint(ir->t) ||
+	       irt_isu32(ir->t) || irt_isaddr(ir->t) || irt_isu8(ir->t),
+	       "bad comparison data type %d", irt_type(ir->t));
     /* Swap constants (only for ABC) and fusable loads to the right. */
     if (irref_isk(lref) || (!irref_isk(rref) && opisfusableload(leftop))) {
       if ((cc & 0xc) == 0xc) cc ^= 0x53;  /* L <-> G, LE <-> GE */
@@ -2459,7 +2482,7 @@ static void asm_comp(ASMState *as, IRIns *ir)
 	  /* Use test r,r instead of cmp r,0. */
 	  x86Op xo = XO_TEST;
 	  if (irt_isu8(ir->t)) {
-	    lua_assert(ir->o == IR_EQ || ir->o == IR_NE);
+	    lj_assertA(ir->o == IR_EQ || ir->o == IR_NE, "bad usage");
 	    xo = XO_TESTb;
 	    if (!rset_test(RSET_RANGE(RID_EAX, RID_EBX+1), left)) {
 	      if (LJ_64) {
@@ -2615,10 +2638,11 @@ static void asm_hiop(ASMState *as, IRIns *ir)
   case IR_CNEWI:
     /* Nothing to do here. Handled by CNEWI itself. */
     break;
-  default: lua_assert(0); break;
+  default: lj_assertA(0, "bad HIOP for op %d", (ir-1)->o); break;
   }
 #else
-  UNUSED(as); UNUSED(ir); lua_assert(0);  /* Unused on x64 or without FFI. */
+  /* Unused on x64 or without FFI. */
+  UNUSED(as); UNUSED(ir); lj_assertA(0, "unexpected HIOP");
 #endif
 }
 
@@ -2684,8 +2708,9 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
       Reg src = ra_alloc1(as, ref, RSET_FPR);
       emit_rmro(as, XO_MOVSDto, src, RID_BASE, ofs);
     } else {
-      lua_assert(irt_ispri(ir->t) || irt_isaddr(ir->t) ||
-		 (LJ_DUALNUM && irt_isinteger(ir->t)));
+      lj_assertA(irt_ispri(ir->t) || irt_isaddr(ir->t) ||
+		 (LJ_DUALNUM && irt_isinteger(ir->t)),
+		 "restore of IR type %d", irt_type(ir->t));
       if (!irref_isk(ref)) {
 	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, RID_BASE));
 #if LJ_GC64
@@ -2730,7 +2755,7 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
     }
     checkmclim(as);
   }
-  lua_assert(map + nent == flinks);
+  lj_assertA(map + nent == flinks, "inconsistent frames in snapshot");
 }
 
 /* -- GC handling --------------------------------------------------------- */
@@ -2774,16 +2799,16 @@ static void asm_loop_fixup(ASMState *as)
   MCode *target = as->mcp;
   if (as->realign) {  /* Realigned loops use short jumps. */
     as->realign = NULL;  /* Stop another retry. */
-    lua_assert(((intptr_t)target & 15) == 0);
+    lj_assertA(((intptr_t)target & 15) == 0, "loop realign failed");
     if (as->loopinv) {  /* Inverted loop branch? */
       p -= 5;
       p[0] = XI_JMP;
-      lua_assert(target - p >= -128);
+      lj_assertA(target - p >= -128, "loop realign failed");
       p[-1] = (MCode)(target - p);  /* Patch sjcc. */
       if (as->loopinv == 2)
 	p[-3] = (MCode)(target - p + 2);  /* Patch opt. short jp. */
     } else {
-      lua_assert(target - p >= -128);
+      lj_assertA(target - p >= -128, "loop realign failed");
       p[-1] = (MCode)(int8_t)(target - p);  /* Patch short jmp. */
       p[-2] = XI_JMPs;
     }
@@ -2880,7 +2905,7 @@ static void asm_tail_fixup(ASMState *as, TraceNo lnk)
   }
   /* Patch exit branch. */
   target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)lj_vm_exit_interp;
-  *(int32_t *)(p-4) = jmprel(p, target);
+  *(int32_t *)(p-4) = jmprel(as->J, p, target);
   p[-5] = XI_JMP;
   /* Drop unused mcode tail. Fill with NOPs to make the prefetcher happy. */
   for (q = as->mctop-1; q >= p; q--)
@@ -3053,17 +3078,17 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   uint32_t statei = u32ptr(&J2G(J)->vmstate);
 #endif
   if (len > 5 && p[len-5] == XI_JMP && p+len-6 + *(int32_t *)(p+len-4) == px)
-    *(int32_t *)(p+len-4) = jmprel(p+len, target);
+    *(int32_t *)(p+len-4) = jmprel(J, p+len, target);
   /* Do not patch parent exit for a stack check. Skip beyond vmstate update. */
   for (; p < pe; p += asm_x86_inslen(p)) {
     intptr_t ofs = LJ_GC64 ? (p[0] & 0xf0) == 0x40 : LJ_64;
     if (*(uint32_t *)(p+2+ofs) == statei && p[ofs+LJ_GC64-LJ_64] == XI_MOVmi)
       break;
   }
-  lua_assert(p < pe);
+  lj_assertJ(p < pe, "instruction length decoder failed");
   for (; p < pe; p += asm_x86_inslen(p))
     if ((*(uint16_t *)p & 0xf0ff) == 0x800f && p + *(int32_t *)(p+2) == px)
-      *(int32_t *)(p+2) = jmprel(p+6, target);
+      *(int32_t *)(p+2) = jmprel(J, p+6, target);
   lj_mcode_sync(T->mcode, T->mcode + T->szmcode);
   lj_mcode_patch(J, mcarea, 1);
 }

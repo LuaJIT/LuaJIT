@@ -60,7 +60,8 @@ double lj_vm_foldarith(double x, double y, int op)
 int32_t LJ_FASTCALL lj_vm_modi(int32_t a, int32_t b)
 {
   uint32_t y, ua, ub;
-  lua_assert(b != 0);  /* This must be checked before using this function. */
+  /* This must be checked before using this function. */
+  lj_assertX(b != 0, "modulo with zero divisor");
   ua = a < 0 ? (uint32_t)-a : (uint32_t)a;
   ub = b < 0 ? (uint32_t)-b : (uint32_t)b;
   y = ua % ub;
@@ -84,7 +85,7 @@ double lj_vm_log2(double a)
 static double lj_vm_powui(double x, uint32_t k)
 {
   double y;
-  lua_assert(k != 0);
+  lj_assertX(k != 0, "pow with zero exponent");
   for (; (k & 1) == 0; k >>= 1) x *= x;
   y = x;
   if ((k >>= 1) != 0) {
@@ -123,7 +124,7 @@ double lj_vm_foldfpm(double x, int fpm)
   case IRFPM_SQRT: return sqrt(x);
   case IRFPM_LOG: return log(x);
   case IRFPM_LOG2: return lj_vm_log2(x);
-  default: lua_assert(0);
+  default: lj_assertX(0, "bad fpm %d", fpm);
   }
   return 0;
 }

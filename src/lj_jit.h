@@ -511,6 +511,12 @@ LJ_ALIGN(16)		/* For DISPATCH-relative addresses in assembler part. */
 #endif
 jit_State;
 
+#ifdef LUA_USE_ASSERT
+#define lj_assertJ(c, ...)	lj_assertG_(J2G(J), (c), __VA_ARGS__)
+#else
+#define lj_assertJ(c, ...)	((void)J)
+#endif
+
 /* Trivial PRNG e.g. used for penalty randomization. */
 static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
 {

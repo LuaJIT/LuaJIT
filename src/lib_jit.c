@@ -243,7 +243,7 @@ LJLIB_CF(jit_util_funcbc)
   if (pc < pt->sizebc) {
     BCIns ins = proto_bc(pt)[pc];
     BCOp op = bc_op(ins);
-    lua_assert(op < BC__MAX);
+    lj_assertL(op < BC__MAX, "bad bytecode op %d", op);
     setintV(L->top, ins);
     setintV(L->top+1, lj_bc_mode[op]);
     L->top += 2;
@@ -512,7 +512,7 @@ static int jitopt_param(jit_State *J, const char *str)
   int i;
   for (i = 0; i < JIT_P__MAX; i++) {
     size_t len = *(const uint8_t *)lst;
-    lua_assert(len != 0);
+    lj_assertJ(len != 0, "bad JIT_P_STRING");
     if (strncmp(str, lst+1, len) == 0 && str[len] == '=') {
       int32_t n = 0;
       const char *p = &str[len+1];

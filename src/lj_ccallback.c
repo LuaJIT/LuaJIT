@@ -123,9 +123,9 @@ MSize lj_ccallback_ptr2slot(CTState *cts, void *p)
 /* Initialize machine code for callback function pointers. */
 #if LJ_OS_NOJIT
 /* Disabled callback support. */
-#define callback_mcode_init(g, p)	UNUSED(p)
+#define callback_mcode_init(g, p)	(p)
 #elif LJ_TARGET_X86ORX64
-static void callback_mcode_init(global_State *g, uint8_t *page)
+static void *callback_mcode_init(global_State *g, uint8_t *page)
 {
   uint8_t *p = page;
   uint8_t *target = (uint8_t *)(void *)lj_vm_ffi_callback;
@@ -159,10 +159,10 @@ static void callback_mcode_init(global_State *g, uint8_t *page)
       *p++ = XI_JMPs; *p++ = (uint8_t)((2+2)*(31-(slot&31)) - 2);
     }
   }
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+  return p;
 }
 #elif LJ_TARGET_ARM
-static void callback_mcode_init(global_State *g, uint32_t *page)
+static void *callback_mcode_init(global_State *g, uint32_t *page)
 {
   uint32_t *p = page;
   void *target = (void *)lj_vm_ffi_callback;
@@ -181,10 +181,10 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
     *p = ARMI_B | ((page-p-2) & 0x00ffffffu);
     p++;
   }
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+  return p;
 }
 #elif LJ_TARGET_ARM64
-static void callback_mcode_init(global_State *g, uint32_t *page)
+static void *callback_mcode_init(global_State *g, uint32_t *page)
 {
   uint32_t *p = page;
   void *target = (void *)lj_vm_ffi_callback;
@@ -201,7 +201,7 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
     *p = A64I_LE(A64I_B | A64F_S26((page-p) & 0x03ffffffu));
     p++;
   }
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+  return p;
 }
 #elif LJ_TARGET_PPC
 #if LJ_ARCH_PPC_OPD
@@ -216,10 +216,10 @@ static void callback_mcode_init(global_State *g, uint64_t *page)
     *p++ = (uint64_t)vm_toc;
     *p++ = (uint64_t)g | ((uint64_t)slot << 47);
   }
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE / 8);
+  return p;
 }
 #else
-static void callback_mcode_init(global_State *g, uint32_t *page)
+static void *callback_mcode_init(global_State *g, uint32_t *page)
 {
   uint32_t *p = page;
   void *target = (void *)lj_vm_ffi_callback;
@@ -254,11 +254,11 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
     p++;
   }
 #endif
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE / 4);
+  return p;
 }
 #endif
 #elif LJ_TARGET_MIPS
-static void callback_mcode_init(global_State *g, uint32_t *page)
+static void *callback_mcode_init(global_State *g, uint32_t *page)
 {
   uint32_t *p = page;
   uintptr_t target = (uintptr_t)(void *)lj_vm_ffi_callback;
@@ -287,11 +287,11 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
     p++;
     *p++ = MIPSI_LI | MIPSF_T(RID_R1) | slot;
   }
-  lua_assert(p - page <= CALLBACK_MCODE_SIZE);
+  return p;
 }
 #else
 /* Missing support for this architecture. */
-#define callback_mcode_init(g, p)	UNUSED(p)
+#define callback_mcode_init(g, p)	(p)
 #endif
 
 /* -- Machine code management --------------------------------------------- */
@@ -314,7 +314,7 @@ static void callback_mcode_init(global_State *g, uint32_t *page)
 static void callback_mcode_new(CTState *cts)
 {
   size_t sz = (size_t)CALLBACK_MCODE_SIZE;
-  void *p;
+  void *p, *pe;
   if (CALLBACK_MAX_SLOT == 0)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #if LJ_TARGET_WINDOWS
@@ -331,7 +331,10 @@ static void callback_mcode_new(CTState *cts)
   p = lj_mem_new(cts->L, sz);
 #endif
   cts->cb.mcode = p;
-  callback_mcode_init(cts->g, p);
+  pe = callback_mcode_init(cts->g, p);
+  UNUSED(pe);
+  lj_assertCTS((size_t)((char *)pe - (char *)p) <= sz,
+	       "miscalculated CALLBACK_MAX_SLOT");
   lj_mcode_sync(p, (char *)p + sz);
 #if LJ_TARGET_WINDOWS
   {
@@ -472,8 +475,9 @@ void lj_ccallback_mcode_free(CTState *cts)
 
 #define CALLBACK_HANDLE_GPR \
   if (n > 1) { \
-    lua_assert(((LJ_ABI_SOFTFP && ctype_isnum(cta->info)) ||  /* double. */ \
-		ctype_isinteger(cta->info)) && n == 2);  /* int64_t. */ \
+    lj_assertCTS(((LJ_ABI_SOFTFP && ctype_isnum(cta->info)) ||  /* double. */ \
+		 ctype_isinteger(cta->info)) && n == 2,  /* int64_t. */ \
+		 "bad GPR type"); \
     ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
   } \
   if (ngpr + n <= maxgpr) { \
@@ -639,7 +643,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
       CTSize sz;
       int isfp;
       MSize n;
-      lua_assert(ctype_isfield(ctf->info));
+      lj_assertCTS(ctype_isfield(ctf->info), "field expected");
       cta = ctype_rawchild(cts, ctf);
       isfp = ctype_isfp(cta->info);
       sz = (cta->size + CTSIZE_PTR-1) & ~(CTSIZE_PTR-1);
@@ -740,7 +744,7 @@ lua_State * LJ_FASTCALL lj_ccallback_enter(CTState *cts, void *cf)
 {
   lua_State *L = cts->L;
   global_State *g = cts->g;
-  lua_assert(L != NULL);
+  lj_assertG(L != NULL, "uninitialized cts->L in callback");
   if (tvref(g->jit_base)) {
     setstrV(L, L->top++, lj_err_str(L, LJ_ERR_FFI_BADCBACK));
     if (g->panic) g->panic(L);
@@ -825,7 +829,7 @@ static CType *callback_checkfunc(CTState *cts, CType *ct)
       CType *ctf = ctype_get(cts, fid);
       if (!ctype_isattrib(ctf->info)) {
 	CType *cta;
-	lua_assert(ctype_isfield(ctf->info));
+	lj_assertCTS(ctype_isfield(ctf->info), "field expected");
 	cta = ctype_rawchild(cts, ctf);
 	if (!(ctype_isenum(cta->info) || ctype_isptr(cta->info) ||
 	      (ctype_isnum(cta->info) && cta->size <= 8)) ||
