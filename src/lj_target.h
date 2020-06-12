@@ -152,7 +152,8 @@ typedef uint32_t RegCost;
 /* Return the address of an exit stub. */
 static LJ_AINLINE char *exitstub_addr_(char **group, uint32_t exitno)
 {
-  lua_assert(group[exitno / EXITSTUBS_PER_GROUP] != NULL);
+  lj_assertX(group[exitno / EXITSTUBS_PER_GROUP] != NULL,
+	     "exit stub group for exit %d uninitialized", exitno);
   return (char *)group[exitno / EXITSTUBS_PER_GROUP] +
 	 EXITSTUB_SPACING*(exitno % EXITSTUBS_PER_GROUP);
 }

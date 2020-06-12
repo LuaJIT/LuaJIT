@@ -391,7 +391,8 @@
 #define CCALL_HANDLE_GPR \
   /* Try to pass argument in GPRs. */ \
   if (n > 1) { \
-    lua_assert(n == 2 || n == 4);  /* int64_t or complex (float). */ \
+    /* int64_t or complex (float). */ \
+    lj_assertL(n == 2 || n == 4, "bad GPR size %d", n); \
     if (ctype_isinteger(d->info) || ctype_isfp(d->info)) \
       ngpr = (ngpr + 1u) & ~1u;  /* Align int64_t to regpair. */ \
     else if (ngpr + n > maxgpr) \
@@ -642,7 +643,8 @@ static void ccall_classify_ct(CTState *cts, CType *ct, int *rcl, CTSize ofs)
     ccall_classify_struct(cts, ct, rcl, ofs);
   } else {
     int cl = ctype_isfp(ct->info) ? CCALL_RCL_SSE : CCALL_RCL_INT;
-    lua_assert(ctype_hassize(ct->info));
+    lj_assertCTS(ctype_hassize(ct->info),
+		 "classify ctype %08x without size", ct->info);
     if ((ofs & (ct->size-1))) cl = CCALL_RCL_MEM;  /* Unaligned. */
     rcl[(ofs >= 8)] |= cl;
   }
@@ -667,12 +669,13 @@ static int ccall_classify_struct(CTState *cts, CType *ct, int *rcl, CTSize ofs)
 }
 
 /* Try to split up a small struct into registers. */
-static int ccall_struct_reg(CCallState *cc, GPRArg *dp, int *rcl)
+static int ccall_struct_reg(CCallState *cc, CTState *cts, GPRArg *dp, int *rcl)
 {
   MSize ngpr = cc->ngpr, nfpr = cc->nfpr;
   uint32_t i;
+  UNUSED(cts);
   for (i = 0; i < 2; i++) {
-    lua_assert(!(rcl[i] & CCALL_RCL_MEM));
+    lj_assertCTS(!(rcl[i] & CCALL_RCL_MEM), "pass mem struct in reg");
     if ((rcl[i] & CCALL_RCL_INT)) {  /* Integer class takes precedence. */
       if (ngpr >= CCALL_NARG_GPR) return 1;  /* Register overflow. */
       cc->gpr[ngpr++] = dp[i];
@@ -693,7 +696,8 @@ static int ccall_struct_arg(CCallState *cc, CTState *cts, CType *d, int *rcl,
   dp[0] = dp[1] = 0;
   /* Convert to temp. struct. */
   lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, CCF_ARG(narg));
-  if (ccall_struct_reg(cc, dp, rcl)) {  /* Register overflow? Pass on stack. */
+  if (ccall_struct_reg(cc, cts, dp, rcl)) {
+    /* Register overflow? Pass on stack. */
     MSize nsp = cc->nsp, n = rcl[1] ? 2 : 1;
     if (nsp + n > CCALL_MAXSTACK) return 1;  /* Too many arguments. */
     cc->nsp = nsp + n;
@@ -990,7 +994,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     if (fid) {  /* Get argument type from field. */
       CType *ctf = ctype_get(cts, fid);
       fid = ctf->sib;
-      lua_assert(ctype_isfield(ctf->info));
+      lj_assertL(ctype_isfield(ctf->info), "field expected");
       did = ctype_cid(ctf->info);
     } else {
       if (!(ct->info & CTF_VARARG))
@@ -1138,7 +1142,8 @@ static int ccall_get_results(lua_State *L, CTState *cts, CType *ct,
   CCALL_HANDLE_RET
 #endif
   /* No reference types end up here, so there's no need for the CTypeID. */
-  lua_assert(!(ctype_isrefarray(ctr->info) || ctype_isstruct(ctr->info)));
+  lj_assertL(!(ctype_isrefarray(ctr->info) || ctype_isstruct(ctr->info)),
+	     "unexpected reference ctype");
   return lj_cconv_tv_ct(cts, ctr, 0, L->top-1, sp);
 }
 

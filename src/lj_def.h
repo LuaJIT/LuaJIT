@@ -337,14 +337,28 @@ static LJ_AINLINE uint32_t lj_getu32(const void *v)
 #define LJ_FUNCA_NORET	LJ_FUNCA LJ_NORET
 #define LJ_ASMF_NORET	LJ_ASMF LJ_NORET
 
-/* Runtime assertions. */
-#ifdef lua_assert
-#define check_exp(c, e)		(lua_assert(c), (e))
-#define api_check(l, e)		lua_assert(e)
+/* Internal assertions. */
+#if defined(LUA_USE_ASSERT) || defined(LUA_USE_APICHECK)
+#define lj_assert_check(g, c, ...) \
+  ((c) ? (void)0 : \
+   (lj_assert_fail((g), __FILE__, __LINE__, __func__, __VA_ARGS__), 0))
+#define lj_checkapi(c, ...)	lj_assert_check(G(L), (c), __VA_ARGS__)
 #else
-#define lua_assert(c)		((void)0)
+#define lj_checkapi(c, ...)	((void)L)
+#endif
+
+#ifdef LUA_USE_ASSERT
+#define lj_assertG_(g, c, ...)	lj_assert_check((g), (c), __VA_ARGS__)
+#define lj_assertG(c, ...)	lj_assert_check(g, (c), __VA_ARGS__)
+#define lj_assertL(c, ...)	lj_assert_check(G(L), (c), __VA_ARGS__)
+#define lj_assertX(c, ...)	lj_assert_check(NULL, (c), __VA_ARGS__)
+#define check_exp(c, e)		(lj_assertX((c), #c), (e))
+#else
+#define lj_assertG_(g, c, ...)	((void)0)
+#define lj_assertG(c, ...)	((void)g)
+#define lj_assertL(c, ...)	((void)L)
+#define lj_assertX(c, ...)	((void)0)
 #define check_exp(c, e)		(e)
-#define api_check		luai_apicheck
 #endif
 
 /* Static assertions. */

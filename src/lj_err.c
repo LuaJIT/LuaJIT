@@ -589,7 +589,7 @@ static ptrdiff_t finderrfunc(lua_State *L)
 	return savestack(L, frame_prevd(frame)+1);  /* xpcall's errorfunc. */
       return 0;
     default:
-      lua_assert(0);
+      lj_assertL(0, "bad frame type");
       return 0;
     }
   }

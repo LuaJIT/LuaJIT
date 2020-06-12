@@ -367,7 +367,7 @@ static void callhook(lua_State *L, int event, BCLine line)
     hook_enter(g);
 #endif
     hookf(L, &ar);
-    lua_assert(hook_active(g));
+    lj_assertG(hook_active(g), "active hook flag removed");
     setgcref(g->cur_L, obj2gco(L));
 #if LJ_HASPROFILE && !LJ_PROFILE_SIGPROF
     lj_profile_hook_leave(g);
@@ -415,7 +415,8 @@ void LJ_FASTCALL lj_dispatch_ins(lua_State *L, const BCIns *pc)
 #endif
       J->L = L;
       lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
-      lua_assert(L->top - L->base == delta);
+      lj_assertG(L->top - L->base == delta,
+		 "unbalanced stack after tracing of instruction");
     }
   }
 #endif
@@ -475,7 +476,8 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #endif
     pc = (const BCIns *)((uintptr_t)pc & ~(uintptr_t)1);
     lj_trace_hot(J, pc);
-    lua_assert(L->top - L->base == delta);
+    lj_assertG(L->top - L->base == delta,
+	       "unbalanced stack after hot call");
     goto out;
   } else if (J->state != LJ_TRACE_IDLE &&
 	     !(g->hookmask & (HOOK_GC|HOOK_VMEVENT))) {
@@ -484,7 +486,8 @@ ASMFunction LJ_FASTCALL lj_dispatch_call(lua_State *L, const BCIns *pc)
 #endif
     /* Record the FUNC* bytecodes, too. */
     lj_trace_ins(J, pc-1);  /* The interpreter bytecode PC is offset by 1. */
-    lua_assert(L->top - L->base == delta);
+    lj_assertG(L->top - L->base == delta,
+	       "unbalanced stack after hot instruction");
   }
 #endif
   if ((g->hookmask & LUA_MASKCALL)) {

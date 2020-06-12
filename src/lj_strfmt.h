@@ -79,7 +79,8 @@ static LJ_AINLINE void lj_strfmt_init(FormatState *fs, const char *p, MSize len)
 {
   fs->p = (const uint8_t *)p;
   fs->e = (const uint8_t *)p + len;
-  lua_assert(*fs->e == 0);  /* Must be NUL-terminated (may have NULs inside). */
+  /* Must be NUL-terminated. May have NULs inside, too. */
+  lj_assertX(*fs->e == 0, "format not NUL-terminated");
 }
 
 /* Raw conversions. */

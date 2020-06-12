@@ -82,7 +82,7 @@ static LJ_AINLINE LexChar lex_savenext(LexState *ls)
 static void lex_newline(LexState *ls)
 {
   LexChar old = ls->c;
-  lua_assert(lex_iseol(ls));
+  lj_assertLS(lex_iseol(ls), "bad usage");
   lex_next(ls);  /* Skip "\n" or "\r". */
   if (lex_iseol(ls) && ls->c != old) lex_next(ls);  /* Skip "\n\r" or "\r\n". */
   if (++ls->linenumber >= LJ_MAX_LINE)
@@ -96,7 +96,7 @@ static void lex_number(LexState *ls, TValue *tv)
 {
   StrScanFmt fmt;
   LexChar c, xp = 'e';
-  lua_assert(lj_char_isdigit(ls->c));
+  lj_assertLS(lj_char_isdigit(ls->c), "bad usage");
   if ((c = ls->c) == '0' && (lex_savenext(ls) | 0x20) == 'x')
     xp = 'p';
   while (lj_char_isident(ls->c) || ls->c == '.' ||
@@ -116,7 +116,8 @@ static void lex_number(LexState *ls, TValue *tv)
   } else if (fmt != STRSCAN_ERROR) {
     lua_State *L = ls->L;
     GCcdata *cd;
-    lua_assert(fmt == STRSCAN_I64 || fmt == STRSCAN_U64 || fmt == STRSCAN_IMAG);
+    lj_assertLS(fmt == STRSCAN_I64 || fmt == STRSCAN_U64 || fmt == STRSCAN_IMAG,
+		"unexpected number format %d", fmt);
     if (!ctype_ctsG(G(L))) {
       ptrdiff_t oldtop = savestack(L, L->top);
       luaopen_ffi(L);  /* Load FFI library on-demand. */
@@ -133,7 +134,8 @@ static void lex_number(LexState *ls, TValue *tv)
     lj_parse_keepcdata(ls, tv, cd);
 #endif
   } else {
-    lua_assert(fmt == STRSCAN_ERROR);
+    lj_assertLS(fmt == STRSCAN_ERROR,
+		"unexpected number format %d", fmt);
     lj_lex_error(ls, TK_number, LJ_ERR_XNUMBER);
   }
 }
@@ -143,7 +145,7 @@ static int lex_skipeq(LexState *ls)
 {
   int count = 0;
   LexChar s = ls->c;
-  lua_assert(s == '[' || s == ']');
+  lj_assertLS(s == '[' || s == ']', "bad usage");
   while (lex_savenext(ls) == '=' && count < 0x20000000)
     count++;
   return (ls->c == s) ? count : (-count) - 1;
@@ -469,7 +471,7 @@ void lj_lex_next(LexState *ls)
 /* Look ahead for the next token. */
 LexToken lj_lex_lookahead(LexState *ls)
 {
-  lua_assert(ls->lookahead == TK_eof);
+  lj_assertLS(ls->lookahead == TK_eof, "double lookahead");
   ls->lookahead = lex_scan(ls, &ls->lookaheadval);
   return ls->lookahead;
 }

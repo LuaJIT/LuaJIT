@@ -29,7 +29,16 @@ typedef struct BCWriteCtx {
   void *wdata;			/* Writer callback data. */
   int strip;			/* Strip debug info. */
   int status;			/* Status from writer callback. */
+#ifdef LUA_USE_ASSERT
+  global_State *g;
+#endif
 } BCWriteCtx;
+
+#ifdef LUA_USE_ASSERT
+#define lj_assertBCW(c, ...)	lj_assertG_(ctx->g, (c), __VA_ARGS__)
+#else
+#define lj_assertBCW(c, ...)	((void)ctx)
+#endif
 
 /* -- Bytecode writer ----------------------------------------------------- */
 
@@ -61,7 +70,7 @@ static void bcwrite_ktabk(BCWriteCtx *ctx, cTValue *o, int narrow)
     p = lj_strfmt_wuleb128(p, o->u32.lo);
     p = lj_strfmt_wuleb128(p, o->u32.hi);
   } else {
-    lua_assert(tvispri(o));
+    lj_assertBCW(tvispri(o), "unhandled type %d", itype(o));
     *p++ = BCDUMP_KTAB_NIL+~itype(o);
   }
   setsbufP(&ctx->sb, p);
@@ -121,7 +130,7 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
       tp = BCDUMP_KGC_STR + gco2str(o)->len;
       need = 5+gco2str(o)->len;
     } else if (o->gch.gct == ~LJ_TPROTO) {
-      lua_assert((pt->flags & PROTO_CHILD));
+      lj_assertBCW((pt->flags & PROTO_CHILD), "prototype has unexpected child");
       tp = BCDUMP_KGC_CHILD;
 #if LJ_HASFFI
     } else if (o->gch.gct == ~LJ_TCDATA) {
@@ -132,12 +141,14 @@ static void bcwrite_kgc(BCWriteCtx *ctx, GCproto *pt)
       } else if (id == CTID_UINT64) {
 	tp = BCDUMP_KGC_U64;
       } else {
-	lua_assert(id == CTID_COMPLEX_DOUBLE);
+	lj_assertBCW(id == CTID_COMPLEX_DOUBLE,
+		     "bad cdata constant CTID %d", id);
 	tp = BCDUMP_KGC_COMPLEX;
       }
 #endif
     } else {
-      lua_assert(o->gch.gct == ~LJ_TTAB);
+      lj_assertBCW(o->gch.gct == ~LJ_TTAB,
+		   "bad constant GC type %d", o->gch.gct);
       tp = BCDUMP_KGC_TAB;
       need = 1+2*5;
     }
@@ -289,7 +300,7 @@ static void bcwrite_proto(BCWriteCtx *ctx, GCproto *pt)
     MSize nn = (lj_fls(n)+8)*9 >> 6;
     char *q = sbufB(&ctx->sb) + (5 - nn);
     p = lj_strfmt_wuleb128(q, n);  /* Fill in final size. */
-    lua_assert(p == sbufB(&ctx->sb) + 5);
+    lj_assertBCW(p == sbufB(&ctx->sb) + 5, "bad ULEB128 write");
     ctx->status = ctx->wfunc(sbufL(&ctx->sb), q, nn+n, ctx->wdata);
   }
 }
@@ -349,6 +360,9 @@ int lj_bcwrite(lua_State *L, GCproto *pt, lua_Writer writer, void *data,
   ctx.wdata = data;
   ctx.strip = strip;
   ctx.status = 0;
+#ifdef LUA_USE_ASSERT
+  ctx.g = G(L);
+#endif
   lj_buf_init(L, &ctx.sb);
   status = lj_vm_cpcall(L, NULL, &ctx, cpwriter);
   if (status == 0) status = ctx.status;

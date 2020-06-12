@@ -372,17 +372,17 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
     } else if (op == NARROW_CONV) {
       *sp++ = emitir_raw(convot, ref, convop2);  /* Raw emit avoids a loop. */
     } else if (op == NARROW_SEXT) {
-      lua_assert(sp >= nc->stack+1);
+      lj_assertJ(sp >= nc->stack+1, "stack underflow");
       sp[-1] = emitir(IRT(IR_CONV, IRT_I64), sp[-1],
 		      (IRT_I64<<5)|IRT_INT|IRCONV_SEXT);
     } else if (op == NARROW_INT) {
-      lua_assert(next < last);
+      lj_assertJ(next < last, "missing arg to NARROW_INT");
       *sp++ = nc->t == IRT_I64 ?
 	      lj_ir_kint64(J, (int64_t)(int32_t)*next++) :
 	      lj_ir_kint(J, *next++);
     } else {  /* Regular IROpT. Pops two operands and pushes one result. */
       IRRef mode = nc->mode;
-      lua_assert(sp >= nc->stack+2);
+      lj_assertJ(sp >= nc->stack+2, "stack underflow");
       sp--;
       /* Omit some overflow checks for array indexing. See comments above. */
       if ((mode & IRCONV_CONVMASK) == IRCONV_INDEX) {
@@ -398,7 +398,7 @@ static IRRef narrow_conv_emit(jit_State *J, NarrowConv *nc)
 	narrow_bpc_set(J, narrow_ref(ref), narrow_ref(sp[-1]), mode);
     }
   }
-  lua_assert(sp == nc->stack+1);
+  lj_assertJ(sp == nc->stack+1, "stack misalignment");
   return nc->stack[0];
 }
 
@@ -452,7 +452,7 @@ static TRef narrow_stripov(jit_State *J, TRef tr, int lastop, IRRef mode)
 TRef LJ_FASTCALL lj_opt_narrow_index(jit_State *J, TRef tr)
 {
   IRIns *ir;
-  lua_assert(tref_isnumber(tr));
+  lj_assertJ(tref_isnumber(tr), "expected number type");
   if (tref_isnum(tr))  /* Conversion may be narrowed, too. See above. */
     return emitir(IRTGI(IR_CONV), tr, IRCONV_INT_NUM|IRCONV_INDEX);
   /* Omit some overflow checks for array indexing. See comments above. */
@@ -499,7 +499,7 @@ TRef LJ_FASTCALL lj_opt_narrow_tobit(jit_State *J, TRef tr)
 /* Narrow C array index (overflow undefined). */
 TRef LJ_FASTCALL lj_opt_narrow_cindex(jit_State *J, TRef tr)
 {
-  lua_assert(tref_isnumber(tr));
+  lj_assertJ(tref_isnumber(tr), "expected number type");
   if (tref_isnum(tr))
     return emitir(IRT(IR_CONV, IRT_INTP), tr, (IRT_INTP<<5)|IRT_NUM|IRCONV_ANY);
   /* Undefined overflow semantics allow stripping of ADDOV, SUBOV and MULOV. */
@@ -627,9 +627,10 @@ static int narrow_forl(jit_State *J, cTValue *o)
 /* Narrow the FORL index type by looking at the runtime values. */
 IRType lj_opt_narrow_forl(jit_State *J, cTValue *tv)
 {
-  lua_assert(tvisnumber(&tv[FORL_IDX]) &&
+  lj_assertJ(tvisnumber(&tv[FORL_IDX]) &&
 	     tvisnumber(&tv[FORL_STOP]) &&
-	     tvisnumber(&tv[FORL_STEP]));
+	     tvisnumber(&tv[FORL_STEP]),
+	     "expected number types");
   /* Narrow only if the runtime values of start/stop/step are all integers. */
   if (narrow_forl(J, &tv[FORL_IDX]) &&
       narrow_forl(J, &tv[FORL_STOP]) &&

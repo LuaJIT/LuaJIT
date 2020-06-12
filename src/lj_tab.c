@@ -38,7 +38,7 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 /* Hash an arbitrary key and return its anchor position in the hash table. */
 static Node *hashkey(const GCtab *t, cTValue *key)
 {
-  lua_assert(!tvisint(key));
+  lj_assertX(!tvisint(key), "attempt to hash integer");
   if (tvisstr(key))
     return hashstr(t, strV(key));
   else if (tvisnum(key))
@@ -57,7 +57,7 @@ static LJ_AINLINE void newhpart(lua_State *L, GCtab *t, uint32_t hbits)
 {
   uint32_t hsize;
   Node *node;
-  lua_assert(hbits != 0);
+  lj_assertL(hbits != 0, "zero hash size");
   if (hbits > LJ_MAX_HBITS)
     lj_err_msg(L, LJ_ERR_TABOV);
   hsize = 1u << hbits;
@@ -78,7 +78,7 @@ static LJ_AINLINE void clearhpart(GCtab *t)
 {
   uint32_t i, hmask = t->hmask;
   Node *node = noderef(t->node);
-  lua_assert(t->hmask != 0);
+  lj_assertX(t->hmask != 0, "empty hash part");
   for (i = 0; i <= hmask; i++) {
     Node *n = &node[i];
     setmref(n->next, NULL);
@@ -103,7 +103,7 @@ static GCtab *newtab(lua_State *L, uint32_t asize, uint32_t hbits)
   /* First try to colocate the array part. */
   if (LJ_MAX_COLOSIZE != 0 && asize > 0 && asize <= LJ_MAX_COLOSIZE) {
     Node *nilnode;
-    lua_assert((sizeof(GCtab) & 7) == 0);
+    lj_assertL((sizeof(GCtab) & 7) == 0, "bad GCtab size");
     t = (GCtab *)lj_mem_newgco(L, sizetabcolo(asize));
     t->gct = ~LJ_TTAB;
     t->nomm = (uint8_t)~0;
@@ -185,7 +185,8 @@ GCtab * LJ_FASTCALL lj_tab_dup(lua_State *L, const GCtab *kt)
   GCtab *t;
   uint32_t asize, hmask;
   t = newtab(L, kt->asize, kt->hmask > 0 ? lj_fls(kt->hmask)+1 : 0);
-  lua_assert(kt->asize == t->asize && kt->hmask == t->hmask);
+  lj_assertL(kt->asize == t->asize && kt->hmask == t->hmask,
+	     "mismatched size of table and template");
   t->nomm = 0;  /* Keys with metamethod names may be present. */
   asize = kt->asize;
   if (asize > 0) {
@@ -310,7 +311,7 @@ void lj_tab_resize(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
 
 static uint32_t countint(cTValue *key, uint32_t *bins)
 {
-  lua_assert(!tvisint(key));
+  lj_assertX(!tvisint(key), "bad integer key");
   if (tvisnum(key)) {
     lua_Number nk = numV(key);
     int32_t k = lj_num2int(nk);
@@ -463,7 +464,8 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
   if (!tvisnil(&n->val) || t->hmask == 0) {
     Node *nodebase = noderef(t->node);
     Node *collide, *freenode = getfreetop(t, nodebase);
-    lua_assert(freenode >= nodebase && freenode <= nodebase+t->hmask+1);
+    lj_assertL(freenode >= nodebase && freenode <= nodebase+t->hmask+1,
+	       "bad freenode");
     do {
       if (freenode == nodebase) {  /* No free node found? */
 	rehashtab(L, t, key);  /* Rehash table. */
@@ -471,7 +473,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
       }
     } while (!tvisnil(&(--freenode)->key));
     setfreetop(t, nodebase, freenode);
-    lua_assert(freenode != &G(L)->nilnode);
+    lj_assertL(freenode != &G(L)->nilnode, "store to fallback hash");
     collide = hashkey(t, &n->key);
     if (collide != n) {  /* Colliding node not the main node? */
       while (noderef(collide->next) != n)  /* Find predecessor. */
@@ -527,7 +529,7 @@ TValue *lj_tab_newkey(lua_State *L, GCtab *t, cTValue *key)
   if (LJ_UNLIKELY(tvismzero(&n->key)))
     n->key.u64 = 0;
   lj_gc_anybarriert(L, t);
-  lua_assert(tvisnil(&n->val));
+  lj_assertL(tvisnil(&n->val), "new hash slot is not empty");
   return &n->val;
 }
 

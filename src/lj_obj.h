@@ -679,6 +679,11 @@ struct lua_State {
 #define curr_topL(L)		(L->base + curr_proto(L)->framesize)
 #define curr_top(L)		(curr_funcisL(L) ? curr_topL(L) : L->top)
 
+#if defined(LUA_USE_ASSERT) || defined(LUA_USE_APICHECK)
+LJ_FUNC_NORET void lj_assert_fail(global_State *g, const char *file, int line,
+				  const char *func, const char *fmt, ...);
+#endif
+
 /* -- GC object definition and conversions -------------------------------- */
 
 /* GC header for generic access to common fields of GC objects. */
@@ -731,10 +736,6 @@ typedef union GCobj {
 #define obj2gco(v)	((GCobj *)(v))
 
 /* -- TValue getters/setters ---------------------------------------------- */
-
-#ifdef LUA_USE_ASSERT
-#include "lj_gc.h"
-#endif
 
 /* Macros to test types. */
 #if LJ_GC64
@@ -856,9 +857,19 @@ static LJ_AINLINE void setlightudV(TValue *o, void *p)
 #define setcont(o, f)		setlightudV((o), contptr(f))
 #endif
 
-#define tvchecklive(L, o) \
-  UNUSED(L), lua_assert(!tvisgcv(o) || \
-  ((~itype(o) == gcval(o)->gch.gct) && !isdead(G(L), gcval(o))))
+static LJ_AINLINE void checklivetv(lua_State *L, TValue *o, const char *msg)
+{
+  UNUSED(L); UNUSED(o); UNUSED(msg);
+#if LUA_USE_ASSERT
+  if (tvisgcv(o)) {
+    lj_assertL(~itype(o) == gcval(o)->gch.gct,
+	       "mismatch of TValue type %d vs GC type %d",
+	       ~itype(o), gcval(o)->gch.gct);
+    /* Copy of isdead check from lj_gc.h to avoid circular include. */
+    lj_assertL(!(gcval(o)->gch.marked & (G(L)->gc.currentwhite ^ 3) & 3), msg);
+  }
+#endif
+}
 
 static LJ_AINLINE void setgcVraw(TValue *o, GCobj *v, uint32_t itype)
 {
@@ -871,7 +882,8 @@ static LJ_AINLINE void setgcVraw(TValue *o, GCobj *v, uint32_t itype)
 
 static LJ_AINLINE void setgcV(lua_State *L, TValue *o, GCobj *v, uint32_t it)
 {
-  setgcVraw(o, v, it); tvchecklive(L, o);
+  setgcVraw(o, v, it);
+  checklivetv(L, o, "store to dead GC object");
 }
 
 #define define_setV(name, type, tag) \
@@ -918,7 +930,8 @@ static LJ_AINLINE void setint64V(TValue *o, int64_t i)
 /* Copy tagged values. */
 static LJ_AINLINE void copyTV(lua_State *L, TValue *o1, const TValue *o2)
 {
-  *o1 = *o2; tvchecklive(L, o1);
+  *o1 = *o2;
+  checklivetv(L, o1, "copy of dead GC object");
 }
 
 /* -- Number to integer conversion ---------------------------------------- */
