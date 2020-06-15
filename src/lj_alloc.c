@@ -302,7 +302,7 @@ static void *mmap_probe(size_t size)
 
 #if LJ_ALLOC_MMAP32
 
-#if defined(__sun__)
+#if LJ_TARGET_SOLARIS
 #define LJ_ALLOC_MMAP32_START	((uintptr_t)0x1000)
 #else
 #define LJ_ALLOC_MMAP32_START	((uintptr_t)0)
