@@ -633,4 +633,19 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_52			0
 #endif
 
+/* -- VM security --------------------------------------------------------- */
+
+/* Don't make any changes here. Instead build with:
+**   make "XCFLAGS=-DLUAJIT_SECURITY_flag=value"
+*/
+
+/* Security defaults. */
+#ifndef LUAJIT_SECURITY_PRNG
+#define LUAJIT_SECURITY_PRNG	1
+#endif
+
+#ifndef LUAJIT_SECURITY_MCODE
+#define LUAJIT_SECURITY_MCODE	1
+#endif
+
 #endif

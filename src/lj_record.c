@@ -33,6 +33,7 @@
 #include "lj_snap.h"
 #include "lj_dispatch.h"
 #include "lj_vm.h"
+#include "lj_prng.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
 #define IR(ref)			(&J->cur.ir[(ref)])
@@ -1696,7 +1697,7 @@ static void check_call_unroll(jit_State *J, TraceNo lnk)
       if (lnk) {  /* Possible tail- or up-recursion. */
 	lj_trace_flush(J, lnk);  /* Flush trace that only returns. */
 	/* Set a small, pseudo-random hotcount for a quick retry of JFUNC*. */
-	hotcount_set(J2GG(J), J->pc+1, LJ_PRNG_BITS(J, 4));
+	hotcount_set(J2GG(J), J->pc+1, lj_prng_u64(&J2G(J)->prng) & 15u);
       }
       lj_trace_err(J, LJ_TRERR_CUNROLL);
     }

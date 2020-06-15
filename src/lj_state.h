@@ -32,4 +32,6 @@ LJ_FUNC void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L);
 LJ_FUNC lua_State *lj_state_newstate(lua_Alloc f, void *ud);
 #endif
 
+#define LJ_ALLOCF_INTERNAL	((lua_Alloc)(void *)(uintptr_t)(1237<<4))
+
 #endif

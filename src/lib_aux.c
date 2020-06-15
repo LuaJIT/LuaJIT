@@ -345,17 +345,13 @@ LUALIB_API lua_State *luaL_newstate(void)
 
 #else
 
-#include "lj_alloc.h"
-
 LUALIB_API lua_State *luaL_newstate(void)
 {
   lua_State *L;
-  void *ud = lj_alloc_create();
-  if (ud == NULL) return NULL;
 #if LJ_64 && !LJ_GC64
-  L = lj_state_newstate(lj_alloc_f, ud);
+  L = lj_state_newstate(LJ_ALLOCF_INTERNAL, NULL);
 #else
-  L = lua_newstate(lj_alloc_f, ud);
+  L = lua_newstate(LJ_ALLOCF_INTERNAL, NULL);
 #endif
   if (L) G(L)->panic = panic;
   return L;

@@ -620,6 +620,7 @@ typedef struct global_State {
   GCRef cur_L;		/* Currently executing lua_State. */
   MRef jit_base;	/* Current JIT code L->base or NULL. */
   MRef ctype_state;	/* Pointer to C type state. */
+  PRNGState prng;	/* Global PRNG state. */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
 } global_State;
 

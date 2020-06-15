@@ -438,9 +438,9 @@ typedef struct jit_State {
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
+  uint32_t k32[LJ_K32__MAX];  /* Common 4 byte constants used by backends. */
   TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
-  TValue k64[LJ_K64__MAX];  /* Common 8 byte constants used by backends. */
-  uint32_t k32[LJ_K32__MAX];  /* Ditto for 4 byte constants. */
+  TValue k64[LJ_K64__MAX];  /* Common 8 byte constants. */
 
   IRIns *irbuf;		/* Temp. IR instruction buffer. Biased with REF_BIAS. */
   IRRef irtoplim;	/* Upper limit of instuction buffer (biased). */
@@ -472,7 +472,6 @@ typedef struct jit_State {
 
   HotPenalty penalty[PENALTY_SLOTS];  /* Penalty slots. */
   uint32_t penaltyslot;	/* Round-robin index into penalty slots. */
-  uint32_t prngstate;	/* PRNG state. */
 
 #ifdef LUAJIT_ENABLE_TABLE_BUMP
   RBCHashEntry rbchash[RBCHASH_SLOTS];  /* Reverse bytecode map. */
@@ -515,13 +514,5 @@ jit_State;
 #else
 #define lj_assertJ(c, ...)	((void)J)
 #endif
-
-/* Trivial PRNG e.g. used for penalty randomization. */
-static LJ_AINLINE uint32_t LJ_PRNG_BITS(jit_State *J, int bits)
-{
-  /* Yes, this LCG is very weak, but that doesn't matter for our use case. */
-  J->prngstate = J->prngstate * 1103515245 + 12345;
-  return J->prngstate >> (32-bits);
-}
 
 #endif
