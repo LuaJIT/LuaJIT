@@ -8,6 +8,8 @@
 
 #include "lua.h"
 
+/* -- Target definitions -------------------------------------------------- */
+
 /* Target endianess. */
 #define LUAJIT_LE	0
 #define LUAJIT_BE	1
@@ -37,6 +39,14 @@
 #define LUAJIT_OS_OSX		3
 #define LUAJIT_OS_BSD		4
 #define LUAJIT_OS_POSIX		5
+
+/* Number mode. */
+#define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
+#define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
+#define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
+#define LJ_NUMMODE_DUAL_SINGLE	3	/* Default to dual-number mode. */
+
+/* -- Target detection ---------------------------------------------------- */
 
 /* Select native target if no target defined. */
 #ifndef LUAJIT_TARGET
@@ -74,7 +84,10 @@
        defined(__NetBSD__) || defined(__OpenBSD__) || \
        defined(__DragonFly__)) && !defined(__ORBIS__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
-#elif (defined(__sun__) && defined(__svr4__)) || defined(__HAIKU__)
+#elif (defined(__sun__) && defined(__svr4__))
+#define LJ_TARGET_SOLARIS	1
+#define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif defined(__HAIKU__)
 #define LUAJIT_OS	LUAJIT_OS_POSIX
 #elif defined(__CYGWIN__)
 #define LJ_TARGET_CYGWIN	1
@@ -103,6 +116,7 @@
 #define LJ_TARGET_WINDOWS	(LUAJIT_OS == LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_LINUX		(LUAJIT_OS == LUAJIT_OS_LINUX)
 #define LJ_TARGET_OSX		(LUAJIT_OS == LUAJIT_OS_OSX)
+#define LJ_TARGET_BSD		(LUAJIT_OS == LUAJIT_OS_BSD)
 #define LJ_TARGET_IOS		(LJ_TARGET_OSX && (LUAJIT_TARGET == LUAJIT_ARCH_ARM || LUAJIT_TARGET == LUAJIT_ARCH_ARM64))
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
@@ -142,10 +156,7 @@
 #endif
 #endif
 
-#define LJ_NUMMODE_SINGLE	0	/* Single-number mode only. */
-#define LJ_NUMMODE_SINGLE_DUAL	1	/* Default to single-number mode. */
-#define LJ_NUMMODE_DUAL		2	/* Dual-number mode only. */
-#define LJ_NUMMODE_DUAL_SINGLE	3	/* Default to dual-number mode. */
+/* -- Arch-specific settings ---------------------------------------------- */
 
 /* Set target architecture properties. */
 #if LUAJIT_TARGET == LUAJIT_ARCH_X86
@@ -407,9 +418,7 @@
 #error "No target architecture defined"
 #endif
 
-#ifndef LJ_PAGESIZE
-#define LJ_PAGESIZE		4096
-#endif
+/* -- Checks for requirements --------------------------------------------- */
 
 /* Check for minimum required compiler versions. */
 #if defined(__GNUC__)
@@ -484,6 +493,8 @@
 #endif
 #endif
 #endif
+
+/* -- Derived defines ----------------------------------------------------- */
 
 /* Enable or disable the dual-number mode for the VM. */
 #if (LJ_ARCH_NUMMODE == LJ_NUMMODE_SINGLE && LUAJIT_NUMMODE == 2) || \
@@ -580,6 +591,10 @@
 
 #ifndef LJ_TARGET_UNALIGNED
 #define LJ_TARGET_UNALIGNED	0
+#endif
+
+#ifndef LJ_PAGESIZE
+#define LJ_PAGESIZE		4096
 #endif
 
 /* Various workarounds for embedded operating systems or weak C runtimes. */

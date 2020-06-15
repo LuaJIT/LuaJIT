@@ -363,7 +363,7 @@ static const ELFheader elfhdr_template = {
   .eosabi = 12,
 #elif defined(__DragonFly__)
   .eosabi = 0,
-#elif (defined(__sun__) && defined(__svr4__))
+#elif LJ_TARGET_SOLARIS
   .eosabi = 6,
 #else
   .eosabi = 0,

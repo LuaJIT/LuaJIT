@@ -5548,7 +5548,7 @@ static void emit_asm_debug(BuildCtx *ctx)
 	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
 #endif
 #if !LJ_NO_UNWIND
-#if (defined(__sun__) && defined(__svr4__))
+#if LJ_TARGET_SOLARIS
 #if LJ_64
     fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@unwind\n");
 #else
