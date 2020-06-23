@@ -183,8 +183,13 @@ int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs)
 
 #elif LJ_TARGET_OSX || LJ_TARGET_BSD || LJ_TARGET_SOLARIS || LJ_TARGET_CYGWIN
 
-  if ((!__ELF__ || getentropy) && getentropy(rs->u, sizeof(rs->u)) == 0)
+#ifdef __ELF__
+  if (getentropy && getentropy(rs->u, sizeof(rs->u)) == 0)
     goto ok;
+#else
+  if (getentropy(rs->u, sizeof(rs->u)) == 0)
+    goto ok;
+#endif
 
 #endif
 
