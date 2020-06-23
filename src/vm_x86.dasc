@@ -1522,7 +1522,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov dword [BASE-4], LJ_TTAB	// Store metatable as default result.
   |  mov [BASE-8], TAB:RB
   |  mov RA, TAB:RB->hmask
-  |  and RA, STR:RC->hash
+  |  and RA, STR:RC->sid
   |  imul RA, #NODE
   |  add NODE:RA, TAB:RB->node
   |3:  // Rearranged logic, because we expect _not_ to find the key.
@@ -4286,7 +4286,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov TAB:RB, [BASE+RB*8]
     |->BC_TGETS_Z:	// RB = GCtab *, RC = GCstr *, refetches PC_RA.
     |  mov RA, TAB:RB->hmask
-    |  and RA, STR:RC->hash
+    |  and RA, STR:RC->sid
     |  imul RA, #NODE
     |  add NODE:RA, TAB:RB->node
     |1:
@@ -4457,7 +4457,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov TAB:RB, [BASE+RB*8]
     |->BC_TSETS_Z:	// RB = GCtab *, RC = GCstr *, refetches PC_RA.
     |  mov RA, TAB:RB->hmask
-    |  and RA, STR:RC->hash
+    |  and RA, STR:RC->sid
     |  imul RA, #NODE
     |  mov byte TAB:RB->nomm, 0		// Clear metamethod cache.
     |  add NODE:RA, TAB:RB->node

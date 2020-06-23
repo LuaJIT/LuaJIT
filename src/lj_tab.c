@@ -23,8 +23,8 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
   return &n[hash & t->hmask];
 }
 
-/* String hashes are precomputed when they are interned. */
-#define hashstr(t, s)		hashmask(t, (s)->hash)
+/* String IDs are generated when a string is interned. */
+#define hashstr(t, s)		hashmask(t, (s)->sid)
 
 #define hashlohi(t, lo, hi)	hashmask((t), hashrot((lo), (hi)))
 #define hashnum(t, o)		hashlohi((t), (o)->u32.lo, ((o)->u32.hi << 1))

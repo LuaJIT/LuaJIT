@@ -721,7 +721,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     if (isk) {
       /* Nothing to do. */
     } else if (irt_isstr(kt)) {
-      emit_tai(as, PPCI_LWZ, tmp1, key, (int32_t)offsetof(GCstr, hash));
+      emit_tai(as, PPCI_LWZ, tmp1, key, (int32_t)offsetof(GCstr, sid));
     } else {  /* Must match with hash*() in lj_tab.c. */
       emit_tab(as, PPCI_SUBF, tmp1, tmp2, tmp1);
       emit_rotlwi(as, tmp2, tmp2, HASH_ROT3);

@@ -1029,7 +1029,7 @@ static uint32_t ir_khash(ASMState *as, IRIns *ir)
   uint32_t lo, hi;
   UNUSED(as);
   if (irt_isstr(ir->t)) {
-    return ir_kstr(ir)->hash;
+    return ir_kstr(ir)->sid;
   } else if (irt_isnum(ir->t)) {
     lo = ir_knum(ir)->u32.lo;
     hi = ir_knum(ir)->u32.hi << 1;

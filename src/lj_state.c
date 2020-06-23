@@ -150,7 +150,7 @@ static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
   /* NOBARRIER: State initialization, all objects are white. */
   setgcref(L->env, obj2gco(lj_tab_new(L, 0, LJ_MIN_GLOBAL)));
   settabV(L, registry(L), lj_tab_new(L, 0, LJ_MIN_REGISTRY));
-  lj_str_resize(L, LJ_MIN_STRTAB-1);
+  lj_str_init(L);
   lj_meta_init(L);
   lj_lex_init(L);
   fixstring(lj_err_str(L, LJ_ERR_ERRMEM));  /* Preallocate memory error msg. */
@@ -166,12 +166,12 @@ static void close_state(lua_State *L)
   lj_gc_freeall(g);
   lj_assertG(gcref(g->gc.root) == obj2gco(L),
 	     "main thread is not first GC object");
-  lj_assertG(g->strnum == 0, "leaked %d strings", g->strnum);
+  lj_assertG(g->str.num == 0, "leaked %d strings", g->str.num);
   lj_trace_freestate(g);
 #if LJ_HASFFI
   lj_ctype_freestate(g);
 #endif
-  lj_mem_freevec(g, g->strhash, g->strmask+1, GCRef);
+  lj_str_freetab(g);
   lj_buf_free(g, &g->tmpbuf);
   lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
   lj_assertG(g->gc.total == sizeof(GG_State),
@@ -231,7 +231,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc allocf, void *allocd)
   setgcref(g->mainthref, obj2gco(L));
   setgcref(g->uvhead.prev, obj2gco(&g->uvhead));
   setgcref(g->uvhead.next, obj2gco(&g->uvhead));
-  g->strmask = ~(MSize)0;
+  g->str.mask = ~(MSize)0;
   setnilV(registry(L));
   setnilV(&g->nilnode.val);
   setnilV(&g->nilnode.key);

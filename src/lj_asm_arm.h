@@ -825,10 +825,10 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   } else {
     emit_dnm(as, ARMI_ADD|ARMF_SH(ARMSH_LSL, 3), dest, dest, tmp);
     emit_dnm(as, ARMI_ADD|ARMF_SH(ARMSH_LSL, 1), tmp, tmp, tmp);
-    if (irt_isstr(kt)) {  /* Fetch of str->hash is cheaper than ra_allock. */
+    if (irt_isstr(kt)) {  /* Fetch of str->sid is cheaper than ra_allock. */
       emit_dnm(as, ARMI_AND, tmp, tmp+1, RID_TMP);
       emit_lso(as, ARMI_LDR, dest, tab, (int32_t)offsetof(GCtab, node));
-      emit_lso(as, ARMI_LDR, tmp+1, key, (int32_t)offsetof(GCstr, hash));
+      emit_lso(as, ARMI_LDR, tmp+1, key, (int32_t)offsetof(GCstr, sid));
       emit_lso(as, ARMI_LDR, RID_TMP, tab, (int32_t)offsetof(GCtab, hmask));
     } else if (irref_isk(refkey)) {
       emit_opk(as, ARMI_AND, tmp, RID_TMP, (int32_t)khash,

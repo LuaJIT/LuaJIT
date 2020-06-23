@@ -1228,7 +1228,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_gri(as, XG_ARITHi(XOg_AND), dest, (int32_t)khash);
       emit_rmro(as, XO_MOV, dest, tab, offsetof(GCtab, hmask));
     } else if (irt_isstr(kt)) {
-      emit_rmro(as, XO_ARITH(XOg_AND), dest, key, offsetof(GCstr, hash));
+      emit_rmro(as, XO_ARITH(XOg_AND), dest, key, offsetof(GCstr, sid));
       emit_rmro(as, XO_MOV, dest, tab, offsetof(GCtab, hmask));
     } else {  /* Must match with hashrot() in lj_tab.c. */
       emit_rmro(as, XO_ARITH(XOg_AND), dest, tab, offsetof(GCtab, hmask));

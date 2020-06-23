@@ -1152,9 +1152,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.  li SFARG1HI, LJ_TNIL
   |  lw TMP0, TAB:SFARG1LO->hmask
   |   li SFARG1HI, LJ_TTAB		// Use metatable as default result.
-  |  lw TMP1, STR:RC->hash
+  |  lw TMP1, STR:RC->sid
   |  lw NODE:TMP2, TAB:SFARG1LO->node
-  |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+  |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
   |  sll TMP0, TMP1, 5
   |  sll TMP1, TMP1, 3
   |  subu TMP1, TMP0, TMP1
@@ -4029,9 +4029,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TGETS_Z:
     |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = dst*8
     |  lw TMP0, TAB:RB->hmask
-    |  lw TMP1, STR:RC->hash
+    |  lw TMP1, STR:RC->sid
     |  lw NODE:TMP2, TAB:RB->node
-    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+    |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
     |  sll TMP0, TMP1, 5
     |  sll TMP1, TMP1, 3
     |  subu TMP1, TMP0, TMP1
@@ -4203,10 +4203,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TSETS_Z:
     |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = BASE+src*8
     |  lw TMP0, TAB:RB->hmask
-    |  lw TMP1, STR:RC->hash
+    |  lw TMP1, STR:RC->sid
     |  lw NODE:TMP2, TAB:RB->node
     |   sb r0, TAB:RB->nomm		// Clear metamethod cache.
-    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
+    |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
     |  sll TMP0, TMP1, 5
     |  sll TMP1, TMP1, 3
     |  subu TMP1, TMP0, TMP1
