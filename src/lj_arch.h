@@ -85,6 +85,7 @@
 #elif defined(__linux__)
 #define LUAJIT_OS	LUAJIT_OS_LINUX
 #elif defined(__MACH__) && defined(__APPLE__)
+#include "TargetConditionals.h"
 #define LUAJIT_OS	LUAJIT_OS_OSX
 #elif (defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || \
        defined(__NetBSD__) || defined(__OpenBSD__) || \
@@ -123,9 +124,14 @@
 #define LJ_TARGET_LINUX		(LUAJIT_OS == LUAJIT_OS_LINUX)
 #define LJ_TARGET_OSX		(LUAJIT_OS == LUAJIT_OS_OSX)
 #define LJ_TARGET_BSD		(LUAJIT_OS == LUAJIT_OS_BSD)
-#define LJ_TARGET_IOS		(LJ_TARGET_OSX && (LUAJIT_TARGET == LUAJIT_ARCH_ARM || LUAJIT_TARGET == LUAJIT_ARCH_ARM64))
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
+
+#if TARGET_OS_IPHONE
+#define LJ_TARGET_IOS		1
+#else
+#define LJ_TARGET_IOS		0
+#endif
 
 #ifdef __CELLOS_LV2__
 #define LJ_TARGET_PS3		1
