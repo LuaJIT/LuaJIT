@@ -124,7 +124,7 @@
 
 #if LJ_ALLOC_NTAVM
 /* Undocumented, but hey, that's what we all love so much about Windows. */
-typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG zbits,
+typedef long (*PNTAVM)(HANDLE handle, void **addr, ULONG_PTR zbits,
 		       size_t *size, ULONG alloctype, ULONG prot);
 static PNTAVM ntavm;
 
