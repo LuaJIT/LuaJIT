@@ -118,7 +118,7 @@ LJ_FUNC GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o);
 LJ_FUNC const char *lj_strfmt_pushvf(lua_State *L, const char *fmt,
 				     va_list argp);
 LJ_FUNC const char *lj_strfmt_pushf(lua_State *L, const char *fmt, ...)
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
   __attribute__ ((format (printf, 2, 3)))
 #endif
   ;
