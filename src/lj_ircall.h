@@ -334,7 +334,7 @@ extern double lj_vm_sfmax(double a, double b);
 #endif
 
 #if LJ_HASFFI && LJ_NEED_FP64 && !(LJ_TARGET_ARM && LJ_SOFTFP)
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__)
 #define fp64_l2d __floatdidf
 #define fp64_ul2d __floatundidf
 #define fp64_l2f __floatdisf

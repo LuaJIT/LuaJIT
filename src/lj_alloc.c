@@ -597,7 +597,7 @@ static int has_segment_link(mstate m, msegmentptr ss)
   noncontiguous segments are added.
 */
 #define TOP_FOOT_SIZE\
-  (align_offset(chunk2mem(0))+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
+  (align_offset(TWO_SIZE_T_SIZES)+pad_request(sizeof(struct malloc_segment))+MIN_CHUNK_SIZE)
 
 /* ---------------------------- Indexing Bins ---------------------------- */
 
