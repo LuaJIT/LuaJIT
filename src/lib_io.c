@@ -304,6 +304,14 @@ LJLIB_CF(io_method_flush)		LJLIB_REC(io_flush 0)
   return luaL_fileresult(L, fflush(io_tofile(L)->fp) == 0, NULL);
 }
 
+#if LJ_32 && defined(__ANDROID__) && __ANDROID_API__ < 24
+/* The Android NDK is such an unmatched marvel of engineering. */
+extern int fseeko32(FILE *, long int, int) __asm__("fseeko");
+extern long int ftello32(FILE *) __asm__("ftello");
+#define fseeko(fp, pos, whence)	(fseeko32((fp), (pos), (whence)))
+#define ftello(fp)		(ftello32((fp)))
+#endif
+
 LJLIB_CF(io_method_seek)
 {
   FILE *fp = io_tofile(L)->fp;
