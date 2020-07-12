@@ -581,6 +581,7 @@ static ptrdiff_t finderrfunc(lua_State *L)
       if (cframe_canyield(cf)) return 0;
       if (cframe_errfunc(cf) >= 0)
 	return cframe_errfunc(cf);
+      cf = cframe_prev(cf);
       frame = frame_prevd(frame);
       break;
     case FRAME_PCALL:
