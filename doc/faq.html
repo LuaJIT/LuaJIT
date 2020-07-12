@@ -57,7 +57,7 @@ dd { margin-left: 1.5em; }
 </li></ul>
 </div>
 <div id="main">
-<dl>
+<dl id="info">
 <dt>Q: Where can I learn more about LuaJIT and Lua?</dt>
 <dd>
 <ul style="padding: 0;">
@@ -77,7 +77,7 @@ has information about diverse topics.</li>
 </ul>
 </dl>
 
-<dl>
+<dl id="tech">
 <dt>Q: Where can I learn more about the compiler technology used by LuaJIT?</dt>
 <dd>
 I'm planning to write more documentation about the internals of LuaJIT.
@@ -93,7 +93,7 @@ And, you know, reading the source is of course the only way to enlightenment. :-
 </dd>
 </dl>
 
-<dl>
+<dl id="arg">
 <dt>Q: Why do I get this error: "attempt to index global 'arg' (a nil value)"?<br>
 Q: My vararg functions fail after switching to LuaJIT!</dt>
 <dd>LuaJIT is compatible to the Lua 5.1 language standard. It doesn't
@@ -103,7 +103,7 @@ functions from Lua 5.0.<br>Please convert your code to the
 vararg syntax</a>.</dd>
 </dl>
 
-<dl>
+<dl id="x87">
 <dt>Q: Why do I get this error: "bad FPU precision"?<br>
 <dt>Q: I get weird behavior after initializing Direct3D.<br>
 <dt>Q: Some FPU operations crash after I load a Delphi DLL.<br>
@@ -125,7 +125,7 @@ Please check the Delphi docs for the Set8087CW method.
 
 </dl>
 
-<dl>
+<dl id="ctrlc">
 <dt>Q: Sometimes Ctrl-C fails to stop my Lua program. Why?</dt>
 <dd>The interrupt signal handler sets a Lua debug hook. But this is
 currently ignored by compiled code (this will eventually be fixed). If
@@ -136,7 +136,31 @@ twice to get stop your program. That's similar to when it's stuck
 running inside a C function under the Lua interpreter.</dd>
 </dl>
 
-<dl>
+<dl id="sandbox">
+<dt>Q: Can Lua code be safely sandboxed?</dt>
+<dd>
+Maybe for an extremly restricted subset of Lua and if you relentlessly
+scrutinize every single interface function you offer to the untrusted code.<br>
+
+Although Lua provides some sandboxing functionality (<tt>setfenv()</tt>, hooks),
+it's very hard to get this right even for the Lua core libraries. Of course,
+you'll need to inspect any extension library, too. And there are libraries
+that are inherently unsafe, e.g. the <a href="ext_ffi.html">FFI library</a>.<br>
+
+Relatedly, <b>loading untrusted bytecode is not safe!</b> It's trivial
+to crash the Lua or LuaJIT VM with maliciously crafted bytecode. This is
+well known and there's no bytecode verification on purpose, so please
+don't report a bug about it. Check the <tt>mode</tt> parameter for the
+<tt>load*()</tt> functions to disable loading of bytecode.<br>
+
+In general, the only promising approach is to sandbox Lua code at the
+process level and not the VM level.<br>
+
+More reading material at the <a href="http://lua-users.org/wiki/SandBoxes"><span class="ext">&raquo;</span>&nbsp;Lua Wiki</a> and <a href="https://en.wikipedia.org/wiki/Sandbox_(computer_security)">Wikipedia</a>.
+</dd>
+</dl>
+
+<dl id="patches">
 <dt>Q: Why doesn't my favorite power-patch for Lua apply against LuaJIT?</dt>
 <dd>Because it's a completely redesigned VM and has very little code
 in common with Lua anymore. Also, if the patch introduces changes to
@@ -147,7 +171,7 @@ can use source transformations or use wrapper or proxy functions.
 The compiler will happily optimize away such indirections.</dd>
 </dl>
 
-<dl>
+<dl id="arch">
 <dt>Q: Lua runs everywhere. Why doesn't LuaJIT support my CPU?</dt>
 <dd>Because it's a compiler &mdash; it needs to generate native
 machine code. This means the code generator must be ported to each
@@ -158,7 +182,7 @@ architectures. Other architectures will follow based on sufficient user
 demand and/or sponsoring.</dd>
 </dl>
 
-<dl>
+<dl id="when">
 <dt>Q: When will feature X be added? When will the next version be released?</dt>
 <dd>When it's ready.<br>
 C'mon, it's open source &mdash; I'm doing it on my own time and you're
