@@ -73,7 +73,8 @@ make PREFIX=/home/myself/lj2
 ```
 
 **Note for OSX**: You must set the `MACOSX_DEPLOYMENT_TARGET` environment
-variable to a value supported by your toolchain.
+variable to a value supported by your toolchain.  The oldest value known to
+work is `10.7`.
 
 ### Installing moonjit
 
