@@ -107,12 +107,26 @@ static PRGR libfunc_rgr;
 #if LJ_TARGET_LINUX
 /* Avoid a dependency on glibc 2.25+ and use the getrandom syscall instead. */
 #include <sys/syscall.h>
-#elif LJ_TARGET_OSX || LJ_TARGET_BSD || LJ_TARGET_SOLARIS || LJ_TARGET_CYGWIN
+#else
+
+#if LJ_TARGET_OSX
+#include <Availability.h>
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101200 || \
+    __IPHONE_OS_VERSION_MIN_REQUIRED >= 100000
+#define LJ_TARGET_HAS_GETENTROPY	1
+#endif
+#elif LJ_TARGET_BSD || LJ_TARGET_SOLARIS || LJ_TARGET_CYGWIN
+#define LJ_TARGET_HAS_GETENTROPY	1
+#endif
+
+#if LJ_TARGET_HAS_GETENTROPY
 extern int getentropy(void *buf, size_t len);
 #ifdef __ELF__
   __attribute__((weak))
 #endif
 ;
+#endif
+
 #endif
 
 /* For the /dev/urandom fallback. */
@@ -181,7 +195,7 @@ int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs)
   if (syscall(SYS_getrandom, rs->u, sizeof(rs->u), 0) == (long)sizeof(rs->u))
     goto ok;
 
-#elif LJ_TARGET_OSX || LJ_TARGET_BSD || LJ_TARGET_SOLARIS || LJ_TARGET_CYGWIN
+#elif LJ_TARGET_HAS_GETENTROPY
 
 #ifdef __ELF__
   if (getentropy && getentropy(rs->u, sizeof(rs->u)) == 0)
