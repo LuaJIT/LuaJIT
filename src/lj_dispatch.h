@@ -47,6 +47,21 @@ GOTDEF(GOTENUM)
 };
 #endif
 
+#if LJ_TARGET_PPC
+/* Need our own global offset table for the dreaded MIPS calling conventions. */
+#define GOTDEF(_) \
+  _(floor) _(ceil) _(trunc) _(log) _(log10) _(exp) _(sin) _(cos) _(tan) \
+  _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
+  _(pow) _(fmod) _(ldexp) _(sqrt)
+
+enum {
+#define GOTENUM(name) LJ_GOT_##name,
+GOTDEF(GOTENUM)
+#undef GOTENUM
+  LJ_GOT__MAX
+};
+#endif
+
 /* Type of hot counter. Must match the code in the assembler VM. */
 /* 16 bits are sufficient. Only 0.0015% overhead with maximum slot penalty. */
 typedef uint16_t HotCount;
@@ -70,7 +85,7 @@ typedef uint16_t HotCount;
 typedef struct GG_State {
   lua_State L;				/* Main thread. */
   global_State g;			/* Global state. */
-#if LJ_TARGET_MIPS
+#if LJ_TARGET_MIPS || LJ_TARGET_PPC
   ASMFunction got[LJ_GOT__MAX];		/* Global offset table. */
 #endif
 #if LJ_HASJIT
