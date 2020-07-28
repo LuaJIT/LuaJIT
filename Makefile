@@ -77,7 +77,8 @@ INSTALL_F= install -m 0644
 UNINSTALL= $(RM)
 LDCONFIG= ldconfig -n 2>/dev/null
 SED_PC= sed -e "s|^prefix=.*|prefix=$(PREFIX)|" \
-            -e "s|^multilib=.*|multilib=$(MULTILIB)|"
+            -e "s|^multilib=.*|multilib=$(MULTILIB)|" \
+            $(SED_PC_OPTIONS_WINDOWS)
 
 FILE_T= luajit
 FILE_A= libluajit.a
@@ -102,6 +103,18 @@ ifeq (Darwin,$(TARGET_SYS))
   INSTALL_SOSHORT1= $(INSTALL_DYLIBSHORT1)
   INSTALL_SOSHORT2= $(INSTALL_DYLIBSHORT2)
   LDCONFIG= :
+endif
+
+ifeq (Windows,$(TARGET_SYS))
+  # "-Wl,-E" and "-ldl" are removed.
+  # Because "-Wl,-E" isn't supported with MinGW and dlopen() isn't used
+  # with MinGW.
+  #
+  # You can't link LuaJIT statically on Windows if you want to load Lua/C
+  # modules at runtime.
+  # See the "Embedding LuaJIT" section at https://luajit.org/install.html .
+  SED_PC_OPTIONS_WINDOWS= -e "s|-Wl,-E||" \
+                          -e "s|-ldl||"
 endif
 
 ##############################################################################
