@@ -503,11 +503,7 @@ typedef struct jit_State {
   BCLine prev_line;	/* Previous line. */
   int prof_mode;	/* Profiling mode: 0, 'f', 'l'. */
 #endif
-}
-#if LJ_TARGET_ARM
-LJ_ALIGN(16)		/* For DISPATCH-relative addresses in assembler part. */
-#endif
-jit_State;
+} jit_State;
 
 #ifdef LUA_USE_ASSERT
 #define lj_assertJ(c, ...)	lj_assertG_(J2G(J), (c), __VA_ARGS__)

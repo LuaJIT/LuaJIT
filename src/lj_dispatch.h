@@ -89,12 +89,20 @@ typedef uint16_t HotCount;
 typedef struct GG_State {
   lua_State L;				/* Main thread. */
   global_State g;			/* Global state. */
+#if LJ_TARGET_ARM
+  /* Make g reachable via K12 encoded DISPATCH-relative addressing. */
+  uint8_t align1[(16-sizeof(global_State))&15];
+#endif
 #if LJ_TARGET_MIPS
   ASMFunction got[LJ_GOT__MAX];		/* Global offset table. */
 #endif
 #if LJ_HASJIT
   jit_State J;				/* JIT state. */
   HotCount hotcount[HOTCOUNT_SIZE];	/* Hot counters. */
+#if LJ_TARGET_ARM
+  /* Ditto for J. */
+  uint8_t align2[(16-sizeof(jit_State)-sizeof(HotCount)*HOTCOUNT_SIZE)&15];
+#endif
 #endif
   ASMFunction dispatch[GG_LEN_DISP];	/* Instruction dispatch tables. */
   BCIns bcff[GG_NUM_ASMFF];		/* Bytecode for ASM fast functions. */
