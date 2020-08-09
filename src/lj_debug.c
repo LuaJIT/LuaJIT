@@ -94,6 +94,7 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 	}
       }
       ins = cframe_pc(cf);
+      if (!ins) return NO_BCPOS;
     }
   }
   pt = funcproto(fn);
