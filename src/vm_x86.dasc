@@ -2960,10 +2960,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp <2
   |
   |9:  // Rethrow error from the right C frame.
-  |  neg RD
   |  mov FCARG1, L:RB
-  |  mov FCARG2, RD
-  |  call extern lj_err_throw@8		// (lua_State *L, int errcode)
+  |  call extern lj_err_run@4		// (lua_State *L)
   |.endif
   |
   |//-----------------------------------------------------------------------

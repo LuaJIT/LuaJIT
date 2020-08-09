@@ -46,7 +46,7 @@ extern double __divdf3(double a, double b);
   _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
   _(pow) _(fmod) _(ldexp) _(lj_vm_modi) \
   _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_dispatch_stitch) \
-  _(lj_dispatch_profile) _(lj_err_throw) \
+  _(lj_dispatch_profile) _(lj_err_throw) _(lj_err_run) \
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \
   _(lj_gc_barrieruv) _(lj_gc_step) _(lj_gc_step_fixtop) _(lj_meta_arith) \
   _(lj_meta_call) _(lj_meta_cat) _(lj_meta_comp) _(lj_meta_equal) \

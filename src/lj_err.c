@@ -598,7 +598,7 @@ static ptrdiff_t finderrfunc(lua_State *L)
 }
 
 /* Runtime error. */
-LJ_NOINLINE void lj_err_run(lua_State *L)
+LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
   if (ef) {
