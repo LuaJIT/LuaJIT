@@ -85,8 +85,13 @@ static MSize snapshot_slots(jit_State *J, SnapEntry *map, BCReg nslots)
       IRIns *ir = &J->cur.ir[ref];
       if ((LJ_FR2 || !(sn & (SNAP_CONT|SNAP_FRAME))) &&
 	  ir->o == IR_SLOAD && ir->op1 == s && ref > retf) {
-	/* No need to snapshot unmodified non-inherited slots. */
-	if (!(ir->op2 & IRSLOAD_INHERIT))
+	/*
+	** No need to snapshot unmodified non-inherited slots.
+	** But always snapshot the function below a frame in LJ_FR2 mode.
+	*/
+	if (!(ir->op2 & IRSLOAD_INHERIT) &&
+	    (!LJ_FR2 || s == 0 || s+1 == nslots ||
+	     !(J->slot[s+1] & (TREF_CONT|TREF_FRAME))))
 	  continue;
 	/* No need to restore readonly slots and unmodified non-parent slots. */
 	if (!(LJ_DUALNUM && (ir->op2 & IRSLOAD_CONVERT)) &&

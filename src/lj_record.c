@@ -211,6 +211,7 @@ static TRef getcurrf(jit_State *J)
 {
   if (J->base[-1-LJ_FR2])
     return J->base[-1-LJ_FR2];
+  /* Non-base frame functions ought to be loaded already. */
   lj_assertJ(J->baseslot == 1+LJ_FR2, "bad baseslot");
   return sloadt(J, -1-LJ_FR2, IRT_FUNC, IRSLOAD_READONLY);
 }
