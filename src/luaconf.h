@@ -149,4 +149,7 @@
 #define luai_apicheck(L, o)	{ (void)L; }
 #endif
 
+// Ashita: Enable Lua 5.2 featuresets..
+#define LUAJIT_ENABLE_LUA52COMPAT 1
+
 #endif

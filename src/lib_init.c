@@ -15,6 +15,9 @@
 
 #include "lj_arch.h"
 
+// Ashita: Third-party library additions..
+#include "../../luaex/lstruct/struct.h"
+
 static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
   { LUA_LOADLIBNAME,	luaopen_package },
@@ -27,6 +30,10 @@ static const luaL_Reg lj_lib_load[] = {
   { LUA_BITLIBNAME,	luaopen_bit },
   { LUA_JITLIBNAME,	luaopen_jit },
   { LUA_UTF8LIBNAME,	luaopen_utf8 }, /* require base, string, debug, bit */
+
+  // Ashita: Third-party library additions..
+  { "struct", luaopen_struct },
+  
   { NULL,		NULL }
 };
 
