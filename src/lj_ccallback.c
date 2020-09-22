@@ -549,13 +549,13 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   if (LJ_FR2) {
     (o++)->u64 = LJ_CONT_FFI_CALLBACK;
     (o++)->u64 = rid;
-    o++;
   } else {
     o->u32.lo = LJ_CONT_FFI_CALLBACK;
     o->u32.hi = rid;
     o++;
   }
   setframe_gc(o, obj2gco(fn), fntp);
+  if (LJ_FR2) o++;
   setframe_ftsz(o, ((char *)(o+1) - (char *)L->base) + FRAME_CONT);
   L->top = L->base = ++o;
   if (!ct)
