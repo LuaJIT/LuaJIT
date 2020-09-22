@@ -133,7 +133,7 @@
   _(XBAR,	S , ___, ___) \
   \
   /* Type conversions. */ \
-  _(CONV,	NW, ref, lit) \
+  _(CONV,	N , ref, lit) \
   _(TOBIT,	N , ref, ref) \
   _(TOSTR,	N , ref, lit) \
   _(STRTO,	N , ref, ___) \
