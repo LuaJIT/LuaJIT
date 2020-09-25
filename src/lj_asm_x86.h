@@ -2300,7 +2300,7 @@ static void asm_bitshift(ASMState *as, IRIns *ir, x86Shift xs, x86Op xv)
     dest = ra_dest(as, ir, rset_exclude(RSET_GPR, RID_ECX));
     if (dest == RID_ECX) {
       dest = ra_scratch(as, rset_exclude(RSET_GPR, RID_ECX));
-      emit_rr(as, XO_MOV, RID_ECX, dest);
+      emit_rr(as, XO_MOV, REX_64IR(ir, RID_ECX), dest);
     }
     right = irr->r;
     if (ra_noreg(right))
