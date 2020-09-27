@@ -2884,6 +2884,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   MSize len = T->szmcode;
   MCode *px = exitstub_addr(J, exitno) - 6;
   MCode *pe = p+len-6;
+  MCode *pgc = NULL;
   uint32_t stateaddr = u32ptr(&J2G(J)->vmstate);
   if (len > 5 && p[len-5] == XI_JMP && p+len-6 + *(int32_t *)(p+len-4) == px)
     *(int32_t *)(p+len-4) = jmprel(p+len, target);
@@ -2892,9 +2893,15 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     if (*(uint32_t *)(p+(LJ_64 ? 3 : 2)) == stateaddr && p[0] == XI_MOVmi)
       break;
   lua_assert(p < pe);
-  for (; p < pe; p += asm_x86_inslen(p))
-    if ((*(uint16_t *)p & 0xf0ff) == 0x800f && p + *(int32_t *)(p+2) == px)
+  for (; p < pe; p += asm_x86_inslen(p)) {
+    if ((*(uint16_t *)p & 0xf0ff) == 0x800f && p + *(int32_t *)(p+2) == px &&
+	p != pgc) {
       *(int32_t *)(p+2) = jmprel(p+6, target);
+    } else if (*p == XI_CALL &&
+	      (void *)(p+5+*(int32_t *)(p+1)) == (void *)lj_gc_step_jit) {
+      pgc = p+7;  /* Do not patch GC check exit. */
+    }
+  }
   lj_mcode_sync(T->mcode, T->mcode + T->szmcode);
   lj_mcode_patch(J, mcarea, 1);
 }

@@ -1665,6 +1665,9 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 
 /* -- GC handling --------------------------------------------------------- */
 
+/* Marker to prevent patching the GC check exit. */
+#define MIPS_NOPATCH_GC_CHECK	MIPSI_OR
+
 /* Check GC threshold and do one or more GC steps. */
 static void asm_gc_check(ASMState *as)
 {
@@ -1680,6 +1683,7 @@ static void asm_gc_check(ASMState *as)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
+  l_end[-3] = MIPS_NOPATCH_GC_CHECK;  /* Replace the nop after the call. */
   emit_tsi(as, MIPSI_ADDIU, ra_releasetmp(as, ASMREF_TMP1), RID_JGL, -32768);
   tmp = ra_releasetmp(as, ASMREF_TMP2);
   emit_loadi(as, tmp, as->gcsteps);
@@ -1936,7 +1940,8 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
       if (((p[-1] ^ (px-p)) & 0xffffu) == 0 &&
 	  ((p[-1] & 0xf0000000u) == MIPSI_BEQ ||
 	   (p[-1] & 0xfc1e0000u) == MIPSI_BLTZ ||
-	   (p[-1] & 0xffe00000u) == MIPSI_BC1F)) {
+	   (p[-1] & 0xffe00000u) == MIPSI_BC1F) &&
+	  p[-2] != MIPS_NOPATCH_GC_CHECK) {
 	ptrdiff_t delta = target - p;
 	if (((delta + 0x8000) >> 16) == 0) {  /* Patch in-range branch. */
 	patchbranch:
