@@ -2033,6 +2033,9 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 
 /* -- GC handling --------------------------------------------------------- */
 
+/* Marker to prevent patching the GC check exit. */
+#define ARM_NOPATCH_GC_CHECK	(ARMI_BIC|ARMI_K12)
+
 /* Check GC threshold and do one or more GC steps. */
 static void asm_gc_check(ASMState *as)
 {
@@ -2044,6 +2047,7 @@ static void asm_gc_check(ASMState *as)
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
   asm_guardcc(as, CC_NE);  /* Assumes asm_snap_prep() already done. */
+  *--as->mcp = ARM_NOPATCH_GC_CHECK;
   emit_n(as, ARMI_CMP|ARMI_K12|0, RID_RET);
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
@@ -2212,7 +2216,8 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     /* Look for bl_cc exitstub, replace with b_cc target. */
     uint32_t ins = *p;
     if ((ins & 0x0f000000u) == 0x0b000000u && ins < 0xf0000000u &&
-	((ins ^ (px-p)) & 0x00ffffffu) == 0) {
+	((ins ^ (px-p)) & 0x00ffffffu) == 0 &&
+	p[-1] != ARM_NOPATCH_GC_CHECK) {
       *p = (ins & 0xfe000000u) | (((target-p)-2) & 0x00ffffffu);
       cend = p+1;
       if (!cstart) cstart = p;

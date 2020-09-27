@@ -1794,6 +1794,10 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 
 /* -- GC handling --------------------------------------------------------- */
 
+/* Marker to prevent patching the GC check exit. */
+#define ARM64_NOPATCH_GC_CHECK \
+  (A64I_ORRx|A64F_D(RID_TMP)|A64F_M(RID_TMP)|A64F_N(RID_TMP))
+
 /* Check GC threshold and do one or more GC steps. */
 static void asm_gc_check(ASMState *as)
 {
@@ -1805,6 +1809,7 @@ static void asm_gc_check(ASMState *as)
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
   asm_guardcnb(as, A64I_CBNZ, RID_RET); /* Assumes asm_snap_prep() is done. */
+  *--as->mcp = ARM64_NOPATCH_GC_CHECK;
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
@@ -1972,6 +1977,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
   MCode *cstart = NULL;
   MCode *mcarea = lj_mcode_patch(J, p, 0);
   MCode *px = exitstub_trace_addr(T, exitno);
+  int patchlong = 1;
   /* Note: this assumes a trace exit is only ever patched once. */
   for (; p < pe; p++) {
     /* Look for exitstub branch, replace with branch to target. */
@@ -1993,7 +1999,9 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     } else if ((ins & 0x7e000000u) == 0x34000000u &&
 	       ((ins ^ ((px-p)<<5)) & 0x00ffffe0u) == 0) {
       /* Patch cbz/cbnz, if within range. */
-      if (A64F_S_OK(delta, 19)) {
+      if (p[-1] == ARM64_NOPATCH_GC_CHECK) {
+	patchlong = 0;
+      } else if (A64F_S_OK(delta, 19)) {
 	*p = A64I_LE((ins & 0xff00001fu) | A64F_S19(delta));
 	if (!cstart) cstart = p;
       }
@@ -2006,7 +2014,8 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
       }
     }
   }
-  {  /* Always patch long-range branch in exit stub itself. */
+  /* Always patch long-range branch in exit stub itself. Except, if we can't. */
+  if (patchlong) {
     ptrdiff_t delta = target - px;
     lj_assertJ(A64F_S_OK(delta, 26), "branch target out of range");
     *px = A64I_B | A64F_S26(delta);
