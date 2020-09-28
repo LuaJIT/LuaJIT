@@ -2021,7 +2021,7 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     *px = A64I_B | A64F_S26(delta);
     if (!cstart) cstart = px;
   }
-  lj_mcode_sync(cstart, px+1);
+  if (cstart) lj_mcode_sync(cstart, px+1);
   lj_mcode_patch(J, mcarea, 1);
 }
 
