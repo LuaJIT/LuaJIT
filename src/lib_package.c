@@ -425,7 +425,7 @@ static int lj_cf_package_loader_preload(lua_State *L)
 
 /* ------------------------------------------------------------------------ */
 
-#define sentinel	((void *)0x4004)
+#define KEY_SENTINEL	(U64x(80000000,00000000)|'s')
 
 static int lj_cf_package_require(lua_State *L)
 {
@@ -435,7 +435,7 @@ static int lj_cf_package_require(lua_State *L)
   lua_getfield(L, LUA_REGISTRYINDEX, "_LOADED");
   lua_getfield(L, 2, name);
   if (lua_toboolean(L, -1)) {  /* is it there? */
-    if (lua_touserdata(L, -1) == sentinel)  /* check loops */
+    if ((L->top-1)->u64 == KEY_SENTINEL)  /* check loops */
       luaL_error(L, "loop or previous error loading module " LUA_QS, name);
     return 1;  /* package is already loaded */
   }
@@ -458,14 +458,14 @@ static int lj_cf_package_require(lua_State *L)
     else
       lua_pop(L, 1);
   }
-  lua_pushlightuserdata(L, sentinel);
+  (L->top++)->u64 = KEY_SENTINEL;
   lua_setfield(L, 2, name);  /* _LOADED[name] = sentinel */
   lua_pushstring(L, name);  /* pass name as argument to module */
   lua_call(L, 1, 1);  /* run loaded module */
   if (!lua_isnil(L, -1))  /* non-nil return? */
     lua_setfield(L, 2, name);  /* _LOADED[name] = returned value */
   lua_getfield(L, 2, name);
-  if (lua_touserdata(L, -1) == sentinel) {   /* module did not set a value? */
+  if ((L->top-1)->u64 == KEY_SENTINEL) {   /* module did not set a value? */
     lua_pushboolean(L, 1);  /* use true as result */
     lua_pushvalue(L, -1);  /* extra copy to be returned */
     lua_setfield(L, 2, name);  /* _LOADED[name] = true */

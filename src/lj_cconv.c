@@ -620,7 +620,7 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
     if (ud->udtype == UDTYPE_IO_FILE)
       tmpptr = *(void **)tmpptr;
   } else if (tvislightud(o)) {
-    tmpptr = lightudV(o);
+    tmpptr = lightudV(cts->g, o);
   } else if (tvisfunc(o)) {
     void *p = lj_ccallback_new(cts, d, funcV(o));
     if (p) {

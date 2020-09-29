@@ -393,7 +393,7 @@ GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o)
       p = lj_buf_wmem(p, "builtin#", 8);
       p = lj_strfmt_wint(p, funcV(o)->c.ffid);
     } else {
-      p = lj_strfmt_wptr(p, lj_obj_ptr(o));
+      p = lj_strfmt_wptr(p, lj_obj_ptr(G(L), o));
     }
     return lj_str_new(L, buf, (size_t)(p - buf));
   }

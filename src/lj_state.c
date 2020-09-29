@@ -174,6 +174,12 @@ static void close_state(lua_State *L)
   lj_str_freetab(g);
   lj_buf_free(g, &g->tmpbuf);
   lj_mem_freevec(g, tvref(L->stack), L->stacksize, TValue);
+#if LJ_64
+  if (mref(g->gc.lightudseg, uint32_t)) {
+    MSize segnum = g->gc.lightudnum ? (2 << lj_fls(g->gc.lightudnum)) : 2;
+    lj_mem_freevec(g, mref(g->gc.lightudseg, uint32_t), segnum, uint32_t);
+  }
+#endif
   lj_assertG(g->gc.total == sizeof(GG_State),
 	     "memory leak of %lld bytes",
 	     (long long)(g->gc.total - sizeof(GG_State)));

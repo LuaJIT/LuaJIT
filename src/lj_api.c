@@ -608,7 +608,7 @@ LUA_API void *lua_touserdata(lua_State *L, int idx)
   if (tvisudata(o))
     return uddata(udataV(o));
   else if (tvislightud(o))
-    return lightudV(o);
+    return lightudV(G(L), o);
   else
     return NULL;
 }
@@ -621,7 +621,7 @@ LUA_API lua_State *lua_tothread(lua_State *L, int idx)
 
 LUA_API const void *lua_topointer(lua_State *L, int idx)
 {
-  return lj_obj_ptr(index2adr(L, idx));
+  return lj_obj_ptr(G(L), index2adr(L, idx));
 }
 
 /* -- Stack setters (object creation) ------------------------------------- */
@@ -707,9 +707,38 @@ LUA_API void lua_pushboolean(lua_State *L, int b)
   incr_top(L);
 }
 
+#if LJ_64
+static void *lightud_intern(lua_State *L, void *p)
+{
+  global_State *g = G(L);
+  uint64_t u = (uint64_t)p;
+  uint32_t up = lightudup(u);
+  uint32_t *segmap = mref(g->gc.lightudseg, uint32_t);
+  MSize segnum = g->gc.lightudnum;
+  if (segmap) {
+    MSize seg;
+    for (seg = 0; seg <= segnum; seg++)
+      if (segmap[seg] == up)  /* Fast path. */
+	return (void *)(((uint64_t)seg << LJ_LIGHTUD_BITS_LO) | lightudlo(u));
+    segnum++;
+  }
+  if (!((segnum-1) & segnum) && segnum != 1) {
+    if (segnum >= (1 << LJ_LIGHTUD_BITS_SEG)) lj_err_msg(L, LJ_ERR_BADLU);
+    lj_mem_reallocvec(L, segmap, segnum, segnum ? 2*segnum : 2u, uint32_t);
+    setmref(g->gc.lightudseg, segmap);
+  }
+  g->gc.lightudnum = segnum;
+  segmap[segnum] = up;
+  return (void *)(((uint64_t)segnum << LJ_LIGHTUD_BITS_LO) | lightudlo(u));
+}
+#endif
+
 LUA_API void lua_pushlightuserdata(lua_State *L, void *p)
 {
-  setlightudV(L->top, checklightudptr(L, p));
+#if LJ_64
+  p = lightud_intern(L, p);
+#endif
+  setrawlightudV(L->top, p);
   incr_top(L);
 }
 
@@ -1149,7 +1178,10 @@ static TValue *cpcall(lua_State *L, lua_CFunction func, void *ud)
   fn->c.f = func;
   setfuncV(L, top++, fn);
   if (LJ_FR2) setnilV(top++);
-  setlightudV(top++, checklightudptr(L, ud));
+#if LJ_64
+  ud = lightud_intern(L, ud);
+#endif
+  setrawlightudV(top++, ud);
   cframe_nres(L->cframe) = 1+0;  /* Zero results. */
   L->top = top;
   return top-1;  /* Now call the newly allocated C function. */

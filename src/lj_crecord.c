@@ -646,8 +646,7 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
     }
   } else if (tref_islightud(sp)) {
 #if LJ_64
-    sp = emitir(IRT(IR_BAND, IRT_P64), sp,
-		lj_ir_kint64(J, U64x(00007fff,ffffffff)));
+    lj_trace_err(J, LJ_TRERR_NYICONV);
 #endif
   } else {  /* NYI: tref_istab(sp). */
     IRType t;
@@ -1212,8 +1211,7 @@ static int crec_call(jit_State *J, RecordFFData *rd, GCcdata *cd)
     TRef tr;
     TValue tv;
     /* Check for blacklisted C functions that might call a callback. */
-    setlightudV(&tv,
-		cdata_getptr(cdataptr(cd), (LJ_64 && tp == IRT_P64) ? 8 : 4));
+    tv.u64 = ((uintptr_t)cdata_getptr(cdataptr(cd), (LJ_64 && tp == IRT_P64) ? 8 : 4) >> 2) | U64x(800000000, 00000000);
     if (tvistrue(lj_tab_get(J->L, cts->miscmap, &tv)))
       lj_trace_err(J, LJ_TRERR_BLACKL);
     if (ctype_isvoid(ctr->info)) {

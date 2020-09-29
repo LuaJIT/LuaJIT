@@ -1167,7 +1167,7 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
     lj_vm_ffi_call(&cc);
     if (cts->cb.slot != ~0u) {  /* Blacklist function that called a callback. */
       TValue tv;
-      setlightudV(&tv, (void *)cc.func);
+      tv.u64 = ((uintptr_t)(void *)cc.func >> 2) | U64x(800000000, 00000000);
       setboolV(lj_tab_set(L, cts->miscmap, &tv), 1);
     }
     ct = (CType *)((intptr_t)ct+(intptr_t)cts->tab);  /* May be reallocated. */

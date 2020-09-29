@@ -315,7 +315,9 @@ local function formatk(tr, idx, sn)
   local tn = type(k)
   local s
   if tn == "number" then
-    if band(sn or 0, 0x30000) ~= 0 then
+    if t < 12 then
+      s = k == 0 and "NULL" or format("[0x%08x]", k)
+    elseif band(sn or 0, 0x30000) ~= 0 then
       s = band(sn, 0x20000) ~= 0 and "contpc" or "ftsz"
     elseif k == 2^52+2^51 then
       s = "bias"

@@ -232,7 +232,7 @@ typedef const TValue cTValue;
 **                  ---MSW---.---LSW---
 ** primitive types |  itype  |         |
 ** lightuserdata   |  itype  |  void * |  (32 bit platforms)
-** lightuserdata   |ffff|    void *    |  (64 bit platforms, 47 bit pointers)
+** lightuserdata   |ffff|seg|    ofs   |  (64 bit platforms)
 ** GC objects      |  itype  |  GCRef  |
 ** int (LJ_DUALNUM)|  itype  |   int   |
 ** number           -------double------
@@ -245,7 +245,8 @@ typedef const TValue cTValue;
 **
 **                     ------MSW------.------LSW------
 ** primitive types    |1..1|itype|1..................1|
-** GC objects/lightud |1..1|itype|-------GCRef--------|
+** GC objects         |1..1|itype|-------GCRef--------|
+** lightuserdata      |1..1|itype|seg|------ofs-------|
 ** int (LJ_DUALNUM)   |1..1|itype|0..0|-----int-------|
 ** number              ------------double-------------
 **
@@ -283,6 +284,12 @@ typedef const TValue cTValue;
 
 #if LJ_GC64
 #define LJ_GCVMASK		(((uint64_t)1 << 47) - 1)
+#endif
+
+#if LJ_64
+/* To stay within 47 bits, lightuserdata is segmented. */
+#define LJ_LIGHTUD_BITS_SEG	8
+#define LJ_LIGHTUD_BITS_LO	(47 - LJ_LIGHTUD_BITS_SEG)
 #endif
 
 /* -- String object ------------------------------------------------------- */
@@ -580,7 +587,11 @@ typedef struct GCState {
   uint8_t currentwhite;	/* Current white color. */
   uint8_t state;	/* GC state. */
   uint8_t nocdatafin;	/* No cdata finalizer called. */
-  uint8_t unused2;
+#if LJ_64
+  uint8_t lightudnum;	/* Number of lightuserdata segments - 1. */
+#else
+  uint8_t unused1;
+#endif
   MSize sweepstr;	/* Sweep position in string table. */
   GCRef root;		/* List of all collectable objects. */
   MRef sweep;		/* Sweep position in root list. */
@@ -592,6 +603,9 @@ typedef struct GCState {
   GCSize estimate;	/* Estimate of memory actually in use. */
   MSize stepmul;	/* Incremental GC step granularity. */
   MSize pause;		/* Pause between successive GC cycles. */
+#if LJ_64
+  MRef lightudseg;	/* Upper bits of lightuserdata segments. */
+#endif
 } GCState;
 
 /* String interning state. */
@@ -813,10 +827,23 @@ typedef union GCobj {
 #endif
 #define boolV(o)	check_exp(tvisbool(o), (LJ_TFALSE - itype(o)))
 #if LJ_64
-#define lightudV(o) \
-  check_exp(tvislightud(o), (void *)((o)->u64 & U64x(00007fff,ffffffff)))
+#define lightudseg(u) \
+  (((u) >> LJ_LIGHTUD_BITS_LO) & ((1 << LJ_LIGHTUD_BITS_SEG)-1))
+#define lightudlo(u) \
+  ((u) & (((uint64_t)1 << LJ_LIGHTUD_BITS_LO) - 1))
+#define lightudup(p) \
+  ((uint32_t)(((p) >> LJ_LIGHTUD_BITS_LO) << (LJ_LIGHTUD_BITS_LO-32)))
+static LJ_AINLINE void *lightudV(global_State *g, cTValue *o)
+{
+  uint64_t u = o->u64;
+  uint64_t seg = lightudseg(u);
+  uint32_t *segmap = mref(g->gc.lightudseg, uint32_t);
+  lj_assertG(tvislightud(o), "lightuserdata expected");
+  lj_assertG(seg <= g->gc.lightudnum, "bad lightuserdata segment %d", seg);
+  return (void *)(((uint64_t)segmap[seg] << 32) | lightudlo(u));
+}
 #else
-#define lightudV(o)	check_exp(tvislightud(o), gcrefp((o)->gcr, void))
+#define lightudV(g, o)	check_exp(tvislightud(o), gcrefp((o)->gcr, void))
 #endif
 #define gcV(o)		check_exp(tvisgcv(o), gcval(o))
 #define strV(o)		check_exp(tvisstr(o), &gcval(o)->str)
@@ -842,7 +869,7 @@ typedef union GCobj {
 #define setpriV(o, i)		(setitype((o), (i)))
 #endif
 
-static LJ_AINLINE void setlightudV(TValue *o, void *p)
+static LJ_AINLINE void setrawlightudV(TValue *o, void *p)
 {
 #if LJ_GC64
   o->u64 = (uint64_t)p | (((uint64_t)LJ_TLIGHTUD) << 47);
@@ -853,24 +880,14 @@ static LJ_AINLINE void setlightudV(TValue *o, void *p)
 #endif
 }
 
-#if LJ_64
-#define checklightudptr(L, p) \
-  (((uint64_t)(p) >> 47) ? (lj_err_msg(L, LJ_ERR_BADLU), NULL) : (p))
-#else
-#define checklightudptr(L, p)	(p)
-#endif
-
-#if LJ_FR2
+#if LJ_FR2 || LJ_32
 #define contptr(f)		((void *)(f))
 #define setcont(o, f)		((o)->u64 = (uint64_t)(uintptr_t)contptr(f))
-#elif LJ_64
+#else
 #define contptr(f) \
   ((void *)(uintptr_t)(uint32_t)((intptr_t)(f) - (intptr_t)lj_vm_asm_begin))
 #define setcont(o, f) \
   ((o)->u64 = (uint64_t)(void *)(f) - (uint64_t)lj_vm_asm_begin)
-#else
-#define contptr(f)		((void *)(f))
-#define setcont(o, f)		setlightudV((o), contptr(f))
 #endif
 
 static LJ_AINLINE void checklivetv(lua_State *L, TValue *o, const char *msg)
@@ -1016,6 +1033,6 @@ LJ_DATA const char *const lj_obj_itypename[~LJ_TNUMX+1];
 
 /* Compare two objects without calling metamethods. */
 LJ_FUNC int LJ_FASTCALL lj_obj_equal(cTValue *o1, cTValue *o2);
-LJ_FUNC const void * LJ_FASTCALL lj_obj_ptr(cTValue *o);
+LJ_FUNC const void * LJ_FASTCALL lj_obj_ptr(global_State *g, cTValue *o);
 
 #endif

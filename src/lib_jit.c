@@ -547,15 +547,15 @@ LJLIB_CF(jit_opt_start)
 
 /* Not loaded by default, use: local profile = require("jit.profile") */
 
-static const char KEY_PROFILE_THREAD = 't';
-static const char KEY_PROFILE_FUNC = 'f';
+#define KEY_PROFILE_THREAD	(U64x(80000000,00000000)|'t')
+#define KEY_PROFILE_FUNC	(U64x(80000000,00000000)|'f')
 
 static void jit_profile_callback(lua_State *L2, lua_State *L, int samples,
 				 int vmstate)
 {
   TValue key;
   cTValue *tv;
-  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  key.u64 = KEY_PROFILE_FUNC;
   tv = lj_tab_get(L, tabV(registry(L)), &key);
   if (tvisfunc(tv)) {
     char vmst = (char)vmstate;
@@ -582,9 +582,9 @@ LJLIB_CF(jit_profile_start)
   lua_State *L2 = lua_newthread(L);  /* Thread that runs profiler callback. */
   TValue key;
   /* Anchor thread and function in registry. */
-  setlightudV(&key, (void *)&KEY_PROFILE_THREAD);
+  key.u64 = KEY_PROFILE_THREAD;
   setthreadV(L, lj_tab_set(L, registry, &key), L2);
-  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  key.u64 = KEY_PROFILE_FUNC;
   setfuncV(L, lj_tab_set(L, registry, &key), func);
   lj_gc_anybarriert(L, registry);
   luaJIT_profile_start(L, mode ? strdata(mode) : "",
@@ -599,9 +599,9 @@ LJLIB_CF(jit_profile_stop)
   TValue key;
   luaJIT_profile_stop(L);
   registry = tabV(registry(L));
-  setlightudV(&key, (void *)&KEY_PROFILE_THREAD);
+  key.u64 = KEY_PROFILE_THREAD;
   setnilV(lj_tab_set(L, registry, &key));
-  setlightudV(&key, (void *)&KEY_PROFILE_FUNC);
+  key.u64 = KEY_PROFILE_FUNC;
   setnilV(lj_tab_set(L, registry, &key));
   lj_gc_anybarriert(L, registry);
   return 0;

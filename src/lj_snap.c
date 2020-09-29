@@ -638,7 +638,14 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
   IRType1 t = ir->t;
   RegSP rs = ir->prev;
   if (irref_isk(ref)) {  /* Restore constant slot. */
-    lj_ir_kvalue(J->L, o, ir);
+    if (ir->o == IR_KPTR) {
+      o->u64 = (uint64_t)(uintptr_t)ir_kptr(ir);
+    } else {
+      lj_assertJ(!(ir->o == IR_KKPTR || ir->o == IR_KNULL),
+		 "restore of const from IR %04d with bad op %d",
+		 ref - REF_BIAS, ir->o);
+      lj_ir_kvalue(J->L, o, ir);
+    }
     return;
   }
   if (LJ_UNLIKELY(bloomtest(rfilt, ref)))

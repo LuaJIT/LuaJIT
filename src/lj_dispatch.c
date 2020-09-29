@@ -295,7 +295,7 @@ int luaJIT_setmode(lua_State *L, int idx, int mode)
       if (idx != 0) {
 	cTValue *tv = idx > 0 ? L->base + (idx-1) : L->top + idx;
 	if (tvislightud(tv))
-	  g->wrapf = (lua_CFunction)lightudV(tv);
+	  g->wrapf = (lua_CFunction)lightudV(g, tv);
 	else
 	  return 0;  /* Failed. */
       } else {

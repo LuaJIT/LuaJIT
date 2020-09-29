@@ -389,8 +389,10 @@ void lj_ir_kvalue(lua_State *L, TValue *tv, const IRIns *ir)
   case IR_KPRI: setpriV(tv, irt_toitype(ir->t)); break;
   case IR_KINT: setintV(tv, ir->i); break;
   case IR_KGC: setgcV(L, tv, ir_kgc(ir), irt_toitype(ir->t)); break;
-  case IR_KPTR: case IR_KKPTR: setlightudV(tv, ir_kptr(ir)); break;
-  case IR_KNULL: setlightudV(tv, NULL); break;
+  case IR_KPTR: case IR_KKPTR:
+    setnumV(tv, (lua_Number)(uintptr_t)ir_kptr(ir));
+    break;
+  case IR_KNULL: setintV(tv, 0); break;
   case IR_KNUM: setnumV(tv, ir_knum(ir)->n); break;
 #if LJ_HASFFI
   case IR_KINT64: {
