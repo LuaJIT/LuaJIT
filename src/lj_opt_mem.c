@@ -370,10 +370,7 @@ TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;
-	store->t.irt = IRT_NIL;
-	store->op1 = store->op2 = 0;
-	store->prev = 0;
+	lj_ir_nop(store);
 	/* Now emit the new store instead. */
       }
       goto doemit;
@@ -534,10 +531,7 @@ TRef LJ_FASTCALL lj_opt_dse_ustore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;
-	store->t.irt = IRT_NIL;
-	store->op1 = store->op2 = 0;
-	store->prev = 0;
+	lj_ir_nop(store);
 	if (ref+1 < J->cur.nins &&
 	    store[1].o == IR_OBAR && store[1].op1 == xref) {
 	  IRRef1 *bp = &J->chain[IR_OBAR];
@@ -546,10 +540,7 @@ TRef LJ_FASTCALL lj_opt_dse_ustore(jit_State *J)
 	    bp = &obar->prev;
 	  /* Remove OBAR, too. */
 	  *bp = obar->prev;
-	  obar->o = IR_NOP;
-	  obar->t.irt = IRT_NIL;
-	  obar->op1 = obar->op2 = 0;
-	  obar->prev = 0;
+	  lj_ir_nop(obar);
 	}
 	/* Now emit the new store instead. */
       }
@@ -640,10 +631,7 @@ TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;
-	store->t.irt = IRT_NIL;
-	store->op1 = store->op2 = 0;
-	store->prev = 0;
+	lj_ir_nop(store);
 	/* Now emit the new store instead. */
       }
       goto doemit;
@@ -894,10 +882,7 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
 	    goto doemit;  /* No elimination possible. */
 	/* Remove redundant store from chain and replace with NOP. */
 	*refp = store->prev;
-	store->o = IR_NOP;
-	store->t.irt = IRT_NIL;
-	store->op1 = store->op2 = 0;
-	store->prev = 0;
+	lj_ir_nop(store);
 	/* Now emit the new store instead. */
       }
       goto doemit;
