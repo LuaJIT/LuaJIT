@@ -1833,7 +1833,7 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 
   /* Ensure an initialized instruction beyond the last one for HIOP checks. */
   J->cur.nins = lj_ir_nextins(J);
-  J->cur.ir[J->cur.nins].o = IR_NOP;
+  lj_ir_nop(&J->cur.ir[J->cur.nins]);
 
   /* Setup initial state. Copy some fields to reduce indirections. */
   as->J = J;
