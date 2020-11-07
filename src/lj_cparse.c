@@ -396,7 +396,7 @@ static void cp_init(CPState *cp)
   cp->linenumber = 1;
   cp->depth = 0;
   cp->curpack = 0;
-  cp->packstack[0] = 255;
+  cp->packstack[0] = 1;
   lj_buf_init(cp->L, &cp->sb);
   lj_assertCP(cp->p != NULL, "uninitialized cp->p");
   cp_get(cp);  /* Read-ahead first char. */
