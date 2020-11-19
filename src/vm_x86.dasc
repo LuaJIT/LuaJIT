@@ -719,6 +719,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  sub RD, RA
   |  shr NARGS:RD, 3
   |  add NARGS:RD, 1			// RD = nargs+1
+  |.if X64
+  |  // Reset KBASEa to prevent lower 32 address bits clashing in vmeta_call.
+  |  xor KBASEa, KBASEa
+  |.endif
   |
   |->vm_call_dispatch:
   |  mov LFUNC:RB, [RA-8]
