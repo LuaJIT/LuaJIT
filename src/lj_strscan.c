@@ -443,6 +443,7 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, MSize len, TValue *o,
 
     /* Handle decimal point. */
     if (dp) {
+      if (base == 2) return STRSCAN_ERROR;
       fmt = STRSCAN_NUM;
       if (dig) {
 	ex = (int32_t)(dp-(p-1)); dp = p-1;
