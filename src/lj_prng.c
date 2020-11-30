@@ -198,7 +198,7 @@ int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs)
 #elif LJ_TARGET_HAS_GETENTROPY
 
 #ifdef __ELF__
-  if (getentropy && getentropy(rs->u, sizeof(rs->u)) == 0)
+  if (&getentropy && getentropy(rs->u, sizeof(rs->u)) == 0)
     goto ok;
 #else
   if (getentropy(rs->u, sizeof(rs->u)) == 0)
