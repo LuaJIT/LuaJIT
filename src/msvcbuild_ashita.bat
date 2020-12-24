@@ -15,8 +15,8 @@
 @setlocal
 @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_APICHECK
 @set DEBUGCFLAGS=
-@set LJCOMPILE=cl /MP /MD /nologo /c /O2 /Oi /W3 /Gy- /GR- /GF /GL /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
-@set LJCOMPILE_DEBUG=cl /MDd /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
+@set LJCOMPILE=cl /MP /MD /nologo /c /O2 /Oi /W3 /Gy /GR- /GF /GL /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
+@set LJCOMPILE_DEBUG=cl /MP /MDd /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
 @set LJLINK=link /nologo /LTCG
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
