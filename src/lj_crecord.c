@@ -959,6 +959,7 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	  dp = emitir(IRT(IR_ADD, IRT_PTR), trcd,
 		      lj_ir_kintp(J, df->size + sizeof(GCcdata)));
 	  crec_ct_tv(J, dc, dp, sp, sval);
+	  if ((d->info & CTF_UNION)) break;
 	} else if (!ctype_isconstval(df->info)) {
 	  /* NYI: init bitfields and sub-structures. */
 	  lj_trace_err(J, LJ_TRERR_NYICONV);
