@@ -78,16 +78,14 @@ has information about diverse topics.</li>
 <dl id="tech">
 <dt>Q: Where can I learn more about the compiler technology used by LuaJIT?</dt>
 <dd>
-I'm planning to write more documentation about the internals of LuaJIT.
-In the meantime, please use the following Google Scholar searches
-to find relevant papers:<br>
+Please use the following Google Scholar searches to find relevant papers:<br>
 Search for: <a href="https://scholar.google.com/scholar?q=Trace+Compiler"><span class="ext">&raquo;</span>&nbsp;Trace Compiler</a><br>
 Search for: <a href="https://scholar.google.com/scholar?q=JIT+Compiler"><span class="ext">&raquo;</span>&nbsp;JIT Compiler</a><br>
 Search for: <a href="https://scholar.google.com/scholar?q=Dynamic+Language+Optimizations"><span class="ext">&raquo;</span>&nbsp;Dynamic Language Optimizations</a><br>
 Search for: <a href="https://scholar.google.com/scholar?q=SSA+Form"><span class="ext">&raquo;</span>&nbsp;SSA Form</a><br>
 Search for: <a href="https://scholar.google.com/scholar?q=Linear+Scan+Register+Allocation"><span class="ext">&raquo;</span>&nbsp;Linear Scan Register Allocation</a><br>
 Here is a list of the <a href="http://lua-users.org/lists/lua-l/2009-11/msg00089.html"><span class="ext">&raquo;</span>&nbsp;innovative features in LuaJIT</a>.<br>
-And, you know, reading the source is of course the only way to enlightenment. :-)
+And, you know, reading the source is of course the only way to enlightenment.
 </dd>
 </dl>
 
@@ -126,12 +124,11 @@ Please check the Delphi docs for the Set8087CW method.
 <dl id="ctrlc">
 <dt>Q: Sometimes Ctrl-C fails to stop my Lua program. Why?</dt>
 <dd>The interrupt signal handler sets a Lua debug hook. But this is
-currently ignored by compiled code (this will eventually be fixed). If
-your program is running in a tight loop and never falls back to the
-interpreter, the debug hook never runs and can't throw the
-"interrupted!" error.<br> In the meantime you have to press Ctrl-C
-twice to get stop your program. That's similar to when it's stuck
-running inside a C function under the Lua interpreter.</dd>
+ignored by compiled code. If your program is running in a tight loop
+and never falls back to the interpreter, the debug hook never runs and
+can't throw the "interrupted!" error.<br>
+You have to press Ctrl-C twice to get stop your program. That's similar
+to when it's stuck running inside a C function under the Lua interpreter.</dd>
 </dl>
 
 <dl id="sandbox">
@@ -145,28 +142,18 @@ it's very hard to get this right even for the Lua core libraries. Of course,
 you'll need to inspect any extension library, too. And there are libraries
 that are inherently unsafe, e.g. the <a href="ext_ffi.html">FFI library</a>.<br>
 
-Relatedly, <b>loading untrusted bytecode is not safe!</b> It's trivial
-to crash the Lua or LuaJIT VM with maliciously crafted bytecode. This is
-well known and there's no bytecode verification on purpose, so please
+More reading material at the <a href="http://lua-users.org/wiki/SandBoxes"><span class="ext">&raquo;</span>&nbsp;Lua Wiki</a> and <a href="https://en.wikipedia.org/wiki/Sandbox_(computer_security)"><span class="ext">&raquo;</span>&nbsp;Wikipedia</a>.<br><br>
+
+Relatedly, <b>loading untrusted bytecode is not safe!</b><br>
+
+It's trivial to crash the Lua or LuaJIT VM with maliciously crafted bytecode.
+This is well known and there's no bytecode verification on purpose, so please
 don't report a bug about it. Check the <tt>mode</tt> parameter for the
-<tt>load*()</tt> functions to disable loading of bytecode.<br>
+<tt>load*()</tt> functions to disable loading of bytecode.<br><br>
 
-In general, the only promising approach is to sandbox Lua code at the
-process level and not the VM level.<br>
-
-More reading material at the <a href="http://lua-users.org/wiki/SandBoxes"><span class="ext">&raquo;</span>&nbsp;Lua Wiki</a> and <a href="https://en.wikipedia.org/wiki/Sandbox_(computer_security)"><span class="ext">&raquo;</span>&nbsp;Wikipedia</a>.
+<b>In general, the only promising approach is to sandbox Lua code at the
+process level and not the VM level.</b>
 </dd>
-</dl>
-
-<dl id="patches">
-<dt>Q: Why doesn't my favorite power-patch for Lua apply against LuaJIT?</dt>
-<dd>Because it's a completely redesigned VM and has very little code
-in common with Lua anymore. Also, if the patch introduces changes to
-the Lua semantics, these would need to be reflected everywhere in the
-VM, from the interpreter up to all stages of the compiler.<br> Please
-use only standard Lua language constructs. For many common needs you
-can use source transformations or use wrapper or proxy functions.
-The compiler will happily optimize away such indirections.</dd>
 </dl>
 
 <dl id="arch">
@@ -176,17 +163,11 @@ machine code. This means the code generator must be ported to each
 architecture. And the fast interpreter is written in assembler and
 must be ported, too. This is quite an undertaking.<br>
 The <a href="install.html">install documentation</a> shows the supported
-architectures. Other architectures will follow based on sufficient user
-demand and/or sponsoring.</dd>
-</dl>
-
-<dl id="when">
-<dt>Q: When will feature X be added? When will the next version be released?</dt>
-<dd>When it's ready.<br>
-C'mon, it's open source &mdash; I'm doing it on my own time and you're
-getting it for free. You can either contribute a patch or sponsor
-the development of certain features, if they are important to you.
-</dd>
+architectures.<br>
+Other architectures may follow based on sufficient user demand and
+market-relevance of the architecture. Sponsoring is required to develop
+the port itself, to integrate it and to continuously maintain it in the
+actively developed branches.</dd>
 </dl>
 <br class="flush">
 </div>
