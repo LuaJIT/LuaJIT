@@ -608,12 +608,15 @@ end
 
 ------------------------------------------------------------------------------
 
+local gpr64 = jit.arch:match("64")
+local fprmips32 = jit.arch == "mips" or jit.arch == "mipsel"
+
 -- Dump taken trace exits.
 local function dump_texit(tr, ex, ngpr, nfpr, ...)
   out:write("---- TRACE ", tr, " exit ", ex, "\n")
   if dumpmode.X then
     local regs = {...}
-    if jit.arch:sub(-2) == "64" then
+    if gpr64 then
       for i=1,ngpr do
 	out:write(format(" %016x", regs[i]))
 	if i % 4 == 0 then out:write("\n") end
@@ -624,7 +627,7 @@ local function dump_texit(tr, ex, ngpr, nfpr, ...)
 	if i % 8 == 0 then out:write("\n") end
       end
     end
-    if jit.arch == "mips" or jit.arch == "mipsel" then
+    if fprmips32 then
       for i=1,nfpr,2 do
 	out:write(format(" %+17.14g", regs[ngpr+i]))
 	if i % 8 == 7 then out:write("\n") end
