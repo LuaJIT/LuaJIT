@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- DynASM MIPS module.
 --
--- Copyright (C) 2005-2020 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2021 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 

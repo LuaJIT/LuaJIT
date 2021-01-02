@@ -1,6 +1,6 @@
 /*
 ** Math helper functions for assembler VM.
-** Copyright (C) 2005-2020 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2021 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_vmmath_c
