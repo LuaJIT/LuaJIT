@@ -103,8 +103,8 @@ operating systems, CPUs and compilers:
 <td class="compatcpu">CPU / OS</td>
 <td class="compatos"><a href="#posix">Linux</a> or<br><a href="#android">Android</a></td>
 <td class="compatos"><a href="#posix">*BSD, Other</a></td>
-<td class="compatos"><a href="#posix">OSX 10.4+</a> or<br><a href="#ios">iOS 3.0+</a></td>
-<td class="compatos"><a href="#windows">Windows<br>XP/Vista/7</a></td>
+<td class="compatos"><a href="#posix">macOS 10.4+</a> or<br><a href="#ios">iOS 3.0+</a></td>
+<td class="compatos"><a href="#windows">Windows 7<br>or later</a></td>
 </tr>
 <tr class="odd separate">
 <td class="compatcpu">x86 (32 bit)</td>
@@ -128,7 +128,7 @@ operating systems, CPUs and compilers:
 <td class="compatos compatno">&nbsp;</td>
 </tr>
 <tr class="even">
-<td class="compatcpu"><a href="#cross2">ARM64</a></td>
+<td class="compatcpu"><a href="#cross2">ARM64<br>ARM64be</a></td>
 <td class="compatos">GCC 4.8+</td>
 <td class="compatos compatno">&nbsp;</td>
 <td class="compatos">XCode 6.0+<br>Clang 3.5+</td>
@@ -142,7 +142,7 @@ operating systems, CPUs and compilers:
 <td class="compatos">XEDK (<a href="#xbox360">Xbox 360</a>)</td>
 </tr>
 <tr class="even">
-<td class="compatcpu"><a href="#cross2">MIPS32<br>MIPS64</a></td>
+<td class="compatcpu"><a href="#cross2">MIPS32<br>MIPS64<br>MIPS64r6</a></td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos">GCC 4.3+</td>
 <td class="compatos compatno">&nbsp;</td>
@@ -177,7 +177,7 @@ Please check the note about the
 <a href="extensions.html#string_dump">bytecode format</a> differences, too.
 </p>
 
-<h2 id="posix">POSIX Systems (Linux, OSX, *BSD etc.)</h2>
+<h2 id="posix">POSIX Systems (Linux, macOS, *BSD etc.)</h2>
 <h3>Prerequisites</h3>
 <p>
 Depending on your distribution, you may need to install a package for
@@ -185,14 +185,15 @@ GCC, the development headers and/or a complete SDK. E.g. on a current
 Debian/Ubuntu, install <tt>libc6-dev</tt> with the package manager.
 </p>
 <p>
-Download the current source package of LuaJIT (pick the .tar.gz),
-if you haven't already done so. Move it to a directory of your choice,
+The recommended way to fetch the latest version is to do a pull from
+the git repository. Alternatively download the latest source package of
+LuaJIT (pick the .tar.gz). Move it to a directory of your choice,
 open a terminal window and change to this directory. Now unpack the archive
 and change to the newly created directory:
 </p>
 <pre class="code">
-tar zxf LuaJIT-2.0.5.tar.gz
-cd LuaJIT-2.0.5</pre>
+tar zxf LuaJIT-2.1.0-beta3.tar.gz
+cd LuaJIT-2.1.0-beta3</pre>
 <h3>Building LuaJIT</h3>
 <p>
 The supplied Makefiles try to auto-detect the settings needed for your
@@ -216,7 +217,7 @@ You can add an extra prefix to the search paths by appending the
 make PREFIX=/home/myself/lj2
 </pre>
 <p>
-Note for OSX: you must set the <tt>MACOSX_DEPLOYMENT_TARGET</tt>
+Note for macOS: you must set the <tt>MACOSX_DEPLOYMENT_TARGET</tt>
 environment variable to a value supported by your toolchain.
 </p>
 <h3>Installing LuaJIT</h3>
@@ -250,8 +251,9 @@ GCC plus the required development headers.
 Or install Microsoft's Visual Studio (MSVC).
 </p>
 <p>
-Next, download the source package and unpack it using an archive manager
-(e.g. the Windows Explorer) to a directory of your choice.
+Next, pull from the git repository or download the source package and
+unpack it using an archive manager (e.g. the Windows Explorer) to
+a directory of your choice.
 </p>
 <h3>Building with MSVC</h3>
 <p>
@@ -269,8 +271,8 @@ Then follow the installation instructions below.
 <h3>Building with MinGW or Cygwin</h3>
 <p>
 Open a command prompt window and make sure the MinGW or Cygwin programs
-are in your path. Then <tt>cd</tt> to the directory where
-you've unpacked the sources and run this command for MinGW:
+are in your path. Then <tt>cd</tt> to the directory of the git repository
+or where you've unpacked the sources. Then run this command for MinGW:
 </p>
 <pre class="code">
 mingw32-make
@@ -325,7 +327,7 @@ You need to specify <tt>TARGET_SYS</tt> whenever the host OS and the
 target OS differ, or you'll get assembler or linker errors:
 </p>
 <ul>
-<li>E.g. if you're compiling on a Windows or OSX host for embedded Linux or Android, you need to add <tt>TARGET_SYS=Linux</tt> to the examples below.</li>
+<li>E.g. if you're compiling on a Windows or macOS host for embedded Linux or Android, you need to add <tt>TARGET_SYS=Linux</tt> to the examples below.</li>
 <li>For a minimal target OS, you may need to disable the built-in allocator in <tt>src/Makefile</tt> and use <tt>TARGET_SYS=Other</tt>.</li>
 <li>Don't forget to specify the same <tt>TARGET_SYS</tt> for the install step, too.</li>
 </ul>
@@ -522,14 +524,6 @@ the DLL). You may link LuaJIT statically on Windows only if you don't
 intend to load Lua/C modules at runtime.
 </li></ul>
 </li>
-<li>
-If you're building a 64 bit application on OSX which links directly or
-indirectly against LuaJIT which is not built for <tt>LJ_GC64</tt> mode,
-you need to link your main executable with these flags:
-<pre class="code">
--pagezero_size 10000 -image_base 100000000
-</pre>
-</li>
 </ul>
 <p>Additional hints for initializing LuaJIT using the C API functions:</p>
 <ul>
@@ -538,7 +532,7 @@ you need to link your main executable with these flags:
 for embedding Lua or LuaJIT into your application.</li>
 <li>Make sure you use <tt>luaL_newstate</tt>. Avoid using
 <tt>lua_newstate</tt>, since this uses the (slower) default memory
-allocator from your system (no support for this on x64).</li>
+allocator from your system (no support for this on 64&nbsp;bit architectures).</li>
 <li>Make sure you use <tt>luaL_openlibs</tt> and not the old Lua 5.0 style
 of calling <tt>luaopen_base</tt> etc. directly.</li>
 <li>To change or extend the list of standard libraries to load, copy
