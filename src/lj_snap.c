@@ -428,21 +428,6 @@ static TRef snap_dedup(jit_State *J, SnapEntry *map, MSize nmax, IRRef ref)
   return 0;
 }
 
-/* Emit parent reference with de-duplication. */
-static TRef snap_pref(jit_State *J, GCtrace *T, SnapEntry *map, MSize nmax,
-		      BloomFilter seen, IRRef ref)
-{
-  IRIns *ir = &T->ir[ref];
-  TRef tr;
-  if (irref_isk(ref))
-    tr = snap_replay_const(J, ir);
-  else if (!regsp_used(ir->prev))
-    tr = 0;
-  else if (!bloomtest(seen, ref) || (tr = snap_dedup(J, map, nmax, ref)) == 0)
-    tr = emitir(IRT(IR_PVAL, irt_type(ir->t)), ref - REF_BIAS, 0);
-  return tr;
-}
-
 /* Check whether a sunk store corresponds to an allocation. Slow path. */
 static int snap_sunk_store2(GCtrace *T, IRIns *ira, IRIns *irs)
 {
@@ -460,8 +445,108 @@ static int snap_sunk_store2(GCtrace *T, IRIns *ira, IRIns *irs)
 static LJ_AINLINE int snap_sunk_store(GCtrace *T, IRIns *ira, IRIns *irs)
 {
   if (irs->s != 255)
-    return (ira + irs->s == irs);  /* Fast check. */
+    return ira + irs->s == irs && (irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
+      irs->o == IR_FSTORE || irs->o == IR_XSTORE);  /* Fast check. */
   return snap_sunk_store2(T, ira, irs);
+}
+
+/* Emit parent reference with de-duplication. */
+static TRef snap_pref(jit_State *J, GCtrace *T, SnapEntry *map, MSize nmax,
+		      BloomFilter seen, IRRef ref, TRef* heavy_restores, int restore)
+{
+  IRIns *ir = &T->ir[ref];
+  TRef tr;
+  if (irref_isk(ref))
+    tr = snap_replay_const(J, ir);
+  else if (ir->r == RID_SUNK) {
+    SnapShot *snap = &T->snap[J->exitno];
+    IRIns *irlast = &T->ir[snap->ref];
+    TRef op1, op2;
+    tr = ir->s > 0 ? heavy_restores[ir->s - 1] : 0;
+    if (tr == 0) {
+      op1 = ir->op1;
+      if (op1 >= T->nk) op1 = snap_pref(J, T, map, nmax, seen, op1, heavy_restores, restore);
+      op2 = ir->op2;
+      if (op2 >= T->nk) op2 = snap_pref(J, T, map, nmax, seen, op2, heavy_restores, restore);
+      if (LJ_HASFFI && ir->o == IR_CNEWI) {
+  if (LJ_32 && ref+1 < T->nins && (ir+1)->o == IR_HIOP) {
+    TRef pref = snap_pref(J, T, map, nmax, seen, (ir+1)->op2, heavy_restores, restore);
+    if (restore) {
+      lj_needsplit(J);  /* Emit joining HIOP. */
+      op2 = emitir_raw(IRT(IR_HIOP, IRT_I64), op2, pref);
+    }
+  }
+  tr = restore ? emitir(ir->ot & ~(IRT_MARK|IRT_ISPHI), op1, op2) : 1;
+  if(ir->s > 0)
+    heavy_restores[ir->s - 1] = tr;
+      } else {
+  IRIns *irs;
+  tr = restore ? emitir(ir->ot, op1, op2) : 1;
+  if(ir->s > 0)
+    heavy_restores[ir->s - 1] = tr;
+  for (irs = ir+1; irs < irlast; irs++)
+    if (irs->r == RID_SINK && snap_sunk_store(T, ir, irs)) {
+      IRIns *irr = &T->ir[irs->op1];
+      TRef val, key = irr->op2, tmp = tr;
+      if (restore) {
+  if (irr->o != IR_FREF) {
+    IRIns *irk = &T->ir[key];
+    if (irr->o == IR_HREFK)
+      key = lj_ir_kslot(J, snap_replay_const(J, &T->ir[irk->op1]),
+            irk->op2);
+    else
+      key = snap_replay_const(J, irk);
+    if (irr->o == IR_HREFK || irr->o == IR_AREF) {
+      IRIns *irf = &T->ir[irr->op1];
+      tmp = emitir(irf->ot, tmp, irf->op2);
+    }
+  }
+  tmp = emitir(irr->ot, tmp, key);
+      }
+      val = snap_pref(J, T, map, nmax, seen, irs->op2, heavy_restores, restore);
+      if (val == 0) {
+  IRIns *irc = &T->ir[irs->op2];
+  lj_assertJ((irc->o == IR_CONV && irc->op2 == IRCONV_NUM_INT) || irc->o == IR_TNEW || irc->o == IR_TDUP,
+      "sunk store for parent IR %04d with bad op %d",
+      ref - REF_BIAS, irc->o);
+  val = snap_pref(J, T, map, nmax, seen, irc->op1, heavy_restores, restore);
+  if (restore && irc->o == IR_CONV)
+    val = emitir(IRTN(IR_CONV), val, IRCONV_NUM_INT);
+      } else if ((LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI)) &&
+    irs+1 < irlast && (irs+1)->o == IR_HIOP) {
+  IRType t = IRT_I64;
+  if (LJ_SOFTFP32 && irt_type((irs+1)->t) == IRT_SOFTFP)
+    t = IRT_NUM;
+  if (restore)
+    lj_needsplit(J);
+  if (irref_isk(irs->op2) && irref_isk((irs+1)->op2)) {
+    if (restore) {
+      uint64_t k = (uint32_t)T->ir[irs->op2].i +
+            ((uint64_t)T->ir[(irs+1)->op2].i << 32);
+      val = lj_ir_k64(J, t == IRT_I64 ? IR_KINT64 : IR_KNUM, k);
+    }
+  } else {
+    TRef pref = snap_pref(J, T, map, nmax, seen, (irs+1)->op2, heavy_restores, restore);
+    if (restore)
+      val = emitir_raw(IRT(IR_HIOP, t), val, pref);
+  }
+  if (restore)
+    tmp = emitir(IRT(irs->o, t), tmp, val);
+  continue;
+      }
+      if (restore)
+  tmp = emitir(irs->ot, tmp, val);
+    } else if (LJ_HASFFI && irs->o == IR_XBAR && ir->o == IR_CNEW) {
+      if (restore)
+  emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
+    }
+      }
+    }
+  } else if (!regsp_used(ir->prev))
+    tr = 0;
+  else if (!bloomtest(seen, ref) || (tr = snap_dedup(J, map, nmax, ref)) == 0)
+    tr = emitir(IRT(IR_PVAL, irt_type(ir->t)), ref - REF_BIAS, 0);
+  return tr;
 }
 
 /* Replay snapshot state to setup side trace. */
@@ -508,7 +593,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
       J->baseslot = s+1;
   }
   if (pass23) {
-    IRIns *irlast = &T->ir[snap->ref];
+    TRef heavy_restores[0xff] = {0};
     pass23 = 0;
     /* Emit dependent PVALs. */
     for (n = 0; n < nent; n++) {
@@ -521,101 +606,26 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 	lj_assertJ(ir->o == IR_TNEW || ir->o == IR_TDUP ||
 		   ir->o == IR_CNEW || ir->o == IR_CNEWI,
 		   "sunk parent IR %04d has bad op %d", refp - REF_BIAS, ir->o);
-	if (ir->op1 >= T->nk) snap_pref(J, T, map, nent, seen, ir->op1);
-	if (ir->op2 >= T->nk) snap_pref(J, T, map, nent, seen, ir->op2);
-	if (LJ_HASFFI && ir->o == IR_CNEWI) {
-	  if (LJ_32 && refp+1 < T->nins && (ir+1)->o == IR_HIOP)
-	    snap_pref(J, T, map, nent, seen, (ir+1)->op2);
-	} else {
-	  IRIns *irs;
-	  for (irs = ir+1; irs < irlast; irs++)
-	    if (irs->r == RID_SINK && snap_sunk_store(T, ir, irs)) {
-	      if (snap_pref(J, T, map, nent, seen, irs->op2) == 0)
-		snap_pref(J, T, map, nent, seen, T->ir[irs->op2].op1);
-	      else if ((LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI)) &&
-		       irs+1 < irlast && (irs+1)->o == IR_HIOP)
-		snap_pref(J, T, map, nent, seen, (irs+1)->op2);
-	    }
-	}
+  snap_pref(J, T, map, nent, seen, refp, heavy_restores, 0);
       } else if (!irref_isk(refp) && !regsp_used(ir->prev)) {
 	lj_assertJ(ir->o == IR_CONV && ir->op2 == IRCONV_NUM_INT,
 		   "sunk parent IR %04d has bad op %d", refp - REF_BIAS, ir->o);
-	J->slot[snap_slot(sn)] = snap_pref(J, T, map, nent, seen, ir->op1);
+	J->slot[snap_slot(sn)] = snap_pref(J, T, map, nent, seen, ir->op1, heavy_restores, 0);
       }
     }
+    for (n = 0; pass23 && n < 0xff; n++)
+      heavy_restores[n] = 0;
     /* Replay sunk instructions. */
     for (n = 0; pass23 && n < nent; n++) {
       SnapEntry sn = map[n];
       IRRef refp = snap_ref(sn);
       IRIns *ir = &T->ir[refp];
       if (regsp_reg(ir->r) == RID_SUNK) {
-	TRef op1, op2;
 	if (J->slot[snap_slot(sn)] != snap_slot(sn)) {  /* De-dup allocs. */
 	  J->slot[snap_slot(sn)] = J->slot[J->slot[snap_slot(sn)]];
 	  continue;
 	}
-	op1 = ir->op1;
-	if (op1 >= T->nk) op1 = snap_pref(J, T, map, nent, seen, op1);
-	op2 = ir->op2;
-	if (op2 >= T->nk) op2 = snap_pref(J, T, map, nent, seen, op2);
-	if (LJ_HASFFI && ir->o == IR_CNEWI) {
-	  if (LJ_32 && refp+1 < T->nins && (ir+1)->o == IR_HIOP) {
-	    lj_needsplit(J);  /* Emit joining HIOP. */
-	    op2 = emitir_raw(IRT(IR_HIOP, IRT_I64), op2,
-			     snap_pref(J, T, map, nent, seen, (ir+1)->op2));
-	  }
-	  J->slot[snap_slot(sn)] = emitir(ir->ot & ~(IRT_MARK|IRT_ISPHI), op1, op2);
-	} else {
-	  IRIns *irs;
-	  TRef tr = emitir(ir->ot, op1, op2);
-	  J->slot[snap_slot(sn)] = tr;
-	  for (irs = ir+1; irs < irlast; irs++)
-	    if (irs->r == RID_SINK && snap_sunk_store(T, ir, irs)) {
-	      IRIns *irr = &T->ir[irs->op1];
-	      TRef val, key = irr->op2, tmp = tr;
-	      if (irr->o != IR_FREF) {
-		IRIns *irk = &T->ir[key];
-		if (irr->o == IR_HREFK)
-		  key = lj_ir_kslot(J, snap_replay_const(J, &T->ir[irk->op1]),
-				    irk->op2);
-		else
-		  key = snap_replay_const(J, irk);
-		if (irr->o == IR_HREFK || irr->o == IR_AREF) {
-		  IRIns *irf = &T->ir[irr->op1];
-		  tmp = emitir(irf->ot, tmp, irf->op2);
-		}
-	      }
-	      tmp = emitir(irr->ot, tmp, key);
-	      val = snap_pref(J, T, map, nent, seen, irs->op2);
-	      if (val == 0) {
-		IRIns *irc = &T->ir[irs->op2];
-		lj_assertJ(irc->o == IR_CONV && irc->op2 == IRCONV_NUM_INT,
-			   "sunk store for parent IR %04d with bad op %d",
-			   refp - REF_BIAS, irc->o);
-		val = snap_pref(J, T, map, nent, seen, irc->op1);
-		val = emitir(IRTN(IR_CONV), val, IRCONV_NUM_INT);
-	      } else if ((LJ_SOFTFP32 || (LJ_32 && LJ_HASFFI)) &&
-			 irs+1 < irlast && (irs+1)->o == IR_HIOP) {
-		IRType t = IRT_I64;
-		if (LJ_SOFTFP32 && irt_type((irs+1)->t) == IRT_SOFTFP)
-		  t = IRT_NUM;
-		lj_needsplit(J);
-		if (irref_isk(irs->op2) && irref_isk((irs+1)->op2)) {
-		  uint64_t k = (uint32_t)T->ir[irs->op2].i +
-			       ((uint64_t)T->ir[(irs+1)->op2].i << 32);
-		  val = lj_ir_k64(J, t == IRT_I64 ? IR_KINT64 : IR_KNUM, k);
-		} else {
-		  val = emitir_raw(IRT(IR_HIOP, t), val,
-			  snap_pref(J, T, map, nent, seen, (irs+1)->op2));
-		}
-		tmp = emitir(IRT(irs->o, t), tmp, val);
-		continue;
-	      }
-	      tmp = emitir(irs->ot, tmp, val);
-	    } else if (LJ_HASFFI && irs->o == IR_XBAR && ir->o == IR_CNEW) {
-	      emitir(IRT(IR_XBAR, IRT_NIL), 0, 0);
-	    }
-	}
+  J->slot[snap_slot(sn)] = snap_pref(J, T, map, nent, seen, refp, heavy_restores, 1);
       }
     }
   }
@@ -630,12 +640,12 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 
 static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
 			SnapNo snapno, BloomFilter rfilt,
-			IRIns *ir, TValue *o);
+			IRIns *ir, TValue *o, TValue* heavy_restores);
 
 /* Restore a value from the trace exit state. */
 static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
 			    SnapNo snapno, BloomFilter rfilt,
-			    IRRef ref, TValue *o)
+			    IRRef ref, TValue *o, TValue* heavy_restores)
 {
   IRIns *ir = &T->ir[ref];
   IRType1 t = ir->t;
@@ -649,6 +659,12 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
 		 ref - REF_BIAS, ir->o);
       lj_ir_kvalue(J->L, o, ir);
     }
+    return;
+  }
+  if (ir->r == RID_SUNK) {
+    /* This allocation is also sunken. */
+    lj_assertJ(ir->s > 0, "Heavy sunken allocation has no global index");
+    snap_unsink(J, T, ex, snapno, rfilt, ir, o, heavy_restores);
     return;
   }
   if (LJ_UNLIKELY(bloomtest(rfilt, ref)))
@@ -675,7 +691,7 @@ static void snap_restoreval(jit_State *J, GCtrace *T, ExitState *ex,
     if (ra_noreg(r)) {
       lj_assertJ(ir->o == IR_CONV && ir->op2 == IRCONV_NUM_INT,
 		 "restore from IR %04d has no reg", ref - REF_BIAS);
-      snap_restoreval(J, T, ex, snapno, rfilt, ir->op1, o);
+      snap_restoreval(J, T, ex, snapno, rfilt, ir->op1, o, heavy_restores);
       if (LJ_DUALNUM) setnumV(o, (lua_Number)intV(o));
       return;
     } else if (irt_isinteger(t)) {
@@ -768,11 +784,17 @@ static void snap_restoredata(jit_State *J, GCtrace *T, ExitState *ex,
 /* Unsink allocation from the trace exit state. Unsink sunk stores. */
 static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
 			SnapNo snapno, BloomFilter rfilt,
-			IRIns *ir, TValue *o)
+			IRIns *ir, TValue *o, TValue* heavy_restores)
 {
   lj_assertJ(ir->o == IR_TNEW || ir->o == IR_TDUP ||
 	     ir->o == IR_CNEW || ir->o == IR_CNEWI,
 	     "sunk allocation with bad op %d", ir->o);
+  if (ir->s > 0) {
+    if (!tvisnil(&heavy_restores[ir->s - 1])) {
+      copyTV(J->L, o, &heavy_restores[ir->s - 1]);
+      return;
+    }
+  }
 #if LJ_HASFFI
   if (ir->o == IR_CNEW || ir->o == IR_CNEWI) {
     CTState *cts = ctype_cts(J->L);
@@ -781,6 +803,9 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
     CTInfo info = lj_ctype_info(cts, id, &sz);
     GCcdata *cd = lj_cdata_newx(cts, id, sz, info);
     setcdataV(J->L, o, cd);
+    if (ir->s > 0) {
+      copyTV(J->L, &heavy_restores[ir->s - 1], o);
+    }
     if (ir->o == IR_CNEWI) {
       uint8_t *p = (uint8_t *)cdataptr(cd);
       lj_assertJ(sz == 4 || sz == 8, "sunk cdata with bad size %d", sz);
@@ -830,6 +855,9 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
     GCtab *t = ir->o == IR_TNEW ? lj_tab_new(J->L, ir->op1, ir->op2) :
 				  lj_tab_dup(J->L, ir_ktab(&T->ir[ir->op1]));
     settabV(J->L, o, t);
+    if (ir->s > 0) {
+      copyTV(J->L, &heavy_restores[ir->s - 1], o);
+    }
     irlast = &T->ir[T->snap[snapno].ref];
     for (irs = ir+1; irs < irlast; irs++)
       if (irs->r == RID_SINK && snap_sunk_store(T, ir, irs)) {
@@ -841,7 +869,7 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
 	if (irk->o == IR_FREF) {
 	  lj_assertJ(irk->op2 == IRFL_TAB_META,
 		     "sunk store with bad field %d", irk->op2);
-	  snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, &tmp);
+	  snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, &tmp, heavy_restores);
 	  /* NOBARRIER: The table is new (marked white). */
 	  setgcref(t->metatable, obj2gco(tabV(&tmp)));
 	} else {
@@ -850,9 +878,9 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
 	  lj_ir_kvalue(J->L, &tmp, irk);
 	  val = lj_tab_set(J->L, t, &tmp);
 	  /* NOBARRIER: The table is new (marked white). */
-	  snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, val);
+	  snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, val, heavy_restores);
 	  if (LJ_SOFTFP32 && irs+1 < T->ir + T->nins && (irs+1)->o == IR_HIOP) {
-	    snap_restoreval(J, T, ex, snapno, rfilt, (irs+1)->op2, &tmp);
+	    snap_restoreval(J, T, ex, snapno, rfilt, (irs+1)->op2, &tmp, heavy_restores);
 	    val->u32.hi = tmp.u32.lo;
 	  }
 	}
@@ -877,8 +905,13 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
 #endif
   TValue *frame;
   BloomFilter rfilt = snap_renamefilter(T, snapno);
+  BloomFilter seen = 0;
   const BCIns *pc = snap_pc(&map[nent]);
   lua_State *L = J->L;
+  TValue heavy_restores[0xff];
+
+  for (n = 0; n < 0xff; n++)
+    setnilV(&heavy_restores[n]);
 
   /* Set interpreter PC to the next PC to get correct error messages. */
   setcframe_pc(cframe_raw(L->cframe), pc+1);
@@ -901,20 +934,24 @@ const BCIns *lj_snap_restore(jit_State *J, void *exptr)
       IRRef ref = snap_ref(sn);
       IRIns *ir = &T->ir[ref];
       if (ir->r == RID_SUNK) {
-	MSize j;
-	for (j = 0; j < n; j++)
-	  if (snap_ref(map[j]) == ref) {  /* De-duplicate sunk allocations. */
-	    copyTV(L, o, &frame[snap_slot(map[j])]);
-	    goto dupslot;
-	  }
-	snap_unsink(J, T, ex, snapno, rfilt, ir, o);
+  if (bloomtest(seen, ref)) {
+    MSize j;
+    for (j = 0; j < n; j++)
+      if (snap_ref(map[j]) == ref) {  /* De-duplicate sunk allocations. */
+  copyTV(L, o, &frame[snap_slot(map[j])]);
+  goto dupslot;
+      }
+  } else {
+    bloomset(seen, ref);
+  }
+	snap_unsink(J, T, ex, snapno, rfilt, ir, o, heavy_restores);
       dupslot:
 	continue;
       }
-      snap_restoreval(J, T, ex, snapno, rfilt, ref, o);
+      snap_restoreval(J, T, ex, snapno, rfilt, ref, o, heavy_restores);
       if (LJ_SOFTFP32 && (sn & SNAP_SOFTFPNUM) && tvisint(o)) {
 	TValue tmp;
-	snap_restoreval(J, T, ex, snapno, rfilt, ref+1, &tmp);
+	snap_restoreval(J, T, ex, snapno, rfilt, ref+1, &tmp, heavy_restores);
 	o->u32.hi = tmp.u32.lo;
 #if !LJ_FR2
       } else if ((sn & (SNAP_CONT|SNAP_FRAME))) {

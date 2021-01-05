@@ -302,7 +302,7 @@ static void ra_dprintf(ASMState *as, const char *fmt, ...)
 #define ra_weak(as, r)		rset_set(as->weakset, (r))
 #define ra_noweak(as, r)	rset_clear(as->weakset, (r))
 
-#define ra_used(ir)		(ra_hasreg((ir)->r) || ra_hasspill((ir)->s))
+#define ra_used(ir)		(ra_hasreg((ir)->r) || ((ir)->r != RID_SUNK && (ir)->r != RID_SINK && ra_hasspill((ir)->s)))
 
 /* Setup register allocator. */
 static void ra_setup(ASMState *as)
@@ -884,7 +884,9 @@ static int asm_sunk_store(ASMState *as, IRIns *ira, IRIns *irs)
     }
     return 0;
   } else {
-    return (ira + irs->s == irs);  /* Quick check. */
+    if (ira + irs->s != irs) return 0;
+    return irs->o == IR_ASTORE || irs->o == IR_HSTORE ||
+	irs->o == IR_FSTORE || irs->o == IR_XSTORE;
   }
 }
 
