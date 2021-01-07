@@ -575,7 +575,7 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 	tr = 0;
       else
 	tr = snap_replay_const(J, ir);
-    } else if (!regsp_used(ir->prev)) {
+    } else if (ir->r == RID_SUNK || !regsp_used(ir->prev)) {
       pass23 = 1;
       lj_assertJ(s != 0, "unused slot 0 in snapshot");
       tr = s;
