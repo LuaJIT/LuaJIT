@@ -208,9 +208,12 @@ You can add an extra prefix to the search paths by appending the
 make PREFIX=/home/myself/lj2
 </pre>
 <p>
-Note for macOS: you must set the <tt>MACOSX_DEPLOYMENT_TARGET</tt>
-environment variable to a value supported by your toolchain.
+Note for macOS: you <b>must</b> set the <tt>MACOSX_DEPLOYMENT_TARGET</tt>
+environment variable to a value supported by your toolchain:
 </p>
+<pre class="code">
+MACOSX_DEPLOYMENT_TARGET=XX.YY make
+</pre>
 <h3>Installing LuaJIT</h3>
 <p>
 The top-level Makefile installs LuaJIT by default under
