@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT compiler dump module.
 --
--- Copyright (C) 2005-2017 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2021 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -315,7 +315,9 @@ local function formatk(tr, idx, sn)
   local tn = type(k)
   local s
   if tn == "number" then
-    if band(sn or 0, 0x30000) ~= 0 then
+    if t < 12 then
+      s = k == 0 and "NULL" or format("[0x%08x]", k)
+    elseif band(sn or 0, 0x30000) ~= 0 then
       s = band(sn, 0x20000) ~= 0 and "contpc" or "ftsz"
     elseif k == 2^52+2^51 then
       s = "bias"
@@ -582,7 +584,7 @@ local function dump_trace(what, tr, func, pc, otr, oex)
 end
 
 -- Dump recorded bytecode.
-local function dump_record(tr, func, pc, depth, callee)
+local function dump_record(tr, func, pc, depth)
   if depth ~= recdepth then
     recdepth = depth
     recprefix = rep(" .", depth)
@@ -593,7 +595,6 @@ local function dump_record(tr, func, pc, depth, callee)
     if dumpmode.H then line = gsub(line, "[<>&]", html_escape) end
   else
     line = "0000 "..recprefix.." FUNCC      \n"
-    callee = func
   end
   if pc <= 0 then
     out:write(sub(line, 1, -2), "         ; ", fmtfunc(func), "\n")
@@ -607,12 +608,15 @@ end
 
 ------------------------------------------------------------------------------
 
+local gpr64 = jit.arch:match("64")
+local fprmips32 = jit.arch == "mips" or jit.arch == "mipsel"
+
 -- Dump taken trace exits.
 local function dump_texit(tr, ex, ngpr, nfpr, ...)
   out:write("---- TRACE ", tr, " exit ", ex, "\n")
   if dumpmode.X then
     local regs = {...}
-    if jit.arch == "x64" then
+    if gpr64 then
       for i=1,ngpr do
 	out:write(format(" %016x", regs[i]))
 	if i % 4 == 0 then out:write("\n") end
@@ -623,7 +627,7 @@ local function dump_texit(tr, ex, ngpr, nfpr, ...)
 	if i % 8 == 0 then out:write("\n") end
       end
     end
-    if jit.arch == "mips" or jit.arch == "mipsel" then
+    if fprmips32 then
       for i=1,nfpr,2 do
 	out:write(format(" %+17.14g", regs[ngpr+i]))
 	if i % 8 == 7 then out:write("\n") end

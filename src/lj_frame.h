@@ -1,6 +1,6 @@
 /*
 ** Stack frames.
-** Copyright (C) 2005-2017 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2021 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_FRAME_H
@@ -46,7 +46,7 @@ enum {
 #define frame_gc(f)		(gcval((f)-1))
 #define frame_ftsz(f)		((ptrdiff_t)(f)->ftsz)
 #define frame_pc(f)		((const BCIns *)frame_ftsz(f))
-#define setframe_gc(f, p, tp)	(setgcVraw((f)-1, (p), (tp)))
+#define setframe_gc(f, p, tp)	(setgcVraw((f), (p), (tp)))
 #define setframe_ftsz(f, sz)	((f)->ftsz = (sz))
 #define setframe_pc(f, pc)	((f)->ftsz = (int64_t)(intptr_t)(pc))
 #else
