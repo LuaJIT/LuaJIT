@@ -196,6 +196,10 @@ LUALIB_API int luaopen_math(lua_State *L)
   PRNGState *rs = (PRNGState *)lua_newuserdata(L, sizeof(PRNGState));
   lj_prng_seed_fixed(rs);
   LJ_LIB_REG(L, LUA_MATHLIBNAME, math);
+#if defined(LUA_COMPAT_MOD) && !LJ_52
+  lua_getfield(L, -1, "fmod");
+  lua_setfield(L, -2, "mod");
+#endif
   return 1;
 }
 

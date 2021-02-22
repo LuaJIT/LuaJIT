@@ -92,6 +92,10 @@
 #define LUAI_GCMUL	200	/* Run GC at 200% of allocation speed. */
 #define LUA_MAXCAPTURES	32	/* Max. pattern captures. */
 
+/* Compatibility with older library function names. */
+#define LUA_COMPAT_MOD		/* OLD: math.mod, NEW: math.fmod */
+#define LUA_COMPAT_GFIND	/* OLD: string.gfind, NEW: string.gmatch */
+
 /* Configuration for the frontend (the luajit executable). */
 #if defined(luajit_c)
 #define LUA_PROGNAME	"luajit"  /* Fallback frontend name. */
