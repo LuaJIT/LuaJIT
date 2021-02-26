@@ -1,0 +1,57 @@
+name: Main Workflow
+
+on:
+  push:
+  pull_request:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    if: "!contains(github.event.head_commit.message, '[skip ci]') || github.event_name == 'release'"
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        Configuration: [Release]
+        Platform: [x86, x64]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1
+    - name: MSBuild
+      shell: cmd
+      run: |
+        set APPVEYOR_BUILD_VERSION=2.1.${{ github.run_number }}
+        
+        msbuild LuaJIT.sln /t:Rebuild /p:Configuration=${{ matrix.Configuration }} /p:Platform=${{ matrix.Platform }}
+    - name: Prepare artifacts
+      shell: cmd
+      run: |
+        set APPVEYOR_BUILD_VERSION=2.1.${{ github.run_number }}
+        set CONFIGURATION=${{ matrix.Configuration }}
+        set PLATFORM=${{ matrix.Platform }}
+        set ARTIFACT_NAME=LuaJIT_%PLATFORM%_%APPVEYOR_BUILD_VERSION%_%CONFIGURATION%.7z
+        
+        cd bin_%PLATFORM%
+        
+        7z a -t7z -m0=LZMA2:d=96m:fb=273 -mx=9 -mmt=2 ..\..\%ARTIFACT_NAME% .\
+    - name: Upload OGSR artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: LuaJIT_${{ matrix.Platform }}_2.1.${{ github.run_number }}_${{ matrix.Configuration }}.7z
+        path: .\LuaJIT_${{ matrix.Platform }}_2.1.${{ github.run_number }}_${{ matrix.Configuration }}.7z
+
+    - name: Upload release asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: .\LuaJIT_${{ matrix.Platform }}_2.1.${{ github.run_number }}_${{ matrix.Configuration }}.7z
+        asset_name: LuaJIT_${{ matrix.Platform }}_2.1.${{ github.run_number }}_${{ matrix.Configuration }}.7z
+        asset_content_type: application/zip
