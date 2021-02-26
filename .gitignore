@@ -1,11 +1,27 @@
-*.[oa]
-*.so
-*.obj
-*.lib
+# Precompiled Headers
+*.ipch
+
+# Всякий ненужный мусор:
+*.VC.*
+*.suo
+*.user
 *.exp
-*.dll
-*.exe
-*.manifest
-*.dmp
-*.swp
-.tags
+*.aps
+*.TMP
+*.ilk
+*.pdb
+*.log
+*.cache
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+/.vs
+/bin*
