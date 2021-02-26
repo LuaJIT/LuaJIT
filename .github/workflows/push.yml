@@ -38,7 +38,7 @@ jobs:
         
         cd bin_%PLATFORM%
         
-        7z a -t7z -m0=LZMA2:d=96m:fb=273 -mx=9 -mmt=2 ..\..\%ARTIFACT_NAME% .\
+        7z a -t7z -m0=LZMA2:d=96m:fb=273 -mx=9 -mmt=2 ..\%ARTIFACT_NAME% .\
     - name: Upload OGSR artifact
       uses: actions/upload-artifact@v2
       with:
