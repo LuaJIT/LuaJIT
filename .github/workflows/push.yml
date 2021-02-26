@@ -36,9 +36,9 @@ jobs:
         set PLATFORM=${{ matrix.Platform }}
         set ARTIFACT_NAME=LuaJIT_%PLATFORM%_%APPVEYOR_BUILD_VERSION%_%CONFIGURATION%.7z
         
-        cd bin_%PLATFORM%
+        cd bin\%PLATFORM%\
         
-        7z a -t7z -m0=LZMA2:d=96m:fb=273 -mx=9 -mmt=2 ..\%ARTIFACT_NAME% .\
+        7z a -t7z -m0=LZMA2:d=96m:fb=273 -mx=9 -mmt=2 ..\..\%ARTIFACT_NAME% .\
     - name: Upload OGSR artifact
       uses: actions/upload-artifact@v2
       with:
