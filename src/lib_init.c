@@ -17,6 +17,8 @@
 
 // Ashita: Third-party library additions..
 #include "../../luaex/lstruct/struct.h"
+#include "../../luaex/luasocket/luasocket.h"
+#include "../../luaex/luasocket/mime.h"
 
 static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
@@ -33,7 +35,7 @@ static const luaL_Reg lj_lib_load[] = {
 
   // Ashita: Third-party library additions..
   { "struct", luaopen_struct },
-  
+
   { NULL,		NULL }
 };
 
@@ -41,6 +43,10 @@ static const luaL_Reg lj_lib_preload[] = {
 #if LJ_HASFFI
   { LUA_FFILIBNAME,	luaopen_ffi },
 #endif
+
+  { "socket.core", luaopen_socket_core },
+  { "mime.core", luaopen_mime_core },
+
   { NULL,		NULL }
 };
 

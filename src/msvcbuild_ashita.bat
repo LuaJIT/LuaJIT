@@ -28,6 +28,9 @@
 @set BUILDTYPE=release
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_utf8.c
 
+@rem Ashita specific extensions folder
+@set ASHITAEXDIR=../../luaex
+
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:minilua.exe minilua.obj
@@ -85,13 +88,14 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1"=="static" goto :STATIC
 %LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:build/%BUILDTYPE%/%LJDLLNAME% lj_*.obj lib_*.obj
+%LJLINK% /DLL /out:build/%BUILDTYPE%/%LJDLLNAME% lj_*.obj lib_*.obj luasocket.obj wsocket.obj
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC
-%LJCOMPILE% lj_*.c lib_*.c
+%LJCOMPILE% lj_*.c lib_*.c %ASHITAEXDIR%/luasocket/*.c
 @if errorlevel 1 goto :BAD
-%LJLIB% /OUT:build/%BUILDTYPE%/%LJLIBNAME% lj_*.obj lib_*.obj
+%LJLIB% /OUT:build/%BUILDTYPE%/%LJLIBNAME% lj_*.obj lib_*.obj^
+  auxiliar.obj buffer.obj compat.obj except.obj inet.obj io.obj luasocket.obj mime.obj options.obj select.obj tcp.obj timeout.obj udp.obj wsocket.obj
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :AMALGDLL
