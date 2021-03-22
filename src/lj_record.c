@@ -1935,9 +1935,9 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     tr = hdr = emitir(IRT(IR_BUFHDR, IRT_PGC),
 		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
     do {
-      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, *trp++);
+      tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, *trp++);
     } while (trp <= top);
-    tr = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+    tr = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
     J->maxslot = (BCReg)(xbase - J->base);
     if (xbase == base) return tr;  /* Return simple concatenation result. */
     /* Pass partial result. */

@@ -707,7 +707,7 @@ static void LJ_FASTCALL recff_bit_tohex(jit_State *J, RecordFFData *rd)
 #if LJ_HASFFI
   TRef hdr = recff_bufhdr(J);
   TRef tr = recff_bit64_tohex(J, rd, hdr);
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
 #else
   recff_nyiu(J, rd);  /* Don't bother working around this NYI. */
 #endif
@@ -833,8 +833,8 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
   if (i > 1) {  /* Concatenate the strings, if there's more than one. */
     TRef hdr = recff_bufhdr(J), tr = hdr;
     for (i = 0; J->base[i] != 0; i++)
-      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, J->base[i]);
-    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+      tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, J->base[i]);
+    J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
   } else if (i == 0) {
     J->base[0] = lj_ir_kstr(J, &J2G(J)->strempty);
   }
@@ -852,19 +852,19 @@ static void LJ_FASTCALL recff_string_rep(jit_State *J, RecordFFData *rd)
     emitir(IRTGI(vrep > 1 ? IR_GT : IR_LE), rep, lj_ir_kint(J, 1));
     if (vrep > 1) {
       TRef hdr2 = recff_bufhdr(J);
-      TRef tr2 = emitir(IRT(IR_BUFPUT, IRT_PGC), hdr2, sep);
-      tr2 = emitir(IRT(IR_BUFPUT, IRT_PGC), tr2, str);
-      str2 = emitir(IRT(IR_BUFSTR, IRT_STR), tr2, hdr2);
+      TRef tr2 = emitir(IRTG(IR_BUFPUT, IRT_PGC), hdr2, sep);
+      tr2 = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr2, str);
+      str2 = emitir(IRTG(IR_BUFSTR, IRT_STR), tr2, hdr2);
     }
   }
   tr = hdr = recff_bufhdr(J);
   if (str2) {
-    tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, str);
+    tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, str);
     str = str2;
     rep = emitir(IRTI(IR_ADD), rep, lj_ir_kint(J, -1));
   }
   tr = lj_ir_call(J, IRCALL_lj_buf_putstr_rep, tr, str, rep);
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
 }
 
 static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
@@ -872,7 +872,7 @@ static void LJ_FASTCALL recff_string_op(jit_State *J, RecordFFData *rd)
   TRef str = lj_ir_tostr(J, J->base[0]);
   TRef hdr = recff_bufhdr(J);
   TRef tr = lj_ir_call(J, rd->data, hdr, str);
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
 }
 
 static void LJ_FASTCALL recff_string_find(jit_State *J, RecordFFData *rd)
@@ -953,7 +953,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
     IRCallID id;
     switch (STRFMT_TYPE(sf)) {
     case STRFMT_LIT:
-      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr,
+      tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr,
 		  lj_ir_kstr(J, lj_str_new(J->L, fs.str, fs.len)));
       break;
     case STRFMT_INT:
@@ -962,7 +962,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       if (!tref_isinteger(tra))
 	goto handle_num;
       if (sf == STRFMT_INT) { /* Shortcut for plain %d. */
-	tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr,
+	tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr,
 		    emitir(IRT(IR_TOSTR, IRT_STR), tra, IRTOSTR_INT));
       } else {
 #if LJ_HASFFI
@@ -992,7 +992,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
 	return;
       }
       if (sf == STRFMT_STR)  /* Shortcut for plain %s. */
-	tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, tra);
+	tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, tra);
       else if ((sf & STRFMT_T_QUOTED))
 	tr = lj_ir_call(J, IRCALL_lj_strfmt_putquoted, tr, tra);
       else
@@ -1001,7 +1001,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
     case STRFMT_CHAR:
       tra = lj_opt_narrow_toint(J, tra);
       if (sf == STRFMT_CHAR)  /* Shortcut for plain %c. */
-	tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr,
+	tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr,
 		    emitir(IRT(IR_TOSTR, IRT_STR), tra, IRTOSTR_CHAR));
       else
 	tr = lj_ir_call(J, IRCALL_lj_strfmt_putfchar, tr, trsf, tra);
@@ -1013,7 +1013,7 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
       return;
     }
   }
-  J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+  J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
 }
 
 /* -- Table library fast functions ---------------------------------------- */
@@ -1054,7 +1054,7 @@ static void LJ_FASTCALL recff_table_concat(jit_State *J, RecordFFData *rd)
     TRef hdr = recff_bufhdr(J);
     TRef tr = lj_ir_call(J, IRCALL_lj_buf_puttab, hdr, tab, sep, tri, tre);
     emitir(IRTG(IR_NE, IRT_PTR), tr, lj_ir_kptr(J, NULL));
-    J->base[0] = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+    J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
   }  /* else: Interpreter will throw. */
   UNUSED(rd);
 }
