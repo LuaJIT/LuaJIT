@@ -72,6 +72,7 @@ typedef struct ASMState {
   SnapNo snapno;	/* Current snapshot number. */
   SnapNo loopsnapno;	/* Loop snapshot number. */
   int snapalloc;	/* Current snapshot needs allocation. */
+  BloomFilter snapfilt1, snapfilt2;	/* Filled with snapshot refs. */
 
   IRRef fuseref;	/* Fusion limit (loopref, 0 or FUSE_DISABLED). */
   IRRef sectref;	/* Section base reference (loopref or 0). */
@@ -894,7 +895,10 @@ static int asm_sunk_store(ASMState *as, IRIns *ira, IRIns *irs)
 static void asm_snap_alloc1(ASMState *as, IRRef ref)
 {
   IRIns *ir = IR(ref);
-  if (!irref_isk(ref) && (!(ra_used(ir) || ir->r == RID_SUNK))) {
+  if (!irref_isk(ref) && ir->r != RID_SUNK) {
+    bloomset(as->snapfilt1, ref);
+    bloomset(as->snapfilt2, hashrot(ref, ref + HASH_BIAS));
+    if (ra_used(ir)) return;
     if (ir->r == RID_SINK) {
       ir->r = RID_SUNK;
 #if LJ_HASFFI
@@ -954,6 +958,7 @@ static void asm_snap_alloc(ASMState *as, int snapno)
   SnapShot *snap = &as->T->snap[snapno];
   SnapEntry *map = &as->T->snapmap[snap->mapofs];
   MSize n, nent = snap->nent;
+  as->snapfilt1 = as->snapfilt2 = 0;
   for (n = 0; n < nent; n++) {
     SnapEntry sn = map[n];
     IRRef ref = snap_ref(sn);
@@ -978,18 +983,12 @@ static void asm_snap_alloc(ASMState *as, int snapno)
 */
 static int asm_snap_checkrename(ASMState *as, IRRef ren)
 {
-  SnapShot *snap = &as->T->snap[as->snapno];
-  SnapEntry *map = &as->T->snapmap[snap->mapofs];
-  MSize n, nent = snap->nent;
-  for (n = 0; n < nent; n++) {
-    SnapEntry sn = map[n];
-    IRRef ref = snap_ref(sn);
-    if (ref == ren || (LJ_SOFTFP && (sn & SNAP_SOFTFPNUM) && ++ref == ren)) {
-      IRIns *ir = IR(ref);
-      ra_spill(as, ir);  /* Register renamed, so force a spill slot. */
-      RA_DBGX((as, "snaprensp $f $s", ref, ir->s));
-      return 1;  /* Found. */
-    }
+  if (bloomtest(as->snapfilt1, ren) &&
+      bloomtest(as->snapfilt2, hashrot(ren, ren + HASH_BIAS))) {
+    IRIns *ir = IR(ren);
+    ra_spill(as, ir);  /* Register renamed, so force a spill slot. */
+    RA_DBGX((as, "snaprensp $f $s", ren, ir->s));
+    return 1;  /* Found. */
   }
   return 0;  /* Not found. */
 }
