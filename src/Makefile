@@ -314,6 +314,13 @@ else
 ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null -fno-stack-protector 2>/dev/null || echo 1))
   TARGET_XCFLAGS+= -fno-stack-protector
 endif
+ifeq (,$(findstring LJ_NO_UNWIND 1,$(TARGET_TESTARCH)))
+  # Find out whether the target toolchain always generates unwind tables.
+  TARGET_TESTUNWIND=$(shell exec 2>/dev/null; echo 'extern void b(void);int a(void){b();return 0;}' | $(TARGET_CC) -c -x c - -o tmpunwind.o && grep -qa -e eh_frame -e __unwind_info tmpunwind.o && echo E; rm -f tmpunwind.o)
+  ifneq (,$(findstring E,$(TARGET_TESTUNWIND)))
+    TARGET_XCFLAGS+= -DLUAJIT_UNWIND_EXTERNAL
+  endif
+endif
 ifeq (Darwin,$(TARGET_SYS))
   ifeq (,$(MACOSX_DEPLOYMENT_TARGET))
     $(error missing: export MACOSX_DEPLOYMENT_TARGET=XX.YY)
@@ -322,10 +329,6 @@ ifeq (Darwin,$(TARGET_SYS))
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
-  ifeq (x64,$(TARGET_LJARCH))
-    TARGET_XLDFLAGS+= -pagezero_size 10000 -image_base 100000000
-    TARGET_XSHLDFLAGS+= -image_base 7fff04c4a000
-  endif
 else
 ifeq (iOS,$(TARGET_SYS))
   TARGET_STRIP+= -x

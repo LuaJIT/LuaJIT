@@ -29,11 +29,17 @@
 ** Pros and Cons:
 **
 ** - EXT requires unwind tables for *all* functions on the C stack between
-**   the pcall/catch and the error/throw. This is the default on x64,
-**   but needs to be manually enabled on x86/PPC for non-C++ code.
+**   the pcall/catch and the error/throw. C modules used by Lua code can
+**   throw errors, so these need to have unwind tables, too. Transitively
+**   this applies to all system libraries used by C modules -- at least
+**   when they have callbacks which may throw an error.
 **
-** - INT is faster when actually throwing errors (but this happens rarely).
+** - INT is faster when actually throwing errors, but this happens rarely.
 **   Setting up error handlers is zero-cost in any case.
+**
+** - INT needs to save *all* callee-saved registers when entering the
+**   interpreter. EXT only needs to save those actually used inside the
+**   interpreter. JIT-compiled code may need to save some more.
 **
 ** - EXT provides full interoperability with C++ exceptions. You can throw
 **   Lua errors or C++ exceptions through a mix of Lua frames and C++ frames.
@@ -46,26 +52,32 @@
 **   the wrapper function feature. Lua errors thrown through C++ frames
 **   cannot be caught by C++ code and C++ destructors are not run.
 **
-** EXT is the default on x64 systems and on Windows, INT is the default on all
-** other systems.
+** EXT is the default on all systems where the toolchain produces unwind
+** tables by default (*). This is hard-coded and/or detected in src/Makefile.
+** You can thwart the detection with: TARGET_XCFLAGS=-DLUAJIT_UNWIND_INTERNAL
 **
-** EXT can be manually enabled on POSIX systems using GCC and DWARF2 stack
-** unwinding with -DLUAJIT_UNWIND_EXTERNAL. *All* C code must be compiled
-** with -funwind-tables (or -fexceptions). This includes LuaJIT itself (set
-** TARGET_CFLAGS), all of your C/Lua binding code, all loadable C modules
-** and all C libraries that have callbacks which may be used to call back
-** into Lua. C++ code must *not* be compiled with -fno-exceptions.
+** INT is the default on all other systems.
 **
-** EXT is mandatory on WIN64 since the calling convention has an abundance
-** of callee-saved registers (rbx, rbp, rsi, rdi, r12-r15, xmm6-xmm15).
-** The POSIX/x64 interpreter only saves r12/r13 for INT (e.g. PS4).
+** EXT can be manually enabled for toolchains that are able to produce
+** conforming unwind tables:
+**   "TARGET_XCFLAGS=-funwind-tables -DLUAJIT_UNWIND_EXTERNAL"
+** As explained above, *all* C code used directly or indirectly by LuaJIT
+** must be compiled with -funwind-tables (or -fexceptions). C++ code must
+** *not* be compiled with -fno-exceptions.
+**
+** If you're unsure whether error handling inside the VM works correctly,
+** try running this and check whether it prints "OK":
+**
+**   luajit -e "print(select(2, load('OK')):match('OK'))"
+**
+** (*) Originally, toolchains only generated unwind tables for C++ code. For
+** interoperability reasons, this can be manually enabled for plain C code,
+** too (with -funwind-tables). With the introduction of the x64 architecture,
+** the corresponding POSIX and Windows ABIs mandated unwind tables for all
+** code. Over the following years most desktop and server platforms have
+** enabled unwind tables by default on all architectures. OTOH mobile and
+** embedded platforms do not consistently mandate unwind tables.
 */
-
-#if (defined(__GNUC__) || defined(__clang__)) && (LJ_TARGET_X64 || defined(LUAJIT_UNWIND_EXTERNAL)) && !LJ_NO_UNWIND
-#define LJ_UNWIND_EXT	1
-#elif LJ_TARGET_WINDOWS
-#define LJ_UNWIND_EXT	1
-#endif
 
 /* -- Error messages ------------------------------------------------------ */
 
@@ -184,7 +196,125 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 
 /* -- External frame unwinding -------------------------------------------- */
 
-#if (defined(__GNUC__) || defined(__clang__)) && !LJ_NO_UNWIND && !LJ_ABI_WIN
+#if LJ_ABI_WIN
+
+/*
+** Someone in Redmond owes me several days of my life. A lot of this is
+** undocumented or just plain wrong on MSDN. Some of it can be gathered
+** from 3rd party docs or must be found by trial-and-error. They really
+** don't want you to write your own language-specific exception handler
+** or to interact gracefully with MSVC. :-(
+**
+** Apparently MSVC doesn't call C++ destructors for foreign exceptions
+** unless you compile your C++ code with /EHa. Unfortunately this means
+** catch (...) also catches things like access violations. The use of
+** _set_se_translator doesn't really help, because it requires /EHa, too.
+*/
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#if LJ_TARGET_X86
+typedef void *UndocumentedDispatcherContext;  /* Unused on x86. */
+#else
+/* Taken from: http://www.nynaeve.net/?p=99 */
+typedef struct UndocumentedDispatcherContext {
+  ULONG64 ControlPc;
+  ULONG64 ImageBase;
+  PRUNTIME_FUNCTION FunctionEntry;
+  ULONG64 EstablisherFrame;
+  ULONG64 TargetIp;
+  PCONTEXT ContextRecord;
+  void (*LanguageHandler)(void);
+  PVOID HandlerData;
+  PUNWIND_HISTORY_TABLE HistoryTable;
+  ULONG ScopeIndex;
+  ULONG Fill0;
+} UndocumentedDispatcherContext;
+#endif
+
+/* Another wild guess. */
+extern void __DestructExceptionObject(EXCEPTION_RECORD *rec, int nothrow);
+
+#if LJ_TARGET_X64 && defined(MINGW_SDK_INIT)
+/* Workaround for broken MinGW64 declaration. */
+VOID RtlUnwindEx_FIXED(PVOID,PVOID,PVOID,PVOID,PVOID,PVOID) asm("RtlUnwindEx");
+#define RtlUnwindEx RtlUnwindEx_FIXED
+#endif
+
+#define LJ_MSVC_EXCODE		((DWORD)0xe06d7363)
+#define LJ_GCC_EXCODE		((DWORD)0x20474343)
+
+#define LJ_EXCODE		((DWORD)0xe24c4a00)
+#define LJ_EXCODE_MAKE(c)	(LJ_EXCODE | (DWORD)(c))
+#define LJ_EXCODE_CHECK(cl)	(((cl) ^ LJ_EXCODE) <= 0xff)
+#define LJ_EXCODE_ERRCODE(cl)	((int)((cl) & 0xff))
+
+/* Windows exception handler for interpreter frame. */
+LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
+  void *f, CONTEXT *ctx, UndocumentedDispatcherContext *dispatch)
+{
+#if LJ_TARGET_X86
+  void *cf = (char *)f - CFRAME_OFS_SEH;
+#else
+  void *cf = f;
+#endif
+  lua_State *L = cframe_L(cf);
+  int errcode = LJ_EXCODE_CHECK(rec->ExceptionCode) ?
+		LJ_EXCODE_ERRCODE(rec->ExceptionCode) : LUA_ERRRUN;
+  if ((rec->ExceptionFlags & 6)) {  /* EH_UNWINDING|EH_EXIT_UNWIND */
+    /* Unwind internal frames. */
+    err_unwind(L, cf, errcode);
+  } else {
+    void *cf2 = err_unwind(L, cf, 0);
+    if (cf2) {  /* We catch it, so start unwinding the upper frames. */
+      if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
+	  rec->ExceptionCode == LJ_GCC_EXCODE) {
+#if !LJ_TARGET_CYGWIN
+	__DestructExceptionObject(rec, 1);
+#endif
+	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
+      } else if (!LJ_EXCODE_CHECK(rec->ExceptionCode)) {
+	/* Don't catch access violations etc. */
+	return 1;  /* ExceptionContinueSearch */
+      }
+#if LJ_TARGET_X86
+      UNUSED(ctx);
+      UNUSED(dispatch);
+      /* Call all handlers for all lower C frames (including ourselves) again
+      ** with EH_UNWINDING set. Then call the specified function, passing cf
+      ** and errcode.
+      */
+      lj_vm_rtlunwind(cf, (void *)rec,
+	(cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
+	(void *)lj_vm_unwind_ff : (void *)lj_vm_unwind_c, errcode);
+      /* lj_vm_rtlunwind does not return. */
+#else
+      /* Unwind the stack and call all handlers for all lower C frames
+      ** (including ourselves) again with EH_UNWINDING set. Then set
+      ** stack pointer = cf, result = errcode and jump to the specified target.
+      */
+      RtlUnwindEx(cf, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
+			       lj_vm_unwind_ff_eh :
+			       lj_vm_unwind_c_eh),
+		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
+      /* RtlUnwindEx should never return. */
+#endif
+    }
+  }
+  return 1;  /* ExceptionContinueSearch */
+}
+
+/* Raise Windows exception. */
+static void err_raise_ext(global_State *g, int errcode)
+{
+#if LJ_HASJIT
+  setmref(g->jit_base, NULL);
+#endif
+  RaiseException(LJ_EXCODE_MAKE(errcode), 1 /* EH_NONCONTINUABLE */, 0, NULL);
+}
+
+#elif !LJ_NO_UNWIND && (defined(__GNUC__) || defined(__clang__))
 
 /*
 ** We have to use our own definitions instead of the mandatory (!) unwind.h,
@@ -233,7 +363,6 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
   lua_State *L;
   if (version != 1)
     return _URC_FATAL_PHASE1_ERROR;
-  UNUSED(uexclass);
   cf = (void *)_Unwind_GetCFA(ctx);
   L = cframe_L(cf);
   if ((actions & _UA_SEARCH_PHASE)) {
@@ -281,6 +410,9 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
     ** it on non-x64 because the interpreter restores all callee-saved regs.
     */
     lj_err_throw(L, errcode);
+#if LJ_TARGET_X64
+#error "Broken build system -- only use the provided Makefiles!"
+#endif
 #endif
   }
   return _URC_CONTINUE_UNWIND;
@@ -288,14 +420,6 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
 
 #if LJ_UNWIND_EXT
 static __thread _Unwind_Exception static_uex;
-
-/* Raise DWARF2 exception. */
-static void err_raise_ext(int errcode)
-{
-  static_uex.exclass = LJ_UEXCLASS_MAKE(errcode);
-  static_uex.excleanup = NULL;
-  _Unwind_RaiseException(&static_uex);
-}
 #endif
 
 #else /* LJ_TARGET_ARM */
@@ -369,131 +493,21 @@ LJ_FUNCA int lj_err_unwind_arm(int state, _Unwind_Control_Block *ucb,
 
 #if LJ_UNWIND_EXT
 static __thread _Unwind_Control_Block static_uex;
+#endif
+#endif /* LJ_TARGET_ARM */
 
-static void err_raise_ext(int errcode)
+#if LJ_UNWIND_EXT
+/* Raise external exception. */
+static void err_raise_ext(global_State *g, int errcode)
 {
+#if LJ_HASJIT
+  setmref(g->jit_base, NULL);
+#endif
   memset(&static_uex, 0, sizeof(static_uex));
   static_uex.exclass = LJ_UEXCLASS_MAKE(errcode);
   _Unwind_RaiseException(&static_uex);
 }
 #endif
-
-#endif /* LJ_TARGET_ARM */
-
-#elif LJ_ABI_WIN
-
-/*
-** Someone in Redmond owes me several days of my life. A lot of this is
-** undocumented or just plain wrong on MSDN. Some of it can be gathered
-** from 3rd party docs or must be found by trial-and-error. They really
-** don't want you to write your own language-specific exception handler
-** or to interact gracefully with MSVC. :-(
-**
-** Apparently MSVC doesn't call C++ destructors for foreign exceptions
-** unless you compile your C++ code with /EHa. Unfortunately this means
-** catch (...) also catches things like access violations. The use of
-** _set_se_translator doesn't really help, because it requires /EHa, too.
-*/
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-#if LJ_TARGET_X64
-/* Taken from: http://www.nynaeve.net/?p=99 */
-typedef struct UndocumentedDispatcherContext {
-  ULONG64 ControlPc;
-  ULONG64 ImageBase;
-  PRUNTIME_FUNCTION FunctionEntry;
-  ULONG64 EstablisherFrame;
-  ULONG64 TargetIp;
-  PCONTEXT ContextRecord;
-  void (*LanguageHandler)(void);
-  PVOID HandlerData;
-  PUNWIND_HISTORY_TABLE HistoryTable;
-  ULONG ScopeIndex;
-  ULONG Fill0;
-} UndocumentedDispatcherContext;
-#else
-typedef void *UndocumentedDispatcherContext;
-#endif
-
-/* Another wild guess. */
-extern void __DestructExceptionObject(EXCEPTION_RECORD *rec, int nothrow);
-
-#if LJ_TARGET_X64 && defined(MINGW_SDK_INIT)
-/* Workaround for broken MinGW64 declaration. */
-VOID RtlUnwindEx_FIXED(PVOID,PVOID,PVOID,PVOID,PVOID,PVOID) asm("RtlUnwindEx");
-#define RtlUnwindEx RtlUnwindEx_FIXED
-#endif
-
-#define LJ_MSVC_EXCODE		((DWORD)0xe06d7363)
-#define LJ_GCC_EXCODE		((DWORD)0x20474343)
-
-#define LJ_EXCODE		((DWORD)0xe24c4a00)
-#define LJ_EXCODE_MAKE(c)	(LJ_EXCODE | (DWORD)(c))
-#define LJ_EXCODE_CHECK(cl)	(((cl) ^ LJ_EXCODE) <= 0xff)
-#define LJ_EXCODE_ERRCODE(cl)	((int)((cl) & 0xff))
-
-/* Windows exception handler for interpreter frame. */
-LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
-  void *f, CONTEXT *ctx, UndocumentedDispatcherContext *dispatch)
-{
-#if LJ_TARGET_X64
-  void *cf = f;
-#else
-  void *cf = (char *)f - CFRAME_OFS_SEH;
-#endif
-  lua_State *L = cframe_L(cf);
-  int errcode = LJ_EXCODE_CHECK(rec->ExceptionCode) ?
-		LJ_EXCODE_ERRCODE(rec->ExceptionCode) : LUA_ERRRUN;
-  if ((rec->ExceptionFlags & 6)) {  /* EH_UNWINDING|EH_EXIT_UNWIND */
-    /* Unwind internal frames. */
-    err_unwind(L, cf, errcode);
-  } else {
-    void *cf2 = err_unwind(L, cf, 0);
-    if (cf2) {  /* We catch it, so start unwinding the upper frames. */
-      if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
-	  rec->ExceptionCode == LJ_GCC_EXCODE) {
-#if LJ_TARGET_WINDOWS
-	__DestructExceptionObject(rec, 1);
-#endif
-	setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRCPP));
-      } else if (!LJ_EXCODE_CHECK(rec->ExceptionCode)) {
-	/* Don't catch access violations etc. */
-	return 1;  /* ExceptionContinueSearch */
-      }
-#if LJ_TARGET_X64
-      /* Unwind the stack and call all handlers for all lower C frames
-      ** (including ourselves) again with EH_UNWINDING set. Then set
-      ** rsp = cf, rax = errcode and jump to the specified target.
-      */
-      RtlUnwindEx(cf, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
-			       lj_vm_unwind_ff_eh :
-			       lj_vm_unwind_c_eh),
-		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
-      /* RtlUnwindEx should never return. */
-#else
-      UNUSED(ctx);
-      UNUSED(dispatch);
-      /* Call all handlers for all lower C frames (including ourselves) again
-      ** with EH_UNWINDING set. Then call the specified function, passing cf
-      ** and errcode.
-      */
-      lj_vm_rtlunwind(cf, (void *)rec,
-	(cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
-	(void *)lj_vm_unwind_ff : (void *)lj_vm_unwind_c, errcode);
-      /* lj_vm_rtlunwind does not return. */
-#endif
-    }
-  }
-  return 1;  /* ExceptionContinueSearch */
-}
-
-/* Raise Windows exception. */
-static void err_raise_ext(int errcode)
-{
-  RaiseException(LJ_EXCODE_MAKE(errcode), 1 /* EH_NONCONTINUABLE */, 0, NULL);
-}
 
 #endif
 
@@ -504,22 +518,23 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
 {
   global_State *g = G(L);
   lj_trace_abort(g);
-  setmref(g->jit_base, NULL);
   L->status = LUA_OK;
 #if LJ_UNWIND_EXT
-  err_raise_ext(errcode);
+  err_raise_ext(g, errcode);
   /*
   ** A return from this function signals a corrupt C stack that cannot be
   ** unwound. We have no choice but to call the panic function and exit.
   **
   ** Usually this is caused by a C function without unwind information.
-  ** This should never happen on x64, but may happen if you've manually
-  ** enabled LUAJIT_UNWIND_EXTERNAL and forgot to recompile *every*
-  ** non-C++ file with -funwind-tables.
+  ** This may happen if you've manually enabled LUAJIT_UNWIND_EXTERNAL
+  ** and forgot to recompile *every* non-C++ file with -funwind-tables.
   */
   if (G(L)->panic)
     G(L)->panic(L);
 #else
+#if LJ_HASJIT
+  setmref(g->jit_base, NULL);
+#endif
   {
     void *cf = err_unwind(L, NULL, errcode);
     if (cframe_unwind_ff(cf))
