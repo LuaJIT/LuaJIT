@@ -90,12 +90,6 @@ The Lua <b>debug API</b> is missing a couple of features (return
 hooks for non-Lua functions) and shows slightly different behavior
 in LuaJIT (no per-coroutine hooks, no tail call counting).
 </li>
-<li>
-Currently some <b>out-of-memory</b> errors from <b>on-trace code</b> are not
-handled correctly. The error may fall through an on-trace
-<tt>pcall</tt> or it may be passed on to the function set with
-<tt>lua_atpanic</tt> on x64.
-</li>
 </ul>
 <br class="flush">
 </div>

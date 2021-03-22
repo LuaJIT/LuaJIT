@@ -173,6 +173,7 @@
 #define LJ_TARGET_X86		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	8
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNALIGNED	1
@@ -186,6 +187,7 @@
 #define LJ_TARGET_X64		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	16
 #define LJ_TARGET_JUMPRANGE	31	/* +-2^31 = +-2GB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -211,6 +213,7 @@
 #define LJ_ABI_EABI		1
 #define LJ_TARGET_ARM		1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	14
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
@@ -241,6 +244,7 @@
 #endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	30
 #define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -296,6 +300,7 @@
 
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_EHRETREG	3
+#define LJ_TARGET_EHRAREG	65
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
@@ -398,6 +403,7 @@
 #endif
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
+#define LJ_TARGET_EHRAREG	31
 #define LJ_TARGET_JUMPRANGE	27	/* 2*2^27 = 256MB-aligned region */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -629,6 +635,12 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_UNWIND_EXT		1
 #else
 #define LJ_UNWIND_EXT		0
+#endif
+
+#if LJ_UNWIND_EXT && LJ_HASJIT && !LJ_TARGET_ARM && !(LJ_ABI_WIN && LJ_TARGET_X86)
+#define LJ_UNWIND_JIT		1
+#else
+#define LJ_UNWIND_JIT		0
 #endif
 
 /* Compatibility with Lua 5.1 vs. 5.2. */

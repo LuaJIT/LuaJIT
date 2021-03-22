@@ -455,6 +455,7 @@ static void LJ_FASTCALL recff_pcall(jit_State *J, RecordFFData *rd)
 #endif
     lj_record_call(J, 0, J->maxslot - 1);
     rd->nres = -1;  /* Pending call. */
+    J->needsnap = 1;  /* Start catching on-trace errors. */
   }  /* else: Interpreter will throw. */
 }
 
@@ -490,6 +491,7 @@ static void LJ_FASTCALL recff_xpcall(jit_State *J, RecordFFData *rd)
     if (errcode)
       lj_err_throw(J->L, errcode);  /* Propagate errors. */
     rd->nres = -1;  /* Pending call. */
+    J->needsnap = 1;  /* Start catching on-trace errors. */
   }  /* else: Interpreter will throw. */
 }
 

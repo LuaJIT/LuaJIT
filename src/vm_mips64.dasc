@@ -556,6 +556,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_returnc
   |.  li RD, 16				// 2 results: false + error message.
   |
+  |->vm_unwind_stub:			// Jump to exit stub from unwinder.
+  |  jr CARG1
+  |.  move ra, CARG2
+  |
   |//-----------------------------------------------------------------------
   |//-- Grow stack for calls -----------------------------------------------
   |//-----------------------------------------------------------------------
@@ -2622,8 +2626,9 @@ static void build_subroutines(BuildCtx *ctx)
   |.  daddu RA, RA, BASE
   |
   |9:  // Rethrow error from the right C frame.
-  |  load_got lj_err_run
-  |  call_intern lj_err_run		// (lua_State *L)
+  |  load_got lj_err_trace
+  |  sub CARG2, r0, CRET1
+  |  call_intern lj_err_trace		// (lua_State *L, int errcode)
   |.  move CARG1, L
   |.endif
   |

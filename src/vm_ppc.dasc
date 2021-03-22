@@ -3090,8 +3090,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  bctr
   |
   |9:  // Rethrow error from the right C frame.
+  |  neg CARG2, CARG1
   |  mr CARG1, L
-  |  bl extern lj_err_run		// (lua_State *L)
+  |  bl extern lj_err_trace		// (lua_State *L, int errcode)
   |.endif
   |
   |//-----------------------------------------------------------------------

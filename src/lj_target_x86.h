@@ -165,6 +165,8 @@ typedef struct {
 #define EXITSTUB_SPACING	(2+2)
 #define EXITSTUBS_PER_GROUP	32
 
+#define EXITTRACE_VMSTATE	1	/* g->vmstate has traceno on exit. */
+
 /* -- x86 ModRM operand encoding ------------------------------------------ */
 
 typedef enum {
