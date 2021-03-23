@@ -1024,8 +1024,26 @@ static void crec_alloc(jit_State *J, RecordFFData *rd, CTypeID id)
 	crec_ct_tv(J, dc, dp, sp, sval);
       }
     } else if (ctype_isstruct(d->info)) {
-      CTypeID fid = d->sib;
+      CTypeID fid;
       MSize i = 1;
+      if (!J->base[1]) {  /* Handle zero-fill of struct-of-NYI. */
+	fid = d->sib;
+	while (fid) {
+	  CType *df = ctype_get(cts, fid);
+	  fid = df->sib;
+	  if (ctype_isfield(df->info)) {
+	    CType *dc;
+	    if (!gcref(df->name)) continue;  /* Ignore unnamed fields. */
+	    dc = ctype_rawchild(cts, df);  /* Field type. */
+	    if (!(ctype_isnum(dc->info) || ctype_isptr(dc->info) ||
+		  ctype_isenum(dc->info)))
+	      goto special;
+	  } else if (!ctype_isconstval(df->info)) {
+	    goto special;
+	  }
+	}
+      }
+      fid = d->sib;
       while (fid) {
 	CType *df = ctype_get(cts, fid);
 	fid = df->sib;
