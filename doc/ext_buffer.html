@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>String Buffers</title>
+<meta charset="utf-8">
+<meta name="Copyright" content="Copyright (C) 2005-2021">
+<meta name="Language" content="en">
+<link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
+<link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
+</head>
+<body>
+<div id="site">
+<a href="https://luajit.org"><span>Lua<span id="logo">JIT</span></span></a>
+</div>
+<div id="head">
+<h1>String Buffers</h1>
+</div>
+<div id="nav">
+<ul><li>
+<a href="luajit.html">LuaJIT</a>
+<ul><li>
+<a href="https://luajit.org/download.html">Download <span class="ext">&raquo;</span></a>
+</li><li>
+<a href="install.html">Installation</a>
+</li><li>
+<a href="running.html">Running</a>
+</li></ul>
+</li><li>
+<a href="extensions.html">Extensions</a>
+<ul><li>
+<a href="ext_ffi.html">FFI Library</a>
+<ul><li>
+<a href="ext_ffi_tutorial.html">FFI Tutorial</a>
+</li><li>
+<a href="ext_ffi_api.html">ffi.* API</a>
+</li><li>
+<a href="ext_ffi_semantics.html">FFI Semantics</a>
+</li></ul>
+</li><li>
+<a class="current" href="ext_buffer.html">String Buffers</a>
+</li><li>
+<a href="ext_jit.html">jit.* Library</a>
+</li><li>
+<a href="ext_c_api.html">Lua/C API</a>
+</li><li>
+<a href="ext_profiler.html">Profiler</a>
+</li></ul>
+</li><li>
+<a href="status.html">Status</a>
+</li><li>
+<a href="faq.html">FAQ</a>
+</li><li>
+<a href="http://wiki.luajit.org/">Wiki <span class="ext">&raquo;</span></a>
+</li><li>
+<a href="https://luajit.org/list.html">Mailing List <span class="ext">&raquo;</span></a>
+</li></ul>
+</div>
+<div id="main">
+<p>
+
+The string buffer library allows <b>high-performance manipulation of
+string-like data</b>.
+
+</p>
+<p>
+
+Unlike Lua strings, which are constants, string buffers are
+<b>mutable</b> sequences of 8-bit (binary-transparent) characters. Data
+can be stored, formatted and encoded into a string buffer and later
+converted, decoded or extracted.
+
+</p>
+<p>
+
+The convenient string buffer API simplifies common string manipulation
+tasks, that would otherwise require creating many intermediate strings.
+String buffers improve performance by eliminating redundant memory
+copies, object creation, string interning and garbage collection
+overhead. In conjunction with the FFI library, they allow zero-copy
+operations.
+
+</p>
+
+<h2 id="load">Using the String Buffer Library</h2>
+<p>
+The string buffer library is built into LuaJIT by default, but it's not
+loaded by default. Add this to the start of every Lua file that needs
+one of its functions:
+</p>
+<pre class="code">
+local buffer = require("string.buffer")
+</pre>
+
+<h2 id="wip" style="color:#ff0000">Work in Progress</h2>
+
+<p>
+
+<b style="color:#ff0000">This library is a work in progress. More
+functions will be added soon.</b>
+
+</p>
+
+<h2 id="serialize">Serialization of Lua Objects</h2>
+<p>
+
+The following functions and methods allow <b>high-speed serialization</b>
+(encoding) of a Lua object into a string and decoding it back to a Lua
+object. This allows convenient storage and transport of <b>structured
+data</b>.
+
+</p>
+<p>
+
+The encoded data is in an <a href="#serialize_format">internal binary
+format</a>. The data can be stored in files, binary-transparent
+databases or transmitted to other LuaJIT instances across threads,
+processes or networks.
+
+</p>
+<p>
+
+Encoding speed can reach up to 1 Gigabyte/second on a modern desktop- or
+server-class system, even when serializing many small objects. Decoding
+speed is mostly constrained by object creation cost.
+
+</p>
+<p>
+
+The serializer handles most Lua types, common FFI number types and
+nested structures. Functions, thread objects, other FFI cdata, full
+userdata and associated metatables cannot be serialized (yet).
+
+</p>
+<p>
+
+The encoder serializes nested structures as trees. Multiple references
+to a single object will be stored separately and create distinct objects
+after decoding. Circular references cause an error.
+
+
+</p>
+
+<h3 id="buffer_encode"><tt>str = buffer.encode(obj)</tt></h3>
+<p>
+
+Serializes (encodes) the Lua object <tt>obj</tt> into the string
+<tt>str</tt>.
+
+</p>
+<p>
+
+<tt>obj</tt> can be any of the supported Lua types &mdash; it doesn't
+need to be a Lua table.
+
+</p>
+<p>
+
+This function may throw an error when attempting to serialize
+unsupported object types, circular references or deeply nested tables.
+
+</p>
+
+<h3 id="buffer_decode"><tt>obj = buffer.decode(str)</tt></h3>
+<p>
+
+De-serializes (decodes) the string <tt>str</tt> into the Lua object
+<tt>obj</tt>.
+
+</p>
+<p>
+
+The returned object may be any of the supported Lua types &mdash;
+even <tt>nil</tt>.
+
+</p>
+<p>
+
+This function may throw an error when fed with malformed or incomplete
+encoded data. The standalone function throws when there's left-over data
+after decoding a single top-level object.
+
+</p>
+
+<h2 id="serialize_format">Serialization Format Specification</h2>
+<p>
+
+This serialization format is designed for <b>internal use</b> by LuaJIT
+applications. Serialized data is upwards-compatible and portable across
+all supported LuaJIT platforms.
+
+</p>
+<p>
+
+It's an <b>8-bit binary format</b> and not human-readable. It uses e.g.
+embedded zeroes and stores embedded Lua string objects unmodified, which
+are 8-bit-clean, too. Encoded data can be safely concatenated for
+streaming and later decoded one top-level object at a time.
+
+</p>
+<p>
+
+The encoding is reasonably compact, but tuned for maximum performance,
+not for minimum space usage. It compresses well with any of the common
+byte-oriented data compression algorithms.
+
+</p>
+<p>
+
+Although documented here for reference, this format is explicitly
+<b>not</b> intended to be a 'public standard' for structured data
+interchange across computer languages (like JSON or MessagePack). Please
+do not use it as such.
+
+</p>
+<p>
+
+The specification is given below as a context-free grammar with a
+top-level <tt>object</tt> as the starting point. Alternatives are
+separated by the <tt>|</tt> symbol and <tt>*</tt> indicates repeats.
+Grouping is implicit or indicated by <tt>{…}</tt>. Terminals are
+either plain hex numbers, encoded as bytes, or have a <tt>.format</tt>
+suffix.
+
+</p>
+<pre>
+object    → nil | false | true
+          | null | lightud32 | lightud64
+          | int | num | tab
+          | int64 | uint64 | complex
+          | string
+
+nil       → 0x00
+false     → 0x01
+true      → 0x02
+
+null      → 0x03                            // NULL lightuserdata
+lightud32 → 0x04 data.I                   // 32 bit lightuserdata
+lightud64 → 0x05 data.L                   // 64 bit lightuserdata
+
+int       → 0x06 int.I                                 // int32_t
+num       → 0x07 double.L
+
+tab       → 0x08                                   // Empty table
+          | 0x09 h.U h*{object object}          // Key/value hash
+          | 0x0a a.U a*object                    // 0-based array
+          | 0x0b a.U a*object h.U h*{object object}      // Mixed
+          | 0x0c a.U (a-1)*object                // 1-based array
+          | 0x0d a.U (a-1)*object h.U h*{object object}  // Mixed
+
+int64     → 0x10 int.L                             // FFI int64_t
+uint64    → 0x11 uint.L                           // FFI uint64_t
+complex   → 0x12 re.L im.L                         // FFI complex
+
+string    → (0x20+len).U len*char.B
+
+.B = 8 bit
+.I = 32 bit little-endian
+.L = 64 bit little-endian
+.U = prefix-encoded 32 bit unsigned number n:
+     0x00..0xdf   → n.B
+     0xe0..0x1fdf → (0xe0|(((n-0xe0)>>8)&0x1f)).B ((n-0xe0)&0xff).B
+   0x1fe0..       → 0xff n.I
+</pre>
+<br class="flush">
+</div>
+<div id="foot">
+<hr class="hide">
+Copyright &copy; 2005-2021
+<span class="noprint">
+&middot;
+<a href="contact.html">Contact</a>
+</span>
+</div>
+</body>
+</html>

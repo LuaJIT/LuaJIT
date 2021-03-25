@@ -179,6 +179,16 @@ ERRDEF(FFI_NYIPACKBIT,	"NYI: packed bit fields")
 ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
 #endif
 
+#if LJ_HASBUFFER
+/* String buffer errors. */
+ERRDEF(BUFFER_BADENC,	"cannot serialize " LUA_QS)
+ERRDEF(BUFFER_BADDEC,	"cannot deserialize tag 0x%02x")
+ERRDEF(BUFFER_DEPTH,	"too deep to serialize")
+ERRDEF(BUFFER_DUPKEY,	"duplicate table key")
+ERRDEF(BUFFER_EOB,	"unexpected end of buffer")
+ERRDEF(BUFFER_LEFTOV,	"left-over data in buffer")
+#endif
+
 #undef ERRDEF
 
 /* Detecting unused error messages:

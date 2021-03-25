@@ -10,7 +10,7 @@
 #include "lj_gc.h"
 #include "lj_str.h"
 
-/* Resizable string buffers. Struct definition in lj_obj.h. */
+/* Resizable string buffers. SBuf struct definition in lj_obj.h. */
 #define sbufB(sb)	(mref((sb)->b, char))
 #define sbufP(sb)	(mref((sb)->p, char))
 #define sbufE(sb)	(mref((sb)->e, char))
@@ -99,5 +99,12 @@ static LJ_AINLINE GCstr *lj_buf_str(lua_State *L, SBuf *sb)
 {
   return lj_str_new(L, sbufB(sb), sbuflen(sb));
 }
+
+/* Interim user-accessible string buffer. */
+typedef struct StrBuf {
+  SBuf *sb;		/* Pointer to system buffer. */
+  char *r;		/* String buffer read pointer. */
+  int depth;		/* Remaining recursion depth. */
+} StrBuf;
 
 #endif
