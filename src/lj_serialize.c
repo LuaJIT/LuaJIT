@@ -7,6 +7,8 @@
 #define LUA_CORE
 
 #include "lj_obj.h"
+
+#if LJ_HASBUFFER
 #include "lj_err.h"
 #include "lj_buf.h"
 #include "lj_str.h"
@@ -349,3 +351,4 @@ StrBuf * LJ_FASTCALL lj_serialize_get(StrBuf *sbuf, TValue *o)
   return sbuf;
 }
 
+#endif
