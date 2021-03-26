@@ -832,6 +832,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     J->base -= cbase;
     J->base[--rbase] = TREF_TRUE;  /* Prepend true to results. */
     frame = frame_prevd(frame);
+    J->needsnap = 1;  /* Stop catching on-trace errors. */
   }
   /* Return to lower frame via interpreter for unhandled cases. */
   if (J->framedepth == 0 && J->pt && bc_isret(bc_op(*J->pc)) &&
@@ -1935,9 +1936,9 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     tr = hdr = emitir(IRT(IR_BUFHDR, IRT_PGC),
 		      lj_ir_kptr(J, &J2G(J)->tmpbuf), IRBUFHDR_RESET);
     do {
-      tr = emitir(IRT(IR_BUFPUT, IRT_PGC), tr, *trp++);
+      tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, *trp++);
     } while (trp <= top);
-    tr = emitir(IRT(IR_BUFSTR, IRT_STR), tr, hdr);
+    tr = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
     J->maxslot = (BCReg)(xbase - J->base);
     if (xbase == base) return tr;  /* Return simple concatenation result. */
     /* Pass partial result. */
@@ -2050,7 +2051,7 @@ void lj_record_ins(jit_State *J)
   /* Need snapshot before recording next bytecode (e.g. after a store). */
   if (J->needsnap) {
     J->needsnap = 0;
-    lj_snap_purge(J);
+    if (J->pt) lj_snap_purge(J);
     lj_snap_add(J);
     J->mergesnap = 1;
   }

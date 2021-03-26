@@ -170,14 +170,10 @@
 #define LJ_ARCH_NAME		"x86"
 #define LJ_ARCH_BITS		32
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
-#define LJ_ABI_WIN		1
-#else
-#define LJ_ABI_WIN		0
-#endif
 #define LJ_TARGET_X86		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	8
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
 #define LJ_TARGET_UNALIGNED	1
@@ -188,14 +184,10 @@
 #define LJ_ARCH_NAME		"x64"
 #define LJ_ARCH_BITS		64
 #define LJ_ARCH_ENDIAN		LUAJIT_LE
-#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
-#define LJ_ABI_WIN		1
-#else
-#define LJ_ABI_WIN		0
-#endif
 #define LJ_TARGET_X64		1
 #define LJ_TARGET_X86ORX64	1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	16
 #define LJ_TARGET_JUMPRANGE	31	/* +-2^31 = +-2GB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -203,6 +195,8 @@
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_SINGLE_DUAL
 #ifndef LUAJIT_DISABLE_GC64
 #define LJ_TARGET_GC64		1
+#elif LJ_TARGET_OSX
+#error "macOS requires GC64 -- don't disable it"
 #endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM
@@ -219,6 +213,7 @@
 #define LJ_ABI_EABI		1
 #define LJ_TARGET_ARM		1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	14
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
@@ -249,6 +244,7 @@
 #endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
+#define LJ_TARGET_EHRAREG	30
 #define LJ_TARGET_JUMPRANGE	27	/* +-2^27 = +-128MB */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -304,6 +300,7 @@
 
 #define LJ_TARGET_PPC		1
 #define LJ_TARGET_EHRETREG	3
+#define LJ_TARGET_EHRAREG	65
 #define LJ_TARGET_JUMPRANGE	25	/* +-2^25 = +-32MB */
 #define LJ_TARGET_MASKSHIFT	0
 #define LJ_TARGET_MASKROT	1
@@ -406,6 +403,7 @@
 #endif
 #define LJ_TARGET_MIPS		1
 #define LJ_TARGET_EHRETREG	4
+#define LJ_TARGET_EHRAREG	31
 #define LJ_TARGET_JUMPRANGE	27	/* 2*2^27 = 256MB-aligned region */
 #define LJ_TARGET_MASKSHIFT	1
 #define LJ_TARGET_MASKROT	1
@@ -551,6 +549,13 @@
 #define LJ_HASFFI		1
 #endif
 
+/* Disable or enable the string buffer extension. */
+#if defined(LUAJIT_DISABLE_BUFFER)
+#define LJ_HASBUFFER		0
+#else
+#define LJ_HASBUFFER		1
+#endif
+
 #if defined(LUAJIT_DISABLE_PROFILE)
 #define LJ_HASPROFILE		0
 #elif LJ_TARGET_POSIX
@@ -611,13 +616,10 @@
 #define LJ_NO_SYSTEM		1
 #endif
 
-#if !defined(LUAJIT_NO_UNWIND) && __GNU_COMPACT_EH__
-/* NYI: no support for compact unwind specification, yet. */
-#define LUAJIT_NO_UNWIND	1
-#endif
-
-#if defined(LUAJIT_NO_UNWIND) || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
-#define LJ_NO_UNWIND		1
+#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
+#define LJ_ABI_WIN		1
+#else
+#define LJ_ABI_WIN		0
 #endif
 
 #if LJ_TARGET_WINDOWS
@@ -630,6 +632,22 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_WIN_VPROTECT	VirtualProtect
 #define LJ_WIN_LOADLIBA(path)	LoadLibraryExA((path), NULL, 0)
 #endif
+#endif
+
+#if defined(LUAJIT_NO_UNWIND) || __GNU_COMPACT_EH__ || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
+#define LJ_NO_UNWIND		1
+#endif
+
+#if !LJ_NO_UNWIND && !defined(LUAJIT_UNWIND_INTERNAL) && (LJ_ABI_WIN || (defined(LUAJIT_UNWIND_EXTERNAL) && (defined(__GNUC__) || defined(__clang__))))
+#define LJ_UNWIND_EXT		1
+#else
+#define LJ_UNWIND_EXT		0
+#endif
+
+#if LJ_UNWIND_EXT && LJ_HASJIT && !LJ_TARGET_ARM && !(LJ_ABI_WIN && LJ_TARGET_X86)
+#define LJ_UNWIND_JIT		1
+#else
+#define LJ_UNWIND_JIT		0
 #endif
 
 /* Compatibility with Lua 5.1 vs. 5.2. */

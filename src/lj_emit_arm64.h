@@ -194,39 +194,41 @@ static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
 
 static void emit_loadk(ASMState *as, Reg rd, uint64_t u64, int is64)
 {
-  uint32_t k13 = emit_isk13(u64, is64);
-  if (k13) {  /* Can the constant be represented as a bitmask immediate? */
-    emit_dn(as, (is64|A64I_ORRw)^k13, rd, RID_ZERO);
-  } else {
-    int i, zeros = 0, ones = 0, neg;
-    if (!is64) u64 = (int64_t)(int32_t)u64;  /* Sign-extend. */
-    /* Count homogeneous 16 bit fragments. */
-    for (i = 0; i < 4; i++) {
-      uint64_t frag = (u64 >> i*16) & 0xffff;
-      zeros += (frag == 0);
-      ones += (frag == 0xffff);
+  int i, zeros = 0, ones = 0, neg;
+  if (!is64) u64 = (int64_t)(int32_t)u64;  /* Sign-extend. */
+  /* Count homogeneous 16 bit fragments. */
+  for (i = 0; i < 4; i++) {
+    uint64_t frag = (u64 >> i*16) & 0xffff;
+    zeros += (frag == 0);
+    ones += (frag == 0xffff);
+  }
+  neg = ones > zeros;  /* Use MOVN if it pays off. */
+  if ((neg ? ones : zeros) < 3) {  /* Need 2+ ins. Try shorter K13 encoding. */
+    uint32_t k13 = emit_isk13(u64, is64);
+    if (k13) {
+      emit_dn(as, (is64|A64I_ORRw)^k13, rd, RID_ZERO);
+      return;
     }
-    neg = ones > zeros;  /* Use MOVN if it pays off. */
-    if (!emit_kdelta(as, rd, u64, 4 - (neg ? ones : zeros))) {
-      int shift = 0, lshift = 0;
-      uint64_t n64 = neg ? ~u64 : u64;
-      if (n64 != 0) {
-	/* Find first/last fragment to be filled. */
-	shift = (63-emit_clz64(n64)) & ~15;
-	lshift = emit_ctz64(n64) & ~15;
-      }
-      /* MOVK requires the original value (u64). */
-      while (shift > lshift) {
-	uint32_t u16 = (u64 >> shift) & 0xffff;
-	/* Skip fragments that are correctly filled by MOVN/MOVZ. */
-	if (u16 != (neg ? 0xffff : 0))
-	  emit_d(as, is64 | A64I_MOVKw | A64F_U16(u16) | A64F_LSL16(shift), rd);
-	shift -= 16;
-      }
-      /* But MOVN needs an inverted value (n64). */
-      emit_d(as, (neg ? A64I_MOVNx : A64I_MOVZx) |
-		 A64F_U16((n64 >> lshift) & 0xffff) | A64F_LSL16(lshift), rd);
+  }
+  if (!emit_kdelta(as, rd, u64, 4 - (neg ? ones : zeros))) {
+    int shift = 0, lshift = 0;
+    uint64_t n64 = neg ? ~u64 : u64;
+    if (n64 != 0) {
+      /* Find first/last fragment to be filled. */
+      shift = (63-emit_clz64(n64)) & ~15;
+      lshift = emit_ctz64(n64) & ~15;
     }
+    /* MOVK requires the original value (u64). */
+    while (shift > lshift) {
+      uint32_t u16 = (u64 >> shift) & 0xffff;
+      /* Skip fragments that are correctly filled by MOVN/MOVZ. */
+      if (u16 != (neg ? 0xffff : 0))
+	emit_d(as, is64 | A64I_MOVKw | A64F_U16(u16) | A64F_LSL16(shift), rd);
+      shift -= 16;
+    }
+    /* But MOVN needs an inverted value (n64). */
+    emit_d(as, (neg ? A64I_MOVNx : A64I_MOVZx) |
+	       A64F_U16((n64 >> lshift) & 0xffff) | A64F_LSL16(lshift), rd);
   }
 }
 

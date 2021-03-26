@@ -1,8 +1,8 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
 <head>
 <title>Running LuaJIT</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta charset="utf-8">
 <meta name="Copyright" content="Copyright (C) 2005-2021">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
@@ -58,6 +58,8 @@ td.param_default {
 </li><li>
 <a href="ext_ffi_semantics.html">FFI Semantics</a>
 </li></ul>
+</li><li>
+<a href="ext_buffer.html">String Buffers</a>
 </li><li>
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
@@ -183,8 +185,8 @@ itself. For a description of their options and output format, please
 read the comment block at the start of their source.
 They can be found in the <tt>lib</tt> directory of the source
 distribution or installed under the <tt>jit</tt> directory. By default
-this is <tt>/usr/local/share/luajit-2.1.0-beta3/jit</tt> on POSIX
-systems.
+this is <tt>/usr/local/share/luajit-XX.YY.ZZ>/jit</tt> on POSIX
+systems (replace XX.YY.ZZ by the installed version).
 </p>
 
 <h3 id="opt_O"><tt>-O[level]</tt><br>

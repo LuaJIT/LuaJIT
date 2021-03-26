@@ -64,17 +64,29 @@ static Reg ra_alloc2(ASMState *as, IRIns *ir, RegSet allow)
 /* Setup spare long-range jump slots per mcarea. */
 static void asm_sparejump_setup(ASMState *as)
 {
-  MCode *mxp = as->mcbot;
-  if (((uintptr_t)mxp & (LJ_PAGESIZE-1)) == sizeof(MCLink)) {
+  MCode *mxp = as->mctop;
+  if ((char *)mxp == (char *)as->J->mcarea + as->J->szmcarea) {
+    mxp -= MIPS_SPAREJUMP*2;
     lj_assertA(MIPSI_NOP == 0, "bad NOP");
     memset(mxp, 0, MIPS_SPAREJUMP*2*sizeof(MCode));
-    mxp += MIPS_SPAREJUMP*2;
-    lj_assertA(mxp < as->mctop, "MIPS_SPAREJUMP too big");
-    lj_mcode_sync(as->mcbot, mxp);
-    lj_mcode_commitbot(as->J, mxp);
-    as->mcbot = mxp;
-    as->mclim = as->mcbot + MCLIM_REDZONE;
+    as->mctop = mxp;
   }
+}
+
+static MCode *asm_sparejump_use(MCode *mcarea, MCode tjump)
+{
+  MCode *mxp = (MCode *)((char *)mcarea + ((MCLink *)mcarea)->size);
+  int slot = MIPS_SPAREJUMP;
+  while (slot--) {
+    mxp -= 2;
+    if (*mxp == tjump) {
+      return mxp;
+    } else if (*mxp == MIPSI_NOP) {
+      *mxp = tjump;
+      return mxp;
+    }
+  }
+  return NULL;
 }
 
 /* Setup exit stub after the end of each trace. */
@@ -2704,21 +2716,17 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
 	patchbranch:
 	  p[-1] = (p[-1] & 0xffff0000u) | (delta & 0xffffu);
 	  *p = MIPSI_NOP;  /* Replace the load of the exit number. */
-	  cstop = p;
+	  cstop = p+1;
 	  if (!cstart) cstart = p-1;
 	} else {  /* Branch out of range. Use spare jump slot in mcarea. */
-	  int i;
-	  for (i = (int)(sizeof(MCLink)/sizeof(MCode));
-	       i < (int)(sizeof(MCLink)/sizeof(MCode)+MIPS_SPAREJUMP*2);
-	       i += 2) {
-	    if (mcarea[i] == tjump) {
-	      delta = mcarea+i - p;
+	  MCode *mcjump = asm_sparejump_use(mcarea, tjump);
+	  if (mcjump) {
+	    lj_mcode_sync(mcjump, mcjump+1);
+	    delta = mcjump - p;
+	    if (((delta + 0x8000) >> 16) == 0) {
 	      goto patchbranch;
-	    } else if (mcarea[i] == MIPSI_NOP) {
-	      mcarea[i] = tjump;
-	      cstart = mcarea+i;
-	      delta = mcarea+i - p;
-	      goto patchbranch;
+	    } else {
+	      lj_assertJ(0, "spare jump out of range: -Osizemcode too big");
 	    }
 	  }
 	  /* Ignore jump slot overflow. Child trace is simply not attached. */

@@ -1,8 +1,8 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
 <head>
 <title>Extensions</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta charset="utf-8">
 <meta name="Copyright" content="Copyright (C) 2005-2021">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
@@ -53,6 +53,8 @@ td.excinterop {
 </li><li>
 <a href="ext_ffi_semantics.html">FFI Semantics</a>
 </li></ul>
+</li><li>
+<a href="ext_buffer.html">String Buffers</a>
 </li><li>
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
@@ -392,29 +394,19 @@ the toolchain used to compile LuaJIT:
 <td class="excinterop">Interoperability</td>
 </tr>
 <tr class="odd separate">
-<td class="excplatform">POSIX/x64, DWARF2 unwinding</td>
-<td class="exccompiler">GCC 4.3+, Clang</td>
+<td class="excplatform">External frame unwinding</td>
+<td class="exccompiler">GCC, Clang, MSVC</td>
 <td class="excinterop"><b style="color: #00a000;">Full</b></td>
 </tr>
 <tr class="even">
-<td class="excplatform">ARM <tt>-DLUAJIT_UNWIND_EXTERNAL</tt></td>
-<td class="exccompiler">GCC, Clang</td>
-<td class="excinterop"><b style="color: #00a000;">Full</b></td>
-</tr>
-<tr class="odd">
-<td class="excplatform">Other platforms, DWARF2 unwinding</td>
+<td class="excplatform">Internal frame unwinding + DWARF2</td>
 <td class="exccompiler">GCC, Clang</td>
 <td class="excinterop"><b style="color: #c06000;">Limited</b></td>
 </tr>
-<tr class="even">
-<td class="excplatform">Windows/x64</td>
-<td class="exccompiler">MSVC</td>
-<td class="excinterop"><b style="color: #00a000;">Full</b></td>
-</tr>
 <tr class="odd">
-<td class="excplatform">Windows/x86</td>
-<td class="exccompiler">Any</td>
-<td class="excinterop"><b style="color: #00a000;">Full</b></td>
+<td class="excplatform">Windows 64 bit</td>
+<td class="exccompiler">non-MSVC</td>
+<td class="excinterop"><b style="color: #c06000;">Limited</b></td>
 </tr>
 <tr class="even">
 <td class="excplatform">Other platforms</td>

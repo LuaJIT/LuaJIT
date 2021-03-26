@@ -269,6 +269,7 @@ static void mcode_allocarea(jit_State *J)
   ((MCLink *)J->mcarea)->next = oldarea;
   ((MCLink *)J->mcarea)->size = sz;
   J->szallmcarea += sz;
+  J->mcbot = (MCode *)lj_err_register_mcode(J->mcarea, sz, (uint8_t *)J->mcbot);
 }
 
 /* Free all MCode areas. */
@@ -279,7 +280,9 @@ void lj_mcode_free(jit_State *J)
   J->szallmcarea = 0;
   while (mc) {
     MCode *next = ((MCLink *)mc)->next;
-    mcode_free(J, mc, ((MCLink *)mc)->size);
+    size_t sz = ((MCLink *)mc)->size;
+    lj_err_deregister_mcode(mc, sz, (uint8_t *)mc + sizeof(MCLink));
+    mcode_free(J, mc, sz);
     mc = next;
   }
 }
@@ -314,21 +317,21 @@ void lj_mcode_abort(jit_State *J)
 /* Set/reset protection to allow patching of MCode areas. */
 MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
 {
-#if LUAJIT_SECURITY_MCODE == 0
-  UNUSED(J); UNUSED(ptr); UNUSED(finish);
-  return NULL;
-#else
   if (finish) {
+#if LUAJIT_SECURITY_MCODE
     if (J->mcarea == ptr)
       mcode_protect(J, MCPROT_RUN);
     else if (LJ_UNLIKELY(mcode_setprot(ptr, ((MCLink *)ptr)->size, MCPROT_RUN)))
       mcode_protfail(J);
+#endif
     return NULL;
   } else {
     MCode *mc = J->mcarea;
     /* Try current area first to use the protection cache. */
     if (ptr >= mc && ptr < (MCode *)((char *)mc + J->szmcarea)) {
+#if LUAJIT_SECURITY_MCODE
       mcode_protect(J, MCPROT_GEN);
+#endif
       return mc;
     }
     /* Otherwise search through the list of MCode areas. */
@@ -336,13 +339,14 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
       mc = ((MCLink *)mc)->next;
       lj_assertJ(mc != NULL, "broken MCode area chain");
       if (ptr >= mc && ptr < (MCode *)((char *)mc + ((MCLink *)mc)->size)) {
+#if LUAJIT_SECURITY_MCODE
 	if (LJ_UNLIKELY(mcode_setprot(mc, ((MCLink *)mc)->size, MCPROT_GEN)))
 	  mcode_protfail(J);
+#endif
 	return mc;
       }
     }
   }
-#endif
 }
 
 /* Limit of MCode reservation reached. */

@@ -1,8 +1,8 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
 <head>
 <title>Installation</title>
-<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<meta charset="utf-8">
 <meta name="Copyright" content="Copyright (C) 2005-2021">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
@@ -64,6 +64,8 @@ td.compatno {
 </li><li>
 <a href="ext_ffi_semantics.html">FFI Semantics</a>
 </li></ul>
+</li><li>
+<a href="ext_buffer.html">String Buffers</a>
 </li><li>
 <a href="ext_jit.html">jit.* Library</a>
 </li><li>
@@ -186,14 +188,18 @@ Debian/Ubuntu, install <tt>libc6-dev</tt> with the package manager.
 </p>
 <p>
 The recommended way to fetch the latest version is to do a pull from
-the git repository. Alternatively download the latest source package of
-LuaJIT (pick the .tar.gz). Move it to a directory of your choice,
-open a terminal window and change to this directory. Now unpack the archive
-and change to the newly created directory:
+the git repository.
+</p>
+<p>
+Alternatively download the latest source package of LuaJIT (pick the .tar.gz).
+Move it to a directory of your choice, open a terminal window and change
+to this directory. Now unpack the archive and change to the newly created
+directory (replace XX.YY.ZZ with the version you downloaded):
 </p>
 <pre class="code">
-tar zxf LuaJIT-2.1.0-beta3.tar.gz
-cd LuaJIT-2.1.0-beta3</pre>
+tar zxf LuaJIT-XX.YY.ZZ.tar.gz
+cd LuaJIT-XX.YY.ZZ
+</pre>
 <h3>Building LuaJIT</h3>
 <p>
 The supplied Makefiles try to auto-detect the settings needed for your
