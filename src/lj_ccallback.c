@@ -271,7 +271,12 @@ static void callback_mcode_new(CTState *cts)
   if (!p)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #elif LJ_TARGET_POSIX
-  p = mmap(NULL, sz, (PROT_READ|PROT_WRITE), MAP_PRIVATE|MAP_ANONYMOUS,
+#ifndef PROT_MPROTECT
+// On NetBSD we need to explicitally allow setting executable bit
+// via PROT_MPROTECT
+#define PROT_MPROTECT(flag) (0)
+#endif
+  p = mmap(NULL, sz, (PROT_READ|PROT_WRITE|PROT_MPROTECT(PROT_EXEC)), MAP_PRIVATE|MAP_ANONYMOUS,
 	   -1, 0);
   if (p == MAP_FAILED)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
