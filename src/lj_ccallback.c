@@ -256,6 +256,11 @@ static void *callback_mcode_init(global_State *g, uint32_t *page)
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS   MAP_ANON
 #endif
+#ifdef PROT_MPROTECT
+#define CCPROT_CREATE	(PROT_MPROTECT(PROT_EXEC))
+#else
+#define CCPROT_CREATE	0
+#endif
 
 #endif
 
@@ -271,7 +276,7 @@ static void callback_mcode_new(CTState *cts)
   if (!p)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #elif LJ_TARGET_POSIX
-  p = mmap(NULL, sz, (PROT_READ|PROT_WRITE), MAP_PRIVATE|MAP_ANONYMOUS,
+  p = mmap(NULL, sz, (PROT_READ|PROT_WRITE|CCPROT_CREATE), MAP_PRIVATE|MAP_ANONYMOUS,
 	   -1, 0);
   if (p == MAP_FAILED)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
