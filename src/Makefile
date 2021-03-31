@@ -335,7 +335,7 @@ ifeq (iOS,$(TARGET_SYS))
 else
   ifeq (,$(findstring LJ_NO_UNWIND 1,$(TARGET_TESTARCH)))
     # Find out whether the target toolchain always generates unwind tables.
-    TARGET_TESTUNWIND=$(shell exec 2>/dev/null; echo 'extern void b(void);int a(void){b();return 0;}' | $(TARGET_CC) -c -x c - -o tmpunwind.o && grep -qU -e eh_frame -e __unwind_info tmpunwind.o && echo E; rm -f tmpunwind.o)
+    TARGET_TESTUNWIND=$(shell exec 2>/dev/null; echo 'extern void b(void);int a(void){b();return 0;}' | $(TARGET_CC) -c -x c - -o tmpunwind.o && { grep -qa -e eh_frame -e __unwind_info tmpunwind.o || grep -qU -e eh_frame -e __unwind_info tmpunwind.o; } && echo E; rm -f tmpunwind.o)
     ifneq (,$(findstring E,$(TARGET_TESTUNWIND)))
       TARGET_XCFLAGS+= -DLUAJIT_UNWIND_EXTERNAL
     endif
