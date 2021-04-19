@@ -224,11 +224,13 @@ static char *serialize_put(char *w, StrBuf *sbuf, cTValue *o)
       ud = lj_bswap(ud);
 #endif
       *w++ = SER_TAG_LIGHTUD32; memcpy(w, &ud, 4); w += 4;
+#if LJ_64
     } else {
 #if LJ_BE
       ud = lj_bswap64(ud);
 #endif
       *w++ = SER_TAG_LIGHTUD64; memcpy(w, &ud, 8); w += 8;
+#endif
     }
   } else {
     /* NYI userdata */
