@@ -697,7 +697,14 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
   emit_movrr(as, ir, down, up);  /* Backwards codegen needs inverse move. */
   if (!ra_hasspill(IR(ref)->s)) {  /* Add the rename to the IR. */
-    ra_addrename(as, down, ref, as->snapno);
+    /*
+    ** The rename is effective at the subsequent (already emitted) exit
+    ** branch. This is for the current snapshot (as->snapno). Except if we
+    ** haven't yet allocated any refs for the snapshot (as->snapalloc == 1),
+    ** then it belongs to the next snapshot.
+    ** See also the discussion at asm_snap_checkrename().
+    */
+    ra_addrename(as, down, ref, as->snapno + as->snapalloc);
   }
 }
 
