@@ -919,6 +919,9 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       TRef tr = gotresults ? J->base[cbase+rbase] : TREF_NIL;
       if (bslot != J->maxslot) {  /* Concatenate the remainder. */
 	TValue *b = J->L->base, save;  /* Simulate lower frame and result. */
+	/* Can't handle MM_concat + CALLT + fast func side-effects. */
+	if (J->postproc != LJ_POST_NONE)
+	  lj_trace_err(J, LJ_TRERR_NYIRETL);
 	J->base[J->maxslot] = tr;
 	copyTV(J->L, &save, b-(2<<LJ_FR2));
 	if (gotresults)
