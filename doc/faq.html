@@ -135,6 +135,19 @@ You have to press Ctrl-C twice to get stop your program. That's similar
 to when it's stuck running inside a C function under the Lua interpreter.</dd>
 </dl>
 
+<dl id="order">
+<dt>Q: Table iteration with <tt>pairs()</tt> does not result in the same order?</dt>
+<dd>The order of table iteration is explicitly <b>undefined</b> by
+the Lua language standard.<br>
+Different Lua implementations or versions may use different orders for
+otherwise identical tables. Different ways of constructing a table may
+result in different orders, too.<br>
+Due to improved VM security, LuaJIT 2.1 may even use a different order
+on separate VM invocations or when string keys are newly interned.<br><br>
+If your program relies on a deterministic order, it has a bug. Rewrite it,
+so it doesn't rely on the key order. Or sort the table keys, if you must.
+</dl>
+
 <dl id="sandbox">
 <dt>Q: Can Lua code be safely sandboxed?</dt>
 <dd>
