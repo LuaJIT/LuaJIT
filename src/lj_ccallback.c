@@ -414,7 +414,7 @@ void lj_ccallback_mcode_free(CTState *cts)
       nfpr = CCALL_NARG_FPR;  /* Prevent reordering. */ \
     } \
   } else { \
-    if (!LJ_TARGET_IOS && n > 1) \
+    if (!LJ_TARGET_OSX && n > 1) \
       ngpr = (ngpr + 1u) & ~1u;  /* Align to regpair. */ \
     if (ngpr + n <= maxgpr) { \
       sp = &cts->cb.gpr[ngpr]; \
