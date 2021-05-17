@@ -178,7 +178,7 @@ static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
     MSize n = (MSize)fread(buf, 1, m, fp);
     setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
     lj_gc_check(L);
-    return (n > 0 || m == 0);
+    return n > 0;
   } else {
     int c = getc(fp);
     ungetc(c, fp);
@@ -253,8 +253,6 @@ static int io_file_iter(lua_State *L)
     lj_err_caller(L, LJ_ERR_IOCLFL);
   L->top = L->base;
   if (n) {  /* Copy upvalues with options to stack. */
-    if (n > LUAI_MAXCSTACK)
-      lj_err_caller(L, LJ_ERR_STKOV);
     lj_state_checkstack(L, (MSize)n);
     memcpy(L->top, &fn->c.upvalue[1], n*sizeof(TValue));
     L->top += n;
