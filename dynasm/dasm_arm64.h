@@ -473,7 +473,13 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  }
 	  break;
 	case DASM_REL_A: {
-	  ptrdiff_t na = (((ptrdiff_t)(*b++) << 32) | (unsigned int)n) - (ptrdiff_t)cp + 4;
+	  ptrdiff_t na = (((ptrdiff_t)(*b++) << 32) | (unsigned int)n);
+	  if ((ins & 0x3000) == 0x3000) {  /* ADRP */
+	    ins &= ~0x1000;
+	    na = (na >> 12) - (((ptrdiff_t)cp - 4) >> 12);
+	  } else {
+	    na = na - (ptrdiff_t)cp + 4;
+	  }
 	  n = (int)na;
 	  CK((ptrdiff_t)n == na, RANGE_REL);
 	  goto patchrel;
