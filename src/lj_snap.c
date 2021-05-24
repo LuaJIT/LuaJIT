@@ -276,7 +276,7 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
        if (!(op == BC_ISTC || op == BC_ISFC)) DEF_SLOT(bc_a(ins));
        break;
     case BCMbase:
-      if (op >= BC_CALLM && op <= BC_VARG) {
+      if (op >= BC_CALLM && op <= BC_ITERN) {
 	BCReg top = (op == BC_CALLM || op == BC_CALLMT || bc_c(ins) == 0) ?
 		    maxslot : (bc_a(ins) + bc_c(ins)+LJ_FR2);
 	if (LJ_FR2) DEF_SLOT(bc_a(ins)+1);
@@ -287,6 +287,8 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
 	  for (s = 0; s < bc_a(ins); s++) DEF_SLOT(s);
 	  return 0;
 	}
+      } else if (op == BC_VARG) {
+	return maxslot;  /* NYI: punt. */
       } else if (op == BC_KNIL) {
 	for (s = bc_a(ins); s <= bc_d(ins); s++) DEF_SLOT(s);
       } else if (op == BC_TSETM) {
