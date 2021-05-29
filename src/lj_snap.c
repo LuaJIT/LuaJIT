@@ -311,8 +311,10 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
 void lj_snap_purge(jit_State *J)
 {
   uint8_t udf[SNAP_USEDEF_SLOTS];
-  BCReg maxslot = J->maxslot;
-  BCReg s = snap_usedef(J, udf, J->pc, maxslot);
+  BCReg s, maxslot = J->maxslot;
+  if (bc_op(*J->pc) == BC_FUNCV && maxslot > J->pt->numparams)
+    maxslot = J->pt->numparams;
+  s = snap_usedef(J, udf, J->pc, maxslot);
   for (; s < maxslot; s++)
     if (udf[s] != 0)
       J->base[s] = 0;  /* Purge dead slots. */
