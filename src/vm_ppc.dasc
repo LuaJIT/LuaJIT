@@ -4101,8 +4101,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.macro addo32., y, a, b
     |  // Need to check overflow for (a<<32) + (b<<32).
     |  rldicr TMP0, a, 32, 31
-    |  rldicr TMP3, b, 32, 31
-    |  addo. TMP0, TMP0, TMP3
+    |  rldicr TMP1, b, 32, 31
+    |  addo. TMP0, TMP0, TMP1
     |  add y, a, b
     |.endmacro
     |  ins_arith addo32., fadd, __adddf3
@@ -4115,8 +4115,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.macro subo32., y, a, b
     |  // Need to check overflow for (a<<32) - (b<<32).
     |  rldicr TMP0, a, 32, 31
-    |  rldicr TMP3, b, 32, 31
-    |  subo. TMP0, TMP0, TMP3
+    |  rldicr TMP1, b, 32, 31
+    |  subo. TMP0, TMP0, TMP1
     |  sub y, a, b
     |.endmacro
     |  ins_arith subo32., fsub, __subdf3
