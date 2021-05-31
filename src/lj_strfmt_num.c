@@ -576,7 +576,7 @@ static char *lj_strfmt_wfnum(SBuf *sb, SFormat sf, lua_Number n, char *p)
 /* Add formatted floating-point number to buffer. */
 SBuf *lj_strfmt_putfnum(SBuf *sb, SFormat sf, lua_Number n)
 {
-  setsbufP(sb, lj_strfmt_wfnum(sb, sf, n, NULL));
+  sb->w = lj_strfmt_wfnum(sb, sf, n, NULL);
   return sb;
 }
 

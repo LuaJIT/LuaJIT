@@ -57,8 +57,8 @@ LJ_STATIC_ASSERT((SER_TAG_TAB & 7) == 0);
 
 static LJ_AINLINE char *serialize_more(char *w, StrBuf *sbuf, MSize sz)
 {
-  if (LJ_UNLIKELY(sz > (MSize)(sbufE(sbuf->sb) - w))) {
-    setsbufP(sbuf->sb, w);
+  if (LJ_UNLIKELY(sz > (MSize)(sbuf->sb->e - w))) {
+    sbuf->sb->w = w;
     w = lj_buf_more2(sbuf->sb, sz);
   }
   return w;
@@ -245,7 +245,7 @@ static char *serialize_put(char *w, StrBuf *sbuf, cTValue *o)
 /* Get serialized object from buffer. */
 static char *serialize_get(char *r, StrBuf *sbuf, TValue *o)
 {
-  char *e = sbufE(sbuf->sb);
+  char *e = sbuf->sb->e;
   uint32_t tp;
   r = serialize_ru124(r, e, &tp); if (LJ_UNLIKELY(!r)) goto eob;
   if (LJ_LIKELY(tp >= SER_TAG_STR)) {
@@ -340,14 +340,14 @@ eob:
 StrBuf * LJ_FASTCALL lj_serialize_put(StrBuf *sbuf, cTValue *o)
 {
   sbuf->depth = LJ_SERIALIZE_DEPTH;
-  setsbufP(sbuf->sb, serialize_put(sbufP(sbuf->sb), sbuf, o));
+  sbuf->sb->w = serialize_put(sbuf->sb->w, sbuf, o);
   return sbuf;
 }
 
 StrBuf * LJ_FASTCALL lj_serialize_get(StrBuf *sbuf, TValue *o)
 {
   char *r = serialize_get(sbuf->r, sbuf, o);
-  if (r != sbufP(sbuf->sb))
+  if (r != sbuf->sb->w)
     lj_err_caller(sbufL(sbuf->sb), LJ_ERR_BUFFER_LEFTOV);
   sbuf->r = r;
   return sbuf;

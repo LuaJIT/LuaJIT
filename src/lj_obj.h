@@ -153,11 +153,9 @@ typedef int32_t BCLine;  /* Bytecode line number. */
 typedef void (*ASMFunction)(void);
 
 /* Resizable string buffer. Need this here, details in lj_buf.h. */
+#define SBufHeader	char *w, *e, *b; MRef L
 typedef struct SBuf {
-  MRef p;		/* String buffer pointer. */
-  MRef e;		/* String buffer end pointer. */
-  MRef b;		/* String buffer base. */
-  MRef L;		/* lua_State, used for buffer resizing. */
+  SBufHeader;
 } SBuf;
 
 /* -- Tags and values ----------------------------------------------------- */

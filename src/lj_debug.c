@@ -648,7 +648,7 @@ void lj_debug_dumpstack(lua_State *L, SBuf *sb, const char *fmt, int depth)
     level += dir;
   }
   if (lastlen)
-    setsbufP(sb, sbufB(sb) + lastlen);  /* Zap trailing separator. */
+    sb->w = sb->b + lastlen;  /* Zap trailing separator. */
 }
 #endif
 

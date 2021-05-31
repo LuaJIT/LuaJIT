@@ -169,7 +169,7 @@ const char *lj_strfmt_wstrnum(lua_State *L, cTValue *o, MSize *lenp)
     return NULL;
   }
   *lenp = sbuflen(sb);
-  return sbufB(sb);
+  return sb->b;
 }
 
 /* -- Unformatted conversions to buffer ----------------------------------- */
@@ -177,7 +177,7 @@ const char *lj_strfmt_wstrnum(lua_State *L, cTValue *o, MSize *lenp)
 /* Add integer to buffer. */
 SBuf * LJ_FASTCALL lj_strfmt_putint(SBuf *sb, int32_t k)
 {
-  setsbufP(sb, lj_strfmt_wint(lj_buf_more(sb, STRFMT_MAXBUF_INT), k));
+  sb->w = lj_strfmt_wint(lj_buf_more(sb, STRFMT_MAXBUF_INT), k);
   return sb;
 }
 
@@ -191,7 +191,7 @@ SBuf * LJ_FASTCALL lj_strfmt_putnum(SBuf *sb, cTValue *o)
 
 SBuf * LJ_FASTCALL lj_strfmt_putptr(SBuf *sb, const void *v)
 {
-  setsbufP(sb, lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR), v));
+  sb->w = lj_strfmt_wptr(lj_buf_more(sb, STRFMT_MAXBUF_PTR), v);
   return sb;
 }
 
@@ -203,23 +203,23 @@ SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str)
   lj_buf_putb(sb, '"');
   while (len--) {
     uint32_t c = (uint32_t)(uint8_t)*s++;
-    char *p = lj_buf_more(sb, 4);
+    char *w = lj_buf_more(sb, 4);
     if (c == '"' || c == '\\' || c == '\n') {
-      *p++ = '\\';
+      *w++ = '\\';
     } else if (lj_char_iscntrl(c)) {  /* This can only be 0-31 or 127. */
       uint32_t d;
-      *p++ = '\\';
+      *w++ = '\\';
       if (c >= 100 || lj_char_isdigit((uint8_t)*s)) {
-	*p++ = (char)('0'+(c >= 100)); if (c >= 100) c -= 100;
+	*w++ = (char)('0'+(c >= 100)); if (c >= 100) c -= 100;
 	goto tens;
       } else if (c >= 10) {
       tens:
-	d = (c * 205) >> 11; c -= d * 10; *p++ = (char)('0'+d);
+	d = (c * 205) >> 11; c -= d * 10; *w++ = (char)('0'+d);
       }
       c += '0';
     }
-    *p++ = (char)c;
-    setsbufP(sb, p);
+    *w++ = (char)c;
+    sb->w = w;
   }
   lj_buf_putb(sb, '"');
   return sb;
@@ -231,11 +231,11 @@ SBuf * LJ_FASTCALL lj_strfmt_putquoted(SBuf *sb, GCstr *str)
 SBuf *lj_strfmt_putfchar(SBuf *sb, SFormat sf, int32_t c)
 {
   MSize width = STRFMT_WIDTH(sf);
-  char *p = lj_buf_more(sb, width > 1 ? width : 1);
-  if ((sf & STRFMT_F_LEFT)) *p++ = (char)c;
-  while (width-- > 1) *p++ = ' ';
-  if (!(sf & STRFMT_F_LEFT)) *p++ = (char)c;
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, width > 1 ? width : 1);
+  if ((sf & STRFMT_F_LEFT)) *w++ = (char)c;
+  while (width-- > 1) *w++ = ' ';
+  if (!(sf & STRFMT_F_LEFT)) *w++ = (char)c;
+  sb->w = w;
   return sb;
 }
 
@@ -244,20 +244,20 @@ SBuf *lj_strfmt_putfstr(SBuf *sb, SFormat sf, GCstr *str)
 {
   MSize len = str->len <= STRFMT_PREC(sf) ? str->len : STRFMT_PREC(sf);
   MSize width = STRFMT_WIDTH(sf);
-  char *p = lj_buf_more(sb, width > len ? width : len);
-  if ((sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, strdata(str), len);
-  while (width-- > len) *p++ = ' ';
-  if (!(sf & STRFMT_F_LEFT)) p = lj_buf_wmem(p, strdata(str), len);
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, width > len ? width : len);
+  if ((sf & STRFMT_F_LEFT)) w = lj_buf_wmem(w, strdata(str), len);
+  while (width-- > len) *w++ = ' ';
+  if (!(sf & STRFMT_F_LEFT)) w = lj_buf_wmem(w, strdata(str), len);
+  sb->w = w;
   return sb;
 }
 
 /* Add formatted signed/unsigned integer to buffer. */
 SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k)
 {
-  char buf[STRFMT_MAXBUF_XINT], *q = buf + sizeof(buf), *p;
+  char buf[STRFMT_MAXBUF_XINT], *q = buf + sizeof(buf), *w;
 #ifdef LUA_USE_ASSERT
-  char *ps;
+  char *ws;
 #endif
   MSize prefix = 0, len, prec, pprec, width, need;
 
@@ -301,27 +301,27 @@ SBuf *lj_strfmt_putfxint(SBuf *sb, SFormat sf, uint64_t k)
   width = STRFMT_WIDTH(sf);
   pprec = prec + (prefix >> 8);
   need = width > pprec ? width : pprec;
-  p = lj_buf_more(sb, need);
+  w = lj_buf_more(sb, need);
 #ifdef LUA_USE_ASSERT
-  ps = p;
+  ws = w;
 #endif
 
   /* Format number with leading/trailing whitespace and zeros. */
   if ((sf & (STRFMT_F_LEFT|STRFMT_F_ZERO)) == 0)
-    while (width-- > pprec) *p++ = ' ';
+    while (width-- > pprec) *w++ = ' ';
   if (prefix) {
-    if ((char)prefix >= 'X') *p++ = '0';
-    *p++ = (char)prefix;
+    if ((char)prefix >= 'X') *w++ = '0';
+    *w++ = (char)prefix;
   }
   if ((sf & (STRFMT_F_LEFT|STRFMT_F_ZERO)) == STRFMT_F_ZERO)
-    while (width-- > pprec) *p++ = '0';
-  while (prec-- > len) *p++ = '0';
-  while (q < buf + sizeof(buf)) *p++ = *q++;  /* Add number itself. */
+    while (width-- > pprec) *w++ = '0';
+  while (prec-- > len) *w++ = '0';
+  while (q < buf + sizeof(buf)) *w++ = *q++;  /* Add number itself. */
   if ((sf & STRFMT_F_LEFT))
-    while (width-- > pprec) *p++ = ' ';
+    while (width-- > pprec) *w++ = ' ';
 
-  lj_assertX(need == (MSize)(p - ps), "miscalculated format size");
-  setsbufP(sb, p);
+  lj_assertX(need == (MSize)(w - ws), "miscalculated format size");
+  sb->w = w;
   return sb;
 }
 

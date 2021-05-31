@@ -11,14 +11,11 @@
 #include "lj_str.h"
 
 /* Resizable string buffers. SBuf struct definition in lj_obj.h. */
-#define sbufB(sb)	(mref((sb)->b, char))
-#define sbufP(sb)	(mref((sb)->p, char))
-#define sbufE(sb)	(mref((sb)->e, char))
+#define sbufsz(sb)	((MSize)((sb)->e - (sb)->b))
+#define sbuflen(sb)	((MSize)((sb)->w - (sb)->b))
+#define sbufleft(sb)	((MSize)((sb)->e - (sb)->w))
+
 #define sbufL(sb)	(mref((sb)->L, lua_State))
-#define sbufsz(sb)	((MSize)(sbufE((sb)) - sbufB((sb))))
-#define sbuflen(sb)	((MSize)(sbufP((sb)) - sbufB((sb))))
-#define sbufleft(sb)	((MSize)(sbufE((sb)) - sbufP((sb))))
-#define setsbufP(sb, q)	(setmref((sb)->p, (q)))
 #define setsbufL(sb, l)	(setmref((sb)->L, (l)))
 
 /* Buffer management */
@@ -30,12 +27,12 @@ LJ_FUNC char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz);
 static LJ_AINLINE void lj_buf_init(lua_State *L, SBuf *sb)
 {
   setsbufL(sb, L);
-  setmref(sb->p, NULL); setmref(sb->e, NULL); setmref(sb->b, NULL);
+  sb->w = sb->e = sb->b = NULL;
 }
 
 static LJ_AINLINE void lj_buf_reset(SBuf *sb)
 {
-  setmrefr(sb->p, sb->b);
+  sb->w = sb->b;
 }
 
 static LJ_AINLINE SBuf *lj_buf_tmp_(lua_State *L)
@@ -48,21 +45,21 @@ static LJ_AINLINE SBuf *lj_buf_tmp_(lua_State *L)
 
 static LJ_AINLINE void lj_buf_free(global_State *g, SBuf *sb)
 {
-  lj_mem_free(g, sbufB(sb), sbufsz(sb));
+  lj_mem_free(g, sb->b, sbufsz(sb));
 }
 
 static LJ_AINLINE char *lj_buf_need(SBuf *sb, MSize sz)
 {
   if (LJ_UNLIKELY(sz > sbufsz(sb)))
     return lj_buf_need2(sb, sz);
-  return sbufB(sb);
+  return sb->b;
 }
 
 static LJ_AINLINE char *lj_buf_more(SBuf *sb, MSize sz)
 {
   if (LJ_UNLIKELY(sz > sbufleft(sb)))
     return lj_buf_more2(sb, sz);
-  return sbufP(sb);
+  return sb->w;
 }
 
 /* Low-level buffer put operations */
@@ -77,9 +74,9 @@ static LJ_AINLINE char *lj_buf_wmem(char *p, const void *q, MSize len)
 
 static LJ_AINLINE void lj_buf_putb(SBuf *sb, int c)
 {
-  char *p = lj_buf_more(sb, 1);
-  *p++ = (char)c;
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, 1);
+  *w++ = (char)c;
+  sb->w = w;
 }
 
 /* High-level buffer put operations */
@@ -97,7 +94,7 @@ LJ_FUNC uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp);
 
 static LJ_AINLINE GCstr *lj_buf_str(lua_State *L, SBuf *sb)
 {
-  return lj_str_new(L, sbufB(sb), sbuflen(sb));
+  return lj_str_new(L, sb->b, sbuflen(sb));
 }
 
 /* Interim user-accessible string buffer. */

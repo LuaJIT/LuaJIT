@@ -38,15 +38,14 @@ LJLIB_CF(buffer_encode)
 LJLIB_CF(buffer_decode)
 {
   GCstr *str = lj_lib_checkstr(L, 1);
-  const char *p = strdata(str);
+  char *p = (char *)strdata(str);
   SBuf sb;
   StrBuf sbuf;
   setsbufL(&sb, L);
-  setmref(sb.b, p);
-  setmref(sb.p, p + str->len);
-  setmref(sb.e, p + str->len);
+  sb.b = p;
+  sb.w = sb.e = p + str->len;
   sbuf.sb = &sb;
-  sbuf.r = (char *)p;
+  sbuf.r = p;
   setnilV(L->top++);
   lj_serialize_get(&sbuf, L->top-1);
   lj_gc_check(L);

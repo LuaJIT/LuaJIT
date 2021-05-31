@@ -2011,7 +2011,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |   mov RC, SBUF:CARG1->b
   |   mov SBUF:CARG1->L, L:RB
-  |   mov SBUF:CARG1->p, RC
+  |   mov SBUF:CARG1->w, RC
   |  mov SAVE_PC, PC
   |  call extern lj_buf_putstr_ .. name
   |  mov CARG1, rax

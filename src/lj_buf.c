@@ -22,10 +22,10 @@ static void buf_grow(SBuf *sb, MSize sz)
   char *b;
   if (nsz < LJ_MIN_SBUF) nsz = LJ_MIN_SBUF;
   while (nsz < sz) nsz += nsz;
-  b = (char *)lj_mem_realloc(sbufL(sb), sbufB(sb), osz, nsz);
-  setmref(sb->b, b);
-  setmref(sb->p, b + len);
-  setmref(sb->e, b + nsz);
+  b = (char *)lj_mem_realloc(sbufL(sb), sb->b, osz, nsz);
+  sb->b = b;
+  sb->w = b + len;
+  sb->e = b + nsz;
 }
 
 LJ_NOINLINE char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz)
@@ -34,7 +34,7 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz)
   if (LJ_UNLIKELY(sz > LJ_MAX_BUF))
     lj_err_mem(sbufL(sb));
   buf_grow(sb, sz);
-  return sbufB(sb);
+  return sb->b;
 }
 
 LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
@@ -44,19 +44,19 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
   if (LJ_UNLIKELY(sz > LJ_MAX_BUF || len + sz > LJ_MAX_BUF))
     lj_err_mem(sbufL(sb));
   buf_grow(sb, len + sz);
-  return sbufP(sb);
+  return sb->w;
 }
 
 void LJ_FASTCALL lj_buf_shrink(lua_State *L, SBuf *sb)
 {
-  char *b = sbufB(sb);
-  MSize osz = (MSize)(sbufE(sb) - b);
+  char *b = sb->b;
+  MSize osz = (MSize)(sb->e - b);
   if (osz > 2*LJ_MIN_SBUF) {
-    MSize n = (MSize)(sbufP(sb) - b);
+    MSize n = (MSize)(sb->w - b);
     b = lj_mem_realloc(L, b, osz, (osz >> 1));
-    setmref(sb->b, b);
-    setmref(sb->p, b + n);
-    setmref(sb->e, b + (osz >> 1));
+    sb->b = b;
+    sb->w = b + n;
+    sb->e = b + (osz >> 1);
   }
 }
 
@@ -71,26 +71,26 @@ char * LJ_FASTCALL lj_buf_tmp(lua_State *L, MSize sz)
 
 SBuf *lj_buf_putmem(SBuf *sb, const void *q, MSize len)
 {
-  char *p = lj_buf_more(sb, len);
-  p = lj_buf_wmem(p, q, len);
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, len);
+  w = lj_buf_wmem(w, q, len);
+  sb->w = w;
   return sb;
 }
 
 SBuf * LJ_FASTCALL lj_buf_putchar(SBuf *sb, int c)
 {
-  char *p = lj_buf_more(sb, 1);
-  *p++ = (char)c;
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, 1);
+  *w++ = (char)c;
+  sb->w = w;
   return sb;
 }
 
 SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
 {
   MSize len = s->len;
-  char *p = lj_buf_more(sb, len);
-  p = lj_buf_wmem(p, strdata(s), len);
-  setsbufP(sb, p);
+  char *w = lj_buf_more(sb, len);
+  w = lj_buf_wmem(w, strdata(s), len);
+  sb->w = w;
   return sb;
 }
 
@@ -99,47 +99,47 @@ SBuf * LJ_FASTCALL lj_buf_putstr(SBuf *sb, GCstr *s)
 SBuf * LJ_FASTCALL lj_buf_putstr_reverse(SBuf *sb, GCstr *s)
 {
   MSize len = s->len;
-  char *p = lj_buf_more(sb, len), *e = p+len;
+  char *w = lj_buf_more(sb, len), *e = w+len;
   const char *q = strdata(s)+len-1;
-  while (p < e)
-    *p++ = *q--;
-  setsbufP(sb, p);
+  while (w < e)
+    *w++ = *q--;
+  sb->w = w;
   return sb;
 }
 
 SBuf * LJ_FASTCALL lj_buf_putstr_lower(SBuf *sb, GCstr *s)
 {
   MSize len = s->len;
-  char *p = lj_buf_more(sb, len), *e = p+len;
+  char *w = lj_buf_more(sb, len), *e = w+len;
   const char *q = strdata(s);
-  for (; p < e; p++, q++) {
+  for (; w < e; w++, q++) {
     uint32_t c = *(unsigned char *)q;
 #if LJ_TARGET_PPC
-    *p = c + ((c >= 'A' && c <= 'Z') << 5);
+    *w = c + ((c >= 'A' && c <= 'Z') << 5);
 #else
     if (c >= 'A' && c <= 'Z') c += 0x20;
-    *p = c;
+    *w = c;
 #endif
   }
-  setsbufP(sb, p);
+  sb->w = w;
   return sb;
 }
 
 SBuf * LJ_FASTCALL lj_buf_putstr_upper(SBuf *sb, GCstr *s)
 {
   MSize len = s->len;
-  char *p = lj_buf_more(sb, len), *e = p+len;
+  char *w = lj_buf_more(sb, len), *e = w+len;
   const char *q = strdata(s);
-  for (; p < e; p++, q++) {
+  for (; w < e; w++, q++) {
     uint32_t c = *(unsigned char *)q;
 #if LJ_TARGET_PPC
-    *p = c - ((c >= 'a' && c <= 'z') << 5);
+    *w = c - ((c >= 'a' && c <= 'z') << 5);
 #else
     if (c >= 'a' && c <= 'z') c -= 0x20;
-    *p = c;
+    *w = c;
 #endif
   }
-  setsbufP(sb, p);
+  sb->w = w;
   return sb;
 }
 
@@ -148,21 +148,21 @@ SBuf *lj_buf_putstr_rep(SBuf *sb, GCstr *s, int32_t rep)
   MSize len = s->len;
   if (rep > 0 && len) {
     uint64_t tlen = (uint64_t)rep * len;
-    char *p;
+    char *w;
     if (LJ_UNLIKELY(tlen > LJ_MAX_STR))
       lj_err_mem(sbufL(sb));
-    p = lj_buf_more(sb, (MSize)tlen);
+    w = lj_buf_more(sb, (MSize)tlen);
     if (len == 1) {  /* Optimize a common case. */
       uint32_t c = strdata(s)[0];
-      do { *p++ = c; } while (--rep > 0);
+      do { *w++ = c; } while (--rep > 0);
     } else {
       const char *e = strdata(s) + len;
       do {
 	const char *q = strdata(s);
-	do { *p++ = *q++; } while (q < e);
+	do { *w++ = *q++; } while (q < e);
       } while (--rep > 0);
     }
-    setsbufP(sb, p);
+    sb->w = w;
   }
   return sb;
 }
@@ -173,27 +173,27 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
   if (i <= e) {
     for (;;) {
       cTValue *o = lj_tab_getint(t, i);
-      char *p;
+      char *w;
       if (!o) {
       badtype:  /* Error: bad element type. */
-	setsbufP(sb, (void *)(intptr_t)i);  /* Store failing index. */
+	sb->w = (char *)(intptr_t)i;  /* Store failing index. */
 	return NULL;
       } else if (tvisstr(o)) {
 	MSize len = strV(o)->len;
-	p = lj_buf_wmem(lj_buf_more(sb, len + seplen), strVdata(o), len);
+	w = lj_buf_wmem(lj_buf_more(sb, len + seplen), strVdata(o), len);
       } else if (tvisint(o)) {
-	p = lj_strfmt_wint(lj_buf_more(sb, STRFMT_MAXBUF_INT+seplen), intV(o));
+	w = lj_strfmt_wint(lj_buf_more(sb, STRFMT_MAXBUF_INT+seplen), intV(o));
       } else if (tvisnum(o)) {
-	p = lj_buf_more(lj_strfmt_putfnum(sb, STRFMT_G14, numV(o)), seplen);
+	w = lj_buf_more(lj_strfmt_putfnum(sb, STRFMT_G14, numV(o)), seplen);
       } else {
 	goto badtype;
       }
       if (i++ == e) {
-	setsbufP(sb, p);
+	sb->w = w;
 	break;
       }
-      if (seplen) p = lj_buf_wmem(p, strdata(sep), seplen);
-      setsbufP(sb, p);
+      if (seplen) w = lj_buf_wmem(w, strdata(sep), seplen);
+      sb->w = w;
     }
   }
   return sb;
@@ -203,7 +203,7 @@ SBuf *lj_buf_puttab(SBuf *sb, GCtab *t, GCstr *sep, int32_t i, int32_t e)
 
 GCstr * LJ_FASTCALL lj_buf_tostr(SBuf *sb)
 {
-  return lj_str_new(sbufL(sb), sbufB(sb), sbuflen(sb));
+  return lj_str_new(sbufL(sb), sb->b, sbuflen(sb));
 }
 
 /* Concatenate two strings. */
@@ -219,14 +219,14 @@ GCstr *lj_buf_cat2str(lua_State *L, GCstr *s1, GCstr *s2)
 /* Read ULEB128 from buffer. */
 uint32_t LJ_FASTCALL lj_buf_ruleb128(const char **pp)
 {
-  const uint8_t *p = (const uint8_t *)*pp;
-  uint32_t v = *p++;
+  const uint8_t *w = (const uint8_t *)*pp;
+  uint32_t v = *w++;
   if (LJ_UNLIKELY(v >= 0x80)) {
     int sh = 0;
     v &= 0x7f;
-    do { v |= ((*p & 0x7f) << (sh += 7)); } while (*p++ >= 0x80);
+    do { v |= ((*w & 0x7f) << (sh += 7)); } while (*w++ >= 0x80);
   }
-  *pp = (const char *)p;
+  *pp = (const char *)w;
   return v;
 }
 

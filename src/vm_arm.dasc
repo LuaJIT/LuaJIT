@@ -1810,7 +1810,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   str BASE, L->base
   |   str PC, SAVE_PC
   |   str L, SBUF:CARG1->L
-  |  str CARG4, SBUF:CARG1->p
+  |  str CARG4, SBUF:CARG1->w
   |  bl extern lj_buf_putstr_ .. name
   |  bl extern lj_buf_tostr
   |  b ->fff_resstr

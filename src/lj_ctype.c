@@ -583,7 +583,7 @@ GCstr *lj_ctype_repr_complex(lua_State *L, void *sp, CTSize size)
   lj_strfmt_putfnum(sb, STRFMT_G14, re.n);
   if (!(im.u32.hi & 0x80000000u) || im.n != im.n) lj_buf_putchar(sb, '+');
   lj_strfmt_putfnum(sb, STRFMT_G14, im.n);
-  lj_buf_putchar(sb, sbufP(sb)[-1] >= 'a' ? 'I' : 'i');
+  lj_buf_putchar(sb, sb->w[-1] >= 'a' ? 'I' : 'i');
   return lj_buf_str(L, sb);
 }
 
