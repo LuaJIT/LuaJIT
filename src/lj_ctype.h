@@ -389,6 +389,16 @@ static LJ_AINLINE CTState *ctype_cts(lua_State *L)
   return cts;
 }
 
+/* Load FFI library on-demand. */
+#define ctype_loadffi(L) \
+  do { \
+    if (!ctype_ctsG(G(L))) { \
+      ptrdiff_t oldtop = (char *)L->top - mref(L->stack, char); \
+      luaopen_ffi(L); \
+      L->top = (TValue *)(mref(L->stack, char) + oldtop); \
+    } \
+  } while (0)
+
 /* Save and restore state of C type table. */
 #define LJ_CTYPE_SAVE(cts)	CTState savects_ = *(cts)
 #define LJ_CTYPE_RESTORE(cts) \

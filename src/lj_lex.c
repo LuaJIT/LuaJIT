@@ -118,11 +118,7 @@ static void lex_number(LexState *ls, TValue *tv)
     GCcdata *cd;
     lj_assertLS(fmt == STRSCAN_I64 || fmt == STRSCAN_U64 || fmt == STRSCAN_IMAG,
 		"unexpected number format %d", fmt);
-    if (!ctype_ctsG(G(L))) {
-      ptrdiff_t oldtop = savestack(L, L->top);
-      luaopen_ffi(L);  /* Load FFI library on-demand. */
-      L->top = restorestack(L, oldtop);
-    }
+    ctype_loadffi(L);
     if (fmt == STRSCAN_IMAG) {
       cd = lj_cdata_new_(L, CTID_COMPLEX_DOUBLE, 2*sizeof(double));
       ((double *)cdataptr(cd))[0] = 0;
