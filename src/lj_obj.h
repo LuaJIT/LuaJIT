@@ -34,13 +34,17 @@ typedef struct MRef {
 
 #if LJ_GC64
 #define mref(r, t)	((t *)(void *)(r).ptr64)
+#define mrefu(r)	((r).ptr64)
 
 #define setmref(r, p)	((r).ptr64 = (uint64_t)(void *)(p))
+#define setmrefu(r, u)	((r).ptr64 = (uint64_t)(u))
 #define setmrefr(r, v)	((r).ptr64 = (v).ptr64)
 #else
 #define mref(r, t)	((t *)(void *)(uintptr_t)(r).ptr32)
+#define mrefu(r)	((r).ptr32)
 
 #define setmref(r, p)	((r).ptr32 = (uint32_t)(uintptr_t)(void *)(p))
+#define setmrefu(r, u)	((r).ptr32 = (uint32_t)(u))
 #define setmrefr(r, v)	((r).ptr32 = (v).ptr32)
 #endif
 

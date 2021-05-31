@@ -22,15 +22,13 @@
 
 #define LJLIB_MODULE_buffer
 
-/* Note: this uses interim structs until the SBuf reorg. */
-
 LJLIB_CF(buffer_encode)
 {
   cTValue *o = lj_lib_checkany(L, 1);
-  StrBuf sbuf;
-  sbuf.sb = lj_buf_tmp_(L);
-  lj_serialize_put(&sbuf, o);
-  setstrV(L, L->top++, lj_buf_str(L, sbuf.sb));
+  SBufExt sbx;
+  lj_bufx_init_borrow(L, &sbx, &G(L)->tmpbuf);
+  lj_serialize_put(&sbx, o);
+  setstrV(L, L->top++, lj_buf_str(L, (SBuf *)&sbx));
   lj_gc_check(L);
   return 1;
 }
@@ -38,16 +36,11 @@ LJLIB_CF(buffer_encode)
 LJLIB_CF(buffer_decode)
 {
   GCstr *str = lj_lib_checkstr(L, 1);
-  char *p = (char *)strdata(str);
-  SBuf sb;
-  StrBuf sbuf;
-  setsbufL(&sb, L);
-  sb.b = p;
-  sb.w = sb.e = p + str->len;
-  sbuf.sb = &sb;
-  sbuf.r = p;
+  SBufExt sbx;
+  lj_bufx_init_cow(L, &sbx, strdata(str), str->len);
+  /* No need to set sbx.cowref here. */
   setnilV(L->top++);
-  lj_serialize_get(&sbuf, L->top-1);
+  lj_serialize_get(&sbx, L->top-1);
   lj_gc_check(L);
   return 1;
 }
