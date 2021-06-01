@@ -346,10 +346,7 @@ SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o)
 
 SBufExt * LJ_FASTCALL lj_serialize_get(SBufExt *sbx, TValue *o)
 {
-  char *r = serialize_get(sbx->r, sbx, o);
-  if (r != sbx->w)
-    lj_err_caller(sbufL(sbx), LJ_ERR_BUFFER_LEFTOV);
-  sbx->r = r;
+  sbx->r = serialize_get(sbx->r, sbx, o);
   return sbx;
 }
 

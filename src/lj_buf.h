@@ -58,6 +58,10 @@ typedef struct SBufExt {
   (lj_assertG_(G(sbufL(sb)), sbufisext(sb), "not an SBufExt"), (SBufExt *)(sb))
 #define setsbufflag(sb, flag)	(setmrefu((sb)->L, (flag)))
 
+#define tvisbuf(o) \
+  (LJ_HASBUFFER && tvisudata(o) && udataV(o)->udtype == UDTYPE_BUFFER)
+#define bufV(o)		check_exp(tvisbuf(o), ((SBufExt *)uddata(udataV(o))))
+
 /* Buffer management */
 LJ_FUNC char *LJ_FASTCALL lj_buf_need2(SBuf *sb, MSize sz);
 LJ_FUNC char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz);

@@ -164,6 +164,10 @@ const char *lj_strfmt_wstrnum(lua_State *L, cTValue *o, MSize *lenp)
   if (tvisstr(o)) {
     *lenp = strV(o)->len;
     return strVdata(o);
+  } else if (tvisbuf(o)) {
+    SBufExt *sbx = bufV(o);
+    *lenp = sbufxlen(sbx);
+    return sbx->r;
   } else if (tvisint(o)) {
     sb = lj_strfmt_putint(lj_buf_tmp_(L), intV(o));
   } else if (tvisnum(o)) {
@@ -421,6 +425,10 @@ int lj_strfmt_putarg(lua_State *L, SBuf *sb, int arg, int retry)
 	if (LJ_LIKELY(tvisstr(o))) {
 	  len = strV(o)->len;
 	  s = strVdata(o);
+	} else if (tvisbuf(o)) {
+	  SBufExt *sbx = bufV(o);
+	  len = sbufxlen(sbx);
+	  s = sbx->r;
 	} else {
 	  GCstr *str = lj_strfmt_obj(L, o);
 	  len = str->len;
