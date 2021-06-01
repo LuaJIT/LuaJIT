@@ -77,7 +77,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @shift
 @set BUILDTYPE=debug
 @set LJCOMPILE=%LJCOMPILE% /Zi %DEBUGCFLAGS%
-@set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no
+@set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no /debug
 :NODEBUG
 @set LJLINK=%LJLINK% /%BUILDTYPE%
 @if "%1"=="amalg" goto :AMALGDLL
