@@ -1913,6 +1913,15 @@ void LJ_FASTCALL lj_crecord_tonumber(jit_State *J, RecordFFData *rd)
   }
 }
 
+TRef lj_crecord_loadiu64(jit_State *J, TRef tr, cTValue *o)
+{
+  CTypeID id = argv2cdata(J, tr, o)->ctypeid;
+  if (!(id == CTID_INT64 || id == CTID_UINT64))
+    lj_trace_err(J, LJ_TRERR_BADTYPE);
+  return emitir(IRT(IR_FLOAD, id == CTID_INT64 ? IRT_I64 : IRT_U64), tr,
+		IRFL_CDATA_INT64);
+}
+
 #undef IR
 #undef emitir
 #undef emitconv

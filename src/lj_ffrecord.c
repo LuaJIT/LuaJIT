@@ -961,8 +961,17 @@ static void LJ_FASTCALL recff_string_format(jit_State *J, RecordFFData *rd)
     case STRFMT_INT:
       id = IRCALL_lj_strfmt_putfnum_int;
     handle_int:
-      if (!tref_isinteger(tra))
+      if (!tref_isinteger(tra)) {
+#if LJ_HASFFI
+	if (tref_iscdata(tra)) {
+	  tra = lj_crecord_loadiu64(J, tra, &rd->argv[arg-1]);
+	  tr = lj_ir_call(J, IRCALL_lj_strfmt_putfxint, tr, trsf, tra);
+	  lj_needsplit(J);
+	  break;
+	}
+#endif
 	goto handle_num;
+      }
       if (sf == STRFMT_INT) { /* Shortcut for plain %d. */
 	tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr,
 		    emitir(IRT(IR_TOSTR, IRT_STR), tra, IRTOSTR_INT));
