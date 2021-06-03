@@ -2117,6 +2117,9 @@ static void asm_setup_regsp(ASMState *as)
 #endif
 
   ra_setup(as);
+#if LJ_TARGET_ARM64
+  ra_setkref(as, RID_GL, (intptr_t)J2G(as->J));
+#endif
 
   /* Clear reg/sp for constants. */
   for (ir = IR(T->nk), lastir = IR(REF_BASE); ir < lastir; ir++) {

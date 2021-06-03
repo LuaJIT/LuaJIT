@@ -163,7 +163,7 @@ nopair:
 /* Try to find an N-step delta relative to other consts with N < lim. */
 static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
 {
-  RegSet work = ~as->freeset & RSET_GPR;
+  RegSet work = (~as->freeset & RSET_GPR) | RID2RSET(RID_GL);
   if (lim <= 1) return 0;  /* Can't beat that. */
   while (work) {
     Reg r = rset_picktop(work);

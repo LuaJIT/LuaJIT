@@ -689,7 +689,7 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
   } else {
     /* Otherwise use g->tmptv to hold the TValue. */
     asm_tvstore64(as, dest, 0, ref);
-    ra_allockreg(as, i64ptr(&J2G(as->J)->tmptv), dest);
+    emit_dn(as, A64I_ADDx^emit_isk12(glofs(as, &J2G(as->J)->tmptv)), dest, RID_GL);
   }
 }
 
@@ -1261,17 +1261,13 @@ static void asm_tbar(ASMState *as, IRIns *ir)
 {
   Reg tab = ra_alloc1(as, ir->op1, RSET_GPR);
   Reg link = ra_scratch(as, rset_exclude(RSET_GPR, tab));
-  Reg gr = ra_allock(as, i64ptr(J2G(as->J)),
-		     rset_exclude(rset_exclude(RSET_GPR, tab), link));
   Reg mark = RID_TMP;
   MCLabel l_end = emit_label(as);
   emit_lso(as, A64I_STRx, link, tab, (int32_t)offsetof(GCtab, gclist));
   emit_lso(as, A64I_STRB, mark, tab, (int32_t)offsetof(GCtab, marked));
-  emit_lso(as, A64I_STRx, tab, gr,
-	   (int32_t)offsetof(global_State, gc.grayagain));
+  emit_setgl(as, tab, gc.grayagain);
   emit_dn(as, A64I_ANDw^emit_isk13(~LJ_GC_BLACK, 0), mark, mark);
-  emit_lso(as, A64I_LDRx, link, gr,
-	   (int32_t)offsetof(global_State, gc.grayagain));
+  emit_getgl(as, link, gc.grayagain);
   emit_cond_branch(as, CC_EQ, l_end);
   emit_n(as, A64I_TSTw^emit_isk13(LJ_GC_BLACK, 0), mark);
   emit_lso(as, A64I_LDRB, mark, tab, (int32_t)offsetof(GCtab, marked));
@@ -1291,7 +1287,7 @@ static void asm_obar(ASMState *as, IRIns *ir)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ir->op1;      /* TValue *tv      */
   asm_gencall(as, ci, args);
-  ra_allockreg(as, i64ptr(J2G(as->J)), ra_releasetmp(as, ASMREF_TMP1) );
+  emit_dm(as, A64I_MOVx, ra_releasetmp(as, ASMREF_TMP1), RID_GL);
   obj = IR(ir->op1)->r;
   tmp = ra_scratch(as, rset_exclude(allow, obj));
   emit_cond_branch(as, CC_EQ, l_end);
@@ -1804,7 +1800,7 @@ static void asm_gc_check(ASMState *as)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_step_jit];
   IRRef args[2];
   MCLabel l_end;
-  Reg tmp1, tmp2;
+  Reg tmp2;
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
@@ -1813,17 +1809,14 @@ static void asm_gc_check(ASMState *as)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
-  tmp1 = ra_releasetmp(as, ASMREF_TMP1);
+  emit_dm(as, A64I_MOVx, ra_releasetmp(as, ASMREF_TMP1), RID_GL);
   tmp2 = ra_releasetmp(as, ASMREF_TMP2);
   emit_loadi(as, tmp2, as->gcsteps);
   /* Jump around GC step if GC total < GC threshold. */
   emit_cond_branch(as, CC_LS, l_end);
   emit_nm(as, A64I_CMPx, RID_TMP, tmp2);
-  emit_lso(as, A64I_LDRx, tmp2, tmp1,
-	   (int32_t)offsetof(global_State, gc.threshold));
-  emit_lso(as, A64I_LDRx, RID_TMP, tmp1,
-	   (int32_t)offsetof(global_State, gc.total));
-  ra_allockreg(as, i64ptr(J2G(as->J)), tmp1);
+  emit_getgl(as, tmp2, gc.threshold);
+  emit_getgl(as, RID_TMP, gc.total);
   as->gcsteps = 0;
   checkmclim(as);
 }
