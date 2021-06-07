@@ -923,7 +923,7 @@ static LJ_AINLINE void setgcV(lua_State *L, TValue *o, GCobj *v, uint32_t it)
 }
 
 #define define_setV(name, type, tag) \
-static LJ_AINLINE void name(lua_State *L, TValue *o, type *v) \
+static LJ_AINLINE void name(lua_State *L, TValue *o, const type *v) \
 { \
   setgcV(L, o, obj2gco(v), tag); \
 }

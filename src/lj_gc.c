@@ -67,9 +67,10 @@ static void gc_mark(global_State *g, GCobj *o)
     gc_markobj(g, tabref(gco2ud(o)->env));
     if (LJ_HASBUFFER && gco2ud(o)->udtype == UDTYPE_BUFFER) {
       SBufExt *sbx = (SBufExt *)uddata(gco2ud(o));
-      if (sbufiscow(sbx) && gcref(sbx->cowref) != NULL) {
+      if (sbufiscow(sbx) && gcref(sbx->cowref))
 	gc_markobj(g, gcref(sbx->cowref));
-      }
+      if (gcref(sbx->dict))
+	gc_markobj(g, gcref(sbx->dict));
     }
   } else if (LJ_UNLIKELY(gct == ~LJ_TUPVAL)) {
     GCupval *uv = gco2uv(o);

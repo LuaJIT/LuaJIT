@@ -182,8 +182,10 @@ ERRDEF(FFI_NYICALL,	"NYI: cannot call this C function (yet)")
 
 #if LJ_HASBUFFER
 /* String buffer errors. */
+ERRDEF(BUFFER_BADOPT,	"bad options table")
 ERRDEF(BUFFER_BADENC,	"cannot serialize " LUA_QS)
 ERRDEF(BUFFER_BADDEC,	"cannot deserialize tag 0x%02x")
+ERRDEF(BUFFER_BADDICTX,	"cannot deserialize dictionary index %d")
 ERRDEF(BUFFER_DEPTH,	"too deep to serialize")
 ERRDEF(BUFFER_DUPKEY,	"duplicate table key")
 ERRDEF(BUFFER_EOB,	"unexpected end of buffer")

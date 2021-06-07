@@ -27,6 +27,7 @@ typedef struct SBufExt {
     MRef bsb;		/* Borrowed string buffer. */
   };
   char *r;		/* Read pointer. */
+  GCRef dict;		/* Serialization string dictionary table. */
   int depth;		/* Remaining recursion depth. */
 } SBufExt;
 
@@ -114,19 +115,17 @@ static LJ_AINLINE void lj_bufx_init(lua_State *L, SBufExt *sbx)
   setsbufXL(sbx, L, SBUF_FLAG_EXT);
 }
 
-static LJ_AINLINE void lj_bufx_init_borrow(lua_State *L, SBufExt *sbx, SBuf *sb)
+static LJ_AINLINE void lj_bufx_set_borrow(lua_State *L, SBufExt *sbx, SBuf *sb)
 {
-  memset(sbx, 0, sizeof(SBufExt));
   setsbufXL(sbx, L, SBUF_FLAG_EXT | SBUF_FLAG_BORROW);
   setmref(sbx->bsb, sb);
   sbx->r = sbx->w = sbx->b = sb->b;
   sbx->e = sb->e;
 }
 
-static LJ_AINLINE void lj_bufx_init_cow(lua_State *L, SBufExt *sbx,
-					const char *p, MSize len)
+static LJ_AINLINE void lj_bufx_set_cow(lua_State *L, SBufExt *sbx,
+				       const char *p, MSize len)
 {
-  memset(sbx, 0, sizeof(SBufExt));
   setsbufXL(sbx, L, SBUF_FLAG_EXT | SBUF_FLAG_COW);
   sbx->r = sbx->b = (char *)p;
   sbx->w = sbx->e = (char *)p + len;
@@ -142,9 +141,12 @@ static LJ_AINLINE void lj_bufx_reset(SBufExt *sbx)
   sbx->r = sbx->w = sbx->b;
 }
 
-static LJ_AINLINE void lj_bufx_free(global_State *g, SBufExt *sbx)
+static LJ_AINLINE void lj_bufx_free(lua_State *L, SBufExt *sbx)
 {
-  if (!sbufiscow(sbx)) lj_mem_free(g, sbx->b, sbufsz(sbx));
+  if (!sbufiscow(sbx)) lj_mem_free(G(L), sbx->b, sbufsz(sbx));
+  setsbufXL(sbx, L, SBUF_FLAG_EXT);
+  setgcrefnull(sbx->cowref);
+  sbx->r = sbx->w = sbx->b = sbx->e = NULL;
 }
 
 /* Low-level buffer put operations */

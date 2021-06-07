@@ -29,9 +29,7 @@
 #include "lj_serialize.h"
 #include "lj_lib.h"
 
-/* ------------------------------------------------------------------------ */
-
-#define LJLIB_MODULE_buffer_method
+/* -- Helper functions ---------------------------------------------------- */
 
 /* Check that the first argument is a string buffer. */
 static SBufExt *buffer_tobuf(lua_State *L)
@@ -49,11 +47,16 @@ static LJ_AINLINE SBufExt *buffer_tobufw(lua_State *L)
   return sbx;
 }
 
+#define buffer_toudata(sbx)	((GCudata *)(sbx)-1)
+
+/* -- Buffer methods ------------------------------------------------------ */
+
+#define LJLIB_MODULE_buffer_method
+
 LJLIB_CF(buffer_method_free)
 {
   SBufExt *sbx = buffer_tobuf(L);
-  lj_bufx_free(G(L), sbx);
-  lj_bufx_init(L, sbx);
+  lj_bufx_free(L, sbx);
   L->top = L->base+1;  /* Chain buffer object. */
   return 1;
 }
@@ -83,6 +86,7 @@ LJLIB_CF(buffer_method_skip)
 LJLIB_CF(buffer_method_set)
 {
   SBufExt *sbx = buffer_tobuf(L);
+  GCobj *ref;
   const char *p;
   MSize len;
 #if LJ_HASFFI
@@ -98,9 +102,11 @@ LJLIB_CF(buffer_method_set)
     p = strdata(str);
     len = str->len;
   }
-  lj_bufx_free(G(L), sbx);
-  lj_bufx_init_cow(L, sbx, p, len);
-  setgcref(sbx->cowref, gcV(L->base+1));
+  lj_bufx_free(L, sbx);
+  lj_bufx_set_cow(L, sbx, p, len);
+  ref = gcV(L->base+1);
+  setgcref(sbx->cowref, ref);
+  lj_gc_objbarrier(L, buffer_toudata(sbx), ref);
   L->top = L->base+1;  /* Chain buffer object. */
   return 1;
 }
@@ -249,8 +255,7 @@ LJLIB_CF(buffer_method_decode)
 LJLIB_CF(buffer_method___gc)
 {
   SBufExt *sbx = buffer_tobuf(L);
-  lj_bufx_free(G(L), sbx);
-  lj_bufx_init(L, sbx);
+  lj_bufx_free(L, sbx);
   return 0;
 }
 
@@ -272,7 +277,7 @@ LJLIB_CF(buffer_method___len)
 LJLIB_PUSH("buffer") LJLIB_SET(__metatable)
 LJLIB_PUSH(top-1) LJLIB_SET(__index)
 
-/* ------------------------------------------------------------------------ */
+/* -- Buffer library functions -------------------------------------------- */
 
 #define LJLIB_MODULE_buffer
 
@@ -280,16 +285,33 @@ LJLIB_PUSH(top-2) LJLIB_SET(!)  /* Set environment. */
 
 LJLIB_CF(buffer_new)
 {
-  MSize sz = L->base == L->top ? 0u :
-	     (MSize)lj_lib_checkintrange(L, 1, 0, LJ_MAX_BUF);
-  GCtab *env = tabref(curr_func(L)->c.env);
-  GCudata *ud = lj_udata_new(L, sizeof(SBufExt), env);
-  SBufExt *sbx = (SBufExt *)uddata(ud);
+  MSize sz = 0;
+  int targ = 1;
+  GCtab *env, *dict = NULL;
+  GCudata *ud;
+  SBufExt *sbx;
+  if (L->base < L->top && !tvistab(L->base)) {
+    targ = 2;
+    if (!tvisnil(L->base))
+      sz = (MSize)lj_lib_checkintrange(L, 1, 0, LJ_MAX_BUF);
+  }
+  if (L->base+targ-1 < L->top) {
+    GCtab *options = lj_lib_checktab(L, targ);
+    cTValue *opt_dict = lj_tab_getstr(options, lj_str_newlit(L, "dict"));
+    if (opt_dict && tvistab(opt_dict)) {
+      dict = tabV(opt_dict);
+      lj_serialize_dict_prep(L, dict);
+    }
+  }
+  env = tabref(curr_func(L)->c.env);
+  ud = lj_udata_new(L, sizeof(SBufExt), env);
   ud->udtype = UDTYPE_BUFFER;
   /* NOBARRIER: The GCudata is new (marked white). */
   setgcref(ud->metatable, obj2gco(env));
   setudataV(L, L->top++, ud);
+  sbx = (SBufExt *)uddata(ud);
   lj_bufx_init(L, sbx);
+  setgcref(sbx->dict, obj2gco(dict));
   if (sz > 0) lj_buf_need2((SBuf *)sbx, sz);
   return 1;
 }
@@ -298,7 +320,8 @@ LJLIB_CF(buffer_encode)
 {
   cTValue *o = lj_lib_checkany(L, 1);
   SBufExt sbx;
-  lj_bufx_init_borrow(L, &sbx, &G(L)->tmpbuf);
+  memset(&sbx, 0, sizeof(SBufExt));
+  lj_bufx_set_borrow(L, &sbx, &G(L)->tmpbuf);
   lj_serialize_put(&sbx, o);
   setstrV(L, L->top++, lj_buf_str(L, (SBuf *)&sbx));
   lj_gc_check(L);
@@ -309,7 +332,8 @@ LJLIB_CF(buffer_decode)
 {
   GCstr *str = lj_lib_checkstrx(L, 1);
   SBufExt sbx;
-  lj_bufx_init_cow(L, &sbx, strdata(str), str->len);
+  memset(&sbx, 0, sizeof(SBufExt));
+  lj_bufx_set_cow(L, &sbx, strdata(str), str->len);
   /* No need to set sbx.cowref here. */
   setnilV(L->top++);
   lj_serialize_get(&sbx, L->top-1);

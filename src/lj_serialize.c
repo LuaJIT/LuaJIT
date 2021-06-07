@@ -32,7 +32,7 @@ enum {
   SER_TAG_NUM,
   SER_TAG_TAB,		/* 0x08 */
   SER_TAG_0x0e = SER_TAG_TAB+6,
-  SER_TAG_0x0f,
+  SER_TAG_DICT,
   SER_TAG_INT64,	/* 0x10 */
   SER_TAG_UINT64,
   SER_TAG_COMPLEX,
@@ -120,6 +120,26 @@ static LJ_AINLINE char *serialize_ru124(char *r, char *w, uint32_t *pv)
   return NULL;
 }
 
+/* Prepare string dictionary for use (once). */
+void LJ_FASTCALL lj_serialize_dict_prep(lua_State *L, GCtab *dict)
+{
+  if (!dict->hmask) {  /* No hash part means not prepared, yet. */
+    MSize i, len = lj_tab_len(dict);
+    if (!len) return;
+    lj_tab_resize(L, dict, dict->asize, hsize2hbits(len));
+    for (i = 1; i <= len && i < dict->asize; i++) {
+      cTValue *o = arrayslot(dict, i);
+      if (tvisstr(o)) {
+	if (!lj_tab_getstr(dict, strV(o))) {  /* Ignore dups. */
+	  lj_tab_newkey(L, dict, o)->u64 = (uint64_t)(i-1);
+	}
+      } else if (!tvisfalse(o)) {
+	lj_err_caller(L, LJ_ERR_BUFFER_BADOPT);
+      }
+    }
+  }
+}
+
 /* -- Internal serializer ------------------------------------------------- */
 
 /* Put serialized object into buffer. */
@@ -174,12 +194,45 @@ static char *serialize_put(char *w, SBufExt *sbx, cTValue *o)
     }
     if (nhash) {  /* Write hash entries. */
       const Node *node = noderef(t->node) + t->hmask;
-      for (;; node--)
-	if (!tvisnil(&node->val)) {
-	  w = serialize_put(w, sbx, &node->key);
-	  w = serialize_put(w, sbx, &node->val);
-	  if (--nhash == 0) break;
-	}
+      GCtab *dict = tabref(sbx->dict);
+      if (LJ_UNLIKELY(dict)) {
+	for (;; node--)
+	  if (!tvisnil(&node->val)) {
+	    if (LJ_LIKELY(tvisstr(&node->key))) {
+	      /* Inlined lj_tab_getstr is 30% faster. */
+	      const GCstr *str = strV(&node->key);
+	      Node *n = hashstr(dict, str);
+	      do {
+		if (tvisstr(&n->key) && strV(&n->key) == str) {
+		  uint32_t idx = n->val.u32.lo;
+		  w = serialize_more(w, sbx, 1+5);
+		  *w++ = SER_TAG_DICT;
+		  w = serialize_wu124(w, idx);
+		  break;
+		}
+		n = nextnode(n);
+		if (!n) {
+		  MSize len = str->len;
+		  w = serialize_more(w, sbx, 5+len);
+		  w = serialize_wu124(w, SER_TAG_STR + len);
+		  w = lj_buf_wmem(w, strdata(str), len);
+		  break;
+		}
+	      } while (1);
+	    } else {
+	      w = serialize_put(w, sbx, &node->key);
+	    }
+	    w = serialize_put(w, sbx, &node->val);
+	    if (--nhash == 0) break;
+	  }
+      } else {
+	for (;; node--)
+	  if (!tvisnil(&node->val)) {
+	    w = serialize_put(w, sbx, &node->key);
+	    w = serialize_put(w, sbx, &node->val);
+	    if (--nhash == 0) break;
+	  }
+      }
     }
     sbx->depth++;
 #if LJ_HASFFI
@@ -266,6 +319,16 @@ static char *serialize_get(char *r, SBufExt *sbx, TValue *o)
     if (!tvisnum(o)) setnanV(o);
   } else if (tp <= SER_TAG_TRUE) {
     setpriV(o, ~tp);
+  } else if (tp == SER_TAG_DICT) {
+    GCtab *dict;
+    uint32_t idx;
+    r = serialize_ru124(r, w, &idx);
+    idx++;
+    dict = tabref(sbx->dict);
+    if (dict && idx < dict->asize && tvisstr(arrayslot(dict, idx)))
+      copyTV(sbufL(sbx), o, arrayslot(dict, idx));
+    else
+      lj_err_callerv(sbufL(sbx), LJ_ERR_BUFFER_BADDICTX, idx);
   } else if (tp >= SER_TAG_TAB && tp < SER_TAG_TAB+6) {
     uint32_t narray = 0, nhash = 0;
     GCtab *t;

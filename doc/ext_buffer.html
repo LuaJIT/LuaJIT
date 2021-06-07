@@ -175,14 +175,19 @@ object itself as a convenience. This allows method chaining, e.g.:
 
 <h2 id="create">Buffer Creation and Management</h2>
 
-<h3 id="buffer_new"><tt>local buf = buffer.new([size])</tt></h3>
+<h3 id="buffer_new"><tt>local buf = buffer.new([size [,options]])<br>
+local buf = buffer.new([options])</tt></h3>
 <p>
 Creates a new buffer object.
 </p>
 <p>
 The optional <tt>size</tt> argument ensures a minimum initial buffer
-size. This is strictly an optimization for cases where the required
-buffer size is known beforehand.
+size. This is strictly an optimization when the required buffer size is
+known beforehand. The buffer space will grow as needed, in any case.
+</p>
+<p>
+The optional table <tt>options</tt> sets various
+<a href="#serialize_options">serialization options</a>.
 </p>
 
 <h3 id="buffer_reset"><tt>buf = buf:reset()</tt></h3>
@@ -205,7 +210,7 @@ immediately.
 
 <h2 id="write">Buffer Writers</h2>
 
-<h3 id="buffer_put"><tt>buf = buf:put([str|num|obj] [, ...])</tt></h3>
+<h3 id="buffer_put"><tt>buf = buf:put([str|num|obj] [,…])</tt></h3>
 <p>
 Appends a string <tt>str</tt>, a number <tt>num</tt> or any object
 <tt>obj</tt> with a <tt>__tostring</tt> metamethod to the buffer.
@@ -217,7 +222,7 @@ internally. But it still involves a copy. Better combine the buffer
 writes to use a single buffer.
 </p>
 
-<h3 id="buffer_putf"><tt>buf = buf:putf(format, ...)</tt></h3>
+<h3 id="buffer_putf"><tt>buf = buf:putf(format, …)</tt></h3>
 <p>
 Appends the formatted arguments to the buffer. The <tt>format</tt>
 string supports the same options as <tt>string.format()</tt>.
@@ -298,7 +303,7 @@ method, if nothing is added to the buffer (e.g. on error).
 Returns the current length of the buffer data in bytes.
 </p>
 
-<h3 id="buffer_concat"><tt>res = str|num|buf .. str|num|buf [...]</tt></h3>
+<h3 id="buffer_concat"><tt>res = str|num|buf .. str|num|buf […]</tt></h3>
 <p>
 The Lua concatenation operator <tt>..</tt> also accepts buffers, just
 like strings or numbers. It always returns a string and not a buffer.
@@ -319,7 +324,7 @@ Skips (consumes) <tt>len</tt> bytes from the buffer up to the current
 length of the buffer data.
 </p>
 
-<h3 id="buffer_get"><tt>str, ... = buf:get([len|nil] [,...])</tt></h3>
+<h3 id="buffer_get"><tt>str, … = buf:get([len|nil] [,…])</tt></h3>
 <p>
 Consumes the buffer data and returns one or more strings. If called
 without arguments, the whole buffer data is consumed. If called with a
@@ -444,6 +449,56 @@ data after decoding a single top-level object. The buffer method leaves
 any left-over data in the buffer.
 </p>
 
+<h3 id="serialize_options">Serialization Options</h3>
+<p>
+The <tt>options</tt> table passed to <tt>buffer.new()</tt> may contain
+the following members (all optional):
+</p>
+<ul>
+<li>
+<tt>dict</tt> is a Lua table holding a <b>dictionary of strings</b> that
+commonly occur as table keys of objects you are serializing. These keys
+are compactly encoded as indexes during serialization. A well chosen
+dictionary saves space and improves serialization performance.
+</li>
+</ul>
+<p>
+<tt>dict</tt> needs to be an array of strings, starting at index 1 and
+without holes (no <tt>nil</tt> inbetween). The table is anchored in the
+buffer object and internally modified into a two-way index (don't do
+this yourself, just pass a plain array). The table must not be modified
+after it has been passed to <tt>buffer.new()</tt>.
+</p>
+<p>
+The <tt>dict</tt> tables used by the encoder and decoder must be the
+same. Put the most common entries at the front. Extend at the end to
+ensure backwards-compatibility &mdash; older encodings can then still be
+read. You may also set some indexes to <tt>false</tt> to explicitly drop
+backwards-compatibility. Old encodings that use these indexes will throw
+an error when decoded.
+</p>
+<p>
+Note: parsing and preparation of the options table is somewhat
+expensive. Create a buffer object only once and recycle it for multiple
+uses. Avoid mixing encoder and decoder buffers, since the
+<tt>buf:set()</tt> method frees the already allocated buffer space:
+</p>
+<pre class="code">
+local options = {
+  dict = { "commonly", "used", "string", "keys" },
+}
+local buf_enc = buffer.new(options)
+local buf_dec = buffer.new(options)
+
+local function encode(obj)
+  return buf_enc:reset():encode(obj):get()
+end
+
+local function decode(str)
+  return buf_dec:set(str):decode()
+end
+</pre>
+
 <h3 id="serialize_stream">Streaming Serialization</h3>
 <p>
 In some contexts, it's desirable to do piecewise serialization of large
@@ -536,6 +591,7 @@ uint64    → 0x11 uint.L                           // FFI uint64_t
 complex   → 0x12 re.L im.L                         // FFI complex
 
 string    → (0x20+len).U len*char.B
+          | 0x0f (index-1).U                        // Dict entry
 
 .B = 8 bit
 .I = 32 bit little-endian
