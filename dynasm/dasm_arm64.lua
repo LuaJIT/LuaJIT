@@ -458,6 +458,14 @@ local function parse_lslx16(expr)
   return shl(n, 17)
 end
 
+local function parse_lsl12(expr)
+  local n = match(expr, "^lsl%s*#(%d+)$")
+  n = tonumber(n)
+  if not n then werror("expected shift operand") end
+  if n ~= 0 and n ~= 12 then werror("bad shift amount") end
+  return (n == 12 and shl(1, 22) or 0)
+end
+
 local function parse_extend(expr)
   local s, s2 = match(expr, "^(%S+)%s*(.*)$")
   if s == "lsl" then
@@ -664,18 +672,18 @@ end)
 map_op = {
   -- Basic data processing instructions.
   add_3  = "0b000000DNMg|11000000pDpNIg|8b206000pDpNMx",
-  add_4  = "0b000000DNMSg|0b200000DNMXg|8b200000pDpNMXx|8b200000pDpNxMwX",
+  add_4  = "0b000000DNMSg|0b200000DNMXg|8b200000pDpNMXx|8b200000pDpNxMwX|11000000pDpNIrg",
   adds_3 = "2b000000DNMg|31000000DpNIg|ab206000DpNMx",
-  adds_4 = "2b000000DNMSg|2b200000DNMXg|ab200000DpNMXx|ab200000DpNxMwX",
+  adds_4 = "2b000000DNMSg|2b200000DNMXg|ab200000DpNMXx|ab200000DpNxMwX|31000000DpNIrg",
   cmn_2  = "2b00001fNMg|3100001fpNIg|ab20601fpNMx",
-  cmn_3  = "2b00001fNMSg|2b20001fNMXg|ab20001fpNMXx|ab20001fpNxMwX",
+  cmn_3  = "2b00001fNMSg|2b20001fNMXg|ab20001fpNMXx|ab20001fpNxMwX|3100001fpNIrg",
 
   sub_3  = "4b000000DNMg|51000000pDpNIg|cb206000pDpNMx",
-  sub_4  = "4b000000DNMSg|4b200000DNMXg|cb200000pDpNMXx|cb200000pDpNxMwX",
+  sub_4  = "4b000000DNMSg|4b200000DNMXg|cb200000pDpNMXx|cb200000pDpNxMwX|51000000pDpNIrg",
   subs_3 = "6b000000DNMg|71000000DpNIg|eb206000DpNMx",
-  subs_4 = "6b000000DNMSg|6b200000DNMXg|eb200000DpNMXx|eb200000DpNxMwX",
+  subs_4 = "6b000000DNMSg|6b200000DNMXg|eb200000DpNMXx|eb200000DpNxMwX||71000000DpNIrg",
   cmp_2  = "6b00001fNMg|7100001fpNIg|eb20601fpNMx",
-  cmp_3  = "6b00001fNMSg|6b20001fNMXg|eb20001fpNMXx|eb20001fpNxMwX",
+  cmp_3  = "6b00001fNMSg|6b20001fNMXg|eb20001fpNMXx|eb20001fpNxMwX|7100001fpNIrg",
 
   neg_2  = "4b0003e0DMg",
   neg_3  = "4b0003e0DMSg",
@@ -985,6 +993,8 @@ local function parse_template(params, template, nparams, pos)
       op = op + parse_extend(q); n = n + 1
     elseif p == "R" then
       op = op + parse_lslx16(q); n = n + 1
+    elseif p == "r" then
+      op = op + parse_lsl12(q); n = n + 1
     elseif p == "C" then
       op = op + parse_cond(q, 0); n = n + 1
     elseif p == "c" then
