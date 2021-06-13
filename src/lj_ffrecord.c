@@ -107,6 +107,11 @@ static void recff_stitch(jit_State *J)
   const BCIns *pc = frame_pc(base-1);
   TValue *pframe = frame_prevl(base-1);
 
+  MSize maxsnap = (MSize)J->param[JIT_P_maxsnap];
+  MSize nsnap = J->cur.nsnap;
+  if (nsnap >= maxsnap)
+    lj_trace_err_info(J, LJ_TRERR_SNAPOV);
+
   /* Move func + args up in Lua stack and insert continuation. */
   memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
   setframe_ftsz(nframe, ((char *)nframe - (char *)pframe) + FRAME_CONT);
