@@ -107,6 +107,10 @@ static void recff_stitch(jit_State *J)
   const BCIns *pc = frame_pc(base-1);
   TValue *pframe = frame_prevl(base-1);
 
+  /* Check for this now. Throwing in lj_record_stop messes up the stack. */
+  if (J->cur.nsnap >= (MSize)J->param[JIT_P_maxsnap])
+    lj_trace_err(J, LJ_TRERR_SNAPOV);
+
   /* Move func + args up in Lua stack and insert continuation. */
   memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
   setframe_ftsz(nframe, ((char *)nframe - (char *)pframe) + FRAME_CONT);
