@@ -334,7 +334,7 @@ TValue *lj_meta_equal(lua_State *L, GCobj *o1, GCobj *o2, int ne)
     uint32_t it;
     if (tabref(o1->gch.metatable) != tabref(o2->gch.metatable)) {
       cTValue *mo2 = lj_meta_fast(L, tabref(o2->gch.metatable), MM_eq);
-      if (mo2 == NULL || !lj_obj_equal(mo, mo2))
+      if (mo2 == NULL /*|| !lj_obj_equal(mo, mo2)*/) 
 	return (TValue *)(intptr_t)ne;
     }
     top = curr_top(L);
