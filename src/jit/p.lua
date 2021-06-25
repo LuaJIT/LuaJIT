@@ -238,6 +238,7 @@ local function prof_finish()
     prof_count1 = nil
     prof_count2 = nil
     prof_ud = nil
+    if out ~= stdout then out:close() end
   end
 end
 
