@@ -280,6 +280,8 @@ LUA_API void lua_setallocf (lua_State *L, lua_Alloc f, void *ud);
 
 #define lua_tostring(L,i)	lua_tolstring(L, (i), NULL)
 
+/* From Lua 5.2. */
+#define lua_pushglobaltable(L)	lua_pushvalue(L, LUA_GLOBALSINDEX)
 
 
 /*
@@ -352,6 +354,7 @@ LUA_API const lua_Number *lua_version (lua_State *L);
 LUA_API void lua_copy (lua_State *L, int fromidx, int toidx);
 LUA_API lua_Number lua_tonumberx (lua_State *L, int idx, int *isnum);
 LUA_API lua_Integer lua_tointegerx (lua_State *L, int idx, int *isnum);
+LUA_API int lua_absindex (lua_State *L, int idx);
 
 /* From Lua 5.3. */
 LUA_API int lua_isyieldable (lua_State *L);

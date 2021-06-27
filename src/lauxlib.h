@@ -90,6 +90,8 @@ LUALIB_API void (luaL_pushmodule) (lua_State *L, const char *modname,
 				   int sizehint);
 LUALIB_API void *(luaL_testudata) (lua_State *L, int ud, const char *tname);
 LUALIB_API void (luaL_setmetatable) (lua_State *L, const char *tname);
+LUALIB_API int (luaL_getsubtable) (lua_State *L, int idx, const char *fname);
+LUALIB_API const char *(luaL_tolstring) (lua_State *L, int idx, size_t *len);
 
 
 /*
@@ -124,6 +126,11 @@ LUALIB_API void (luaL_setmetatable) (lua_State *L, const char *tname);
 	lua_createtable(L, 0, sizeof(l)/sizeof((l)[0]) - 1)
 #define luaL_newlib(L, l)	(luaL_newlibtable(L, l), luaL_setfuncs(L, l, 0))
 
+/* From Lua 5.4 */
+#define luaL_argexpected(L,cond,arg,tname)	\
+		((void)((cond) || luaL_typerror(L, (arg), (tname))))
+#define luaL_typeerror(L,n,t)	luaL_typerror(L, (n), (t))
+
 /*
 ** {======================================================
 ** Generic Buffer manipulation
@@ -155,6 +162,14 @@ LUALIB_API void (luaL_addstring) (luaL_Buffer *B, const char *s);
 LUALIB_API void (luaL_addvalue) (luaL_Buffer *B);
 LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 
+/* From Lua 5.2. */
+LUALIB_API void (luaL_pushresultsize) (luaL_Buffer *B, size_t sz);
+
+/* From Lua 5.4 */
+#define luaL_buffaddr(B)	((B)->p)
+#define luaL_bufflen(B)		((size_t)((B)->p - (B)->buffer))
+LUALIB_API void luaL_addgsub (luaL_Buffer *b, const char *s,
+                                     const char *p, const char *r);
 
 /* }====================================================== */
 

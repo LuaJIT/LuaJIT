@@ -158,19 +158,39 @@ LUALIB_API void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup)
   lua_pop(L, nup);  /* Remove upvalues. */
 }
 
-LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
-				 const char *p, const char *r)
+LUALIB_API int luaL_getsubtable(lua_State *L, int idx, const char *fname)
+{
+  lua_getfield(L, idx, fname);
+  if (lua_istable(L, -1)) return 1;  /* table already there */
+  else {
+    lua_pop(L, 1);  /* remove previous result */
+    idx = lua_absindex(L, idx);
+    lua_newtable(L);
+    lua_pushvalue(L, -1);  /* copy to be left at top */
+    lua_setfield(L, idx, fname);  /* assign new table to field */
+    return 0;  /* false, because did not find table there */
+  }
+}
+
+LUALIB_API void luaL_addgsub(luaL_Buffer *b, const char *s,
+                             const char *p, const char *r)
 {
   const char *wild;
   size_t l = strlen(p);
+  while ((wild = strstr(s, p)) != NULL) {
+    luaL_addlstring(b, s, wild - s);  /* push prefix */
+    luaL_addstring(b, r);  /* push replacement in place of pattern */
+    s = wild + l;  /* continue after 'p' */
+  }
+  luaL_addstring(b, s);  /* push last suffix */
+}
+
+LUALIB_API const char *luaL_gsub(lua_State *L, const char *s,
+                                 const char *p, const char *r)
+{
   luaL_Buffer b;
   luaL_buffinit(L, &b);
-  while ((wild = strstr(s, p)) != NULL) {
-    luaL_addlstring(&b, s, (size_t)(wild - s));  /* push prefix */
-    luaL_addstring(&b, r);  /* push replacement in place of pattern */
-    s = wild + l;  /* continue after `p' */
-  }
-  luaL_addstring(&b, s);  /* push last suffix */
+  luaL_addgsub(&b, s, p, r);
   luaL_pushresult(&b);
   return lua_tostring(L, -1);
 }
@@ -239,6 +259,12 @@ LUALIB_API void luaL_pushresult(luaL_Buffer *B)
   emptybuffer(B);
   lua_concat(B->L, B->lvl);
   B->lvl = 1;
+}
+
+LUALIB_API void luaL_pushresultsize(luaL_Buffer *B, size_t sz)
+{
+  luaL_addsize(B, sz);
+  luaL_pushresult(B);
 }
 
 LUALIB_API void luaL_addvalue(luaL_Buffer *B)

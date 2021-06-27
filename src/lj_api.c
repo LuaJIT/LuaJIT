@@ -137,6 +137,13 @@ LUA_API const lua_Number *lua_version(lua_State *L)
 
 /* -- Stack manipulation -------------------------------------------------- */
 
+LUA_API int lua_absindex (lua_State *L, int idx)
+{
+  return (idx > 0 || idx <= LUA_REGISTRYINDEX)
+         ? idx
+         : (int)(L->top - L->base) + idx + 1;
+}
+
 LUA_API int lua_gettop(lua_State *L)
 {
   return (int)(L->top - L->base);
@@ -518,6 +525,29 @@ LUA_API const char *lua_tolstring(lua_State *L, int idx, size_t *len)
   }
   if (len != NULL) *len = s->len;
   return strdata(s);
+}
+
+LUALIB_API const char *luaL_tolstring(lua_State *L, int idx, size_t *len)
+{
+  if (!luaL_callmeta(L, idx, "__tostring")) {  /* no metafield? */
+    switch (lua_type(L, idx)) {
+      case LUA_TNUMBER:
+      case LUA_TSTRING:
+        lua_pushvalue(L, idx);
+        break;
+      case LUA_TBOOLEAN:
+        lua_pushstring(L, (lua_toboolean(L, idx) ? "true" : "false"));
+        break;
+      case LUA_TNIL:
+        lua_pushliteral(L, "nil");
+        break;
+      default:
+        lua_pushfstring(L, "%s: %p", lua_typename(L, lua_type(L, idx)),
+                                            lua_topointer(L, idx));
+        break;
+    }
+  }
+  return lua_tolstring(L, -1, len);
 }
 
 LUALIB_API const char *luaL_checklstring(lua_State *L, int idx, size_t *len)
