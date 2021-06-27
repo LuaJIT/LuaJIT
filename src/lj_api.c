@@ -9,6 +9,8 @@
 #define lj_api_c
 #define LUA_CORE
 
+#include "lauxlib.h"
+
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
@@ -591,6 +593,20 @@ LUA_API size_t lua_objlen(lua_State *L, int idx)
   }
 }
 
+LUA_API size_t lua_rawlen(lua_State *L, int idx)
+{
+  TValue *o = index2adr(L, idx);
+  if (tvisstr(o)) {
+    return strV(o)->len;
+  } else if (tvistab(o)) {
+    return (size_t)lj_tab_len(tabV(o));
+  } else if (tvisudata(o)) {
+    return udataV(o)->len;
+  } else {
+    return 0;
+  }
+}
+
 LUA_API lua_CFunction lua_tocfunction(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);
@@ -790,6 +806,25 @@ LUA_API void lua_concat(lua_State *L, int n)
     incr_top(L);
   }
   /* else n == 1: nothing to do. */
+}
+
+LUA_API void lua_len (lua_State *L, int idx)
+{
+  TValue *o = index2adr_stack(L, idx);
+  if (tvisstr(o)) {
+    setnumV(L->top, strV(o)->len);
+  } else if (tvistab(o) && (!LJ_52 || tvisnil(lj_meta_lookup(L, o, MM_len)))) {
+    setnumV(L->top, lj_tab_len(tabV(o)));
+  } else {
+    TValue *v;
+    L->top = lj_meta_len(L, o);
+    L->top += 2;
+    lj_vm_call(L, L->top-2, 1+1);
+    L->top -= 2+LJ_FR2;
+    v = L->top+1+LJ_FR2;
+    copyTV(L, L->top, v);
+  }
+  incr_top(L);
 }
 
 /* -- Object getters ------------------------------------------------------ */
@@ -1184,6 +1219,18 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
     return 1;
   }
   return 0;
+}
+
+LUALIB_API lua_Integer luaL_len(lua_State *L, int idx)
+{
+  lua_Integer l;
+  int isnum;
+  lua_len(L, idx);
+  l = lua_tointegerx(L, -1, &isnum);
+  if (!isnum)
+    luaL_error(L, "object length is not a number");
+  lua_pop(L, 1);  /* remove object */
+  return l;
 }
 
 /* -- Coroutine yield and resume ------------------------------------------ */

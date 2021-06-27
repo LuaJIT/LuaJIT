@@ -90,6 +90,7 @@ LUALIB_API void (luaL_pushmodule) (lua_State *L, const char *modname,
 				   int sizehint);
 LUALIB_API void *(luaL_testudata) (lua_State *L, int ud, const char *tname);
 LUALIB_API void (luaL_setmetatable) (lua_State *L, const char *tname);
+LUALIB_API lua_Integer (luaL_len) (lua_State *L, int idx);
 
 
 /*

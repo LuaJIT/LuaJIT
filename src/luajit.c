@@ -267,6 +267,21 @@ static void dotty(lua_State *L)
   progname = oldprogname;
 }
 
+/* Push on the stack the contents of table 'arg' from 1 to #arg */
+static int pushargs(lua_State *L)
+{
+  int i, n;
+  lua_getglobal(L, "arg");
+  if (!lua_istable(L, -1))
+    luaL_error(L, "'arg' is not a table");
+  n = (int)luaL_len(L, -1);
+  luaL_checkstack(L, n + 3, "too many arguments to script");
+  for (i = 1; i <= n; i++)
+    lua_rawgeti(L, -i, i);
+  lua_remove(L, -i);  /* remove table from the stack */
+  return n;
+}
+
 static int handle_script(lua_State *L, char **argx)
 {
   int status;
@@ -275,21 +290,8 @@ static int handle_script(lua_State *L, char **argx)
     fname = NULL;  /* stdin */
   status = luaL_loadfile(L, fname);
   if (status == LUA_OK) {
-    /* Fetch args from arg table. LUA_INIT or -e might have changed them. */
-    int narg = 0;
-    lua_getglobal(L, "arg");
-    if (lua_istable(L, -1)) {
-      do {
-	narg++;
-	lua_rawgeti(L, -narg, narg);
-      } while (!lua_isnil(L, -1));
-      lua_pop(L, 1);
-      lua_remove(L, -narg);
-      narg--;
-    } else {
-      lua_pop(L, 1);
-    }
-    status = docall(L, narg, 0);
+    int narg = pushargs(L);  /* push arguments to script */
+    status = docall(L, narg, LUA_MULTRET);
   }
   return report(L, status);
 }
