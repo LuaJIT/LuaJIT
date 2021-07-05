@@ -26,6 +26,8 @@
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
 
+int luaJIT_compat52 = LJ_52;
+
 /* -- Common helper functions --------------------------------------------- */
 
 #define lj_checkapi_slot(idx) \
