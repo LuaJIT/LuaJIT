@@ -126,6 +126,7 @@ LJLIB_CF(buffer_method_put)
       lj_strfmt_putfnum((SBuf *)sbx, STRFMT_G14, numV(o));
     } else if (tvisbuf(o)) {
       SBufExt *sbx2 = bufV(o);
+      if (sbx2 == sbx) lj_err_arg(L, arg+1, LJ_ERR_BUFFER_SELF);
       lj_buf_putmem((SBuf *)sbx, sbx2->r, sbufxlen(sbx2));
     } else if (!mo && !tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
       /* Call __tostring metamethod inline. */

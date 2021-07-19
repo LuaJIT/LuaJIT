@@ -431,7 +431,7 @@ int lj_strfmt_putarg(lua_State *L, SBuf *sb, int arg, int retry)
 	MSize len;
 	const char *s;
 	cTValue *mo;
-	if (LJ_UNLIKELY(!tvisstr(o)) && retry >= 0 &&
+	if (LJ_UNLIKELY(!tvisstr(o) && !tvisbuf(o)) && retry >= 0 &&
 	    !tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
 	  /* Call __tostring metamethod once. */
 	  copyTV(L, L->top++, mo);
@@ -447,10 +447,13 @@ int lj_strfmt_putarg(lua_State *L, SBuf *sb, int arg, int retry)
 	if (LJ_LIKELY(tvisstr(o))) {
 	  len = strV(o)->len;
 	  s = strVdata(o);
+#if LJ_HASBUFFER
 	} else if (tvisbuf(o)) {
 	  SBufExt *sbx = bufV(o);
+	  if (sbx == (SBufExt *)sb) lj_err_arg(L, arg+1, LJ_ERR_BUFFER_SELF);
 	  len = sbufxlen(sbx);
 	  s = sbx->r;
+#endif
 	} else {
 	  GCstr *str = lj_strfmt_obj(L, o);
 	  len = str->len;
