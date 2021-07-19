@@ -256,9 +256,9 @@ static void LJ_FASTCALL recff_select(jit_State *J, RecordFFData *rd)
       ptrdiff_t n = (ptrdiff_t)J->maxslot;
       if (start < 0) start += n;
       else if (start > n) start = n;
-      rd->nres = n - start;
       if (start >= 1) {
 	ptrdiff_t i;
+	rd->nres = n - start;
 	for (i = 0; i < n - start; i++)
 	  J->base[i] = J->base[start+i];
       }  /* else: Interpreter will throw. */
