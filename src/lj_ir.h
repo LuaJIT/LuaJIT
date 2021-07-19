@@ -232,10 +232,10 @@ IRFLDEF(FLENUM)
 #define IRSLOAD_READONLY	0x10	/* Read-only, omit slot store. */
 #define IRSLOAD_INHERIT		0x20	/* Inherited by exits/side traces. */
 
-/* XLOAD mode, stored in op2. */
-#define IRXLOAD_READONLY	1	/* Load from read-only data. */
-#define IRXLOAD_VOLATILE	2	/* Load from volatile data. */
-#define IRXLOAD_UNALIGNED	4	/* Unaligned load. */
+/* XLOAD mode bits, stored in op2. */
+#define IRXLOAD_READONLY	0x01	/* Load from read-only data. */
+#define IRXLOAD_VOLATILE	0x02	/* Load from volatile data. */
+#define IRXLOAD_UNALIGNED	0x04	/* Unaligned load. */
 
 /* BUFHDR mode, stored in op2. */
 #define IRBUFHDR_RESET		0	/* Reset buffer. */
