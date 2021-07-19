@@ -621,7 +621,7 @@ static TRef crec_ct_tv(jit_State *J, CType *d, TRef dp, TRef sp, cTValue *sval)
       emitir(IRTGI(IR_EQ), tr, lj_ir_kint(J, ud->udtype));
       sp = emitir(IRT(IR_FLOAD, IRT_PTR), sp,
 		  ud->udtype == UDTYPE_IO_FILE ? IRFL_UDATA_FILE :
-						 IRFL_UDATA_BUF_R);
+						 IRFL_SBUF_R);
     } else {
       sp = emitir(IRT(IR_ADD, IRT_PTR), sp, lj_ir_kintp(J, sizeof(GCudata)));
     }
@@ -1918,9 +1918,24 @@ TRef lj_crecord_loadiu64(jit_State *J, TRef tr, cTValue *o)
   CTypeID id = argv2cdata(J, tr, o)->ctypeid;
   if (!(id == CTID_INT64 || id == CTID_UINT64))
     lj_trace_err(J, LJ_TRERR_BADTYPE);
+  lj_needsplit(J);
   return emitir(IRT(IR_FLOAD, id == CTID_INT64 ? IRT_I64 : IRT_U64), tr,
 		IRFL_CDATA_INT64);
 }
+
+#if LJ_HASBUFFER
+TRef lj_crecord_topcvoid(jit_State *J, TRef tr, cTValue *o)
+{
+  CTState *cts = ctype_ctsG(J2G(J));
+  if (!tref_iscdata(tr)) lj_trace_err(J, LJ_TRERR_BADTYPE);
+  return crec_ct_tv(J, ctype_get(cts, CTID_P_CVOID), 0, tr, o);
+}
+
+TRef lj_crecord_topuint8(jit_State *J, TRef tr)
+{
+  return emitir(IRTG(IR_CNEWI, IRT_CDATA), lj_ir_kint(J, CTID_P_UINT8), tr);
+}
+#endif
 
 #undef IR
 #undef emitir

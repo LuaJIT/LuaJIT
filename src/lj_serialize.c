@@ -18,6 +18,9 @@
 #include "lj_ctype.h"
 #include "lj_cdata.h"
 #endif
+#if LJ_HASJIT
+#include "lj_ir.h"
+#endif
 #include "lj_serialize.h"
 
 /* Tags for internal serialization format. */
@@ -400,6 +403,9 @@ eob:
   return NULL;
 }
 
+/* -- External serialization API ------------------------------------------ */
+
+/* Encode to buffer. */
 SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o)
 {
   sbx->depth = LJ_SERIALIZE_DEPTH;
@@ -407,10 +413,63 @@ SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o)
   return sbx;
 }
 
-SBufExt * LJ_FASTCALL lj_serialize_get(SBufExt *sbx, TValue *o)
+/* Decode from buffer. */
+char * LJ_FASTCALL lj_serialize_get(SBufExt *sbx, TValue *o)
 {
-  sbx->r = serialize_get(sbx->r, sbx, o);
-  return sbx;
+  return serialize_get(sbx->r, sbx, o);
 }
+
+/* Stand-alone encoding, borrowing from global temporary buffer. */
+GCstr * LJ_FASTCALL lj_serialize_encode(lua_State *L, cTValue *o)
+{
+  SBufExt sbx;
+  char *w;
+  memset(&sbx, 0, sizeof(SBufExt));
+  lj_bufx_set_borrow(L, &sbx, &G(L)->tmpbuf);
+  sbx.depth = LJ_SERIALIZE_DEPTH;
+  w = serialize_put(sbx.w, &sbx, o);
+  return lj_str_new(L, sbx.b, (size_t)(w - sbx.b));
+}
+
+/* Stand-alone decoding, copy-on-write from string. */
+void lj_serialize_decode(lua_State *L, TValue *o, GCstr *str)
+{
+  SBufExt sbx;
+  char *r;
+  memset(&sbx, 0, sizeof(SBufExt));
+  lj_bufx_set_cow(L, &sbx, strdata(str), str->len);
+  /* No need to set sbx.cowref here. */
+  r = lj_serialize_get(&sbx, o);
+  if (r != sbx.w) lj_err_caller(L, LJ_ERR_BUFFER_LEFTOV);
+}
+
+#if LJ_HASJIT
+/* Peek into buffer to find the result IRType for specialization purposes. */
+LJ_FUNC MSize LJ_FASTCALL lj_serialize_peektype(SBufExt *sbx)
+{
+  uint32_t tp;
+  if (serialize_ru124(sbx->r, sbx->w, &tp)) {
+    /* This must match the handling of all tags in the decoder above. */
+    switch (tp) {
+    case SER_TAG_NIL: return IRT_NIL;
+    case SER_TAG_FALSE: return IRT_FALSE;
+    case SER_TAG_TRUE: return IRT_TRUE;
+    case SER_TAG_NULL: case SER_TAG_LIGHTUD32: case SER_TAG_LIGHTUD64:
+      return IRT_LIGHTUD;
+    case SER_TAG_INT: return LJ_DUALNUM ? IRT_INT : IRT_NUM;
+    case SER_TAG_NUM: return IRT_NUM;
+    case SER_TAG_TAB: case SER_TAG_TAB+1: case SER_TAG_TAB+2:
+    case SER_TAG_TAB+3: case SER_TAG_TAB+4: case SER_TAG_TAB+5:
+      return IRT_TAB;
+    case SER_TAG_INT64: case SER_TAG_UINT64: case SER_TAG_COMPLEX:
+      return IRT_CDATA;
+    case SER_TAG_DICT:
+    default:
+      return IRT_STR;
+    }
+  }
+  return IRT_NIL;  /* Will fail on actual decode. */
+}
+#endif
 
 #endif

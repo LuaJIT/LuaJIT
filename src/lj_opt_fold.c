@@ -578,6 +578,9 @@ LJFOLDF(kfold_strcmp)
 ** The compromise is to declare them as loads, emit them like stores and
 ** CSE whole chains manually when the BUFSTR is to be emitted. Any chain
 ** fragments left over from CSE are eliminated by DCE.
+**
+** The string buffer methods emit a USE instead of a BUFSTR to keep the
+** chain alive.
 */
 
 LJFOLD(BUFHDR any any)
@@ -586,18 +589,38 @@ LJFOLDF(bufhdr_merge)
   return fins->op2 == IRBUFHDR_WRITE ? CSEFOLD : EMITFOLD;
 }
 
-LJFOLD(BUFPUT BUFHDR BUFSTR)
-LJFOLDF(bufput_append)
+LJFOLD(BUFPUT any BUFSTR)
+LJFOLDF(bufput_bufstr)
 {
-  /* New buffer, no other buffer op inbetween and same buffer? */
-  if ((J->flags & JIT_F_OPT_FWD) &&
-      fleft->op2 == IRBUFHDR_RESET &&
-      fleft->prev == fright->op2 &&
-      fleft->op1 == IR(fright->op2)->op1) {
-    IRRef ref = fins->op1;
-    IR(ref)->op2 = IRBUFHDR_APPEND;  /* Modify BUFHDR. */
-    IR(ref)->op1 = fright->op1;
-    return ref;
+  if ((J->flags & JIT_F_OPT_FWD)) {
+    IRRef hdr = fright->op2;
+    /* New buffer, no other buffer op inbetween and same buffer? */
+    if (fleft->o == IR_BUFHDR && fleft->op2 == IRBUFHDR_RESET &&
+	fleft->prev == hdr &&
+	fleft->op1 == IR(hdr)->op1) {
+      IRRef ref = fins->op1;
+      IR(ref)->op2 = IRBUFHDR_APPEND;  /* Modify BUFHDR. */
+      IR(ref)->op1 = fright->op1;
+      return ref;
+    }
+    /* Replay puts to global temporary buffer. */
+    if (IR(hdr)->op2 == IRBUFHDR_RESET) {
+      IRIns *ir = IR(fright->op1);
+      /* For now only handle single string.reverse .lower .upper .rep. */
+      if (ir->o == IR_CALLL &&
+	  ir->op2 >= IRCALL_lj_buf_putstr_reverse &&
+	  ir->op2 <= IRCALL_lj_buf_putstr_rep) {
+	IRIns *carg1 = IR(ir->op1);
+	if (ir->op2 == IRCALL_lj_buf_putstr_rep) {
+	  IRIns *carg2 = IR(carg1->op1);
+	  if (carg2->op1 == hdr) {
+	    return lj_ir_call(J, ir->op2, fins->op1, carg2->op2, carg1->op2);
+	  }
+	} else if (carg1->op1 == hdr) {
+	  return lj_ir_call(J, ir->op2, fins->op1, carg1->op2);
+	}
+      }
+    }
   }
   return EMITFOLD;  /* Always emit, CSE later. */
 }
@@ -2283,6 +2306,18 @@ LJFOLDF(fload_str_len_tostr)
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD) && fleft->op2 == IRTOSTR_CHAR)
     return INTFOLD(1);
   return NEXTFOLD;
+}
+
+LJFOLD(FLOAD any IRFL_SBUF_W)
+LJFOLD(FLOAD any IRFL_SBUF_E)
+LJFOLD(FLOAD any IRFL_SBUF_B)
+LJFOLD(FLOAD any IRFL_SBUF_L)
+LJFOLD(FLOAD any IRFL_SBUF_REF)
+LJFOLD(FLOAD any IRFL_SBUF_R)
+LJFOLDF(fload_sbuf)
+{
+  TRef tr = lj_opt_fwd_fload(J);
+  return lj_opt_fwd_sbuf(J, tref_ref(tr)) ? tr : EMITFOLD;
 }
 
 /* The C type ID of cdata objects is immutable. */

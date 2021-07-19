@@ -30,6 +30,7 @@
 #endif
 #include "lj_vm.h"
 #include "lj_strscan.h"
+#include "lj_serialize.h"
 #include "lj_strfmt.h"
 #include "lj_prng.h"
 

@@ -1445,6 +1445,16 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 	return 0;  /* No result yet. */
       }
     }
+#if LJ_HASBUFFER
+    /* The index table of buffer objects is treated as immutable. */
+    if (ix->mt == TREF_NIL && !ix->val &&
+	tref_isudata(ix->tab) && udataV(&ix->tabv)->udtype == UDTYPE_BUFFER &&
+	tref_istab(ix->mobj) && tref_isstr(ix->key) && tref_isk(ix->key)) {
+      cTValue *val = lj_tab_getstr(tabV(&ix->mobjv), strV(&ix->keyv));
+      TRef tr = lj_record_constify(J, val);
+      if (tr) return tr;  /* Specialize to the value, i.e. a method. */
+    }
+#endif
     /* Otherwise retry lookup with metaobject. */
     ix->tab = ix->mobj;
     copyTV(J->L, &ix->tabv, &ix->mobjv);

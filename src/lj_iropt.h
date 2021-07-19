@@ -124,6 +124,7 @@ LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_alen(jit_State *J);
 LJ_FUNC TRef LJ_FASTCALL lj_opt_fwd_hrefk(jit_State *J);
 LJ_FUNC int LJ_FASTCALL lj_opt_fwd_href_nokey(jit_State *J);
 LJ_FUNC int LJ_FASTCALL lj_opt_fwd_tptr(jit_State *J, IRRef lim);
+LJ_FUNC int LJ_FASTCALL lj_opt_fwd_sbuf(jit_State *J, IRRef lim);
 LJ_FUNC int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref);
 
 /* Dead-store elimination. */

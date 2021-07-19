@@ -205,10 +205,15 @@ IRFPMDEF(FPMENUM)
   _(UDATA_META,	offsetof(GCudata, metatable)) \
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
-  _(UDATA_BUF_R, sizeof(GCudata) + offsetof(SBufExt, r)) \
+  _(SBUF_W,	sizeof(GCudata) + offsetof(SBufExt, w)) \
+  _(SBUF_E,	sizeof(GCudata) + offsetof(SBufExt, e)) \
+  _(SBUF_B,	sizeof(GCudata) + offsetof(SBufExt, b)) \
+  _(SBUF_L,	sizeof(GCudata) + offsetof(SBufExt, L)) \
+  _(SBUF_REF,	sizeof(GCudata) + offsetof(SBufExt, cowref)) \
+  _(SBUF_R,	sizeof(GCudata) + offsetof(SBufExt, r)) \
   _(CDATA_CTYPEID, offsetof(GCcdata, ctypeid)) \
   _(CDATA_PTR,	sizeof(GCcdata)) \
-  _(CDATA_INT, sizeof(GCcdata)) \
+  _(CDATA_INT,	sizeof(GCcdata)) \
   _(CDATA_INT64, sizeof(GCcdata)) \
   _(CDATA_INT64_4, sizeof(GCcdata) + 4)
 
