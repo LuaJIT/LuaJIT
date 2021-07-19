@@ -193,6 +193,9 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow)
 	  return ra_allock(as, ofs-(int16_t)ofs, allow);
 	}
       }
+    } else if (ir->o == IR_TMPREF) {
+      *ofsp = (int32_t)(offsetof(global_State, tmptv)-32768);
+      return RID_JGL;
     }
   }
   *ofsp = 0;
@@ -839,34 +842,63 @@ static void asm_tvstore64(ASMState *as, Reg base, int32_t ofs, IRRef ref)
 #endif
 
 /* Get pointer to TValue. */
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 {
-  IRIns *ir = IR(ref);
-  if (irt_isnum(ir->t)) {
-    if (irref_isk(ref))  /* Use the number constant itself as a TValue. */
-      ra_allockreg(as, igcptr(ir_knum(ir)), dest);
-    else  /* Otherwise force a spill and use the spill slot. */
-      emit_tsi(as, MIPSI_AADDIU, dest, RID_SP, ra_spill(as, ir));
-  } else {
-    /* Otherwise use g->tmptv to hold the TValue. */
-#if LJ_32
-    RegSet allow = rset_exclude(RSET_GPR, dest);
-    Reg type;
-    emit_tsi(as, MIPSI_ADDIU, dest, RID_JGL, (int32_t)(offsetof(global_State, tmptv)-32768));
-    if (!irt_ispri(ir->t)) {
-      Reg src = ra_alloc1(as, ref, allow);
-      emit_setgl(as, src, tmptv.gcr);
-    }
-    if (LJ_SOFTFP && (ir+1)->o == IR_HIOP)
-      type = ra_alloc1(as, ref+1, allow);
-    else
-      type = ra_allock(as, (int32_t)irt_toitype(ir->t), allow);
-    emit_setgl(as, type, tmptv.it);
+  int32_t tmpofs = (int32_t)(offsetof(global_State, tmptv)-32768);
+  if ((mode & IRTMPREF_IN1)) {
+    IRIns *ir = IR(ref);
+    if (irt_isnum(ir->t)) {
+      if ((mode & IRTMPREF_OUT1)) {
+#if LJ_SOFTFP
+	emit_tsi(as, MIPSI_AADDIU, dest, RID_JGL, tmpofs);
+#if LJ_64
+	emit_setgl(as, ra_alloc1(as, ref, RSET_GPR), tmptv.u64);
 #else
-    asm_tvstore64(as, dest, 0, ref);
-    emit_tsi(as, MIPSI_DADDIU, dest, RID_JGL,
-	     (int32_t)(offsetof(global_State, tmptv)-32768));
+	lj_assertA(irref_isk(ref), "unsplit FP op");
+	emit_setgl(as,
+		   ra_allock(as, (int32_t)ir_knum(ir)->u32.lo, RSET_GPR),
+		   tmptv.u32.lo);
+	emit_setgl(as,
+		   ra_allock(as, (int32_t)ir_knum(ir)->u32.hi, RSET_GPR),
+		   tmptv.u32.hi);
 #endif
+#else
+	Reg src = ra_alloc1(as, ref, RSET_FPR);
+	emit_tsi(as, MIPSI_AADDIU, dest, RID_JGL, tmpofs);
+	emit_tsi(as, MIPSI_SDC1, (src & 31),  RID_JGL, tmpofs);
+#endif
+      } else if (irref_isk(ref)) {
+	/* Use the number constant itself as a TValue. */
+	ra_allockreg(as, igcptr(ir_knum(ir)), dest);
+      } else {
+#if LJ_SOFTFP
+	lj_assertA(0, "unsplit FP op");
+#else
+	/* Otherwise force a spill and use the spill slot. */
+	emit_tsi(as, MIPSI_AADDIU, dest, RID_SP, ra_spill(as, ir));
+#endif
+      }
+    } else {
+      /* Otherwise use g->tmptv to hold the TValue. */
+#if LJ_32
+      Reg type;
+      emit_tsi(as, MIPSI_ADDIU, dest, RID_JGL, tmpofs);
+      if (!irt_ispri(ir->t)) {
+	Reg src = ra_alloc1(as, ref, RSET_GPR);
+	emit_setgl(as, src, tmptv.gcr);
+      }
+      if (LJ_SOFTFP && (ir+1)->o == IR_HIOP && !irt_isnil((ir+1)->t))
+	type = ra_alloc1(as, ref+1, RSET_GPR);
+      else
+	type = ra_allock(as, (int32_t)irt_toitype(ir->t), RSET_GPR);
+      emit_setgl(as, type, tmptv.it);
+#else
+      asm_tvstore64(as, dest, 0, ref);
+      emit_tsi(as, MIPSI_DADDIU, dest, RID_JGL, tmpofs);
+#endif
+    }
+  } else {
+    emit_tsi(as, MIPSI_AADDIU, dest, RID_JGL, tmpofs);
   }
 }
 
@@ -2415,7 +2447,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
       ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
 #if LJ_SOFTFP
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR:
+  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
 #endif
   case IR_CNEWI:
     /* Nothing to do here. Handled by lo op itself. */

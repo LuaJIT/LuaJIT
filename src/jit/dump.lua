@@ -287,6 +287,7 @@ local litname = {
   ["FLOAD "] = vmdef.irfield,
   ["FREF  "] = vmdef.irfield,
   ["FPMATH"] = vmdef.irfpm,
+  ["TMPREF"] = { [0] = "", "IN", "OUT", "INOUT", "", "", "OUT2", "INOUT2" },
   ["BUFHDR"] = { [0] = "RESET", "APPEND" },
   ["TOSTR "] = { [0] = "INT", "NUM", "CHAR" },
 }

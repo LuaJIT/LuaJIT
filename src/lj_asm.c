@@ -1144,7 +1144,7 @@ static void asm_gcstep(ASMState *as, IRIns *ir)
 
 /* -- Buffer operations --------------------------------------------------- */
 
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode);
 
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
@@ -1218,7 +1218,7 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   if (args[1] == ASMREF_TMP1) {
     Reg tmp = ra_releasetmp(as, ASMREF_TMP1);
     if (kchar == -129)
-      asm_tvptr(as, tmp, irs->op1);
+      asm_tvptr(as, tmp, irs->op1, IRTMPREF_IN1);
     else
       ra_allockreg(as, kchar, tmp);
   }
@@ -1256,7 +1256,7 @@ static void asm_tostr(ASMState *as, IRIns *ir)
   asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);
   if (ir->op2 == IRTOSTR_NUM)
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1, IRTMPREF_IN1);
 }
 
 #if LJ_32 && LJ_HASFFI && !LJ_SOFTFP && !LJ_TARGET_X86
@@ -1303,7 +1303,13 @@ static void asm_newref(ASMState *as, IRIns *ir)
   args[2] = ASMREF_TMP1;  /* cTValue *key */
   asm_setupresult(as, ir, ci);  /* TValue * */
   asm_gencall(as, ci, args);
-  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2, IRTMPREF_IN1);
+}
+
+static void asm_tmpref(ASMState *as, IRIns *ir)
+{
+  Reg r = ra_dest(as, ir, RSET_GPR);
+  asm_tvptr(as, r, ir->op1, ir->op2);
 }
 
 static void asm_lref(ASMState *as, IRIns *ir)
@@ -1785,6 +1791,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_NEWREF: asm_newref(as, ir); break;
   case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
   case IR_FREF: asm_fref(as, ir); break;
+  case IR_TMPREF: asm_tmpref(as, ir); break;
   case IR_STRREF: asm_strref(as, ir); break;
   case IR_LREF: asm_lref(as, ir); break;
 
@@ -2192,6 +2199,10 @@ static void asm_setup_regsp(ASMState *as)
       ir->prev = (uint16_t)REGSP_HINT((rload & 15));
       rload = lj_ror(rload, 4);
       continue;
+    case IR_TMPREF:
+      if ((ir->op2 & IRTMPREF_OUT2) && as->evenspill < 4)
+	as->evenspill = 4;  /* TMPREF OUT2 needs two TValues on the stack. */
+      break;
 #endif
     case IR_CALLXS: {
       CCallInfo ci;

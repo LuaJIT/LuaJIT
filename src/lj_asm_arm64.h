@@ -198,6 +198,9 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow,
 	  return RID_GL;
 	}
       }
+    } else if (ir->o == IR_TMPREF) {
+      *ofsp = (int32_t)glofs(as, &J2G(as->J)->tmptv);
+      return RID_GL;
     }
   }
   *ofsp = 0;
@@ -675,22 +678,23 @@ static void asm_tvstore64(ASMState *as, Reg base, int32_t ofs, IRRef ref)
 }
 
 /* Get pointer to TValue. */
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 {
-  IRIns *ir = IR(ref);
-  if (irt_isnum(ir->t)) {
-    if (irref_isk(ref)) {
-      /* Use the number constant itself as a TValue. */
-      ra_allockreg(as, i64ptr(ir_knum(ir)), dest);
+  if ((mode & IRTMPREF_IN1)) {
+    IRIns *ir = IR(ref);
+    if (irt_isnum(ir->t)) {
+      if (irref_isk(ref) && !(mode & IRTMPREF_OUT1)) {
+	/* Use the number constant itself as a TValue. */
+	ra_allockreg(as, i64ptr(ir_knum(ir)), dest);
+	return;
+      }
+      emit_lso(as, A64I_STRd, (ra_alloc1(as, ref, RSET_FPR) & 31), dest, 0);
     } else {
-      /* Otherwise force a spill and use the spill slot. */
-      emit_opk(as, A64I_ADDx, dest, RID_SP, ra_spill(as, ir), RSET_GPR);
+      asm_tvstore64(as, dest, 0, ref);
     }
-  } else {
-    /* Otherwise use g->tmptv to hold the TValue. */
-    asm_tvstore64(as, dest, 0, ref);
-    emit_dn(as, A64I_ADDx^emit_isk12(glofs(as, &J2G(as->J)->tmptv)), dest, RID_GL);
   }
+  /* g->tmptv holds the TValue(s). */
+  emit_dn(as, A64I_ADDx^emit_isk12(glofs(as, &J2G(as->J)->tmptv)), dest, RID_GL);
 }
 
 static void asm_aref(ASMState *as, IRIns *ir)

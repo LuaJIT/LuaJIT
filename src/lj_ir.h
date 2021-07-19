@@ -95,6 +95,7 @@
   _(UREFO,	LW, ref, lit) \
   _(UREFC,	LW, ref, lit) \
   _(FREF,	R , ref, lit) \
+  _(TMPREF,	S , ref, lit) \
   _(STRREF,	N , ref, ref) \
   _(LREF,	L , ___, ___) \
   \
@@ -217,6 +218,11 @@ IRFLDEF(FLENUM)
 #undef FLENUM
   IRFL__MAX
 } IRFieldID;
+
+/* TMPREF mode bits, stored in op2. */
+#define IRTMPREF_IN1		0x01	/* First input value. */
+#define IRTMPREF_OUT1		0x02	/* First output value. */
+#define IRTMPREF_OUT2		0x04	/* Second output value. */
 
 /* SLOAD mode bits, stored in op2. */
 #define IRSLOAD_PARENT		0x01	/* Coalesce with parent trace. */
