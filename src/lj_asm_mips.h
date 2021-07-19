@@ -465,6 +465,27 @@ static void asm_retf(ASMState *as, IRIns *ir)
   emit_tsi(as, MIPSI_AL, RID_TMP, base, -8);
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, RID_TMP, sb, offsetof(SBuf, L));
+  if ((as->flags & JIT_F_MIPSXXR2)) {
+    emit_tsml(as, LJ_64 ? MIPSI_DINS : MIPSI_INS, RID_TMP, tmp,
+	      lj_fls(SBUF_MASK_FLAG), 0);
+  } else {
+    emit_dst(as, MIPSI_OR, RID_TMP, RID_TMP, tmp);
+    emit_tsi(as, MIPSI_ANDI, tmp, tmp, SBUF_MASK_FLAG);
+  }
+  emit_getgl(as, RID_TMP, cur_L);
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 #if !LJ_SOFTFP

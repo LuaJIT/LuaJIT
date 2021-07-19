@@ -1145,6 +1145,9 @@ static void asm_gcstep(ASMState *as, IRIns *ir)
 /* -- Buffer operations --------------------------------------------------- */
 
 static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode);
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb);
+#endif
 
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
@@ -1172,6 +1175,11 @@ static void asm_bufhdr(ASMState *as, IRIns *ir)
     }
     break;
     }
+#if LJ_HASBUFFER
+  case IRBUFHDR_WRITE:
+    asm_bufhdr_write(as, sb);
+    break;
+#endif
   default: lj_assertA(0, "bad BUFHDR op2 %d", ir->op2); break;
   }
 #if LJ_TARGET_X86ORX64

@@ -501,6 +501,30 @@ static void asm_retf(ASMState *as, IRIns *ir)
   emit_lso(as, ARMI_LDR, RID_TMP, base, -4);
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  int32_t addr = i32ptr((void *)&J2G(as->J)->cur_L);
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, RID_TMP, sb, offsetof(SBuf, L));
+  if ((as->flags & JIT_F_ARMV6T2)) {
+    emit_dnm(as, ARMI_BFI, RID_TMP, lj_fls(SBUF_MASK_FLAG), tmp);
+  } else {
+    emit_dnm(as, ARMI_ORR, RID_TMP, RID_TMP, tmp);
+    emit_dn(as, ARMI_AND|ARMI_K12|SBUF_MASK_FLAG, tmp, tmp);
+  }
+  emit_lso(as, ARMI_LDR, RID_TMP,
+	   ra_allock(as, (addr & ~4095),
+		     rset_exclude(rset_exclude(RSET_GPR, sb), tmp)),
+	   (addr & 4095));
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 #if !LJ_SOFTFP

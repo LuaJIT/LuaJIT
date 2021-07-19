@@ -791,6 +791,21 @@ static void asm_retf(ASMState *as, IRIns *ir)
 #endif
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+  emit_opgl(as, XO_ARITH(XOg_OR), tmp|REX_GC64, cur_L);
+  emit_gri(as, XG_ARITHi(XOg_AND), tmp, SBUF_MASK_FLAG);
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
