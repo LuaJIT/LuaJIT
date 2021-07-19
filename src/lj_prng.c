@@ -173,7 +173,7 @@ int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs)
 
 #elif LJ_TARGET_PS4 || LJ_TARGET_PSVITA
 
-  if (sceRandomGetRandomNumber(rs->u, sizeof(rs->u) == 0)
+  if (sceRandomGetRandomNumber(rs->u, sizeof(rs->u)) == 0)
     goto ok;
 
 #elif LJ_TARGET_UWP || LJ_TARGET_XBOXONE
