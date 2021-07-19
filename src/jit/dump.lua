@@ -278,7 +278,9 @@ local litname = {
     s = irtype[band(shr(mode, 5), 31)].."."..s
     if band(mode, 0x800) ~= 0 then s = s.." sext" end
     local c = shr(mode, 12)
-    if c == 2 then s = s.." index" elseif c == 3 then s = s.." check" end
+    if c == 1 then s = s.." none"
+    elseif c == 2 then s = s.." index"
+    elseif c == 3 then s = s.." check" end
     t[mode] = s
     return s
   end}),

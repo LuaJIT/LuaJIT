@@ -250,6 +250,7 @@ IRFLDEF(FLENUM)
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
+#define IRCONV_NONE   IRCONV_ANY	/* INT|*64 no conv, but change type. */
 
 /* TOSTR mode, stored in op2. */
 #define IRTOSTR_INT		0	/* Convert integer to string. */

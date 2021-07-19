@@ -924,7 +924,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       }
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      if (st64) {
+      if (st64 && !(ir->op2 & IRCONV_NONE)) {
 	Reg left = asm_fuseload(as, lref, RSET_GPR);
 	/* This is either a 32 bit reg/reg mov which zeroes the hiword
 	** or a load of the loword from a 64 bit address.
