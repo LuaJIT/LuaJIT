@@ -514,6 +514,7 @@ LJFOLDF(kfold_snew_kptr)
 }
 
 LJFOLD(SNEW any KINT)
+LJFOLD(XSNEW any KINT)
 LJFOLDF(kfold_snew_empty)
 {
   if (fright->i == 0)
@@ -1301,6 +1302,10 @@ LJFOLD(CONV SUB IRCONV_U32_U64)
 LJFOLD(CONV MUL IRCONV_U32_U64)
 LJFOLDF(simplify_conv_narrow)
 {
+#if LJ_64
+  UNUSED(J);
+  return NEXTFOLD;
+#else
   IROp op = (IROp)fleft->o;
   IRType t = irt_type(fins->t);
   IRRef op1 = fleft->op1, op2 = fleft->op2, mode = fins->op2;
@@ -1311,6 +1316,7 @@ LJFOLDF(simplify_conv_narrow)
   fins->op1 = op1;
   fins->op2 = op2;
   return RETRYFOLD;
+#endif
 }
 
 /* Special CSE rule for CONV. */
