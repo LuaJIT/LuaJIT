@@ -586,11 +586,11 @@ LJFOLDF(bufput_append)
 {
   /* New buffer, no other buffer op inbetween and same buffer? */
   if ((J->flags & JIT_F_OPT_FWD) &&
-      !(fleft->op2 & IRBUFHDR_APPEND) &&
+      fleft->op2 == IRBUFHDR_RESET &&
       fleft->prev == fright->op2 &&
       fleft->op1 == IR(fright->op2)->op1) {
     IRRef ref = fins->op1;
-    IR(ref)->op2 = (fleft->op2 | IRBUFHDR_APPEND);  /* Modify BUFHDR. */
+    IR(ref)->op2 = IRBUFHDR_APPEND;  /* Modify BUFHDR. */
     IR(ref)->op1 = fright->op1;
     return ref;
   }
@@ -626,14 +626,14 @@ LJFOLDF(bufstr_kfold_cse)
 	     "bad buffer constructor IR op %d", fleft->o);
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fleft->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      if (fleft->op2 == IRBUFHDR_RESET)  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
       fins->op1 = fleft->op1;
       fins->op2 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else if (fleft->o == IR_BUFPUT) {
       IRIns *irb = IR(fleft->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+      if (irb->o == IR_BUFHDR && irb->op2 == IRBUFHDR_RESET)
 	return fleft->op2;  /* Shortcut for a single put operation. */
     }
   }
@@ -646,7 +646,7 @@ LJFOLDF(bufstr_kfold_cse)
 	lj_assertJ(ira->o == IR_BUFHDR || ira->o == IR_BUFPUT ||
 		   ira->o == IR_CALLL || ira->o == IR_CARG,
 		   "bad buffer constructor IR op %d", ira->o);
-	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
+	if (ira->o == IR_BUFHDR && ira->op2 == IRBUFHDR_RESET)
 	  return ref;  /* CSE succeeded. */
 	if (ira->o == IR_CALLL && ira->op2 == IRCALL_lj_buf_puttab)
 	  break;

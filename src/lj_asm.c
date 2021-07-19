@@ -1149,24 +1149,30 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode);
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
   Reg sb = ra_dest(as, ir, RSET_GPR);
-  if ((ir->op2 & IRBUFHDR_APPEND)) {
+  switch (ir->op2) {
+  case IRBUFHDR_RESET: {
+    Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+    IRIns irbp;
+    irbp.ot = IRT(0, IRT_PTR);  /* Buffer data pointer type. */
+    emit_storeofs(as, &irbp, tmp, sb, offsetof(SBuf, w));
+    emit_loadofs(as, &irbp, tmp, sb, offsetof(SBuf, b));
+    break;
+    }
+  case IRBUFHDR_APPEND: {
     /* Rematerialize const buffer pointer instead of likely spill. */
     IRIns *irp = IR(ir->op1);
     if (!(ra_hasreg(irp->r) || irp == ir-1 ||
 	  (irp == ir-2 && !ra_used(ir-1)))) {
-      while (!(irp->o == IR_BUFHDR && !(irp->op2 & IRBUFHDR_APPEND)))
+      while (!(irp->o == IR_BUFHDR && irp->op2 == IRBUFHDR_RESET))
 	irp = IR(irp->op1);
       if (irref_isk(irp->op1)) {
 	ra_weak(as, ra_allocref(as, ir->op1, RSET_GPR));
 	ir = irp;
       }
     }
-  } else {
-    Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
-    IRIns irbp;
-    irbp.ot = IRT(0, IRT_PTR);  /* Buffer data pointer type. */
-    emit_storeofs(as, &irbp, tmp, sb, offsetof(SBuf, w));
-    emit_loadofs(as, &irbp, tmp, sb, offsetof(SBuf, b));
+    break;
+    }
+  default: lj_assertA(0, "bad BUFHDR op2 %d", ir->op2); break;
   }
 #if LJ_TARGET_X86ORX64
   ra_left(as, sb, ir->op1);
