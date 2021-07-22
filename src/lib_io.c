@@ -293,8 +293,14 @@ static int io_file_lines(lua_State *L)
 
 LJLIB_CF(io_method_close)
 {
-  IOFileUD *iof = L->base < L->top ? io_tofile(L) :
-		  io_stdfile(L, GCROOT_IO_OUTPUT);
+  IOFileUD *iof;
+  if (L->base < L->top) {
+    iof = io_tofile(L);
+  } else {
+    iof = IOSTDF_IOF(L, GCROOT_IO_OUTPUT);
+    if (iof->fp == NULL)
+      lj_err_caller(L, LJ_ERR_IOCLFL);
+  }
   return io_file_close(L, iof);
 }
 
