@@ -2041,7 +2041,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ld TMP0, SBUF:CARG1->b
   |   sd L, SBUF:CARG1->L
   |   sd BASE, L->base
-  |  sd TMP0, SBUF:CARG1->p
+  |  sd TMP0, SBUF:CARG1->w
   |  call_intern extern lj_buf_putstr_ .. name
   |.  sd PC, SAVE_PC
   |  load_got lj_buf_tostr

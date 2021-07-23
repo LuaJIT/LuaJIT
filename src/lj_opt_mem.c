@@ -620,8 +620,9 @@ TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J)
 	goto doemit;
       break;  /* Otherwise continue searching. */
     case ALIAS_MUST:
-      if (store->op2 == val)  /* Same value: drop the new store. */
-	return DROPFOLD;
+      if (store->op2 == val &&
+	  !(xr->op2 >= IRFL_SBUF_W && xr->op2 <= IRFL_SBUF_R))
+	return DROPFOLD;  /* Same value: drop the new store. */
       /* Different value: try to eliminate the redundant store. */
       if (ref > J->chain[IR_LOOP]) {  /* Quick check to avoid crossing LOOP. */
 	IRIns *ir;
@@ -640,6 +641,29 @@ TRef LJ_FASTCALL lj_opt_dse_fstore(jit_State *J)
   }
 doemit:
   return EMITFOLD;  /* Otherwise we have a conflict or simply no match. */
+}
+
+/* Check whether there's no aliasing buffer op between IRFL_SBUF_*. */
+int LJ_FASTCALL lj_opt_fwd_sbuf(jit_State *J, IRRef lim)
+{
+  IRRef ref;
+  if (J->chain[IR_BUFPUT] > lim)
+    return 0;  /* Conflict. */
+  ref = J->chain[IR_CALLS];
+  while (ref > lim) {
+    IRIns *ir = IR(ref);
+    if (ir->op2 >= IRCALL_lj_strfmt_putint && ir->op2 < IRCALL_lj_buf_tostr)
+      return 0;  /* Conflict. */
+    ref = ir->prev;
+  }
+  ref = J->chain[IR_CALLL];
+  while (ref > lim) {
+    IRIns *ir = IR(ref);
+    if (ir->op2 >= IRCALL_lj_strfmt_putint && ir->op2 < IRCALL_lj_buf_tostr)
+      return 0;  /* Conflict. */
+    ref = ir->prev;
+  }
+  return 1;  /* No conflict. Can safely FOLD/CSE. */
 }
 
 /* -- XLOAD forwarding and XSTORE elimination ----------------------------- */

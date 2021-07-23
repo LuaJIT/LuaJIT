@@ -216,6 +216,16 @@ static void asm_fuseahuref(ASMState *as, IRRef ref, RegSet allow)
 #endif
       }
       break;
+    case IR_TMPREF:
+#if LJ_GC64
+      as->mrm.ofs = (int32_t)dispofs(as, &J2G(as->J)->tmptv);
+      as->mrm.base = RID_DISPATCH;
+      as->mrm.idx = RID_NONE;
+#else
+      as->mrm.ofs = igcptr(&J2G(as->J)->tmptv);
+      as->mrm.base = as->mrm.idx = RID_NONE;
+#endif
+      return;
     default:
       lj_assertA(ir->o == IR_HREF || ir->o == IR_NEWREF || ir->o == IR_UREFO ||
 		 ir->o == IR_KKPTR,
@@ -781,6 +791,21 @@ static void asm_retf(ASMState *as, IRIns *ir)
 #endif
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+  emit_opgl(as, XO_ARITH(XOg_OR), tmp|REX_GC64, cur_L);
+  emit_gri(as, XG_ARITHi(XOg_AND), tmp, SBUF_MASK_FLAG);
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
@@ -924,7 +949,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       }
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      if (st64) {
+      if (st64 && !(ir->op2 & IRCONV_NONE)) {
 	Reg left = asm_fuseload(as, lref, RSET_GPR);
 	/* This is either a 32 bit reg/reg mov which zeroes the hiword
 	** or a load of the loword from a 64 bit address.
@@ -1050,47 +1075,48 @@ static void asm_strto(ASMState *as, IRIns *ir)
 /* -- Memory references --------------------------------------------------- */
 
 /* Get pointer to TValue. */
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 {
-  IRIns *ir = IR(ref);
-  if (irt_isnum(ir->t)) {
-    /* For numbers use the constant itself or a spill slot as a TValue. */
-    if (irref_isk(ref))
-      emit_loada(as, dest, ir_knum(ir));
-    else
-      emit_rmro(as, XO_LEA, dest|REX_64, RID_ESP, ra_spill(as, ir));
-  } else {
-    /* Otherwise use g->tmptv to hold the TValue. */
-#if LJ_GC64
-    if (irref_isk(ref)) {
-      TValue k;
-      lj_ir_kvalue(as->J->L, &k, ir);
-      emit_movmroi(as, dest, 4, k.u32.hi);
-      emit_movmroi(as, dest, 0, k.u32.lo);
-    } else {
-      /* TODO: 64 bit store + 32 bit load-modify-store is suboptimal. */
-      Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, dest));
-      if (irt_is64(ir->t)) {
-	emit_u32(as, irt_toitype(ir->t) << 15);
-	emit_rmro(as, XO_ARITHi, XOg_OR, dest, 4);
-      } else {
-	/* Currently, no caller passes integers that might end up here. */
-	emit_movmroi(as, dest, 4, (irt_toitype(ir->t) << 15));
+  if ((mode & IRTMPREF_IN1)) {
+    IRIns *ir = IR(ref);
+    if (irt_isnum(ir->t)) {
+      if (irref_isk(ref) && !(mode & IRTMPREF_OUT1)) {
+	/* Use the number constant itself as a TValue. */
+	emit_loada(as, dest, ir_knum(ir));
+	return;
       }
-      emit_movtomro(as, REX_64IR(ir, src), dest, 0);
-    }
+      emit_rmro(as, XO_MOVSDto, ra_alloc1(as, ref, RSET_FPR), dest, 0);
+    } else {
+#if LJ_GC64
+      if (irref_isk(ref)) {
+	TValue k;
+	lj_ir_kvalue(as->J->L, &k, ir);
+	emit_movmroi(as, dest, 4, k.u32.hi);
+	emit_movmroi(as, dest, 0, k.u32.lo);
+      } else {
+	/* TODO: 64 bit store + 32 bit load-modify-store is suboptimal. */
+	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, dest));
+	if (irt_is64(ir->t)) {
+	  emit_u32(as, irt_toitype(ir->t) << 15);
+	  emit_rmro(as, XO_ARITHi, XOg_OR, dest, 4);
+	} else {
+	  emit_movmroi(as, dest, 4, (irt_toitype(ir->t) << 15));
+	}
+	emit_movtomro(as, REX_64IR(ir, src), dest, 0);
+      }
 #else
-    if (!irref_isk(ref)) {
-      Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, dest));
-      emit_movtomro(as, REX_64IR(ir, src), dest, 0);
-    } else if (!irt_ispri(ir->t)) {
-      emit_movmroi(as, dest, 0, ir->i);
-    }
-    if (!(LJ_64 && irt_islightud(ir->t)))
-      emit_movmroi(as, dest, 4, irt_toitype(ir->t));
+      if (!irref_isk(ref)) {
+	Reg src = ra_alloc1(as, ref, rset_exclude(RSET_GPR, dest));
+	emit_movtomro(as, REX_64IR(ir, src), dest, 0);
+      } else if (!irt_ispri(ir->t)) {
+	emit_movmroi(as, dest, 0, ir->i);
+      }
+      if (!(LJ_64 && irt_islightud(ir->t)))
+	emit_movmroi(as, dest, 4, irt_toitype(ir->t));
 #endif
-    emit_loada(as, dest, &J2G(as->J)->tmptv);
+    }
   }
+  emit_loada(as, dest, &J2G(as->J)->tmptv); /* g->tmptv holds the TValue(s). */
 }
 
 static void asm_aref(ASMState *as, IRIns *ir)

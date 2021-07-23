@@ -133,9 +133,9 @@ LJ_NORET static void cp_errmsg(CPState *cp, CPToken tok, ErrMsg em, ...)
     tokstr = NULL;
   } else if (tok == CTOK_IDENT || tok == CTOK_INTEGER || tok == CTOK_STRING ||
 	     tok >= CTOK_FIRSTDECL) {
-    if (sbufP(&cp->sb) == sbufB(&cp->sb)) cp_save(cp, '$');
+    if (cp->sb.w == cp->sb.b) cp_save(cp, '$');
     cp_save(cp, '\0');
-    tokstr = sbufB(&cp->sb);
+    tokstr = cp->sb.b;
   } else {
     tokstr = cp_tok2str(cp, tok);
   }
@@ -175,7 +175,7 @@ static CPToken cp_number(CPState *cp)
   TValue o;
   do { cp_save(cp, cp->c); } while (lj_char_isident(cp_get(cp)));
   cp_save(cp, '\0');
-  fmt = lj_strscan_scan((const uint8_t *)sbufB(&cp->sb), sbuflen(&cp->sb)-1,
+  fmt = lj_strscan_scan((const uint8_t *)(cp->sb.b), sbuflen(&cp->sb)-1,
 			&o, STRSCAN_OPT_C);
   if (fmt == STRSCAN_INT) cp->val.id = CTID_INT32;
   else if (fmt == STRSCAN_U32) cp->val.id = CTID_UINT32;
@@ -279,7 +279,7 @@ static CPToken cp_string(CPState *cp)
     return CTOK_STRING;
   } else {
     if (sbuflen(&cp->sb) != 1) cp_err_token(cp, '\'');
-    cp->val.i32 = (int32_t)(char)*sbufB(&cp->sb);
+    cp->val.i32 = (int32_t)(char)*cp->sb.b;
     cp->val.id = CTID_INT32;
     return CTOK_INTEGER;
   }

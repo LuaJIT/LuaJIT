@@ -1089,7 +1089,7 @@ local function disass_ins(ctx)
 	  last = "#"..(sf+32 - immr)
 	  operands[#operands] = last
 	  x = x + 1
-	elseif x >= immr then
+	else
 	  name = a2
 	  x = x - immr + 1
 	end

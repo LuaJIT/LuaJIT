@@ -198,6 +198,9 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow,
 	  return RID_GL;
 	}
       }
+    } else if (ir->o == IR_TMPREF) {
+      *ofsp = (int32_t)glofs(as, &J2G(as->J)->tmptv);
+      return RID_GL;
     }
   }
   *ofsp = 0;
@@ -519,6 +522,21 @@ static void asm_retf(ASMState *as, IRIns *ir)
   emit_lso(as, A64I_LDRx, RID_TMP, base, -8);
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, RID_TMP, sb, offsetof(SBuf, L));
+  emit_dn(as, A64I_BFMx | A64F_IMMS(lj_fls(SBUF_MASK_FLAG)) | A64F_IMMR(0), RID_TMP, tmp);
+  emit_getgl(as, RID_TMP, cur_L);
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
@@ -602,7 +620,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	emit_dn(as, A64I_SXTW, dest, left);
       }
     } else {
-      if (st64) {
+      if (st64 && !(ir->op2 & IRCONV_NONE)) {
 	/* This is either a 32 bit reg/reg mov which zeroes the hiword
 	** or a load of the loword from a 64 bit address.
 	*/
@@ -675,22 +693,23 @@ static void asm_tvstore64(ASMState *as, Reg base, int32_t ofs, IRRef ref)
 }
 
 /* Get pointer to TValue. */
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 {
-  IRIns *ir = IR(ref);
-  if (irt_isnum(ir->t)) {
-    if (irref_isk(ref)) {
-      /* Use the number constant itself as a TValue. */
-      ra_allockreg(as, i64ptr(ir_knum(ir)), dest);
+  if ((mode & IRTMPREF_IN1)) {
+    IRIns *ir = IR(ref);
+    if (irt_isnum(ir->t)) {
+      if (irref_isk(ref) && !(mode & IRTMPREF_OUT1)) {
+	/* Use the number constant itself as a TValue. */
+	ra_allockreg(as, i64ptr(ir_knum(ir)), dest);
+	return;
+      }
+      emit_lso(as, A64I_STRd, (ra_alloc1(as, ref, RSET_FPR) & 31), dest, 0);
     } else {
-      /* Otherwise force a spill and use the spill slot. */
-      emit_opk(as, A64I_ADDx, dest, RID_SP, ra_spill(as, ir), RSET_GPR);
+      asm_tvstore64(as, dest, 0, ref);
     }
-  } else {
-    /* Otherwise use g->tmptv to hold the TValue. */
-    asm_tvstore64(as, dest, 0, ref);
-    ra_allockreg(as, i64ptr(&J2G(as->J)->tmptv), dest);
   }
+  /* g->tmptv holds the TValue(s). */
+  emit_dn(as, A64I_ADDx^emit_isk12(glofs(as, &J2G(as->J)->tmptv)), dest, RID_GL);
 }
 
 static void asm_aref(ASMState *as, IRIns *ir)
@@ -1261,17 +1280,13 @@ static void asm_tbar(ASMState *as, IRIns *ir)
 {
   Reg tab = ra_alloc1(as, ir->op1, RSET_GPR);
   Reg link = ra_scratch(as, rset_exclude(RSET_GPR, tab));
-  Reg gr = ra_allock(as, i64ptr(J2G(as->J)),
-		     rset_exclude(rset_exclude(RSET_GPR, tab), link));
   Reg mark = RID_TMP;
   MCLabel l_end = emit_label(as);
   emit_lso(as, A64I_STRx, link, tab, (int32_t)offsetof(GCtab, gclist));
   emit_lso(as, A64I_STRB, mark, tab, (int32_t)offsetof(GCtab, marked));
-  emit_lso(as, A64I_STRx, tab, gr,
-	   (int32_t)offsetof(global_State, gc.grayagain));
+  emit_setgl(as, tab, gc.grayagain);
   emit_dn(as, A64I_ANDw^emit_isk13(~LJ_GC_BLACK, 0), mark, mark);
-  emit_lso(as, A64I_LDRx, link, gr,
-	   (int32_t)offsetof(global_State, gc.grayagain));
+  emit_getgl(as, link, gc.grayagain);
   emit_cond_branch(as, CC_EQ, l_end);
   emit_n(as, A64I_TSTw^emit_isk13(LJ_GC_BLACK, 0), mark);
   emit_lso(as, A64I_LDRB, mark, tab, (int32_t)offsetof(GCtab, marked));
@@ -1291,7 +1306,7 @@ static void asm_obar(ASMState *as, IRIns *ir)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ir->op1;      /* TValue *tv      */
   asm_gencall(as, ci, args);
-  ra_allockreg(as, i64ptr(J2G(as->J)), ra_releasetmp(as, ASMREF_TMP1) );
+  emit_dm(as, A64I_MOVx, ra_releasetmp(as, ASMREF_TMP1), RID_GL);
   obj = IR(ir->op1)->r;
   tmp = ra_scratch(as, rset_exclude(allow, obj));
   emit_cond_branch(as, CC_EQ, l_end);
@@ -1804,7 +1819,7 @@ static void asm_gc_check(ASMState *as)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_step_jit];
   IRRef args[2];
   MCLabel l_end;
-  Reg tmp1, tmp2;
+  Reg tmp2;
   ra_evictset(as, RSET_SCRATCH);
   l_end = emit_label(as);
   /* Exit trace if in GCSatomic or GCSfinalize. Avoids syncing GC objects. */
@@ -1813,17 +1828,14 @@ static void asm_gc_check(ASMState *as)
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
   asm_gencall(as, ci, args);
-  tmp1 = ra_releasetmp(as, ASMREF_TMP1);
+  emit_dm(as, A64I_MOVx, ra_releasetmp(as, ASMREF_TMP1), RID_GL);
   tmp2 = ra_releasetmp(as, ASMREF_TMP2);
   emit_loadi(as, tmp2, as->gcsteps);
   /* Jump around GC step if GC total < GC threshold. */
   emit_cond_branch(as, CC_LS, l_end);
   emit_nm(as, A64I_CMPx, RID_TMP, tmp2);
-  emit_lso(as, A64I_LDRx, tmp2, tmp1,
-	   (int32_t)offsetof(global_State, gc.threshold));
-  emit_lso(as, A64I_LDRx, RID_TMP, tmp1,
-	   (int32_t)offsetof(global_State, gc.total));
-  ra_allockreg(as, i64ptr(J2G(as->J)), tmp1);
+  emit_getgl(as, tmp2, gc.threshold);
+  emit_getgl(as, RID_TMP, gc.total);
   as->gcsteps = 0;
   checkmclim(as);
 }

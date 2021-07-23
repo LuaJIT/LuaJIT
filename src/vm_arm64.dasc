@@ -1589,7 +1589,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   str BASE, L->base
   |   str PC, SAVE_PC
   |   str L, GL->tmpbuf.L
-  |  str TMP0, GL->tmpbuf.p
+  |  str TMP0, GL->tmpbuf.w
   |  bl extern lj_buf_putstr_ .. name
   |  bl extern lj_buf_tostr
   |  b ->fff_resstr

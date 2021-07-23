@@ -13,8 +13,14 @@
 
 #define LJ_SERIALIZE_DEPTH	100	/* Default depth. */
 
-LJ_FUNC StrBuf * LJ_FASTCALL lj_serialize_put(StrBuf *sb, cTValue *o);
-LJ_FUNC StrBuf * LJ_FASTCALL lj_serialize_get(StrBuf *sb, TValue *o);
+LJ_FUNC void LJ_FASTCALL lj_serialize_dict_prep(lua_State *L, GCtab *dict);
+LJ_FUNC SBufExt * LJ_FASTCALL lj_serialize_put(SBufExt *sbx, cTValue *o);
+LJ_FUNC char * LJ_FASTCALL lj_serialize_get(SBufExt *sbx, TValue *o);
+LJ_FUNC GCstr * LJ_FASTCALL lj_serialize_encode(lua_State *L, cTValue *o);
+LJ_FUNC void lj_serialize_decode(lua_State *L, TValue *o, GCstr *str);
+#if LJ_HASJIT
+LJ_FUNC MSize LJ_FASTCALL lj_serialize_peektype(SBufExt *sbx);
+#endif
 
 #endif
 

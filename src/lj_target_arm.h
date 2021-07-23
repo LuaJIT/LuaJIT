@@ -211,6 +211,7 @@ typedef enum ARMIns {
   /* ARMv6T2 */
   ARMI_MOVW = 0xe3000000,
   ARMI_MOVT = 0xe3400000,
+  ARMI_BFI = 0xe7c00010,
 
   /* VFP */
   ARMI_VMOV_D = 0xeeb00b40,

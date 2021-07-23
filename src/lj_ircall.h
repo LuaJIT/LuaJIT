@@ -113,6 +113,18 @@ typedef struct CCallInfo {
 #define IRCALLCOND_FFI32(x)		NULL
 #endif
 
+#if LJ_HASBUFFER
+#define IRCALLCOND_BUFFER(x)		x
+#else
+#define IRCALLCOND_BUFFER(x)		NULL
+#endif
+
+#if LJ_HASBUFFER && LJ_HASFFI
+#define IRCALLCOND_BUFFFI(x)		x
+#else
+#define IRCALLCOND_BUFFFI(x)		NULL
+#endif
+
 #if LJ_SOFTFP
 #define XA_FP		CCI_XA
 #define XA2_FP		(CCI_XA+CCI_XA)
@@ -163,6 +175,12 @@ typedef struct CCallInfo {
   _(ANY,	lj_buf_putstr_upper,	2,  FL, PGC, CCI_T) \
   _(ANY,	lj_buf_putstr_rep,	3,   L, PGC, CCI_T) \
   _(ANY,	lj_buf_puttab,		5,   L, PGC, CCI_T) \
+  _(BUFFER,	lj_bufx_set,		4,   S, NIL, 0) \
+  _(BUFFFI,	lj_bufx_more,		2,  FS, INT, CCI_T) \
+  _(BUFFER,	lj_serialize_put,	2,  FS, PGC, CCI_T) \
+  _(BUFFER,	lj_serialize_get,	2,  FS, PTR, CCI_T) \
+  _(BUFFER,	lj_serialize_encode,	2,  FA, STR, CCI_L|CCI_T) \
+  _(BUFFER,	lj_serialize_decode,	3,   A, INT, CCI_L|CCI_T) \
   _(ANY,	lj_buf_tostr,		1,  FL, STR, CCI_T) \
   _(ANY,	lj_tab_new_ah,		3,   A, TAB, CCI_L|CCI_T) \
   _(ANY,	lj_tab_new1,		2,  FA, TAB, CCI_L|CCI_T) \

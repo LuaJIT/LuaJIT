@@ -185,6 +185,9 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow,
 	*ofsp = (ofs & 255);  /* Mask out less bits to allow LDRD. */
 	return ra_allock(as, (ofs & ~255), allow);
       }
+    } else if (ir->o == IR_TMPREF) {
+      *ofsp = 0;
+      return RID_SP;
     }
   }
   *ofsp = 0;
@@ -498,6 +501,30 @@ static void asm_retf(ASMState *as, IRIns *ir)
   emit_lso(as, ARMI_LDR, RID_TMP, base, -4);
 }
 
+/* -- Buffer operations --------------------------------------------------- */
+
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb)
+{
+  Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+  IRIns irgc;
+  int32_t addr = i32ptr((void *)&J2G(as->J)->cur_L);
+  irgc.ot = IRT(0, IRT_PGC);  /* GC type. */
+  emit_storeofs(as, &irgc, RID_TMP, sb, offsetof(SBuf, L));
+  if ((as->flags & JIT_F_ARMV6T2)) {
+    emit_dnm(as, ARMI_BFI, RID_TMP, lj_fls(SBUF_MASK_FLAG), tmp);
+  } else {
+    emit_dnm(as, ARMI_ORR, RID_TMP, RID_TMP, tmp);
+    emit_dn(as, ARMI_AND|ARMI_K12|SBUF_MASK_FLAG, tmp, tmp);
+  }
+  emit_lso(as, ARMI_LDR, RID_TMP,
+	   ra_allock(as, (addr & ~4095),
+		     rset_exclude(rset_exclude(RSET_GPR, sb), tmp)),
+	   (addr & 4095));
+  emit_loadofs(as, &irgc, tmp, sb, offsetof(SBuf, L));
+}
+#endif
+
 /* -- Type conversions ---------------------------------------------------- */
 
 #if !LJ_SOFTFP
@@ -666,35 +693,55 @@ static void asm_strto(ASMState *as, IRIns *ir)
 /* -- Memory references --------------------------------------------------- */
 
 /* Get pointer to TValue. */
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref)
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 {
-  IRIns *ir = IR(ref);
-  if (irt_isnum(ir->t)) {
-    if (irref_isk(ref)) {
-      /* Use the number constant itself as a TValue. */
-      ra_allockreg(as, i32ptr(ir_knum(ir)), dest);
-    } else {
+  if ((mode & IRTMPREF_IN1)) {
+    IRIns *ir = IR(ref);
+    if (irt_isnum(ir->t)) {
+      if ((mode & IRTMPREF_OUT1)) {
 #if LJ_SOFTFP
-      lj_assertA(0, "unsplit FP op");
+	lj_assertA(irref_isk(ref), "unsplit FP op");
+	emit_dm(as, ARMI_MOV, dest, RID_SP);
+	emit_lso(as, ARMI_STR,
+		 ra_allock(as, (int32_t)ir_knum(ir)->u32.lo, RSET_GPR),
+		 RID_SP, 0);
+	emit_lso(as, ARMI_STR,
+		 ra_allock(as, (int32_t)ir_knum(ir)->u32.hi, RSET_GPR),
+		 RID_SP, 4);
 #else
-      /* Otherwise force a spill and use the spill slot. */
-      emit_opk(as, ARMI_ADD, dest, RID_SP, ra_spill(as, ir), RSET_GPR);
+	Reg src = ra_alloc1(as, ref, RSET_FPR);
+	emit_dm(as, ARMI_MOV, dest, RID_SP);
+	emit_vlso(as, ARMI_VSTR_D, src, RID_SP, 0);
 #endif
+      } else if (irref_isk(ref)) {
+	/* Use the number constant itself as a TValue. */
+	ra_allockreg(as, i32ptr(ir_knum(ir)), dest);
+      } else {
+#if LJ_SOFTFP
+	lj_assertA(0, "unsplit FP op");
+#else
+	/* Otherwise force a spill and use the spill slot. */
+	emit_opk(as, ARMI_ADD, dest, RID_SP, ra_spill(as, ir), RSET_GPR);
+#endif
+      }
+    } else {
+      /* Otherwise use [sp] and [sp+4] to hold the TValue.
+      ** This assumes the following call has max. 4 args.
+      */
+      Reg type;
+      emit_dm(as, ARMI_MOV, dest, RID_SP);
+      if (!irt_ispri(ir->t)) {
+	Reg src = ra_alloc1(as, ref, RSET_GPR);
+	emit_lso(as, ARMI_STR, src, RID_SP, 0);
+      }
+      if (LJ_SOFTFP && (ir+1)->o == IR_HIOP && !irt_isnil((ir+1)->t))
+	type = ra_alloc1(as, ref+1, RSET_GPR);
+      else
+	type = ra_allock(as, irt_toitype(ir->t), RSET_GPR);
+      emit_lso(as, ARMI_STR, type, RID_SP, 4);
     }
   } else {
-    /* Otherwise use [sp] and [sp+4] to hold the TValue. */
-    RegSet allow = rset_exclude(RSET_GPR, dest);
-    Reg type;
     emit_dm(as, ARMI_MOV, dest, RID_SP);
-    if (!irt_ispri(ir->t)) {
-      Reg src = ra_alloc1(as, ref, allow);
-      emit_lso(as, ARMI_STR, src, RID_SP, 0);
-    }
-    if (LJ_SOFTFP && (ir+1)->o == IR_HIOP)
-      type = ra_alloc1(as, ref+1, allow);
-    else
-      type = ra_allock(as, irt_toitype(ir->t), allow);
-    emit_lso(as, ARMI_STR, type, RID_SP, 4);
   }
 }
 
@@ -1909,7 +1956,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
       ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
 #if LJ_SOFTFP
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR:
+  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
 #endif
   case IR_CNEWI:
     /* Nothing to do here. Handled by lo op itself. */

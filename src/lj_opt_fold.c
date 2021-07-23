@@ -514,6 +514,7 @@ LJFOLDF(kfold_snew_kptr)
 }
 
 LJFOLD(SNEW any KINT)
+LJFOLD(XSNEW any KINT)
 LJFOLDF(kfold_snew_empty)
 {
   if (fright->i == 0)
@@ -577,22 +578,49 @@ LJFOLDF(kfold_strcmp)
 ** The compromise is to declare them as loads, emit them like stores and
 ** CSE whole chains manually when the BUFSTR is to be emitted. Any chain
 ** fragments left over from CSE are eliminated by DCE.
+**
+** The string buffer methods emit a USE instead of a BUFSTR to keep the
+** chain alive.
 */
 
-/* BUFHDR is emitted like a store, see below. */
-
-LJFOLD(BUFPUT BUFHDR BUFSTR)
-LJFOLDF(bufput_append)
+LJFOLD(BUFHDR any any)
+LJFOLDF(bufhdr_merge)
 {
-  /* New buffer, no other buffer op inbetween and same buffer? */
-  if ((J->flags & JIT_F_OPT_FWD) &&
-      !(fleft->op2 & IRBUFHDR_APPEND) &&
-      fleft->prev == fright->op2 &&
-      fleft->op1 == IR(fright->op2)->op1) {
-    IRRef ref = fins->op1;
-    IR(ref)->op2 = (fleft->op2 | IRBUFHDR_APPEND);  /* Modify BUFHDR. */
-    IR(ref)->op1 = fright->op1;
-    return ref;
+  return fins->op2 == IRBUFHDR_WRITE ? CSEFOLD : EMITFOLD;
+}
+
+LJFOLD(BUFPUT any BUFSTR)
+LJFOLDF(bufput_bufstr)
+{
+  if ((J->flags & JIT_F_OPT_FWD)) {
+    IRRef hdr = fright->op2;
+    /* New buffer, no other buffer op inbetween and same buffer? */
+    if (fleft->o == IR_BUFHDR && fleft->op2 == IRBUFHDR_RESET &&
+	fleft->prev == hdr &&
+	fleft->op1 == IR(hdr)->op1) {
+      IRRef ref = fins->op1;
+      IR(ref)->op2 = IRBUFHDR_APPEND;  /* Modify BUFHDR. */
+      IR(ref)->op1 = fright->op1;
+      return ref;
+    }
+    /* Replay puts to global temporary buffer. */
+    if (IR(hdr)->op2 == IRBUFHDR_RESET) {
+      IRIns *ir = IR(fright->op1);
+      /* For now only handle single string.reverse .lower .upper .rep. */
+      if (ir->o == IR_CALLL &&
+	  ir->op2 >= IRCALL_lj_buf_putstr_reverse &&
+	  ir->op2 <= IRCALL_lj_buf_putstr_rep) {
+	IRIns *carg1 = IR(ir->op1);
+	if (ir->op2 == IRCALL_lj_buf_putstr_rep) {
+	  IRIns *carg2 = IR(carg1->op1);
+	  if (carg2->op1 == hdr) {
+	    return lj_ir_call(J, ir->op2, fins->op1, carg2->op2, carg1->op2);
+	  }
+	} else if (carg1->op1 == hdr) {
+	  return lj_ir_call(J, ir->op2, fins->op1, carg1->op2);
+	}
+      }
+    }
   }
   return EMITFOLD;  /* Always emit, CSE later. */
 }
@@ -626,14 +654,14 @@ LJFOLDF(bufstr_kfold_cse)
 	     "bad buffer constructor IR op %d", fleft->o);
   if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD)) {
     if (fleft->o == IR_BUFHDR) {  /* No put operations? */
-      if (!(fleft->op2 & IRBUFHDR_APPEND))  /* Empty buffer? */
+      if (fleft->op2 == IRBUFHDR_RESET)  /* Empty buffer? */
 	return lj_ir_kstr(J, &J2G(J)->strempty);
       fins->op1 = fleft->op1;
       fins->op2 = fleft->prev;  /* Relies on checks in bufput_append. */
       return CSEFOLD;
     } else if (fleft->o == IR_BUFPUT) {
       IRIns *irb = IR(fleft->op1);
-      if (irb->o == IR_BUFHDR && !(irb->op2 & IRBUFHDR_APPEND))
+      if (irb->o == IR_BUFHDR && irb->op2 == IRBUFHDR_RESET)
 	return fleft->op2;  /* Shortcut for a single put operation. */
     }
   }
@@ -646,7 +674,7 @@ LJFOLDF(bufstr_kfold_cse)
 	lj_assertJ(ira->o == IR_BUFHDR || ira->o == IR_BUFPUT ||
 		   ira->o == IR_CALLL || ira->o == IR_CARG,
 		   "bad buffer constructor IR op %d", ira->o);
-	if (ira->o == IR_BUFHDR && !(ira->op2 & IRBUFHDR_APPEND))
+	if (ira->o == IR_BUFHDR && ira->op2 == IRBUFHDR_RESET)
 	  return ref;  /* CSE succeeded. */
 	if (ira->o == IR_CALLL && ira->op2 == IRCALL_lj_buf_puttab)
 	  break;
@@ -1297,6 +1325,10 @@ LJFOLD(CONV SUB IRCONV_U32_U64)
 LJFOLD(CONV MUL IRCONV_U32_U64)
 LJFOLDF(simplify_conv_narrow)
 {
+#if LJ_64
+  UNUSED(J);
+  return NEXTFOLD;
+#else
   IROp op = (IROp)fleft->o;
   IRType t = irt_type(fins->t);
   IRRef op1 = fleft->op1, op2 = fleft->op2, mode = fins->op2;
@@ -1307,6 +1339,7 @@ LJFOLDF(simplify_conv_narrow)
   fins->op1 = op1;
   fins->op2 = op2;
   return RETRYFOLD;
+#endif
 }
 
 /* Special CSE rule for CONV. */
@@ -2275,6 +2308,18 @@ LJFOLDF(fload_str_len_tostr)
   return NEXTFOLD;
 }
 
+LJFOLD(FLOAD any IRFL_SBUF_W)
+LJFOLD(FLOAD any IRFL_SBUF_E)
+LJFOLD(FLOAD any IRFL_SBUF_B)
+LJFOLD(FLOAD any IRFL_SBUF_L)
+LJFOLD(FLOAD any IRFL_SBUF_REF)
+LJFOLD(FLOAD any IRFL_SBUF_R)
+LJFOLDF(fload_sbuf)
+{
+  TRef tr = lj_opt_fwd_fload(J);
+  return lj_opt_fwd_sbuf(J, tref_ref(tr)) ? tr : EMITFOLD;
+}
+
 /* The C type ID of cdata objects is immutable. */
 LJFOLD(FLOAD KGC IRFL_CDATA_CTYPEID)
 LJFOLDF(fload_cdata_typeid_kgc)
@@ -2421,6 +2466,7 @@ LJFOLD(XSTORE any any)
 LJFOLDX(lj_opt_dse_xstore)
 
 LJFOLD(NEWREF any any)  /* Treated like a store. */
+LJFOLD(TMPREF any any)
 LJFOLD(CALLA any any)
 LJFOLD(CALLL any any)  /* Safeguard fallback. */
 LJFOLD(CALLS any any)
@@ -2431,7 +2477,6 @@ LJFOLD(TNEW any any)
 LJFOLD(TDUP any)
 LJFOLD(CNEW any any)
 LJFOLD(XSNEW any any)
-LJFOLD(BUFHDR any any)
 LJFOLDX(lj_ir_emit)
 
 /* ------------------------------------------------------------------------ */

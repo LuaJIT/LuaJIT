@@ -11,6 +11,7 @@
 #if LJ_HASJIT
 
 #include "lj_gc.h"
+#include "lj_buf.h"
 #include "lj_str.h"
 #include "lj_tab.h"
 #include "lj_frame.h"
@@ -697,7 +698,14 @@ static void ra_rename(ASMState *as, Reg down, Reg up)
   RA_DBGX((as, "rename    $f $r $r", regcost_ref(as->cost[up]), down, up));
   emit_movrr(as, ir, down, up);  /* Backwards codegen needs inverse move. */
   if (!ra_hasspill(IR(ref)->s)) {  /* Add the rename to the IR. */
-    ra_addrename(as, down, ref, as->snapno);
+    /*
+    ** The rename is effective at the subsequent (already emitted) exit
+    ** branch. This is for the current snapshot (as->snapno). Except if we
+    ** haven't yet allocated any refs for the snapshot (as->snapalloc == 1),
+    ** then it belongs to the next snapshot.
+    ** See also the discussion at asm_snap_checkrename().
+    */
+    ra_addrename(as, down, ref, as->snapno + as->snapalloc);
   }
 }
 
@@ -1136,28 +1144,43 @@ static void asm_gcstep(ASMState *as, IRIns *ir)
 
 /* -- Buffer operations --------------------------------------------------- */
 
-static void asm_tvptr(ASMState *as, Reg dest, IRRef ref);
+static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode);
+#if LJ_HASBUFFER
+static void asm_bufhdr_write(ASMState *as, Reg sb);
+#endif
 
 static void asm_bufhdr(ASMState *as, IRIns *ir)
 {
   Reg sb = ra_dest(as, ir, RSET_GPR);
-  if ((ir->op2 & IRBUFHDR_APPEND)) {
+  switch (ir->op2) {
+  case IRBUFHDR_RESET: {
+    Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
+    IRIns irbp;
+    irbp.ot = IRT(0, IRT_PTR);  /* Buffer data pointer type. */
+    emit_storeofs(as, &irbp, tmp, sb, offsetof(SBuf, w));
+    emit_loadofs(as, &irbp, tmp, sb, offsetof(SBuf, b));
+    break;
+    }
+  case IRBUFHDR_APPEND: {
     /* Rematerialize const buffer pointer instead of likely spill. */
     IRIns *irp = IR(ir->op1);
     if (!(ra_hasreg(irp->r) || irp == ir-1 ||
 	  (irp == ir-2 && !ra_used(ir-1)))) {
-      while (!(irp->o == IR_BUFHDR && !(irp->op2 & IRBUFHDR_APPEND)))
+      while (!(irp->o == IR_BUFHDR && irp->op2 == IRBUFHDR_RESET))
 	irp = IR(irp->op1);
       if (irref_isk(irp->op1)) {
 	ra_weak(as, ra_allocref(as, ir->op1, RSET_GPR));
 	ir = irp;
       }
     }
-  } else {
-    Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, sb));
-    /* Passing ir isn't strictly correct, but it's an IRT_PGC, too. */
-    emit_storeofs(as, ir, tmp, sb, offsetof(SBuf, p));
-    emit_loadofs(as, ir, tmp, sb, offsetof(SBuf, b));
+    break;
+    }
+#if LJ_HASBUFFER
+  case IRBUFHDR_WRITE:
+    asm_bufhdr_write(as, sb);
+    break;
+#endif
+  default: lj_assertA(0, "bad BUFHDR op2 %d", ir->op2); break;
   }
 #if LJ_TARGET_X86ORX64
   ra_left(as, sb, ir->op1);
@@ -1209,7 +1232,7 @@ static void asm_bufput(ASMState *as, IRIns *ir)
   if (args[1] == ASMREF_TMP1) {
     Reg tmp = ra_releasetmp(as, ASMREF_TMP1);
     if (kchar == -129)
-      asm_tvptr(as, tmp, irs->op1);
+      asm_tvptr(as, tmp, irs->op1, IRTMPREF_IN1);
     else
       ra_allockreg(as, kchar, tmp);
   }
@@ -1247,7 +1270,7 @@ static void asm_tostr(ASMState *as, IRIns *ir)
   asm_setupresult(as, ir, ci);  /* GCstr * */
   asm_gencall(as, ci, args);
   if (ir->op2 == IRTOSTR_NUM)
-    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1);
+    asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op1, IRTMPREF_IN1);
 }
 
 #if LJ_32 && LJ_HASFFI && !LJ_SOFTFP && !LJ_TARGET_X86
@@ -1294,7 +1317,13 @@ static void asm_newref(ASMState *as, IRIns *ir)
   args[2] = ASMREF_TMP1;  /* cTValue *key */
   asm_setupresult(as, ir, ci);  /* TValue * */
   asm_gencall(as, ci, args);
-  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2);
+  asm_tvptr(as, ra_releasetmp(as, ASMREF_TMP1), ir->op2, IRTMPREF_IN1);
+}
+
+static void asm_tmpref(ASMState *as, IRIns *ir)
+{
+  Reg r = ra_dest(as, ir, RSET_GPR);
+  asm_tvptr(as, r, ir->op1, ir->op2);
 }
 
 static void asm_lref(ASMState *as, IRIns *ir)
@@ -1776,6 +1805,7 @@ static void asm_ir(ASMState *as, IRIns *ir)
   case IR_NEWREF: asm_newref(as, ir); break;
   case IR_UREFO: case IR_UREFC: asm_uref(as, ir); break;
   case IR_FREF: asm_fref(as, ir); break;
+  case IR_TMPREF: asm_tmpref(as, ir); break;
   case IR_STRREF: asm_strref(as, ir); break;
   case IR_LREF: asm_lref(as, ir); break;
 
@@ -2109,6 +2139,9 @@ static void asm_setup_regsp(ASMState *as)
 #endif
 
   ra_setup(as);
+#if LJ_TARGET_ARM64
+  ra_setkref(as, RID_GL, (intptr_t)J2G(as->J));
+#endif
 
   /* Clear reg/sp for constants. */
   for (ir = IR(T->nk), lastir = IR(REF_BASE); ir < lastir; ir++) {
@@ -2180,6 +2213,10 @@ static void asm_setup_regsp(ASMState *as)
       ir->prev = (uint16_t)REGSP_HINT((rload & 15));
       rload = lj_ror(rload, 4);
       continue;
+    case IR_TMPREF:
+      if ((ir->op2 & IRTMPREF_OUT2) && as->evenspill < 4)
+	as->evenspill = 4;  /* TMPREF OUT2 needs two TValues on the stack. */
+      break;
 #endif
     case IR_CALLXS: {
       CCallInfo ci;
@@ -2282,13 +2319,23 @@ static void asm_setup_regsp(ASMState *as)
       }
       /* fallthrough */ /* for integer POW */
     case IR_DIV: case IR_MOD:
-      if (!irt_isnum(ir->t)) {
+      if ((LJ_64 && LJ_SOFTFP) || !irt_isnum(ir->t)) {
 	ir->prev = REGSP_HINT(RID_RET);
 	if (inloop)
 	  as->modset |= (RSET_SCRATCH & RSET_GPR);
 	continue;
       }
       break;
+#if LJ_64 && LJ_SOFTFP
+    case IR_ADD: case IR_SUB: case IR_MUL:
+      if (irt_isnum(ir->t)) {
+	ir->prev = REGSP_HINT(RID_RET);
+	if (inloop)
+	  as->modset |= (RSET_SCRATCH & RSET_GPR);
+	continue;
+      }
+      break;
+#endif
     case IR_FPMATH:
 #if LJ_TARGET_X86ORX64
       if (ir->op2 <= IRFPM_TRUNC) {

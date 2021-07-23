@@ -70,7 +70,7 @@ static void emit_rotr(ASMState *as, Reg dest, Reg src, Reg tmp, uint32_t shift)
   }
 }
 
-#if LJ_64
+#if LJ_64 || LJ_HASBUFFER
 static void emit_tsml(ASMState *as, MIPSIns mi, Reg rt, Reg rs, uint32_t msb,
 		      uint32_t lsb)
 {

@@ -2423,9 +2423,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   lea SBUF:FCARG1, [DISPATCH+DISPATCH_GL(tmpbuf)]
   |  mov L:RB->base, BASE
   |  mov STR:FCARG2, [BASE]		// Caveat: FCARG2 == BASE
-  |   mov RC, SBUF:FCARG1->b
+  |   mov RCa, SBUF:FCARG1->b
   |   mov SBUF:FCARG1->L, L:RB
-  |   mov SBUF:FCARG1->p, RC
+  |   mov SBUF:FCARG1->w, RCa
   |  mov SAVE_PC, PC
   |  call extern lj_buf_putstr_ .. name .. @8
   |  mov FCARG1, eax

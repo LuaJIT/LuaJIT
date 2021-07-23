@@ -34,13 +34,17 @@ typedef struct MRef {
 
 #if LJ_GC64
 #define mref(r, t)	((t *)(void *)(r).ptr64)
+#define mrefu(r)	((r).ptr64)
 
 #define setmref(r, p)	((r).ptr64 = (uint64_t)(void *)(p))
+#define setmrefu(r, u)	((r).ptr64 = (uint64_t)(u))
 #define setmrefr(r, v)	((r).ptr64 = (v).ptr64)
 #else
 #define mref(r, t)	((t *)(void *)(uintptr_t)(r).ptr32)
+#define mrefu(r)	((r).ptr32)
 
 #define setmref(r, p)	((r).ptr32 = (uint32_t)(uintptr_t)(void *)(p))
+#define setmrefu(r, u)	((r).ptr32 = (uint32_t)(u))
 #define setmrefr(r, v)	((r).ptr32 = (v).ptr32)
 #endif
 
@@ -153,11 +157,9 @@ typedef int32_t BCLine;  /* Bytecode line number. */
 typedef void (*ASMFunction)(void);
 
 /* Resizable string buffer. Need this here, details in lj_buf.h. */
+#define SBufHeader	char *w, *e, *b; MRef L
 typedef struct SBuf {
-  MRef p;		/* String buffer pointer. */
-  MRef e;		/* String buffer end pointer. */
-  MRef b;		/* String buffer base. */
-  MRef L;		/* lua_State, used for buffer resizing. */
+  SBufHeader;
 } SBuf;
 
 /* -- Tags and values ----------------------------------------------------- */
@@ -330,6 +332,7 @@ enum {
   UDTYPE_USERDATA,	/* Regular userdata. */
   UDTYPE_IO_FILE,	/* I/O library FILE. */
   UDTYPE_FFI_CLIB,	/* FFI C library namespace. */
+  UDTYPE_BUFFER,	/* String buffer. */
   UDTYPE__MAX
 };
 
@@ -920,7 +923,7 @@ static LJ_AINLINE void setgcV(lua_State *L, TValue *o, GCobj *v, uint32_t it)
 }
 
 #define define_setV(name, type, tag) \
-static LJ_AINLINE void name(lua_State *L, TValue *o, type *v) \
+static LJ_AINLINE void name(lua_State *L, TValue *o, const type *v) \
 { \
   setgcV(L, o, obj2gco(v), tag); \
 }

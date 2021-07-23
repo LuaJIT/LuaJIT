@@ -95,6 +95,7 @@
   _(UREFO,	LW, ref, lit) \
   _(UREFC,	LW, ref, lit) \
   _(FREF,	R , ref, lit) \
+  _(TMPREF,	S , ref, lit) \
   _(STRREF,	N , ref, ref) \
   _(LREF,	L , ___, ___) \
   \
@@ -204,9 +205,15 @@ IRFPMDEF(FPMENUM)
   _(UDATA_META,	offsetof(GCudata, metatable)) \
   _(UDATA_UDTYPE, offsetof(GCudata, udtype)) \
   _(UDATA_FILE,	sizeof(GCudata)) \
+  _(SBUF_W,	sizeof(GCudata) + offsetof(SBufExt, w)) \
+  _(SBUF_E,	sizeof(GCudata) + offsetof(SBufExt, e)) \
+  _(SBUF_B,	sizeof(GCudata) + offsetof(SBufExt, b)) \
+  _(SBUF_L,	sizeof(GCudata) + offsetof(SBufExt, L)) \
+  _(SBUF_REF,	sizeof(GCudata) + offsetof(SBufExt, cowref)) \
+  _(SBUF_R,	sizeof(GCudata) + offsetof(SBufExt, r)) \
   _(CDATA_CTYPEID, offsetof(GCcdata, ctypeid)) \
   _(CDATA_PTR,	sizeof(GCcdata)) \
-  _(CDATA_INT, sizeof(GCcdata)) \
+  _(CDATA_INT,	sizeof(GCcdata)) \
   _(CDATA_INT64, sizeof(GCcdata)) \
   _(CDATA_INT64_4, sizeof(GCcdata) + 4)
 
@@ -217,6 +224,11 @@ IRFLDEF(FLENUM)
   IRFL__MAX
 } IRFieldID;
 
+/* TMPREF mode bits, stored in op2. */
+#define IRTMPREF_IN1		0x01	/* First input value. */
+#define IRTMPREF_OUT1		0x02	/* First output value. */
+#define IRTMPREF_OUT2		0x04	/* Second output value. */
+
 /* SLOAD mode bits, stored in op2. */
 #define IRSLOAD_PARENT		0x01	/* Coalesce with parent trace. */
 #define IRSLOAD_FRAME		0x02	/* Load 32 bits of ftsz. */
@@ -225,14 +237,15 @@ IRFLDEF(FLENUM)
 #define IRSLOAD_READONLY	0x10	/* Read-only, omit slot store. */
 #define IRSLOAD_INHERIT		0x20	/* Inherited by exits/side traces. */
 
-/* XLOAD mode, stored in op2. */
-#define IRXLOAD_READONLY	1	/* Load from read-only data. */
-#define IRXLOAD_VOLATILE	2	/* Load from volatile data. */
-#define IRXLOAD_UNALIGNED	4	/* Unaligned load. */
+/* XLOAD mode bits, stored in op2. */
+#define IRXLOAD_READONLY	0x01	/* Load from read-only data. */
+#define IRXLOAD_VOLATILE	0x02	/* Load from volatile data. */
+#define IRXLOAD_UNALIGNED	0x04	/* Unaligned load. */
 
 /* BUFHDR mode, stored in op2. */
 #define IRBUFHDR_RESET		0	/* Reset buffer. */
 #define IRBUFHDR_APPEND		1	/* Append to buffer. */
+#define IRBUFHDR_WRITE		2	/* Write to string buffer. */
 
 /* CONV mode, stored in op2. */
 #define IRCONV_SRCMASK		0x001f	/* Source IRType. */
@@ -249,6 +262,7 @@ IRFLDEF(FLENUM)
 #define IRCONV_ANY    (1<<IRCONV_CSH)	/* Any FP number is ok. */
 #define IRCONV_INDEX  (2<<IRCONV_CSH)	/* Check + special backprop rules. */
 #define IRCONV_CHECK  (3<<IRCONV_CSH)	/* Number checked for integerness. */
+#define IRCONV_NONE   IRCONV_ANY	/* INT|*64 no conv, but change type. */
 
 /* TOSTR mode, stored in op2. */
 #define IRTOSTR_INT		0	/* Convert integer to string. */

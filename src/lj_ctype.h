@@ -298,6 +298,7 @@ typedef struct CTState {
   _(P_VOID,	CTSIZE_PTR,	CT_PTR, CTALIGN_PTR|CTID_VOID) \
   _(P_CVOID,	CTSIZE_PTR,	CT_PTR, CTALIGN_PTR|CTID_CVOID) \
   _(P_CCHAR,	CTSIZE_PTR,	CT_PTR, CTALIGN_PTR|CTID_CCHAR) \
+  _(P_UINT8,	CTSIZE_PTR,	CT_PTR, CTALIGN_PTR|CTID_UINT8) \
   _(A_CCHAR,		-1,	CT_ARRAY, CTF_CONST|CTALIGN(0)|CTID_CCHAR) \
   _(CTYPEID,		4,	CT_ENUM, CTALIGN(2)|CTID_INT32) \
   CTTYDEFP(_) \
@@ -388,6 +389,16 @@ static LJ_AINLINE CTState *ctype_cts(lua_State *L)
   cts->L = L;  /* Save L for errors and allocations. */
   return cts;
 }
+
+/* Load FFI library on-demand. */
+#define ctype_loadffi(L) \
+  do { \
+    if (!ctype_ctsG(G(L))) { \
+      ptrdiff_t oldtop = (char *)L->top - mref(L->stack, char); \
+      luaopen_ffi(L); \
+      L->top = (TValue *)(mref(L->stack, char) + oldtop); \
+    } \
+  } while (0)
 
 /* Save and restore state of C type table. */
 #define LJ_CTYPE_SAVE(cts)	CTState savects_ = *(cts)

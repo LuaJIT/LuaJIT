@@ -65,6 +65,13 @@ static void gc_mark(global_State *g, GCobj *o)
     gray2black(o);  /* Userdata are never gray. */
     if (mt) gc_markobj(g, mt);
     gc_markobj(g, tabref(gco2ud(o)->env));
+    if (LJ_HASBUFFER && gco2ud(o)->udtype == UDTYPE_BUFFER) {
+      SBufExt *sbx = (SBufExt *)uddata(gco2ud(o));
+      if (sbufiscow(sbx) && gcref(sbx->cowref))
+	gc_markobj(g, gcref(sbx->cowref));
+      if (gcref(sbx->dict))
+	gc_markobj(g, gcref(sbx->dict));
+    }
   } else if (LJ_UNLIKELY(gct == ~LJ_TUPVAL)) {
     GCupval *uv = gco2uv(o);
     gc_marktv(g, uvval(uv));
