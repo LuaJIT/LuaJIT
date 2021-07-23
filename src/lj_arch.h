@@ -672,14 +672,4 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LUAJIT_SECURITY_MCODE	1
 #endif
 
-#define LJ_SECURITY_MODE \
-  ( 0u \
-  | ((LUAJIT_SECURITY_PRNG & 3) << 0) \
-  | ((LUAJIT_SECURITY_STRHASH & 3) << 2) \
-  | ((LUAJIT_SECURITY_STRID & 3) << 4) \
-  | ((LUAJIT_SECURITY_MCODE & 3) << 6) \
-  )
-#define LJ_SECURITY_MODESTRING \
-  "\004prng\007strhash\005strid\005mcode"
-
 #endif

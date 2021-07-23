@@ -113,13 +113,6 @@ LJLIB_CF(jit_status)
 #endif
 }
 
-LJLIB_CF(jit_security)
-{
-  int idx = lj_lib_checkopt(L, 1, -1, LJ_SECURITY_MODESTRING);
-  setintV(L->top++, ((LJ_SECURITY_MODE >> (2*idx)) & 3));
-  return 1;
-}
-
 LJLIB_CF(jit_attach)
 {
 #ifdef LUAJIT_DISABLE_VMEVENT
