@@ -252,7 +252,12 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
       BCReg minslot = bc_a(ins);
       if (op >= BC_FORI && op <= BC_JFORL) minslot += FORL_EXT;
       else if (op >= BC_ITERL && op <= BC_JITERL) minslot += bc_b(pc[-2])-1;
-      else if (op == BC_UCLO) { pc += bc_j(ins); break; }
+      else if (op == BC_UCLO) {
+	ptrdiff_t delta = bc_j(ins);
+	if (delta < 0) return maxslot;  /* Prevent loop. */
+	pc += delta;
+	break;
+      }
       for (s = minslot; s < maxslot; s++) DEF_SLOT(s);
       return minslot < maxslot ? minslot : maxslot;
       }
