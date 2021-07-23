@@ -993,9 +993,9 @@ static void build_subroutines(BuildCtx *ctx)
   |   ldr STR:RC, GL->gcroot[GCROOT_MMNAME+MM_metatable]
   |  cbz TAB:RB, ->fff_restv
   |  ldr TMP1w, TAB:RB->hmask
-  |   ldr TMP2w, STR:RC->sid
+  |   ldr TMP2w, STR:RC->hash
   |    ldr NODE:CARG3, TAB:RB->node
-  |  and TMP1w, TMP1w, TMP2w		// idx = str->sid & tab->hmask
+  |  and TMP1w, TMP1w, TMP2w		// idx = str->hash & tab->hmask
   |  add TMP1, TMP1, TMP1, lsl #1
   |  movn CARG4, #~LJ_TSTR
   |    add NODE:CARG3, NODE:CARG3, TMP1, lsl #3  // node = tab->node + idx*3*8
@@ -2943,9 +2943,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TGETS_Z:
     |  // TAB:CARG2 = GCtab *, STR:RC = GCstr *, RA = dst
     |  ldr TMP1w, TAB:CARG2->hmask
-    |   ldr TMP2w, STR:RC->sid
+    |   ldr TMP2w, STR:RC->hash
     |    ldr NODE:CARG3, TAB:CARG2->node
-    |  and TMP1w, TMP1w, TMP2w		// idx = str->sid & tab->hmask
+    |  and TMP1w, TMP1w, TMP2w		// idx = str->hash & tab->hmask
     |  add TMP1, TMP1, TMP1, lsl #1
     |  movn CARG4, #~LJ_TSTR
     |    add NODE:CARG3, NODE:CARG3, TMP1, lsl #3  // node = tab->node + idx*3*8
@@ -3069,9 +3069,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TSETS_Z:
     |  // TAB:CARG2 = GCtab *, STR:RC = GCstr *, RA = src
     |  ldr TMP1w, TAB:CARG2->hmask
-    |   ldr TMP2w, STR:RC->sid
+    |   ldr TMP2w, STR:RC->hash
     |    ldr NODE:CARG3, TAB:CARG2->node
-    |  and TMP1w, TMP1w, TMP2w		// idx = str->sid & tab->hmask
+    |  and TMP1w, TMP1w, TMP2w		// idx = str->hash & tab->hmask
     |  add TMP1, TMP1, TMP1, lsl #1
     |  movn CARG4, #~LJ_TSTR
     |    add NODE:CARG3, NODE:CARG3, TMP1, lsl #3  // node = tab->node + idx*3*8

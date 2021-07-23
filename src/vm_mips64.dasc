@@ -1205,9 +1205,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  beqz TAB:RB, ->fff_restv
   |.  li CARG1, LJ_TNIL
   |  lw TMP0, TAB:RB->hmask
-  |   lw TMP1, STR:RC->sid
+  |   lw TMP1, STR:RC->hash
   |    ld NODE:TMP2, TAB:RB->node
-  |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
+  |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
   |  dsll TMP0, TMP1, 5
   |  dsll TMP1, TMP1, 3
   |  dsubu TMP1, TMP0, TMP1
@@ -4243,9 +4243,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TGETS_Z:
     |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = dst*8
     |  lw TMP0, TAB:RB->hmask
-    |   lw TMP1, STR:RC->sid
+    |   lw TMP1, STR:RC->hash
     |    ld NODE:TMP2, TAB:RB->node
-    |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
+    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
     |  sll TMP0, TMP1, 5
     |  sll TMP1, TMP1, 3
     |  subu TMP1, TMP0, TMP1
@@ -4406,10 +4406,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |->BC_TSETS_Z:
     |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = BASE+src*8
     |  lw TMP0, TAB:RB->hmask
-    |   lw TMP1, STR:RC->sid
+    |   lw TMP1, STR:RC->hash
     |    ld NODE:TMP2, TAB:RB->node
     |   sb r0, TAB:RB->nomm		// Clear metamethod cache.
-    |  and TMP1, TMP1, TMP0		// idx = str->sid & tab->hmask
+    |  and TMP1, TMP1, TMP0		// idx = str->hash & tab->hmask
     |  sll TMP0, TMP1, 5
     |  sll TMP1, TMP1, 3
     |  subu TMP1, TMP0, TMP1

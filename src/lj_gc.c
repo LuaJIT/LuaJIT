@@ -424,32 +424,6 @@ static GCRef *gc_sweep(global_State *g, GCRef *p, uint32_t lim)
   return p;
 }
 
-/* Sweep one string interning table chain. Preserves hashalg bit. */
-static void gc_sweepstr(global_State *g, GCRef *chain)
-{
-  /* Mask with other white and LJ_GC_FIXED. Or LJ_GC_SFIXED on shutdown. */
-  int ow = otherwhite(g);
-  uintptr_t u = gcrefu(*chain);
-  GCRef q;
-  GCRef *p = &q;
-  GCobj *o;
-  setgcrefp(q, (u & ~(uintptr_t)1));
-  while ((o = gcref(*p)) != NULL) {
-    if (((o->gch.marked ^ LJ_GC_WHITES) & ow)) {  /* Black or current white? */
-      lj_assertG(!isdead(g, o) || (o->gch.marked & LJ_GC_FIXED),
-		 "sweep of undead string");
-      makewhite(g, o);  /* String is alive, change to the current white. */
-      p = &o->gch.nextgc;
-    } else {  /* Otherwise string is dead, free it. */
-      lj_assertG(isdead(g, o) || ow == LJ_GC_SFIXED,
-		 "sweep of unlive string");
-      setgcrefr(*p, o->gch.nextgc);
-      lj_str_free(g, gco2str(o));
-    }
-  }
-  setgcrefp(*chain, (gcrefu(q) | (u & 1)));
-}
-
 /* Check whether we can clear a key or a value slot from a table. */
 static int gc_mayclear(cTValue *o, int val)
 {
@@ -604,9 +578,9 @@ void lj_gc_freeall(global_State *g)
   /* Free everything, except super-fixed objects (the main thread). */
   g->gc.currentwhite = LJ_GC_WHITES | LJ_GC_SFIXED;
   gc_fullsweep(g, &g->gc.root);
-  strmask = g->str.mask;
+  strmask = g->strmask;
   for (i = 0; i <= strmask; i++)  /* Free all string hash chains. */
-    gc_sweepstr(g, &g->str.tab[i]);
+    gc_fullsweep(g, &g->strhash[i]);
 }
 
 /* -- Collector ----------------------------------------------------------- */
@@ -669,8 +643,8 @@ static size_t gc_onestep(lua_State *L)
     return 0;
   case GCSsweepstring: {
     GCSize old = g->gc.total;
-    gc_sweepstr(g, &g->str.tab[g->gc.sweepstr++]);  /* Sweep one chain. */
-    if (g->gc.sweepstr > g->str.mask)
+    gc_fullsweep(g, &g->strhash[g->gc.sweepstr++]);  /* Sweep one chain. */
+    if (g->gc.sweepstr > g->strmask)
       g->gc.state = GCSsweep;  /* All string hash chains sweeped. */
     lj_assertG(old >= g->gc.total, "sweep increased memory");
     g->gc.estimate -= old - g->gc.total;
@@ -682,8 +656,8 @@ static size_t gc_onestep(lua_State *L)
     lj_assertG(old >= g->gc.total, "sweep increased memory");
     g->gc.estimate -= old - g->gc.total;
     if (gcref(*mref(g->gc.sweep, GCRef)) == NULL) {
-      if (g->str.num <= (g->str.mask >> 2) && g->str.mask > LJ_MIN_STRTAB*2-1)
-	lj_str_resize(L, g->str.mask >> 1);  /* Shrink string table. */
+      if (g->strnum <= (g->strmask >> 2) && g->strmask > LJ_MIN_STRTAB*2-1)
+	lj_str_resize(L, g->strmask >> 1);  /* Shrink string table. */
       if (gcref(g->gc.mmudata)) {  /* Need any finalizations? */
 	g->gc.state = GCSfinalize;
 #if LJ_HASFFI

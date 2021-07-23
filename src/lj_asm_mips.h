@@ -1106,7 +1106,7 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     if (isk) {
       /* Nothing to do. */
     } else if (irt_isstr(kt)) {
-      emit_tsi(as, MIPSI_LW, tmp1, key, (int32_t)offsetof(GCstr, sid));
+      emit_tsi(as, MIPSI_LW, tmp1, key, (int32_t)offsetof(GCstr, hash));
     } else {  /* Must match with hash*() in lj_tab.c. */
       emit_dst(as, MIPSI_SUBU, tmp1, tmp1, tmp2);
       emit_rotr(as, tmp2, tmp2, dest, (-HASH_ROT3)&31);
