@@ -735,6 +735,8 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
 {
   global_State *g = G(L);
   lj_trace_abort(g);
+  /* Set the running lua_State as the one where the error can be handled. */
+  setgcref(g->cur_L, obj2gco(L));
   L->status = LUA_OK;
 #if LJ_UNWIND_EXT
   err_raise_ext(g, errcode);
