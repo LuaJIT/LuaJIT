@@ -127,7 +127,7 @@ space.
 <p>
 Buffers operate like a FIFO (first-in first-out) data structure. Data
 can be appended (written) to the end of the buffer and consumed (read)
-from the front of the buffer. These operations can be freely mixed.
+from the front of the buffer. These operations may be freely mixed.
 </p>
 <p>
 The buffer space that holds the characters is managed automatically
@@ -199,7 +199,7 @@ may be reused.
 <h3 id="buffer_free"><tt>buf = buf:free()</tt></h3>
 <p>
 The buffer space of the buffer object is freed. The object itself
-remains intact, empty and it may be reused.
+remains intact, empty and may be reused.
 </p>
 <p>
 Note: you normally don't need to use this method. The garbage collector
@@ -404,8 +404,8 @@ speed is mostly constrained by object creation cost.
 </p>
 <p>
 The serializer handles most Lua types, common FFI number types and
-nested structures. Functions, thread objects, other FFI cdata, full
-userdata and associated metatables cannot be serialized (yet).
+nested structures. Functions, thread objects, other FFI cdata and full
+userdata cannot be serialized (yet).
 </p>
 <p>
 The encoder serializes nested structures as trees. Multiple references
@@ -461,21 +461,31 @@ commonly occur as table keys of objects you are serializing. These keys
 are compactly encoded as indexes during serialization. A well chosen
 dictionary saves space and improves serialization performance.
 </li>
+<li>
+<tt>metatable</tt> is a Lua table holding a <b>dictionary of metatables</b>
+for the table objects you are serializing.
+</li>
 </ul>
 <p>
-<tt>dict</tt> needs to be an array of strings, starting at index 1 and
-without holes (no <tt>nil</tt> inbetween). The table is anchored in the
-buffer object and internally modified into a two-way index (don't do
-this yourself, just pass a plain array). The table must not be modified
-after it has been passed to <tt>buffer.new()</tt>.
+<tt>dict</tt> needs to be an array of strings and <tt>metatable</tt> needs
+to be an array of tables. Both starting at index 1 and without holes (no
+<tt>nil</tt> inbetween). The tables are anchored in the buffer object and
+internally modified into a two-way index (don't do this yourself, just pass
+a plain array). The tables must not be modified after they have been passed
+to <tt>buffer.new()</tt>.
 </p>
 <p>
-The <tt>dict</tt> tables used by the encoder and decoder must be the
-same. Put the most common entries at the front. Extend at the end to
-ensure backwards-compatibility &mdash; older encodings can then still be
-read. You may also set some indexes to <tt>false</tt> to explicitly drop
-backwards-compatibility. Old encodings that use these indexes will throw
-an error when decoded.
+The <tt>dict</tt> and <tt>metatable</tt> tables used by the encoder and
+decoder must be the same. Put the most common entries at the front. Extend
+at the end to ensure backwards-compatibility &mdash; older encodings can
+then still be read. You may also set some indexes to <tt>false</tt> to
+explicitly drop backwards-compatibility. Old encodings that use these
+indexes will throw an error when decoded.
+</p>
+<p>
+Metatables that are not found in the <tt>metatable</tt> dictionary are
+ignored when encoding. Decoding returns a table with a <tt>nil</tt>
+metatable.
 </p>
 <p>
 Note: parsing and preparation of the options table is somewhat
@@ -564,7 +574,7 @@ suffix.
 <pre>
 object    → nil | false | true
           | null | lightud32 | lightud64
-          | int | num | tab
+          | int | num | tab | tab_mt
           | int64 | uint64 | complex
           | string
 
@@ -585,13 +595,14 @@ tab       → 0x08                                   // Empty table
           | 0x0b a.U a*object h.U h*{object object}      // Mixed
           | 0x0c a.U (a-1)*object                // 1-based array
           | 0x0d a.U (a-1)*object h.U h*{object object}  // Mixed
+tab_mt    → 0x0e (index-1).U tab          // Metatable dict entry
 
 int64     → 0x10 int.L                             // FFI int64_t
 uint64    → 0x11 uint.L                           // FFI uint64_t
 complex   → 0x12 re.L im.L                         // FFI complex
 
 string    → (0x20+len).U len*char.B
-          | 0x0f (index-1).U                        // Dict entry
+          | 0x0f (index-1).U                 // String dict entry
 
 .B = 8 bit
 .I = 32 bit little-endian

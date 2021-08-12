@@ -27,7 +27,8 @@ typedef struct SBufExt {
     MRef bsb;		/* Borrowed string buffer. */
   };
   char *r;		/* Read pointer. */
-  GCRef dict;		/* Serialization string dictionary table. */
+  GCRef dict_str;	/* Serialization string dictionary table. */
+  GCRef dict_mt;	/* Serialization metatable dictionary table. */
   int depth;		/* Remaining recursion depth. */
 } SBufExt;
 

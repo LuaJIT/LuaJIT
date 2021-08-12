@@ -288,7 +288,7 @@ LJLIB_CF(buffer_new)
 {
   MSize sz = 0;
   int targ = 1;
-  GCtab *env, *dict = NULL;
+  GCtab *env, *dict_str = NULL, *dict_mt = NULL;
   GCudata *ud;
   SBufExt *sbx;
   if (L->base < L->top && !tvistab(L->base)) {
@@ -298,10 +298,16 @@ LJLIB_CF(buffer_new)
   }
   if (L->base+targ-1 < L->top) {
     GCtab *options = lj_lib_checktab(L, targ);
-    cTValue *opt_dict = lj_tab_getstr(options, lj_str_newlit(L, "dict"));
+    cTValue *opt_dict, *opt_mt;
+    opt_dict = lj_tab_getstr(options, lj_str_newlit(L, "dict"));
     if (opt_dict && tvistab(opt_dict)) {
-      dict = tabV(opt_dict);
-      lj_serialize_dict_prep(L, dict);
+      dict_str = tabV(opt_dict);
+      lj_serialize_dict_prep_str(L, dict_str);
+    }
+    opt_mt = lj_tab_getstr(options, lj_str_newlit(L, "metatable"));
+    if (opt_mt && tvistab(opt_mt)) {
+      dict_mt = tabV(opt_mt);
+      lj_serialize_dict_prep_mt(L, dict_mt);
     }
   }
   env = tabref(curr_func(L)->c.env);
@@ -312,7 +318,8 @@ LJLIB_CF(buffer_new)
   setudataV(L, L->top++, ud);
   sbx = (SBufExt *)uddata(ud);
   lj_bufx_init(L, sbx);
-  setgcref(sbx->dict, obj2gco(dict));
+  setgcref(sbx->dict_str, obj2gco(dict_str));
+  setgcref(sbx->dict_mt, obj2gco(dict_mt));
   if (sz > 0) lj_buf_need2((SBuf *)sbx, sz);
   return 1;
 }
