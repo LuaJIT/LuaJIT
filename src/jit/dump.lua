@@ -102,10 +102,12 @@ end
 local function fillsymtab(tr, nexit)
   local t = symtab
   if nexitsym == 0 then
+    local maskaddr = jit.arch == "arm" and -2
     local ircall = vmdef.ircall
     for i=0,#ircall do
       local addr = ircalladdr(i)
       if addr ~= 0 then
+	if maskaddr then addr = band(addr, maskaddr) end
 	if addr < 0 then addr = addr + 2^32 end
 	t[addr] = ircall[i]
       end
