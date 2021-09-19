@@ -364,7 +364,10 @@ TRef LJ_FASTCALL lj_opt_dse_ahstore(jit_State *J)
       /* Different value: try to eliminate the redundant store. */
       if (ref > J->chain[IR_LOOP]) {  /* Quick check to avoid crossing LOOP. */
 	IRIns *ir;
-	/* Check for any intervening guards (includes conflicting loads). */
+	/* Check for any intervening guards (includes conflicting loads).
+	** Note that lj_tab_keyindex and lj_vm_next don't need guards,
+	** since they are followed by at least one guarded VLOAD.
+	*/
 	for (ir = IR(J->cur.nins-1); ir > store; ir--)
 	  if (irt_isguard(ir->t) || ir->o == IR_ALEN)
 	    goto doemit;  /* No elimination possible. */

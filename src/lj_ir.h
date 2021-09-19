@@ -236,6 +236,7 @@ IRFLDEF(FLENUM)
 #define IRSLOAD_CONVERT		0x08	/* Number to integer conversion. */
 #define IRSLOAD_READONLY	0x10	/* Read-only, omit slot store. */
 #define IRSLOAD_INHERIT		0x20	/* Inherited by exits/side traces. */
+#define IRSLOAD_KEYINDEX	0x40	/* Table traversal key index. */
 
 /* XLOAD mode bits, stored in op2. */
 #define IRXLOAD_READONLY	0x01	/* Load from read-only data. */
@@ -495,6 +496,7 @@ typedef uint32_t TRef;
 #define TREF_REFMASK		0x0000ffff
 #define TREF_FRAME		0x00010000
 #define TREF_CONT		0x00020000
+#define TREF_KEYINDEX		0x00100000
 
 #define TREF(ref, t)		((TRef)((ref) + ((t)<<24)))
 

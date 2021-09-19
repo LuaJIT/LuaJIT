@@ -215,8 +215,8 @@ static void trace_unpatch(jit_State *J, GCtrace *T)
     break;
   case BC_JITERL:
   case BC_JLOOP:
-    lj_assertJ(op == BC_ITERL || op == BC_LOOP || bc_isret(op),
-	       "bad original bytecode %d", op);
+    lj_assertJ(op == BC_ITERL || op == BC_ITERN || op == BC_LOOP ||
+	       bc_isret(op), "bad original bytecode %d", op);
     *pc = T->startins;
     break;
   case BC_JMP:
@@ -411,7 +411,7 @@ static void trace_start(jit_State *J)
   TraceNo traceno;
 
   if ((J->pt->flags & PROTO_NOJIT)) {  /* JIT disabled for this proto? */
-    if (J->parent == 0 && J->exitno == 0) {
+    if (J->parent == 0 && J->exitno == 0 && bc_op(*J->pc) != BC_ITERN) {
       /* Lazy bytecode patching to disable hotcount events. */
       lj_assertJ(bc_op(*J->pc) == BC_FORL || bc_op(*J->pc) == BC_ITERL ||
 		 bc_op(*J->pc) == BC_LOOP || bc_op(*J->pc) == BC_FUNCF,
@@ -496,6 +496,7 @@ static void trace_stop(jit_State *J)
     J->cur.nextroot = pt->trace;
     pt->trace = (TraceNo1)traceno;
     break;
+  case BC_ITERN:
   case BC_RET:
   case BC_RET0:
   case BC_RET1:
@@ -575,7 +576,8 @@ static int trace_abort(jit_State *J)
     return 1;  /* Retry ASM with new MCode area. */
   }
   /* Penalize or blacklist starting bytecode instruction. */
-  if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins))) {
+  if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins)) &&
+      bc_op(J->cur.startins) != BC_ITERN) {
     if (J->exitno == 0) {
       BCIns *startpc = mref(J->cur.startpc, BCIns);
       if (e == LJ_TRERR_RETRY)
@@ -651,8 +653,13 @@ static TValue *trace_state(lua_State *L, lua_CFunction dummy, void *ud)
       J->state = LJ_TRACE_RECORD;  /* trace_start() may change state. */
       trace_start(J);
       lj_dispatch_update(J2G(J));
-      break;
+      if (J->state != LJ_TRACE_RECORD_1ST)
+	break;
+      /* fallthrough */
 
+    case LJ_TRACE_RECORD_1ST:
+      J->state = LJ_TRACE_RECORD;
+      /* fallthrough */
     case LJ_TRACE_RECORD:
       trace_pendpatch(J, 0);
       setvmstate(J2G(J), RECORD);
@@ -899,13 +906,14 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   }
   if (bc_op(*pc) == BC_JLOOP) {
     BCIns *retpc = &traceref(J, bc_d(*pc))->startins;
-    if (bc_isret(bc_op(*retpc))) {
+    int isret = bc_isret(bc_op(*retpc));
+    if (isret || bc_op(*retpc) == BC_ITERN) {
       if (J->state == LJ_TRACE_RECORD) {
 	J->patchins = *pc;
 	J->patchpc = (BCIns *)pc;
 	*J->patchpc = *retpc;
 	J->bcskip = 1;
-      } else {
+      } else if (isret) {
 	pc = retpc;
 	setcframe_pc(cf, pc);
       }

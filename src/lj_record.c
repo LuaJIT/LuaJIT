@@ -156,6 +156,9 @@ static void rec_check_slots(jit_State *J)
 	lj_assertJ((J->slot[s+1+LJ_FR2] & TREF_FRAME),
 		   "cont slot %d not followed by frame", s);
 	depth++;
+      } else if ((tr & TREF_KEYINDEX)) {
+	lj_assertJ(tref_isint(tr), "keyindex slot %d bad type %d",
+				   s, tref_type(tr));
       } else {
 	/* Number repr. may differ, but other types must be the same. */
 	lj_assertJ(tvisnumber(tv) ? tref_isnumber(tr) :
@@ -283,9 +286,9 @@ static void canonicalize_slots(jit_State *J)
   if (LJ_DUALNUM) return;
   for (s = J->baseslot+J->maxslot-1; s >= 1; s--) {
     TRef tr = J->slot[s];
-    if (tref_isinteger(tr)) {
+    if (tref_isinteger(tr) && !(tr & TREF_KEYINDEX)) {
       IRIns *ir = IR(tref_ref(tr));
-      if (!(ir->o == IR_SLOAD && (ir->op2 & IRSLOAD_READONLY)))
+      if (!(ir->o == IR_SLOAD && (ir->op2 & (IRSLOAD_READONLY))))
 	J->slot[s] = emitir(IRTN(IR_CONV), tr, IRCONV_NUM_INT);
     }
   }
@@ -606,6 +609,7 @@ static void rec_loop_interp(jit_State *J, const BCIns *pc, LoopEvent ev)
 {
   if (J->parent == 0 && J->exitno == 0) {
     if (pc == J->startpc && J->framedepth + J->retdepth == 0) {
+      if (bc_op(J->cur.startins) == BC_ITERN) return;  /* See rec_itern(). */
       /* Same loop? */
       if (ev == LOOPEV_LEAVE)  /* Must loop back to form a root trace. */
 	lj_trace_err(J, LJ_TRERR_LLEAVE);
@@ -644,6 +648,68 @@ static void rec_loop_jit(jit_State *J, TraceNo lnk, LoopEvent ev)
     else
       lj_record_stop(J, LJ_TRLINK_ROOT, lnk);  /* Link to the loop. */
   }  /* Side trace continues across a loop that's left or not entered. */
+}
+
+/* Record ITERN. */
+static LoopEvent rec_itern(jit_State *J, BCReg ra, BCReg rb)
+{
+#if LJ_BE
+  /* YAGNI: Disabled on big-endian due to issues with lj_vm_next,
+  ** IR_HIOP, RID_RETLO/RID_RETHI and ra_destpair.
+  */
+  UNUSED(ra); UNUSED(rb);
+  setintV(&J->errinfo, (int32_t)BC_ITERN);
+  lj_trace_err_info(J, LJ_TRERR_NYIBC);
+#else
+  RecordIndex ix;
+  /* Since ITERN is recorded at the start, we need our own loop detection. */
+  if (J->pc == J->startpc && J->cur.nins > REF_FIRST &&
+      J->framedepth + J->retdepth == 0 && J->parent == 0 && J->exitno == 0) {
+    lj_record_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Looping trace. */
+    return LOOPEV_ENTER;
+  }
+  J->maxslot = ra;
+  lj_snap_add(J);  /* Required to make JLOOP the first ins in a side-trace. */
+  ix.tab = getslot(J, ra-2);
+  ix.key = J->base[ra-1] ? J->base[ra-1] :
+	   sloadt(J, (int32_t)(ra-1), IRT_INT, IRSLOAD_KEYINDEX);
+  copyTV(J->L, &ix.tabv, &J->L->base[ra-2]);
+  copyTV(J->L, &ix.keyv, &J->L->base[ra-1]);
+  ix.idxchain = (rb < 3);  /* Omit value type check, if unused. */
+  ix.mobj = 1;  /* We need the next index, too. */
+  J->maxslot = ra + lj_record_next(J, &ix);
+  J->needsnap = 1;
+  if (!tref_isnil(ix.key)) {  /* Looping back? */
+    J->base[ra-1] = ix.mobj | TREF_KEYINDEX;  /* Control var has next index. */
+    J->base[ra] = ix.key;
+    J->base[ra+1] = ix.val;
+    J->pc += bc_j(J->pc[1])+2;
+    return LOOPEV_ENTER;
+  } else {
+    J->maxslot = ra-3;
+    J->pc += 2;
+    return LOOPEV_LEAVE;
+  }
+#endif
+}
+
+/* Record ISNEXT. */
+static void rec_isnext(jit_State *J, BCReg ra)
+{
+  cTValue *b = &J->L->base[ra-3];
+  if (tvisfunc(b) && funcV(b)->c.ffid == FF_next &&
+      tvistab(b+1) && tvisnil(b+2)) {
+    /* These checks are folded away for a compiled pairs(). */
+    TRef func = getslot(J, ra-3);
+    TRef trid = emitir(IRT(IR_FLOAD, IRT_U8), func, IRFL_FUNC_FFID);
+    emitir(IRTGI(IR_EQ), trid, lj_ir_kint(J, FF_next));
+    (void)getslot(J, ra-2); /* Type check for table. */
+    (void)getslot(J, ra-1); /* Type check for nil key. */
+    J->base[ra-1] = lj_ir_kint(J, 0) | TREF_KEYINDEX;
+    J->maxslot = ra;
+  } else {  /* Abort trace. Interpreter will despecialize bytecode. */
+    lj_trace_err(J, LJ_TRERR_RECERR);
+  }
 }
 
 /* -- Record profiler hook checks ----------------------------------------- */
@@ -716,7 +782,7 @@ static TRef rec_call_specialize(jit_State *J, GCfunc *fn, TRef tr)
       /* NYI: io_file_iter doesn't have an ffid, yet. */
       {  /* Specialize to the ffid. */
 	TRef trid = emitir(IRT(IR_FLOAD, IRT_U8), tr, IRFL_FUNC_FFID);
-	emitir(IRTG(IR_EQ, IRT_INT), trid, lj_ir_kint(J, fn->c.ffid));
+	emitir(IRTGI(IR_EQ), trid, lj_ir_kint(J, fn->c.ffid));
       }
       return tr;
     default:
@@ -1562,6 +1628,47 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
     }
     J->needsnap = 1;
     return 0;
+  }
+}
+
+/* Determine result type of table traversal. */
+static IRType rec_next_types(GCtab *t, uint32_t idx)
+{
+  for (; idx < t->asize; idx++) {
+    cTValue *a = arrayslot(t, idx);
+    if (LJ_LIKELY(!tvisnil(a)))
+      return (LJ_DUALNUM ? IRT_INT : IRT_NUM) + (itype2irt(a) << 8);
+  }
+  idx -= t->asize;
+  for (; idx <= t->hmask; idx++) {
+    Node *n = &noderef(t->node)[idx];
+    if (!tvisnil(&n->val))
+      return itype2irt(&n->key) + (itype2irt(&n->val) << 8);
+  }
+  return IRT_NIL + (IRT_NIL << 8);
+}
+
+/* Record a table traversal step aka next(). */
+int lj_record_next(jit_State *J, RecordIndex *ix)
+{
+  IRType t, tkey, tval;
+  TRef trvk;
+  t = rec_next_types(tabV(&ix->tabv), ix->keyv.u32.lo);
+  tkey = (t & 0xff); tval = (t >> 8);
+  trvk = lj_ir_call(J, IRCALL_lj_vm_next, ix->tab, ix->key);
+  if (ix->mobj || tkey == IRT_NIL) {
+    TRef idx = emitir(IRTI(IR_HIOP), trvk, trvk);
+    /* Always check for invalid key from next() for nil result. */
+    if (!ix->mobj) emitir(IRTGI(IR_NE), idx, lj_ir_kint(J, -1));
+    ix->mobj = idx;
+  }
+  ix->key = lj_record_vload(J, trvk, 1, tkey);
+  if (tkey == IRT_NIL || ix->idxchain) {  /* Omit value type check. */
+    ix->val = TREF_NIL;
+    return 1;
+  } else {  /* Need value. */
+    ix->val = lj_record_vload(J, trvk, 0, tval);
+    return 2;
   }
 }
 
@@ -2440,6 +2547,9 @@ void lj_record_ins(jit_State *J)
   case BC_ITERL:
     rec_loop_interp(J, pc, rec_iterl(J, *pc));
     break;
+  case BC_ITERN:
+    rec_loop_interp(J, pc, rec_itern(J, ra, rb));
+    break;
   case BC_LOOP:
     rec_loop_interp(J, pc, rec_loop(J, ra, 1));
     break;
@@ -2466,6 +2576,10 @@ void lj_record_ins(jit_State *J)
   case BC_JMP:
     if (ra < J->maxslot)
       J->maxslot = ra;  /* Shrink used slots. */
+    break;
+
+  case BC_ISNEXT:
+    rec_isnext(J, ra);
     break;
 
   /* -- Function headers -------------------------------------------------- */
@@ -2497,8 +2611,6 @@ void lj_record_ins(jit_State *J)
       break;
     }
     /* fallthrough */
-  case BC_ITERN:
-  case BC_ISNEXT:
   case BC_UCLO:
   case BC_FNEW:
     setintV(&J->errinfo, (int32_t)op);
@@ -2549,6 +2661,13 @@ static const BCIns *rec_setup_root(jit_State *J)
     pc += 1+bc_j(ins);
     lj_assertJ(bc_op(pc[-1]) == BC_JMP, "ITERL does not point to JMP+1");
     J->bc_min = pc;
+    break;
+  case BC_ITERN:
+    lj_assertJ(bc_op(pc[1]) == BC_ITERL, "no ITERL after ITERN");
+    J->maxslot = ra;
+    J->bc_extent = (MSize)(-bc_j(pc[1]))*sizeof(BCIns);
+    J->bc_min = pc+2 + bc_j(pc[1]);
+    J->state = LJ_TRACE_RECORD_1ST;  /* Record the first ITERN, too. */
     break;
   case BC_LOOP:
     /* Only check BC range for real loops, but not for "repeat until true". */
@@ -2657,6 +2776,7 @@ void lj_record_setup(jit_State *J)
     J->pc = rec_setup_root(J);
     /* Note: the loop instruction itself is recorded at the end and not
     ** at the start! So snapshot #0 needs to point to the *next* instruction.
+    ** The one exception is BC_ITERN, which sets LJ_TRACE_RECORD_1ST.
     */
     lj_snap_add(J);
     if (bc_op(J->cur.startins) == BC_FORL)

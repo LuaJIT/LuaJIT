@@ -193,7 +193,7 @@
 |//-----------------------------------------------------------------------
 |
 |// Trap for not-yet-implemented parts.
-|.macro NYI; .long 0xf0f0f0f0; .endmacro
+|.macro NYI; .long 0xec1cf0f0; .endmacro
 |
 |// Macros to mark delay slots.
 |.macro ., a; a; .endmacro
@@ -2904,6 +2904,70 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------
   |
+  |.define NEXT_TAB,		TAB:CARG1
+  |.define NEXT_IDX,		CARG2
+  |.define NEXT_ASIZE,		CARG3
+  |.define NEXT_NIL,		CARG4
+  |.define NEXT_TMP0,		r12
+  |.define NEXT_TMP1,		r13
+  |.define NEXT_TMP2,		r14
+  |.define NEXT_RES_VK,		CRET1
+  |.define NEXT_RES_IDX,	CRET2
+  |.define NEXT_RES_PTR,	sp
+  |.define NEXT_RES_VAL,	0(sp)
+  |.define NEXT_RES_KEY,	8(sp)
+  |
+  |// TValue *lj_vm_next(GCtab *t, uint32_t idx)
+  |// Next idx returned in CRET2.
+  |->vm_next:
+  |.if JIT and ENDIAN_LE
+  |   lw NEXT_ASIZE, NEXT_TAB->asize
+  |  ld NEXT_TMP0, NEXT_TAB->array
+  |    li NEXT_NIL, LJ_TNIL
+  |1:  // Traverse array part.
+  |   sltu AT, NEXT_IDX, NEXT_ASIZE
+  |    sll NEXT_TMP1, NEXT_IDX, 3
+  |   beqz AT, >5
+  |.   daddu NEXT_TMP1, NEXT_TMP0, NEXT_TMP1
+  |   li AT, LJ_TISNUM
+  |  ld NEXT_TMP2, 0(NEXT_TMP1)
+  |   dsll AT, AT, 47
+  |   or NEXT_TMP1, NEXT_IDX, AT
+  |  beq NEXT_TMP2, NEXT_NIL, <1
+  |.  addiu NEXT_IDX, NEXT_IDX, 1
+  |  sd NEXT_TMP2, NEXT_RES_VAL
+  |   sd NEXT_TMP1, NEXT_RES_KEY
+  |  move NEXT_RES_VK, NEXT_RES_PTR
+  |  jr ra
+  |.  move NEXT_RES_IDX, NEXT_IDX
+  |
+  |5:  // Traverse hash part.
+  |  subu NEXT_RES_IDX, NEXT_IDX, NEXT_ASIZE
+  |   ld NODE:NEXT_RES_VK, NEXT_TAB->node
+  |    sll NEXT_TMP2, NEXT_RES_IDX, 5
+  |  lw NEXT_TMP0, NEXT_TAB->hmask
+  |    sll AT, NEXT_RES_IDX, 3
+  |    subu AT, NEXT_TMP2, AT
+  |   daddu NODE:NEXT_RES_VK, NODE:NEXT_RES_VK, AT
+  |6:
+  |  sltu AT, NEXT_TMP0, NEXT_RES_IDX
+  |  bnez AT, >8
+  |.  nop
+  |  ld NEXT_TMP2, NODE:NEXT_RES_VK->val
+  |  bne NEXT_TMP2, NEXT_NIL, >9
+  |.  addiu NEXT_RES_IDX, NEXT_RES_IDX, 1
+  |  // Skip holes in hash part.
+  |  b <6
+  |.  daddiu NODE:NEXT_RES_VK, NODE:NEXT_RES_VK, sizeof(Node)
+  |
+  |8:  // End of iteration. Set the key to nil (not the value).
+  |  sd NEXT_NIL, NEXT_RES_KEY
+  |  move NEXT_RES_VK, NEXT_RES_PTR
+  |9:
+  |  jr ra
+  |.  addu NEXT_RES_IDX, NEXT_RES_IDX, NEXT_ASIZE
+  |.endif
+  |
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
@@ -4700,10 +4764,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
-    |.if JIT
-    |  // NYI: add hotloop, record BC_ITERN.
+    |.if JIT and ENDIAN_LE
+    |  hotloop
     |.endif
+    |->vm_IITERN:
+    |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
     |  daddu RA, BASE, RA
     |  ld TAB:RB, -16(RA)
     |   lw RC, -8+LO(RA)		// Get index from control var.
@@ -4789,8 +4854,27 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   li TMP1, BC_ITERC
     |  sb TMP3, -4+OFS_OP(PC)
     |   daddu PC, TMP0, TMP2
+    |.if JIT
+    |  lb TMP0, OFS_OP(PC)
+    |  li AT, BC_ITERN
+    |  bne TMP0, AT, >6
+    |.  lhu TMP2, OFS_RD(PC)
+    |.endif
     |  b <1
     |.  sb TMP1, OFS_OP(PC)
+    |.if JIT
+    |6:  // Unpatch JLOOP.
+    |  ld TMP0, DISPATCH_J(trace)(DISPATCH)
+    |   sll TMP2, TMP2, 3
+    |  daddu TMP0, TMP0, TMP2
+    |  ld TRACE:TMP2, 0(TMP0)
+    |  lw TMP0, TRACE:TMP2->startins
+    |   li AT, -256
+    |  and TMP0, TMP0, AT
+    |  or TMP0, TMP0, TMP1
+    |  b <1
+    |.  sw TMP0, 0(PC)
+    |.endif
     break;
 
   case BC_VARG:

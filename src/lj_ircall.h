@@ -187,6 +187,8 @@ typedef struct CCallInfo {
   _(ANY,	lj_tab_dup,		2,  FA, TAB, CCI_L|CCI_T) \
   _(ANY,	lj_tab_clear,		1,  FS, NIL, 0) \
   _(ANY,	lj_tab_newkey,		3,   S, PGC, CCI_L|CCI_T) \
+  _(ANY,	lj_tab_keyindex,	2,  FL, INT, 0) \
+  _(ANY,	lj_vm_next,		2,  FL, PTR, 0) \
   _(ANY,	lj_tab_len,		1,  FL, INT, 0) \
   _(ANY,	lj_tab_len_hint,	2,  FL, INT, 0) \
   _(ANY,	lj_gc_step_jit,		2,  FS, NIL, CCI_L) \

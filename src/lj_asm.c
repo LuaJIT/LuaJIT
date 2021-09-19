@@ -2225,7 +2225,17 @@ static void asm_setup_regsp(ASMState *as)
 	as->modset |= RSET_SCRATCH;
       continue;
       }
-    case IR_CALLN: case IR_CALLA: case IR_CALLL: case IR_CALLS: {
+    case IR_CALLL:
+      /* lj_vm_next needs two TValues on the stack. */
+#if LJ_TARGET_X64 && LJ_ABI_WIN
+      if (ir->op2 == IRCALL_lj_vm_next && as->evenspill < SPS_FIRST + 4)
+	as->evenspill = SPS_FIRST + 4;
+#else
+      if (SPS_FIRST < 4 && ir->op2 == IRCALL_lj_vm_next && as->evenspill < 4)
+	as->evenspill = 4;
+#endif
+      /* fallthrough */
+    case IR_CALLN: case IR_CALLA: case IR_CALLS: {
       const CCallInfo *ci = &lj_ir_callinfo[ir->op2];
       ir->prev = asm_setup_call_slots(as, ir, ci);
       if (inloop)

@@ -521,6 +521,40 @@ static void LJ_FASTCALL recff_getfenv(jit_State *J, RecordFFData *rd)
   recff_nyiu(J, rd);
 }
 
+static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
+{
+#if LJ_BE
+  /* YAGNI: Disabled on big-endian due to issues with lj_vm_next,
+  ** IR_HIOP, RID_RETLO/RID_RETHI and ra_destpair.
+  */
+  recff_nyi(J, rd);
+#else
+  TRef tab = J->base[0];
+  if (tref_istab(tab)) {
+    RecordIndex ix;
+    cTValue *keyv;
+    ix.tab = tab;
+    if (tref_isnil(J->base[1])) {  /* Shortcut for start of traversal. */
+      ix.key = lj_ir_kint(J, 0);
+      keyv = niltvg(J2G(J));
+    } else {
+      TRef tmp = recff_tmpref(J, J->base[1], IRTMPREF_IN1);
+      ix.key = lj_ir_call(J, IRCALL_lj_tab_keyindex, tab, tmp);
+      keyv = &rd->argv[1];
+    }
+    copyTV(J->L, &ix.tabv, &rd->argv[0]);
+    ix.keyv.u32.lo = lj_tab_keyindex(tabV(&ix.tabv), keyv);
+    /* Omit the value, if not used by the caller. */
+    ix.idxchain = (J->framedepth && frame_islua(J->L->base-1) &&
+		   bc_b(frame_pc(J->L->base-1)[-1]) <= 2);
+    ix.mobj = 0;  /* We don't need the next index. */
+    rd->nres = lj_record_next(J, &ix);
+    J->base[0] = ix.key;
+    J->base[1] = ix.val;
+  }  /* else: Interpreter will throw. */
+#endif
+}
+
 /* -- Math library fast functions ----------------------------------------- */
 
 static void LJ_FASTCALL recff_math_abs(jit_State *J, RecordFFData *rd)

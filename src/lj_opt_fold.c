@@ -2320,6 +2320,15 @@ LJFOLDF(fload_sbuf)
   return lj_opt_fwd_sbuf(J, tref_ref(tr)) ? tr : EMITFOLD;
 }
 
+/* The fast function ID of function objects is immutable. */
+LJFOLD(FLOAD KGC IRFL_FUNC_FFID)
+LJFOLDF(fload_func_ffid_kgc)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_FOLD))
+    return INTFOLD((int32_t)ir_kfunc(fleft)->c.ffid);
+  return NEXTFOLD;
+}
+
 /* The C type ID of cdata objects is immutable. */
 LJFOLD(FLOAD KGC IRFL_CDATA_CTYPEID)
 LJFOLDF(fload_cdata_typeid_kgc)

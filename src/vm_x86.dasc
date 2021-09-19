@@ -3120,6 +3120,86 @@ static void build_subroutines(BuildCtx *ctx)
   |  ret
   |.endif
   |
+  |.define NEXT_TAB,		TAB:FCARG1
+  |.define NEXT_IDX,		FCARG2
+  |.define NEXT_PTR,		RCa
+  |.define NEXT_PTRd,		RC
+  |.macro NEXT_RES_IDXL, op2;	lea edx, [NEXT_IDX+op2]; .endmacro
+  |.if X64
+  |.define NEXT_TMP,		CARG3d
+  |.define NEXT_TMPq,		CARG3
+  |.define NEXT_ASIZE,		CARG4d
+  |.macro NEXT_ENTER;		.endmacro
+  |.macro NEXT_LEAVE;		ret; .endmacro
+  |.if X64WIN
+  |.define NEXT_RES_PTR,	[rsp+aword*5]
+  |.macro NEXT_RES_IDX, op2;	add NEXT_IDX, op2; .endmacro
+  |.else
+  |.define NEXT_RES_PTR,	[rsp+aword*1]
+  |.macro NEXT_RES_IDX, op2;	lea edx, [NEXT_IDX+op2]; .endmacro
+  |.endif
+  |.else
+  |.define NEXT_ASIZE,		esi
+  |.define NEXT_TMP,		edi
+  |.macro NEXT_ENTER;		push esi; push edi; .endmacro
+  |.macro NEXT_LEAVE;		pop edi; pop esi; ret; .endmacro
+  |.define NEXT_RES_PTR,	[esp+dword*3]
+  |.macro NEXT_RES_IDX, op2;	add NEXT_IDX, op2; .endmacro
+  |.endif
+  |
+  |// TValue *lj_vm_next(GCtab *t, uint32_t idx)
+  |// Next idx returned in edx.
+  |->vm_next:
+  |.if JIT
+  |  NEXT_ENTER
+  |  mov NEXT_ASIZE, NEXT_TAB->asize
+  |1:  // Traverse array part.
+  |  cmp NEXT_IDX, NEXT_ASIZE;  jae >5
+  |  mov NEXT_TMP, NEXT_TAB->array
+  |  cmp dword [NEXT_TMP+NEXT_IDX*8+4], LJ_TNIL;  je >2
+  |  lea NEXT_PTR, NEXT_RES_PTR
+  |.if X64
+  |  mov NEXT_TMPq, qword [NEXT_TMP+NEXT_IDX*8]
+  |  mov qword [NEXT_PTR], NEXT_TMPq
+  |.else
+  |  mov NEXT_ASIZE, dword [NEXT_TMP+NEXT_IDX*8+4]
+  |  mov NEXT_TMP, dword [NEXT_TMP+NEXT_IDX*8]
+  |  mov dword [NEXT_PTR+4], NEXT_ASIZE
+  |  mov dword [NEXT_PTR], NEXT_TMP
+  |.endif
+  |.if DUALNUM
+  |  mov dword [NEXT_PTR+dword*3], LJ_TISNUM
+  |  mov dword [NEXT_PTR+dword*2], NEXT_IDX
+  |.else
+  |  cvtsi2sd xmm0, NEXT_IDX
+  |  movsd qword [NEXT_PTR+dword*2], xmm0
+  |.endif
+  |  NEXT_RES_IDX 1
+  |  NEXT_LEAVE
+  |2:  // Skip holes in array part.
+  |  add NEXT_IDX, 1
+  |  jmp <1
+  |
+  |5:  // Traverse hash part.
+  |  sub NEXT_IDX, NEXT_ASIZE
+  |6:
+  |  cmp NEXT_IDX, NEXT_TAB->hmask; ja >9
+  |  imul NEXT_PTRd, NEXT_IDX, #NODE
+  |  add NODE:NEXT_PTRd, dword NEXT_TAB->node
+  |  cmp dword NODE:NEXT_PTR->val.it, LJ_TNIL; je >7
+  |  NEXT_RES_IDXL NEXT_ASIZE+1
+  |  NEXT_LEAVE
+  |7:  // Skip holes in hash part.
+  |  add NEXT_IDX, 1
+  |  jmp <6
+  |
+  |9:  // End of iteration. Set the key to nil (not the value).
+  |  NEXT_RES_IDX NEXT_ASIZE
+  |  lea NEXT_PTR, NEXT_RES_PTR
+  |  mov dword [NEXT_PTR+dword*3], LJ_TNIL
+  |  NEXT_LEAVE
+  |.endif
+  |
   |//-----------------------------------------------------------------------
   |//-- Assertions ---------------------------------------------------------
   |//-----------------------------------------------------------------------
@@ -4771,10 +4851,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  ins_A	// RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |.if JIT
-    |  // NYI: add hotloop, record BC_ITERN.
+    |  hotloop RB
     |.endif
+    |->vm_IITERN:
+    |  ins_A	// RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |  mov TMP1, KBASE			// Need two more free registers.
     |  mov TMP2, DISPATCH
     |  mov TAB:RB, [BASE+RA*8-16]
@@ -4868,8 +4949,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Despecialize bytecode if any of the checks fail.
     |  mov PC_OP, BC_JMP
     |  branchPC RD
+    |.if JIT
+    |  cmp byte [PC], BC_ITERN
+    |  jne >6
+    |.endif
     |  mov byte [PC], BC_ITERC
     |  jmp <1
+    |.if JIT
+    |6:  // Unpatch JLOOP.
+    |  mov RA, [DISPATCH+DISPATCH_J(trace)]
+    |  movzx RC, word [PC+2]
+    |  mov TRACE:RA, [RA+RC*4]
+    |  mov eax, TRACE:RA->startins
+    |  mov al, BC_ITERC
+    |  mov dword [PC], eax
+    |  jmp <1
+    |.endif
     break;
 
   case BC_VARG:

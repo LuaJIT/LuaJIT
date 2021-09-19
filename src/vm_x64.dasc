@@ -2633,6 +2633,67 @@ static void build_subroutines(BuildCtx *ctx)
   |  .if X64WIN; pop rsi; .endif
   |  ret
   |
+  |.define NEXT_TAB,		TAB:CARG1
+  |.define NEXT_IDX,		CARG2d
+  |.define NEXT_IDXa,		CARG2
+  |.define NEXT_PTR,		RC
+  |.define NEXT_PTRd,		RCd
+  |.define NEXT_TMP,		CARG3
+  |.define NEXT_ASIZE,		CARG4d
+  |.macro NEXT_RES_IDXL, op2;	lea edx, [NEXT_IDX+op2]; .endmacro
+  |.if X64WIN
+  |.define NEXT_RES_PTR,	[rsp+aword*5]
+  |.macro NEXT_RES_IDX, op2;	add NEXT_IDX, op2; .endmacro
+  |.else
+  |.define NEXT_RES_PTR,	[rsp+aword*1]
+  |.macro NEXT_RES_IDX, op2;	lea edx, [NEXT_IDX+op2]; .endmacro
+  |.endif
+  |
+  |// TValue *lj_vm_next(GCtab *t, uint32_t idx)
+  |// Next idx returned in edx.
+  |->vm_next:
+  |.if JIT
+  |  mov NEXT_ASIZE, NEXT_TAB->asize
+  |1:  // Traverse array part.
+  |  cmp NEXT_IDX, NEXT_ASIZE;  jae >5
+  |  mov NEXT_TMP, NEXT_TAB->array
+  |  mov NEXT_TMP, qword [NEXT_TMP+NEXT_IDX*8]
+  |  cmp NEXT_TMP, LJ_TNIL;  je >2
+  |  lea NEXT_PTR, NEXT_RES_PTR
+  |  mov qword [NEXT_PTR], NEXT_TMP
+  |.if DUALNUM
+  |  setint NEXT_TMP, NEXT_IDXa
+  |  mov qword [NEXT_PTR+qword*1], NEXT_TMP
+  |.else
+  |  cvtsi2sd xmm0, NEXT_IDX
+  |  movsd qword [NEXT_PTR+qword*1], xmm0
+  |.endif
+  |  NEXT_RES_IDX 1
+  |  ret
+  |2:  // Skip holes in array part.
+  |  add NEXT_IDX, 1
+  |  jmp <1
+  |
+  |5:  // Traverse hash part.
+  |  sub NEXT_IDX, NEXT_ASIZE
+  |6:
+  |  cmp NEXT_IDX, NEXT_TAB->hmask; ja >9
+  |  imul NEXT_PTRd, NEXT_IDX, #NODE
+  |  add NODE:NEXT_PTR, NEXT_TAB->node
+  |  cmp qword NODE:NEXT_PTR->val, LJ_TNIL; je >7
+  |  NEXT_RES_IDXL NEXT_ASIZE+1
+  |  ret
+  |7:  // Skip holes in hash part.
+  |  add NEXT_IDX, 1
+  |  jmp <6
+  |
+  |9:  // End of iteration. Set the key to nil (not the value).
+  |  NEXT_RES_IDX NEXT_ASIZE
+  |  lea NEXT_PTR, NEXT_RES_PTR
+  |  mov qword [NEXT_PTR+qword*1], LJ_TNIL
+  |  ret
+  |.endif
+  |
   |//-----------------------------------------------------------------------
   |//-- Assertions ---------------------------------------------------------
   |//-----------------------------------------------------------------------
@@ -4044,10 +4105,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERN:
-    |  ins_A	// RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |.if JIT
-    |  // NYI: add hotloop, record BC_ITERN.
+    |  hotloop RBd
     |.endif
+    |->vm_IITERN:
+    |  ins_A	// RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |  mov TAB:RB, [BASE+RA*8-16]
     |  cleartp TAB:RB
     |  mov RCd, [BASE+RA*8-8]		// Get index from control var.
@@ -4118,8 +4180,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:  // Despecialize bytecode if any of the checks fail.
     |  mov PC_OP, BC_JMP
     |  branchPC RD
+    |.if JIT
+    |  cmp byte [PC], BC_ITERN
+    |  jne >6
+    |.endif
     |  mov byte [PC], BC_ITERC
     |  jmp <1
+    |.if JIT
+    |6:  // Unpatch JLOOP.
+    |  mov RA, [DISPATCH+DISPATCH_J(trace)]
+    |  movzx RCd, word [PC+2]
+    |  mov TRACE:RA, [RA+RC*8]
+    |  mov eax, TRACE:RA->startins
+    |  mov al, BC_ITERC
+    |  mov dword [PC], eax
+    |  jmp <1
+    |.endif
     break;
 
   case BC_VARG:

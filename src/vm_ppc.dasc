@@ -3163,6 +3163,11 @@ static void build_subroutines(BuildCtx *ctx)
   |  blr
   |.endif
   |
+  |->vm_next:
+  |.if JIT
+  |  NYI  // On big-endian.
+  |.endif
+  |
   |//-----------------------------------------------------------------------
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
@@ -5112,8 +5117,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ITERN:
     |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
     |.if JIT
-    |  // NYI: add hotloop, record BC_ITERN.
+    |  // NYI on big-endian
     |.endif
+    |->vm_IITERN:
     |  add RA, BASE, RA
     |  lwz TAB:RB, -12(RA)
     |  lwz RC, -4(RA)			// Get index from control var.
@@ -5244,6 +5250,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   li TMP1, BC_ITERC
     |  stb TMP0, -1(PC)
     |    addis PC, TMP3, -(BCBIAS_J*4 >> 16)
+    |  // NYI on big-endian: unpatch JLOOP.
     |   stb TMP1, 3(PC)
     |  b <1
     break;

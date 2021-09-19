@@ -219,8 +219,10 @@ local function colorize_text(s)
   return s
 end
 
-local function colorize_ansi(s, t)
-  return format(colortype_ansi[t], s)
+local function colorize_ansi(s, t, extra)
+  local out = format(colortype_ansi[t], s)
+  if extra then out = "\027[3m"..out end
+  return out
 end
 
 local irtype_ansi = setmetatable({},
@@ -229,9 +231,10 @@ local irtype_ansi = setmetatable({},
 
 local html_escape = { ["<"] = "&lt;", [">"] = "&gt;", ["&"] = "&amp;", }
 
-local function colorize_html(s, t)
+local function colorize_html(s, t, extra)
   s = gsub(s, "[<>&]", html_escape)
-  return format('<span class="irt_%s">%s</span>', irtype_text[t], s)
+  return format('<span class="irt_%s%s">%s</span>',
+		irtype_text[t], extra and " irt_extra" or "", s)
 end
 
 local irtype_html = setmetatable({},
@@ -256,6 +259,7 @@ span.irt_tab { color: #c00000; }
 span.irt_udt, span.irt_lud { color: #00c0c0; }
 span.irt_num { color: #4040c0; }
 span.irt_int, span.irt_i8, span.irt_u8, span.irt_i16, span.irt_u16 { color: #b040b0; }
+span.irt_extra { font-style: italic; }
 </style>
 ]]
 
@@ -271,6 +275,7 @@ local litname = {
     if band(mode, 8) ~= 0 then s = s.."C" end
     if band(mode, 16) ~= 0 then s = s.."R" end
     if band(mode, 32) ~= 0 then s = s.."I" end
+    if band(mode, 64) ~= 0 then s = s.."K" end
     t[mode] = s
     return s
   end}),
@@ -350,7 +355,7 @@ local function formatk(tr, idx, sn)
   else
     s = tostring(k) -- For primitives.
   end
-  s = colorize(format("%-4s", s), t)
+  s = colorize(format("%-4s", s), t, band(sn or 0, 0x100000) ~= 0)
   if slot then
     s = format("%s @%d", s, slot)
   end
@@ -370,7 +375,7 @@ local function printsnap(tr, snap)
 	out:write(colorize(format("%04d/%04d", ref, ref+1), 14))
       else
 	local m, ot, op1, op2 = traceir(tr, ref)
-	out:write(colorize(format("%04d", ref), band(ot, 31)))
+	out:write(colorize(format("%04d", ref), band(ot, 31), band(sn, 0x100000) ~= 0))
       end
       out:write(band(sn, 0x10000) == 0 and " " or "|") -- SNAP_FRAME
     else

@@ -51,6 +51,7 @@ LJ_ASMF void lj_vm_inshook(void);
 LJ_ASMF void lj_vm_rethook(void);
 LJ_ASMF void lj_vm_callhook(void);
 LJ_ASMF void lj_vm_profhook(void);
+LJ_ASMF void lj_vm_IITERN(void);
 
 /* Trace exit handling. */
 LJ_ASMF void lj_vm_exit_handler(void);
@@ -98,6 +99,7 @@ LJ_ASMF double lj_vm_trunc_sf(double);
 #if LJ_HASFFI
 LJ_ASMF int lj_vm_errno(void);
 #endif
+LJ_ASMF TValue *lj_vm_next(GCtab *t, uint32_t idx);
 #endif
 
 /* Continuations for metamethods. */
