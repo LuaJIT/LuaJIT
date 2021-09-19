@@ -1858,6 +1858,12 @@ static void asm_loop_fixup(ASMState *as)
   }
 }
 
+/* Fixup the tail of the loop. */
+static void asm_loop_tail_fixup(ASMState *as)
+{
+  UNUSED(as);  /* Nothing to do. */
+}
+
 /* -- Head of trace ------------------------------------------------------- */
 
 /* Reload L register from g->cur_L. */

@@ -2640,6 +2640,12 @@ static void asm_loop_fixup(ASMState *as)
   }
 }
 
+/* Fixup the tail of the loop. */
+static void asm_loop_tail_fixup(ASMState *as)
+{
+  if (as->loopinv) as->mctop--;
+}
+
 /* -- Head of trace ------------------------------------------------------- */
 
 /* Coalesce BASE register for a root trace. */
@@ -2647,7 +2653,6 @@ static void asm_head_root_base(ASMState *as)
 {
   IRIns *ir = IR(REF_BASE);
   Reg r = ir->r;
-  if (as->loopinv) as->mctop--;
   if (ra_hasreg(r)) {
     ra_free(as, r);
     if (rset_test(as->modset, r) || irt_ismarked(ir->t))
@@ -2662,7 +2667,6 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
 {
   IRIns *ir = IR(REF_BASE);
   Reg r = ir->r;
-  if (as->loopinv) as->mctop--;
   if (ra_hasreg(r)) {
     ra_free(as, r);
     if (rset_test(as->modset, r) || irt_ismarked(ir->t))
