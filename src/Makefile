@@ -320,7 +320,10 @@ ifeq (Darwin,$(TARGET_SYS))
     $(error missing: export MACOSX_DEPLOYMENT_TARGET=XX.YY)
   endif
   TARGET_STRIP+= -x
-  TARGET_XCFLAGS+= -DLUAJIT_UNWIND_EXTERNAL
+  # Ext. unwinding is broken on OSX/ARM64 until someone finds a fix. See #698.
+  ifneq (arm64,$(TARGET_LJARCH))
+    TARGET_XCFLAGS+= -DLUAJIT_UNWIND_EXTERNAL
+  endif
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)
