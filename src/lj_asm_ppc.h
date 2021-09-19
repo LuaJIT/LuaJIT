@@ -1019,6 +1019,10 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     rset_clear(allow, dest);
   }
   idx = asm_fuseahuref(as, ir->op1, &ofs, allow);
+  if (ir->o == IR_VLOAD) {
+    ofs = ofs != AHUREF_LSX ? ofs + 8 * ir->op2 :
+	  ir->op2 ? 8 * ir->op2 : AHUREF_LSX;
+  }
   if (irt_isnum(t)) {
     Reg tisnum = ra_allock(as, (int32_t)LJ_TISNUM, rset_exclude(allow, idx));
     asm_guardcc(as, CC_GE);

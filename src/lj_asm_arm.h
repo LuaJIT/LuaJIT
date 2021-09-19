@@ -1133,6 +1133,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   }
   idx = asm_fuseahuref(as, ir->op1, &ofs, allow,
 		       (!LJ_SOFTFP && t == IRT_NUM) ? 1024 : 4096);
+  if (ir->o == IR_VLOAD) ofs += 8 * ir->op2;
   if (!hiop || type == RID_NONE) {
     rset_clear(allow, idx);
     if (ofs < 256 && ra_hasreg(dest) && (dest & 1) == 0 &&

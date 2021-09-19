@@ -106,7 +106,7 @@
   _(FLOAD,	L , ref, lit) \
   _(XLOAD,	L , ref, lit) \
   _(SLOAD,	L , lit, lit) \
-  _(VLOAD,	L , ref, ___) \
+  _(VLOAD,	L , ref, lit) \
   _(ALEN,	L , ref, ref) \
   \
   _(ASTORE,	S , ref, ref) \

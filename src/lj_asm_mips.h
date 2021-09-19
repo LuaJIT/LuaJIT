@@ -1417,6 +1417,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
 #endif
   }
   idx = asm_fuseahuref(as, ir->op1, &ofs, allow);
+  if (ir->o == IR_VLOAD) ofs += 8 * ir->op2;
   rset_clear(allow, idx);
   if (irt_isnum(t)) {
     asm_guard(as, MIPSI_BEQ, RID_TMP, RID_ZERO);

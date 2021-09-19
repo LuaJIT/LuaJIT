@@ -1317,7 +1317,7 @@ static void LJ_FASTCALL recff_buffer_method_decode(jit_State *J, RecordFFData *r
   trr = lj_ir_call(J, IRCALL_lj_serialize_get, trbuf, tmp);
   /* No IR_USE needed, since the call is a store. */
   t = (IRType)lj_serialize_peektype(bufV(&rd->argv[0]));
-  J->base[0] = lj_record_vload(J, tmp, t);
+  J->base[0] = lj_record_vload(J, tmp, 0, t);
   /* The sbx->r store must be after the VLOAD type check, in case it fails. */
   recff_sbufx_set_ptr(J, ud, IRFL_SBUF_R, trr);
 }
@@ -1350,7 +1350,7 @@ static void LJ_FASTCALL recff_buffer_decode(jit_State *J, RecordFFData *rd)
     memset(&sbx, 0, sizeof(SBufExt));
     lj_bufx_set_cow(J->L, &sbx, strdata(str), str->len);
     t = (IRType)lj_serialize_peektype(&sbx);
-    J->base[0] = lj_record_vload(J, tmp, t);
+    J->base[0] = lj_record_vload(J, tmp, 0, t);
   }  /* else: Interpreter will throw. */
 }
 
