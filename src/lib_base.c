@@ -79,6 +79,7 @@ LJ_STATIC_ASSERT((int)FF_next == FF_next_N);
 LJLIB_ASM(next)
 {
   lj_lib_checktab(L, 1);
+  lj_err_msg(L, LJ_ERR_NEXTIDX);
   return FFH_UNREACHABLE;
 }
 

@@ -1346,44 +1346,28 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_1 next
   |  je >2				// Missing 2nd arg?
   |1:
-  |.if X64WIN
-  |  mov RA, [BASE]
-  |  checktab RA, ->fff_fallback
-  |.else
-  |  mov CARG2, [BASE]
-  |  checktab CARG2, ->fff_fallback
-  |.endif
-  |  mov L:RB, SAVE_L
-  |  mov L:RB->base, BASE		// Add frame since C call can throw.
-  |  mov L:RB->top, BASE		// Dummy frame length is ok.
+  |  mov CARG1, [BASE]
   |  mov PC, [BASE-8]
+  |  checktab CARG1, ->fff_fallback
+  |  mov RB, BASE			// Save BASE.
   |.if X64WIN
-  |  lea CARG3, [BASE+8]
-  |  mov CARG2, RA			// Caveat: CARG2 == BASE.
-  |  mov CARG1, L:RB
+  |  lea CARG3, [BASE-16]
+  |  lea CARG2, [BASE+8]		// Caveat: CARG2 == BASE.
   |.else
-  |  lea CARG3, [BASE+8]		// Caveat: CARG3 == BASE.
-  |  mov CARG1, L:RB
+  |  lea CARG2, [BASE+8]
+  |  lea CARG3, [BASE-16]		// Caveat: CARG3 == BASE.
   |.endif
-  |  mov SAVE_PC, PC			// Needed for ITERN fallback.
-  |  call extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
-  |  // Flag returned in eax (RD).
-  |  mov BASE, L:RB->base
-  |  test RDd, RDd;  jz >3		// End of traversal?
-  |  // Copy key and value to results.
-  |  mov RB, [BASE+8]
-  |  mov RD, [BASE+16]
-  |  mov [BASE-16], RB
-  |  mov [BASE-8], RD
-  |->fff_res2:
-  |  mov RDd, 1+2
-  |  jmp ->fff_res
+  |  call extern lj_tab_next		// (GCtab *t, cTValue *key, TValue *o)
+  |  // 1=found, 0=end, -1=error returned in eax (RD).
+  |  mov BASE, RB			// Restore BASE.
+  |  test RDd, RDd;  jg ->fff_res2	// Found key/value.
+  |  js ->fff_fallback_2		// Invalid key.
+  |  // End of traversal: return nil.
+  |  mov aword [BASE-16], LJ_TNIL
+  |  jmp ->fff_res1
   |2:  // Set missing 2nd arg to nil.
   |  mov aword [BASE+8], LJ_TNIL
   |  jmp <1
-  |3:  // End of traversal: return nil.
-  |  mov aword [BASE-16], LJ_TNIL
-  |  jmp ->fff_res1
   |
   |.ffunc_1 pairs
   |  mov TAB:RB, [BASE]
@@ -1432,7 +1416,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Copy array slot.
   |  mov RB, [RD]
   |  mov [BASE-8], RB
-  |  jmp ->fff_res2
+  |->fff_res2:
+  |  mov RDd, 1+2
+  |  jmp ->fff_res
   |2:  // Check for empty hash part first. Otherwise call C function.
   |  cmp dword TAB:RB->hmask, 0; je ->fff_res0
   |.if X64WIN
@@ -4125,7 +4111,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp aword [BASE+RA*8-8], LJ_TNIL; jne >5
     |  cmp byte CFUNC:RB->ffid, FF_next_N; jne >5
     |  branchPC RD
-    |  mov64 TMPR, U64x(fffe7fff, 00000000)
+    |  mov64 TMPR, ((uint64_t)LJ_KEYINDEX << 32)
     |  mov [BASE+RA*8-8], TMPR		// Initialize control var.
     |1:
     |  ins_next

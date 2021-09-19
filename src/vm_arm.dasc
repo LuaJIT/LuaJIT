@@ -1111,24 +1111,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  checktab CARG2, ->fff_fallback
   |   strd CARG34, [BASE, NARGS8:RC]	// Set missing 2nd arg to nil.
   |   ldr PC, [BASE, FRAME_PC]
-  |  mov CARG2, CARG1
-  |    str BASE, L->base		// Add frame since C call can throw.
-  |  mov CARG1, L
-  |    str BASE, L->top			// Dummy frame length is ok.
-  |  add CARG3, BASE, #8
-  |   str PC, SAVE_PC
-  |  bl extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
-  |  // Returns 0 at end of traversal.
+  |  add CARG2, BASE, #8
+  |  sub CARG3, BASE, #8
+  |  bl extern lj_tab_next		// (GCtab *t, cTValue *key, TValue *o)
+  |  // Returns 1=found, 0=end, -1=error.
   |  .IOS ldr BASE, L->base
   |  cmp CRET1, #0
-  |  mvneq CRET2, #~LJ_TNIL
-  |  beq ->fff_restv			// End of traversal: return nil.
-  |  ldrd CARG12, [BASE, #8]		// Copy key and value to results.
-  |   ldrd CARG34, [BASE, #16]
-  |    mov RC, #(2+1)*8
-  |  strd CARG12, [BASE, #-8]
-  |   strd CARG34, [BASE]
-  |  b ->fff_res
+  |   mov RC, #(2+1)*8
+  |  bgt ->fff_res			// Found key/value.
+  |  bmi ->fff_fallback			// Invalid key.
+  |  // End of traversal: return nil.
+  |  mvn CRET2, #~LJ_TNIL
+  |  b ->fff_restv
   |
   |.ffunc_1 pairs
   |  checktab CARG2, ->fff_fallback
@@ -3989,7 +3983,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next1
     |   ins_next2
     |  mov CARG1, #0
-    |  mvn CARG2, #0x00018000
+    |  mvn CARG2, #~LJ_KEYINDEX
     |  strd CARG1, [RA, #-8]		// Initialize control var.
     |1:
     |   ins_next3

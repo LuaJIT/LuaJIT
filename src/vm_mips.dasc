@@ -1262,35 +1262,27 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: iterators -------------------------------------------
   |
   |.ffunc next
-  |  lw CARG1, HI(BASE)
-  |   lw TAB:CARG2, LO(BASE)
+  |  lw CARG2, HI(BASE)
+  |   lw TAB:CARG1, LO(BASE)
   |  beqz NARGS8:RC, ->fff_fallback
   |.  addu TMP2, BASE, NARGS8:RC
   |  li AT, LJ_TTAB
   |   sw TISNIL, HI(TMP2)		// Set missing 2nd arg to nil.
-  |  bne CARG1, AT, ->fff_fallback
+  |  bne CARG2, AT, ->fff_fallback
   |.  lw PC, FRAME_PC(BASE)
   |  load_got lj_tab_next
-  |   sw BASE, L->base			// Add frame since C call can throw.
-  |   sw BASE, L->top			// Dummy frame length is ok.
-  |  addiu CARG3, BASE, 8
-  |   sw PC, SAVE_PC
-  |  call_intern lj_tab_next		// (lua_State *L, GCtab *t, TValue *key)
-  |.  move CARG1, L
-  |  // Returns 0 at end of traversal.
+  |  addiu CARG2, BASE, 8
+  |  call_intern lj_tab_next		// (GCtab *t, cTValue *key, TValue *o)
+  |.  addiu CARG3, BASE, -8
+  |  // Returns 1=found, 0=end, -1=error.
+  |   addiu RA, BASE, -8
+  |  bgtz CRET1, ->fff_res		// Found key/value.
+  |.  li RD, (2+1)*8
   |  beqz CRET1, ->fff_restv		// End of traversal: return nil.
   |.  li SFARG1HI, LJ_TNIL
-  |  lw TMP0, 8+HI(BASE)
-  |   lw TMP1, 8+LO(BASE)
-  |    addiu RA, BASE, -8
-  |  lw TMP2, 16+HI(BASE)
-  |   lw TMP3, 16+LO(BASE)
-  |  sw TMP0, HI(RA)
-  |   sw TMP1, LO(RA)
-  |  sw TMP2, 8+HI(RA)
-  |   sw TMP3, 8+LO(RA)
-  |  b ->fff_res
-  |.  li RD, (2+1)*8
+  |   lw CFUNC:RB, FRAME_FUNC(BASE)
+  |  b ->fff_fallback			// Invalid key.
+  |.  li RC, 2*8
   |
   |.ffunc_1 pairs
   |  li AT, LJ_TTAB
@@ -4611,9 +4603,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addiu CARG2, CARG2, -FF_next_N
     |  or CARG2, CARG2, CARG3
     |  bnez CARG2, >5
-    |.  lui TMP1, 0xfffe
+    |.  lui TMP1, (LJ_KEYINDEX >> 16)
     |  addu PC, TMP0, TMP2
-    |  ori TMP1, TMP1, 0x7fff
+    |  ori TMP1, TMP1, (LJ_KEYINDEX & 0xffff)
     |  sw r0, -8+LO(RA)			// Initialize control var.
     |  sw TMP1, -8+HI(RA)
     |1:

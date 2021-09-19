@@ -1086,21 +1086,19 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: iterators -------------------------------------------
   |
   |.ffunc_1 next
-  |  checktp CARG2, CARG1, LJ_TTAB, ->fff_fallback
+  |  checktp CARG1, LJ_TTAB, ->fff_fallback
   |  str TISNIL, [BASE, NARGS8:RC]	// Set missing 2nd arg to nil.
   |  ldr PC, [BASE, FRAME_PC]
-  |   stp BASE, BASE, L->base		// Add frame since C call can throw.
-  |  mov CARG1, L
-  |  add CARG3, BASE, #8
-  |   str PC, SAVE_PC
-  |  bl extern lj_tab_next	// (lua_State *L, GCtab *t, TValue *key)
-  |  // Returns 0 at end of traversal.
+  |  add CARG2, BASE, #8
+  |  sub CARG3, BASE, #16
+  |  bl extern lj_tab_next		// (GCtab *t, cTValue *key, TValue *o)
+  |  // Returns 1=found, 0=end, -1=error.
+  |   mov RC, #(2+1)*8
+  |  tbnz CRET1w, #31, ->fff_fallback	// Invalid key.
+  |  cbnz CRET1, ->fff_res		// Found key/value.
+  |  // End of traversal: return nil.
   |  str TISNIL, [BASE, #-16]
-  |  cbz CRET1, ->fff_res1		// End of traversal: return nil.
-  |  ldp CARG1, CARG2, [BASE, #8]	// Copy key and value to results.
-  |    mov RC, #(2+1)*8
-  |  stp CARG1, CARG2, [BASE, #-16]
-  |  b ->fff_res
+  |  b ->fff_res1
   |
   |.ffunc_1 pairs
   |  checktp TMP1, CARG1, LJ_TTAB, ->fff_fallback
@@ -3384,7 +3382,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ccmp CARG4, TISNIL, #0, eq
     |  ccmp TMP1w, #FF_next_N, #0, eq
     |  bne >5
-    |  mov TMP0w, #0xfffe7fff
+    |  mov TMP0w, #0xfffe7fff		// LJ_KEYINDEX
     |  lsl TMP0, TMP0, #32
     |  str TMP0, [RA, #-8]		// Initialize control var.
     |1:

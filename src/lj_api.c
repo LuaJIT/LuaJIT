@@ -893,11 +893,13 @@ LUA_API int lua_next(lua_State *L, int idx)
   cTValue *t = index2adr(L, idx);
   int more;
   lj_checkapi(tvistab(t), "stack slot %d is not a table", idx);
-  more = lj_tab_next(L, tabV(t), L->top-1);
-  if (more) {
+  more = lj_tab_next(tabV(t), L->top-1, L->top-1);
+  if (more > 0) {
     incr_top(L);  /* Return new key and value slot. */
-  } else {  /* End of traversal. */
+  } else if (!more) {  /* End of traversal. */
     L->top--;  /* Remove key slot. */
+  } else {
+    lj_err_msg(L, LJ_ERR_NEXTIDX);
   }
   return more;
 }
