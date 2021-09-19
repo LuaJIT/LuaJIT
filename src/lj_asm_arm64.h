@@ -460,8 +460,11 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 {
   RegSet drop = RSET_SCRATCH;
+  int hiop = ((ir+1)->o == IR_HIOP && !irt_isnil((ir+1)->t));
   if (ra_hasreg(ir->r))
     rset_clear(drop, ir->r); /* Dest reg handled below. */
+  if (hiop && ra_hasreg((ir+1)->r))
+    rset_clear(drop, (ir+1)->r);  /* Dest reg handled below. */
   ra_evictset(as, drop); /* Evictions must be performed first. */
   if (ra_used(ir)) {
     lj_assertA(!irt_ispri(ir->t), "PRI dest");
@@ -473,6 +476,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       } else {
 	ra_destreg(as, ir, RID_FPRET);
       }
+    } else if (hiop) {
+      ra_destpair(as, ir);
     } else {
       ra_destreg(as, ir, RID_RET);
     }
@@ -1720,13 +1725,25 @@ static void asm_comp(ASMState *as, IRIns *ir)
 
 #define asm_equal(as, ir)	asm_comp(as, ir)
 
-/* -- Support for 64 bit ops in 32 bit mode ------------------------------- */
+/* -- Split register ops -------------------------------------------------- */
 
-/* Hiword op of a split 64 bit op. Previous op must be the loword op. */
+/* Hiword op of a split 64/64 bit op. Previous op is the loword op. */
 static void asm_hiop(ASMState *as, IRIns *ir)
 {
-  UNUSED(as); UNUSED(ir);
-  lj_assertA(0, "unexpected HIOP");  /* Unused on 64 bit. */
+  /* HIOP is marked as a store because it needs its own DCE logic. */
+  int uselo = ra_used(ir-1), usehi = ra_used(ir);  /* Loword/hiword used? */
+  if (LJ_UNLIKELY(!(as->flags & JIT_F_OPT_DCE))) uselo = usehi = 1;
+  if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
+  switch ((ir-1)->o) {
+  case IR_CALLN:
+  case IR_CALLL:
+  case IR_CALLS:
+  case IR_CALLXS:
+    if (!uselo)
+      ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
+    break;
+  default: lj_assertA(0, "bad HIOP for op %d", (ir-1)->o); break;
+  }
 }
 
 /* -- Profiling ----------------------------------------------------------- */

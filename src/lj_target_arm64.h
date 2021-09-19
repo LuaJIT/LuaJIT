@@ -31,6 +31,8 @@ enum {
 
   /* Calling conventions. */
   RID_RET = RID_X0,
+  RID_RETLO = RID_X0,
+  RID_RETHI = RID_X1,
   RID_FPRET = RID_D0,
 
   /* These definitions must match with the *.dasc file(s): */

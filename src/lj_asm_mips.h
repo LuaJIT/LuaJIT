@@ -351,19 +351,15 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
 {
   RegSet drop = RSET_SCRATCH;
-#if LJ_32
   int hiop = ((ir+1)->o == IR_HIOP && !irt_isnil((ir+1)->t));
-#endif
 #if !LJ_SOFTFP
   if ((ci->flags & CCI_NOFPRCLOBBER))
     drop &= ~RSET_FPR;
 #endif
   if (ra_hasreg(ir->r))
     rset_clear(drop, ir->r);  /* Dest reg handled below. */
-#if LJ_32
   if (hiop && ra_hasreg((ir+1)->r))
     rset_clear(drop, (ir+1)->r);  /* Dest reg handled below. */
-#endif
   ra_evictset(as, drop);  /* Evictions must be performed first. */
   if (ra_used(ir)) {
     lj_assertA(!irt_ispri(ir->t), "PRI dest");
@@ -392,10 +388,8 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       } else {
 	ra_destreg(as, ir, RID_FPRET);
       }
-#if LJ_32
     } else if (hiop) {
       ra_destpair(as, ir);
-#endif
     } else {
       ra_destreg(as, ir, RID_RET);
     }
@@ -2393,15 +2387,15 @@ static void asm_comp64eq(ASMState *as, IRIns *ir)
 }
 #endif
 
-/* -- Support for 64 bit ops in 32 bit mode ------------------------------- */
+/* -- Split register ops -------------------------------------------------- */
 
-/* Hiword op of a split 64 bit op. Previous op must be the loword op. */
+/* Hiword op of a split 32/32 or 64/64 bit op. Previous op is the loword op. */
 static void asm_hiop(ASMState *as, IRIns *ir)
 {
-#if LJ_32 && (LJ_HASFFI || LJ_SOFTFP)
   /* HIOP is marked as a store because it needs its own DCE logic. */
   int uselo = ra_used(ir-1), usehi = ra_used(ir);  /* Loword/hiword used? */
   if (LJ_UNLIKELY(!(as->flags & JIT_F_OPT_DCE))) uselo = usehi = 1;
+#if LJ_32 && (LJ_HASFFI || LJ_SOFTFP)
   if ((ir-1)->o == IR_CONV) {  /* Conversions to/from 64 bit. */
     as->curins--;  /* Always skip the CONV. */
 #if LJ_HASFFI && !LJ_SOFTFP
@@ -2448,38 +2442,33 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     }
     return;
   }
+#endif
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
-#if LJ_HASFFI
+#if LJ_32 && LJ_HASFFI
   case IR_ADD: as->curins--; asm_add64(as, ir); break;
   case IR_SUB: as->curins--; asm_sub64(as, ir); break;
   case IR_NEG: as->curins--; asm_neg64(as, ir); break;
+  case IR_CNEWI:
+    /* Nothing to do here. Handled by lo op itself. */
+    break;
 #endif
-#if LJ_SOFTFP
+#if LJ_32 && LJ_SOFTFP
   case IR_SLOAD: case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
   case IR_STRTO:
     if (!uselo)
       ra_allocref(as, ir->op1, RSET_GPR);  /* Mark lo op as used. */
     break;
+  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
+    /* Nothing to do here. Handled by lo op itself. */
+    break;
 #endif
-  case IR_CALLN:
-  case IR_CALLS:
-  case IR_CALLXS:
+  case IR_CALLN: case IR_CALLL: case IR_CALLS: case IR_CALLXS:
     if (!uselo)
       ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
-#if LJ_SOFTFP
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
-#endif
-  case IR_CNEWI:
-    /* Nothing to do here. Handled by lo op itself. */
-    break;
   default: lj_assertA(0, "bad HIOP for op %d", (ir-1)->o); break;
   }
-#else
-  /* Unused on MIPS64 or without SOFTFP or FFI. */
-  UNUSED(as); UNUSED(ir); lj_assertA(0, "unexpected HIOP");
-#endif
 }
 
 /* -- Profiling ----------------------------------------------------------- */

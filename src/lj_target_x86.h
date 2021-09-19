@@ -38,10 +38,9 @@ enum {
   RID_RET = RID_EAX,
 #if LJ_64
   RID_FPRET = RID_XMM0,
-#else
+#endif
   RID_RETLO = RID_EAX,
   RID_RETHI = RID_EDX,
-#endif
 
   /* These definitions must match with the *.dasc file(s): */
   RID_BASE = RID_EDX,		/* Interpreter BASE. */

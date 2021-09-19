@@ -1885,15 +1885,15 @@ static void asm_int64comp(ASMState *as, IRIns *ir)
 }
 #endif
 
-/* -- Support for 64 bit ops in 32 bit mode ------------------------------- */
+/* -- Split register ops -------------------------------------------------- */
 
-/* Hiword op of a split 64 bit op. Previous op must be the loword op. */
+/* Hiword op of a split 32/32 bit op. Previous op is the loword op. */
 static void asm_hiop(ASMState *as, IRIns *ir)
 {
-#if LJ_HASFFI || LJ_SOFTFP
   /* HIOP is marked as a store because it needs its own DCE logic. */
   int uselo = ra_used(ir-1), usehi = ra_used(ir);  /* Loword/hiword used? */
   if (LJ_UNLIKELY(!(as->flags & JIT_F_OPT_DCE))) uselo = usehi = 1;
+#if LJ_HASFFI || LJ_SOFTFP
   if ((ir-1)->o <= IR_NE) {  /* 64 bit integer or FP comparisons. ORDER IR. */
     as->curins--;  /* Always skip the loword comparison. */
 #if LJ_SOFTFP
@@ -1924,6 +1924,7 @@ static void asm_hiop(ASMState *as, IRIns *ir)
       asm_xstore_(as, ir, 4);
     return;
   }
+#endif
   if (!usehi) return;  /* Skip unused hiword op for all remaining ops. */
   switch ((ir-1)->o) {
 #if LJ_HASFFI
@@ -1942,6 +1943,9 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     asm_intneg(as, ir, ARMI_RSC);
     asm_intneg(as, ir-1, ARMI_RSB|ARMI_S);
     break;
+  case IR_CNEWI:
+    /* Nothing to do here. Handled by lo op itself. */
+    break;
 #endif
 #if LJ_SOFTFP
   case IR_SLOAD: case IR_ALOAD: case IR_HLOAD: case IR_ULOAD: case IR_VLOAD:
@@ -1949,25 +1953,16 @@ static void asm_hiop(ASMState *as, IRIns *ir)
     if (!uselo)
       ra_allocref(as, ir->op1, RSET_GPR);  /* Mark lo op as used. */
     break;
+  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
+    /* Nothing to do here. Handled by lo op itself. */
+    break;
 #endif
-  case IR_CALLN:
-  case IR_CALLS:
-  case IR_CALLXS:
+  case IR_CALLN: case IR_CALLL: case IR_CALLS: case IR_CALLXS:
     if (!uselo)
       ra_allocref(as, ir->op1, RID2RSET(RID_RETLO));  /* Mark lo op as used. */
     break;
-#if LJ_SOFTFP
-  case IR_ASTORE: case IR_HSTORE: case IR_USTORE: case IR_TOSTR: case IR_TMPREF:
-#endif
-  case IR_CNEWI:
-    /* Nothing to do here. Handled by lo op itself. */
-    break;
   default: lj_assertA(0, "bad HIOP for op %d", (ir-1)->o); break;
   }
-#else
-  /* Unused without SOFTFP or FFI. */
-  UNUSED(as); UNUSED(ir); lj_assertA(0, "unexpected HIOP");
-#endif
 }
 
 /* -- Profiling ----------------------------------------------------------- */
