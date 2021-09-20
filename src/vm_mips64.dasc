@@ -728,11 +728,11 @@ static void build_subroutines(BuildCtx *ctx)
   |     ld PC, -24(RB)			// Restore PC from [cont|PC].
   |    cleartp LFUNC:TMP1
   |   daddu TMP2, RA, RD
-  |    ld TMP1, LFUNC:TMP1->pc
   |.if FFI
   |  bnez AT, >1
   |.endif
   |.  sd TISNIL, -8(TMP2)		// Ensure one valid arg.
+  |    ld TMP1, LFUNC:TMP1->pc
   |  // BASE = base, RA = resultptr, RB = meta base
   |  jr TMP0				// Jump to continuation.
   |.  ld KBASE, PC2PROTO(k)(TMP1)

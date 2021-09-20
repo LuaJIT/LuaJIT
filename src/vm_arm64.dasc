@@ -562,12 +562,12 @@ static void build_subroutines(BuildCtx *ctx)
   |    cmp CARG1, #1
   |.endif
   |   ldr PC, [CARG4, #-24]		// Restore PC from [cont|PC].
-  |  ldr CARG3, LFUNC:CARG3->pc
   |    add TMP0, RA, RC
   |    str TISNIL, [TMP0, #-8]		// Ensure one valid arg.
   |.if FFI
   |    bls >1
   |.endif
+  |  ldr CARG3, LFUNC:CARG3->pc
   |  ldr KBASE, [CARG3, #PC2PROTO(k)]
   |  // BASE = base, RA = resultptr, CARG4 = meta base
   |    br CARG1
