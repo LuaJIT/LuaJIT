@@ -76,7 +76,7 @@ static CTypeID argv2ctype(jit_State *J, TRef tr, cTValue *o)
     /* Specialize to the string containing the C type declaration. */
     emitir(IRTG(IR_EQ, IRT_STR), tr, lj_ir_kstr(J, s));
     cp.L = J->L;
-    cp.cts = ctype_ctsG(J2G(J));
+    cp.cts = ctype_cts(J->L);
     oldtop = cp.cts->top;
     cp.srcname = strdata(s);
     cp.p = strdata(s);
