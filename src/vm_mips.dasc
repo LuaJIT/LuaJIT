@@ -603,11 +603,11 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |     lw PC, -16+HI(RB)		// Restore PC from [cont|PC].
   |   addu TMP2, RA, RD
-  |    lw TMP1, LFUNC:TMP1->pc
   |.if FFI
   |  bnez AT, >1
   |.endif
   |.  sw TISNIL, -8+HI(TMP2)		// Ensure one valid arg.
+  |    lw TMP1, LFUNC:TMP1->pc
   |  // BASE = base, RA = resultptr, RB = meta base
   |  jr TMP0				// Jump to continuation.
   |.  lw KBASE, PC2PROTO(k)(TMP1)
