@@ -452,7 +452,11 @@ static void trace_stop(jit_State *J)
     lua_assert(J->parent != 0 && J->cur.root != 0);
     lj_asm_patchexit(J, traceref(J, J->parent), J->exitno, J->cur.mcode);
     /* Avoid compiling a side trace twice (stack resizing uses parent exit). */
-    traceref(J, J->parent)->snap[J->exitno].count = SNAPCOUNT_DONE;
+    {
+      SnapShot *snap = &traceref(J, J->parent)->snap[J->exitno];
+      snap->count = SNAPCOUNT_DONE;
+      if (J->cur.topslot > snap->topslot) snap->topslot = J->cur.topslot;
+    }
     /* Add to side trace chain in root trace. */
     {
       GCtrace *root = traceref(J, J->cur.root);
