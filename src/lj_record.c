@@ -2767,9 +2767,12 @@ void lj_record_setup(jit_State *J)
   sidecheck:
     if ((traceref(J, J->cur.root)->nchild >= J->param[JIT_P_maxside] ||
 	 T->snap[J->exitno].count >= J->param[JIT_P_hotexit] +
-				     J->param[JIT_P_tryside]) &&
-	!(bc_op(*J->pc) == BC_JLOOP &&
-	  bc_op(traceref(J, bc_d(*J->pc))->startins) == BC_ITERN)) {
+				     J->param[JIT_P_tryside])) {
+      if (bc_op(*J->pc) == BC_JLOOP) {
+	BCIns startins = traceref(J, bc_d(*J->pc))->startins;
+	if (bc_op(startins) == BC_ITERN)
+	  rec_itern(J, bc_a(startins), bc_b(startins));
+      }
       lj_record_stop(J, LJ_TRLINK_INTERP, 0);
     }
   } else {  /* Root trace. */
