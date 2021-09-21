@@ -4061,7 +4061,8 @@ static void emit_asm_debug(BuildCtx *ctx)
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
 #endif
     break;
-#if !LJ_NO_UNWIND
+    /* Disabled until someone finds a fix. See #698. */
+#if !LJ_NO_UNWIND && 0
   case BUILD_machasm: {
 #if LJ_HASFFI
     int fcsize = 0;
