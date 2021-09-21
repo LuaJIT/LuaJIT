@@ -373,8 +373,13 @@ void lj_trace_freestate(global_State *g)
 /* Blacklist a bytecode instruction. */
 static void blacklist_pc(GCproto *pt, BCIns *pc)
 {
-  setbc_op(pc, (int)bc_op(*pc)+(int)BC_ILOOP-(int)BC_LOOP);
-  pt->flags |= PROTO_ILOOP;
+  if (bc_op(*pc) == BC_ITERN) {
+    setbc_op(pc, BC_ITERC);
+    setbc_op(pc+1+bc_j(pc[1]), BC_JMP);
+  } else {
+    setbc_op(pc, (int)bc_op(*pc)+(int)BC_ILOOP-(int)BC_LOOP);
+    pt->flags |= PROTO_ILOOP;
+  }
 }
 
 /* Penalize a bytecode instruction. */
@@ -576,8 +581,7 @@ static int trace_abort(jit_State *J)
     return 1;  /* Retry ASM with new MCode area. */
   }
   /* Penalize or blacklist starting bytecode instruction. */
-  if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins)) &&
-      bc_op(J->cur.startins) != BC_ITERN) {
+  if (J->parent == 0 && !bc_isret(bc_op(J->cur.startins))) {
     if (J->exitno == 0) {
       BCIns *startpc = mref(J->cur.startpc, BCIns);
       if (e == LJ_TRERR_RETRY)
