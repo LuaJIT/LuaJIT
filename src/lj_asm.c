@@ -1022,13 +1022,13 @@ static void asm_snap_prep(ASMState *as)
 static void asm_snap_prev(ASMState *as)
 {
   if (as->curins < as->snapref) {
-    ptrdiff_t ofs = as->mctoporig - as->mcp;
+    uintptr_t ofs = (uintptr_t)(as->mctoporig - as->mcp);
     if (ofs >= 0x10000) lj_trace_err(as->J, LJ_TRERR_MCODEOV);
     do {
       if (as->snapno == 0) return;
       as->snapno--;
       as->snapref = as->T->snap[as->snapno].ref;
-      as->T->snap[as->snapno].mcofs = ofs;  /* Remember mcode offset. */
+      as->T->snap[as->snapno].mcofs = (uint16_t)ofs;  /* Remember mcode ofs. */
     } while (as->curins < as->snapref);  /* May have no ins inbetween. */
     as->snapalloc = 1;
   }
