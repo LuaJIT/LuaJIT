@@ -886,7 +886,7 @@ static void asm_tvptr(ASMState *as, Reg dest, IRRef ref, MSize mode)
 	/* Use the number constant itself as a TValue. */
 	ra_allockreg(as, igcptr(ir_knum(ir)), dest);
       } else {
-#if LJ_SOFTFP
+#if LJ_SOFTFP32
 	lj_assertA(0, "unsplit FP op");
 #else
 	/* Otherwise force a spill and use the spill slot. */
