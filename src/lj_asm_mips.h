@@ -643,9 +643,11 @@ static void asm_href(ASMState *as, IRIns *ir)
   if (irt_isnum(kt)) {
     key = ra_alloc1(as, refkey, RSET_FPR);
     tmpnum = ra_scratch(as, rset_exclude(RSET_FPR, key));
-  } else if (!irt_ispri(kt)) {
-    key = ra_alloc1(as, refkey, allow);
-    rset_clear(allow, key);
+  } else {
+    if (!irt_ispri(kt)) {
+      key = ra_alloc1(as, refkey, allow);
+      rset_clear(allow, key);
+    }
     type = ra_allock(as, irt_toitype(irkey->t), allow);
     rset_clear(allow, type);
   }
