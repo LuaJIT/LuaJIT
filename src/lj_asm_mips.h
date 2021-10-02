@@ -968,11 +968,16 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   MCLabel l_end, l_loop, l_next;
 
   rset_clear(allow, tab);
-#if LJ_SOFTFP32
-  if (!isk) {
-    key = ra_alloc1(as, refkey, allow);
-    rset_clear(allow, key);
-    if (irkey[1].o == IR_HIOP) {
+  if (!LJ_SOFTFP && irt_isnum(kt)) {
+    key = ra_alloc1(as, refkey, RSET_FPR);
+    tmpnum = ra_scratch(as, rset_exclude(RSET_FPR, key));
+  } else {
+    if (!irt_ispri(kt)) {
+      key = ra_alloc1(as, refkey, allow);
+      rset_clear(allow, key);
+    }
+#if LJ_32
+    if (LJ_SOFTFP && irkey[1].o == IR_HIOP) {
       if (ra_hasreg((irkey+1)->r)) {
 	type = tmpnum = (irkey+1)->r;
 	tmp1 = ra_scratch(as, allow);
@@ -983,23 +988,11 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       }
       rset_clear(allow, tmpnum);
     } else {
-      type = ra_allock(as, (int32_t)irt_toitype(irkey->t), allow);
+      type = ra_allock(as, (int32_t)irt_toitype(kt), allow);
       rset_clear(allow, type);
     }
-  }
-#else
-  if (!LJ_SOFTFP && irt_isnum(kt)) {
-    key = ra_alloc1(as, refkey, RSET_FPR);
-    tmpnum = ra_scratch(as, rset_exclude(RSET_FPR, key));
-  } else if (!irt_ispri(kt)) {
-    key = ra_alloc1(as, refkey, allow);
-    rset_clear(allow, key);
-#if LJ_32
-    type = ra_allock(as, (int32_t)irt_toitype(irkey->t), allow);
-    rset_clear(allow, type);
 #endif
   }
-#endif
   tmp2 = ra_scratch(as, allow);
   rset_clear(allow, tmp2);
 #if LJ_64
@@ -1012,10 +1005,10 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
     } else {
       int64_t k;
       if (isk && irt_isaddr(kt)) {
-	k = ((int64_t)irt_toitype(irkey->t) << 47) | irkey[1].tv.u64;
+	k = ((int64_t)irt_toitype(kt) << 47) | irkey[1].tv.u64;
       } else {
 	lj_assertA(irt_ispri(kt) && !irt_isnil(kt), "bad HREF key type");
-	k = ~((int64_t)~irt_toitype(ir->t) << 47);
+	k = ~((int64_t)~irt_toitype(kt) << 47);
       }
       cmp64 = ra_allock(as, k, allow);
       rset_clear(allow, cmp64);
