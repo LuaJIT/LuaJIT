@@ -546,7 +546,7 @@ static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
     ix.keyv.u32.lo = lj_tab_keyindex(tabV(&ix.tabv), keyv);
     /* Omit the value, if not used by the caller. */
     ix.idxchain = (J->framedepth && frame_islua(J->L->base-1) &&
-		   bc_b(frame_pc(J->L->base-1)[-1]) <= 2);
+		   bc_b(frame_pc(J->L->base-1)[-1])-1 < 2);
     ix.mobj = 0;  /* We don't need the next index. */
     rd->nres = lj_record_next(J, &ix);
     J->base[0] = ix.key;
