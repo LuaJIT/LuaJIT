@@ -1123,6 +1123,7 @@ static TRef recff_sbufx_check(jit_State *J, RecordFFData *rd, int arg)
   if (!tvisbuf(&rd->argv[arg])) lj_trace_err(J, LJ_TRERR_BADTYPE);
   trtype = emitir(IRT(IR_FLOAD, IRT_U8), ud, IRFL_UDATA_UDTYPE);
   emitir(IRTGI(IR_EQ), trtype, lj_ir_kint(J, UDTYPE_BUFFER));
+  J->needsnap = 1;
   return ud;
 }
 
