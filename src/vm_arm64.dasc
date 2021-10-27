@@ -1164,9 +1164,10 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: catch errors ----------------------------------------
   |
   |.ffunc pcall
+  |   cmp NARGS8:RC, #8
   |  ldrb TMP0w, GL->hookmask
-  |   subs NARGS8:RC, NARGS8:RC, #8
   |   blo ->fff_fallback
+  |   sub NARGS8:RC, NARGS8:RC, #8
   |    mov RB, BASE
   |    add BASE, BASE, #16
   |  ubfx TMP0w, TMP0w, #HOOK_ACTIVE_SHIFT, #1
