@@ -420,7 +420,8 @@ NDKCROSS=$NDKBIN/arm-linux-androideabi-
 NDKCC=$NDKBIN/armv7a-linux-androideabi16-clang
 make HOST_CC="gcc -m32" CROSS=$NDKCROSS \
      STATIC_CC=$NDKCC DYNAMIC_CC="$NDKCC -fPIC" \
-     TARGET_LD=$NDKCC
+     TARGET_LD=$NDKCC TARGET_AR=$NDKBIN/llvm-ar
+     TARGET_STRIP=$NDKBIN/llvm-strip
 </pre>
 <p>
 You can cross-compile for <b id="ios">iOS 3.0+</b> (iPhone/iPad) using the <a href="https://developer.apple.com/ios/"><span class="ext">&raquo;</span>&nbsp;iOS SDK</a>:
