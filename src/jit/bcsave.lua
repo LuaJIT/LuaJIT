@@ -56,6 +56,17 @@ local function savefile(name, mode)
   return check(io.open(name, mode))
 end
 
+local function set_stdout_mode()
+  local ok, ffi = pcall(require, "ffi")
+  check(ok, "FFI library is required to write to stdout on this platform")
+  local FD_STDOUT = 1
+  local O_BINARY = 0x8000
+  ffi.cdef[[
+    int _setmode(int fd, int mode);
+  ]]
+  ffi.C._setmode(FD_STDOUT, O_BINARY)
+end
+
 ------------------------------------------------------------------------------
 
 local map_type = {
@@ -587,10 +598,16 @@ local function bcsave(ctx, input, output)
     ctx.type = t
   end
   if t == "raw" then
+    if output == "-" and ctx.os == "windows" then
+      set_stdout_mode()
+    end
     bcsave_raw(output, s)
   else
     if not ctx.modname then ctx.modname = detectmodname(input) end
     if t == "obj" then
+      if output == "-" and ctx.os == "windows" then
+        set_stdout_mode()
+      end
       bcsave_obj(ctx, output, s)
     else
       bcsave_c(ctx, output, s)
