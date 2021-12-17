@@ -1038,8 +1038,15 @@ LJFOLD(SUB any KNUM)
 LJFOLDF(simplify_numsub_k)
 {
   lua_Number n = knumright;
-  if (n == 0.0)  /* x - (+-0) ==> x */
-    return LEFTFOLD;
+  if (n == 0.0) {
+    /* x - (+0) ==> x */
+    if (!signbit(n))
+      return LEFTFOLD;
+    /* x - (-0) ==> x + 0 */
+    /* Note: x + 0 != x for x = -0 */
+    fins->o = IR_ADD;
+    fins->op2 = (IRRef1)lj_ir_knum(J, 0.0);
+  }
   return NEXTFOLD;
 }
 
