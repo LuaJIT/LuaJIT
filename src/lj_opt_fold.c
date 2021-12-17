@@ -1037,8 +1037,7 @@ LJFOLDF(simplify_numadd_xneg)
 LJFOLD(SUB any KNUM)
 LJFOLDF(simplify_numsub_k)
 {
-  lua_Number n = knumright;
-  if (n == 0.0)  /* x - (+-0) ==> x */
+  if (ir_knum(fright)->u64 == 0)  /* x - (+0) ==> x */
     return LEFTFOLD;
   return NEXTFOLD;
 }
