@@ -121,7 +121,11 @@ static StrScanFmt strscan_hex(const uint8_t *p, TValue *o,
   /* Format-specific handling. */
   switch (fmt) {
   case STRSCAN_INT:
-    if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
+    /* Need special check for 0 to be consistent with Lua 5.1
+    ** behaviour in DUALNUM mode for tonumber "-0x0".
+    ** See also https://github.com/LuaJIT/LuaJIT/issues/528.
+    */
+    if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg && x != 0) {
       o->i = neg ? -(int32_t)x : (int32_t)x;
       return STRSCAN_INT;  /* Fast path for 32 bit integers. */
     }
@@ -445,7 +449,11 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     /* Fast path for decimal 32 bit integers. */
     if (fmt == STRSCAN_INT && base == 10 &&
 	(dig < 10 || (dig == 10 && *sp <= '2' && x < 0x80000000u+neg))) {
-      if ((opt & STRSCAN_OPT_TONUM)) {
+      /* Need special check for 0 to be consistent with Lua 5.1
+      ** behaviour in DUALNUM mode for tonumber "-0".
+      ** See also https://github.com/LuaJIT/LuaJIT/issues/528.
+      */
+      if ((opt & STRSCAN_OPT_TONUM) || x == 0) {
 	o->n = neg ? -(double)x : (double)x;
 	return STRSCAN_NUM;
       } else {
@@ -462,8 +470,12 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
     else
       fmt = strscan_dec(sp, o, fmt, opt, ex, neg, dig);
 
-    /* Try to convert number to integer, if requested. */
-    if (fmt == STRSCAN_NUM && (opt & STRSCAN_OPT_TOINT)) {
+    /* Try to convert number to integer, if requested.
+    ** Need special check for 0 to be consistent with Lua 5.1
+    ** behaviour in DUALNUM mode for tonumber "-0x0".
+    ** See also https://github.com/LuaJIT/LuaJIT/issues/528.
+    */
+    if (fmt == STRSCAN_NUM && (opt & STRSCAN_OPT_TOINT) && o->n != 0.) {
       double n = o->n;
       int32_t i = lj_num2int(n);
       if (n == (lua_Number)i) { o->i = i; return STRSCAN_INT; }
