@@ -480,8 +480,11 @@ extern const void *_Unwind_Find_FDE(void *pc, struct dwarf_eh_bases *bases);
 /* Verify that external error handling actually has a chance to work. */
 void lj_err_verify(void)
 {
+#if !LJ_TARGET_OSX
+  /* Check disabled on MacOS due to brilliant software engineering at Apple. */
   struct dwarf_eh_bases ehb;
   lj_assertX(_Unwind_Find_FDE((void *)lj_err_throw, &ehb), "broken build: external frame unwinding enabled, but missing -funwind-tables");
+#endif
   /* Check disabled, because of broken Fedora/ARM64. See #722.
   lj_assertX(_Unwind_Find_FDE((void *)_Unwind_RaiseException, &ehb), "broken build: external frame unwinding enabled, but system libraries have no unwind tables");
   */
