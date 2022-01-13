@@ -121,7 +121,8 @@ static StrScanFmt strscan_hex(const uint8_t *p, TValue *o,
   /* Format-specific handling. */
   switch (fmt) {
   case STRSCAN_INT:
-    if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg) {
+    if (!(opt & STRSCAN_OPT_TONUM) && x < 0x80000000u+neg &&
+	!(x == 0 && neg)) {
       o->i = neg ? -(int32_t)x : (int32_t)x;
       return STRSCAN_INT;  /* Fast path for 32 bit integers. */
     }
@@ -448,6 +449,9 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
       if ((opt & STRSCAN_OPT_TONUM)) {
 	o->n = neg ? -(double)x : (double)x;
 	return STRSCAN_NUM;
+      } else if (x == 0 && neg) {
+	o->n = -0.0;
+	return STRSCAN_NUM;
       } else {
 	o->i = neg ? -(int32_t)x : (int32_t)x;
 	return STRSCAN_INT;
@@ -463,7 +467,7 @@ StrScanFmt lj_strscan_scan(const uint8_t *p, TValue *o, uint32_t opt)
       fmt = strscan_dec(sp, o, fmt, opt, ex, neg, dig);
 
     /* Try to convert number to integer, if requested. */
-    if (fmt == STRSCAN_NUM && (opt & STRSCAN_OPT_TOINT)) {
+    if (fmt == STRSCAN_NUM && (opt & STRSCAN_OPT_TOINT) && !tvismzero(o)) {
       double n = o->n;
       int32_t i = lj_num2int(n);
       if (n == (lua_Number)i) { o->i = i; return STRSCAN_INT; }
