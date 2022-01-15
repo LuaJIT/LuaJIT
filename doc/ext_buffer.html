@@ -448,6 +448,10 @@ encoded data. The stand-alone function throws when there's left-over
 data after decoding a single top-level object. The buffer method leaves
 any left-over data in the buffer.
 </p>
+<p>
+Attempting to de-serialize an FFI type will throw an error, if the FFI
+library is not built-in or has not been loaded, yet.
+</p>
 
 <h3 id="serialize_options">Serialization Options</h3>
 <p>
