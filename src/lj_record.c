@@ -667,6 +667,7 @@ static LoopEvent rec_itern(jit_State *J, BCReg ra, BCReg rb)
       (J->cur.nins > REF_FIRST+1 ||
        (J->cur.nins == REF_FIRST+1 && J->cur.ir[REF_FIRST].o != IR_PROF)) &&
       J->framedepth + J->retdepth == 0 && J->parent == 0 && J->exitno == 0) {
+    J->instunroll = 0;  /* Cannot continue unrolling across an ITERN. */
     lj_record_stop(J, LJ_TRLINK_LOOP, J->cur.traceno);  /* Looping trace. */
     return LOOPEV_ENTER;
   }
