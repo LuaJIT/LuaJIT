@@ -605,7 +605,7 @@ LJFOLDF(bufput_bufstr)
       return ref;
     }
     /* Replay puts to global temporary buffer. */
-    if (IR(hdr)->op2 == IRBUFHDR_RESET) {
+    if (IR(hdr)->op2 == IRBUFHDR_RESET && !irt_isphi(fright->t)) {
       IRIns *ir = IR(fright->op1);
       /* For now only handle single string.reverse .lower .upper .rep. */
       if (ir->o == IR_CALLL &&
