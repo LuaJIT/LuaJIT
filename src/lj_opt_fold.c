@@ -598,7 +598,8 @@ LJFOLDF(bufput_bufstr)
     if (fleft->o == IR_BUFHDR && fleft->op2 == IRBUFHDR_RESET &&
 	fleft->prev == hdr &&
 	fleft->op1 == IR(hdr)->op1 &&
-	!(irt_isphi(fright->t) && IR(hdr)->prev)) {
+	!(irt_isphi(fright->t) && IR(hdr)->prev) &&
+	(!LJ_HASBUFFER || J->chain[IR_CALLA] < hdr)) {
       IRRef ref = fins->op1;
       IR(ref)->op2 = IRBUFHDR_APPEND;  /* Modify BUFHDR. */
       IR(ref)->op1 = fright->op1;
