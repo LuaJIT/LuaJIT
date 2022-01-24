@@ -83,10 +83,6 @@ LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t, int32_t);
 LJ_ASMF void lj_vm_floor_sse(void);
 LJ_ASMF void lj_vm_ceil_sse(void);
 LJ_ASMF void lj_vm_trunc_sse(void);
-LJ_ASMF void lj_vm_powi_sse(void);
-#define lj_vm_powi	NULL
-#else
-LJ_ASMF double lj_vm_powi(double, int32_t);
 #endif
 #if LJ_TARGET_PPC || LJ_TARGET_ARM64
 #define lj_vm_trunc	trunc
@@ -101,6 +97,9 @@ LJ_ASMF int lj_vm_errno(void);
 #endif
 LJ_ASMF TValue *lj_vm_next(GCtab *t, uint32_t idx);
 #endif
+
+LJ_ASMF double lj_vm_powi(double, int32_t);
+LJ_ASMF double lj_vm_pow(double, double);
 
 /* Continuations for metamethods. */
 LJ_ASMF void lj_cont_cat(void);  /* Continue with concatenation. */

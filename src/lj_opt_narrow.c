@@ -590,20 +590,14 @@ TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
   rb = conv_str_tonum(J, rb, vb);
   rb = lj_ir_tonum(J, rb);  /* Left arg is always treated as an FP number. */
   rc = conv_str_tonum(J, rc, vc);
-  /* Narrowing must be unconditional to preserve (-x)^i semantics. */
   if (tvisint(vc) || numisint(numV(vc))) {
-    int checkrange = 0;
-    /* pow() is faster for bigger exponents. But do this only for (+k)^i. */
-    if (tref_isk(rb) && (int32_t)ir_knum(IR(tref_ref(rb)))->u32.hi >= 0) {
-      int32_t k = numberVint(vc);
-      if (!(k >= -65536 && k <= 65536)) goto force_pow_num;
-      checkrange = 1;
-    }
+    int32_t k = numberVint(vc);
+    if (!(k >= -65536 && k <= 65536)) goto force_pow_num;
     if (!tref_isinteger(rc)) {
       /* Guarded conversion to integer! */
       rc = emitir(IRTGI(IR_CONV), rc, IRCONV_INT_NUM|IRCONV_CHECK);
     }
-    if (checkrange && !tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
+    if (!tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
       TRef tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536));
       emitir(IRTGI(IR_ULE), tmp, lj_ir_kint(J, 2*65536));
     }

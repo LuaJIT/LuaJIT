@@ -2017,19 +2017,6 @@ static void asm_ldexp(ASMState *as, IRIns *ir)
   asm_x87load(as, ir->op2);
 }
 
-static void asm_fppowi(ASMState *as, IRIns *ir)
-{
-  /* The modified regs must match with the *.dasc implementation. */
-  RegSet drop = RSET_RANGE(RID_XMM0, RID_XMM1+1)|RID2RSET(RID_EAX);
-  if (ra_hasreg(ir->r))
-    rset_clear(drop, ir->r);  /* Dest reg handled below. */
-  ra_evictset(as, drop);
-  ra_destreg(as, ir, RID_XMM0);
-  emit_call(as, lj_vm_powi_sse);
-  ra_left(as, RID_XMM0, ir->op1);
-  ra_left(as, RID_EAX, ir->op2);
-}
-
 static int asm_swapops(ASMState *as, IRIns *ir)
 {
   IRIns *irl = IR(ir->op1);
