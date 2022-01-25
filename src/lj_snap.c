@@ -313,7 +313,7 @@ static BCReg snap_usedef(jit_State *J, uint8_t *udf,
 }
 
 /* Mark slots used by upvalues of child prototypes as used. */
-void snap_useuv(GCproto *pt, uint8_t *udf)
+static void snap_useuv(GCproto *pt, uint8_t *udf)
 {
   /* This is a coarse check, because it's difficult to correlate the lifetime
   ** of slots and closures. But the number of false positives is quite low.
