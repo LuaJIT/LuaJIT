@@ -380,7 +380,7 @@ NDKCROSS=$NDKBIN/arm-linux-androideabi-
 NDKCC=$NDKBIN/armv7a-linux-androideabi16-clang
 make HOST_CC="gcc -m32" CROSS=$NDKCROSS \
      STATIC_CC=$NDKCC DYNAMIC_CC="$NDKCC -fPIC" \
-     TARGET_LD=$NDKCC TARGET_AR=$NDKBIN/llvm-ar
+     TARGET_LD=$NDKCC TARGET_AR="$NDKBIN/llvm-ar rcus" \
      TARGET_STRIP=$NDKBIN/llvm-strip
 </pre>
 <p>
