@@ -126,7 +126,7 @@ static PRGR libfunc_rgr;
 #endif
 
 #if LJ_TARGET_HAS_GETENTROPY
-extern int getentropy(void *buf, size_t len);
+extern int getentropy(void *buf, size_t len)
 #ifdef __ELF__
   __attribute__((weak))
 #endif
