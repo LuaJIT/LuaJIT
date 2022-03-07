@@ -66,7 +66,7 @@ LJ_NOINLINE char *LJ_FASTCALL lj_buf_more2(SBuf *sb, MSize sz)
       lj_err_mem(sbufL(sbx));
     if (len + sz > sbufsz(sbx)) {  /* Must grow. */
       buf_grow((SBuf *)sbx, len + sz);
-    } else if (sbufxslack(sbx) < (sbufsz(sbx) >> 3)) {
+    } else if (sbufiscow(sb) || sbufxslack(sbx) < (sbufsz(sbx) >> 3)) {
       /* Also grow to avoid excessive compactions, if slack < size/8. */
       buf_grow((SBuf *)sbx, sbuflen(sbx) + sz);  /* Not sbufxlen! */
       return sbx->w;
