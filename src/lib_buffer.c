@@ -76,6 +76,8 @@ LJLIB_CF(buffer_method_skip)		LJLIB_REC(.)
   MSize len = sbufxlen(sbx);
   if (n < len) {
     sbx->r += n;
+  } else if (sbufiscow(sbx)) {
+    sbx->r = sbx->w;
   } else {
     sbx->r = sbx->w = sbx->b;
   }
@@ -173,7 +175,7 @@ LJLIB_CF(buffer_method_get)		LJLIB_REC(.)
     setstrV(L, o, lj_str_new(L, sbx->r, n));
     sbx->r += n;
   }
-  if (sbx->r == sbx->w) sbx->r = sbx->w = sbx->b;
+  if (sbx->r == sbx->w && !sbufiscow(sbx)) sbx->r = sbx->w = sbx->b;
   lj_gc_check(L);
   return narg-1;
 }
