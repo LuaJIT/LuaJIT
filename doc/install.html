@@ -411,7 +411,7 @@ NDKCROSS=$NDKBIN/aarch64-linux-android-
 NDKCC=$NDKBIN/aarch64-linux-android21-clang
 make CROSS=$NDKCROSS \
      STATIC_CC=$NDKCC DYNAMIC_CC="$NDKCC -fPIC" \
-     TARGET_LD=$NDKCC TARGET_AR=$NDKBIN/llvm-ar
+     TARGET_LD=$NDKCC TARGET_AR="$NDKBIN/llvm-ar rcus" \
      TARGET_STRIP=$NDKBIN/llvm-strip
 
 # Android/ARM, armeabi-v7a (ARMv7 VFP), Android 4.1+ (JB)
@@ -421,7 +421,7 @@ NDKCROSS=$NDKBIN/arm-linux-androideabi-
 NDKCC=$NDKBIN/armv7a-linux-androideabi16-clang
 make HOST_CC="gcc -m32" CROSS=$NDKCROSS \
      STATIC_CC=$NDKCC DYNAMIC_CC="$NDKCC -fPIC" \
-     TARGET_LD=$NDKCC TARGET_AR=$NDKBIN/llvm-ar
+     TARGET_LD=$NDKCC TARGET_AR="$NDKBIN/llvm-ar rcus" \
      TARGET_STRIP=$NDKBIN/llvm-strip
 </pre>
 <p>
