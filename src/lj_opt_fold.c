@@ -1112,11 +1112,11 @@ LJFOLDF(simplify_nummuldiv_negneg)
 LJFOLD(POW any KNUM)
 LJFOLDF(simplify_numpow_k)
 {
-  if (knumright == 0)  /* x ^ 0 ==> 1 */
+  if (knumright == 0.0)  /* x ^ 0 ==> 1 */
     return lj_ir_knum_one(J);  /* Result must be a number, not an int. */
-  else if (knumright == 1)  /* x ^ 1 ==> x */
+  else if (knumright == 1.0)  /* x ^ 1 ==> x */
     return LEFTFOLD;
-  else if (knumright == 2)  /* x ^ 2 ==> x * x */
+  else if (knumright == 2.0)  /* x ^ 2 ==> x * x */
     return emitir(IRTN(IR_MUL), fins->op1, fins->op1);
   else
     return NEXTFOLD;
