@@ -44,7 +44,7 @@ extern double __divdf3(double a, double b);
 #define GOTDEF(_) \
   _(floor) _(ceil) _(trunc) _(log) _(log10) _(exp) _(sin) _(cos) _(tan) \
   _(asin) _(acos) _(atan) _(sinh) _(cosh) _(tanh) _(frexp) _(modf) _(atan2) \
-  _(lj_vm_pow) _(fmod) _(ldexp) _(lj_vm_modi) \
+  _(pow) _(fmod) _(ldexp) _(lj_vm_modi) \
   _(lj_dispatch_call) _(lj_dispatch_ins) _(lj_dispatch_stitch) \
   _(lj_dispatch_profile) _(lj_err_throw) \
   _(lj_ffh_coroutine_wrap_err) _(lj_func_closeuv) _(lj_func_newL_gc) \

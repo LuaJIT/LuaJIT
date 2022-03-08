@@ -1623,16 +1623,13 @@ static void build_subroutines(BuildCtx *ctx)
   |.  nop
   |.endmacro
   |
-  |.macro math_extern2, name, func
-  |  .ffunc_nn math_ .. name
+  |.macro math_extern2, func
+  |  .ffunc_nn math_ .. func
   |.  load_got func
   |  call_extern
   |.  nop
   |  b ->fff_resn
   |.  nop
-  |.endmacro
-  |.macro math_extern2, func
-  |  math_extern2 func, func
   |.endmacro
   |
   |// TODO: Return integer type if result is integer (own sf implementation).
@@ -1687,7 +1684,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
-  |  math_extern2 pow, lj_vm_pow
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
@@ -3692,7 +3689,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sltiu AT, SFARG1HI, LJ_TISNUM
     |  sltiu TMP0, SFARG2HI, LJ_TISNUM
     |  and AT, AT, TMP0
-    |  load_got lj_vm_pow
+    |  load_got pow
     |  beqz AT, ->vmeta_arith
     |.  addu RA, BASE, RA
     |.if FPU

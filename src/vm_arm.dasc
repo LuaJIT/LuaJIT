@@ -1477,11 +1477,11 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |.endmacro
   |
-  |.macro math_extern2, name, func
+  |.macro math_extern2, func
   |.if HFABI
-  |  .ffunc_dd math_ .. name
+  |  .ffunc_dd math_ .. func
   |.else
-  |  .ffunc_nn math_ .. name
+  |  .ffunc_nn math_ .. func
   |.endif
   |  .IOS mov RA, BASE
   |  bl extern func
@@ -1491,9 +1491,6 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |  b ->fff_restv
   |.endif
-  |.endmacro
-  |.macro math_extern2, func
-  |  math_extern2 func, func
   |.endmacro
   |
   |.if FPU
@@ -1540,7 +1537,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
-  |  math_extern2 pow, lj_vm_pow
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
@@ -3206,7 +3203,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_POW:
     |  // NYI: (partial) integer arithmetic.
-    |  ins_arithfp extern, extern lj_vm_pow
+    |  ins_arithfp extern, extern pow
     break;
 
   case BC_CAT:

@@ -2138,8 +2138,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_resfp
   |.endmacro
   |
-  |.macro math_extern2, name, func
-  |  .ffunc_nnsse math_ .. name
+  |.macro math_extern2, func
+  |  .ffunc_nnsse math_ .. func
   |.if not X64
   |  movsd FPARG1, xmm0
   |  movsd FPARG3, xmm1
@@ -2148,9 +2148,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  call extern func
   |  mov BASE, RB
   |  jmp ->fff_resfp
-  |.endmacro
-  |.macro math_extern2, func
-  |  math_extern2 func, func
   |.endmacro
   |
   |  math_extern log10
@@ -2164,7 +2161,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
-  |  math_extern2 pow, lj_vm_pow
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
@@ -3922,7 +3919,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  movsd FPARG1, xmm0
     |  movsd FPARG3, xmm1
     |.endif
-    |  call extern lj_vm_pow
+    |  call extern pow
     |  movzx RA, PC_RA
     |  mov BASE, RB
     |.if X64

@@ -638,8 +638,8 @@ static void LJ_FASTCALL recff_math_call(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_math_pow(jit_State *J, RecordFFData *rd)
 {
-  J->base[0] = lj_opt_narrow_pow(J, J->base[0], J->base[1],
-				 &rd->argv[0], &rd->argv[1]);
+  J->base[0] = lj_opt_narrow_arith(J, J->base[0], J->base[1],
+				   &rd->argv[0], &rd->argv[1], IR_POW);
   UNUSED(rd);
 }
 

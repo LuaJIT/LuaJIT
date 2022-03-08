@@ -98,9 +98,6 @@ LJ_ASMF int lj_vm_errno(void);
 LJ_ASMF TValue *lj_vm_next(GCtab *t, uint32_t idx);
 #endif
 
-LJ_ASMF double lj_vm_powi(double, int32_t);
-LJ_ASMF double lj_vm_pow(double, double);
-
 /* Continuations for metamethods. */
 LJ_ASMF void lj_cont_cat(void);  /* Continue with concatenation. */
 LJ_ASMF void lj_cont_ra(void);  /* Store result in RA from instruction. */

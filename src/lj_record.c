@@ -2394,7 +2394,7 @@ void lj_record_ins(jit_State *J)
 
   case BC_POW:
     if (tref_isnumber_str(rb) && tref_isnumber_str(rc))
-      rc = lj_opt_narrow_pow(J, rb, rc, rbv, rcv);
+      rc = lj_opt_narrow_arith(J, rb, rc, rbv, rcv, IR_POW);
     else
       rc = rec_mm_arith(J, &ix, MM_pow);
     break;

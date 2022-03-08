@@ -584,30 +584,6 @@ TRef lj_opt_narrow_mod(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
   return emitir(IRTN(IR_SUB), rb, tmp);
 }
 
-/* Narrowing of power operator or math.pow. */
-TRef lj_opt_narrow_pow(jit_State *J, TRef rb, TRef rc, TValue *vb, TValue *vc)
-{
-  rb = conv_str_tonum(J, rb, vb);
-  rb = lj_ir_tonum(J, rb);  /* Left arg is always treated as an FP number. */
-  rc = conv_str_tonum(J, rc, vc);
-  if (tvisint(vc) || numisint(numV(vc))) {
-    int32_t k = numberVint(vc);
-    if (!(k >= -65536 && k <= 65536)) goto force_pow_num;
-    if (!tref_isinteger(rc)) {
-      /* Guarded conversion to integer! */
-      rc = emitir(IRTGI(IR_CONV), rc, IRCONV_INT_NUM|IRCONV_CHECK);
-    }
-    if (!tref_isk(rc)) {  /* Range guard: -65536 <= i <= 65536 */
-      TRef tmp = emitir(IRTI(IR_ADD), rc, lj_ir_kint(J, 65536));
-      emitir(IRTGI(IR_ULE), tmp, lj_ir_kint(J, 2*65536));
-    }
-  } else {
-force_pow_num:
-    rc = lj_ir_tonum(J, rc);  /* Want POW(num, num), not POW(num, int). */
-  }
-  return emitir(IRTN(IR_POW), rb, rc);
-}
-
 /* -- Predictive narrowing of induction variables ------------------------- */
 
 /* Narrow a single runtime value. */

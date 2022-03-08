@@ -236,14 +236,10 @@ LJFOLDF(kfold_fpcall2)
   return NEXTFOLD;
 }
 
-LJFOLD(POW KNUM KINT)
 LJFOLD(POW KNUM KNUM)
 LJFOLDF(kfold_numpow)
 {
-  lua_Number a = knumleft;
-  lua_Number b = fright->o == IR_KINT ? (lua_Number)fright->i : knumright;
-  lua_Number y = lj_vm_foldarith(a, b, IR_POW - IR_ADD);
-  return lj_ir_knum(J, y);
+  return lj_ir_knum(J, lj_vm_foldarith(knumleft, knumright, IR_POW - IR_ADD));
 }
 
 /* Must not use kfold_kref for numbers (could be NaN). */
@@ -1113,34 +1109,17 @@ LJFOLDF(simplify_nummuldiv_negneg)
   return RETRYFOLD;
 }
 
-LJFOLD(POW any KINT)
-LJFOLDF(simplify_numpow_xkint)
+LJFOLD(POW any KNUM)
+LJFOLDF(simplify_numpow_k)
 {
-  int32_t k = fright->i;
-  TRef ref = fins->op1;
-  if (k == 0)  /* x ^ 0 ==> 1 */
+  if (knumright == 0)  /* x ^ 0 ==> 1 */
     return lj_ir_knum_one(J);  /* Result must be a number, not an int. */
-  if (k == 1)  /* x ^ 1 ==> x */
+  else if (knumright == 1)  /* x ^ 1 ==> x */
     return LEFTFOLD;
-  if ((uint32_t)(k+65536) > 2*65536u)  /* Limit code explosion. */
+  else if (knumright == 2)  /* x ^ 2 ==> x * x */
+    return emitir(IRTN(IR_MUL), fins->op1, fins->op1);
+  else
     return NEXTFOLD;
-  if (k < 0) {  /* x ^ (-k) ==> (1/x) ^ k. */
-    ref = emitir(IRTN(IR_DIV), lj_ir_knum_one(J), ref);
-    k = -k;
-  }
-  /* Unroll x^k for 1 <= k <= 65536. */
-  for (; (k & 1) == 0; k >>= 1)  /* Handle leading zeros. */
-    ref = emitir(IRTN(IR_MUL), ref, ref);
-  if ((k >>= 1) != 0) {  /* Handle trailing bits. */
-    TRef tmp = emitir(IRTN(IR_MUL), ref, ref);
-    for (; k != 1; k >>= 1) {
-      if (k & 1)
-	ref = emitir(IRTN(IR_MUL), ref, tmp);
-      tmp = emitir(IRTN(IR_MUL), tmp, tmp);
-    }
-    ref = emitir(IRTN(IR_MUL), ref, tmp);
-  }
-  return ref;
 }
 
 /* -- Simplify conversions ------------------------------------------------ */

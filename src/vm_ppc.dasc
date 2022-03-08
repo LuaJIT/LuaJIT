@@ -2012,13 +2012,10 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->fff_resn
   |.endmacro
   |
-  |.macro math_extern2, name, func
-  |  .ffunc_nn math_ .. name
+  |.macro math_extern2, func
+  |  .ffunc_nn math_ .. func
   |  blex func
   |  b ->fff_resn
-  |.endmacro
-  |.macro math_extern2, func
-  |  math_extern2 func, func
   |.endmacro
   |
   |.macro math_round, func
@@ -2144,7 +2141,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
-  |  math_extern2 pow, lj_vm_pow
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
@@ -4142,7 +4139,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checknum cr1, CARG3
     |  crand 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
     |  bge ->vmeta_arith_vv
-    |  blex lj_vm_pow
+    |  blex pow
     |  ins_next1
     |.if FPU
     |  stfdx FARG1, BASE, RA

@@ -1755,15 +1755,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->fff_resxmm0
   |.endmacro
   |
-  |.macro math_extern2, name, func
-  |  .ffunc_nn math_ .. name
+  |.macro math_extern2, func
+  |  .ffunc_nn math_ .. func
   |  mov RB, BASE
   |  call extern func
   |  mov BASE, RB
   |  jmp ->fff_resxmm0
-  |.endmacro
-  |.macro math_extern2, func
-  |  math_extern2 func, func
   |.endmacro
   |
   |  math_extern log10
@@ -1777,7 +1774,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  math_extern sinh
   |  math_extern cosh
   |  math_extern tanh
-  |  math_extern2 pow, lj_vm_pow
+  |  math_extern2 pow
   |  math_extern2 atan2
   |  math_extern2 fmod
   |
