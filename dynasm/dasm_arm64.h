@@ -438,7 +438,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  n = DASM_EXTERN(Dst, (unsigned char *)cp, (ins&2047), !(ins&2048));
 	  goto patchrel;
 	case DASM_ALIGN:
-	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0xe1a00000;
+	  ins &= 255; while ((((char *)cp - base) & ins)) *cp++ = 0xd503201f;
 	  break;
 	case DASM_REL_LG:
 	  if (n < 0) {
