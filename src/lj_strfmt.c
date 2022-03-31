@@ -521,6 +521,11 @@ GCstr * LJ_FASTCALL lj_strfmt_obj(lua_State *L, cTValue *o)
     return lj_str_newlit(L, "true");
   } else {
     char buf[8+2+2+16], *p = buf;
+    if (tvislightud(o) && o->u32.hi == LJ_KEYINDEX) {
+      p = lj_buf_wmem(p, "iterator@", 9);
+      p = lj_strfmt_wint(p, o->u32.lo);
+      return lj_str_new(L, buf, (size_t)(p - buf));
+    }
     p = lj_buf_wmem(p, lj_typename(o), (MSize)strlen(lj_typename(o)));
     *p++ = ':'; *p++ = ' ';
     if (tvisfunc(o) && isffunc(funcV(o))) {
