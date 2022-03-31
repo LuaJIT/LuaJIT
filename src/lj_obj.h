@@ -845,6 +845,7 @@ static LJ_AINLINE void *lightudV(global_State *g, cTValue *o)
   uint64_t seg = lightudseg(u);
   uint32_t *segmap = mref(g->gc.lightudseg, uint32_t);
   lj_assertG(tvislightud(o), "lightuserdata expected");
+  if (seg == (1 << LJ_LIGHTUD_BITS_SEG)-1) return NULL;
   lj_assertG(seg <= g->gc.lightudnum, "bad lightuserdata segment %d", seg);
   return (void *)(((uint64_t)segmap[seg] << 32) | lightudlo(u));
 }
