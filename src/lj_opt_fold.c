@@ -668,7 +668,6 @@ LJFOLDF(kfold_conv_knum_int_num)
 LJFOLD(CONV KNUM IRCONV_U32_NUM)
 LJFOLDF(kfold_conv_knum_u32_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
 #ifdef _MSC_VER
   {  /* Workaround for MSVC bug. */
     volatile uint32_t u = (uint32_t)knumleft;
@@ -682,14 +681,12 @@ LJFOLDF(kfold_conv_knum_u32_num)
 LJFOLD(CONV KNUM IRCONV_I64_NUM)
 LJFOLDF(kfold_conv_knum_i64_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
   return INT64FOLD((uint64_t)(int64_t)knumleft);
 }
 
 LJFOLD(CONV KNUM IRCONV_U64_NUM)
 LJFOLDF(kfold_conv_knum_u64_num)
 {
-  lua_assert((fins->op2 & IRCONV_TRUNC));
   return INT64FOLD(lj_num2u64(knumleft));
 }
 
