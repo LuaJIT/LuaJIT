@@ -83,7 +83,7 @@
 #define LUAJIT_OS	LUAJIT_OS_OSX
 #elif (defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || \
        defined(__NetBSD__) || defined(__OpenBSD__) || \
-       defined(__DragonFly__)) && !defined(__ORBIS__)
+       defined(__DragonFly__)) && !defined(__ORBIS__) && !defined(__PROSPERO__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
 #elif (defined(__sun__) && defined(__svr4__))
 #define LJ_TARGET_SOLARIS	1
@@ -134,6 +134,13 @@
 
 #ifdef __ORBIS__
 #define LJ_TARGET_PS4		1
+#define LJ_TARGET_CONSOLE	1
+#undef NULL
+#define NULL ((void*)0)
+#endif
+
+#ifdef __PROSPERO__
+#define LJ_TARGET_PS5		1
 #define LJ_TARGET_CONSOLE	1
 #undef NULL
 #define NULL ((void*)0)
@@ -634,7 +641,7 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #endif
 #endif
 
-#if defined(LUAJIT_NO_UNWIND) || __GNU_COMPACT_EH__ || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4
+#if defined(LUAJIT_NO_UNWIND) || __GNU_COMPACT_EH__ || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4 || LJ_TARGET_PS5
 #define LJ_NO_UNWIND		1
 #endif
 

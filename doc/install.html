@@ -118,7 +118,7 @@ operating systems, CPUs and compilers:
 <tr class="even">
 <td class="compatcpu">x64 (64 bit)</td>
 <td class="compatos">GCC 4.2+</td>
-<td class="compatos">GCC 4.2+<br>ORBIS (<a href="#ps4">PS4</a>)</td>
+<td class="compatos">GCC 4.2+<br>ORBIS (<a href="#ps4">PS4</a>)<br>PROSPERO (<a href="#ps5">PS5</a>)</td>
 <td class="compatos">XCode 5.0+<br>Clang</td>
 <td class="compatos">MSVC<br>Durango (<a href="#xboxone">Xbox One</a>)</td>
 </tr>
@@ -476,6 +476,16 @@ run the following commands:
 <pre class="code">
 cd src
 ps4build
+</pre>
+<p>
+To cross-compile for <b id="ps5">PS5</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and
+run the following commands:
+</p>
+<pre class="code">
+cd src
+ps5build
 </pre>
 <p>
 To cross-compile for <b id="psvita">PS Vita</b> from a Windows host,
