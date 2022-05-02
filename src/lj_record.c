@@ -2043,7 +2043,7 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
 static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
 {
   TRef *top = &J->base[topslot];
-  TValue savetv[5];
+  TValue savetv[5+LJ_FR2];
   BCReg s;
   RecordIndex ix;
   lj_assertJ(baseslot < topslot, "bad CAT arg");
