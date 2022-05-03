@@ -1448,16 +1448,16 @@ static TRef rec_idx_key(jit_State *J, RecordIndex *ix, IRRef *rbref,
     key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
   if (tref_isk(key)) {
     /* Optimize lookup of constant hash keys. */
-    MSize hslot = (MSize)((char *)ix->oldv - (char *)&noderef(t->node)[0].val);
-    if (t->hmask > 0 && hslot <= t->hmask*(MSize)sizeof(Node) &&
-	hslot <= 65535*(MSize)sizeof(Node)) {
+    GCSize hslot = (GCSize)((char *)ix->oldv-(char *)&noderef(t->node)[0].val);
+    if (hslot <= t->hmask*(GCSize)sizeof(Node) &&
+	hslot <= 65535*(GCSize)sizeof(Node)) {
       TRef node, kslot, hm;
       *rbref = J->cur.nins;  /* Mark possible rollback point. */
       *rbguard = J->guardemit;
       hm = emitir(IRTI(IR_FLOAD), ix->tab, IRFL_TAB_HMASK);
       emitir(IRTGI(IR_EQ), hm, lj_ir_kint(J, (int32_t)t->hmask));
       node = emitir(IRT(IR_FLOAD, IRT_PGC), ix->tab, IRFL_TAB_NODE);
-      kslot = lj_ir_kslot(J, key, hslot / sizeof(Node));
+      kslot = lj_ir_kslot(J, key, (IRRef)(hslot / sizeof(Node)));
       return emitir(IRTG(IR_HREFK, IRT_PGC), node, kslot);
     }
   }
