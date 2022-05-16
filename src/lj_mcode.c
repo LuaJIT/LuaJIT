@@ -124,9 +124,33 @@ static int mcode_setprot(void *p, size_t sz, int prot)
   return mprotect(p, sz, prot);
 }
 
-#else
+#elif LJ_64 || LUAJIT_SECURITY_MCODE
 
 #error "Missing OS support for explicit placement of executable memory"
+
+#else
+
+/* Fallback allocator. This will fail if memory is not executable by default. */
+#define MCPROT_RW	0
+#define MCPROT_RX	0
+#define MCPROT_RWX	0
+
+static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, int prot)
+{
+  UNUSED(hint); UNUSED(prot);
+  return lj_mem_new(J->L, sz);
+}
+
+static void mcode_free(jit_State *J, void *p, size_t sz)
+{
+  lj_mem_free(J2G(J), p, sz);
+}
+
+static int mcode_setprot(void *p, size_t sz, int prot)
+{
+  UNUSED(p); UNUSED(sz); UNUSED(prot);
+  return 0;
+}
 
 #endif
 
