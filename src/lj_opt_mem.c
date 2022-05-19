@@ -432,7 +432,7 @@ TRef LJ_FASTCALL lj_opt_fwd_alen(jit_State *J)
 	    fins->op2 = aref->op2;  /* Set ALEN hint. */
 	  }
 	  goto doemit;  /* Conflicting store, possibly giving a hint. */
-	} else if (aa_table(J, tab, fref->op1) == ALIAS_NO) {
+	} else if (aa_table(J, tab, fref->op1) != ALIAS_NO) {
 	  goto doemit;  /* Conflicting store. */
 	}
 	sref = store->prev;
