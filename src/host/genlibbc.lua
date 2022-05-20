@@ -55,7 +55,7 @@ local function transform_lua(code)
   end)
   code = string.gsub(code, "PAIRS%((.-)%)", function(var)
     fixup.PAIRS = true
-    return format("nil, %s, 0", var)
+    return format("nil, %s, 0x4dp80", var)
   end)
   return "return "..code, fixup
 end
@@ -129,7 +129,10 @@ local function fixup_dump(dump, fixup)
     end
     p = p + 4
   end
-  return ffi.string(start, n)
+  local ndump = ffi.string(start, n)
+  -- Fixup hi-part of 0x4dp80 to LJ_KEYINDEX.
+  ndump = ndump:gsub("\x80\x80\xcd\xaa\x04", "\xff\xff\xf9\xff\x0f")
+  return ndump
 end
 
 local function find_defs(src)
