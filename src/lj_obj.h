@@ -511,7 +511,7 @@ typedef struct GCtab {
 } GCtab;
 
 #define sizetabcolo(n)	((n)*sizeof(TValue) + sizeof(GCtab))
-#define tabref(r)	(&gcref((r))->tab)
+#define tabref(r)	((GCtab *)gcref((r)))
 #define noderef(r)	(mref((r), Node))
 #define nextnode(n)	(mref((n)->next, Node))
 #if LJ_GC64
