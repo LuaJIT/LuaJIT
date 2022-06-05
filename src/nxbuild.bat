@@ -59,9 +59,9 @@ goto :BEGIN
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
-@rem Check for 32/64 bit host compiler.
+@rem Check that we have the right 32/64 bit host compiler to generate the right virtual machine files.
 @minilua
-@if %errorlevel% == %HOST_PTR_SIZE% goto :PASSED_PTR_CHECK
+@if "%ERRORLEVEL%" == "%HOST_PTR_SIZE%" goto :PASSED_PTR_CHECK
 
 @echo The pointer size of the host in bytes (%HOST_PTR_SIZE%) does not match the expected value (%errorlevel%).
 @echo Check that the script is being ran under the correct x86/x64 VS prompt.
