@@ -16,7 +16,7 @@
 @rem nx32 (before debug)    32-bit target library
 @rem noamalg (after debug)  non-amalgamated build
 
-::@if not defined INCLUDE goto :FAIL
+@if not defined INCLUDE goto :FAIL
 @if not defined NINTENDO_SDK_ROOT goto :FAIL
 
 @setlocal
@@ -27,12 +27,7 @@
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
-::@set DASC=vm_arm.dasc
-
-
-::@if "%1" neq "nx32" goto :NOGC32
-@set DASC=vm_arm64.dasc
-:::NOGC32
+@set DASC=vm_arm.dasc
 
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
@@ -43,12 +38,13 @@ if exist minilua.exe.manifest^
 
 @rem Check for 64 bit host compiler.
 @minilua
-@if not errorlevel 8 goto :FAIL
-
-@set DASMFLAGS=-D P64 -D ENDIAN_LE -D NO_UNWIND -D LUAJIT_TARGET=LUAJIT_ARCH_ARM64 -D LUAJIT_OS=LUAJIT_OS_OTHER -D LUAJIT_DISABLE_JIT -D LUAJIT_DISABLE_FFI
+@echo lol
+@if not errorlevel 4 goto :FAIL
+@echo lold
+@set DASMFLAGS= -D HFABI -D FPU -D NO_UNWIND -D LUAJIT_TARGET=LUAJIT_ARCH_ARM -D LUAJIT_OS=LUAJIT_OS_OTHER -D LUAJIT_DISABLE_JIT -D LUAJIT_DISABLE_FFI
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
-%LJCOMPILE% /I "." /I %DASMDIR% -DLUAJIT_TARGET=LUAJIT_ARCH_ARM64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND host\buildvm*.c
+%LJCOMPILE% /I "." /I %DASMDIR% -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
@@ -72,29 +68,29 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 
 @rem ---- Cross compiler ----
 ::@if "%1" neq "nx32" goto :NX32BUILD
-@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_TARGET=LUAJIT_ARCH_ARM64 -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -DLUAJIT_NO_UNWIND -c
-@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-ar" rc
-@set TARGETLIB_SUFFIX="nx64"
+::@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -DLUAJIT_NO_UNWIND -c
+::@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-ar" rc
+::@set TARGETLIB_SUFFIX="nx64"
 
-%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-as -o lj_vm.o lj_vm.s
+::%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-as -o lj_vm.o lj_vm.s
 ::goto :DEBUGCHECK
 
 :::NX32BUILD
-::@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_DISABLE_JIT -DLUAJIT_SECURITY_PRNG=0 -DLUAJIT_USE_SYSMALLOC -DNN_NINTENDO_SDK %GC64% -c
-::@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-ar" rc
-::@set TARGETLIB_SUFFIX="nx32"
+@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -DLUAJIT_NO_UNWIND -c
+@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-ar" rc
+@set TARGETLIB_SUFFIX="nx32"
 
-::%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-ar -o lj_vm.o lj_vm.s
+%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-as -o lj_vm.o lj_vm.s
 :DEBUGCHECK
 
 @if "%1" neq "debug" goto :NODEBUG
 @shift
 @set LJCOMPILE=%LJCOMPILE% -DNN_SDK_BUILD_DEBUG -g -O0
-@set TARGETLIB=liblua51D_%TARGETLIB_SUFFIX%.a
+@set TARGETLIB=libluajitD_%TARGETLIB_SUFFIX%.a
 goto :BUILD
 :NODEBUG
 @set LJCOMPILE=%LJCOMPILE% -DNN_SDK_BUILD_RELEASE -O3
-@set TARGETLIB=liblua51_%TARGETLIB_SUFFIX%.a
+@set TARGETLIB=libluajit_%TARGETLIB_SUFFIX%.a
 :BUILD
 del %TARGETLIB%
 @if "%1" neq "noamalg" goto :AMALG
