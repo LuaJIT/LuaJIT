@@ -181,6 +181,12 @@ LuaJIT currently builds out-of-the box on most systems:
 <td class="compatx">Xbox One SDK (DURANGO)</td>
 <td class="compatx">v2.1 &ndash;</td>
 </tr>
+<tr class="even">
+  <td class="compatname"><a href="#consoles">Nintendo Switch</a></td>
+  <td class="compatver">&nbsp;</td>
+  <td class="compatx">NintendoSDK + NX Addon</td>
+  <td class="compatx">v2.1 &ndash;</td>
+  </tr>
 </table>
 <p>
 The codebase has compatibility defines for some more systems, but
@@ -647,6 +653,21 @@ the following commands:
 <pre class="code">
 cd src
 xb1build
+</pre>
+<p>
+To cross-compile for <b id="nx">Nintendo Switch</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and run
+any of the following commands, depending on the NX32 or NX64 target:
+</p>
+<pre class="code">
+cd src
+nx32build
+</pre>
+
+<pre class="code">
+cd src
+nx64build
 </pre>
 
 <h2 id="embed">Embedding LuaJIT</h2>

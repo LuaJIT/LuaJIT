@@ -169,6 +169,13 @@
 #endif
 #endif
 
+#ifdef __NX__
+#define LJ_TARGET_NX      1
+#define LJ_TARGET_CONSOLE	1
+#undef NULL
+#define NULL ((void*)0)
+#endif
+
 /* -- Arch-specific settings ---------------------------------------------- */
 
 /* Set target architecture properties. */
@@ -641,7 +648,7 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #endif
 #endif
 
-#if defined(LUAJIT_NO_UNWIND) || __GNU_COMPACT_EH__ || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4 || LJ_TARGET_PS5
+#if defined(LUAJIT_NO_UNWIND) || __GNU_COMPACT_EH__ || defined(__symbian__) || LJ_TARGET_IOS || LJ_TARGET_PS3 || LJ_TARGET_PS4 || LJ_TARGET_PS5 || LJ_TARGET_NX
 #define LJ_NO_UNWIND		1
 #endif
 
