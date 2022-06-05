@@ -182,11 +182,11 @@ LuaJIT currently builds out-of-the box on most systems:
 <td class="compatx">v2.1 &ndash;</td>
 </tr>
 <tr class="even">
-  <td class="compatname"><a href="#consoles">Nintendo Switch</a></td>
-  <td class="compatver">&nbsp;</td>
-  <td class="compatx">NintendoSDK + NX Addon</td>
-  <td class="compatx">v2.1 &ndash;</td>
-  </tr>
+<td class="compatname"><a href="#consoles">Nintendo Switch</a></td>
+<td class="compatver">&nbsp;</td>
+<td class="compatx">NintendoSDK + NX Addon</td>
+<td class="compatx">v2.1 &ndash;</td>
+</tr>
 </table>
 <p>
 The codebase has compatibility defines for some more systems, but
@@ -656,20 +656,17 @@ xb1build
 </pre>
 <p>
 To cross-compile for <b id="nx">Nintendo Switch</b> from a Windows host,
-open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
-<tt>cd</tt> to the directory where you've unpacked the sources and run
-any of the following commands, depending on the NX32 or NX64 target:
+open a "<i>Native Tools Command Prompt for VS</i>". Either the x86 version for <tt>NX32</tt>,
+or x64 for the <tt>NX64</tt> target; this is because the pointer size of the LuaJIT host
+tools (<tt>buildvm.exe</tt>) must match the one from the cross-compiled target (32 or 64 bits).
+</p>
+<p>
+Then <tt>cd</tt> to the directory where you've unpacked the sources and run these commands:
 </p>
 <pre class="code">
 cd src
-nx32build
+nxbuild
 </pre>
-
-<pre class="code">
-cd src
-nx64build
-</pre>
-
 <h2 id="embed">Embedding LuaJIT</h2>
 <p>
 LuaJIT is API-compatible with Lua 5.1. If you've already embedded Lua
