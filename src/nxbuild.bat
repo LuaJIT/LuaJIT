@@ -145,7 +145,7 @@ for %%f in (lj_*.c lib_*.c) do (
 @echo.
 @echo *******************************************************
 @echo *** Build FAILED -- Please check the error messages ***
-@echo *******************************************************
+@echo *******************************************************
 @goto :END
 :FAIL
 @echo To run this script you must open a "Native Tools Command Prompt for VS".
