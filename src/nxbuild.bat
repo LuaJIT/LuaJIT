@@ -1,8 +1,10 @@
 @rem Script to build LuaJIT with NintendoSDK + NX Addon.
-@rem Donated to the public domain.
+@rem Donated to the public domain by Swyter.
 @rem
-@rem Open a "Visual Studio .NET Command Prompt" (64 bit host compiler)
-@rem or "VS20xx x64 Native Tools Command Prompt".
+@rem To run this script you must open a "Native Tools Command Prompt for VS".
+@rem
+@rem Either the x86 version for NX32, or x64 for the NX64 target, this is because the pointer size
+@rem of the LuaJIT host tools (buildvm.exe) must match the cross-compiled target (32 or 64 bits).
 @rem
 @rem Then cd to this directory and run this script.
 @rem
@@ -13,13 +15,35 @@
 @rem
 @rem Additional command-line options (not generally recommended):
 @rem
-@rem nx32 (before debug)    32-bit target library
 @rem noamalg (after debug)  non-amalgamated build
 
 @if not defined INCLUDE goto :FAIL
 @if not defined NINTENDO_SDK_ROOT goto :FAIL
+@if not defined PLATFORM goto :FAIL
+
+@if "%platform%" == "x86" goto :DO_NX32
+@if "%platform%" == "x64" goto :DO_NX64
+
+@echo Error: Current host platform is %platform%!
+@echo. 
+@goto :FAIL
 
 @setlocal
+
+:DO_NX32
+@set DASC=vm_arm.dasc
+@set DASMFLAGS= -D HFABI -D FPU
+@set DASMTARGET= -D LUAJIT_TARGET=LUAJIT_ARCH_ARM
+@set HOST_PTR_SIZE=4
+goto :BEGIN
+
+:DO_NX64
+@set DASC=vm_arm64.dasc
+@set DASMFLAGS= -D ENDIAN_LE
+@set DASMTARGET= -D LUAJIT_TARGET=LUAJIT_ARCH_ARM64
+@set HOST_PTR_SIZE=8
+
+:BEGIN
 @rem ---- Host compiler ----
 @set LJCOMPILE=cl /nologo /c /MD /O2 /W3 /wo4146 /wo4244 /D_CRT_SECURE_NO_DEPRECATE
 @set LJLINK=link /nologo
@@ -27,7 +51,6 @@
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
-@set DASC=vm_arm.dasc
 
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
@@ -36,15 +59,19 @@
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
-@rem Check for 64 bit host compiler.
+@rem Check for 32/64 bit host compiler.
 @minilua
-@echo lol
-@if not errorlevel 4 goto :FAIL
-@echo lold
-@set DASMFLAGS= -D HFABI -D FPU -D NO_UNWIND -D LUAJIT_TARGET=LUAJIT_ARCH_ARM -D LUAJIT_OS=LUAJIT_OS_OTHER -D LUAJIT_DISABLE_JIT -D LUAJIT_DISABLE_FFI
+@if %errorlevel% == %HOST_PTR_SIZE% goto :PASSED_PTR_CHECK
+
+@echo The pointer size of the host in bytes (%HOST_PTR_SIZE%) does not match the expected value (%errorlevel%).
+@echo Check that the script is being ran under the correct x86/x64 VS prompt.
+@goto :BAD
+
+:PASSED_PTR_CHECK
+@set DASMFLAGS=%DASMFLAGS% %DASMTARGET% -D LJ_TARGET_NX -D LUAJIT_OS=LUAJIT_OS_OTHER -D LUAJIT_DISABLE_JIT -D LUAJIT_DISABLE_FFI
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
-%LJCOMPILE% /I "." /I %DASMDIR% -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -D LJ_TARGET_NX -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_NO_UNWIND host\buildvm*.c
+%LJCOMPILE% /I "." /I %DASMDIR% %DASMTARGET% -D LJ_TARGET_NX -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
@@ -67,18 +94,18 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if errorlevel 1 goto :BAD
 
 @rem ---- Cross compiler ----
-::@if "%1" neq "nx32" goto :NX32BUILD
-::@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -DLUAJIT_NO_UNWIND -c
-::@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-ar" rc
-::@set TARGETLIB_SUFFIX="nx64"
+@if "%platform%" neq "x64" goto :NX32_CROSSBUILD
+@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -c
+@set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-ar" rc
+@set TARGETLIB_SUFFIX=nx64
 
-::%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-as -o lj_vm.o lj_vm.s
-::goto :DEBUGCHECK
+%NINTENDO_SDK_ROOT%\Compilers\NX\nx\aarch64\bin\aarch64-nintendo-nx-elf-as -o lj_vm.o lj_vm.s
+goto :DEBUGCHECK
 
-:::NX32BUILD
-@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include -DLUAJIT_TARGET=LUAJIT_ARCH_ARM -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -DLUAJIT_NO_UNWIND -c
+:NX32_CROSSBUILD
+@set LJCOMPILE="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\clang" -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -c
 @set LJLIB="%NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-ar" rc
-@set TARGETLIB_SUFFIX="nx32"
+@set TARGETLIB_SUFFIX=nx32
 
 %NINTENDO_SDK_ROOT%\Compilers\NX\nx\armv7l\bin\armv7l-nintendo-nx-eabihf-as -o lj_vm.o lj_vm.s
 :DEBUGCHECK
@@ -111,7 +138,7 @@ for %%f in (lj_*.c lib_*.c) do (
 
 @del *.o *.obj *.manifest minilua.exe buildvm.exe
 @echo.
-@echo === Successfully built LuaJIT for Nintendo Switch ===
+@echo === Successfully built LuaJIT for Nintendo Switch (%TARGETLIB_SUFFIX%) ===
 
 @goto :END
 :BAD
@@ -121,6 +148,10 @@ for %%f in (lj_*.c lib_*.c) do (
 @echo *******************************************************
 @goto :END
 :FAIL
-@echo To run this script you must open a "Visual Studio .NET Command Prompt"
-@echo (64 bit host compiler). NintendoSDK + NX Addon must be installed, too.
+@echo To run this script you must open a "Native Tools Command Prompt for VS".
+@echo. 
+@echo Either the x86 version for NX32, or x64 for the NX64 target, this is because the pointer size
+@echo of the LuaJIT host tools (buildvm.exe) must match the cross-compiled target (32 or 64 bits).
+@echo. 
+@echo Keep in mind that NintendoSDK + NX Addon must be installed, too.
 :END
