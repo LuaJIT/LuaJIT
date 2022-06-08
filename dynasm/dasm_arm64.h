@@ -158,10 +158,10 @@ void dasm_setup(Dst_DECL, const void *actionlist)
 #ifdef DASM_CHECKS
 #define CK(x, st) \
   do { if (!(x)) { \
-    D->status = DASM_S_##st|(p-D->actionlist-1); return; } } while (0)
+    D->status = DASM_S_##st|(int)(p-D->actionlist-1); return; } } while (0)
 #define CKPL(kind, st) \
   do { if ((size_t)((char *)pl-(char *)D->kind##labels) >= D->kind##size) { \
-    D->status = DASM_S_RANGE_##st|(p-D->actionlist-1); return; } } while (0)
+    D->status = DASM_S_RANGE_##st|(int)(p-D->actionlist-1); return; } } while (0)
 #else
 #define CK(x, st)	((void)0)
 #define CKPL(kind, st)	((void)0)
@@ -190,7 +190,9 @@ static int dasm_imm13(int lo, int hi)
   unsigned long long n = (((unsigned long long)hi) << 32) | (unsigned int)lo;
   unsigned long long m = 1ULL, a, b, c;
   if (n & 1) { n = ~n; inv = 1; }
-  a = n & -n; b = (n+a)&-(n+a); c = (n+a-b)&-(n+a-b);
+  a = n & (unsigned long long)-(long long)n;
+  b = (n+a)&(unsigned long long)-(long long)(n+a);
+  c = (n+a-b)&(unsigned long long)-(long long)(n+a-b);
   xa = dasm_ffs(a); xb = dasm_ffs(b);
   if (c) {
     w = dasm_ffs(c) - xa;
@@ -406,7 +408,7 @@ int dasm_link(Dst_DECL, size_t *szp)
 
 #ifdef DASM_CHECKS
 #define CK(x, st) \
-  do { if (!(x)) return DASM_S_##st|(p-D->actionlist-1); } while (0)
+  do { if (!(x)) return DASM_S_##st|(int)(p-D->actionlist-1); } while (0)
 #else
 #define CK(x, st)	((void)0)
 #endif
@@ -554,7 +556,7 @@ int dasm_checkstep(Dst_DECL, int secmatch)
   }
   if (D->status == DASM_S_OK && secmatch >= 0 &&
       D->section != &D->sections[secmatch])
-    D->status = DASM_S_MATCH_SEC|(D->section-D->sections);
+    D->status = DASM_S_MATCH_SEC|(int)(D->section-D->sections);
   return D->status;
 }
 #endif
