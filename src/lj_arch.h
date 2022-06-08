@@ -162,6 +162,13 @@
 #define LJ_TARGET_GC64		1
 #endif
 
+#ifdef __NX__
+#define LJ_TARGET_NX		1
+#define LJ_TARGET_CONSOLE	1
+#undef NULL
+#define NULL ((void*)0)
+#endif
+
 #ifdef _UWP
 #define LJ_TARGET_UWP		1
 #if LUAJIT_TARGET == LUAJIT_ARCH_X64
