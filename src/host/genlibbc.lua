@@ -79,9 +79,11 @@ local name2itype = {
   str = 5, func = 9, tab = 12, int = 14, num = 15
 }
 
-local BC = {}
+local BC, BCN = {}, {}
 for i=0,#bcnames/6-1 do
-  BC[string.gsub(string.sub(bcnames, i*6+1, i*6+6), " ", "")] = i
+  local name = bcnames:sub(i*6+1, i*6+6):gsub(" ", "")
+  BC[name] = i
+  BCN[i] = name
 end
 local xop, xra = isbe and 3 or 0, isbe and 2 or 1
 local xrc, xrb = isbe and 1 or 2, isbe and 0 or 3
@@ -96,6 +98,7 @@ local function fixup_dump(dump, fixup)
   p = read_uleb128(p)
   p = read_uleb128(p)
   p, sizebc = read_uleb128(p)
+  local startbc = tonumber(p - start)
   local rawtab = {}
   for i=0,sizebc-1 do
     local op = p[xop]
@@ -132,7 +135,7 @@ local function fixup_dump(dump, fixup)
   local ndump = ffi.string(start, n)
   -- Fixup hi-part of 0x4dp80 to LJ_KEYINDEX.
   ndump = ndump:gsub("\x80\x80\xcd\xaa\x04", "\xff\xff\xf9\xff\x0f")
-  return ndump
+  return { dump = ndump, startbc = startbc, sizebc = sizebc }
 end
 
 local function find_defs(src)
@@ -152,24 +155,46 @@ local function gen_header(defs)
   local function w(x) t[#t+1] = x end
   w("/* This is a generated file. DO NOT EDIT! */\n\n")
   w("static const int libbc_endian = ") w(isbe and 1 or 0) w(";\n\n")
-  local s = ""
-  for _,name in ipairs(defs) do
-    s = s .. defs[name]
+  local s, sb = "", ""
+  for i,name in ipairs(defs) do
+    local d = defs[name]
+    s = s .. d.dump
+    sb = sb .. string.char(i) .. ("\0"):rep(d.startbc - 1)
+	    .. (isbe and "\0\0\0\255" or "\255\0\0\0"):rep(d.sizebc)
+	    .. ("\0"):rep(#d.dump - d.startbc - d.sizebc*4)
   end
   w("static const uint8_t libbc_code[] = {\n")
   local n = 0
   for i=1,#s do
     local x = string.byte(s, i)
-    w(x); w(",")
-    n = n + (x < 10 and 2 or (x < 100 and 3 or 4))
-    if n >= 75 then n = 0; w("\n") end
+    local xb = string.byte(sb, i)
+    if xb == 255 then
+      local name = BCN[x]
+      local m = #name + 4
+      if n + m > 78 then n = 0; w("\n") end
+      n = n + m
+      w("BC_"); w(name)
+    else
+      local m = x < 10 and 2 or (x < 100 and 3 or 4)
+      if xb == 0 then
+	if n + m > 78 then n = 0; w("\n") end
+      else
+	local name = defs[xb]:gsub("_", ".")
+	if n ~= 0 then w("\n") end
+	w("/* "); w(name); w(" */ ")
+	n = #name + 7
+      end
+      n = n + m
+      w(x)
+    end
+    w(",")
   end
-  w("0\n};\n\n")
+  w("\n0\n};\n\n")
   w("static const struct { const char *name; int ofs; } libbc_map[] = {\n")
   local m = 0
   for _,name in ipairs(defs) do
     w('{"'); w(name); w('",'); w(m) w('},\n')
-    m = m + #defs[name]
+    m = m + #defs[name].dump
   end
   w("{NULL,"); w(m); w("}\n};\n\n")
   return table.concat(t)
