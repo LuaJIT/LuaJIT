@@ -120,7 +120,7 @@ Direct3D version 10 or higher do not show this behavior anymore.
 Consider testing your application with older versions, too.<br>
 
 Similarly, the Borland/Delphi runtime modifies the FPU control word and
-enables FP exceptions. Of course this violates the Windows ABI, too.
+enables FP exceptions. Of course, this violates the Windows ABI, too.
 Please check the Delphi docs for the Set8087CW method.</dd>
 </dl>
 
@@ -130,7 +130,7 @@ Please check the Delphi docs for the Set8087CW method.</dd>
 ignored by compiled code. If your program is running in a tight loop
 and never falls back to the interpreter, the debug hook never runs and
 can't throw the "interrupted!" error.<br>
-You have to press Ctrl-C twice to get stop your program. That's similar
+You have to press Ctrl-C twice to stop your program. That's similar
 to when it's stuck running inside a C function under the Lua interpreter.</dd>
 </dl>
 
@@ -150,7 +150,7 @@ so it doesn't rely on the key order. Or sort the table keys, if you must.</dd>
 <dl id="sandbox">
 <dt>Q: Can Lua code be safely sandboxed?</dt>
 <dd>
-Maybe for an extremly restricted subset of Lua and if you relentlessly
+Maybe for an extremely restricted subset of Lua and if you relentlessly
 scrutinize every single interface function you offer to the untrusted code.<br>
 
 Although Lua provides some sandboxing functionality (<tt>setfenv()</tt>, hooks),
