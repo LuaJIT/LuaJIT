@@ -79,7 +79,7 @@ Known incompatibilities and issues in LuaJIT&nbsp;2.0:
 <ul>
 <li>
 There are some differences in <b>implementation-defined</b> behavior.
-These either have a good reason, are arbitrary design choices
+These either have a good reason, are arbitrary design choices,
 or are due to quirks in the VM. The latter cases may get fixed if a
 demonstrable need is shown.
 </li>
@@ -89,7 +89,7 @@ hooks for non-Lua functions) and shows slightly different behavior
 in LuaJIT (no per-coroutine hooks, no tail call counting).
 </li>
 <li>
-Currently some <b>out-of-memory</b> errors from <b>on-trace code</b> are not
+Currently, some <b>out-of-memory</b> errors from <b>on-trace code</b> are not
 handled correctly. The error may fall through an on-trace
 <tt>pcall</tt> or it may be passed on to the function set with
 <tt>lua_atpanic</tt> on x64.
