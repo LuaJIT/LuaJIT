@@ -359,9 +359,6 @@
 |.macro sseconst_1, reg, tmp		// Synthesize 1.0.
 |  sseconst_hi reg, tmp, 3ff00000
 |.endmacro
-|.macro sseconst_m1, reg, tmp		// Synthesize -1.0.
-|  sseconst_hi reg, tmp, bff00000
-|.endmacro
 |.macro sseconst_2p52, reg, tmp		// Synthesize 2^52.
 |  sseconst_hi reg, tmp, 43300000
 |.endmacro
@@ -2530,15 +2527,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  addsd xmm1, xmm3			// (|x| + 2^52) - 2^52
   |  subsd xmm1, xmm3
   |  orpd xmm1, xmm2			// Merge sign bit back in.
+  |  sseconst_1 xmm3, RD
   |  .if mode == 1		// ceil(x)?
-  |    sseconst_m1 xmm2, RD		// Must subtract -1 to preserve -0.
   |    cmpsd xmm0, xmm1, 6		// x > result?
+  |    andpd xmm0, xmm3
+  |    addsd xmm1, xmm0			// If yes, add 1.
+  |    orpd xmm1, xmm2			// Merge sign bit back in (again).
   |  .else			// floor(x)?
-  |    sseconst_1 xmm2, RD
   |    cmpsd xmm0, xmm1, 1		// x < result?
+  |    andpd xmm0, xmm3
+  |    subsd xmm1, xmm0			// If yes, subtract 1.
   |  .endif
-  |  andpd xmm0, xmm2
-  |  subsd xmm1, xmm0			// If yes, subtract +-1.
   |.endif
   |  movaps xmm0, xmm1
   |1:
