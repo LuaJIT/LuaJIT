@@ -501,6 +501,18 @@ typedef struct {
   mach_nlist sym_entry;
   uint8_t space[4096];
 } mach_fat_obj;
+typedef struct {
+  mach_fat_header fat;
+  mach_fat_arch fat_arch[2];
+  struct {
+    mach_header_64 hdr;
+    mach_segment_command_64 seg;
+    mach_section_64 sec;
+    mach_symtab_command sym;
+  } arch[2];
+  mach_nlist_64 sym_entry;
+  uint8_t space[4096];
+} mach_fat_obj_64;
 ]]
   local symname = '_'..LJBC_PREFIX..ctx.modname
   local isfat, is64, align, mobj = false, false, 4, "mach_obj"
@@ -509,7 +521,7 @@ typedef struct {
   elseif ctx.arch == "arm" then
     isfat, mobj = true, "mach_fat_obj"
   elseif ctx.arch == "arm64" then
-    is64, align, isfat, mobj = true, 8, true, "mach_fat_obj"
+    is64, align, isfat, mobj = true, 8, true, "mach_fat_obj_64"
   else
     check(ctx.arch == "x86", "unsupported architecture for OSX")
   end
