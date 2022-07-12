@@ -615,7 +615,7 @@ LJLIB_CF(ffi_alignof)	LJLIB_REC(ffi_xof FF_ffi_alignof)
   CTState *cts = ctype_cts(L);
   CTypeID id = ffi_checkctype(L, cts, NULL);
   CTSize sz = 0;
-  CTInfo info = lj_ctype_info(cts, id, &sz);
+  CTInfo info = lj_ctype_info_raw(cts, id, &sz);
   setintV(L->top-1, 1 << ctype_align(info));
   return 1;
 }
