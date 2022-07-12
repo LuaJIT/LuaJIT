@@ -743,7 +743,7 @@ LJLIB_CF(ffi_metatype)
   CTypeID id = ffi_checkctype(L, cts, NULL);
   GCtab *mt = lj_lib_checktab(L, 2);
   GCtab *t = cts->miscmap;
-  CType *ct = ctype_get(cts, id);  /* Only allow raw types. */
+  CType *ct = ctype_raw(cts, id);
   TValue *tv;
   GCcdata *cd;
   if (!(ctype_isstruct(ct->info) || ctype_iscomplex(ct->info) ||
