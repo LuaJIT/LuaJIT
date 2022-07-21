@@ -2665,6 +2665,8 @@ static const BCIns *rec_setup_root(jit_State *J)
     J->bc_min = pc;
     break;
   case BC_ITERL:
+    if (bc_op(pc[-1]) == BC_JLOOP)
+      lj_trace_err(J, LJ_TRERR_LINNER);
     lj_assertJ(bc_op(pc[-1]) == BC_ITERC, "no ITERC before ITERL");
     J->maxslot = ra + bc_b(pc[-1]) - 1;
     J->bc_extent = (MSize)(-bc_j(ins))*sizeof(BCIns);
