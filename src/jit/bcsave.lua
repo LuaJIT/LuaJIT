@@ -456,18 +456,18 @@ typedef struct {
   uint32_t value;
 } mach_nlist;
 typedef struct {
-  uint32_t strx;
+  int32_t strx;
   uint8_t type, sect;
   uint16_t desc;
   uint64_t value;
 } mach_nlist_64;
 typedef struct
 {
-  uint32_t magic, nfat_arch;
+  int32_t magic, nfat_arch;
 } mach_fat_header;
 typedef struct
 {
-  uint32_t cputype, cpusubtype, offset, size, align;
+  int32_t cputype, cpusubtype, offset, size, align;
 } mach_fat_arch;
 typedef struct {
   struct {
