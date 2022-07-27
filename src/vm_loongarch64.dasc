@@ -310,6 +310,23 @@
 |
 #define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
 |
+|.macro hotcheck, delta, target
+|  srli.d TMP1, PC, 1
+|  andi TMP1, TMP1, 126
+|  add.d TMP1, TMP1, DISPATCH
+|  ld.hu TMP2, GG_DISP2HOT(TMP1)
+|  addi.w TMP2, TMP2, -delta
+|  st.h TMP2, GG_DISP2HOT(TMP1)
+|  blt TMP2, r0, target
+|.endmacro
+|
+|.macro hotloop
+|  hotcheck HOTCOUNT_LOOP, ->vm_hotloop
+|.endmacro
+|
+|.macro hotcall
+|  hotcheck HOTCOUNT_CALL, ->vm_hotcall
+|.endmacro
 |
 |// Set current VM state. Uses TMP0.
 |.macro li_vmstate, st; addi.w TMP0, r0, ~LJ_VMST_..st; .endmacro
@@ -969,8 +986,15 @@ static void build_subroutines(BuildCtx *ctx)
   |  or MULTRES, INS, r0
   |  or CARG1, L, r0
   |  bl extern lj_meta_for	// (lua_State *L, TValue *base)
+  |.if JIT
+  |  decode_OP TMP0, MULTRES
+  |  addi.d TMP1, r0, BC_JFORI
+  |.endif
   |  decode_RA RA, MULTRES
   |  decode_RD RD, MULTRES
+  |.if JIT
+  |  beq TMP0, TMP1, =>BC_JFORI
+  |.endif
   |  b =>BC_FORI
   |
   |//-----------------------------------------------------------------------
@@ -1923,6 +1947,20 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->vm_record:				// Dispatch target for recording phase.
+  |.if JIT
+  |  .LDXBU TMP3, DISPATCH, DISPATCH_GL(hookmask)
+  |  andi TMP1, TMP3, HOOK_VMEVENT	// No recording while in vmevent.
+  |  bnez TMP1, >5
+  |  // Decrement the hookcount for consistency, but always do the call.
+  |  .LDXW TMP2, DISPATCH, DISPATCH_GL(hookcount)
+  |  andi TMP1, TMP3, HOOK_ACTIVE
+  |  bnez TMP1, >1
+  |  addi.w TMP2, TMP2, -1
+  |  andi TMP1, TMP3, LUA_MASKLINE|LUA_MASKCOUNT
+  |  beqz TMP1, >1
+  |  .STXW TMP2, DISPATCH, DISPATCH_GL(hookcount)
+  |  b >1
+  |.endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
   |  .LDXBU TMP3, DISPATCH, DISPATCH_GL(hookmask)
@@ -1968,10 +2006,101 @@ static void build_subroutines(BuildCtx *ctx)
   |  ld.w MULTRES, -24(RB)		// Restore MULTRES for *M ins.
   |  b <4
   |
+  |->vm_hotloop:			// Hot loop counter underflow.
+  |.if JIT
+  |  ld.d LFUNC:TMP1, FRAME_FUNC(BASE)
+  |  .ADD16I CARG1, DISPATCH, GG_DISP2J
+  |  cleartp LFUNC:TMP1
+  |  st.d PC, SAVE_PC(sp)
+  |  ld.d TMP1, LFUNC:TMP1->pc
+  |  or CARG2, PC, r0
+  |  .STXD L, DISPATCH, DISPATCH_J(L)
+  |  ld.bu TMP1, PC2PROTO(framesize)(TMP1)
+  |  st.d BASE, L->base
+  |  slli.d TMP1, TMP1, 3
+  |  add.d TMP1, BASE, TMP1
+  |  st.d TMP1, L->top
+  |  bl extern lj_trace_hot		// (jit_State *J, const BCIns *pc)
+  |  b <3
+  |.endif
+  |
   |
   |->vm_callhook:			// Dispatch target for call hooks.
   |  or CARG2, PC, r0
+  |.if JIT
+  |  b >1
+  |.endif
   |
+  |->vm_hotcall:			// Hot call counter underflow.
+  |.if JIT
+  |  ori CARG2, PC, 1
+  |1:
+  |.endif
+  |  add.d TMP0, BASE, RC
+  |  st.d PC, SAVE_PC(sp)
+  |  st.d BASE, L->base
+  |  sub.d RA, RA, BASE
+  |  st.d TMP0, L->top
+  |  or CARG1, L, r0
+  |  bl extern lj_dispatch_call		// (lua_State *L, const BCIns *pc)
+  |  // Returns ASMFunction.
+  |  ld.d BASE, L->base
+  |  ld.d TMP0, L->top
+  |  st.d r0, SAVE_PC(sp)		// Invalidate for subsequent line hook.
+  |  add.d RA, BASE, RA
+  |  sub.d NARGS8:RC, TMP0, BASE
+  |  ld.d LFUNC:RB, FRAME_FUNC(BASE)
+  |  cleartp LFUNC:RB
+  |  ld.w INS, -4(PC)
+  |  jirl r0, CRET1, 0
+  |
+  |->cont_stitch:			// Trace stitching.
+  |.if JIT
+  |  // RA = resultptr, RB = meta base
+  |  ld.w INS, -4(PC)
+  |  ld.d TRACE:TMP2, -40(RB)		// Save previous trace.
+  |  decode_RA RC, INS
+  |  addi.d TMP1, MULTRES, -8
+  |  cleartp TRACE:TMP2
+  |  add.d RC, BASE, RC			// Call base.
+  |  beqz TMP1, >2
+  |1:  // Move results down.
+  |  ld.d CARG1, 0(RA)
+  |  addi.d TMP1, TMP1, -8
+  |  addi.d RA, RA, 8
+  |  st.d CARG1, 0(RC)
+  |  addi.d RC, RC, 8
+  |  bnez TMP1, <1
+  |2:
+  |  decode_RA RA, INS
+  |  decode_RB RB, INS
+  |  add.d RA, RA, RB
+  |  add.d RA, BASE, RA
+  |3:
+  |  sltu TMP1, RC, RA
+  |  bnez TMP1, >9			// More results wanted?
+  |
+  |  ld.hu TMP3, TRACE:TMP2->traceno
+  |  ld.hu RD, TRACE:TMP2->link
+  |  beq RD, TMP3, ->cont_nop		// Blacklisted.
+  |  slli.w RD, RD, 3
+  |  bnez RD, =>BC_JLOOP		// Jump to stitched trace.
+  |
+  |  // Stitch a new trace to the previous trace.
+  |  st.w TMP3, DISPATCH_J(exitno)(DISPATCH)
+  |  .STXD L, DISPATCH, DISPATCH_J(L)
+  |  st.d BASE, L->base
+  |  .ADD16I CARG1, DISPATCH, GG_DISP2J
+  |  or CARG2, PC, r0
+  |  bl extern lj_dispatch_stitch	// (jit_State *J, const BCIns *pc)
+  |  ld.d BASE, L->base
+  |  b ->cont_nop
+  |
+  |9:
+  |  st.d TISNIL, 0(RC)
+  |  addi.d RC, RC, 8
+  |  b <3
+  |.endif
   |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
@@ -2126,6 +2255,18 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |  addu16i.d TMP0, r0, 0x3ff0	// Hiword of +1 (double).
   |.endif
+  |.if "func" == "trunc"
+  |  slli.d TMP0, TMP0, 32
+  |  movgr2fr.d FARG5, TMP0
+  |  fcmp.clt.d FCC0, FTMP4, FRET1	// |x| < result?
+  |  fsub.d FTMP4, FTMP3, FARG5
+  |  fsel FTMP1, FTMP3, FTMP4, FCC0
+  |  movgr2fr.d FTMP3, TMP1
+  |  fneg.d FTMP4, FTMP1
+  |  movfr2cf FCC0, FTMP3
+  |  fsel FTMP3, FTMP1, FTMP4, FCC0
+  |  jirl r0, ra, 0
+  |.else
   |  fneg.d FTMP4, FTMP3
   |  slli.d TMP0, TMP0, 32
   |  movgr2fr.d FARG5, TMP0
@@ -2141,6 +2282,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  fsel FTMP3, FTMP1, FTMP4, FCC0
   |  fmov.d FARG1, FTMP3
   |  jirl r0, ra, 0
+  |.endif
   |1:
   |  fmov.d FTMP3, FARG1
   |  jirl r0, ra, 0
@@ -2151,9 +2293,79 @@ static void build_subroutines(BuildCtx *ctx)
   |  vm_round_hf floor
   |->vm_ceil:
   |  vm_round_hf ceil
+  |->vm_trunc:
+  |.if JIT
+  |  vm_round_hf trunc
+  |.endif
   |
   |
   |//-----------------------------------------------------------------------
+  |//-- Miscellaneous functions --------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |.define NEXT_TAB,            TAB:CARG1
+  |.define NEXT_IDX,            CARG2
+  |.define NEXT_ASIZE,          CARG3
+  |.define NEXT_NIL,            CARG4
+  |.define NEXT_TMP0,           TMP0
+  |.define NEXT_TMP1,           TMP1
+  |.define NEXT_TMP2,           TMP2
+  |.define NEXT_RES_VK,         CRET1
+  |.define NEXT_RES_IDX,        CRET2
+  |.define NEXT_RES_PTR,        sp
+  |.define NEXT_RES_VAL,        0(sp)
+  |.define NEXT_RES_KEY,        8(sp)
+  |
+  |// TValue *lj_vm_next(GCtab *t, uint32_t idx)
+  |// Next idx returned in CRET2.
+  |->vm_next:
+  |.if JIT
+  |  ld.w NEXT_ASIZE, NEXT_TAB->asize
+  |  ld.d NEXT_TMP0, NEXT_TAB->array
+  |  addi.d NEXT_NIL, r0, LJ_TNIL
+  |1:  // Traverse array part.
+  |  sltu TMP3, NEXT_IDX, NEXT_ASIZE
+  |  slli.w NEXT_TMP1, NEXT_IDX, 3
+  |  add.d NEXT_TMP1, NEXT_TMP0, NEXT_TMP1
+  |  beqz TMP3, >5
+  |  addi.d TMP3, r0, LJ_TISNUM
+  |  ld.d NEXT_TMP2, 0(NEXT_TMP1)
+  |  slli.d TMP3, TMP3, 47
+  |  or NEXT_TMP1, NEXT_IDX, TMP3
+  |  addi.w NEXT_IDX, NEXT_IDX, 1
+  |  beq NEXT_TMP2, NEXT_NIL, <1
+  |  st.d NEXT_TMP2, NEXT_RES_VAL
+  |  st.d NEXT_TMP1, NEXT_RES_KEY
+  |  or NEXT_RES_VK, NEXT_RES_PTR, r0
+  |  or NEXT_RES_IDX, NEXT_IDX, r0
+  |  jirl r0, ra, 0
+  |
+  |5:  // Traverse hash part.
+  |  sub.w NEXT_RES_IDX, NEXT_IDX, NEXT_ASIZE
+  |  ld.w NEXT_TMP0, NEXT_TAB->hmask
+  |  ld.d NODE:NEXT_RES_VK, NEXT_TAB->node
+  |  slli.w NEXT_TMP2, NEXT_RES_IDX, 5
+  |  slli.w TMP3, NEXT_RES_IDX, 3
+  |  sub.w TMP3, NEXT_TMP2, TMP3
+  |  add.d NODE:NEXT_RES_VK, NODE:NEXT_RES_VK, TMP3
+  |6:
+  |  sltu TMP3, NEXT_TMP0, NEXT_RES_IDX
+  |  bnez TMP3, >8
+  |  ld.d NEXT_TMP2, NODE:NEXT_RES_VK->val
+  |  addi.w NEXT_RES_IDX, NEXT_RES_IDX, 1
+  |  bne NEXT_TMP2, NEXT_NIL, >9
+  |  // Skip holes in hash part.
+  |  addi.d NODE:NEXT_RES_VK, NODE:NEXT_RES_VK, sizeof(Node)
+  |  b <6
+  |
+  |8:  // End of iteration. Set the key to nil (not the value).
+  |  st.d NEXT_NIL, NEXT_RES_KEY
+  |  or NEXT_RES_VK, NEXT_RES_PTR, r0
+  |9:
+  |  add.w NEXT_RES_IDX, NEXT_RES_IDX, NEXT_ASIZE
+  |  jirl r0, ra, 0
+  |.endif
+  |
 }
 
 /* Generate the code for a single instruction. */
@@ -3455,6 +3667,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERN:
     |  // RA = base*8, (RB = (nresults+1)*8, RC = (nargs+1)*8 (2+1)*8)
+    |.if JIT
+    |  hotloop
+    |.endif
     |->vm_IITERN:
     |  add.d RA, BASE, RA
     |  ld.d TAB:RB, -16(RA)
@@ -3542,8 +3757,27 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  addi.d TMP1, r0, BC_ITERC
     |  st.b TMP3, -4+OFS_OP(PC)
     |  add.d PC, TMP0, TMP2
+    |.if JIT
+    |  ld.b TMP0, OFS_OP(PC)
+    |  addi.d TMP3, r0, BC_ITERN
+    |  ld.hu TMP2, OFS_RD(PC)
+    |  bne TMP0, TMP3, >6
+    |.endif
     |  st.b TMP1, OFS_OP(PC)
     |  b <1
+    |.if JIT
+    |6:  // Unpatch JLOOP.
+    |  .LDXD TMP0, DISPATCH, DISPATCH_J(trace)
+    |  slli.w TMP2, TMP2, 3
+    |  add.d TMP0, TMP0, TMP2
+    |  ld.d TRACE:TMP2, 0(TMP0)
+    |  ld.w TMP0, TRACE:TMP2->startins
+    |  addi.d TMP3, r0, -256
+    |  and TMP0, TMP0, TMP3
+    |  or TMP0, TMP0, TMP1
+    |  st.w TMP0, 0(PC)
+    |  b <1
+    |.endif
     break;
 
   case BC_VARG:
@@ -3713,6 +3947,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Loops and branches ------------------------------------------------ */
 
   case BC_FORL:
+    |.if JIT
+    |  hotloop
+    |.endif
     |  // Fall through. Assumes BC_IFORL follows.
     break;
 
@@ -3832,6 +4069,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERL:
+    |.if JIT
+    |  hotloop
+    |.endif
     |  // Fall through. Assumes BC_IITERL follows.
     break;
 
@@ -3859,6 +4099,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA = base*8, RD = target (loop extent)
     |  // Note: RA/RD is only used by trace recorder to determine scope/extent
     |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
+    |.if JIT
+    |  hotloop
+    |.endif
     |  // Fall through. Assumes BC_ILOOP follows.
     break;
 
@@ -3868,6 +4111,19 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JLOOP:
+    |.if JIT
+    |  // RA = base*8 (ignored), RD = traceno*8
+    |  .LDXD TMP0, DISPATCH, DISPATCH_J(trace)
+    |  add.d TMP0, TMP0, RD
+    |  // Traces on LOONGARCH don't store the trace number, so use 0.
+    |  .STXD r0, DISPATCH, DISPATCH_GL(vmstate)
+    |  ld.d TRACE:TMP1, 0(TMP0)
+    |  .STXD BASE, DISPATCH, DISPATCH_GL(jit_base)	// store Current JIT code L->base
+    |  ld.d TMP1, TRACE:TMP1->mcode
+    |  .ADD16I JGL, DISPATCH, GG_DISP2G+32768
+    |  .STXD L, DISPATCH, DISPATCH_GL(tmpbuf.L)
+    |  jirl r0, TMP1, 0
+    |.endif
     break;
 
   case BC_JMP:
@@ -3879,6 +4135,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Function headers -------------------------------------------------- */
 
   case BC_FUNCF:
+    |.if JIT
+    |  hotcall
+    |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
     |  // Fall through. Assumes BC_IFUNCF/BC_IFUNCV follow.
     break;
