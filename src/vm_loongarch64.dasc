@@ -72,3 +72,73 @@
 |.define FCC0,		fcc0
 |.define FCC1,		fcc1
 |
+|// Stack layout while in interpreter. Must match with lj_frame.h.
+|// LoongArch64 hard-float.
+|
+|.define CFRAME_SPACE,	200	// Delta for sp.
+|
+|//----- 16 byte aligned, <-- sp entering interpreter
+|.define SAVE_ERRF,	196	// 32 bit values.
+|.define SAVE_NRES,	192
+|.define SAVE_CFRAME,	184	// 64 bit values.
+|.define SAVE_L,	176
+|.define SAVE_PC,	168
+|//----- 16 byte aligned
+|.define SAVE_GPR_,	80	// .. 80+11*8: 64 bit GPR saves.
+|.define SAVE_FPR_,	16	// .. 16+8*8: 64 bit FPR saves.
+|
+|
+|.define TMPD,		0
+|//----- 16 byte aligned
+|
+|.define TMPD_OFS,	0
+|
+|//-----------------------------------------------------------------------
+|
+|.macro saveregs
+|  addi.d sp, sp, -CFRAME_SPACE
+|  st.d ra, SAVE_GPR_+10*8(sp)
+|  st.d r22, SAVE_GPR_+9*8(sp)
+|  st.d r31, SAVE_GPR_+8*8(sp)
+|  fst.d f31, SAVE_FPR_+7*8(sp)
+|  st.d r30, SAVE_GPR_+7*8(sp)
+|  fst.d f30, SAVE_FPR_+6*8(sp)
+|  st.d r29, SAVE_GPR_+6*8(sp)
+|  fst.d f29, SAVE_FPR_+5*8(sp)
+|  st.d r28, SAVE_GPR_+5*8(sp)
+|  fst.d f28, SAVE_FPR_+4*8(sp)
+|  st.d r27, SAVE_GPR_+4*8(sp)
+|  fst.d f27, SAVE_FPR_+3*8(sp)
+|  st.d r26, SAVE_GPR_+3*8(sp)
+|  fst.d f26, SAVE_FPR_+2*8(sp)
+|  st.d r25, SAVE_GPR_+2*8(sp)
+|  fst.d f25, SAVE_FPR_+1*8(sp)
+|  st.d r24, SAVE_GPR_+1*8(sp)
+|  fst.d f24, SAVE_FPR_+0*8(sp)
+|  st.d r23, SAVE_GPR_+0*8(sp)
+|.endmacro
+|
+|.macro restoreregs_ret
+|  ld.d ra, SAVE_GPR_+10*8(sp)
+|  ld.d r22, SAVE_GPR_+9*8(sp)
+|  ld.d r31, SAVE_GPR_+8*8(sp)
+|  ld.d r30, SAVE_GPR_+7*8(sp)
+|  fld.d f31, SAVE_FPR_+7*8(sp)
+|  ld.d r29, SAVE_GPR_+6*8(sp)
+|  fld.d f30, SAVE_FPR_+6*8(sp)
+|  ld.d r28, SAVE_GPR_+5*8(sp)
+|  fld.d f29, SAVE_FPR_+5*8(sp)
+|  ld.d r27, SAVE_GPR_+4*8(sp)
+|  fld.d f28, SAVE_FPR_+4*8(sp)
+|  ld.d r26, SAVE_GPR_+3*8(sp)
+|  fld.d f27, SAVE_FPR_+3*8(sp)
+|  ld.d r25, SAVE_GPR_+2*8(sp)
+|  fld.d f26, SAVE_FPR_+2*8(sp)
+|  ld.d r24, SAVE_GPR_+1*8(sp)
+|  fld.d f25, SAVE_FPR_+1*8(sp)
+|  ld.d r23, SAVE_GPR_+0*8(sp)
+|  fld.d f24, SAVE_FPR_+0*8(sp)
+|  addi.d sp, sp, CFRAME_SPACE
+|  jirl r0, ra, 0
+|.endmacro
+|
