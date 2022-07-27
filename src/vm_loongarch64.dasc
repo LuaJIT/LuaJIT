@@ -142,3 +142,228 @@
 |  jirl r0, ra, 0
 |.endmacro
 |
+|//-----------------------------------------------------------------------
+|
+|.macro .STXW, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  stx.w a, b, r20
+|.endmacro
+|
+|.macro .STXD, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  stx.d a, b, r20
+|.endmacro
+|
+|.macro .LDXW, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  ldx.w a, b, r20
+|.endmacro
+|
+|.macro .LDXD, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  ldx.d a, b, r20
+|.endmacro
+|
+|.macro .LDXBU, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  ldx.bu a, b, r20
+|.endmacro
+|
+|.macro .ADD16I, a, b, c
+|  addu16i.d r20, r0, c
+|  srai.d r20, r20, 16
+|  add.d a, b, r20
+|.endmacro
+|
+|// Type definitions. Some of these are only used for documentation.
+|.type L,		lua_State,	LREG
+|.type GL,		global_State
+|.type TVALUE,		TValue
+|.type GCOBJ,		GCobj
+|.type STR,		GCstr
+|.type TAB,		GCtab
+|.type LFUNC,		GCfuncL
+|.type CFUNC,		GCfuncC
+|.type PROTO,		GCproto
+|.type UPVAL,		GCupval
+|.type NODE,		Node
+|.type NARGS8,		int
+|.type TRACE,		GCtrace
+|.type SBUF,		SBuf
+|
+|//-----------------------------------------------------------------------
+|
+|// Trap for not-yet-implemented parts.
+|.macro NYI; break 0; .endmacro
+|
+|//-----------------------------------------------------------------------
+|
+|// Access to frame relative to BASE.
+|.define FRAME_PC,	-8
+|.define FRAME_FUNC,	-16
+|
+|//-----------------------------------------------------------------------
+|
+|// Endian-specific defines. LoongArch is little endian.
+|.define OFS_RD,	2
+|.define OFS_RA,	1
+|.define OFS_OP,	0
+|
+|// Instruction decode.
+|.macro decode_BC4b, dst; slli.w dst, dst, 2; .endmacro
+|.macro decode_BC8b, dst; slli.w dst, dst, 3; .endmacro
+|.macro decode_OP, dst, ins; andi dst, ins, 0xff; .endmacro
+|.macro decode_RA, dst, ins; bstrpick.d dst, ins, 15, 8; decode_BC8b dst; .endmacro
+|.macro decode_RB, dst, ins; bstrpick.d dst, ins, 31, 24; decode_BC8b dst; .endmacro
+|.macro decode_RC, dst, ins; bstrpick.d dst, ins, 23, 16; decode_BC8b dst; .endmacro
+|.macro decode_RD, dst, ins; bstrpick.d dst, ins, 31, 16; decode_BC8b dst; .endmacro
+|.macro decode_RDtoRC8, dst, src; andi dst, src, 0x7f8; .endmacro
+|
+|// Instruction fetch.
+|.macro ins_NEXT1
+|  ld.w INS, 0(PC)
+|  addi.d PC, PC, 4
+|.endmacro
+|// Instruction decode+dispatch.
+|.macro ins_NEXT2
+|  decode_OP TMP1, INS
+|  decode_BC8b TMP1
+|  add.d TMP0, DISPATCH, TMP1
+|  ld.d TMP4, 0(TMP0)
+|   decode_RD RD, INS
+|   decode_RA RA, INS
+|  jirl r0, TMP4, 0
+|.endmacro
+|.macro ins_NEXT
+|  ins_NEXT1
+|  ins_NEXT2
+|.endmacro
+|
+|// Instruction footer.
+|.if 1
+|  // Replicated dispatch. Less unpredictable branches, but higher I-Cache use.
+|  .define ins_next, ins_NEXT
+|  .define ins_next_, ins_NEXT
+|  .define ins_next1, ins_NEXT1
+|  .define ins_next2, ins_NEXT2
+|.else
+|  // Common dispatch. Lower I-Cache use, only one (very) unpredictable branch.
+|  // Affects only certain kinds of benchmarks (and only with -j off).
+|  .macro ins_next
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next1
+|  .endmacro
+|  .macro ins_next2
+|    b ->ins_next
+|  .endmacro
+|  .macro ins_next_
+|  ->ins_next:
+|    ins_NEXT
+|  .endmacro
+|.endif
+|
+|// Call decode and dispatch.
+|.macro ins_callt
+|  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
+|  ld.d PC, LFUNC:RB->pc
+|  ld.w INS, 0(PC)
+|  addi.d PC, PC, 4
+|  decode_OP TMP1, INS
+|  decode_RA RA, INS
+|  decode_BC8b TMP1
+|  add.d TMP0, DISPATCH, TMP1
+|  ld.d TMP0, 0(TMP0)
+|  add.d RA, RA, BASE
+|  jirl r0, TMP0, 0
+|.endmacro
+|
+|.macro ins_call
+|  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, PC = caller PC
+|  st.d PC, FRAME_PC(BASE)
+|  ins_callt
+|.endmacro
+|
+|//-----------------------------------------------------------------------
+|
+|.macro branch_RD
+|  srli.w TMP0, RD, 1
+|  addu16i.d TMP4, r0, -0x2	// -BCBIAS_J*4
+|  add.w TMP0, TMP0, TMP4	// (jump - 0x8000)<<2
+|  add.d PC, PC, TMP0
+|.endmacro
+|
+|// Assumes DISPATCH is relative to GL.
+#define DISPATCH_GL(field)	(GG_DISP2G + (int)offsetof(global_State, field))
+#define DISPATCH_J(field)	(GG_DISP2J + (int)offsetof(jit_State, field))
+|
+#define PC2PROTO(field)  ((int)offsetof(GCproto, field)-(int)sizeof(GCproto))
+|
+|
+|// Set current VM state. Uses TMP0.
+|.macro li_vmstate, st; addi.w TMP0, r0, ~LJ_VMST_..st; .endmacro
+|.macro st_vmstate; .STXW TMP0, DISPATCH, DISPATCH_GL(vmstate); .endmacro
+|
+|// Move table write barrier back. Overwrites mark and tmp.
+|.macro barrierback, tab, mark, tmp, target
+|  .LDXD tmp, DISPATCH, DISPATCH_GL(gc.grayagain)
+|  andi mark, mark, ~LJ_GC_BLACK & 255		// black2gray(tab)
+|  .STXD tab, DISPATCH, DISPATCH_GL(gc.grayagain)
+|  st.b mark, tab->marked
+|  st.d tmp, tab->gclist
+|  b target
+|.endmacro
+|
+|// Clear type tag. Isolate lowest 47 bits of reg.
+|.macro cleartp, reg; bstrpick.d reg, reg, 46, 0; .endmacro
+|.macro cleartp, dst, reg; bstrpick.d dst, reg, 46, 0; .endmacro
+|
+|// Set type tag: Merge 17 type bits into bits [47, 63] of dst.
+|.macro settp, dst, tp; bstrins.d dst, tp, 63, 47; .endmacro
+|
+|// Extract (negative) type tag.
+|.macro gettp, dst, src; srai.d dst, src, 47; .endmacro
+|
+|// Macros to check the TValue type and extract the GCobj. Branch on failure.
+|.macro checktp, reg, tp, target
+|  gettp TMP4, reg
+|  addi.d TMP4, TMP4, tp
+|  cleartp reg
+|  bnez TMP4, target
+|.endmacro
+|.macro checktp, dst, reg, tp, target
+|  gettp TMP4, reg
+|  addi.d TMP4, TMP4, tp
+|  cleartp dst, reg
+|  bnez TMP4, target
+|.endmacro
+|.macro checkstr, reg, target; checktp reg, -LJ_TSTR, target; .endmacro
+|.macro checktab, reg, target; checktp reg, -LJ_TTAB, target; .endmacro
+|.macro checkfunc, reg, target; checktp reg, -LJ_TFUNC, target; .endmacro
+|.macro checkint, reg, target
+|  gettp TMP4, reg
+|  bne TMP4, TISNUM, target
+|.endmacro
+|.macro checknum, reg, target
+|  gettp TMP4, reg
+|  sltui TMP4, TMP4, LJ_TISNUM
+|  beqz TMP4, target
+|.endmacro
+|
+|.macro mov_false, reg
+|  addi.d reg, r0, 0x0001
+|  slli.d reg, reg, 47
+|  nor reg, reg, r0
+|.endmacro
+|.macro mov_true, reg
+|  addi.d reg, r0, 0x0001
+|  slli.d reg, reg, 48
+|  nor reg, reg, r0
+|.endmacro
+|
+|//-----------------------------------------------------------------------
