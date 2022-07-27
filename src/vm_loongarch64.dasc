@@ -2366,6 +2366,70 @@ static void build_subroutines(BuildCtx *ctx)
   |  jirl r0, ra, 0
   |.endif
   |
+  |//-----------------------------------------------------------------------
+  |//-- FFI helper functions -----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |->vm_ffi_call:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
+  |.if FFI
+  |  .type CCSTATE, CCallState, CARG1
+  |  ld.w TMP1, CCSTATE->spadj
+  |  ld.bu CARG2, CCSTATE->nsp
+  |  ld.bu CARG3, CCSTATE->nfpr
+  |  or TMP2, sp, r0
+  |  sub.d sp, sp, TMP1
+  |  st.d ra, -8(TMP2)
+  |  slli.w CARG2, CARG2, 3
+  |  st.d r23, -16(TMP2)
+  |  st.d CCSTATE, -24(TMP2)
+  |  or r23, TMP2, r0
+  |  addi.d TMP1, CCSTATE, offsetof(CCallState, stack)
+  |  or TMP2, sp, r0
+  |  add.d TMP3, TMP1, CARG2
+  |  beqz CARG2, >2
+  |1:
+  |  ld.d TMP0, 0(TMP1)
+  |  addi.d TMP1, TMP1, 8
+  |  sltu TMP4, TMP1, TMP3
+  |  st.d TMP0, 0(TMP2)
+  |  addi.d TMP2, TMP2, 8
+  |  bnez TMP4, <1
+  |2:
+  |  beqz CARG3, >3
+  |  fld.d FARG1, CCSTATE->fpr[0]
+  |  fld.d FARG2, CCSTATE->fpr[1]
+  |  fld.d FARG3, CCSTATE->fpr[2]
+  |  fld.d FARG4, CCSTATE->fpr[3]
+  |  fld.d FARG5, CCSTATE->fpr[4]
+  |  fld.d FARG6, CCSTATE->fpr[5]
+  |  fld.d FARG7, CCSTATE->fpr[6]
+  |  fld.d FARG8, CCSTATE->fpr[7]
+  |3:
+  |  ld.d TMP3, CCSTATE->func
+  |  ld.d CARG2, CCSTATE->gpr[1]
+  |  ld.d CARG3, CCSTATE->gpr[2]
+  |  ld.d CARG4, CCSTATE->gpr[3]
+  |  ld.d CARG5, CCSTATE->gpr[4]
+  |  ld.d CARG6, CCSTATE->gpr[5]
+  |  ld.d CARG7, CCSTATE->gpr[6]
+  |  ld.d CARG8, CCSTATE->gpr[7]
+  |  ld.d CARG1, CCSTATE->gpr[0]         // Do this last, since CCSTATE is CARG1.
+  |  jirl r1, TMP3, 0
+  |  ld.d CCSTATE:TMP1, -24(r23)
+  |  ld.d TMP2, -16(r23)
+  |  ld.d ra, -8(r23)
+  |  st.d CRET1, CCSTATE:TMP1->gpr[0]
+  |  st.d CRET2, CCSTATE:TMP1->gpr[1]
+  |  fst.d FRET1, CCSTATE:TMP1->fpr[0]
+  |  fst.d FRET2, CCSTATE:TMP1->fpr[1]
+  |  or sp, r23, r0
+  |  or r23, TMP2, r0
+  |  jirl r0, ra, 0
+  |.endif
+  |// Note: vm_ffi_call must be the last function in this object file!
+  |
+  |//-----------------------------------------------------------------------
 }
 
 /* Generate the code for a single instruction. */
