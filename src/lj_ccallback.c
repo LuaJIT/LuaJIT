@@ -71,6 +71,10 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 
 #define CALLBACK_MCODE_HEAD		52
 
+#elif LJ_TARGET_LOONGARCH64
+
+#define CALLBACK_MCODE_HEAD		52
+
 #else
 
 /* Missing support for this architecture. */
@@ -235,6 +239,33 @@ static void *callback_mcode_init(global_State *g, uint32_t *page)
     *p = MIPSI_B | ((page-p-1) & 0x0000ffffu);
     p++;
     *p++ = MIPSI_LI | MIPSF_T(RID_R1) | slot;
+  }
+  return p;
+}
+#elif LJ_TARGET_LOONGARCH64
+static void *callback_mcode_init(global_State *g, uint32_t *page)
+{
+  uint32_t *p = page;
+  uintptr_t target = (uintptr_t)(void *)lj_vm_ffi_callback;
+  uintptr_t ug = (uintptr_t)(void *)g;
+  MSize slot;
+  *p++ = LOONGI_LU12I_W | LOONGF_D(RID_R18) | LOONGF_I20((target >> 12) & 0xfffff);
+  *p++ = LOONGI_LU12I_W | LOONGF_D(RID_R17) | LOONGF_I20((ug >> 12) & 0xfffff);
+  *p++ = LOONGI_ORI  | LOONGF_D(RID_R18) | LOONGF_J(RID_R18) | LOONGF_I(target & 0xfff);
+  *p++ = LOONGI_ORI  | LOONGF_D(RID_R17) | LOONGF_J(RID_R17) | LOONGF_I(ug & 0xfff);
+  *p++ = LOONGI_LU32I_D | LOONGF_D(RID_R18) | LOONGF_I20((target >> 32) & 0xfffff);
+  *p++ = LOONGI_LU32I_D | LOONGF_D(RID_R17) | LOONGF_I20((ug >> 32) & 0xfffff);
+  *p++ = LOONGI_LU52I_D | LOONGF_D(RID_R18) | LOONGF_J(RID_R18) | LOONGF_I((target >> 52) & 0xfff);
+  *p++ = LOONGI_LU52I_D | LOONGF_D(RID_R17) | LOONGF_J(RID_R17) | LOONGF_I((ug >> 52) & 0xfff);
+  *p++ = LOONGI_NOP;
+  *p++ = LOONGI_NOP;
+  *p++ = LOONGI_NOP;
+  *p++ = LOONGI_NOP;
+  *p++ = LOONGI_JIRL | LOONGF_D(RID_R0) | LOONGF_J(RID_R18) | LOONGF_I(0);
+  for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+    *p++ = LOONGI_ORI  | LOONGF_D(RID_R19) | LOONGF_J(RID_R0) | LOONGF_I(slot & 0xfff);
+    *p = LOONGI_B | LOONGF_I((page-p) & 0xffff) | (((page-p) >> 16) & 0x3ff);
+    p++;
   }
   return p;
 }
@@ -516,6 +547,31 @@ void lj_ccallback_mcode_free(CTState *cts)
   if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
     ((float *)dp)[1] = *(float *)dp;
 
+#elif LJ_TARGET_LOONGARCH64
+
+#define CALLBACK_HANDLE_REGARG \
+  if (isfp) { \
+    if (nfpr + n <= CCALL_NARG_FPR) { \
+      sp = &cts->cb.fpr[nfpr]; \
+      nfpr += n; \
+      goto done; \
+    } else if (ngpr + n <= maxgpr) { \
+      sp = &cts->cb.gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } \
+  } else { \
+    if (ngpr + n <= maxgpr) { \
+      sp = &cts->cb.gpr[ngpr]; \
+      ngpr += n; \
+      goto done; \
+    } \
+  }
+
+#define CALLBACK_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    ((float *)dp)[1] = *(float *)dp;
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
@@ -662,7 +718,7 @@ static void callback_conv_result(CTState *cts, lua_State *L, TValue *o)
 	*(int32_t *)dp = ctr->size == 1 ? (int32_t)*(int8_t *)dp :
 					  (int32_t)*(int16_t *)dp;
     }
-#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE)
+#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE) || LJ_TARGET_LOONGARCH64
     /* Always sign-extend results to 64 bits. Even a soft-fp 'float'. */
     if (ctr->size <= 4 &&
 	(LJ_ABI_SOFTFP || ctype_isinteger_or_bool(ctr->info)))

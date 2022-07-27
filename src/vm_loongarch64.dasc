@@ -2370,6 +2370,69 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- FFI helper functions -----------------------------------------------
   |//-----------------------------------------------------------------------
   |
+  |// Handler for callback functions. Callback slot number in r19, g in r17.
+  |->vm_ffi_callback:
+  |.if FFI
+  |.type CTSTATE, CTState, PC
+  |  saveregs
+  |  ld.d CTSTATE, GL:r17->ctype_state
+  |  .ADD16I DISPATCH, r17, GG_G2DISP
+  |  st.w r19, CTSTATE->cb.slot
+  |  st.d CARG1, CTSTATE->cb.gpr[0]
+  |  fst.d FARG1, CTSTATE->cb.fpr[0]
+  |  st.d CARG2, CTSTATE->cb.gpr[1]
+  |  fst.d FARG2, CTSTATE->cb.fpr[1]
+  |  st.d CARG3, CTSTATE->cb.gpr[2]
+  |  fst.d FARG3, CTSTATE->cb.fpr[2]
+  |  st.d CARG4, CTSTATE->cb.gpr[3]
+  |  fst.d FARG4, CTSTATE->cb.fpr[3]
+  |  st.d CARG5, CTSTATE->cb.gpr[4]
+  |  fst.d FARG5, CTSTATE->cb.fpr[4]
+  |  st.d CARG6, CTSTATE->cb.gpr[5]
+  |  fst.d FARG6, CTSTATE->cb.fpr[5]
+  |  st.d CARG7, CTSTATE->cb.gpr[6]
+  |  fst.d FARG7, CTSTATE->cb.fpr[6]
+  |  st.d CARG8, CTSTATE->cb.gpr[7]
+  |  fst.d FARG8, CTSTATE->cb.fpr[7]
+  |  addi.d TMP0, sp, CFRAME_SPACE
+  |  st.d TMP0, CTSTATE->cb.stack
+  |  st.d r0, SAVE_PC(sp)		// Any value outside of bytecode is ok.
+  |  or CARG1, CTSTATE, r0
+  |  or CARG2, sp, r0
+  |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
+  |  // Returns lua_State *.
+  |  ld.d BASE, L:CRET1->base
+  |  ld.d RC, L:CRET1->top
+  |  or L, CRET1, r0
+  |  addu16i.d TMP3, r0, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |  ld.d LFUNC:RB, FRAME_FUNC(BASE)
+  |  movgr2fr.w TOBIT, TMP3
+  |  addi.d TISNIL, r0, LJ_TNIL
+  |  addi.d TISNUM, r0, LJ_TISNUM
+  |  li_vmstate INTERP
+  |  sub.w RC, RC, BASE
+  |  cleartp LFUNC:RB
+  |  st_vmstate
+  |  fcvt.d.s TOBIT, TOBIT
+  |  ins_callt
+  |.endif
+  |
+  |->cont_ffi_callback:			// Return from FFI callback.
+  |.if FFI
+  |  .LDXD CTSTATE, DISPATCH, DISPATCH_GL(ctype_state)
+  |  st.d BASE, L->base
+  |  st.d RB, L->top
+  |  st.d L, CTSTATE->L
+  |  or CARG1, CTSTATE, r0
+  |  or CARG2, RA, r0
+  |  bl extern lj_ccallback_leave	// (CTState *cts, TValue *o)
+  |  fld.d FRET1, CTSTATE->cb.fpr[0]
+  |  ld.d CRET1, CTSTATE->cb.gpr[0]
+  |  fld.d FRET2, CTSTATE->cb.fpr[1]
+  |  ld.d CRET2, CTSTATE->cb.gpr[1]
+  |  b ->vm_leave_unw
+  |.endif
+  |
   |->vm_ffi_call:			// Call C function via FFI.
   |  // Caveat: needs special frame unwinding, see below.
   |.if FFI
