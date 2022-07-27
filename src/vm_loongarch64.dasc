@@ -687,15 +687,29 @@ static void build_subroutines(BuildCtx *ctx)
   |  or RB, BASE, r0
   |  or BASE, TMP2, r0			// Restore caller BASE.
   |  ld.d LFUNC:TMP1, FRAME_FUNC(TMP2)
+  |.if FFI
+  |  sltui TMP3, TMP0, 2
+  |.endif
   |  ld.d PC, -24(RB)			// Restore PC from [cont|PC].
   |  cleartp LFUNC:TMP1
   |  add.d TMP2, RA, RD
   |  ld.d TMP1, LFUNC:TMP1->pc
   |  st.d TISNIL, -8(TMP2)               // Ensure one valid arg.
+  |.if FFI
+  |  bnez TMP3, >1
+  |.endif
   |  // BASE = base, RA = resultptr, RB = meta base
   |  ld.d KBASE, PC2PROTO(k)(TMP1)
   |  jirl r0, TMP0, 0				// Jump to continuation.
   |
+  |.if FFI
+  |1:
+  |  addi.d TMP1, RB, -32
+  |  bnez TMP0, ->cont_ffi_callback	// cont = 1: return from FFI callback.
+  |  // cont = 0: tailcall from C function.
+  |  sub.d RC, TMP1, BASE
+  |  b ->vm_call_tail
+  |.endif
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  ld.w INS, -4(PC)
@@ -889,6 +903,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Returns 0/1 or TValue * (metamethod).
   |  b <3
   |
+  |->vmeta_equal_cd:
+  |.if FFI
+  |  or CARG2, INS, r0
+  |  addi.d PC, PC, -4
+  |  st.d BASE, L->base
+  |  or CARG1, L, r0
+  |  st.d PC, SAVE_PC(sp)
+  |  bl extern lj_meta_equal_cd		// (lua_State *L, BCIns op)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |  b <3
+  |.endif
   |
   |->vmeta_istype:
   |  addi.d PC, PC, -4
@@ -2617,6 +2642,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  beqz TMP0, ->BC_ISNEN_Z
     }
     |// Either or both types are not numbers.
+    |.if FFI
+    |  // Check if RA or RD is a cdata.
+    |  addi.w TMP0, r0, LJ_TCDATA
+    |  beq CARG3, TMP0, ->vmeta_equal_cd
+    |  beq CARG4, TMP0, ->vmeta_equal_cd
+    |.endif
     |  addu16i.d TMP3, r0, -0x2		// -BCBIAS_J*4
     |  decode_BC4b TMP2
     |  add.w TMP2, TMP2, TMP3		// (jump-0x8000)<<2
@@ -2667,10 +2698,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sub.d RD, KBASE, RD
     |  ld.hu TMP2, -4+OFS_RD(PC)
     |  ld.d CARG2, -8(RD)		// KBASE-8-str_const*8
+    |.if FFI
+    |  gettp CARG3, CARG1
+    |  addi.w TMP1, r0, LJ_TCDATA
+    |.endif
     |  addi.w TMP0, r0, LJ_TSTR
     |  decode_BC4b TMP2
     |  settp CARG2, TMP0
     |  addu16i.d TMP3, r0, -0x2		// -BCBIAS_J*4
+    |.if FFI
+    |  beq CARG3, TMP1, ->vmeta_equal_cd
+    |.endif
     |  xor TMP0, CARG1, CARG2		// TMP2=0: A==D; TMP2!=0: A!=D
     |  add.w TMP2, TMP2, TMP3
     if (vk) {
@@ -2720,7 +2758,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |4:  // RA is not an integer.
     |  sltu TMP0, CARG3, TISNUM
     |  add.w TMP2, TMP2, TMP3
+    |.if FFI
+    |  beqz TMP0, >7
+    |.else
     |  beqz TMP0, <2
+    |.endif
     |  movgr2fr.d FTMP0, CARG1
     |  movgr2fr.d FTMP2, CARG2
     |  bne CARG4, TISNUM, >5
@@ -2734,12 +2776,27 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |6: // RA is an integer, RD is a number.
     |  sltu TMP0, CARG4, TISNUM
+    |.if FFI
+    |  beqz TMP0, >8
+    |.else
     |  beqz TMP0, <2
+    |.endif
     |  movgr2fr.w FTMP0, CARG1
     |  movgr2fr.d FTMP2, CARG2
     |  ffint.d.w FTMP0, FTMP0
     |  b <5
     |
+    |.if FFI
+    |7:	// RA not int, not number
+    |  addi.w TMP0, r0, LJ_TCDATA
+    |  bne CARG3, TMP0, <2
+    |  b ->vmeta_equal_cd
+    |
+    |8:	// RD not int, not number
+    |  addi.w TMP0, r0, LJ_TCDATA
+    |  bne CARG4, TMP0, <2
+    |  b ->vmeta_equal_cd
+    |.endif
     break;
 
   case BC_ISEQP: case BC_ISNEP:
@@ -2753,6 +2810,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  gettp TMP1, TMP1
     |  addi.d PC, PC, 4
     |  xor TMP0, TMP1, TMP0		// TMP0=0 A=D; TMP0!=0 A!=D
+    |.if FFI
+    |  addi.w TMP3, r0, LJ_TCDATA
+    |  beq TMP1, TMP3, ->vmeta_equal_cd
+    |.endif
     |  decode_BC4b TMP2
     |  addu16i.d TMP3, r0, -0x2		// -BCBIAS_J*4
     |  add.w TMP2, TMP2, TMP3		// TMP2=(jump-0x8000)<<2
@@ -3086,6 +3147,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KCDATA:
+    |.if FFI
+    |  // RA = dst*8, RD = cdata_const*8 (~)
+    |  sub.d TMP1, KBASE, RD
+    |  ld.d TMP0, -8(TMP1)		// KBASE-8-cdata_const*8
+    |  addi.w TMP2, r0, LJ_TCDATA
+    |  add.d RA, BASE, RA
+    |  settp TMP0, TMP2
+    |  st.d TMP0, 0(RA)
+    |  ins_next
+    |.endif
     break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8
