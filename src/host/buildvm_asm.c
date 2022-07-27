@@ -156,6 +156,15 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
 	  "Error: unsupported opcode %08x for %s symbol relocation.\n",
 	  ins, sym);
   exit(1);
+#elif LJ_TARGET_LOONGARCH64
+  if ((ins >> 26) == 21) {
+    fprintf(ctx->fp, "\tbl %s\n", sym);
+  } else {
+    fprintf(stderr,
+            "Error: unsupported opcode %08x for %s symbol relocation.\n",
+            ins, sym);
+    exit(1);
+  }
 #else
 #error "missing relocation support for this architecture"
 #endif
