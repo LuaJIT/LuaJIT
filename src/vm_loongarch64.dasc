@@ -1986,6 +1986,123 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->cont_nop
 #endif
   |
+  |//-----------------------------------------------------------------------
+  |//-- Trace exit handler -------------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |.macro savex_, a, b
+  |  fst.d f..a, a*8(sp)
+  |  fst.d f..b, b*8(sp)
+  |  st.d r..a, 32*8+a*8(sp)
+  |  st.d r..b, 32*8+b*8(sp)
+  |.endmacro
+  |
+  |->vm_exit_handler:
+  |.if JIT
+  |  addi.d sp, sp, -(32*8+32*8)
+  |  savex_ 0, 2
+  |  savex_ 4, 5
+  |  savex_ 6, 7
+  |  savex_ 8, 9
+  |  savex_ 10, 11
+  |  savex_ 12, 13
+  |  savex_ 14, 15
+  |  savex_ 16, 17
+  |  savex_ 18, 19
+  |  savex_ 20, 21
+  |  savex_ 22, 23
+  |  savex_ 24, 25
+  |  savex_ 26, 27
+  |  savex_ 28, 29
+  |  savex_ 30, 31
+  |  fst.d f1, 1*8(sp)
+  |  fst.d f3, 3*8(sp)
+  |  st.d r0, 32*8+1*8(sp)		// Clear RID_TMP.
+  |  addi.d TMP2, sp, 32*8+32*8		// Recompute original value of sp.
+  |  st.d TMP2, 32*8+3*8(sp)		// Store sp in RID_SP
+  |  li_vmstate EXIT
+  |  .ADD16I DISPATCH, JGL, -GG_DISP2G-32768
+  |  ld.w TMP1, 0(TMP2)			// Load exit number.
+  |  st_vmstate
+  |  .LDXD L, DISPATCH, DISPATCH_GL(cur_L)
+  |  .LDXD BASE, DISPATCH, DISPATCH_GL(jit_base)
+  |  .STXD L, DISPATCH, DISPATCH_J(L)
+  |  st.w ra, DISPATCH_J(parent)(DISPATCH)	// Store trace number.
+  |  st.d BASE, L->base
+  |  st.w TMP1, DISPATCH_J(exitno)(DISPATCH)	// Store exit number.
+  |  .ADD16I CARG1, DISPATCH, GG_DISP2J
+  |  .STXD r0, DISPATCH, DISPATCH_GL(jit_base)
+  |  or CARG2, sp, r0
+  |  bl extern lj_trace_exit		// (jit_State *J, ExitState *ex)
+  |  // Returns MULTRES (unscaled) or negated error code.
+  |  ld.d TMP1, L->cframe
+  |  addi.d TMP2, r0, -4
+  |  ld.d BASE, L->base
+  |  and sp, TMP1, TMP2
+  |  ld.d PC, SAVE_PC(sp)		// Get SAVE_PC.
+  |  st.d L, SAVE_L(sp)			// Set SAVE_L (on-trace resume/yield).
+  |  b >1
+  |.endif
+  |
+  |->vm_exit_interp:
+  |.if JIT
+  |  // CRET1 = MULTRES or negated error code, BASE, PC and JGL set.
+  |  ld.d L, SAVE_L(sp)
+  |  .ADD16I DISPATCH, JGL, -GG_DISP2G-32768
+  |  st.d BASE, L->base
+  |1:
+  |  ld.d LFUNC:RB, FRAME_FUNC(BASE)
+  |  blt CRET1, r0, >9			// Check for error from exit.
+  |  addu16i.d TMP3, r0, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
+  |  slli.d MULTRES, CRET1, 3
+  |  cleartp LFUNC:RB
+  |  st.w MULTRES, TMPD(sp)
+  |  addi.d TISNIL, r0, LJ_TNIL
+  |  addi.d TISNUM, r0, LJ_TISNUM		// Setup type comparison constants.
+  |  movgr2fr.w TOBIT, TMP3
+  |  ld.d TMP1, LFUNC:RB->pc
+  |  .STXD r0, DISPATCH, DISPATCH_GL(jit_base)
+  |  ld.d KBASE, PC2PROTO(k)(TMP1)
+  |  fcvt.d.s TOBIT, TOBIT
+  |  // Modified copy of ins_next which handles function header dispatch, too.
+  |  ld.w INS, 0(PC)
+  |  addi.d PC, PC, 4
+  |  // Assumes TISNIL == ~LJ_VMST_INTERP == -1
+  |  .STXW TISNIL, DISPATCH, DISPATCH_GL(vmstate)
+  |  decode_OP TMP1, INS
+  |  decode_BC8b TMP1
+  |  sltui TMP2, TMP1, BC_FUNCF*8
+  |  add.d TMP0, DISPATCH, TMP1
+  |  decode_RD RD, INS
+  |  ld.d TMP3, 0(TMP0)
+  |  decode_RA RA, INS
+  |  beqz TMP2, >2
+  |  jirl r0, TMP3, 0
+  |2:
+  |  sltui TMP2, TMP1, (BC_FUNCC+2)*8	// Fast function?
+  |  ld.d TMP1, FRAME_PC(BASE)
+  |  bnez TMP2, >3
+  |  // Check frame below fast function.
+  |  andi TMP0, TMP1, FRAME_TYPE
+  |  bnez TMP0, >3			// Trace stitching continuation?
+  |  // Otherwise set KBASE for Lua function below fast function.
+  |  ld.w TMP2, -4(TMP1)
+  |  decode_RA TMP0, TMP2
+  |  sub.d TMP1, BASE, TMP0
+  |  ld.d LFUNC:TMP2, -32(TMP1)
+  |  cleartp LFUNC:TMP2
+  |  ld.d TMP1, LFUNC:TMP2->pc
+  |  ld.d KBASE, PC2PROTO(k)(TMP1)
+  |3:
+  |  addi.d RC, MULTRES, -8
+  |  add.d RA, RA, BASE
+  |  jirl r0, TMP3, 0
+  |
+  |9:  // Rethrow error from the right C frame.
+  |  sub.w CARG2, r0, CRET1		//TODO LA: sub.w  no trap
+  |  or CARG1, L, r0
+  |  bl extern lj_err_trace		// (lua_State *L, int errcode)
+  |.endif
   |
   |//-----------------------------------------------------------------------
   |//-- Math helper functions ----------------------------------------------
