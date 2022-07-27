@@ -1,0 +1,74 @@
+|// Low-level VM code for LoongArch CPUs.
+|// Bytecode interpreter, fast functions and helper functions.
+|// Copyright (C) 2005-2022 Mike Pall. See Copyright Notice in luajit.h
+|
+|.arch loongarch64
+|
+|//-----------------------------------------------------------------------
+|
+|// Fixed register assignments for the interpreter.
+|// Don't use: r0 = 0, r1 = ra, r2 = tp, r3 = sp, r21 = reserved
+|
+|
+|// The following must be C callee-save (but BASE is often refetched).
+|.define BASE,		r23	// Base of current Lua stack frame.
+|.define KBASE,		r24	// Constants of current Lua function.
+|.define PC,		r25	// Next PC.
+|.define DISPATCH,	r26	// Opcode dispatch table.
+|.define LREG,		r27	// Register holding lua_State (also in SAVE_L).
+|.define MULTRES,	r28	// Size of multi-result: (nresults+1)*8.
+|
+|.define JGL,		r22	// On-trace: global_State + 32768.
+|
+|// Constants for type-comparisons, stores and conversions. C callee-save.
+|.define TISNIL,	r22
+|.define TISNUM,	r29
+|.define TOBIT,		f30	// 2^52 + 2^51.
+|
+|// The following temporaries are not saved across C calls, except for RA.
+|.define RA,		r30	// Callee-save.
+|.define RB,		r8
+|.define RC,		r9
+|.define RD,		r10
+|.define INS,		r11
+|
+|.define TMP0,		r12
+|.define TMP1,		r13
+|.define TMP2,		r14
+|.define TMP3,		r15
+|.define TMP4,		r17
+|
+|// Loongarch lp64 calling convention.
+|.define CARG1,		r4
+|.define CARG2,		r5
+|.define CARG3,		r6
+|.define CARG4,		r7
+|.define CARG5,		r8
+|.define CARG6,		r9
+|.define CARG7,		r10
+|.define CARG8,		r11
+|
+|.define CRET1,		r4
+|.define CRET2,		r5
+|
+|.define FARG1,		f0
+|.define FARG2,		f1
+|.define FARG3,		f2
+|.define FARG4,		f3
+|.define FARG5,		f4
+|.define FARG6,		f5
+|.define FARG7,		f6
+|.define FARG8,		f7
+|
+|.define FRET1,		f0
+|.define FRET2,		f1
+|
+|.define FTMP0,		f8
+|.define FTMP1,		f9
+|.define FTMP2,		f10
+|.define FTMP3,		f22
+|.define FTMP4,		f23
+|
+|.define FCC0,		fcc0
+|.define FCC1,		fcc1
+|
