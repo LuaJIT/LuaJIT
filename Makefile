@@ -77,7 +77,8 @@ INSTALL_F= install -m 0644
 UNINSTALL= $(RM)
 LDCONFIG= ldconfig -n 2>/dev/null
 SED_PC= sed -e "s|^prefix=.*|prefix=$(PREFIX)|" \
-            -e "s|^multilib=.*|multilib=$(MULTILIB)|"
+            -e "s|^multilib=.*|multilib=$(MULTILIB)|" \
+            -e "s|^includedir=.*|includedir=$(INSTALL_INC)|"
 
 FILE_T= luajit
 FILE_A= libluajit.a
