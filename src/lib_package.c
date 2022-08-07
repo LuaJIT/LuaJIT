@@ -57,7 +57,7 @@ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
 
 static const char *ll_bcsym(void *lib, const char *sym)
 {
-#if defined(RTLD_DEFAULT)
+#if defined(RTLD_DEFAULT) && !defined(NO_RTLD_DEFAULT)
   if (lib == NULL) lib = RTLD_DEFAULT;
 #elif LJ_TARGET_OSX || LJ_TARGET_BSD
   if (lib == NULL) lib = (void *)(intptr_t)-2;
