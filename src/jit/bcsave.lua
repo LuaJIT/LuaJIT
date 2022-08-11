@@ -29,6 +29,7 @@ Save LuaJIT bytecode: luajit -b[options] input output
   -l        Only list bytecode.
   -s        Strip debug info (default).
   -g        Keep debug info.
+  -f        Set custom file name (passed to loadstring. default: input filename)
   -n name   Set module name (default: auto-detect from input name).
   -t type   Set output file type (default: auto-detect from output name).
   -a arch   Override architecture for object files (default: native).
@@ -49,10 +50,13 @@ local function check(ok, ...)
   os.exit(1)
 end
 
-local function readfile(input)
+local function readfile(input, filename)
   if type(input) == "function" then return input end
   if input == "-" then input = nil end
-  return check(loadfile(input))
+  local f = assert(io.open(input, "r"))
+  local src = f:read("*all")
+  f:close()
+  return check(loadstring(src, filename))
 end
 
 local function savefile(name, mode)
@@ -604,13 +608,13 @@ end
 
 ------------------------------------------------------------------------------
 
-local function bclist(input, output)
-  local f = readfile(input)
+local function bclist(input, output, filename)
+  local f = readfile(input, filename)
   require("jit.bc").dump(f, savefile(output, "w"), true)
 end
 
-local function bcsave(ctx, input, output)
-  local f = readfile(input)
+local function bcsave(ctx, input, output, filename)
+  local f = readfile(input, filename)
   local s = string.dump(f, ctx.strip)
   local t = ctx.type
   if not t then
@@ -633,6 +637,7 @@ local function docmd(...)
   local arg = {...}
   local n = 1
   local list = false
+  local filename = nil
   local ctx = {
     strip = true, arch = jit.arch, os = jit.os:lower(),
     type = false, modname = false,
@@ -663,6 +668,8 @@ local function docmd(...)
 	    ctx.arch = checkarg(tremove(arg, n), map_arch, "architecture")
 	  elseif opt == "o" then
 	    ctx.os = checkarg(tremove(arg, n), map_os, "OS name")
+	  elseif opt == "f" then
+	    filename = tremove(arg, n)
 	  else
 	    usage()
 	  end
@@ -674,10 +681,10 @@ local function docmd(...)
   end
   if list then
     if #arg == 0 or #arg > 2 then usage() end
-    bclist(arg[1], arg[2] or "-")
+    bclist(arg[1], arg[2] or "-", filename or arg[1])
   else
     if #arg ~= 2 then usage() end
-    bcsave(ctx, arg[1], arg[2])
+    bcsave(ctx, arg[1], arg[2], filename or arg[1])
   end
 end
 
