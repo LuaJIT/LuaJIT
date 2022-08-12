@@ -319,17 +319,8 @@ typedef struct GCstr {
 
 /* -- Userdata object ----------------------------------------------------- */
 
-#if defined(__GNUC__)
-  #define LUA_STRUCT_ALIGNED(a) __attribute__ ((aligned (a)))
-#elif defined(_MSC_VER)
-  #define LUA_STRUCT_ALIGNED(a) __declspec(align(a))
-#else
-  #warning "No struct alignment for GCudata"
-  #define LUA_STRUCT_ALIGNED(a)
-#endif
-
 /* Userdata object. Payload follows. */
-typedef struct LUA_STRUCT_ALIGNED(LUA_USERDATA_ALIGNMENT) GCudata {
+typedef struct LJ_ALIGN(LUA_USERDATA_ALIGNMENT) GCudata {
   GCHeader;
   uint8_t udtype;	/* Userdata type. */
   uint8_t unused2;
