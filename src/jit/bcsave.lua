@@ -33,6 +33,7 @@ Save LuaJIT bytecode: luajit -b[options] input output
   -t type   Set output file type (default: auto-detect from output name).
   -a arch   Override architecture for object files (default: native).
   -o os     Override OS for object files (default: native).
+  -F name   Override filename (default: input filename).
   -e chunk  Use chunk string as input.
   --        Stop handling options.
   -         Use stdin as input and/or stdout as output.
@@ -49,10 +50,22 @@ local function check(ok, ...)
   os.exit(1)
 end
 
-local function readfile(input)
+local function readfile(ctx, input)
   if type(input) == "function" then return input end
-  if input == "-" then input = nil end
-  return check(loadfile(input))
+  if ctx.filename then
+    local data
+    if input == "-" then
+      data = io.stdin:read("*a")
+    else
+      local fp = assert(io.open(input, "rb"))
+      data = assert(fp:read("*a"))
+      assert(fp:close())
+    end
+    return check(load(data, ctx.filename))
+  else
+    if input == "-" then input = nil end
+    return check(loadfile(input))
+  end
 end
 
 local function savefile(name, mode)
@@ -604,13 +617,13 @@ end
 
 ------------------------------------------------------------------------------
 
-local function bclist(input, output)
-  local f = readfile(input)
+local function bclist(ctx, input, output)
+  local f = readfile(ctx, input)
   require("jit.bc").dump(f, savefile(output, "w"), true)
 end
 
 local function bcsave(ctx, input, output)
-  local f = readfile(input)
+  local f = readfile(ctx, input)
   local s = string.dump(f, ctx.strip)
   local t = ctx.type
   if not t then
@@ -663,6 +676,8 @@ local function docmd(...)
 	    ctx.arch = checkarg(tremove(arg, n), map_arch, "architecture")
 	  elseif opt == "o" then
 	    ctx.os = checkarg(tremove(arg, n), map_os, "OS name")
+	  elseif opt == "F" then
+	    ctx.filename = "@"..tremove(arg, n)
 	  else
 	    usage()
 	  end
@@ -674,7 +689,7 @@ local function docmd(...)
   end
   if list then
     if #arg == 0 or #arg > 2 then usage() end
-    bclist(arg[1], arg[2] or "-")
+    bclist(ctx, arg[1], arg[2] or "-")
   else
     if #arg ~= 2 then usage() end
     bcsave(ctx, arg[1], arg[2])
