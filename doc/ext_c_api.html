@@ -107,7 +107,7 @@ Turn the whole JIT compiler on or off or flush the whole cache of compiled code.
 This sets the mode for the function at the stack index <tt>idx</tt> or
 the parent of the calling function (<tt>idx = 0</tt>). It either
 enables JIT compilation for a function, disables it and flushes any
-already compiled code or only flushes already compiled code. This
+already compiled code, or only flushes already compiled code. This
 applies recursively to all sub-functions of the function with
 <tt>LUAJIT_MODE_ALLFUNC</tt> or only to the sub-functions with
 <tt>LUAJIT_MODE_ALLSUBFUNC</tt>.
@@ -126,7 +126,7 @@ traces which link to it.
 This mode defines a wrapper function for calls to C functions. If
 called with <tt>LUAJIT_MODE_ON</tt>, the stack index at <tt>idx</tt>
 must be a <tt>lightuserdata</tt> object holding a pointer to the wrapper
-function. From now on all C functions are called through the wrapper
+function. From now on, all C functions are called through the wrapper
 function. If called with <tt>LUAJIT_MODE_OFF</tt> this mode is turned
 off and all C functions are directly called.
 </p>

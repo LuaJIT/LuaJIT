@@ -323,6 +323,7 @@ LJLIB_CF(buffer_new)
   setgcref(sbx->dict_str, obj2gco(dict_str));
   setgcref(sbx->dict_mt, obj2gco(dict_mt));
   if (sz > 0) lj_buf_need2((SBuf *)sbx, sz);
+  lj_gc_check(L);
   return 1;
 }
 
@@ -339,6 +340,7 @@ LJLIB_CF(buffer_decode)			LJLIB_REC(.)
   GCstr *str = lj_lib_checkstrx(L, 1);
   setnilV(L->top++);
   lj_serialize_decode(L, L->top-1, str);
+  lj_gc_check(L);
   return 1;
 }
 

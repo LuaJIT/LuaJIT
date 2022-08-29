@@ -485,7 +485,8 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
 	asm_fusexref(as, ir->op1, xallow);
 	return RID_MRM;
       }
-    } else if (ir->o == IR_VLOAD && !(LJ_GC64 && irt_isaddr(ir->t))) {
+    } else if (ir->o == IR_VLOAD && IR(ir->op1)->o == IR_AREF &&
+	       !(LJ_GC64 && irt_isaddr(ir->t))) {
       asm_fuseahuref(as, ir->op1, xallow);
       as->mrm.ofs += 8 * ir->op2;
       return RID_MRM;

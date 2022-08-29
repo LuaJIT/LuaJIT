@@ -34,6 +34,7 @@ Save LuaJIT bytecode: luajit -b[options] input output
   -t type   Set output file type (default: auto-detect from output name).
   -a arch   Override architecture for object files (default: native).
   -o os     Override OS for object files (default: native).
+  -F name   Override filename (default: input filename).
   -e chunk  Use chunk string as input.
   --        Stop handling options.
   -         Use stdin as input and/or stdout as output.
@@ -50,10 +51,22 @@ local function check(ok, ...)
   os.exit(1)
 end
 
-local function readfile(input)
+local function readfile(ctx, input)
   if type(input) == "function" then return input end
-  if input == "-" then input = nil end
-  return check(loadfile(input))
+  if ctx.filename then
+    local data
+    if input == "-" then
+      data = io.stdin:read("*a")
+    else
+      local fp = assert(io.open(input, "rb"))
+      data = assert(fp:read("*a"))
+      assert(fp:close())
+    end
+    return check(load(data, ctx.filename))
+  else
+    if input == "-" then input = nil end
+    return check(loadfile(input))
+  end
 end
 
 local function savefile(name, mode)
@@ -457,18 +470,18 @@ typedef struct {
   uint32_t value;
 } mach_nlist;
 typedef struct {
-  uint32_t strx;
+  int32_t strx;
   uint8_t type, sect;
   uint16_t desc;
   uint64_t value;
 } mach_nlist_64;
 typedef struct
 {
-  uint32_t magic, nfat_arch;
+  int32_t magic, nfat_arch;
 } mach_fat_header;
 typedef struct
 {
-  uint32_t cputype, cpusubtype, offset, size, align;
+  int32_t cputype, cpusubtype, offset, size, align;
 } mach_fat_arch;
 typedef struct {
   struct {
@@ -502,6 +515,18 @@ typedef struct {
   mach_nlist sym_entry;
   uint8_t space[4096];
 } mach_fat_obj;
+typedef struct {
+  mach_fat_header fat;
+  mach_fat_arch fat_arch[2];
+  struct {
+    mach_header_64 hdr;
+    mach_segment_command_64 seg;
+    mach_section_64 sec;
+    mach_symtab_command sym;
+  } arch[2];
+  mach_nlist_64 sym_entry;
+  uint8_t space[4096];
+} mach_fat_obj_64;
 ]]
   local symname = '_'..LJBC_PREFIX..ctx.modname
   local isfat, is64, align, mobj = false, false, 4, "mach_obj"
@@ -510,7 +535,7 @@ typedef struct {
   elseif ctx.arch == "arm" then
     isfat, mobj = true, "mach_fat_obj"
   elseif ctx.arch == "arm64" then
-    is64, align, isfat, mobj = true, 8, true, "mach_fat_obj"
+    is64, align, isfat, mobj = true, 8, true, "mach_fat_obj_64"
   else
     check(ctx.arch == "x86", "unsupported architecture for OSX")
   end
@@ -599,7 +624,7 @@ local function bclist(input, output, lineinfo)
 end
 
 local function bcsave(ctx, input, output)
-  local f = readfile(input)
+  local f = readfile(ctx, input)
   local s = string.dump(f, ctx.strip)
   local t = ctx.type
   if not t then
@@ -656,6 +681,8 @@ local function docmd(...)
 	    ctx.arch = checkarg(tremove(arg, n), map_arch, "architecture")
 	  elseif opt == "o" then
 	    ctx.os = checkarg(tremove(arg, n), map_os, "OS name")
+	  elseif opt == "F" then
+	    ctx.filename = "@"..tremove(arg, n)
 	  else
 	    usage()
 	  end
