@@ -7,7 +7,6 @@
 #define _LJ_JIT_H
 
 #include "lj_obj.h"
-#if LJ_HASJIT
 #include "lj_ir.h"
 
 /* -- JIT engine flags ---------------------------------------------------- */
@@ -23,6 +22,7 @@
 #define JIT_F_SSE3		(JIT_F_CPU << 0)
 #define JIT_F_SSE4_1		(JIT_F_CPU << 1)
 #define JIT_F_BMI2		(JIT_F_CPU << 2)
+#define JIT_F_SSE4_2		(JIT_F_CPU << 3)
 
 
 #define JIT_F_CPUSTRING		"\4SSE3\6SSE4.1\4BMI2"
@@ -112,12 +112,12 @@
 
 /* Optimization parameters and their defaults. Length is a char in octal! */
 #define JIT_PARAMDEF(_) \
-  _(\010, maxtrace,	1000)	/* Max. # of traces in cache. */ \
-  _(\011, maxrecord,	4000)	/* Max. # of recorded IR instructions. */ \
+  _(\010, maxtrace,	8000)	/* Max. # of traces in cache. */ \
+  _(\011, maxrecord,	16000)	/* Max. # of recorded IR instructions. */ \
   _(\012, maxirconst,	500)	/* Max. # of IR constants of a trace. */ \
   _(\007, maxside,	100)	/* Max. # of side traces of a root trace. */ \
   _(\007, maxsnap,	500)	/* Max. # of snapshots for a trace. */ \
-  _(\011, minstitch,	0)	/* Min. # of IR ins for a stitched trace. */ \
+  _(\011, minstitch,	3)	/* Min. # of IR ins for a stitched trace. */ \
   \
   _(\007, hotloop,	56)	/* # of iter. to detect a hot loop/call. */ \
   _(\007, hotexit,	10)	/* # of taken exits to start a side trace. */ \
@@ -131,7 +131,7 @@
   /* Size of each machine code area (in KBytes). */ \
   _(\011, sizemcode,	JIT_P_sizemcode_DEFAULT) \
   /* Max. total size of all machine code areas (in KBytes). */ \
-  _(\010, maxmcode,	512) \
+  _(\010, maxmcode,	40960) \
   /* End of list. */
 
 enum {
@@ -372,7 +372,6 @@ enum {
 #endif
   LJ_K64__MAX,
 };
-#define LJ_K64__USED	(LJ_TARGET_X86ORX64 || LJ_TARGET_MIPS)
 
 enum {
 #if LJ_TARGET_X86ORX64
@@ -391,7 +390,6 @@ enum {
 #endif
   LJ_K32__MAX
 };
-#define LJ_K32__USED	(LJ_TARGET_X86ORX64 || LJ_TARGET_PPC || LJ_TARGET_MIPS)
 
 /* Get 16 byte aligned pointer to SIMD constant. */
 #define LJ_KSIMD(J, n) \
@@ -446,13 +444,9 @@ typedef struct jit_State {
   int32_t framedepth;	/* Current frame depth. */
   int32_t retdepth;	/* Return frame depth (count of RETF). */
 
-#if LJ_K32__USED
   uint32_t k32[LJ_K32__MAX];  /* Common 4 byte constants used by backends. */
-#endif
   TValue ksimd[LJ_KSIMD__MAX*2+1];  /* 16 byte aligned SIMD constants. */
-#if LJ_K64__USED
   TValue k64[LJ_K64__MAX];  /* Common 8 byte constants. */
-#endif
 
   IRIns *irbuf;		/* Temp. IR instruction buffer. Biased with REF_BIAS. */
   IRRef irtoplim;	/* Upper limit of instuction buffer (biased). */
@@ -516,13 +510,14 @@ typedef struct jit_State {
   BCLine prev_line;	/* Previous line. */
   int prof_mode;	/* Profiling mode: 0, 'f', 'l'. */
 #endif
+  PRNGState prng;	/* PRNG state for the JIT compiler, defaults to prng in
+			   global_State. */
 } jit_State;
 
 #ifdef LUA_USE_ASSERT
 #define lj_assertJ(c, ...)	lj_assertG_(J2G(J), (c), __VA_ARGS__)
 #else
 #define lj_assertJ(c, ...)	((void)J)
-#endif
 #endif
 
 #endif

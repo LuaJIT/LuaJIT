@@ -190,6 +190,10 @@ typedef struct CCallInfo {
   _(ANY,	lj_tab_keyindex,	2,  FL, INT, 0) \
   _(ANY,	lj_vm_next,		2,  FL, PTR, 0) \
   _(ANY,	lj_tab_len,		1,  FL, INT, 0) \
+  _(ANY,	lj_tab_clone,		2,  FS, TAB, CCI_L) \
+  _(ANY,	lj_tab_isarray,		1,  FL, INT, 0) \
+  _(ANY,	lj_tab_nkeys,		1,  FL, INT, 0) \
+  _(ANY,	lj_tab_isempty,		1,  FL, INT, 0) \
   _(ANY,	lj_tab_len_hint,	2,  FL, INT, 0) \
   _(ANY,	lj_gc_step_jit,		2,  FS, NIL, CCI_L) \
   _(ANY,	lj_gc_barrieruv,	2,  FS, NIL, 0) \

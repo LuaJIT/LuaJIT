@@ -27,6 +27,7 @@ local function usage()
   io.stderr:write[[
 Save LuaJIT bytecode: luajit -b[options] input output
   -l        Only list bytecode.
+  -L        Only list bytecode with lineinfo.
   -s        Strip debug info (default).
   -g        Keep debug info.
   -n name   Set module name (default: auto-detect from input name).
@@ -592,9 +593,9 @@ end
 
 ------------------------------------------------------------------------------
 
-local function bclist(input, output)
+local function bclist(input, output, lineinfo)
   local f = readfile(input)
-  require("jit.bc").dump(f, savefile(output, "w"), true)
+  require("jit.bc").dump(f, savefile(output, "w"), true, lineinfo)
 end
 
 local function bcsave(ctx, input, output)
@@ -621,6 +622,7 @@ local function docmd(...)
   local arg = {...}
   local n = 1
   local list = false
+  local lineinfo = false
   local ctx = {
     strip = true, arch = jit.arch, os = jit.os:lower(),
     type = false, modname = false,
@@ -634,6 +636,9 @@ local function docmd(...)
 	local opt = a:sub(m, m)
 	if opt == "l" then
 	  list = true
+	elseif opt == "L" then
+	  list = true
+	  lineinfo = true
 	elseif opt == "s" then
 	  ctx.strip = true
 	elseif opt == "g" then
@@ -662,7 +667,7 @@ local function docmd(...)
   end
   if list then
     if #arg == 0 or #arg > 2 then usage() end
-    bclist(arg[1], arg[2] or "-")
+    bclist(arg[1], arg[2] or "-", lineinfo)
   else
     if #arg ~= 2 then usage() end
     bcsave(ctx, arg[1], arg[2])

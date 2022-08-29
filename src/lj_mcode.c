@@ -231,7 +231,7 @@ static void *mcode_alloc(jit_State *J, size_t sz)
     }
     /* Next try probing 64K-aligned pseudo-random addresses. */
     do {
-      hint = lj_prng_u64(&J2G(J)->prng) & ((1u<<LJ_TARGET_JUMPRANGE)-0x10000);
+      hint = lj_prng_u64(&J->prng) & ((1u<<LJ_TARGET_JUMPRANGE)-0x10000);
     } while (!(hint + sz < range+range));
     hint = target + hint - range;
   }

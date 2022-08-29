@@ -30,6 +30,8 @@
 
 #include "lua.h"
 
+#define OPENRESTY_LUAJIT
+
 #define LUAJIT_VERSION		"LuaJIT 2.1.0-beta3"
 #define LUAJIT_VERSION_NUM	20100  /* Version 2.1.0 = 02.01.00. */
 #define LUAJIT_VERSION_SYM	luaJIT_version_2_1_0_beta3

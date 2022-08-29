@@ -66,12 +66,16 @@ typedef unsigned int uintptr_t;
 #define LJ_MAX_BCINS	(1<<26)		/* Max. # of bytecode instructions. */
 #define LJ_MAX_SLOTS	250		/* Max. # of slots in a Lua func. */
 #define LJ_MAX_LOCVAR	200		/* Max. # of local variables. */
-#define LJ_MAX_UPVAL	60		/* Max. # of upvalues. */
+#define LJ_MAX_UPVAL	120		/* Max. # of upvalues. */
 
 #define LJ_MAX_IDXCHAIN	100		/* __index/__newindex chain limit. */
 #define LJ_STACK_EXTRA	(5+2*LJ_FR2)	/* Extra stack space (metamethods). */
 
+#if defined(__powerpc64__) && _CALL_ELF != 2
+#define LJ_NUM_CBPAGE	4		/* Number of FFI callback pages. */
+#else
 #define LJ_NUM_CBPAGE	1		/* Number of FFI callback pages. */
+#endif
 
 /* Minimum table/buffer sizes. */
 #define LJ_MIN_GLOBAL	6		/* Min. global table size (hbits). */
@@ -107,7 +111,11 @@ typedef unsigned int uintptr_t;
 #define checkptr31(x)	(((uint64_t)(uintptr_t)(x) >> 31) == 0)
 #define checkptr32(x)	((uintptr_t)(x) == (uint32_t)(uintptr_t)(x))
 #define checkptr47(x)	(((uint64_t)(uintptr_t)(x) >> 47) == 0)
+#if defined(__powerpc64__) && _CALL_ELF == 2
+#define checkptrGC(x)   (LJ_GC64 ? checkptr47((x)) : LJ_64 ? checkptr32((x)) :1)
+#else
 #define checkptrGC(x)	(LJ_GC64 ? checkptr47((x)) : LJ_64 ? checkptr31((x)) :1)
+#endif
 
 /* Every half-decent C compiler transforms this into a rotate instruction. */
 #define lj_rol(x, n)	(((x)<<(n)) | ((x)>>(-(int)(n)&(8*sizeof(x)-1))))

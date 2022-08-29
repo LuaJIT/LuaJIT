@@ -76,7 +76,7 @@ LJLIB_CF(os_rename)
 
 LJLIB_CF(os_tmpname)
 {
-#if LJ_TARGET_PS3 || LJ_TARGET_PS4 || LJ_TARGET_PS5 || LJ_TARGET_PSVITA || LJ_TARGET_NX
+#if LJ_TARGET_PS3 || LJ_TARGET_PS4 || LJ_TARGET_PS5 || LJ_TARGET_PSVITA
   lj_err_caller(L, LJ_ERR_OSUNIQF);
   return 0;
 #else
@@ -185,6 +185,7 @@ LJLIB_CF(os_date)
 #endif
   } else {
 #if LJ_TARGET_POSIX
+    tzset();
     stm = localtime_r(&t, &rtm);
 #else
     stm = localtime(&t);

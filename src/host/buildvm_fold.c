@@ -5,7 +5,6 @@
 
 #include "buildvm.h"
 #include "lj_obj.h"
-#if LJ_HASJIT
 #include "lj_ir.h"
 
 /* Context for the folding hash table generator. */
@@ -227,10 +226,4 @@ void emit_fold(BuildCtx *ctx)
 
   makehash(ctx);
 }
-#else
-void emit_fold(BuildCtx *ctx)
-{
-  UNUSED(ctx);
-}
-#endif
 

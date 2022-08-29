@@ -1143,6 +1143,7 @@ LUA_API int lua_pcall(lua_State *L, int nargs, int nresults, int errfunc)
     ef = savestack(L, o);
   }
   status = lj_vm_pcall(L, api_call_base(L, nargs), nresults+1, ef);
+  printf("hello, %d", status);
   if (status) hook_restore(g, oldh);
   return status;
 }
@@ -1193,6 +1194,36 @@ LUALIB_API int luaL_callmeta(lua_State *L, int idx, const char *field)
 LUA_API int lua_isyieldable(lua_State *L)
 {
   return cframe_canyield(L->cframe);
+}
+
+LUA_API void lua_resetthread(lua_State *L, lua_State *th)
+{
+  TValue *stend, *st;
+
+  th->dummy_ffid = FF_C;
+  th->status = LUA_OK;
+
+  setmrefr(th->glref, L->glref);
+  setgcrefr(th->env, L->env);
+
+  th->cframe = NULL;
+
+  st = tvref(th->stack);
+
+  if (st != NULL) {
+    lj_state_relimitstack(th);
+
+    stend = st + th->stacksize;
+    st++; /* Needed for curr_funcisL() on empty stack. */
+    if (LJ_FR2) st++;
+    th->base = th->top = st;
+    lj_func_closeuv(L, st);
+    while (st < stend)  /* Clear new slots. */
+      setnilV(st++);
+  }
+
+  th->exdata = L->exdata;
+  th->exdata2 = L->exdata2;
 }
 
 LUA_API int lua_yield(lua_State *L, int nresults)
@@ -1311,3 +1342,22 @@ LUA_API void lua_setallocf(lua_State *L, lua_Alloc f, void *ud)
   g->allocf = f;
 }
 
+LUA_API void lua_setexdata(lua_State *L, void *exdata)
+{
+  L->exdata = exdata;
+}
+
+LUA_API void *lua_getexdata(lua_State *L)
+{
+  return L->exdata;
+}
+
+LUA_API void lua_setexdata2(lua_State *L, void *exdata2)
+{
+  L->exdata2 = exdata2;
+}
+
+LUA_API void *lua_getexdata2(lua_State *L)
+{
+  return L->exdata2;
+}
