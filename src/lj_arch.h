@@ -93,6 +93,9 @@
 #elif defined(__CYGWIN__)
 #define LJ_TARGET_CYGWIN	1
 #define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif defined(__QNX__)
+#define LJ_TARGET_QNX		1
+#define LUAJIT_OS	LUAJIT_OS_POSIX
 #else
 #define LUAJIT_OS	LUAJIT_OS_OTHER
 #endif
