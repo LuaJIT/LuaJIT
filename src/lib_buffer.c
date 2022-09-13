@@ -128,7 +128,7 @@ LJLIB_CF(buffer_method_put)		LJLIB_REC(.)
       lj_strfmt_putfnum((SBuf *)sbx, STRFMT_G14, numV(o));
     } else if (tvisbuf(o)) {
       SBufExt *sbx2 = bufV(o);
-      if (sbx2 == sbx) lj_err_arg(L, arg+1, LJ_ERR_BUFFER_SELF);
+      if (sbx2 == sbx) lj_err_arg(L, (int)(arg+1), LJ_ERR_BUFFER_SELF);
       lj_buf_putmem((SBuf *)sbx, sbx2->r, sbufxlen(sbx2));
     } else if (!mo && !tvisnil(mo = lj_meta_lookup(L, o, MM_tostring))) {
       /* Call __tostring metamethod inline. */
@@ -140,7 +140,7 @@ LJLIB_CF(buffer_method_put)		LJLIB_REC(.)
       L->top = L->base + narg;
       goto retry;  /* Retry with the result. */
     } else {
-      lj_err_argtype(L, arg+1, "string/number/__tostring");
+      lj_err_argtype(L, (int)(arg+1), "string/number/__tostring");
     }
     /* Probably not useful to inline other __tostring MMs, e.g. FFI numbers. */
   }
@@ -169,7 +169,7 @@ LJLIB_CF(buffer_method_get)		LJLIB_REC(.)
   for (arg = 1; arg < narg; arg++) {
     TValue *o = &L->base[arg];
     MSize n = tvisnil(o) ? LJ_MAX_BUF :
-	      (MSize) lj_lib_checkintrange(L, arg+1, 0, LJ_MAX_BUF);
+	      (MSize) lj_lib_checkintrange(L, (int)(arg+1), 0, LJ_MAX_BUF);
     MSize len = sbufxlen(sbx);
     if (n > len) n = len;
     setstrV(L, o, lj_str_new(L, sbx->r, n));
@@ -177,7 +177,7 @@ LJLIB_CF(buffer_method_get)		LJLIB_REC(.)
   }
   if (sbx->r == sbx->w && !sbufiscow(sbx)) sbx->r = sbx->w = sbx->b;
   lj_gc_check(L);
-  return narg-1;
+  return (int)(narg-1);
 }
 
 #if LJ_HASFFI
