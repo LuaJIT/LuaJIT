@@ -2572,7 +2572,8 @@ void lj_record_ins(jit_State *J)
     break;
   case BC_JLOOP:
     rec_loop_jit(J, rc, rec_loop(J, ra,
-				 !bc_isret(bc_op(traceref(J, rc)->startins))));
+				 !bc_isret(bc_op(traceref(J, rc)->startins)) &&
+				 bc_op(traceref(J, rc)->startins) != BC_ITERN));
     break;
 
   case BC_IFORL:
