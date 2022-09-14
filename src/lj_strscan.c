@@ -552,6 +552,46 @@ int LJ_FASTCALL lj_strscan_number(GCstr *str, TValue *o)
 }
 #endif
 
+static int strscan_base(GCstr *str, TValue *o, int base, int dualnum)
+{
+  const char *p = strdata(str);
+  char *ep;
+  unsigned int neg = 0;
+  unsigned long ul;
+  while (lj_char_isspace((unsigned char)(*p))) p++;
+  if (*p == '-') { p++; neg = 1; } else if (*p == '+') { p++; }
+  if (lj_char_isalnum((unsigned char)(*p))) {
+    ul = strtoul(p, &ep, base);
+    if (p != ep) {
+      while (lj_char_isspace((unsigned char)(*ep))) ep++;
+      if (*ep == '\0') {
+        if (dualnum && LJ_LIKELY(ul < 0x80000000u+neg)) {
+          if (neg) ul = (unsigned long)-(long)ul;
+          setintV(o, (int32_t)ul);
+        } else {
+          lua_Number n = (lua_Number)ul;
+          if (neg) n = -n;
+          setnumV(o, n);
+        }
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
+
+LJ_FUNC int lj_strscan_num_base(GCstr *str, TValue *o, int base)
+{
+  return strscan_base(str, o, base, 0);
+}
+
+#if LJ_DUALNUM
+LJ_FUNC int lj_strscan_number_base(GCstr *str, TValue *o, int base)
+{
+  return strscan_base(str, o, base, 1);
+}
+#endif
+
 #undef DNEXT
 #undef DPREV
 #undef DLEN

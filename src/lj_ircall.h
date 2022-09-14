@@ -155,6 +155,7 @@ typedef struct CCallInfo {
   _(ANY,	lj_str_find,		4,   N, PGC, 0) \
   _(ANY,	lj_str_new,		3,   S, STR, CCI_L|CCI_T) \
   _(ANY,	lj_strscan_num,		2,  FN, INT, 0) \
+  _(ANY,	lj_strscan_num_base,	3,  N, INT, 0) \
   _(ANY,	lj_strfmt_int,		2,  FN, STR, CCI_L|CCI_T) \
   _(ANY,	lj_strfmt_num,		2,  FN, STR, CCI_L|CCI_T) \
   _(ANY,	lj_strfmt_char,		2,  FN, STR, CCI_L|CCI_T) \

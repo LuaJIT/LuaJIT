@@ -37,4 +37,13 @@ static LJ_AINLINE int lj_strscan_numberobj(TValue *o)
   return tvisnumber(o) || (tvisstr(o) && lj_strscan_number(strV(o), o));
 }
 
+/* The base must be between 2 and 36. */
+LJ_FUNC int lj_strscan_num_base(GCstr *str, TValue *o, int base);
+#if LJ_DUALNUM
+LJ_FUNC int lj_strscan_number_base(GCstr *str, TValue *o, int base);
+#else
+#define lj_strscan_number_base(s, o, base) \
+  lj_strscan_num_base((s), (o), (base))
+#endif
+
 #endif

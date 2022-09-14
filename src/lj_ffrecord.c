@@ -349,9 +349,28 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
   TRef tr = J->base[0];
   TRef base = J->base[1];
   if (tr && !tref_isnil(base)) {
+    int32_t kbase;
     base = lj_opt_narrow_toint(J, base);
-    if (!tref_isk(base) || IR(tref_ref(base))->i != 10) {
-      recff_nyiu(J, rd);
+    if (!tref_isk(base) || (kbase = IR(tref_ref(base))->i) != 10) {
+      if (tref_isstr(tr)) {
+        if (tref_isk(tr) && tref_isk(base) && kbase >= 2 && kbase <= 36) {
+          TValue num;
+          if (lj_strscan_num_base(strV(&rd->argv[0]), &num, (int)kbase))
+            J->base[0] = lj_ir_knum(J, numV(&num));
+          else
+            J->base[0] = TREF_NIL;
+        } else {
+          TRef tmp, parsed;
+          emitir(IRTGI(IR_GE), base, lj_ir_kint(J, 2));
+          emitir(IRTGI(IR_LE), base, lj_ir_kint(J, 36));
+          tmp = recff_tmpref(J, TREF_NIL, IRTMPREF_OUT1);
+          parsed = lj_ir_call(J, IRCALL_lj_strscan_num_base, tr, tmp, base);
+          emitir(IRTGI(IR_NE), parsed, lj_ir_kint(J, 0));
+          J->base[0] = lj_record_vload(J, tmp, 0, IRT_NUM);
+        }
+      } else {
+        recff_nyiu(J, rd);
+      }
       return;
     }
   }
