@@ -38,9 +38,9 @@ static LJ_AINLINE int lj_strscan_numberobj(TValue *o)
 }
 
 /* The base must be between 2 and 36. */
-LJ_FUNC int lj_strscan_num_base(GCstr *str, TValue *o, int base);
+LJ_FUNC int32_t lj_strscan_num_base(GCstr *str, TValue *o, int32_t base);
 #if LJ_DUALNUM
-LJ_FUNC int lj_strscan_number_base(GCstr *str, TValue *o, int base);
+LJ_FUNC int32_t lj_strscan_number_base(GCstr *str, TValue *o, int32_t base);
 #else
 #define lj_strscan_number_base(s, o, base) \
   lj_strscan_num_base((s), (o), (base))

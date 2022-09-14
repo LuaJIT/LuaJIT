@@ -552,7 +552,7 @@ int LJ_FASTCALL lj_strscan_number(GCstr *str, TValue *o)
 }
 #endif
 
-static int strscan_base(GCstr *str, TValue *o, int base, int dualnum)
+static int32_t strscan_base(GCstr *str, TValue *o, int32_t base, int dualnum)
 {
   const char *p = strdata(str);
   char *ep;
@@ -561,7 +561,7 @@ static int strscan_base(GCstr *str, TValue *o, int base, int dualnum)
   while (lj_char_isspace((unsigned char)(*p))) p++;
   if (*p == '-') { p++; neg = 1; } else if (*p == '+') { p++; }
   if (lj_char_isalnum((unsigned char)(*p))) {
-    ul = strtoul(p, &ep, base);
+    ul = strtoul(p, &ep, (int)base);
     if (p != ep) {
       while (lj_char_isspace((unsigned char)(*ep))) ep++;
       if (*ep == '\0') {
@@ -580,13 +580,13 @@ static int strscan_base(GCstr *str, TValue *o, int base, int dualnum)
   return 0;
 }
 
-LJ_FUNC int lj_strscan_num_base(GCstr *str, TValue *o, int base)
+LJ_FUNC int32_t lj_strscan_num_base(GCstr *str, TValue *o, int32_t base)
 {
   return strscan_base(str, o, base, 0);
 }
 
 #if LJ_DUALNUM
-LJ_FUNC int lj_strscan_number_base(GCstr *str, TValue *o, int base)
+LJ_FUNC int32_t lj_strscan_number_base(GCstr *str, TValue *o, int32_t base)
 {
   return strscan_base(str, o, base, 1);
 }
