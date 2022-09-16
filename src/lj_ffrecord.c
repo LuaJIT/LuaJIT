@@ -355,7 +355,7 @@ static void LJ_FASTCALL recff_tonumber(jit_State *J, RecordFFData *rd)
       if (tref_isstr(tr)) {
         if (tref_isk(tr) && tref_isk(base) && kbase >= 2 && kbase <= 36) {
           TValue out;
-          if (lj_strscan_num_base(strV(&rd->argv[0]), &out, (int)kbase))
+          if (lj_strscan_num_base(strV(&rd->argv[0]), &out, kbase))
             J->base[0] = lj_ir_knum(J, numV(&out));
           else
             J->base[0] = TREF_NIL;
