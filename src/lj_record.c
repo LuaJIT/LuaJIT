@@ -1112,8 +1112,8 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
       kmt = lj_ir_ktab(J, mt);
     } else {
       IRRef ref;
-      for (ref = J->chain[IR_KGC]; ref; ref = J->cur.ir[ref].prev) {
-        if (ir_kgc(&J->cur.ir[ref]) == obj2gco(mt)) {
+      for (ref = J->chain[IR_KGC]; ref; ref = IR(ref)->prev) {
+        if (ir_kgc(IR(ref)) == obj2gco(mt)) {
           kmt = TREF(ref, IRT_TAB);
           break;
         }
