@@ -271,13 +271,10 @@ restart:
 	return "global";
       case BC_TGETS:
 	*name = strdata(gco2str(proto_kgc(pt, ~(ptrdiff_t)bc_c(ins))));
-	if (ip > proto_bc(pt)) {
-	  BCIns insp = ip[-1];
-	  if (bc_op(insp) == BC_MOV && bc_a(insp) == ra+1+LJ_FR2 &&
-	      bc_d(insp) == bc_b(ins))
-	    return "method";
-	}
 	return "field";
+      case BC_TGETSS:
+	*name = strdata(gco2str(proto_kgc(pt, ~(ptrdiff_t)bc_c(ins))));
+	return "method";
       case BC_UGET:
 	*name = lj_debug_uvname(pt, bc_d(ins));
 	return "upvalue";

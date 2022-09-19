@@ -675,7 +675,7 @@ static void bcemit_method(FuncState *fs, ExpDesc *e, ExpDesc *key)
   idx = const_str(fs, key);
   if (idx <= BCMAX_C) {
     bcreg_reserve(fs, 2+LJ_FR2);
-    bcemit_ABC(fs, BC_TGETS, func, obj, idx);
+    bcemit_ABC(fs, BC_TGETSS, func, obj, idx);
   } else {
     bcreg_reserve(fs, 3+LJ_FR2);
     bcemit_AD(fs, BC_KSTR, func+2+LJ_FR2, idx);

@@ -144,6 +144,7 @@
   _(GSET,	var,	___,	str,	newindex) \
   _(TGETV,	dst,	var,	var,	index) \
   _(TGETS,	dst,	var,	str,	index) \
+  _(TGETSS,	dst,	var,	str,	index) \
   _(TGETB,	dst,	var,	lit,	index) \
   _(TGETR,	dst,	var,	var,	index) \
   _(TSETV,	var,	var,	var,	newindex) \
@@ -258,6 +259,8 @@ static LJ_AINLINE int bc_isret(BCOp op)
 {
   return (op == BC_RETM || op == BC_RET || op == BC_RET0 || op == BC_RET1);
 }
+
+#define bc_isalias(op) ((op) == BC_TGETSS)
 
 LJ_DATA const uint16_t lj_bc_mode[];
 LJ_DATA const uint16_t lj_bc_ofs[];

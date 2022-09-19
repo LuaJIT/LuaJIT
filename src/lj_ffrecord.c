@@ -225,6 +225,7 @@ static void LJ_FASTCALL recff_getmetatable(jit_State *J, RecordFFData *rd)
     RecordIndex ix;
     ix.tab = tr;
     copyTV(J->L, &ix.tabv, &rd->argv[0]);
+    ix.mtspec = 0;
     if (lj_record_mm_lookup(J, &ix, MM_metatable))
       J->base[0] = ix.mobj;
     else
@@ -241,6 +242,7 @@ static void LJ_FASTCALL recff_setmetatable(jit_State *J, RecordFFData *rd)
     RecordIndex ix;
     ix.tab = tr;
     copyTV(J->L, &ix.tabv, &rd->argv[0]);
+    ix.mtspec = 0;
     lj_record_mm_lookup(J, &ix, MM_metatable); /* Guard for no __metatable. */
     fref = emitir(IRT(IR_FREF, IRT_PGC), tr, IRFL_TAB_META);
     mtref = tref_isnil(mt) ? lj_ir_knull(J, IRT_TAB) : mt;
@@ -389,6 +391,7 @@ static int recff_metacall(jit_State *J, RecordFFData *rd, MMS mm)
   RecordIndex ix;
   ix.tab = J->base[0];
   copyTV(J->L, &ix.tabv, &rd->argv[0]);
+  ix.mtspec = 1;
   if (lj_record_mm_lookup(J, &ix, mm)) {  /* Has metamethod? */
     int errcode;
     TValue argv0;
@@ -548,6 +551,7 @@ static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
     ix.idxchain = (J->framedepth && frame_islua(J->L->base-1) &&
 		   bc_b(frame_pc(J->L->base-1)[-1])-1 < 2);
     ix.mobj = 0;  /* We don't need the next index. */
+    ix.mtspec = 0;
     rd->nres = lj_record_next(J, &ix);
     J->base[0] = ix.key;
     J->base[1] = ix.val;
