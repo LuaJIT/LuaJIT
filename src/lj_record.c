@@ -1104,13 +1104,13 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
       GG_OFS(g.gcroot[GCROOT_BASEMT+itypemap(&ix->tabv)]));
     goto nocheck;
   }
-  ix->mt = mt ? mix.tab : TREF_NIL;
   if (ix->mtspec && mt) {
     TRef kmt = lj_ir_ktab(J, mt);
     emitir(IRTG(IR_EQ, IRT_TAB), mix.tab, kmt);
     mix.tab = kmt;
     ix->mt = kmt;
   } else {
+    ix->mt = mt ? mix.tab : TREF_NIL;
     emitir(IRTG(mt ? IR_NE : IR_EQ, IRT_TAB), mix.tab, lj_ir_knull(J, IRT_TAB));
   }
 nocheck:
