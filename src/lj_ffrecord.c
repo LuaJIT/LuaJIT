@@ -558,12 +558,11 @@ static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_unpack(jit_State *J, RecordFFData *rd)
 {
   TRef tab = J->base[0], trstart = J->base[1], trend = J->base[2];
-  if (tref_istab(tab) && trstart && (trend && !tref_isnil(trend))) {
-    if (tref_isk2(trstart, trend)) {
-      if (!tref_isnil(trstart))
-	trstart = lj_opt_narrow_toint(J, trstart);
-      trend = lj_opt_narrow_toint(J, trend);
-    }
+  if (tref_istab(tab) && trstart && trend && tref_isk2(trstart, trend) &&
+			 !tref_isnil(trend)) {
+    if (!tref_isnil(trstart))
+      trstart = lj_opt_narrow_toint(J, trstart);
+    trend = lj_opt_narrow_toint(J, trend);
     if (tref_isk2(trstart, trend)) {
       uint32_t nu;
       int32_t start = tref_isnil(trstart) ? 1 : IR(tref_ref(trstart))->i;
