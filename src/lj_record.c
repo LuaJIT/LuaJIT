@@ -1060,7 +1060,6 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
 {
   RecordIndex mix;
   GCtab *mt;
-  TRef kmt;
   if (tref_istab(ix->tab)) {
     mt = tabref(tabV(&ix->tabv)->metatable);
     mix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), ix->tab, IRFL_TAB_META);
@@ -1105,22 +1104,8 @@ int lj_record_mm_lookup(jit_State *J, RecordIndex *ix, MMS mm)
       GG_OFS(g.gcroot[GCROOT_BASEMT+itypemap(&ix->tabv)]));
     goto nocheck;
   }
-  kmt = 0;
-  if (mt) {
-    /* Constify metatable or try to find existing constant. */
-    if (ix->mtspec) {
-      kmt = lj_ir_ktab(J, mt);
-    } else {
-      IRRef ref;
-      for (ref = J->chain[IR_KGC]; ref; ref = IR(ref)->prev) {
-        if (ir_kgc(IR(ref)) == obj2gco(mt)) {
-          kmt = TREF(ref, IRT_TAB);
-          break;
-        }
-      }
-    }
-  }
-  if (kmt) {
+  if (ix->mtspec && mt) {
+    TRef kmt = lj_ir_ktab(J, mt);
     emitir(IRTG(IR_EQ, IRT_TAB), mix.tab, kmt);
     mix.tab = kmt;
     ix->mt = kmt;
