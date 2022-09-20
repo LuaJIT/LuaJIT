@@ -2503,6 +2503,7 @@ void lj_record_ins(jit_State *J)
     /* fallthrough */
   case BC_TGETV: case BC_TGETS: case BC_TSETV: case BC_TSETS:
     ix.idxchain = LJ_MAX_IDXCHAIN;
+    ix.mtspec = tref_isk(ix.key) && tref_isstr(ix.key);
     rc = lj_record_idx(J, &ix);
     break;
   case BC_TGETR: case BC_TSETR:
