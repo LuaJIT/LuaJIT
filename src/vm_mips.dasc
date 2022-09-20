@@ -2981,10 +2981,6 @@ static void build_subroutines(BuildCtx *ctx)
 static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 {
   int vk = 0;
-
-  if (bc_isalias(op))
-    return;
-
   |=>defop:
 
   switch (op) {
@@ -4080,7 +4076,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.  nop
     break;
   case BC_TGETS:
-    |=>BC_TGETSS:
     |  // RA = dst*8, RB = table*8, RC = str_const*4 (~)
     |  decode_RB8a RB, INS
     |  decode_RB8b RB

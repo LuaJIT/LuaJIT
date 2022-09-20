@@ -2796,10 +2796,6 @@ static void build_subroutines(BuildCtx *ctx)
 static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 {
   int vk = 0;
-
-  if (bc_isalias(op))
-    return;
-
   |// Note: aligning all instructions does not pay off.
   |=>defop:
 
@@ -3682,7 +3678,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jmp ->BC_TGETS_Z
     break;
   case BC_TGETS:
-    |=>BC_TGETSS:
     |  ins_ABC	// RA = dst, RB = table, RC = str const (~)
     |  mov TAB:RB, [BASE+RB*8]
     |  not RC
