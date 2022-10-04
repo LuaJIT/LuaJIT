@@ -1201,7 +1201,7 @@ dotypecheck:
       tmp = ra_scratch(as, allow);
       rset_clear(allow, tmp);
     }
-    if (irt_isnum(t) && !(ir->op2 & IRSLOAD_CONVERT))
+    if (ra_hasreg(dest) && irt_isnum(t) && !(ir->op2 & IRSLOAD_CONVERT))
       emit_dn(as, A64I_FMOV_D_R, (dest & 31), tmp);
     /* Need type check, even if the load result is unused. */
     asm_guardcc(as, irt_isnum(t) ? CC_LS : CC_NE);
