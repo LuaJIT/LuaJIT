@@ -419,6 +419,9 @@ LJ_FUNCA int lj_err_unwind_dwarf(int version, int actions,
   if (version != 1)
     return _URC_FATAL_PHASE1_ERROR;
   cf = (void *)_Unwind_GetCFA(ctx);
+#ifdef LJ_TARGET_S390X
+  cf -= 160; /* CFA points 160 bytes above r15. */
+#endif
   L = cframe_L(cf);
   if ((actions & _UA_SEARCH_PHASE)) {
 #if LJ_UNWIND_EXT
@@ -753,6 +756,7 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode)
     G(L)->panic(L);
 #else
 #if LJ_HASJIT
+  g->saved_jit_base = g->jit_base;
   setmref(g->jit_base, NULL);
 #endif
   {

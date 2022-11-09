@@ -327,12 +327,6 @@ local function rename_tokens2(src)
   return gsub(src, "ZY([%w_]+)", "union %1")
 end
 
-local function fix_bugs_and_warnings(src)
- src = gsub(src, "(luaD_checkstack%(L,p%->maxstacksize)%)", "%1+p->numparams)")
- src = gsub(src, "if%(sep==%-1%)(return'%[';)\nelse (luaX_lexerror%b();)", "if (sep!=-1)%2\n%1")
- return gsub(src, "(default:{\nNode%*n=mainposition)", "/*fallthrough*/\n%1")
-end
-
 local function func_gather(src)
   local nodes, list = {}, {}
   local pos, len = 1, #src
@@ -431,6 +425,5 @@ src = rename_tokens1(src)
 src = func_collect(src)
 src = rename_tokens2(src)
 src = restore_strings(src)
-src = fix_bugs_and_warnings(src)
 src = merge_header(src, license)
 io.write(src)

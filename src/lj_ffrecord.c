@@ -29,6 +29,7 @@
 #include "lj_vm.h"
 #include "lj_strscan.h"
 #include "lj_strfmt.h"
+#include "lj_cdata.h"
 #include "lj_serialize.h"
 
 /* Some local macros to save typing. Undef'd at the end. */
@@ -1458,6 +1459,77 @@ static void LJ_FASTCALL recff_table_clear(jit_State *J, RecordFFData *rd)
     J->needsnap = 1;
   }  /* else: Interpreter will throw. */
 }
+
+static void LJ_FASTCALL recff_table_clone(jit_State *J, RecordFFData *rd)
+{
+  TRef src = J->base[0];
+  J->base[0] = lj_ir_call(J, IRCALL_lj_tab_clone, src);
+  UNUSED(rd);
+}
+
+static void LJ_FASTCALL recff_table_isarray(jit_State *J, RecordFFData *rd)
+{
+  TRef src = J->base[0];
+  if (LJ_LIKELY(tref_istab(src))) {
+    TRef trres = lj_ir_call(J, IRCALL_lj_tab_isarray, src);
+    GCtab *t = tabV(&rd->argv[0]);
+    int isarr = lj_tab_isarray(t);
+    TRef tr0 = lj_ir_kint(J, 0);
+    emitir(isarr ? IRTGI(IR_NE) : IRTGI(IR_EQ), trres, tr0);
+    J->base[0] = isarr ? TREF_TRUE : TREF_FALSE;
+  }  /* else: Interpreter will throw. */
+}
+
+static void LJ_FASTCALL recff_table_nkeys(jit_State *J, RecordFFData *rd)
+{
+  TRef src = J->base[0];
+  if (LJ_LIKELY(tref_istab(src))) {
+    J->base[0] = lj_ir_call(J, IRCALL_lj_tab_nkeys, src);
+  }  /* else: Interpreter will throw. */
+}
+
+static void LJ_FASTCALL recff_table_isempty(jit_State *J, RecordFFData *rd)
+{
+  TRef src = J->base[0];
+  if (LJ_LIKELY(tref_istab(src))) {
+    TRef trres = lj_ir_call(J, IRCALL_lj_tab_isempty, src);
+    GCtab *t = tabV(&rd->argv[0]);
+    int isempty = lj_tab_isempty(t);
+    TRef tr0 = lj_ir_kint(J, 0);
+    emitir(isempty ? IRTGI(IR_NE) : IRTGI(IR_EQ), trres, tr0);
+    J->base[0] = isempty ? TREF_TRUE : TREF_FALSE;
+  }  /* else: Interpreter will throw. */
+}
+
+/* -- thread library fast functions ------------------------------------------ */
+
+#if LJ_HASFFI
+void LJ_FASTCALL recff_thread_exdata(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (!tr) {
+    TRef trl = emitir(IRT(IR_LREF, IRT_THREAD), 0, 0);
+    TRef trp = emitir(IRT(IR_FLOAD, IRT_PTR), trl, IRFL_THREAD_EXDATA);
+    TRef trid = lj_ir_kint(J, CTID_P_VOID);
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, trp);
+    return;
+  }
+  recff_nyiu(J, rd);  /* this case is too rare to be interesting */
+}
+
+void LJ_FASTCALL recff_thread_exdata2(jit_State *J, RecordFFData *rd)
+{
+  TRef tr = J->base[0];
+  if (!tr) {
+    TRef trl = emitir(IRT(IR_LREF, IRT_THREAD), 0, 0);
+    TRef trp = emitir(IRT(IR_FLOAD, IRT_PTR), trl, IRFL_THREAD_EXDATA2);
+    TRef trid = lj_ir_kint(J, CTID_P_VOID);
+    J->base[0] = emitir(IRTG(IR_CNEWI, IRT_CDATA), trid, trp);
+    return;
+  }
+  recff_nyiu(J, rd);  /* this case is too rare to be interesting */
+}
+#endif
 
 /* -- I/O library fast functions ------------------------------------------ */
 

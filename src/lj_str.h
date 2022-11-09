@@ -28,4 +28,16 @@ LJ_FUNC void LJ_FASTCALL lj_str_init(lua_State *L);
 #define lj_str_newlit(L, s)	(lj_str_new(L, "" s, sizeof(s)-1))
 #define lj_str_size(len)	(sizeof(GCstr) + (((len)+4) & ~(MSize)3))
 
+#ifdef LJ_HAS_OPTIMISED_HASH
+typedef StrHash (*str_sparse_hashfn) (uint64_t, const char *, MSize);
+extern str_sparse_hashfn hash_sparse;
+
+#if LUAJIT_SECURITY_STRHASH
+typedef StrHash (*str_dense_hashfn) (uint64_t, StrHash, const char *, MSize);
+extern str_dense_hashfn hash_dense;
+#endif
+
+extern void str_hash_init_sse42 (void);
+#endif
+
 #endif

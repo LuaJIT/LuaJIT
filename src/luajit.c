@@ -303,8 +303,9 @@ static int loadjitmodule(lua_State *L)
   lua_concat(L, 2);
   if (lua_pcall(L, 1, 1, 0)) {
     const char *msg = lua_tostring(L, -1);
-    if (msg && !strncmp(msg, "module ", 7))
-      goto nomodule;
+    if (msg && !strncmp(msg, "module ", 7)){
+      printf("hehe\n");
+      goto nomodule;}
     return report(L, 1);
   }
   lua_getfield(L, -1, "start");
@@ -542,7 +543,6 @@ static int pmain(lua_State *L)
   }
 
   if ((flags & FLAGS_VERSION)) print_version();
-
   s->status = runargs(L, argv, argn);
   if (s->status != LUA_OK) return 0;
 

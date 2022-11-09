@@ -18,10 +18,8 @@
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_bc.h"
-#if LJ_HASJIT
 #include "lj_ir.h"
 #include "lj_ircall.h"
-#endif
 #include "lj_frame.h"
 #include "lj_dispatch.h"
 #if LJ_HASFFI
@@ -67,6 +65,8 @@ static int collect_reloc(BuildCtx *ctx, uint8_t *addr, int idx, int type);
 #include "../dynasm/dasm_ppc.h"
 #elif LJ_TARGET_MIPS
 #include "../dynasm/dasm_mips.h"
+#elif LJ_TARGET_S390X
+#include "../dynasm/dasm_s390x.h"
 #else
 #error "No support for this architecture (yet)"
 #endif
@@ -252,7 +252,6 @@ BCDEF(BCNAME)
   NULL
 };
 
-#if LJ_HASJIT
 const char *const ir_names[] = {
 #define IRNAME(name, m, m1, m2)	#name,
 IRDEF(IRNAME)
@@ -293,9 +292,7 @@ static const char *const trace_errors[] = {
 #include "lj_traceerr.h"
   NULL
 };
-#endif
 
-#if LJ_HASJIT
 static const char *lower(char *buf, const char *s)
 {
   char *p = buf;
@@ -306,7 +303,6 @@ static const char *lower(char *buf, const char *s)
   *p = '\0';
   return buf;
 }
-#endif
 
 /* Emit C source code for bytecode-related definitions. */
 static void emit_bcdef(BuildCtx *ctx)
@@ -324,9 +320,7 @@ static void emit_bcdef(BuildCtx *ctx)
 /* Emit VM definitions as Lua code for debug modules. */
 static void emit_vmdef(BuildCtx *ctx)
 {
-#if LJ_HASJIT
   char buf[80];
-#endif
   int i;
   fprintf(ctx->fp, "-- This is a generated file. DO NOT EDIT!\n\n");
   fprintf(ctx->fp, "return {\n\n");
@@ -335,7 +329,6 @@ static void emit_vmdef(BuildCtx *ctx)
   for (i = 0; bc_names[i]; i++) fprintf(ctx->fp, "%-6s", bc_names[i]);
   fprintf(ctx->fp, "\",\n\n");
 
-#if LJ_HASJIT
   fprintf(ctx->fp, "irnames = \"");
   for (i = 0; ir_names[i]; i++) fprintf(ctx->fp, "%-6s", ir_names[i]);
   fprintf(ctx->fp, "\",\n\n");
@@ -364,7 +357,6 @@ static void emit_vmdef(BuildCtx *ctx)
   for (i = 0; trace_errors[i]; i++)
     fprintf(ctx->fp, "\"%s\",\n", trace_errors[i]);
   fprintf(ctx->fp, "},\n\n");
-#endif
 }
 
 /* -- Argument parsing ---------------------------------------------------- */
