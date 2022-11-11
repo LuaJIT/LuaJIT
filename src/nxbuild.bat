@@ -121,6 +121,7 @@ goto :BUILD
 @set TARGETLIB=libluajit_%TARGETLIB_SUFFIX%.a
 :BUILD
 del %TARGETLIB%
+@set LJCOMPILE=%LJCOMPILE% %TARGET_CFLAGS%
 @if "%1" neq "noamalg" goto :AMALG
 for %%f in (lj_*.c lib_*.c) do (
   %LJCOMPILE% %%f
