@@ -78,7 +78,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @set LJLIB="%SCE_ORBIS_SDK_DIR%\host_tools\bin\orbis-ar" rcus
 @set INCLUDE=""
 
-orbis-as -o lj_vm.o lj_vm.s
+"%SCE_ORBIS_SDK_DIR%\host_tools\bin\orbis-as" -o lj_vm.o lj_vm.s
 
 @if "%1" neq "debug" goto :NODEBUG
 @shift

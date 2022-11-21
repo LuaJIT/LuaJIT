@@ -78,7 +78,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @set LJLIB="%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-llvm-ar" rcus
 @set INCLUDE=""
 
-%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-llvm-as -o lj_vm.o lj_vm.s
+"%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-llvm-as" -o lj_vm.o lj_vm.s
 
 @if "%1" neq "debug" goto :NODEBUG
 @shift
