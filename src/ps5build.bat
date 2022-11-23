@@ -74,7 +74,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if errorlevel 1 goto :BAD
 
 @rem ---- Cross compiler ----
-@set LJCOMPILE="%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-clang" -c -Wall -DLUAJIT_DISABLE_FFI %GC64%
+@set LJCOMPILE="%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-clang" -c -Wall -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC %GC64%
 @set LJLIB="%SCE_PROSPERO_SDK_DIR%\host_tools\bin\prospero-llvm-ar" rcus
 @set INCLUDE=""
 
