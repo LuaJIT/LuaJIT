@@ -191,8 +191,20 @@ CTypeID lj_ctype_intern(CTState *cts, CTInfo info, CTSize size)
   }
   id = cts->top;
   if (LJ_UNLIKELY(id >= cts->sizetab)) {
+#ifdef LUAJIT_CTYPE_CHECK_ANCHOR
+    CType *ct;
+#endif
     if (id >= CTID_MAX) lj_err_msg(cts->L, LJ_ERR_TABOV);
+#ifdef LUAJIT_CTYPE_CHECK_ANCHOR
+    ct = lj_mem_newvec(cts->L, id+1, CType);
+    memcpy(ct, cts->tab, id*sizeof(CType));
+    memset(cts->tab, 0, id*sizeof(CType));
+    lj_mem_freevec(cts->g, cts->tab, cts->sizetab, CType);
+    cts->tab = ct;
+    cts->sizetab = id+1;
+#else
     lj_mem_growvec(cts->L, cts->tab, cts->sizetab, CTID_MAX, CType);
+#endif
   }
   cts->top = id+1;
   cts->tab[id].info = info;
