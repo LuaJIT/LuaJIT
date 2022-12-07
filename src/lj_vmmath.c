@@ -36,6 +36,17 @@ LJ_FUNCA double lj_wrap_fmod(double x, double y) { return fmod(x, y); }
 
 /* -- Helper functions ---------------------------------------------------- */
 
+/* Required to prevent the C compiler from applying FMA optimizations.
+**
+** Yes, there's -ffp-contract and the FP_CONTRACT pragma ... in theory.
+** But the current state of C compilers is a mess in this regard.
+** Also, this function is not performance sensitive at all.
+*/
+LJ_NOINLINE static double lj_vm_floormul(double x, double y)
+{
+  return lj_vm_floor(x / y) * y;
+}
+
 double lj_vm_foldarith(double x, double y, int op)
 {
   switch (op) {
@@ -43,7 +54,7 @@ double lj_vm_foldarith(double x, double y, int op)
   case IR_SUB - IR_ADD: return x-y; break;
   case IR_MUL - IR_ADD: return x*y; break;
   case IR_DIV - IR_ADD: return x/y; break;
-  case IR_MOD - IR_ADD: return x-lj_vm_floor(x/y)*y; break;
+  case IR_MOD - IR_ADD: return x-lj_vm_floormul(x, y); break;
   case IR_POW - IR_ADD: return pow(x, y); break;
   case IR_NEG - IR_ADD: return -x; break;
   case IR_ABS - IR_ADD: return fabs(x); break;
