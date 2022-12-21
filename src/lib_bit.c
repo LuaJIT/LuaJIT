@@ -55,8 +55,8 @@ LJLIB_CF(bit_tohex)
   int32_t i, n = L->base+1 >= L->top ? 8 : lj_lib_checkbit(L, 2);
   const char *hexdigits = "0123456789abcdef";
   char buf[8];
-  if (n < 0) { n = -n; hexdigits = "0123456789ABCDEF"; }
-  if (n > 8) n = 8;
+  if (n < 0) { n = (int32_t)(~(uint32_t)n+1u); hexdigits = "0123456789ABCDEF"; }
+  if ((uint32_t)n > 8) n = 8;
   for (i = n; --i >= 0; ) { buf[i] = hexdigits[b & 15]; b >>= 4; }
   lua_pushlstring(L, buf, (size_t)n);
   return 1;

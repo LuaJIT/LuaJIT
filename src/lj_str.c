@@ -190,7 +190,7 @@ size_t LJ_FASTCALL lj_str_bufnum(char *s, cTValue *o)
 /* Print integer to buffer. Returns pointer to start. */
 char * LJ_FASTCALL lj_str_bufint(char *p, int32_t k)
 {
-  uint32_t u = (uint32_t)(k < 0 ? -k : k);
+  uint32_t u = k < 0 ? ~(uint32_t)k+1u : (uint32_t)k;
   p += 1+10;
   do { *--p = (char)('0' + u % 10); } while (u /= 10);
   if (k < 0) *--p = '-';
