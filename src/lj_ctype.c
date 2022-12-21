@@ -582,7 +582,7 @@ GCstr *lj_ctype_repr_int64(lua_State *L, uint64_t n, int isunsigned)
   if (isunsigned) {
     *--p = 'U';
   } else if ((int64_t)n < 0) {
-    n = (uint64_t)-(int64_t)n;
+    n = ~n+1u;
     sign = 1;
   }
   do { *--p = (char)('0' + n % 10); } while (n /= 10);

@@ -1879,7 +1879,8 @@ TRef recff_bit64_tohex(jit_State *J, RecordFFData *rd, TRef hdr)
   } else {
     n = id ? 16 : 8;
   }
-  if (n < 0) { n = -n; sf |= STRFMT_F_UPPER; }
+  if (n < 0) { n = (int32_t)(~n+1u); sf |= STRFMT_F_UPPER; }
+  if ((uint32_t)n > 254) n = 254;
   sf |= ((SFormat)((n+1)&255) << STRFMT_SH_PREC);
   if (id) {
     tr = crec_ct_tv(J, ctype_get(cts, id), 0, J->base[0], &rd->argv[0]);
