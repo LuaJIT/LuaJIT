@@ -33,6 +33,7 @@
 #define LUAJIT_OS_OSX		3
 #define LUAJIT_OS_BSD		4
 #define LUAJIT_OS_POSIX		5
+#define LUAJIT_OS_SOLARIS	6
 
 /* Select native target if no target defined. */
 #ifndef LUAJIT_TARGET
@@ -70,11 +71,10 @@
        defined(__NetBSD__) || defined(__OpenBSD__) || \
        defined(__DragonFly__)) && !defined(__ORBIS__)
 #define LUAJIT_OS	LUAJIT_OS_BSD
-#elif (defined(__sun__) && defined(__svr4__))
-#define LUAJIT_OS	LUAJIT_OS_POSIX
 #elif defined(__CYGWIN__)
-#define LJ_TARGET_CYGWIN	1
 #define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif (defined(__sun__) && defined(__svr4__))
+#define LUAJIT_OS	LUAJIT_OS_SOLARIS
 #else
 #define LUAJIT_OS	LUAJIT_OS_OTHER
 #endif
@@ -92,6 +92,8 @@
 #define LJ_OS_NAME	"BSD"
 #elif LUAJIT_OS == LUAJIT_OS_POSIX
 #define LJ_OS_NAME	"POSIX"
+#elif LUAJUT_OS == LUAJIT_OS_SOLARIS
+#define LJ_OS_NAME	"Solaris"
 #else
 #define LJ_OS_NAME	"Other"
 #endif
@@ -100,6 +102,7 @@
 #define LJ_TARGET_LINUX		(LUAJIT_OS == LUAJIT_OS_LINUX)
 #define LJ_TARGET_OSX		(LUAJIT_OS == LUAJIT_OS_OSX)
 #define LJ_TARGET_IOS		(LJ_TARGET_OSX && LUAJIT_TARGET == LUAJIT_ARCH_ARM)
+#define LJ_TARGET_SOLARIS	(LUAJIT_OS == LUAJIT_OS_SOLARIS)
 #define LJ_TARGET_POSIX		(LUAJIT_OS > LUAJIT_OS_WINDOWS)
 #define LJ_TARGET_DLOPEN	LJ_TARGET_POSIX
 

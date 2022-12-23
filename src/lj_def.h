@@ -113,10 +113,18 @@ typedef uintptr_t BloomFilter;
 
 #if defined(__GNUC__) || defined(__psp2__)
 
+#if SOLARIS_STD_UNWINDER
+#define LJ_NORET
+#else
 #define LJ_NORET	__attribute__((noreturn))
+#endif
 #define LJ_ALIGN(n)	__attribute__((aligned(n)))
 #define LJ_INLINE	inline
+#if !defined(__FreeBSD__)
 #define LJ_AINLINE	inline __attribute__((always_inline))
+#else
+#define LJ_AINLINE	inline
+#endif
 #define LJ_NOINLINE	__attribute__((noinline))
 
 #if defined(__ELF__) || defined(__MACH__) || defined(__psp2__)

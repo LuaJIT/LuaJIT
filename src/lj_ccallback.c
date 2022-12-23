@@ -20,6 +20,7 @@
 #include "lj_mcode.h"
 #include "lj_trace.h"
 #include "lj_vm.h"
+#include "lj_alloc.h"
 
 /* -- Target-specific handling of callback slots -------------------------- */
 
@@ -228,8 +229,12 @@ static void callback_mcode_new(CTState *cts)
   if (!p)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #elif LJ_TARGET_POSIX
+#if LJ_TARGET_SOLARIS && LJ_64
+  p = lj_mmap(sz, (PROT_READ|PROT_WRITE));
+#else
   p = mmap(NULL, sz, (PROT_READ|PROT_WRITE), MAP_PRIVATE|MAP_ANONYMOUS,
 	   -1, 0);
+#endif
   if (p == MAP_FAILED)
     lj_err_caller(cts->L, LJ_ERR_FFI_CBACKOV);
 #else
@@ -259,7 +264,11 @@ void lj_ccallback_mcode_free(CTState *cts)
   VirtualFree(p, 0, MEM_RELEASE);
   UNUSED(sz);
 #elif LJ_TARGET_POSIX
+#if LJ_TARGET_SOLARIS && LJ_64
+  lj_munmap(p, sz);
+#else
   munmap(p, sz);
+#endif
 #else
   lj_mem_free(cts->g, p, sz);
 #endif

@@ -553,6 +553,8 @@ static int pmain(lua_State *L)
   return 0;
 }
 
+static struct Smain s;
+
 int main(int argc, char **argv)
 {
   int status;
