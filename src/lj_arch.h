@@ -465,6 +465,10 @@
 #error "Need at least GCC 4.8 or newer"
 #endif
 #endif
+#elif LJ_TARGET_PPC
+#if ((__clang_major__ < 8) || ((__clang_major__ == 0) && __clang_minor__ < 0))
+#error "Need at least Clang 8.0 or newer"
+#endif
 #elif !LJ_TARGET_PS3
 #if (__GNUC__ < 4) || ((__GNUC__ == 4) && __GNUC_MINOR__ < 3)
 #error "Need at least GCC 4.3 or newer"
