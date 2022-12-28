@@ -320,6 +320,12 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 #error "NYI: Windows arch-specific unwinder for JIT-compiled code"
 #endif
 
+#if defined(LJ_TARGET_CYGWIN) && defined(LJ_TARGET_X64)
+#define RTL_DWORD64 DWORD64
+#else
+#define RTL_DWORD64 uintptr_t
+#endif
+
 /* Windows unwinder for JIT-compiled code. */
 static void err_unwind_win_jit(global_State *g, int errcode)
 {
@@ -329,7 +335,8 @@ static void err_unwind_win_jit(global_State *g, int errcode)
   memset(&hist, 0, sizeof(hist));
   RtlCaptureContext(&ctx);
   while (1) {
-    uintptr_t frame, base, addr = ctx.CONTEXT_REG_PC;
+    RTL_DWORD64 frame, base;
+    uintptr_t addr = ctx.CONTEXT_REG_PC;
     void *hdata;
     PRUNTIME_FUNCTION func = RtlLookupFunctionEntry(addr, &base, &hist);
     if (!func) {  /* Found frame without .pdata: must be JIT-compiled code. */
