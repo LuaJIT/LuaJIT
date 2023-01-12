@@ -26,8 +26,12 @@ LUALIB_API int luaopen_base(lua_State *L);
 LUALIB_API int luaopen_math(lua_State *L);
 LUALIB_API int luaopen_string(lua_State *L);
 LUALIB_API int luaopen_table(lua_State *L);
+#ifndef LUAJIT_DISABLE_MODULE_IO
 LUALIB_API int luaopen_io(lua_State *L);
+#endif
+#ifndef LUAJIT_DISABLE_MODULE_OS
 LUALIB_API int luaopen_os(lua_State *L);
+#endif
 LUALIB_API int luaopen_package(lua_State *L);
 LUALIB_API int luaopen_debug(lua_State *L);
 LUALIB_API int luaopen_bit(lua_State *L);

@@ -26,6 +26,8 @@
 #include <sys/wait.h>
 #endif
 
+#if !defined(LUAJIT_DISABLE_MODULE_IO) || !defined(LUAJIT_DISABLE_MODULE_OS)
+
 /* -- I/O error handling -------------------------------------------------- */
 
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
@@ -75,6 +77,8 @@ LUALIB_API int luaL_execresult(lua_State *L, int stat)
   }
   return luaL_fileresult(L, 0, NULL);
 }
+
+#endif
 
 /* -- Module registration ------------------------------------------------- */
 

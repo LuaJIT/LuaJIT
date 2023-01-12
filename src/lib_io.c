@@ -16,6 +16,8 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#ifndef LUAJIT_DISABLE_MODULE_IO
+
 #include "lj_obj.h"
 #include "lj_gc.h"
 #include "lj_err.h"
@@ -549,3 +551,4 @@ LUALIB_API int luaopen_io(lua_State *L)
   return 1;
 }
 
+#endif

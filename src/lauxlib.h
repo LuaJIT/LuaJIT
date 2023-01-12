@@ -77,8 +77,10 @@ LUALIB_API const char *(luaL_findtable) (lua_State *L, int idx,
                                          const char *fname, int szhint);
 
 /* From Lua 5.2. */
+#if !defined(LUAJIT_DISABLE_MODULE_IO) || !defined(LUAJIT_DISABLE_MODULE_OS)
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname);
 LUALIB_API int luaL_execresult(lua_State *L, int stat);
+#endif
 LUALIB_API int (luaL_loadfilex) (lua_State *L, const char *filename,
 				 const char *mode);
 LUALIB_API int (luaL_loadbufferx) (lua_State *L, const char *buff, size_t sz,

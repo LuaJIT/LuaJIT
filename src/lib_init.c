@@ -19,8 +19,12 @@ static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
   { LUA_LOADLIBNAME,	luaopen_package },
   { LUA_TABLIBNAME,	luaopen_table },
+#ifndef LUAJIT_DISABLE_MODULE_IO
   { LUA_IOLIBNAME,	luaopen_io },
+#endif
+#ifndef LUAJIT_DISABLE_MODULE_OS
   { LUA_OSLIBNAME,	luaopen_os },
+#endif
   { LUA_STRLIBNAME,	luaopen_string },
   { LUA_MATHLIBNAME,	luaopen_math },
   { LUA_DBLIBNAME,	luaopen_debug },
