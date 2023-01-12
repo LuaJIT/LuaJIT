@@ -33,7 +33,7 @@
 #include "lj_alloc.h"
 #include "lj_prng.h"
 
-#ifndef LUAJIT_USE_SYSMALLOC
+#if !defined(LUAJIT_USE_SYSMALLOC) && !defined(LUAJIT_DISABLE_DLMALLOC)
 
 #define MAX_SIZE_T		(~(size_t)0)
 #define MALLOC_ALIGNMENT	((size_t)8U)

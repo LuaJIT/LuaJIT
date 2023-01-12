@@ -184,7 +184,7 @@ static void close_state(lua_State *L)
   lj_assertG(g->gc.total == sizeof(GG_State),
 	     "memory leak of %lld bytes",
 	     (long long)(g->gc.total - sizeof(GG_State)));
-#ifndef LUAJIT_USE_SYSMALLOC
+#if !defined(LUAJIT_USE_SYSMALLOC) && !defined(LUAJIT_DISABLE_DLMALLOC)
   if (g->allocf == lj_alloc_f)
     lj_alloc_destroy(g->allocd);
   else
@@ -208,7 +208,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc allocf, void *allocd)
     /* Can only return NULL here, so this errors with "not enough memory". */
     return NULL;
   }
-#ifndef LUAJIT_USE_SYSMALLOC
+#if !defined(LUAJIT_USE_SYSMALLOC) && !defined(LUAJIT_DISABLE_DLMALLOC)
   if (allocf == LJ_ALLOCF_INTERNAL) {
     allocd = lj_alloc_create(&prng);
     if (!allocd) return NULL;
@@ -230,7 +230,7 @@ LUA_API lua_State *lua_newstate(lua_Alloc allocf, void *allocd)
   g->allocf = allocf;
   g->allocd = allocd;
   g->prng = prng;
-#ifndef LUAJIT_USE_SYSMALLOC
+#if !defined(LUAJIT_USE_SYSMALLOC) && !defined(LUAJIT_DISABLE_DLMALLOC)
   if (allocf == lj_alloc_f) {
     lj_alloc_setprng(allocd, &g->prng);
   }
