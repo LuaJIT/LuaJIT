@@ -373,6 +373,8 @@ static int load_aux(lua_State *L, int status, int envarg)
   }
 }
 
+#if LJ_HASLOADFILE
+
 LJLIB_CF(loadfile)
 {
   GCstr *fname = lj_lib_optstr(L, 1);
@@ -383,6 +385,8 @@ LJLIB_CF(loadfile)
 			  mode ? strdata(mode) : NULL);
   return load_aux(L, status, 3);
 }
+
+#endif
 
 static const char *reader_func(lua_State *L, void *ud, size_t *size)
 {
@@ -439,6 +443,8 @@ LJLIB_CF(loadstring)
   return lj_cf_load(L);
 }
 
+#if LJ_HASLOADFILE
+
 LJLIB_CF(dofile)
 {
   GCstr *fname = lj_lib_optstr(L, 1);
@@ -449,6 +455,8 @@ LJLIB_CF(dofile)
   lua_call(L, 0, LUA_MULTRET);
   return (int)(L->top - L->base) - 1;
 }
+
+#endif
 
 /* -- Base library: GC control -------------------------------------------- */
 

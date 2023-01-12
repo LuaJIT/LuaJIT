@@ -62,7 +62,9 @@ LUALIB_API int (luaL_checkoption) (lua_State *L, int narg, const char *def,
 LUALIB_API int (luaL_ref) (lua_State *L, int t);
 LUALIB_API void (luaL_unref) (lua_State *L, int t, int ref);
 
+#ifndef LUAJIT_DISABLE_LOADFILE
 LUALIB_API int (luaL_loadfile) (lua_State *L, const char *filename);
+#endif
 LUALIB_API int (luaL_loadbuffer) (lua_State *L, const char *buff, size_t sz,
                                   const char *name);
 LUALIB_API int (luaL_loadstring) (lua_State *L, const char *s);
@@ -79,8 +81,10 @@ LUALIB_API const char *(luaL_findtable) (lua_State *L, int idx,
 /* From Lua 5.2. */
 LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname);
 LUALIB_API int luaL_execresult(lua_State *L, int stat);
+#ifndef LUAJIT_DISABLE_LOADFILE
 LUALIB_API int (luaL_loadfilex) (lua_State *L, const char *filename,
 				 const char *mode);
+#endif
 LUALIB_API int (luaL_loadbufferx) (lua_State *L, const char *buff, size_t sz,
 				   const char *name, const char *mode);
 LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,

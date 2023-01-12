@@ -594,6 +594,12 @@
 #define LJ_HASPROFILE		0
 #endif
 
+#if defined(LUAJIT_DISABLE_LOADFILE)
+#define LJ_HASLOADFILE          0
+#else
+#define LJ_HASLOADFILE          1
+#endif
+
 #ifndef LJ_ARCH_HASFPU
 #define LJ_ARCH_HASFPU		1
 #endif

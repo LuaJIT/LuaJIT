@@ -67,6 +67,8 @@ LUA_API int lua_load(lua_State *L, lua_Reader reader, void *data,
   return lua_loadx(L, reader, data, chunkname, NULL);
 }
 
+#if LJ_HASLOADFILE
+
 typedef struct FileReaderCtx {
   FILE *fp;
   char buf[LUAL_BUFFERSIZE];
@@ -118,6 +120,8 @@ LUALIB_API int luaL_loadfile(lua_State *L, const char *filename)
 {
   return luaL_loadfilex(L, filename, NULL);
 }
+
+#endif
 
 typedef struct StringReaderCtx {
   const char *str;
