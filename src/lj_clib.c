@@ -5,7 +5,7 @@
 
 #include "lj_obj.h"
 
-#if LJ_HASFFI
+#if LJ_HASFFI && !defined(LUAJIT_DISABLE_CLIB)
 
 #include "lj_gc.h"
 #include "lj_err.h"

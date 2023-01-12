@@ -355,6 +355,8 @@ LJLIB_PUSH("ffi") LJLIB_SET(__metatable)
 
 /* -- C library metamethods ----------------------------------------------- */
 
+#ifndef LUAJIT_DISABLE_CLIB
+
 #define LJLIB_MODULE_ffi_clib
 
 /* Index C library by a name. */
@@ -424,6 +426,8 @@ LJLIB_CF(ffi_clib___gc)
 }
 
 #include "lj_libdef.h"
+
+#endif
 
 /* -- Callback function metamethods --------------------------------------- */
 
@@ -808,9 +812,13 @@ LJLIB_PUSH(top-5) LJLIB_SET(!)  /* Store clib metatable in func environment. */
 
 LJLIB_CF(ffi_load)
 {
+#ifndef LUAJIT_DISABLE_CLIB
   GCstr *name = lj_lib_checkstr(L, 1);
   int global = (L->base+1 < L->top && tvistruecond(L->base+1));
   lj_clib_load(L, tabref(curr_func(L)->c.env), name, global);
+#else
+  lj_err_callermsg(L, "dlopen failed");
+#endif
   return 1;
 }
 
@@ -854,12 +862,16 @@ LUALIB_API int luaopen_ffi(lua_State *L)
   LJ_LIB_REG(L, NULL, ffi_meta);
   /* NOBARRIER: basemt is a GC root. */
   setgcref(basemt_it(G(L), LJ_TCDATA), obj2gco(tabV(L->top-1)));
+#ifndef LUAJIT_DISABLE_CLIB
   LJ_LIB_REG(L, NULL, ffi_clib);
+#endif
   LJ_LIB_REG(L, NULL, ffi_callback);
   /* NOBARRIER: the key is new and lj_tab_newkey() handles the barrier. */
   settabV(L, lj_tab_setstr(L, cts->miscmap, &cts->g->strempty), tabV(L->top-1));
   L->top--;
+#ifndef LUAJIT_DISABLE_CLIB
   lj_clib_default(L, tabV(L->top-1));  /* Create ffi.C default namespace. */
+#endif
   lua_pushliteral(L, LJ_OS_NAME);
   lua_pushliteral(L, LJ_ARCH_NAME);
   LJ_LIB_REG(L, NULL, ffi);  /* Note: no global "ffi" created! */
