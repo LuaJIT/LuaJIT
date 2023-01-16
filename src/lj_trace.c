@@ -816,6 +816,18 @@ static TValue *trace_exit_cp(lua_State *L, lua_CFunction dummy, void *ud)
   return NULL;
 }
 
+/* Need to protect lj_gc_step because it may throw. */
+static TValue *trace_exit_gc_cp(lua_State *L, lua_CFunction dummy, void *unused)
+{
+  /* Always catch error here and don't call error function. */
+  cframe_errfunc(L->cframe) = 0;
+  cframe_nres(L->cframe) = -2*LUAI_MAXSTACK*(int)sizeof(TValue);
+  lj_gc_step(L);
+  UNUSED(dummy);
+  UNUSED(unused);
+  return NULL;
+}
+
 #ifndef LUAJIT_DISABLE_VMEVENT
 /* Push all registers from exit state. */
 static void trace_exit_regs(lua_State *L, ExitState *ex)
@@ -911,8 +923,12 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   } else if (LJ_HASPROFILE && (G(L)->hookmask & HOOK_PROFILE)) {
     /* Just exit to interpreter. */
   } else if (G(L)->gc.state == GCSatomic || G(L)->gc.state == GCSfinalize) {
-    if (!(G(L)->hookmask & HOOK_GC))
-      lj_gc_step(L);  /* Exited because of GC: drive GC forward. */
+    if (!(G(L)->hookmask & HOOK_GC)) {
+      /* Exited because of GC: drive GC forward. */
+      errcode = lj_vm_cpcall(L, NULL, NULL, trace_exit_gc_cp);
+      if (errcode)
+	return -errcode;  /* Return negated error code. */
+    }
   } else {
     trace_hotside(J, pc);
   }
