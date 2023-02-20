@@ -24,7 +24,7 @@ NODOTABIVER= 51
 # removing the '#' in front of them. Make sure you force a full recompile
 # with "make clean", followed by "make" if you change any options.
 #
-DEFAULT_CC = gcc
+DEFAULT_CC = cc
 #
 # LuaJIT builds as a native 32 or 64 bit binary by default.
 CC= $(DEFAULT_CC)
@@ -527,6 +527,7 @@ ALL_RM= $(ALL_T) $(ALL_GEN) *.o host/*.o $(WIN_RM)
 
 # Mixed mode defaults.
 TARGET_O= $(LUAJIT_A)
+TARGET_LO= $(TARGET_O)
 TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
 TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
 
@@ -583,6 +584,11 @@ ifeq (dynamic,$(BUILDMODE))
   TARGET_DYNCC= @:
   LJVMCORE_DYNO= $(LJVMCORE_O)
   TARGET_O= $(LUAJIT_SO)
+  ifeq (Windows,$(TARGET_SYS))
+    TARGET_LO= libluajit-${ABIVER}.dll.a
+  else
+    TARGET_LO= $(TARGET_O)
+  endif
   TARGET_XLDFLAGS+= $(TARGET_DYNXLDOPTS)
 else
 ifeq (Darwin,$(TARGET_SYS))
@@ -719,7 +725,7 @@ $(LUAJIT_SO): $(LJVMCORE_O)
 
 $(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
 	$(E) "LINK      $@"
-	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_ALIBS)
+	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_LO) $(TARGET_ALIBS)
 	$(Q)$(TARGET_STRIP) $@
 	$(E) "OK        Successfully built LuaJIT"
 
