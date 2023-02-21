@@ -69,7 +69,7 @@ typedef uint32_t RegSet;
 #define rset_set(rs, r)		(rs |= RID2RSET(r))
 #define rset_clear(rs, r)	(rs &= ~RID2RSET(r))
 #define rset_exclude(rs, r)	(rs & ~RID2RSET(r))
-#if LJ_TARGET_PPC || LJ_TARGET_MIPS || LJ_TARGET_ARM64
+#if (LJ_TARGET_PPC || LJ_TARGET_MIPS || LJ_TARGET_ARM64) && !_MSC_VER
 #define rset_picktop(rs)	((Reg)(__builtin_clzll(rs)^63))
 #define rset_pickbot(rs)	((Reg)__builtin_ctzll(rs))
 #else

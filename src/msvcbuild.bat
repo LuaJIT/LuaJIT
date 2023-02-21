@@ -15,13 +15,13 @@
 @setlocal
 @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_APICHECK
 @set DEBUGCFLAGS=
-@set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
-@set LJLINK=link /nologo
+@set LJCOMPILE=cl /nologo /c /O2 /Oi- /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /Zi /Zo /DEBUG
+@set LJLINK=link /nologo /DEBUG
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
-@set DASC=vm_x64.dasc
+@set DASC=vm_arm64.dasc
 @set LJDLLNAME=lua51.dll
 @set LJLIBNAME=lua51.lib
 @set BUILDTYPE=release
@@ -35,19 +35,7 @@ if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
 @set DASMFLAGS=-D WIN -D JIT -D FFI -D P64
-@set LJARCH=x64
-@minilua
-@if errorlevel 8 goto :X64
-@set DASC=vm_x86.dasc
-@set DASMFLAGS=-D WIN -D JIT -D FFI
-@set LJARCH=x86
-@set LJCOMPILE=%LJCOMPILE% /arch:SSE2
-:X64
-@if "%1" neq "nogc64" goto :GC64
-@shift
-@set DASC=vm_x86.dasc
-@set LJCOMPILE=%LJCOMPILE% /DLUAJIT_DISABLE_GC64
-:GC64
+@set LJARCH=arm64
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
@@ -120,7 +108,7 @@ if exist luajit.exe.manifest^
 @echo.
 @echo *******************************************************
 @echo *** Build FAILED -- Please check the error messages ***
-@echo *******************************************************
+@echo *******************************************************
 @goto :END
 :FAIL
 @echo You must open a "Visual Studio Command Prompt" to run this script

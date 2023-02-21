@@ -39,7 +39,7 @@ void lj_mcode_sync(void *start, void *end)
 #ifdef LUAJIT_USE_VALGRIND
   VALGRIND_DISCARD_TRANSLATIONS(start, (char *)end-(char *)start);
 #endif
-#if LJ_TARGET_X86ORX64
+#if LJ_TARGET_X86ORX64 || _MSC_VER
   UNUSED(start); UNUSED(end);
 #elif LJ_TARGET_IOS
   sys_icache_invalidate(start, (char *)end-(char *)start);
