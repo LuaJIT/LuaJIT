@@ -9,6 +9,20 @@
 #include <string.h>
 #include <stdlib.h>
 
+#if defined(_MSC_VER) && (_MSC_VER < 1700)
+/* Old MSVC is stuck in the last century and doesn't have C99's stdint.h. */
+#ifdef _WIN64
+typedef unsigned __int64 uintptr_t;
+#else
+typedef unsigned __int32 uintptr_t;
+#endif
+#elif defined(__symbian__)
+/* Cough. */
+typedef unsigned int uintptr_t;
+#else
+#include <stdint.h>
+#endif
+
 #define DASM_ARCH		"ppc"
 
 #ifndef DASM_EXTERN
@@ -122,7 +136,7 @@ void dasm_free(Dst_DECL)
 void dasm_setupglobal(Dst_DECL, void **gl, unsigned int maxgl)
 {
   dasm_State *D = Dst_REF;
-  D->globals = gl - 10;  /* Negative bias to compensate for locals. */
+  D->globals = (void **)((uintptr_t)gl - 10);  /* Negative bias to compensate for locals. */
   DASM_M_GROW(Dst, int, D->lglabels, D->lgsize, (10+maxgl)*sizeof(int));
 }
 
