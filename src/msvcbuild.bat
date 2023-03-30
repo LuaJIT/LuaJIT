@@ -43,7 +43,7 @@ if exist minilua.exe.manifest^
 @set LJARCH=x86
 @set LJCOMPILE=%LJCOMPILE% /arch:SSE2
 :X64
-@if "%1" neq "nogc64" goto :GC64
+@if "%~1" neq "nogc64" goto :GC64
 @shift
 @set DASC=vm_x86.dasc
 @set LJCOMPILE=%LJCOMPILE% /DLUAJIT_DISABLE_GC64
