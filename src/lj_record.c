@@ -1256,6 +1256,8 @@ TRef lj_record_idx(jit_State *J, RecordIndex *ix)
 	TRef key = ix->key;
 	if (tref_isinteger(key))  /* NEWREF needs a TValue as a key. */
 	  key = emitir(IRTN(IR_CONV), key, IRCONV_NUM_INT);
+	else if (tref_isnumber(key) && tref_isk(key) && tvismzero(&ix->keyv))
+	  key = lj_ir_knum_zero(J);  /* Canonicalize -0.0 to +0.0. */
 	xref = emitir(IRT(IR_NEWREF, IRT_P32), ix->tab, key);
 	keybarrier = 0;  /* NEWREF already takes care of the key barrier. */
       }
