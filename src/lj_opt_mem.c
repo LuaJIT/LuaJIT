@@ -154,6 +154,7 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
     if (ir->o == IR_TNEW || (ir->o == IR_TDUP && irref_isk(xr->op2))) {
       /* A NEWREF with a number key may end up pointing to the array part.
       ** But it's referenced from HSTORE and not found in the ASTORE chain.
+      ** Or a NEWREF may rehash the table and move unrelated number keys.
       ** For now simply consider this a conflict without forwarding anything.
       */
       if (xr->o == IR_AREF) {
@@ -164,6 +165,11 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	    goto cselim;
 	  ref2 = newref->prev;
 	}
+      } else {
+	IRIns *key = IR(xr->op2);
+	if (key->o == IR_KSLOT) key = IR(key->op1);
+	if (irt_isnum(key->t) && J->chain[IR_NEWREF] > tab)
+	  goto cselim;
       }
       /* NEWREF inhibits CSE for HREF, and dependent FLOADs from HREFK/AREF.
       ** But the above search for conflicting stores was limited by xref.
