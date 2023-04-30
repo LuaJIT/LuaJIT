@@ -359,6 +359,7 @@ LUALIB_API lua_State *luaL_newstate(void)
     lua_pushcfunction(L, error_finalizer);
     lua_rawseti(L, -2, VMEVENT_HASH(LJ_VMEVENT_ERRFIN));
     G(L)->vmevmask = VMEVENT_MASK(LJ_VMEVENT_ERRFIN);
+    L->top--;
 #endif
   }
   return L;
@@ -381,6 +382,7 @@ LUALIB_API lua_State *luaL_newstate(void)
     lua_pushcfunction(L, error_finalizer);
     lua_rawseti(L, -2, VMEVENT_HASH(LJ_VMEVENT_ERRFIN));
     G(L)->vmevmask = VMEVENT_MASK(LJ_VMEVENT_ERRFIN);
+    L->top--;
 #endif
   }
   return L;
