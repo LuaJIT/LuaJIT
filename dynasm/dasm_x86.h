@@ -68,7 +68,7 @@ struct dasm_State {
   size_t lgsize;
   int *pclabels;		/* PC label chains/pos ptrs. */
   size_t pcsize;
-  void **globals;		/* Array of globals (bias -10). */
+  void **globals;		/* Array of globals. */
   dasm_Section *section;	/* Pointer to active section. */
   size_t codesize;		/* Total size of all code sections. */
   int maxsection;		/* 0 <= sectionidx < maxsection. */
@@ -85,7 +85,6 @@ void dasm_init(Dst_DECL, int maxsection)
 {
   dasm_State *D;
   size_t psz = 0;
-  int i;
   Dst_REF = NULL;
   DASM_M_GROW(Dst, struct dasm_State, Dst_REF, psz, DASM_PSZ(maxsection));
   D = Dst_REF;
@@ -96,12 +95,7 @@ void dasm_init(Dst_DECL, int maxsection)
   D->pcsize = 0;
   D->globals = NULL;
   D->maxsection = maxsection;
-  for (i = 0; i < maxsection; i++) {
-    D->sections[i].buf = NULL;  /* Need this for pass3. */
-    D->sections[i].rbuf = D->sections[i].buf - DASM_SEC2POS(i);
-    D->sections[i].bsize = 0;
-    D->sections[i].epos = 0;  /* Wrong, but is recalculated after resize. */
-  }
+  memset((void *)D->sections, 0, maxsection * sizeof(dasm_Section));
 }
 
 /* Free DynASM state. */
@@ -121,7 +115,7 @@ void dasm_free(Dst_DECL)
 void dasm_setupglobal(Dst_DECL, void **gl, unsigned int maxgl)
 {
   dasm_State *D = Dst_REF;
-  D->globals = gl - 10;  /* Negative bias to compensate for locals. */
+  D->globals = gl;
   DASM_M_GROW(Dst, int, D->lglabels, D->lgsize, (10+maxgl)*sizeof(int));
 }
 
@@ -445,7 +439,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  break;
 	}
 	case DASM_REL_LG: p++; if (n >= 0) goto rel_pc;
-	  b++; n = (int)(ptrdiff_t)D->globals[-n];
+	  b++; n = (int)(ptrdiff_t)D->globals[-n-10];
 	  /* fallthrough */
 	case DASM_REL_A: rel_a:
 	  n -= (unsigned int)(ptrdiff_t)(cp+4); goto wd; /* !x64 */
@@ -459,7 +453,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	}
 	case DASM_IMM_LG:
 	  p++;
-	  if (n < 0) { dasma((ptrdiff_t)D->globals[-n]); break; }
+	  if (n < 0) { dasma((ptrdiff_t)D->globals[-n-10]); break; }
 	  /* fallthrough */
 	case DASM_IMM_PC: {
 	  int *pb = DASM_POS2PTR(D, n);
@@ -469,7 +463,7 @@ int dasm_encode(Dst_DECL, void *buffer)
 	case DASM_LABEL_LG: {
 	  int idx = *p++;
 	  if (idx >= 10)
-	    D->globals[idx] = (void *)(base + (*p == DASM_SETLABEL ? *b : n));
+	    D->globals[idx-10] = (void *)(base + (*p == DASM_SETLABEL ? *b : n));
 	  break;
 	}
 	case DASM_LABEL_PC: case DASM_SETLABEL: break;
