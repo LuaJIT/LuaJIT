@@ -378,7 +378,8 @@ void emit_lib(BuildCtx *ctx)
       char *p;
       /* Simplistic pre-processor. Only handles top-level #if/#endif. */
       if (buf[0] == '#' && buf[1] == 'i' && buf[2] == 'f') {
-	int ok = 1, len = strlen(buf);
+	int ok = 1;
+	size_t len = strlen(buf);
 	if (buf[len-1] == '\n') {
 	  buf[len-1] = 0;
 	  if (buf[len-2] == '\r') {
