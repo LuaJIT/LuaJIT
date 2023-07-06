@@ -261,6 +261,7 @@ typedef enum {
   XO_IMUL =	XO_0f(af),
   XO_IMULi =	XO_(69),
   XO_IMULi8 =	XO_(6b),
+  XO_CMPb = XO_(38),
   XO_CMP =	XO_(3b),
   XO_TESTb =	XO_(84),
   XO_TEST =	XO_(85),

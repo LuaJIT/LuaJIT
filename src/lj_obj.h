@@ -12,6 +12,7 @@
 #include "lua.h"
 #include "lj_def.h"
 #include "lj_arch.h"
+#include "lj_arena.h"
 
 /* -- Memory references --------------------------------------------------- */
 
@@ -60,7 +61,7 @@ typedef struct GCRef {
 } GCRef;
 
 /* Common GC header for all collectable objects. */
-#define GCHeader	GCRef nextgc; uint8_t marked; uint8_t gct
+#define GCHeader	uint8_t gcflags; uint8_t gct
 /* This occupies 6 bytes, so use the next 2 bytes for non-32 bit fields. */
 
 #if LJ_GC64
@@ -307,7 +308,8 @@ typedef struct GCstr {
   GCHeader;
   uint8_t reserved;	/* Used by lexer for fast lookup of reserved words. */
   uint8_t hashalg;	/* Hash algorithm. */
-  StrID sid;		/* Interned string ID. */
+  GCRef nextgc;
+  StrID sid;            /* Interned string ID. */
   StrHash hash;		/* Hash of string. */
   MSize len;		/* Size of string. */
 } GCstr;
@@ -319,15 +321,16 @@ typedef struct GCstr {
 
 /* -- Userdata object ----------------------------------------------------- */
 
-/* Userdata object. Payload follows. */
+/* Userdata object. */
 typedef struct GCudata {
   GCHeader;
   uint8_t udtype;	/* Userdata type. */
   uint8_t unused2;
-  GCRef env;		/* Should be at same offset in GCfunc. */
   MSize len;		/* Size of payload. */
+  MRef payload;
+  GCRef env;		/* Should be at same offset in GCfunc. */
   GCRef metatable;	/* Must be at same offset in GCtab. */
-  uint32_t align1;	/* To force 8 byte alignment of the payload. */
+  GCRef gclist;
 } GCudata;
 
 /* Userdata types. */
@@ -339,7 +342,7 @@ enum {
   UDTYPE__MAX
 };
 
-#define uddata(u)	((void *)((u)+1))
+#define uddata(u)	mref((u)->payload, void)
 #define sizeudata(u)	(sizeof(struct GCudata)+(u)->len)
 
 /* -- C data object ------------------------------------------------------- */
@@ -348,6 +351,7 @@ enum {
 typedef struct GCcdata {
   GCHeader;
   uint16_t ctypeid;	/* C type ID. */
+  GCRef nextgc;
 } GCcdata;
 
 /* Prepended to variable-sized or realigned C data objects. */
@@ -358,7 +362,7 @@ typedef struct GCcdataVar {
 } GCcdataVar;
 
 #define cdataptr(cd)	((void *)((cd)+1))
-#define cdataisv(cd)	((cd)->marked & 0x80)
+#define cdataisv(cd)	((cd)->gcflags & 0x80)
 #define cdatav(cd)	((GCcdataVar *)((char *)(cd) - sizeof(GCcdataVar)))
 #define cdatavlen(cd)	check_exp(cdataisv(cd), cdatav(cd)->len)
 #define sizecdatav(cd)	(cdatavlen(cd) + cdatav(cd)->extra)
@@ -374,11 +378,12 @@ typedef struct GCproto {
   uint8_t numparams;	/* Number of parameters. */
   uint8_t framesize;	/* Fixed frame size. */
   MSize sizebc;		/* Number of bytecode instructions. */
+  GCRef nextgc;
 #if LJ_GC64
   uint32_t unused_gc64;
 #endif
-  GCRef gclist;
   MRef k;		/* Split constant array (points to the middle). */
+  GCRef gclist;
   MRef uv;		/* Upvalue list. local slot|0x8000 or parent uv idx. */
   MSize sizekgc;	/* Number of collectable constants. */
   MSize sizekn;		/* Number of lua_Number constants. */
@@ -433,19 +438,14 @@ typedef struct GCupval {
   GCHeader;
   uint8_t closed;	/* Set if closed (i.e. uv->v == &uv->u.value). */
   uint8_t immutable;	/* Immutable value. */
+  uint32_t dhash;	/* Disambiguation hash: dh1 != dh2 => cannot alias. */
   union {
     TValue tv;		/* If closed: the value itself. */
-    struct {		/* If open: double linked list, anchored at thread. */
-      GCRef prev;
-      GCRef next;
-    };
+    GCRef next;     /* If open: single linked list, anchored at thread. */
   };
   MRef v;		/* Points to stack slot (open) or above (closed). */
-  uint32_t dhash;	/* Disambiguation hash: dh1 != dh2 => cannot alias. */
 } GCupval;
 
-#define uvprev(uv_)	(&gcref((uv_)->prev)->uv)
-#define uvnext(uv_)	(&gcref((uv_)->next)->uv)
 #define uvval(uv_)	(mref((uv_)->v, TValue))
 
 /* -- Function object (closures) ------------------------------------------ */
@@ -453,22 +453,32 @@ typedef struct GCupval {
 /* Common header for functions. env should be at same offset in GCudata. */
 #define GCfuncHeader \
   GCHeader; uint8_t ffid; uint8_t nupvalues; \
-  GCRef env; GCRef gclist; MRef pc
+  MRef pc; GCRef env
+
+typedef struct GCfuncCData {
+  lua_CFunction f;   /* C function to be called. */
+  TValue upvalue[1]; /* Array of upvalues (TValue). */
+} GCfuncCData;
+
+typedef struct GCfuncGen {
+  GCfuncHeader;
+  MRef data;
+} GCfuncGen;
 
 typedef struct GCfuncC {
   GCfuncHeader;
-  lua_CFunction f;	/* C function to be called. */
-  TValue upvalue[1];	/* Array of upvalues (TValue). */
+  GCfuncCData *data;
 } GCfuncC;
 
 typedef struct GCfuncL {
   GCfuncHeader;
-  GCRef uvptr[1];	/* Array of _pointers_ to upvalue objects (GCupval). */
+  GCRef *uvptr;	/* Pointer to array of _pointers_ to upvalue objects (GCupval). */
 } GCfuncL;
 
 typedef union GCfunc {
   GCfuncC c;
   GCfuncL l;
+  GCfuncGen gen;
 } GCfunc;
 
 #define FF_LUA		0
@@ -478,8 +488,8 @@ typedef union GCfunc {
 #define isffunc(fn)	((fn)->c.ffid > FF_C)
 #define funcproto(fn) \
   check_exp(isluafunc(fn), (GCproto *)(mref((fn)->l.pc, char)-sizeof(GCproto)))
-#define sizeCfunc(n)	(sizeof(GCfuncC)-sizeof(TValue)+sizeof(TValue)*(n))
-#define sizeLfunc(n)	(sizeof(GCfuncL)-sizeof(GCRef)+sizeof(GCRef)*(n))
+#define sizeCfunc(n)	(sizeof(TValue)+sizeof(TValue)*(n))
+#define sizeLfunc(n)	(sizeof(GCRef)*(n))
 
 /* -- Table object -------------------------------------------------------- */
 
@@ -498,15 +508,16 @@ LJ_STATIC_ASSERT(offsetof(Node, val) == 0);
 typedef struct GCtab {
   GCHeader;
   uint8_t nomm;		/* Negative cache for fast metamethods. */
-  int8_t colo;		/* Array colocation. */
+  uint8_t colo;		/* Array colocation. */
   MRef array;		/* Array part. */
-  GCRef gclist;
-  GCRef metatable;	/* Must be at same offset in GCudata. */
   MRef node;		/* Hash part. */
+  GCRef metatable;	/* Must be at same offset in GCudata. */
+  GCRef gclist;
   uint32_t asize;	/* Size of array part (keys [0, asize-1]). */
   uint32_t hmask;	/* Hash part mask (size of hash part - 1). */
 #if LJ_GC64
   MRef freetop;		/* Top of free elements. */
+  uint64_t unused;
 #endif
 } GCtab;
 
@@ -590,7 +601,11 @@ typedef enum {
 typedef struct GCState {
   GCSize total;		/* Memory currently allocated. */
   GCSize threshold;	/* Memory threshold. */
-  uint8_t currentwhite;	/* Current white color. */
+  uint8_t currentblack;
+  uint8_t currentblackgray;
+  uint8_t safecolor;
+  uint8_t currentsweep;
+  uint8_t gcmode;
   uint8_t state;	/* GC state. */
   uint8_t nocdatafin;	/* No cdata finalizer called. */
 #if LJ_64
@@ -602,16 +617,52 @@ typedef struct GCState {
   GCRef root;		/* List of all collectable objects. */
   MRef sweep;		/* Sweep position in root list. */
   GCRef gray;		/* List of gray objects. */
-  GCRef grayagain;	/* List of objects for atomic traversal. */
+  GCRef grayagain;	/* List of tables for atomic traversal. */
+  GCRef grayagain_th;	/* List of threads for atomic traversal. */
   GCRef weak;		/* List of weak tables (to be cleared). */
+  GCRef ephemeron;
   GCRef mmudata;	/* List of userdata (to be finalized). */
+  GCRef fin_list;
   GCSize debt;		/* Debt (how much GC is behind schedule). */
   GCSize estimate;	/* Estimate of memory actually in use. */
+  GCSize accum;     /* Accumulated memory marked. */
+  GCSize malloc;    /* Malloced memory. */
   MSize stepmul;	/* Incremental GC step granularity. */
   MSize pause;		/* Pause between successive GC cycles. */
 #if LJ_64
   MRef lightudseg;	/* Upper bits of lightuserdata segments. */
 #endif
+
+  /* New GC */
+  arena_context ctx;
+  /* Arenas to allocate from. Never NULL. Chains with prev/next */
+  GCArenaHdr *tab;
+  GCArenaHdr *fintab;
+  GCArenaHdr *uv;
+  GCArenaHdr *func;
+  GCArenaHdr *udata;
+
+  /* This is the allocated-from blob arena. Never NULL */
+  GCAblob *blob_generic;
+
+  GCAblob **bloblist;
+  uint32_t *bloblist_usage;
+  uint32_t bloblist_alloc;
+  uint32_t bloblist_wr;
+  uint32_t bloblist_sweep;
+
+  /* These are the arenas that have at least one gray object, may be NULL.
+   * Chains with 'gray' */
+  GCArenaHdr *gray_head;
+  GCArenaHdr *gray_tail;
+
+  /* Freelist, may be NULL. Contains at least one free object. Chains with
+   * 'freenext' & 'freeprev' */
+  GCArenaHdr *free_tab;
+  GCArenaHdr *free_fintab;
+  GCArenaHdr *free_uv;
+  GCArenaHdr *free_func;
+  GCArenaHdr *free_udata;
 } GCState;
 
 /* String interning state. */
@@ -644,7 +695,6 @@ typedef struct global_State {
   TValue tmptv, tmptv2;	/* Temporary TValues. */
   Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
   TValue registrytv;	/* Anchor for registry. */
-  GCupval uvhead;	/* Head of double-linked list of all open upvalues. */
   int32_t hookcount;	/* Instruction hook countdown. */
   int32_t hookcstart;	/* Start count for instruction hook counter. */
   lua_Hook hookf;	/* Hook function. */
@@ -687,9 +737,10 @@ struct lua_State {
   GCHeader;
   uint8_t dummy_ffid;	/* Fake FF_C for curr_funcisL() on dummy frames. */
   uint8_t status;	/* Thread status. */
-  MRef glref;		/* Link to global state. */
-  GCRef gclist;		/* GC chain. */
+  GCRef nextgc;
+  MRef glref;           /* Link to global state. */
   TValue *base;		/* Base of currently executing function. */
+  GCRef gclist;		/* GC chain. */
   TValue *top;		/* First free slot in the stack. */
   MRef maxstack;	/* Last free slot in the stack. */
   MRef stack;		/* Stack base. */
@@ -727,9 +778,10 @@ typedef struct GChead {
   GCHeader;
   uint8_t unused1;
   uint8_t unused2;
+  GCRef nextgc;
   GCRef env;
-  GCRef gclist;
   GCRef metatable;
+  GCRef gclist;
 } GChead;
 
 /* The env field SHOULD be at the same offset for all GC objects. */
@@ -742,9 +794,14 @@ LJ_STATIC_ASSERT(offsetof(GChead, metatable) == offsetof(GCudata, metatable));
 
 /* The gclist field MUST be at the same offset for all GC objects. */
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(lua_State, gclist));
-LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCproto, gclist));
-LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCfuncL, gclist));
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCtab, gclist));
+LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCproto, gclist));
+
+/* The nextgc field MUST be at the same offset for all LL GC objects. */
+LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(lua_State, nextgc));
+LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCproto, nextgc));
+LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCcdata, nextgc));
+LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCstr, nextgc));
 
 typedef union GCobj {
   GChead gch;
@@ -897,6 +954,9 @@ static LJ_AINLINE void setrawlightudV(TValue *o, void *p)
   ((o)->u64 = (uint64_t)(void *)(f) - (uint64_t)lj_vm_asm_begin)
 #endif
 
+/* Copy from lj_gc.h */
+LJ_FUNC int checkdead(global_State *g, GCobj *o);
+
 static LJ_AINLINE void checklivetv(lua_State *L, TValue *o, const char *msg)
 {
   UNUSED(L); UNUSED(o); UNUSED(msg);
@@ -906,7 +966,7 @@ static LJ_AINLINE void checklivetv(lua_State *L, TValue *o, const char *msg)
 	       "mismatch of TValue type %d vs GC type %d",
 	       ~itype(o), gcval(o)->gch.gct);
     /* Copy of isdead check from lj_gc.h to avoid circular include. */
-    lj_assertL(!(gcval(o)->gch.marked & (G(L)->gc.currentwhite ^ 3) & 3), msg);
+    lj_assertL(!checkdead(G(L), gcval(o)), msg);
   }
 #endif
 }

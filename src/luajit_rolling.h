@@ -73,6 +73,38 @@ LUA_API void luaJIT_profile_stop(lua_State *L);
 LUA_API const char *luaJIT_profile_dumpstack(lua_State *L, const char *fmt,
 					     int depth, size_t *len);
 
+typedef unsigned (*luaJIT_allocpages)(void *ud, void **pages, unsigned n);
+/* Free is called one last time with NULL, 0 to indicate any state should be released */
+typedef void (*luaJIT_freepages)(void *ud, void **pages, unsigned n);
+typedef void* (*luaJIT_reallochuge)(void *ud, void *p, size_t osz, size_t nsz);
+
+/* This many bytes are reserved at the start of each huge arena for the allocator's use */
+#define LUAJIT_HUGE_RESERVED_SPACE 20
+
+LUA_API size_t luaJIT_getpagesize();
+
+/* Custom allocator support.
+ * Page allocators must yield naturally aligned regions in the size provided by
+ * luaJIT_getpagesize. Page allocators allocate and free N pages at once. Huge
+ * allocations are one at a time.
+ * The lua_Alloc allocator is used for allocations that require variable size
+ * and a fixed address.
+ * Allocators are permitted to fail. The huge page allocator can return NULL and
+ * the page allocator can return fewer than the requested amount. Allocators are not
+ * permitted to throw.
+ * Huge allocations have the same alignment requirements as normal arenas.
+ * Either the normal or page allocation can be NULL and the default will be used.
+ * Passing all NULL is functionally the same as luaL_newstate()
+ */
+LUA_API lua_State *luaJIT_newstate(lua_Alloc f, void *ud,
+                                   luaJIT_allocpages allocp,
+                                   luaJIT_freepages freep,
+                                   luaJIT_reallochuge realloch,
+                                   void *page_ud);
+
+/* As lua_createtable, but can be used with __gc */
+LUA_API void luaJIT_createtable(lua_State *L, int narray, int nrec);
+
 /* Enforce (dynamic) linker error for version mismatches. Call from main. */
 LUA_API void LUAJIT_VERSION_SYM(void);
 

@@ -399,3 +399,35 @@ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
 
 #endif
 
+LUA_API lua_State *luaJIT_newstate(lua_Alloc f, void *ud,
+                                   luaJIT_allocpages allocp,
+                                   luaJIT_freepages freep,
+                                   luaJIT_reallochuge realloch,
+                                   void *page_ud)
+{
+  lua_State *L;
+#ifdef LUAJIT_USE_SYSMALLOC
+  if (!f) {
+    f = mem_alloc;
+    ud = NULL;
+  }
+#else
+  if (f == NULL) {
+    f = LJ_ALLOCF_INTERNAL;
+    ud = NULL;
+  }
+#endif
+  L = lj_newstate(f, ud, allocp, freep, realloch, page_ud);
+
+  if (L) {
+    G(L)->panic = panic;
+#ifndef LUAJIT_DISABLE_VMEVENT
+    luaL_findtable(L, LUA_REGISTRYINDEX, LJ_VMEVENTS_REGKEY, LJ_VMEVENTS_HSIZE);
+    lua_pushcfunction(L, error_finalizer);
+    lua_rawseti(L, -2, VMEVENT_HASH(LJ_VMEVENT_ERRFIN));
+    G(L)->vmevmask = VMEVENT_MASK(LJ_VMEVENT_ERRFIN);
+    L->top--;
+#endif
+  }
+  return L;
+}

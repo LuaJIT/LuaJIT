@@ -1398,9 +1398,10 @@ static void asm_uref(ASMState *as, IRIns *ir)
       GCobj *o = gcref(fn->l.uvptr[(ir->op2 >> 8)]);
       emit_loada(as, uv, o);
     } else {
-      emit_rmro(as, XO_MOV, uv|REX_GC64, ra_alloc1(as, ir->op1, RSET_GPR),
-	        (int32_t)offsetof(GCfuncL, uvptr) +
-	        (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
+      emit_rmro(as, XO_MOV, uv|REX_GC64, uv,
+                (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
+      emit_rmro(as, XO_MOV, uv|REX_GC64,
+                ra_alloc1(as, ir->op1, RSET_GPR), offsetof(GCfuncL, uvptr));
     }
   }
 }
@@ -1892,11 +1893,8 @@ static void asm_cnew(ASMState *as, IRIns *ir)
   }
 
   /* Combine initialization of marked, gct and ctypeid. */
-  emit_movtomro(as, RID_ECX, RID_RET, offsetof(GCcdata, marked));
-  emit_gri(as, XG_ARITHi(XOg_OR), RID_ECX,
-	   (int32_t)((~LJ_TCDATA<<8)+(id<<16)));
-  emit_gri(as, XG_ARITHi(XOg_AND), RID_ECX, LJ_GC_WHITES);
-  emit_opgl(as, XO_MOVZXb, RID_ECX, gc.currentwhite);
+  emit_movmroi(as, RID_RET, offsetof(GCcdata, gcflags),
+               (int32_t)((~LJ_TCDATA << 8) + (id << 16)));
 
   args[0] = ASMREF_L;     /* lua_State *L */
   args[1] = ASMREF_TMP1;  /* MSize size   */
@@ -1912,14 +1910,15 @@ static void asm_tbar(ASMState *as, IRIns *ir)
   Reg tab = ra_alloc1(as, ir->op1, RSET_GPR);
   Reg tmp = ra_scratch(as, rset_exclude(RSET_GPR, tab));
   MCLabel l_end = emit_label(as);
-  emit_movtomro(as, tmp|REX_GC64, tab, offsetof(GCtab, gclist));
+
+  emit_movtomro(as, tmp | REX_GC64, tab, offsetof(GCtab, gclist));
   emit_setgl(as, tab, gc.grayagain);
   emit_getgl(as, tmp, gc.grayagain);
-  emit_i8(as, ~LJ_GC_BLACK);
-  emit_rmro(as, XO_ARITHib, XOg_AND, tab, offsetof(GCtab, marked));
-  emit_sjcc(as, CC_Z, l_end);
-  emit_i8(as, LJ_GC_BLACK);
-  emit_rmro(as, XO_GROUP3b, XOg_TEST, tab, offsetof(GCtab, marked));
+  emit_gmroi(as, XG_ARITHi(XOg_OR), tab, offsetof(GCtab, gcflags), LJ_GC_GRAY);
+  emit_sjcc(as, CC_NZ, l_end);
+  emit_opgl(as, XO_CMPb, tmp | REX_GC64, gc.currentblack);
+  emit_gri(as, XG_ARITHi(XOg_AND), tmp, LJ_GC_COLORS);
+  emit_rmro(as, XO_MOVZXb, tmp, tab, offsetof(GCtab, gcflags));
 }
 
 static void asm_obar(ASMState *as, IRIns *ir)
@@ -1927,7 +1926,7 @@ static void asm_obar(ASMState *as, IRIns *ir)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_barrieruv];
   IRRef args[2];
   MCLabel l_end;
-  Reg obj;
+  Reg obj, tmp;
   /* No need for other object barriers (yet). */
   lj_assertA(IR(ir->op1)->o == IR_UREFC, "bad OBAR type");
   ra_evictset(as, RSET_SCRATCH);
@@ -1937,19 +1936,21 @@ static void asm_obar(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
   emit_loada(as, ra_releasetmp(as, ASMREF_TMP1), J2G(as->J));
   obj = IR(ir->op1)->r;
-  emit_sjcc(as, CC_Z, l_end);
-  emit_i8(as, LJ_GC_WHITES);
+  tmp = ra_scratch(as, rset_exclude(RSET_GPR, obj));
+  emit_sjcc(as, CC_NZ, l_end);
+  emit_opgl(as, XO_TESTb, tmp | REX_GC64, gc.currentblackgray);
   if (irref_isk(ir->op2)) {
     GCobj *vp = ir_kgc(IR(ir->op2));
-    emit_rma(as, XO_GROUP3b, XOg_TEST, &vp->gch.marked);
+    emit_rma(as, XO_MOVZXb, tmp, &vp->gch.gcflags);
   } else {
-    Reg val = ra_alloc1(as, ir->op2, rset_exclude(RSET_SCRATCH&RSET_GPR, obj));
-    emit_rmro(as, XO_GROUP3b, XOg_TEST, val, (int32_t)offsetof(GChead, marked));
+    emit_rmro(as, XO_MOVZXb, tmp, obj, (int32_t) offsetof(GChead, gcflags));
   }
-  emit_sjcc(as, CC_Z, l_end);
-  emit_i8(as, LJ_GC_BLACK);
-  emit_rmro(as, XO_GROUP3b, XOg_TEST, obj,
-	    (int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv));
+  emit_sjcc(as, CC_NZ, l_end);
+  emit_opgl(as, XO_CMPb, tmp | REX_GC64, gc.currentblack);
+  emit_gri(as, XG_ARITHi(XOg_AND), tmp, LJ_GC_COLORS);
+  emit_rmro(as, XO_MOVZXb, tmp, obj,
+            (int32_t)offsetof(GCupval, gcflags) -
+                (int32_t)offsetof(GCupval, tv));
 }
 
 /* -- FP/int arithmetic and logic operations ------------------------------ */

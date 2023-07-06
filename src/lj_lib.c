@@ -95,7 +95,7 @@ void lj_lib_register(lua_State *L, const char *libname,
       GCfunc *fn = lj_func_newC(L, nuv, env);
       if (nuv) {
 	L->top = L->base + tpos;
-	memcpy(fn->c.upvalue, L->top, sizeof(TValue)*nuv);
+	memcpy(fn->c.data->upvalue, L->top, sizeof(TValue)*nuv);
       }
       fn->c.ffid = (uint8_t)(ffid++);
       name = (const char *)p;
@@ -105,9 +105,9 @@ void lj_lib_register(lua_State *L, const char *libname,
       else
 	setmref(fn->c.pc, bcff++);
       if (tag == LIBINIT_ASM_)
-	fn->c.f = ofn->c.f;  /* Copy handler from previous function. */
+	fn->c.data->f = ofn->c.data->f;  /* Copy handler from previous function. */
       else
-	fn->c.f = *cf++;  /* Get cf or handler from C function table. */
+	fn->c.data->f = *cf++;  /* Get cf or handler from C function table. */
       if (len) {
 	/* NOBARRIER: See above for common barrier. */
 	setfuncV(L, lj_tab_setstr(L, tab, lj_str_new(L, name, len)), fn);

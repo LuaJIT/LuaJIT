@@ -53,8 +53,10 @@
 |.define RDL,		RCL
 |.define TMPR,		r10
 |.define TMPRd,		r10d
+|.define TMPRb,		r10b
 |.define ITYPE,		r11
 |.define ITYPEd,	r11d
+|.define ITYPEb,	r11b
 |
 |.if X64WIN
 |.define CARG1,		rcx		// x64/WIN64 C call arguments.
@@ -89,6 +91,7 @@
 |.type TAB,		GCtab
 |.type LFUNC,		GCfuncL
 |.type CFUNC,		GCfuncC
+|.type CFUNCD,		GCfuncCData
 |.type PROTO,		GCproto
 |.type UPVAL,		GCupval
 |.type NODE,		Node
@@ -368,10 +371,24 @@
 |
 |// Move table write barrier back. Overwrites reg.
 |.macro barrierback, tab, reg
-|  and byte tab->marked, (uint8_t)~LJ_GC_BLACK	// black2gray(tab)
+|  or byte tab->gcflags, (uint8_t)LJ_GC_GRAY	// black2gray(tab)
 |  mov reg, [DISPATCH+DISPATCH_GL(gc.grayagain)]
 |  mov [DISPATCH+DISPATCH_GL(gc.grayagain)], tab
 |  mov tab->gclist, reg
+|.endmacro
+|
+|// Generic isblack(o) macro
+|.macro isblack, rD, rB, o, j
+|  movzx rD, byte o->gcflags
+|  and rD, LJ_GC_COLORS
+|  cmp rB, byte [DISPATCH+DISPATCH_GL(gc.currentblack)]
+|  jz j
+|.endmacro
+|.macro isnblack, rD, rB, o, j
+|  movzx rD, byte o->gcflags
+|  and rD, LJ_GC_COLORS
+|  cmp rB, byte [DISPATCH+DISPATCH_GL(gc.currentblack)]
+|  jnz j
 |.endmacro
 |
 |//-----------------------------------------------------------------------
@@ -1205,7 +1222,8 @@ static void build_subroutines(BuildCtx *ctx)
   |2:
   |  mov CFUNC:RB, [BASE-16]
   |  cleartp CFUNC:RB
-  |  mov STR:RC, [CFUNC:RB+RC*8+((char *)(&((GCfuncC *)0)->upvalue))]
+  |  mov PC, CFUNC:RB->data
+  |  mov STR:RC, [PC+RC*8+((char *)(&((GCfuncCData *)0)->upvalue))]
   |  mov PC, [BASE-8]
   |  settp STR:RC, LJ_TSTR
   |  mov [BASE-16], STR:RC
@@ -1265,8 +1283,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov TAB:RB->metatable, TAB:RA
   |  mov PC, [BASE-8]
   |  mov [BASE-16], TAB:TMPR			// Return original table.
-  |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-  |  jz >1
+  |  isnblack RCd, RCL, TAB:RB, >1
   |  // Possible write barrier. Table is black, but skip iswhite(mt) check.
   |  barrierback TAB:RB, RC
   |1:
@@ -1375,7 +1392,8 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |  mov CFUNC:RD, [BASE-16]
   |  cleartp CFUNC:RD
-  |  mov CFUNC:RD, CFUNC:RD->upvalue[0]
+  |  mov CFUNCD:RD, CFUNC:RD->data
+  |  mov CFUNC:RD, CFUNCD:RD->upvalue[0]
   |  settp CFUNC:RD, LJ_TFUNC
   |  mov PC, [BASE-8]
   |  mov [BASE-16], CFUNC:RD
@@ -1446,7 +1464,8 @@ static void build_subroutines(BuildCtx *ctx)
 #endif
   |  mov CFUNC:RD, [BASE-16]
   |  cleartp CFUNC:RD
-  |  mov CFUNC:RD, CFUNC:RD->upvalue[0]
+  |  mov CFUNCD:RD, CFUNC:RD->data
+  |  mov CFUNC:RD, CFUNCD:RD->upvalue[0]
   |  settp CFUNC:RD, LJ_TFUNC
   |  mov PC, [BASE-8]
   |  mov [BASE-16], CFUNC:RD
@@ -1508,7 +1527,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc coroutine_wrap_aux
   |  mov CFUNC:RB, [BASE-16]
   |  cleartp CFUNC:RB
-  |  mov L:RB, CFUNC:RB->upvalue[0].gcr
+  |  mov CFUNCD:RB, CFUNC:RB->data
+  |  mov L:RB, CFUNCD:RB->upvalue[0].gcr
   |  cleartp L:RB
   |.endif
   |  mov PC, [BASE-8]
@@ -2143,7 +2163,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmp RA, L:RB->maxstack
   |  ja >5				// Need to grow stack.
   |  mov CARG1, L:RB
-  |  call aword CFUNC:RD->f		// (lua_State *L)
+  |  mov CFUNCD:RD, CFUNC:RD->data
+  |  call aword CFUNCD:RD->f		// (lua_State *L)
   |  mov BASE, L:RB->base
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  test RDd, RDd; jg ->fff_res	// Returned nresults+1?
@@ -3445,7 +3466,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD	// RA = dst, RD = upvalue #
     |  mov LFUNC:RB, [BASE-16]
     |  cleartp LFUNC:RB
-    |  mov UPVAL:RB, [LFUNC:RB+RD*8+offsetof(GCfuncL, uvptr)]
+    |  mov RB, LFUNC:RB->uvptr
+    |  mov UPVAL:RB, [RB+RD*8]
     |  mov RB, UPVAL:RB->v
     |  mov RD, [RB]
     |  mov [BASE+RA*8], RD
@@ -3453,18 +3475,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_USETV:
 #define TV2MARKOFS \
- ((int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv))
+ ((int32_t)offsetof(GCupval, gcflags)-(int32_t)offsetof(GCupval, tv))
     |  ins_AD	// RA = upvalue #, RD = src
     |  mov LFUNC:RB, [BASE-16]
     |  cleartp LFUNC:RB
-    |  mov UPVAL:RB, [LFUNC:RB+RA*8+offsetof(GCfuncL, uvptr)]
+    |  mov UPVAL:RB, LFUNC:RB->uvptr
+    |  mov UPVAL:RB, [RB+RA*8]
     |  cmp byte UPVAL:RB->closed, 0
     |  mov RB, UPVAL:RB->v
     |  mov RA, [BASE+RD*8]
     |  mov [RB], RA
     |  jz >1
     |  // Check barrier for closed upvalue.
-    |  test byte [RB+TV2MARKOFS], LJ_GC_BLACK		// isblack(uv)
+    |  movzx RDd, byte [DISPATCH+DISPATCH_GL(gc.currentblack)]
+    |  test byte [RB+TV2MARKOFS], RDL		// isblack(uv)
     |  jnz >2
     |1:
     |  ins_next
@@ -3476,8 +3500,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp RDd, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
     |  jbe <1
     |  cleartp GCOBJ:RA
-    |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
-    |  jz <1
+    |  movzx TMPRd, byte [DISPATCH+DISPATCH_GL(gc.currentblackgray)]
+    |  test byte GCOBJ:RA->gch.gcflags, TMPRb	// iswhite(v)
+    |  jnz <1
     |  // Crossed a write barrier. Move the barrier forward.
     |.if not X64WIN
     |  mov CARG2, RB
@@ -3495,19 +3520,20 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AND	// RA = upvalue #, RD = str const (~)
     |  mov LFUNC:RB, [BASE-16]
     |  cleartp LFUNC:RB
-    |  mov UPVAL:RB, [LFUNC:RB+RA*8+offsetof(GCfuncL, uvptr)]
+    |  mov UPVAL:RB, LFUNC:RB->uvptr
+    |  mov UPVAL:RB, [RB+RA*8]
     |  mov STR:RA, [KBASE+RD*8]
     |  mov RD, UPVAL:RB->v
     |  settp STR:ITYPE, STR:RA, LJ_TSTR
     |  mov [RD], STR:ITYPE
-    |  test byte UPVAL:RB->marked, LJ_GC_BLACK		// isblack(uv)
-    |  jnz >2
+    |  isblack TMPRd, TMPRb, UPVAL:RB, >2		// isblack(uv)
     |1:
     |  ins_next
     |
     |2:  // Check if string is white and ensure upvalue is closed.
-    |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(str)
-    |  jz <1
+    |  movzx TMPRd, byte [DISPATCH+DISPATCH_GL(gc.currentblackgray)]
+    |  test byte GCOBJ:RA->gch.gcflags, TMPRb	// iswhite(str)
+    |  jnz <1
     |  cmp byte UPVAL:RB->closed, 0
     |  jz <1
     |  // Crossed a write barrier. Move the barrier forward.
@@ -3523,7 +3549,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mov LFUNC:RB, [BASE-16]
     |  cleartp LFUNC:RB
     |  movsd xmm0, qword [KBASE+RD*8]
-    |  mov UPVAL:RB, [LFUNC:RB+RA*8+offsetof(GCfuncL, uvptr)]
+    |  mov UPVAL:RB, LFUNC:RB->uvptr
+    |  mov UPVAL:RB, [RB+RA*8]
     |  mov RA, UPVAL:RB->v
     |  movsd qword [RA], xmm0
     |  ins_next
@@ -3532,7 +3559,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD	// RA = upvalue #, RD = primitive type (~)
     |  mov LFUNC:RB, [BASE-16]
     |  cleartp LFUNC:RB
-    |  mov UPVAL:RB, [LFUNC:RB+RA*8+offsetof(GCfuncL, uvptr)]
+    |  mov UPVAL:RB, LFUNC:RB->uvptr
+    |  mov UPVAL:RB, [RB+RA*8]
     |  shl RD, 47
     |  not RD
     |  mov RA, UPVAL:RB->v
@@ -3802,8 +3830,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp aword [RC], LJ_TNIL
     |  je >3				// Previous value is nil?
     |1:
-    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-    |  jnz >7
+    |  isblack TMPRd, TMPRb, TAB:RB, >7		// isblack(table)
     |2:  // Set array slot.
     |  mov RB, [BASE+RA*8]
     |  mov [RC], RB
@@ -3846,8 +3873,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp aword [TMPR], LJ_TNIL
     |  je >4				// Previous value is nil?
     |2:
-    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-    |  jnz >7
+    |  isblack ITYPEd, ITYPEb, TAB:RB, >7		// isblack(table)
     |3:  // Set node value.
     |  mov ITYPE, [BASE+RA*8]
     |  mov [TMPR], ITYPE
@@ -3903,8 +3929,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmp aword [RC], LJ_TNIL
     |  je >3				// Previous value is nil?
     |1:
-    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-    |  jnz >7
+    |  isblack TMPRd, TMPRb, TAB:RB, >7		// isblack(table)
     |2:	 // Set array slot.
     |  mov ITYPE, [BASE+RA*8]
     |  mov [RC], ITYPE
@@ -3931,8 +3956,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.else
     |  cvttsd2si RCd, qword [BASE+RC*8]
     |.endif
-    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-    |  jnz >7
+    |  isblack TMPRd, TMPRb, TAB:RB, >7		// isblack(table)
     |2:
     |  cmp RCd, TAB:RB->asize
     |  jae ->vmeta_tsetr
@@ -3956,8 +3980,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lea RA, [BASE+RA*8]
     |  mov TAB:RB, [RA-8]		// Guaranteed to be a table.
     |  cleartp TAB:RB
-    |  test byte TAB:RB->marked, LJ_GC_BLACK	// isblack(table)
-    |  jnz >7
+    |  isblack RDd, RDL, TAB:RB, >7		// isblack(table)
     |2:
     |  mov RDd, MULTRES
     |  sub RDd, 1
@@ -4670,7 +4693,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_AD  // BASE = new base, RA = ins RA|RD (unused), RD = nargs+1
     |  mov CFUNC:RB, [BASE-16]
     |  cleartp CFUNC:RB
-    |  mov KBASE, CFUNC:RB->f
+    |  mov CFUNCD:KBASE, CFUNC:RB->data
+    |  mov KBASE, CFUNCD:KBASE->f
     |  mov L:RB, SAVE_L
     |  lea RD, [BASE+NARGS:RD*8-8]
     |  mov L:RB->base, BASE

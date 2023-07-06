@@ -240,7 +240,7 @@ const char *lj_debug_uvnamev(cTValue *o, uint32_t idx, TValue **tvp, GCobj **op)
       }
     } else {
       if (idx < fn->c.nupvalues) {
-	*tvp = &fn->c.upvalue[idx];
+	*tvp = &fn->c.data->upvalue[idx];
 	*op = obj2gco(fn);
 	return "";
       }
@@ -632,7 +632,7 @@ void lj_debug_dumpstack(lua_State *L, SBuf *sb, const char *fmt, int depth)
 	    lj_buf_putb(sb, ']');
 	  } else {  /* Dump C function address. */
 	    lj_buf_putb(sb, '@');
-	    lj_strfmt_putptr(sb, fn->c.f);
+	    lj_strfmt_putptr(sb, fn->c.data->f);
 	  }
 	  break;
 	case 'Z':  /* Zap trailing separator. */
@@ -694,7 +694,7 @@ LUALIB_API void luaL_traceback (lua_State *L, lua_State *L1, const char *msg,
       if (*ar.what == 'm') {
 	lua_pushliteral(L, " in main chunk");
       } else if (*ar.what == 'C') {
-	lua_pushfstring(L, " at %p", fn->c.f);
+	lua_pushfstring(L, " at %p", fn->c.data->f);
       } else {
 	lua_pushfstring(L, " in function <%s:%d>",
 			ar.short_src, ar.linedefined);

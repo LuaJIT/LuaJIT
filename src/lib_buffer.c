@@ -317,6 +317,8 @@ LJLIB_CF(buffer_new)
   ud->udtype = UDTYPE_BUFFER;
   /* NOBARRIER: The GCudata is new (marked white). */
   setgcref(ud->metatable, obj2gco(env));
+  if (lj_meta_fastg(G(L), tabref(ud->metatable), MM_gc))
+    lj_mem_registergc_udata(L, ud);
   setudataV(L, L->top++, ud);
   sbx = (SBufExt *)uddata(ud);
   lj_bufx_init(L, sbx);

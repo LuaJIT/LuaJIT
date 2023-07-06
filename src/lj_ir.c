@@ -280,7 +280,7 @@ TRef lj_ir_kgc(jit_State *J, GCobj *o, IRType t)
 {
   IRIns *ir, *cir = J->cur.ir;
   IRRef ref;
-  lj_assertJ(!isdead(J2G(J), o), "interning of dead GC object");
+  lj_assertJ(!checkdead(J2G(J), o), "interning of dead GC object");
   for (ref = J->chain[IR_KGC]; ref; ref = cir[ref].prev)
     if (ir_kgc(&cir[ref]) == o)
       goto found;

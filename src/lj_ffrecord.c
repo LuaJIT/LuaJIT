@@ -214,7 +214,7 @@ static void LJ_FASTCALL recff_type(jit_State *J, RecordFFData *rd)
     t = ~LJ_TLIGHTUD;
   else
     t = ~itype(&rd->argv[0]);
-  J->base[0] = lj_ir_kstr(J, strV(&J->fn->c.upvalue[t]));
+  J->base[0] = lj_ir_kstr(J, strV(&J->fn->c.data->upvalue[t]));
   UNUSED(rd);
 }
 
@@ -452,7 +452,7 @@ static void LJ_FASTCALL recff_xpairs(jit_State *J, RecordFFData *rd)
   if (!((LJ_52 || (LJ_HASFFI && tref_iscdata(tr))) &&
 	recff_metacall(J, rd, MM_pairs + rd->data))) {
     if (tref_istab(tr)) {
-      J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.upvalue[0]));
+      J->base[0] = lj_ir_kfunc(J, funcV(&J->fn->c.data->upvalue[0]));
       J->base[1] = tr;
       J->base[2] = rd->data ? lj_ir_kint(J, 0) : TREF_NIL;
       rd->nres = 3;
@@ -663,7 +663,7 @@ static void LJ_FASTCALL recff_math_minmax(jit_State *J, RecordFFData *rd)
 
 static void LJ_FASTCALL recff_math_random(jit_State *J, RecordFFData *rd)
 {
-  GCudata *ud = udataV(&J->fn->c.upvalue[0]);
+  GCudata *ud = udataV(&J->fn->c.data->upvalue[0]);
   TRef tr, one;
   lj_ir_kgc(J, obj2gco(ud), IRT_UDATA);  /* Prevent collection. */
   tr = lj_ir_call(J, IRCALL_lj_prng_u64d, lj_ir_kptr(J, uddata(ud)));

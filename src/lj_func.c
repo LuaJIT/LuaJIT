@@ -24,15 +24,6 @@ void LJ_FASTCALL lj_func_freeproto(global_State *g, GCproto *pt)
 
 /* -- Upvalues ------------------------------------------------------------ */
 
-static void unlinkuv(global_State *g, GCupval *uv)
-{
-  UNUSED(g);
-  lj_assertG(uvprev(uvnext(uv)) == uv && uvnext(uvprev(uv)) == uv,
-	     "broken upvalue chain");
-  setgcrefr(uvnext(uv)->prev, uv->prev);
-  setgcrefr(uvprev(uv)->next, uv->next);
-}
-
 /* Find existing open upvalue for a stack slot or create a new one. */
 static GCupval *func_finduv(lua_State *L, TValue *slot)
 {
@@ -44,34 +35,27 @@ static GCupval *func_finduv(lua_State *L, TValue *slot)
   while (gcref(*pp) != NULL && uvval((p = gco2uv(gcref(*pp)))) >= slot) {
     lj_assertG(!p->closed && uvval(p) != &p->tv, "closed upvalue in chain");
     if (uvval(p) == slot) {  /* Found open upvalue pointing to same slot? */
-      if (isdead(g, obj2gco(p)))  /* Resurrect it, if it's dead. */
-	flipwhite(obj2gco(p));
       return p;
     }
-    pp = &p->nextgc;
+    pp = &p->next;
   }
   /* No matching upvalue found. Create a new one. */
-  uv = lj_mem_newt(L, sizeof(GCupval), GCupval);
-  newwhite(g, uv);
+  uv = lj_mem_allocuv(L);
+  newwhite(uv);
   uv->gct = ~LJ_TUPVAL;
   uv->closed = 0;  /* Still open. */
   setmref(uv->v, slot);  /* Pointing to the stack slot. */
   /* NOBARRIER: The GCupval is new (marked white) and open. */
-  setgcrefr(uv->nextgc, *pp);  /* Insert into sorted list of open upvalues. */
+  setgcrefr(uv->next, *pp);  /* Insert into sorted list of open upvalues. */
   setgcref(*pp, obj2gco(uv));
-  setgcref(uv->prev, obj2gco(&g->uvhead));  /* Insert into GC list, too. */
-  setgcrefr(uv->next, g->uvhead.next);
-  setgcref(uvnext(uv)->prev, obj2gco(uv));
-  setgcref(g->uvhead.next, obj2gco(uv));
-  lj_assertG(uvprev(uvnext(uv)) == uv && uvnext(uvprev(uv)) == uv,
-	     "broken upvalue chain");
   return uv;
 }
 
 /* Create an empty and closed upvalue. */
 static GCupval *func_emptyuv(lua_State *L)
 {
-  GCupval *uv = (GCupval *)lj_mem_newgco(L, sizeof(GCupval));
+  GCupval *uv = lj_mem_allocuv(L);
+  newwhite(uv);
   uv->gct = ~LJ_TUPVAL;
   uv->closed = 1;
   setnilV(&uv->tv);
@@ -86,32 +70,21 @@ void LJ_FASTCALL lj_func_closeuv(lua_State *L, TValue *level)
   global_State *g = G(L);
   while (gcref(L->openupval) != NULL &&
 	 uvval((uv = gco2uv(gcref(L->openupval)))) >= level) {
-    GCobj *o = obj2gco(uv);
-    lj_assertG(!isblack(o), "bad black upvalue");
+    lj_assertG(gcref(L->openupval) == obj2gco(uv), "bad upvalue list");
     lj_assertG(!uv->closed && uvval(uv) != &uv->tv, "closed upvalue in chain");
-    setgcrefr(L->openupval, uv->nextgc);  /* No longer in open list. */
-    if (isdead(g, o)) {
-      lj_func_freeuv(g, uv);
-    } else {
-      unlinkuv(g, uv);
-      lj_gc_closeuv(g, uv);
-    }
-  }
-}
+    setgcrefr(L->openupval, uv->next);  /* No longer in open list. */
 
-void LJ_FASTCALL lj_func_freeuv(global_State *g, GCupval *uv)
-{
-  if (!uv->closed)
-    unlinkuv(g, uv);
-  lj_mem_freet(g, uv);
+    copyTV(mainthread(g), &uv->tv, uvval(uv));
+    setmref(uv->v, &uv->tv);
+    uv->closed = 1;
+  }
 }
 
 /* -- Functions (closures) ------------------------------------------------ */
 
 GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 {
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeCfunc(nelems));
-  fn->c.gct = ~LJ_TFUNC;
+  GCfunc *fn = lj_mem_allocfunc(L, sizeCfunc(nelems));
   fn->c.ffid = FF_C;
   fn->c.nupvalues = (uint8_t)nelems;
   /* NOBARRIER: The GCfunc is new (marked white). */
@@ -123,8 +96,7 @@ GCfunc *lj_func_newC(lua_State *L, MSize nelems, GCtab *env)
 static GCfunc *func_newL(lua_State *L, GCproto *pt, GCtab *env)
 {
   uint32_t count;
-  GCfunc *fn = (GCfunc *)lj_mem_newgco(L, sizeLfunc((MSize)pt->sizeuv));
-  fn->l.gct = ~LJ_TFUNC;
+  GCfunc *fn = lj_mem_allocfunc(L, sizeLfunc((MSize)pt->sizeuv));
   fn->l.ffid = FF_LUA;
   fn->l.nupvalues = 0;  /* Set to zero until upvalues are initialized. */
   /* NOBARRIER: Really a setgcref. But the GCfunc is new (marked white). */
@@ -181,11 +153,3 @@ GCfunc *lj_func_newL_gc(lua_State *L, GCproto *pt, GCfuncL *parent)
   fn->l.nupvalues = (uint8_t)nuv;
   return fn;
 }
-
-void LJ_FASTCALL lj_func_free(global_State *g, GCfunc *fn)
-{
-  MSize size = isluafunc(fn) ? sizeLfunc((MSize)fn->l.nupvalues) :
-			       sizeCfunc((MSize)fn->c.nupvalues);
-  lj_mem_free(g, fn, size);
-}
-

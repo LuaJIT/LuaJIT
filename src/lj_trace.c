@@ -130,7 +130,7 @@ GCtrace * LJ_FASTCALL lj_trace_alloc(lua_State *L, GCtrace *T)
   GCtrace *T2 = lj_mem_newt(L, (MSize)sz, GCtrace);
   char *p = (char *)T2 + sztr;
   T2->gct = ~LJ_TTRACE;
-  T2->marked = 0;
+  T2->gcflags = 0;
   T2->traceno = 0;
   T2->ir = (IRIns *)p - T->nk;
   T2->nins = T->nins;
@@ -150,7 +150,7 @@ static void trace_save(jit_State *J, GCtrace *T)
   memcpy(T, &J->cur, sizeof(GCtrace));
   setgcrefr(T->nextgc, J2G(J)->gc.root);
   setgcrefp(J2G(J)->gc.root, T);
-  newwhite(J2G(J), T);
+  newwhite(T);
   T->gct = ~LJ_TTRACE;
   T->ir = (IRIns *)p - J->cur.nk;  /* The IR has already been copied above. */
 #if LJ_ABI_PAUTH

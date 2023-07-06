@@ -35,4 +35,11 @@ LJ_FUNC lua_State *lj_state_newstate(lua_Alloc f, void *ud);
 
 #define LJ_ALLOCF_INTERNAL	((lua_Alloc)(void *)(uintptr_t)(1237<<4))
 
+LJ_FUNC lua_State *lj_newstate(lua_Alloc f, void *ud,
+                               luaJIT_allocpages allocp,
+                               luaJIT_freepages freep,
+                               luaJIT_reallochuge realloch,
+                               void *page_ud);
+
+
 #endif

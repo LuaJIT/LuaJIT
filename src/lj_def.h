@@ -59,7 +59,8 @@ typedef unsigned int uintptr_t;
 #define LJ_MAX_HBITS	26		/* Max. hash bits. */
 #define LJ_MAX_ABITS	28		/* Max. bits of array key. */
 #define LJ_MAX_ASIZE	((1<<(LJ_MAX_ABITS-1))+1)  /* Max. array part size. */
-#define LJ_MAX_COLOSIZE	16		/* Max. elems for colocated array. */
+#define LJ_MAX_COLOSIZE	0		/* Max. elems for colocated array. */
+#define LJ_COLO_ENABLED 1
 
 #define LJ_MAX_LINE	LJ_MAX_MEM32	/* Max. source code line number. */
 #define LJ_MAX_XLEVEL	200		/* Max. syntactic nesting level. */

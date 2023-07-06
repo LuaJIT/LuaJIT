@@ -220,7 +220,7 @@ LJLIB_CF(jit_util_funcinfo)
     if (!iscfunc(fn))
       setintfield(L, t, "ffid", fn->c.ffid);
     setintptrV(lj_tab_setstr(L, t, lj_str_newlit(L, "addr")),
-	       (intptr_t)(void *)fn->c.f);
+	       (intptr_t)(void *)fn->c.data->f);
     setintfield(L, t, "upvalues", fn->c.nupvalues);
   }
   return 1;

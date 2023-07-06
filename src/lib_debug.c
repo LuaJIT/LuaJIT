@@ -232,7 +232,7 @@ LJLIB_CF(debug_upvalueid)
   if ((uint32_t)n >= fn->l.nupvalues)
     lj_err_arg(L, 2, LJ_ERR_IDXRNG);
   lua_pushlightuserdata(L, isluafunc(fn) ? (void *)gcref(fn->l.uvptr[n]) :
-					   (void *)&fn->c.upvalue[n]);
+					   (void *)&fn->c.data->upvalue[n]);
   return 1;
 }
 
