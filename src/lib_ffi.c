@@ -776,7 +776,7 @@ LJLIB_CF(ffi_metatype)
   if (!(ctype_isstruct(ct->info) || ctype_iscomplex(ct->info) ||
 	ctype_isvector(ct->info)))
     lj_err_arg(L, 1, LJ_ERR_FFI_INVTYPE);
-  tv = lj_tab_setinth(L, t, -(int32_t)id);
+  tv = lj_tab_setinth(L, t, -(int32_t)ctype_typeid(cts, ct));
   if (!tvisnil(tv))
     lj_err_caller(L, LJ_ERR_PROTMT);
   settabV(L, tv, mt);
