@@ -116,6 +116,7 @@ static void rec_check_slots(jit_State *J)
       cTValue *tv = &base[s];
       IRRef ref = tref_ref(tr);
       IRIns *ir = NULL;  /* Silence compiler. */
+      lj_assertJ(tv < J->L->top, "slot %d above top of Lua stack", s);
       if (!LJ_FR2 || ref || !(tr & (TREF_FRAME | TREF_CONT))) {
 	lj_assertJ(ref >= J->cur.nk && ref < J->cur.nins,
 		   "slot %d ref %04d out of range", s, ref - REF_BIAS);
@@ -2476,6 +2477,7 @@ void lj_record_ins(jit_State *J)
 
   case BC_TSETM:
     rec_tsetm(J, ra, (BCReg)(J->L->top - J->L->base), (int32_t)rcv->u32.lo);
+    J->maxslot = ra;  /* The table slot at ra-1 is the highest used slot. */
     break;
 
   case BC_TNEW:
