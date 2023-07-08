@@ -1365,6 +1365,7 @@ static void asm_head_side(ASMState *as)
   IRRef1 sloadins[RID_MAX];
   RegSet allow = RSET_ALL;  /* Inverse of all coalesced registers. */
   RegSet live = RSET_EMPTY;  /* Live parent registers. */
+  RegSet pallow = RSET_GPR;  /* Registers needed by the parent stack check. */
   IRIns *irp = &as->parent->ir[REF_BASE];  /* Parent base. */
   int32_t spadj, spdelta;
   int pass2 = 0;
@@ -1404,6 +1405,7 @@ static void asm_head_side(ASMState *as)
       sloadins[rs] = (IRRef1)i;
       rset_set(live, rs);  /* Block live parent register. */
     }
+    if (!ra_hasspill(regsp_spill(rs))) rset_clear(pallow, regsp_reg(rs));
   }
 
   /* Calculate stack frame adjustment. */
@@ -1520,7 +1522,7 @@ static void asm_head_side(ASMState *as)
     ExitNo exitno = as->J->exitno;
 #endif
     as->T->topslot = (uint8_t)as->topslot;  /* Remember for child traces. */
-    asm_stack_check(as, as->topslot, irp, allow & RSET_GPR, exitno);
+    asm_stack_check(as, as->topslot, irp, pallow, exitno);
   }
 }
 
