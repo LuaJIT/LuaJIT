@@ -909,7 +909,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   IRIns *irkey = IR(kslot->op1);
   int32_t ofs = (int32_t)(kslot->op2 * sizeof(Node));
   int32_t kofs = ofs + (int32_t)offsetof(Node, key);
-  int bigofs = !emit_checkofs(A64I_LDRx, ofs);
+  int bigofs = !emit_checkofs(A64I_LDRx, kofs);
   Reg dest = (ra_used(ir) || bigofs) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
   Reg node = ra_alloc1(as, ir->op1, RSET_GPR);
   Reg key, idx = node;
