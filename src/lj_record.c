@@ -1942,12 +1942,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
   if (J->framedepth > 0) {  /* Simple case: varargs defined on-trace. */
     ptrdiff_t i;
     if (nvararg < 0) nvararg = 0;
-    if (nresults == -1) {
-      nresults = nvararg;
-      J->maxslot = dst + (BCReg)nvararg;
-    } else if (dst + nresults > J->maxslot) {
-      J->maxslot = dst + (BCReg)nresults;
-    }
+    if (nresults == -1) nresults = nvararg;
+    J->maxslot = dst + (BCReg)nresults;
     if (J->baseslot + J->maxslot >= LJ_MAX_JSLOTS)
       lj_trace_err(J, LJ_TRERR_STACKOV);
     for (i = 0; i < nresults; i++)
