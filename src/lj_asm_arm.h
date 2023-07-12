@@ -2114,7 +2114,7 @@ static void asm_head_root_base(ASMState *as)
 }
 
 /* Coalesce BASE register for a side trace. */
-static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
+static Reg asm_head_side_base(ASMState *as, IRIns *irp)
 {
   IRIns *ir;
   asm_head_lreg(as);
@@ -2122,16 +2122,15 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
   if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
     ra_spill(as, ir);
   if (ra_hasspill(irp->s)) {
-    rset_clear(allow, ra_dest(as, ir, allow));
+    return ra_dest(as, ir, RSET_GPR);
   } else {
     Reg r = irp->r;
     lua_assert(ra_hasreg(r));
-    rset_clear(allow, r);
     if (r != ir->r && !rset_test(as->freeset, r))
       ra_restore(as, regcost_ref(as->cost[r]));
     ra_destreg(as, ir, r);
+    return r;
   }
-  return allow;
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
