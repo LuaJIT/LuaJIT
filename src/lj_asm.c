@@ -1889,6 +1889,7 @@ static void asm_head_side(ASMState *as)
   RegSet allow = RSET_ALL;  /* Inverse of all coalesced registers. */
   RegSet live = RSET_EMPTY;  /* Live parent registers. */
   RegSet pallow = RSET_GPR;  /* Registers needed by the parent stack check. */
+  Reg pbase;
   IRIns *irp = &as->parent->ir[REF_BASE];  /* Parent base. */
   int32_t spadj, spdelta;
   int pass2 = 0;
@@ -1899,7 +1900,11 @@ static void asm_head_side(ASMState *as)
     /* Force snap #0 alloc to prevent register overwrite in stack check. */
     asm_snap_alloc(as, 0);
   }
-  allow = asm_head_side_base(as, irp, allow);
+  pbase = asm_head_side_base(as, irp);
+  if (pbase != RID_NONE) {
+    rset_clear(allow, pbase);
+    rset_clear(pallow, pbase);
+  }
 
   /* Scan all parent SLOADs and collect register dependencies. */
   for (i = as->stopins; i > REF_BASE; i--) {
