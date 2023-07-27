@@ -263,6 +263,8 @@ static CPToken cp_string(CPState *cp)
 	      c = c*8 + (cp->c - '0');
 	      cp_get(cp);
 	    }
+	  } else {
+		  c = '\\';
 	  }
 	  cp_save(cp, (c & 0xff));
 	  continue;

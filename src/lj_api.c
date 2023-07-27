@@ -495,6 +495,22 @@ LUALIB_API lua_Integer luaL_optinteger(lua_State *L, int idx, lua_Integer def)
 #endif
 }
 
+
+LUA_API int luaL_checkboolean (lua_State *L, int idx) {
+  cTValue *o = index2adr(L, idx);
+  if (!tvisbool(o))
+    lj_err_argt(L, idx, LUA_TBOOLEAN);
+  return boolV(o);
+}
+
+
+LUA_API int luaL_optboolean (lua_State *L, int idx, int def) {
+  cTValue *o = index2adr(L, idx);
+  if (!tvisbool(o))
+      return def;
+  return boolV(o);
+}
+
 LUA_API int lua_toboolean(lua_State *L, int idx)
 {
   cTValue *o = index2adr(L, idx);

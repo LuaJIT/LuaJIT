@@ -206,6 +206,7 @@ static void lex_string(LexState *ls, TValue *tv)
       case 'r': c = '\r'; break;
       case 't': c = '\t'; break;
       case 'v': c = '\v'; break;
+#if 0
       case 'x':  /* Hexadecimal escape '\xXX'. */
 	c = (lex_next(ls) & 15u) << 4;
 	if (!lj_char_isdigit(ls->c)) {
@@ -250,12 +251,15 @@ static void lex_string(LexState *ls, TValue *tv)
 	while (lj_char_isspace(ls->c))
 	  if (lex_iseol(ls)) lex_newline(ls); else lex_next(ls);
 	continue;
+#endif
       case '\n': case '\r': lex_save(ls, '\n'); lex_newline(ls); continue;
       case '\\': case '\"': case '\'': break;
       case LEX_EOF: continue;
       default:
-	if (!lj_char_isdigit(c))
+	if (!lj_char_isdigit(c)) {
+    break;
 	  goto err_xesc;
+  }
 	c -= '0';  /* Decimal escape '\ddd'. */
 	if (lj_char_isdigit(lex_next(ls))) {
 	  c = c*10 + (ls->c - '0');

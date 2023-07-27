@@ -14,7 +14,7 @@
 
 @setlocal
 @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_APICHECK
-@set DEBUGCFLAGS=
+@set DEBUGCFLAGS= /DLUA_USE_APICHECK /DLUA_USE_ASSERT
 @set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
@@ -22,8 +22,8 @@
 @set DASMDIR=..\dynasm
 @set DASM=%DASMDIR%\dynasm.lua
 @set DASC=vm_x64.dasc
-@set LJDLLNAME=lua51.dll
-@set LJLIBNAME=lua51.lib
+@set LJDLLNAME=lua51DS.dll
+@set LJLIBNAME=lua51DS.lib
 @set BUILDTYPE=release
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
 
@@ -76,7 +76,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1" neq "debug" goto :NODEBUG
 @shift
 @set BUILDTYPE=debug
-@set LJCOMPILE=%LJCOMPILE% /Zi %DEBUGCFLAGS%
+@set LJCOMPILE=%LJCOMPILE% /Od /Zi %DEBUGCFLAGS%
 @set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no
 :NODEBUG
 @set LJLINK=%LJLINK% /%BUILDTYPE%
@@ -113,14 +113,14 @@ if exist luajit.exe.manifest^
 @del host\buildvm_arch.h
 @del lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h
 @echo.
-@echo === Successfully built LuaJIT for Windows/%LJARCH% ===
+@echo === Successfully built LuaJIT for Windows/%LJARCH%[%BUILDTYPE%] ===
 
 @goto :END
 :BAD
 @echo.
 @echo *******************************************************
 @echo *** Build FAILED -- Please check the error messages ***
-@echo *******************************************************
+@echo *******************************************************
 @goto :END
 :FAIL
 @echo You must open a "Visual Studio Command Prompt" to run this script

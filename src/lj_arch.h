@@ -722,4 +722,41 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_SECURITY_MODESTRING \
   "\004prng\007strhash\005strid\005mcode"
 
+#ifndef LUAJIT_DISABLE_DS
+#define LJ_DS 1
+#else 
+#define LJ_DS 0
+#endif
+
+#ifndef LJ_DS_STRING_HASH
+#define LJ_DS_STRING_HASH LJ_DS
+#endif
+
+#ifndef LJ_DS_STRING_DUMP_FIX
+#define LJ_DS_STRING_DUMP_FIX LJ_DS
+#endif
+
+#ifndef LJ_DS_MOD_GEMCORE_FIX
+#define LJ_DS_MOD_GEMCORE_FIX LJ_DS
+#endif
+
+#ifndef LJ_DS_BIG_UPVAL_PATCH
+#define LJ_DS_BIG_UPVAL_PATCH LJ_DS
+#endif
+
+#ifndef LJ_DS_UNPACK_PATCH
+#define LJ_DS_UNPACK_PATCH LJ_DS
+#endif
+
+#ifndef LJ_NO_SYSTEM
+#define LJ_NO_SYSTEM LJ_DS
+#endif
+
+#ifdef LJ_DS
+    #ifdef LUAJIT_SECURITY_STRHASH
+    #undef LUAJIT_SECURITY_STRHASH
+    #endif
+#define LUAJIT_SECURITY_STRHASH !LJ_DS
+#endif
+
 #endif

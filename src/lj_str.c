@@ -75,6 +75,7 @@ int lj_str_haspattern(GCstr *s)
 /* Keyed sparse ARX string hash. Constant time. */
 static StrHash hash_sparse(uint64_t seed, const char *str, MSize len)
 {
+#if 0
   /* Constants taken from lookup3 hash by Bob Jenkins. */
   StrHash a, b, h = len ^ (StrHash)seed;
   if (len >= 4) {  /* Caveat: unaligned access! */
@@ -92,6 +93,14 @@ static StrHash hash_sparse(uint64_t seed, const char *str, MSize len)
   a ^= h; a -= lj_rol(h, 11);
   b ^= a; b -= lj_rol(a, 25);
   h ^= b; h -= lj_rol(b, 16);
+#else
+  const MSize l = len;
+  StrHash  h = (unsigned int)l;  /* seed */
+  size_t step = (l>>5)+1;  /* if string is too long, don't hash all its chars */
+
+  for (size_t l1=l; l1>=step; l1-=step)  /* compute hash */
+    h = h ^ ((h<<5)+(h>>2)+(unsigned char)str[l1-1]);
+#endif
   return h;
 }
 

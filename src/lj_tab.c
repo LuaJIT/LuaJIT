@@ -279,8 +279,8 @@ void lj_tab_resize(lua_State *L, GCtab *t, uint32_t asize, uint32_t hbits)
   }
   if (oldhmask > 0) {  /* Reinsert pairs from old hash part. */
     global_State *g;
-    uint32_t i;
-    for (i = 0; i <= oldhmask; i++) {
+    int i;
+    for (i = oldhmask; i >= 0; i--) {
       Node *n = &oldnode[i];
       if (!tvisnil(&n->val))
 	copyTV(L, lj_tab_set(L, t, &n->key), &n->val);
@@ -691,3 +691,14 @@ MSize LJ_FASTCALL lj_tab_len_hint(GCtab *t, size_t hint)
 }
 #endif
 
+#if LJ_DS_UNPACK_PATCH
+MSize LJ_FASTCALL lj_tab_arraylen(GCtab *t)
+{
+  MSize j = (MSize)t->asize;
+  while (j > 1 && tvisnil(arrayslot(t, j - 1))) {
+    j--;
+  }
+  if (j) --j;
+  return j;
+}
+#endif

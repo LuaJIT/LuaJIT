@@ -222,10 +222,16 @@ LJLIB_CF(rawlen)		LJLIB_REC(.)
 
 LJLIB_CF(unpack)
 {
+#if LJ_DS_UNPACK_PATCH
+#define TAB_LEN lj_tab_arraylen
+#else
+#define TAB_LEN lj_tab_len
+#endif
+
   GCtab *t = lj_lib_checktab(L, 1);
   int32_t n, i = lj_lib_optint(L, 2, 1);
   int32_t e = (L->base+3-1 < L->top && !tvisnil(L->base+3-1)) ?
-	      lj_lib_checkint(L, 3) : (int32_t)lj_tab_len(t);
+	      lj_lib_checkint(L, 3) : (int32_t)TAB_LEN(t);
   uint32_t nu;
   if (i > e) return 0;
   nu = (uint32_t)e - (uint32_t)i;
@@ -434,8 +440,89 @@ LJLIB_CF(load)
   return load_aux(L, status, 4);
 }
 
+#if LJ_DS_BIG_UPVAL_PATCH
+void filter(lua_State* L) {
+	char ch, check = 0;
+	int level = 0;
+	int t = lua_type(L, 1);
+	int happen = 0;
+	int quote = 0;
+  int slash = 0;
+	const char* p = lua_tostring(L, 1);
+	long size = lua_objlen(L, 1);
+	char levelMasks[1024];
+	memset(levelMasks, 0, sizeof(levelMasks));
+	if (t == LUA_TSTRING) {
+		char* target = (char*)malloc(size * 2);
+		char* q = target;
+		while (size-- > 0) {
+			ch = *p++;
+			if (ch == '"' && !slash) {
+				quote = !quote;
+			}
+
+			if (!quote) {
+				if (ch == '{') {
+
+					level++;
+					if (check) {
+						const char* ts = "(function () return {";
+						--q;
+						memcpy(q, ts, strlen(ts));
+						q += strlen(ts);
+						levelMasks[level - 2] = 1;
+						check = 0;
+						happen = 1;
+					}
+
+					check = 1;
+					*q++ = (char)ch;
+				} else {
+					*q++ = (char)ch;
+					if (level > 0 && ch == '}') {
+						level--;
+						
+						if (levelMasks[level] != 0) {
+							const char* ts = "end)()";
+							memcpy(q, ts, strlen(ts));
+							q += strlen(ts);
+							levelMasks[level] = 0;
+						}
+					}
+					check = 0;
+				}
+			} else {
+        if (ch == '\\') {
+          slash = !slash;
+        } else {
+          slash = 0;
+        }
+				*q++ = (char)ch;
+				check = 0;
+			}
+		}
+
+		if (happen) {
+			*q = 0;
+      /* printf("TARGET: %s\n", target); */
+/*
+      FILE* tg = fopen("modified.lua", "wb");
+      fwrite(target, q-target, 1, tg);
+      fclose(tg);*/
+			lua_pushlstring(L, target, q - target);
+			lua_replace(L, 1);
+		}
+
+		free(target);
+	}
+}
+#endif
+
 LJLIB_CF(loadstring)
 {
+#if LJ_DS_BIG_UPVAL_PATCH
+  filter(L);
+#endif
   return lj_cf_load(L);
 }
 

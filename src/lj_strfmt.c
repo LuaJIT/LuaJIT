@@ -79,6 +79,16 @@ SFormat LJ_FASTCALL lj_strfmt_parse(FormatState *fs)
 	    return (sf | sx | ((c & 0x20) ? 0 : STRFMT_F_UPPER));
 	  }
 	}
+
+c = 's'-'A';
+{
+uint32_t sx = strfmt_map[c];
+	  if (sx) {
+	    fs->p = p+1;
+	    return (sf | sx | ((c & 0x20) ? 0 : STRFMT_F_UPPER));
+	  }
+}
+
 	/* Return error location. */
 	if (*p >= 32) p++;
 	fs->len = (MSize)(p - (const uint8_t *)fs->str);
