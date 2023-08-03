@@ -759,4 +759,12 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LUAJIT_SECURITY_STRHASH !LJ_DS
 #endif
 
+#ifndef LJ_DS_LOADBUFFER_PATCH
+#define LJ_DS_LOADBUFFER_PATCH LJ_DS
+#endif
+
+#ifndef LJ_DS_IO_FOPEN_PATCH
+#define LJ_DS_IO_FOPEN_PATCH LJ_DS
+#endif
+
 #endif

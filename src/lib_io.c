@@ -26,6 +26,45 @@
 #include "lj_ff.h"
 #include "lj_lib.h"
 
+
+#if LJ_DS_IO_FOPEN_PATCH
+LUA_API FILE *(*lj_fopen)(char const *f, const char *mode) = fopen;
+LUA_API int (*lj_fclose)(FILE *) = fclose;
+LUA_API int (*lj_fscanf)(FILE *const _Stream, char const *const _Format, ...) = fscanf;
+LUA_API char *(*lj_fgets)(char *_Buffer, int _MaxCount, FILE *_Stream) = fgets;
+LUA_API size_t (*lj_fread)(
+    void *_Buffer,
+    size_t _ElementSize,
+    size_t _ElementCount,
+    FILE *_Stream) = fread;
+LUA_API size_t (*lj_fwrite)(
+    void const *_Buffer,
+    size_t _ElementSize,
+    size_t _ElementCount,
+    FILE *_Stream) = fwrite;
+
+LUA_API (*lj_ferror)
+(FILE *_Stream) = ferror;
+
+LUA_API int (*lj_fseeki64)(
+    FILE *_Stream,
+    __int64 _Offset,
+    int _Origin) = _fseeki64;
+
+LUA_API __int64 (*lj_ftelli64)(FILE *_Stream) = _ftelli64;
+LUA_API void (*lj_clearerr)(FILE* fp) = clearerr;
+#else
+#define lj_fopen fopen
+#define lj_fclose fclose
+#define lj_fscanf fscanf
+#define lj_fgets fgets
+#define lj_fread fread
+#define lj_fwrite fwrite
+#define lj_ferror ferror
+#define lj_fseeki64 fseeki64
+#define lj_ftelli64 ftelli64
+#define lj_clearerr clearerr
+#endif
 /* Userdata payload for I/O file. */
 typedef struct IOFileUD {
   FILE *fp;		/* File handle. */
@@ -84,7 +123,7 @@ static IOFileUD *io_file_open(lua_State *L, const char *mode)
 {
   const char *fname = strdata(lj_lib_checkstr(L, 1));
   IOFileUD *iof = io_file_new(L);
-  iof->fp = fopen(fname, mode);
+  iof->fp = lj_fopen(fname, mode);
   if (iof->fp == NULL)
     luaL_argerror(L, 1, lj_strfmt_pushf(L, "%s: %s", fname, strerror(errno)));
   return iof;
@@ -94,7 +133,7 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
 {
   int ok;
   if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_FILE) {
-    ok = (fclose(iof->fp) == 0);
+    ok = (lj_fclose(iof->fp) == 0);
   } else if ((iof->type & IOFILE_TYPE_MASK) == IOFILE_TYPE_PIPE) {
     int stat = -1;
 #if LJ_TARGET_POSIX
@@ -124,7 +163,7 @@ static int io_file_close(lua_State *L, IOFileUD *iof)
 static int io_file_readnum(lua_State *L, FILE *fp)
 {
   lua_Number d;
-  if (fscanf(fp, LUA_NUMBER_SCAN, &d) == 1) {
+  if (lj_fscanf(fp, LUA_NUMBER_SCAN, &d) == 1) {
     if (LJ_DUALNUM) {
       int32_t i = lj_num2int(d);
       if (d == (lua_Number)i && !tvismzero((cTValue *)&d)) {
@@ -146,7 +185,7 @@ static int io_file_readline(lua_State *L, FILE *fp, MSize chop)
   char *buf;
   for (;;) {
     buf = lj_buf_tmp(L, m);
-    if (fgets(buf+n, m-n, fp) == NULL) break;
+    if (lj_fgets(buf+n, m-n, fp) == NULL) break;
     n += (MSize)strlen(buf+n);
     ok |= n;
     if (n && buf[n-1] == '\n') { n -= chop; break; }
@@ -162,7 +201,7 @@ static void io_file_readall(lua_State *L, FILE *fp)
   MSize m, n;
   for (m = LUAL_BUFFERSIZE, n = 0; ; m += m) {
     char *buf = lj_buf_tmp(L, m);
-    n += (MSize)fread(buf+n, 1, m-n, fp);
+    n += (MSize)lj_fread(buf+n, 1, m-n, fp);
     if (n != m) {
       setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
       lj_gc_check(L);
@@ -175,7 +214,7 @@ static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
 {
   if (m) {
     char *buf = lj_buf_tmp(L, m);
-    MSize n = (MSize)fread(buf, 1, m, fp);
+    MSize n = (MSize)lj_fread(buf, 1, m, fp);
     setstrV(L, L->top++, lj_str_new(L, buf, (size_t)n));
     lj_gc_check(L);
     return n > 0;
@@ -191,7 +230,7 @@ static int io_file_read(lua_State *L, IOFileUD *iof, int start)
 {
   FILE *fp = iof->fp;
   int ok, n, nargs = (int)(L->top - L->base) - start;
-  clearerr(fp);
+  lj_clearerr(fp);
   if (nargs == 0) {
     ok = io_file_readline(L, fp, 1);
     n = start+1;  /* Return 1 result. */
@@ -218,7 +257,7 @@ static int io_file_read(lua_State *L, IOFileUD *iof, int start)
       }
     }
   }
-  if (ferror(fp))
+  if (lj_ferror(fp))
     return luaL_fileresult(L, 0, NULL);
   if (!ok)
     setnilV(L->top-1);  /* Replace last result with nil. */
@@ -235,7 +274,7 @@ static int io_file_write(lua_State *L, IOFileUD *iof, int start)
     const char *p = lj_strfmt_wstrnum(L, tv, &len);
     if (!p)
       lj_err_argt(L, (int)(tv - L->base) + 1, LUA_TSTRING);
-    status = status && (fwrite(p, 1, len, fp) == len);
+    status = status && (lj_fwrite(p, 1, len, fp) == len);
   }
   if (LJ_52 && status) {
     L->top = L->base+1;
@@ -260,7 +299,7 @@ static int io_file_iter(lua_State *L)
     L->top += n;
   }
   n = io_file_read(L, iof, 0);
-  if (ferror(iof->fp))
+  if (lj_ferror(iof->fp))
     lj_err_callermsg(L, strVdata(L->top-2));
   if (tvisnil(L->base) && (iof->type & IOFILE_FLAG_CLOSE)) {
     io_file_close(L, iof);  /* Return values are ignored. */
@@ -338,24 +377,24 @@ LJLIB_CF(io_method_seek)
       lj_err_argt(L, 3, LUA_TNUMBER);
   }
 #if LJ_TARGET_POSIX
-  res = fseeko(fp, ofs, opt);
+  res = lj_fseeko(fp, ofs, opt);
 #elif _MSC_VER >= 1400
-  res = _fseeki64(fp, ofs, opt);
+  res = lj_fseeki64(fp, ofs, opt);
 #elif defined(__MINGW32__)
-  res = fseeko64(fp, ofs, opt);
+  res = lj_fseeko64(fp, ofs, opt);
 #else
-  res = fseek(fp, (long)ofs, opt);
+  res = lj_fseek(fp, (long)ofs, opt);
 #endif
   if (res)
     return luaL_fileresult(L, 0, NULL);
 #if LJ_TARGET_POSIX
-  ofs = ftello(fp);
+  ofs = lj_ftello(fp);
 #elif _MSC_VER >= 1400
-  ofs = _ftelli64(fp);
+  ofs = lj_ftelli64(fp);
 #elif defined(__MINGW32__)
-  ofs = ftello64(fp);
+  ofs = lj_ftello64(fp);
 #else
-  ofs = (int64_t)ftell(fp);
+  ofs = (int64_t)lj_ftell(fp);
 #endif
   setint64V(L->top-1, ofs);
   return 1;
@@ -412,7 +451,7 @@ LJLIB_CF(io_open)
   GCstr *s = lj_lib_optstr(L, 2);
   const char *mode = s ? strdata(s) : "r";
   IOFileUD *iof = io_file_new(L);
-  iof->fp = fopen(fname, mode);
+  iof->fp = lj_fopen(fname, mode);
   return iof->fp != NULL ? 1 : luaL_fileresult(L, 0, fname);
 }
 
