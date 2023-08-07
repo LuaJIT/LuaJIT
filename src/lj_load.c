@@ -205,16 +205,16 @@ LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,
 #ifdef LJ_DS_LOADBUFFER_PATCH
   if (buf != name){
     if (lj_path_map){
-      name = lj_path_map(name);
-      if (name){
-        char path[255];
-        snprintf(path, 255, "@%s", name);
+      const char* real_path = lj_path_map(name);
+      if (real_path){
+        char path[260];
+        snprintf(path, 260, "@%s", real_path);
         return luaL_loadbufferx(L, buf, size, path, NULL);
       }
     }
     if (strncmp(name, "scripts/", sizeof("scripts/") -1) == 0) {
-      char path[255];
-      snprintf(path, 255, "@%s", name);
+      char path[260];
+      snprintf(path, 260, "@%s", name);
       return luaL_loadbufferx(L, buf, size, path, NULL);
     }
   }
