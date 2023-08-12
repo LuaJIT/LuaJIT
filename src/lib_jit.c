@@ -422,7 +422,8 @@ LJLIB_CF(jit_util_ircalladdr)
 {
   uint32_t idx = (uint32_t)lj_lib_checkint(L, 1);
   if (idx < IRCALL__MAX) {
-    setintptrV(L->top-1, (intptr_t)(void *)lj_ir_callinfo[idx].func);
+    ASMFunction func = lj_ir_callinfo[idx].func;
+    setintptrV(L->top-1, (intptr_t)(void *)lj_ptr_strip(func));
     return 1;
   }
   return 0;

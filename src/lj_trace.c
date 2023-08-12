@@ -153,6 +153,9 @@ static void trace_save(jit_State *J, GCtrace *T)
   newwhite(J2G(J), T);
   T->gct = ~LJ_TTRACE;
   T->ir = (IRIns *)p - J->cur.nk;  /* The IR has already been copied above. */
+#if LJ_ABI_PAUTH
+  T->mcauth = lj_ptr_sign((ASMFunction)T->mcode, T);
+#endif
   p += szins;
   TRACE_APPENDVEC(snap, nsnap, SnapShot)
   TRACE_APPENDVEC(snapmap, nsnapmap, SnapEntry)

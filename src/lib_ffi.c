@@ -745,6 +745,9 @@ LJLIB_CF(ffi_abi)	LJLIB_REC(.)
 #if LJ_ABI_WIN
     "\003win"
 #endif
+#if LJ_ABI_PAUTH
+    "\007pauth"
+#endif
 #if LJ_TARGET_UWP
     "\003uwp"
 #endif
