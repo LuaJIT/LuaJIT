@@ -823,6 +823,13 @@ map_op = {
   tbz_3  = "36000000DTBw|36000000DTBx",
   tbnz_3 = "37000000DTBw|37000000DTBx",
 
+  -- ARM64e: Pointer authentication codes (PAC).
+  blraaz_1  = "d63f081fNx",
+  braa_2    = "d71f0800NDx",
+  braaz_1   = "d61f081fNx",
+  pacibsp_0 = "d503237f",
+  retab_0   = "d65f0fff",
+
   -- Miscellaneous instructions.
   -- TODO: hlt, hvc, smc, svc, eret, dcps[123], drps, mrs, msr
   -- TODO: sys, sysl, ic, dc, at, tlbi
