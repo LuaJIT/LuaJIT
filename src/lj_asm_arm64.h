@@ -935,7 +935,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   emit_nm(as, A64I_CMPx, key, ra_allock(as, k, rset_exclude(allow, key)));
   emit_lso(as, A64I_LDRx, key, idx, kofs);
   if (bigofs)
-    emit_opk(as, A64I_ADDx, dest, node, ofs, RSET_GPR);
+    emit_opk(as, A64I_ADDx, dest, node, ofs, rset_exclude(RSET_GPR, node));
 }
 
 static void asm_uref(ASMState *as, IRIns *ir)
