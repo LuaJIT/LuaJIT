@@ -875,6 +875,10 @@ LJ_NORET LJ_NOINLINE static void err_msgv(lua_State *L, ErrMsg em, ...)
   const char *msg;
   va_list argp;
   va_start(argp, em);
+  if (LJ_HASJIT) {
+    TValue *base = tvref(G(L)->jit_base);
+    if (base) L->base = base;
+  }
   if (curr_funcisL(L)) L->top = curr_topL(L);
   msg = lj_strfmt_pushvf(L, err2msg(em), argp);
   va_end(argp);
