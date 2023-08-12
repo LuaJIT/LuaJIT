@@ -243,6 +243,12 @@ void emit_asm(BuildCtx *ctx)
 
   fprintf(ctx->fp, "\t.file \"buildvm_%s.dasc\"\n", ctx->dasm_arch);
   fprintf(ctx->fp, "\t.text\n");
+#if LJ_TARGET_MIPS32 && !LJ_ABI_SOFTFP
+  fprintf(ctx->fp, "\t.module fp=32\n");
+#endif
+#if LJ_TARGET_MIPS
+  fprintf(ctx->fp, "\t.set nomips16\n\t.abicalls\n\t.set noreorder\n\t.set nomacro\n");
+#endif
   emit_asm_align(ctx, 4);
 
 #if LJ_TARGET_PS3
@@ -268,9 +274,6 @@ void emit_asm(BuildCtx *ctx)
 	  ".save {r4, r5, r6, r7, r8, r9, r10, r11, lr}\n"
 	  ".pad #28\n");
 #endif
-#endif
-#if LJ_TARGET_MIPS
-  fprintf(ctx->fp, ".set nomips16\n.abicalls\n.set noreorder\n.set nomacro\n");
 #endif
 
   for (i = rel = 0; i < ctx->nsym; i++) {
