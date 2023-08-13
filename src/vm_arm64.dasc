@@ -2005,8 +2005,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.if JIT
   |  ldr L, SAVE_L
   |1:
-  |  cmp CARG1w, #0
-  |  blt >9				// Check for error from exit.
+  |  cmn CARG1w, #LUA_ERRERR
+  |  bhs >9				// Check for error from exit.
   |   lsl RC, CARG1, #3
   |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
   |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
@@ -2023,6 +2023,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldrb RBw, [PC, # OFS_OP]
   |   ldr INSw, [PC], #4
   |    st_vmstate CARG4w
+  |  cmn CARG1w, #17			// Static dispatch?
+  |  beq >5
   |  cmp RBw, #BC_FUNCC+2		// Fast function?
   |   add TMP1, GL, INS, uxtb #3
   |  bhs >4
@@ -2033,12 +2035,12 @@ static void build_subroutines(BuildCtx *ctx)
   |   decode_RA RA, INS
   |   lsr TMP0, INS, #16
   |   csel RC, TMP0, RC, lo
-  |   blo >5
+  |   blo >3
   |   ldr CARG3, [BASE, FRAME_FUNC]
   |   sub RC, RC, #8
   |   add RA, BASE, RA, lsl #3	// Yes: RA = BASE+framesize*8, RC = nargs*8
   |   and LFUNC:CARG3, CARG3, #LJ_GCVMASK
-  |5:
+  |3:
   |  br_auth RB
   |
   |4:  // Check frame below fast function.
@@ -2054,6 +2056,17 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr CARG3, LFUNC:CARG3->pc
   |  ldr KBASE, [CARG3, #PC2PROTO(k)]
   |  b <2
+  |
+  |5:  // Dispatch to static entry of original ins replaced by BC_JLOOP.
+  |  ldr RA, [GL, #GL_J(trace)]
+  |  decode_RD RC, INS
+  |  ldr TRACE:RA, [RA, RC, lsl #3]
+  |  ldr INSw, TRACE:RA->startins
+  |  add TMP0, GL, INS, uxtb #3
+  |   decode_RA RA, INS
+  |  ldr RB, [TMP0, #GG_G2DISP+GG_DISP2STATIC]
+  |   decode_RD RC, INS
+  |  br_auth RB
   |
   |9:  // Rethrow error from the right C frame.
   |  neg CARG2w, CARG1w
