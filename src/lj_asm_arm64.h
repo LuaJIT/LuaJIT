@@ -421,8 +421,8 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   uint32_t n, nargs = CCI_XNARGS(ci);
   int32_t ofs = 0;
   Reg gpr, fpr = REGARG_FIRSTFPR;
-  if ((void *)ci->func)
-    emit_call(as, (void *)ci->func);
+  if (ci->func)
+    emit_call(as, ci->func);
   for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
     as->cost[gpr] = REGCOST(~0u, ASMREF_L);
   gpr = REGARG_FIRSTGPR;
@@ -501,7 +501,7 @@ static void asm_callx(ASMState *as, IRIns *ir)
     ci.func = (ASMFunction)(ir_k64(irf)->u64);
   } else {  /* Need a non-argument register for indirect calls. */
     Reg freg = ra_alloc1(as, func, RSET_RANGE(RID_X8, RID_MAX_GPR)-RSET_FIXED);
-    emit_n(as, A64I_BLR, freg);
+    emit_n(as, A64I_BLR_AUTH, freg);
     ci.func = (ASMFunction)(void *)0;
   }
   asm_gencall(as, &ci, args);
@@ -935,7 +935,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   emit_nm(as, A64I_CMPx, key, ra_allock(as, k, rset_exclude(allow, key)));
   emit_lso(as, A64I_LDRx, key, idx, kofs);
   if (bigofs)
-    emit_opk(as, A64I_ADDx, dest, node, ofs, RSET_GPR);
+    emit_opk(as, A64I_ADDx, dest, node, ofs, rset_exclude(RSET_GPR, node));
 }
 
 static void asm_uref(ASMState *as, IRIns *ir)

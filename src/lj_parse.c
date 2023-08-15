@@ -2518,6 +2518,7 @@ static int predict_next(LexState *ls, FuncState *fs, BCPos pc)
   cTValue *o;
   switch (bc_op(ins)) {
   case BC_MOV:
+    if (bc_d(ins) >= fs->nactvar) return 0;
     name = gco2str(gcref(var_get(ls, fs, bc_d(ins)).name));
     break;
   case BC_UGET:

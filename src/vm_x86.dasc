@@ -2902,7 +2902,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov r13, TMPa
   |  mov r12, TMPQ
   |.endif
-  |  test RD, RD; js >9			// Check for error from exit.
+  |  cmp RD, -LUA_ERRERR; jae >9	// Check for error from exit.
   |  mov L:RB, SAVE_L
   |  mov MULTRES, RD
   |  mov LFUNC:KBASE, [BASE-8]
@@ -2917,6 +2917,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  movzx OP, RCL
   |  add PC, 4
   |  shr RC, 16
+  |  cmp MULTRES, -17			// Static dispatch?
+  |  je >5
   |  cmp OP, BC_FUNCF			// Function header?
   |  jb >3
   |  cmp OP, BC_FUNCC+2			// Fast function?
@@ -2941,6 +2943,19 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov KBASE, LFUNC:KBASE->pc
   |  mov KBASE, [KBASE+PC2PROTO(k)]
   |  jmp <2
+  |
+  |5:  // Dispatch to static entry of original ins replaced by BC_JLOOP.
+  |  mov RA, [DISPATCH+DISPATCH_J(trace)]
+  |  mov TRACE:RA, [RA+RD*4]
+  |  mov RC, TRACE:RA->startins
+  |  movzx RA, RCH
+  |  movzx OP, RCL
+  |  shr RC, 16
+  |.if X64
+  |  jmp aword [DISPATCH+OP*8+GG_DISP2STATIC]
+  |.else
+  |  jmp aword [DISPATCH+OP*4+GG_DISP2STATIC]
+  |.endif
   |
   |9:  // Rethrow error from the right C frame.
   |  mov FCARG2, RD

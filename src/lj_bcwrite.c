@@ -189,7 +189,8 @@ static void bcwrite_knum(BCWriteCtx *ctx, GCproto *pt)
       goto save_int;
     } else {
       /* Write a 33 bit ULEB128 for the int (lsb=0) or loword (lsb=1). */
-      if (!LJ_DUALNUM) {  /* Narrow number constants to integers. */
+      if (!LJ_DUALNUM && o->u32.hi != LJ_KEYINDEX) {
+	/* Narrow number constants to integers. */
 	lua_Number num = numV(o);
 	k = lj_num2int(num);
 	if (num == (lua_Number)k) {  /* -0 is never a constant. */

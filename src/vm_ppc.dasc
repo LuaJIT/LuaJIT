@@ -3015,8 +3015,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  addi DISPATCH, JGL, -GG_DISP2G-32768
   |  stp BASE, L->base
   |1:
-  |  cmpwi CARG1, 0
-  |  blt >9				// Check for error from exit.
+  |  li TMP2, -LUA_ERRERR
+  |  cmplw CARG1, TMP2
+  |  bge >9				// Check for error from exit.
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
   |   slwi MULTRES, CARG1, 3
   |    li TMP2, 0
@@ -3041,6 +3042,8 @@ static void build_subroutines(BuildCtx *ctx)
   |   addi PC, PC, 4
   |    // Assumes TISNIL == ~LJ_VMST_INTERP == -1.
   |    stw TISNIL, DISPATCH_GL(vmstate)(DISPATCH)
+  |  cmpwi CARG1, -17			// Static dispatch?
+  |  beq >5
   |  decode_OPP TMP1, INS
   |   decode_RA8 RA, INS
   |  lpx TMP0, DISPATCH, TMP1
@@ -3068,6 +3071,21 @@ static void build_subroutines(BuildCtx *ctx)
   |3:
   |   subi RC, MULTRES, 8
   |   add RA, RA, BASE
+  |  bctr
+  |
+  |5:  // Dispatch to static entry of original ins replaced by BC_JLOOP.
+  |  lwz TMP1, DISPATCH_J(trace)(DISPATCH)
+  |  decode_RD4 RD, INS
+  |  lwzx TRACE:TMP1, TMP1, RD
+  |  lwz INS, TRACE:TMP1->startins
+  |  decode_OPP TMP1, INS
+  |  addi TMP1, TMP1, GG_DISP2STATIC
+  |  lpx TMP0, DISPATCH, TMP1
+  |  mtctr TMP0
+  |   decode_RB8 RB, INS
+  |   decode_RD8 RD, INS
+  |   decode_RA8 RA, INS
+  |   decode_RC8 RC, INS
   |  bctr
   |
   |9:  // Rethrow error from the right C frame.
