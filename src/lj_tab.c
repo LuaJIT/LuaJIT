@@ -691,14 +691,3 @@ MSize LJ_FASTCALL lj_tab_len_hint(GCtab *t, size_t hint)
 }
 #endif
 
-#if LJ_DS_UNPACK_PATCH
-MSize LJ_FASTCALL lj_tab_arraylen(GCtab *t)
-{
-  MSize j = (MSize)t->asize;
-  while (j > 1 && tvisnil(arrayslot(t, j - 1))) {
-    j--;
-  }
-  if (j) --j;
-  return j;
-}
-#endif

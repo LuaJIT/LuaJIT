@@ -222,16 +222,10 @@ LJLIB_CF(rawlen)		LJLIB_REC(.)
 
 LJLIB_CF(unpack)
 {
-#if LJ_DS_UNPACK_PATCH
-#define TAB_LEN lj_tab_arraylen
-#else
-#define TAB_LEN lj_tab_len
-#endif
-
   GCtab *t = lj_lib_checktab(L, 1);
   int32_t n, i = lj_lib_optint(L, 2, 1);
   int32_t e = (L->base+3-1 < L->top && !tvisnil(L->base+3-1)) ?
-	      lj_lib_checkint(L, 3) : (int32_t)TAB_LEN(t);
+	      lj_lib_checkint(L, 3) : (int32_t)lj_tab_len(t);
   uint32_t nu;
   if (i > e) return 0;
   nu = (uint32_t)e - (uint32_t)i;

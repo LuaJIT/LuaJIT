@@ -751,8 +751,8 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_DS_BIG_UPVAL_PATCH LJ_DS
 #endif
 
-#ifndef LJ_DS_UNPACK_PATCH
-#define LJ_DS_UNPACK_PATCH LJ_DS
+#ifndef LJ_DS_PARSER_TABLE_PATCH
+#define LJ_DS_PARSER_TABLE_PATCH LJ_DS
 #endif
 
 #ifndef LJ_NO_SYSTEM

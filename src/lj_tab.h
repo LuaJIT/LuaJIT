@@ -43,7 +43,7 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 
 #define hashlohi(t, lo, hi)	hashmask((t), hashrot((lo), (hi)))
 #define hashnum(t, o)		hashlohi((t), (o)->u32.lo, ((o)->u32.hi << 1))
-#if LJ_GC64
+#if LJ_GC64 
 #define hashgcref(t, r) \
   hashlohi((t), (uint32_t)gcrefu(r), (uint32_t)(gcrefu(r) >> 32))
 #else
@@ -51,6 +51,7 @@ static LJ_AINLINE Node *hashmask(const GCtab *t, uint32_t hash)
 #endif
 
 #define hsize2hbits(s)	((s) ? ((s)==1 ? 1 : 1+lj_fls((uint32_t)((s)-1))) : 0)
+#define hsize2hmask(s)  ((s) ? (1u <<hsize2hbits(nhash)) - 1 : 0)
 
 LJ_FUNCA GCtab *lj_tab_new(lua_State *L, uint32_t asize, uint32_t hbits);
 LJ_FUNC GCtab *lj_tab_new_ah(lua_State *L, int32_t a, int32_t h);
@@ -91,10 +92,6 @@ LJ_FUNCA int lj_tab_next(GCtab *t, cTValue *key, TValue *o);
 LJ_FUNCA MSize LJ_FASTCALL lj_tab_len(GCtab *t);
 #if LJ_HASJIT
 LJ_FUNC MSize LJ_FASTCALL lj_tab_len_hint(GCtab *t, size_t hint);
-#endif
-
-#if LJ_DS_UNPACK_PATCH
-LJ_FUNCA MSize LJ_FASTCALL lj_tab_arraylen(GCtab *t);
 #endif
 
 #endif

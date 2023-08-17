@@ -1807,8 +1807,14 @@ static void expr_table(LexState *ls, ExpDesc *e)
     else if (narr > 0x7ff) narr = 0x7ff;
     setbc_d(ip, narr|(hsize2hbits(nhash)<<11));
   } else {
+#if LJ_DS_PARSER_TABLE_PATCH
+    if ((needarr && t->asize != narr) ||  hsize2hmask(nhash) != t->hmask) {
+      lj_tab_resize(fs->L, t, narr, hsize2hbits(nhash));
+    }
+#else
     if (needarr && t->asize < narr)
       lj_tab_reasize(fs->L, t, narr-1);
+#endif
     if (fixt) {  /* Fix value for dummy keys in template table. */
       Node *node = noderef(t->node);
       uint32_t i, hmask = t->hmask;
