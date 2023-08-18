@@ -6,6 +6,7 @@
 # Debugged and (now seriously) modified by Ronan Collobert, for Torch7
 
 #project(LuaJIT C ASM)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 SET(LUAJIT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -427,3 +428,5 @@ MACRO(LUA_ADD_EXECUTABLE luajit_target)
   LUAJIT_add_custom_commands(${luajit_target} ${ARGN})
   add_executable(${luajit_target} ${target_srcs})
 ENDMACRO(LUA_ADD_EXECUTABLE luajit_target)
+
+install(TARGETS luajit-5.1 RUNTIME DESTINATION .)

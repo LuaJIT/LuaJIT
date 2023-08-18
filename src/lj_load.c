@@ -134,21 +134,34 @@ static const char *reader_string(lua_State *L, void *ud, size_t *size)
   return ctx->str;
 }
 
-char* hack_gemcore(const char* base, size_t size)
+static const char *custom_strstr(const char *haystack, int haystack_length, const char *needle) {
+    int needle_length = strlen(needle);
+    
+    for (int i = 0; i <= haystack_length - needle_length; ++i) {
+        if (memcmp(haystack + i, needle, needle_length) == 0) {
+            return (char *)(haystack + i);
+        }
+    }
+    
+    return NULL;
+}
+
+static char* hack_gemcore(const char* base, size_t size)
 {
 		char* target;
     const char* t = base;
-    char* s = NULL, *p = NULL, *q = NULL;
-    if (strstr(base, "return _debug_getinfo") == NULL) return NULL;
+    const char* s = NULL, *p = NULL;
+    char *q = NULL;
+    if (custom_strstr(base, size, "return _debug_getinfo") == NULL) return NULL;
 
     target = (char*)malloc(size * 2 + 32);
     memset(target, 0, size * 2 + 32);
     q = target;
 
     while (
-      ((p = strstr(t, "return _debug_")) != NULL) ||
-      ((p = strstr(t, "return _getfenv")) != NULL) ||
-      ((p = strstr(t, "return _setfenv")) != NULL)
+      ((p = custom_strstr(t, size, "return _debug_")) != NULL) ||
+      ((p = custom_strstr(t, size, "return _getfenv")) != NULL) ||
+      ((p = custom_strstr(t, size, "return _setfenv")) != NULL)
       ) {
       memcpy(q, t, p - t);
       q += p - t;
@@ -159,7 +172,7 @@ char* hack_gemcore(const char* base, size_t size)
         continue;
       }
 
-      s = strstr(p, "end");
+      s = custom_strstr(p, size - (p - base) - 1, "end");
       if (s != NULL) {
         memcpy(q, p, s - p); q += s - p;
         memcpy(q, ", nil end", 9); q += 9;
