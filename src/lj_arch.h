@@ -774,4 +774,8 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_DS_IO_FOPEN_PATCH LJ_DS
 #endif
 
+#ifndef LUA_COMPAT_GFIND
+#define LUA_COMPAT_GFIND LJ_DS
+#endif
+
 #endif
