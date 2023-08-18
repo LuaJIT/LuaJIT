@@ -137,7 +137,7 @@ static const char *reader_string(lua_State *L, void *ud, size_t *size)
 char* hack_gemcore(const char* base, size_t size)
 {
 		char* target;
-    char* t = base;
+    const char* t = base;
     char* s = NULL, *p = NULL, *q = NULL;
     if (strstr(base, "return _debug_getinfo") == NULL) return NULL;
 
@@ -195,14 +195,14 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
   return ret;
 }
 
-#ifdef LJ_DS_LOADBUFFER_PATCH
-LUA_API const char* (*lj_path_map)(const char* k);
+#if LJ_DS_LOADBUFFER_PATCH
+LUA_API const char* (*lj_path_map)(const char* k) = NULL;
 #endif
 
 LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,
 			       const char *name)
 {
-#ifdef LJ_DS_LOADBUFFER_PATCH
+#if LJ_DS_LOADBUFFER_PATCH
   if (buf != name){
     if (lj_path_map){
       const char* real_path = lj_path_map(name);
