@@ -760,10 +760,10 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #endif
 
 #ifdef LJ_DS
-    #ifdef LUAJIT_SECURITY_STRHASH
-    #undef LUAJIT_SECURITY_STRHASH
-    #endif
-#define LUAJIT_SECURITY_STRHASH !LJ_DS
+#undef LUAJIT_SECURITY_STRHASH
+#undef LUAJIT_SECURITY_STRID
+#define LUAJIT_SECURITY_STRHASH 0
+#define LUAJIT_SECURITY_STRID 0
 #endif
 
 #ifndef LJ_DS_LOADBUFFER_PATCH
@@ -776,6 +776,10 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 
 #ifndef LUA_COMPAT_GFIND
 #define LUA_COMPAT_GFIND LJ_DS
+#endif
+
+#ifndef LJ_DS_STR_HASH_PATCH
+#define LJ_DS_STR_HASH_PATCH LJ_DS
 #endif
 
 #endif

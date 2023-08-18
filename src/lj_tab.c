@@ -374,6 +374,32 @@ void lj_tab_rehash(lua_State *L, GCtab *t)
 }
 #endif
 
+#if LJ_DS_PARSER_TABLE_PATCH
+void lj_tab_rehash_bykeys(lua_State *L, GCtab *t, GCtab *kt)
+{
+  Node *oldnode = noderef(t->node);
+  uint32_t oldhmask = t->hmask;
+  GCtab *tmp = lj_tab_new(L, t->asize, t->hmask > 0 ? lj_fls(t->hmask)+1 : 0);
+  for (size_t i = 0; i < kt->asize; i++)
+  {
+    TValue* k = arrayslot(kt, i);
+    if (tvisnil(k))
+      break;
+    cTValue* val = lj_tab_get(L, t, k);
+    TValue* tmp_v = lj_tab_set(L, tmp, k);
+    copyTV(L, tmp_v, val);
+  }
+  global_State *g = G(L);
+  Node* nilNode = &g->nilnode;
+  setmref(t->node, noderef(tmp->node));
+  setmref(t->freetop, noderef(tmp->freetop));
+  setmref(tmp->node, nilNode);
+  setmref(tmp->freetop, nilNode);
+  tmp->hmask = 0;
+  lj_mem_freevec(g, oldnode, oldhmask+1, Node);
+}
+#endif
+
 void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize)
 {
   lj_tab_resize(L, t, nasize+1, t->hmask > 0 ? lj_fls(t->hmask)+1 : 0);

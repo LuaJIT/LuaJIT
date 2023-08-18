@@ -1730,6 +1730,10 @@ static void expr_table(LexState *ls, ExpDesc *e)
   bcreg_reserve(fs, 1);
   freg++;
   lex_check(ls, '{');
+#if LJ_DS_PARSER_TABLE_PATCH
+  GCtab* tmp_t = lj_tab_new(fs->L, 0, 0);
+  int tmp_indx = 0;
+#endif
   while (ls->tok != '}') {
     ExpDesc key, val;
     vcall = 0;
@@ -1763,6 +1767,12 @@ static void expr_table(LexState *ls, ExpDesc *e)
       expr_kvalue(fs, &k, &key);
       v = lj_tab_set(fs->L, t, &k);
       lj_gc_anybarriert(fs->L, t);
+#if LJ_DS_PARSER_TABLE_PATCH
+      TValue* tmp_v = lj_tab_setint(fs->L, tmp_t, tmp_indx);
+      tmp_indx++;
+      lj_gc_anybarriert(fs->L, tmp_t);
+      copyTV(fs->L, tmp_v, &k);
+#endif
       if (expr_isk_nojump(&val)) {  /* Add const key/value to template table. */
 	expr_kvalue(fs, v, &val);
       } else {  /* Otherwise create dummy string key (avoids lj_tab_newkey). */
@@ -1810,6 +1820,10 @@ static void expr_table(LexState *ls, ExpDesc *e)
 #if LJ_DS_PARSER_TABLE_PATCH
     if ((needarr && t->asize != narr) ||  hsize2hmask(nhash) != t->hmask) {
       lj_tab_resize(fs->L, t, narr, hsize2hbits(nhash));
+    }
+    if (t->hmask) {
+      // rebuild hash 
+      lj_tab_rehash_bykeys(fs->L, t, tmp_t);
     }
 #else
     if (needarr && t->asize < narr)

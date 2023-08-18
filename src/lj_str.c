@@ -75,7 +75,7 @@ int lj_str_haspattern(GCstr *s)
 /* Keyed sparse ARX string hash. Constant time. */
 static StrHash hash_sparse(uint64_t seed, const char *str, MSize len)
 {
-#if 0
+#if !LJ_DS_STR_HASH_PATCH
   /* Constants taken from lookup3 hash by Bob Jenkins. */
   StrHash a, b, h = len ^ (StrHash)seed;
   if (len >= 4) {  /* Caveat: unaligned access! */
@@ -291,6 +291,9 @@ static GCstr *lj_str_alloc(lua_State *L, const char *str, MSize len,
   s->gct = ~LJ_TSTR;
   s->len = len;
   s->hash = hash;
+#if LJ_DS_STR_HASH_PATCH
+  s->sid = hash;
+#else
 #ifndef STRID_RESEED_INTERVAL
   s->sid = g->str.id++;
 #elif STRID_RESEED_INTERVAL
@@ -302,6 +305,7 @@ static GCstr *lj_str_alloc(lua_State *L, const char *str, MSize len,
   s->sid = g->str.id++;
 #else
   s->sid = (StrID)lj_prng_u64(&g->prng);
+#endif
 #endif
   s->reserved = 0;
   s->hashalg = (uint8_t)hashalg;
