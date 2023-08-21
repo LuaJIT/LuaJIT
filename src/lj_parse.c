@@ -143,6 +143,9 @@ typedef struct FuncState {
   VarIndex varmap[LJ_MAX_LOCVAR];  /* Map from register to variable idx. */
   VarIndex uvmap[LJ_MAX_UPVAL];	/* Map from upvalue to variable idx. */
   VarIndex uvtmp[LJ_MAX_UPVAL];	/* Temporary upvalue map. */
+#if LUA_COMPAT_VARARG
+  uint8_t need_vararg;
+#endif
 } FuncState;
 
 /* Binary and unary operators. ORDER OPR */
@@ -1128,6 +1131,13 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
     BCReg reg = var_lookup_local(fs, name);
     if ((int32_t)reg >= 0) {  /* Local in this function? */
       expr_init(e, VLOCAL, reg);
+#if LUA_COMPAT_VARARG
+    if (!fs->need_vararg && fs->flags & PROTO_VARARG){
+      if (name->len == (sizeof("arg") - 1) && strncmp(strdata(name), "arg", name->len) == 0){
+        fs->need_vararg = 1;
+      }
+    }
+#endif
       if (!first)
 	fscope_uvmark(fs, reg);  /* Scope now has an upvalue. */
       return (MSize)(e->u.s.aux = (uint32_t)fs->varmap[reg]);
@@ -1575,6 +1585,18 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   /* Apply final fixups. */
   fs_fixup_ret(fs);
 
+#if LUA_COMPAT_VARARG
+  if ((fs->flags & PROTO_VARARG) && !fs->need_vararg) {
+    lj_assertX(fs->bcbase[1].ins == BCINS_AD(BC_TNEW, fs->numparams, 3), "TNEW numparams,3");
+    lj_assertX(fs->bcbase[2].ins == BCINS_ABC(BC_VARG, fs->numparams + 1, 0, fs->numparams), "VARG numparams+1,0,numparams");
+    lj_assertX(fs->bcbase[3].ins == BCINS_AD(BC_TSETM, fs->numparams + 1, 0), "TSETM numparams+1,0");
+    lj_assertX(fs->pc >= 3, "invaild opcode length");
+    fs->bcbase[1].ins = BCINS_AD(BC_KPRI, 0, 0);
+    fs->bcbase[2].ins = BCINS_AD(BC_KPRI, 0, 0);
+    fs->bcbase[3].ins = BCINS_AD(BC_KPRI, 0, 0);
+  }
+#endif
+
   /* Calculate total size of prototype including all colocated arrays. */
   sizept = sizeof(GCproto) + fs->pc*sizeof(BCIns) + fs->nkgc*sizeof(GCRef);
   sizept = (sizept + sizeof(TValue)-1) & ~(sizeof(TValue)-1);
@@ -1632,6 +1654,9 @@ static void fs_init(LexState *ls, FuncState *fs)
   fs->flags = 0;
   fs->framesize = 1;  /* Minimum frame size. */
   fs->kt = lj_tab_new(L, 0, 0);
+#if LUA_COMPAT_VARARG
+  fs->need_vararg = 0;
+#endif
   /* Anchor table of constants in stack to avoid being collected. */
   settabV(L, L->top, fs->kt);
   incr_top(L);
@@ -2716,7 +2741,7 @@ static int parse_stmt(LexState *ls)
   return 0;
 }
 
-/* A chunk is a list of statements optionally separated by semicolons. */
+#if LUA_COMPAT_VARARG
 
 static void add_argstmt(LexState* ls)
 {
@@ -2795,12 +2820,16 @@ static void add_argstmt(LexState* ls)
     var_add(ls, 1);
   }  
 }
+#endif
 
+/* A chunk is a list of statements optionally separated by semicolons. */
 static void parse_chunk(LexState *ls)
 {
   int islast = 0;
   synlevel_begin(ls);
+#if LUA_COMPAT_VARARG
   add_argstmt(ls);
+#endif
   while (!islast && !parse_isend(ls->tok)) {
     islast = parse_stmt(ls);
     lex_opt(ls, ';');

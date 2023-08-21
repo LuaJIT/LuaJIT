@@ -778,6 +778,10 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LUA_COMPAT_GFIND LJ_DS
 #endif
 
+#ifndef LUA_COMPAT_VARARG
+#define LUA_COMPAT_VARARG LJ_DS
+#endif
+
 #ifndef LJ_DS_STR_HASH_PATCH
 #define LJ_DS_STR_HASH_PATCH LJ_DS
 #endif
