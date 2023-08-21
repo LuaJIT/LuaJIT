@@ -320,6 +320,7 @@ static void emit_vmdef(BuildCtx *ctx)
   char buf[80];
   int i;
   fprintf(ctx->fp, "-- This is a generated file. DO NOT EDIT!\n\n");
+  fprintf(ctx->fp, "assert(require(\"jit\").version == \"%s\", \"LuaJIT core/library version mismatch\")\n\n", LUAJIT_VERSION);
   fprintf(ctx->fp, "module(...)\n\n");
 
   fprintf(ctx->fp, "bcnames = \"");

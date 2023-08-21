@@ -648,7 +648,7 @@ LUALIB_API int luaopen_jit(lua_State *L)
 {
   lua_pushliteral(L, LJ_OS_NAME);
   lua_pushliteral(L, LJ_ARCH_NAME);
-  lua_pushinteger(L, LUAJIT_VERSION_NUM);
+  lua_pushinteger(L, LUAJIT_VERSION_NUM);  /* Deprecated. */
   lua_pushliteral(L, LUAJIT_VERSION);
   LJ_LIB_REG(L, LUA_JITLIBNAME, jit);
 #ifndef LUAJIT_DISABLE_JITUTIL
