@@ -142,14 +142,8 @@ install: $(INSTALL_DEP)
 	  $(RM) $(FILE_PC).tmp
 	cd src && $(INSTALL_F) $(FILES_INC) $(INSTALL_INC)
 	cd src/jit && $(INSTALL_F) $(FILES_JITLIB) $(INSTALL_JITLIB)
+	$(SYMLINK) $(INSTALL_TNAME) $(INSTALL_TSYM)
 	@echo "==== Successfully installed LuaJIT $(VERSION) to $(PREFIX) ===="
-	@echo ""
-	@echo "Note: the development releases deliberately do NOT install a symlink for luajit"
-	@echo "You can do this now by running this command (with sudo):"
-	@echo ""
-	@echo "  $(SYMLINK) $(INSTALL_TNAME) $(INSTALL_TSYM)"
-	@echo ""
-
 
 uninstall:
 	@echo "==== Uninstalling LuaJIT $(VERSION) from $(PREFIX) ===="
