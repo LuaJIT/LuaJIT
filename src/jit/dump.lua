@@ -396,11 +396,15 @@ local function dump_snap(tr)
 end
 
 -- Return a register name or stack slot for a rid/sp location.
-local function ridsp_name(ridsp, ins)
+local function ridsp_name(ridsp, ins, op)
   if not disass then disass = require("jit.dis_"..jit.arch) end
   local rid, slot = band(ridsp, 0xff), shr(ridsp, 8)
   if rid == 253 or rid == 254 then
-    return (slot == 0 or slot == 255) and " {sink" or format(" {%04d", ins-slot)
+    if op == "TNEW  " or op == "TDUP  " or op == "CNEW  " then
+      return (slot == 0) and " {sink" or format(" {ri%02d", slot)
+    else
+      return (slot == 0 or slot == 255) and " {sink" or format(" {%04d", ins-slot)
+    end
   end
   if ridsp > 255 then return format("[%x]", slot*4) end
   if rid < 128 then return disass.regname(rid) end
@@ -485,7 +489,7 @@ local function dump_ir(tr, dumpsnap, dumpreg)
 	   (dumpreg or op ~= "RENAME") then
       local rid = band(ridsp, 255)
       if dumpreg then
-	out:write(format("%04d %-6s", ins, ridsp_name(ridsp, ins)))
+	out:write(format("%04d %-6s", ins, ridsp_name(ridsp, ins, op)))
       else
 	out:write(format("%04d ", ins))
       end
