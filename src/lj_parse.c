@@ -1591,9 +1591,9 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
     lj_assertX(fs->bcbase[2].ins == BCINS_ABC(BC_VARG, fs->numparams + 1, 0, fs->numparams), "VARG numparams+1,0,numparams");
     lj_assertX(fs->bcbase[3].ins == BCINS_AD(BC_TSETM, fs->numparams + 1, 0), "TSETM numparams+1,0");
     lj_assertX(fs->pc >= 3, "invaild opcode length");
-    fs->bcbase[1].ins = BCINS_AD(BC_KPRI, 0, 0);
-    fs->bcbase[2].ins = BCINS_AD(BC_KPRI, 0, 0);
-    fs->bcbase[3].ins = BCINS_AD(BC_KPRI, 0, 0);
+    fs->bcbase[1].ins = BCINS_AD(BC_KPRI, fs->numparams, 0);
+    fs->bcbase[2].ins = BCINS_AD(BC_KPRI, fs->numparams, 0);
+    fs->bcbase[3].ins = BCINS_AD(BC_KPRI, fs->numparams, 0);
   }
 #endif
 
