@@ -473,7 +473,7 @@ static int lj_cf_package_require(lua_State *L)
   lj_lib_checkfpu(L);
 
   if (strcmp(name, "util") == 0) {
-	luaL_loadstring(L, "function table.reverse(tab) \n\
+	luaL_dostring(L, "function table.reverse(tab) \n\
     local size = #tab \n\
     local newTable = {} \n\
 	for i = 1, size - 1 do \n\
@@ -495,7 +495,6 @@ static int lj_cf_package_require(lua_State *L)
   end \n\
   \n\
 ");
-	lua_call(L, 0, 0);
   }
   return 1;
 }
