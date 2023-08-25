@@ -89,11 +89,11 @@ static void handle_luainit(lua_State *L)
 {
   const char *init = getenv(LUA_INIT);
   if (init == NULL)
-    return LUA_OK;
-  else if (init[0] == '@')
-    return luaL_dofile(L, init+1);
+    return;
+  if (init[0] == '@')
+    luaL_dofile(L, init+1);
   else
-    return luaL_dostring(L, init);
+    luaL_dostring(L, init);
 }
 
 

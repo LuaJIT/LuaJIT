@@ -273,6 +273,17 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/buildvm_arch.h
   DEPENDS ${LUAJIT_DIR}/dynasm/dynasm.lua minilua
 )
 
+add_custom_command(OUTPUT ${LUAJIT_DIR}/src/luajit_relver.txt
+  COMMAND git show -s --format=%ct > ${LUAJIT_DIR}/src/luajit_relver.txt
+  WORKING_DIRECTORY ${LUAJIT_DIR}/src/
+)
+
+add_custom_command(OUTPUT ${LUAJIT_DIR}/src/luajit.h
+  COMMAND minilua ${LUAJIT_DIR}/src/host/genversion.lua
+  DEPENDS ${LUAJIT_DIR}/src/host/genversion.lua minilua ${LUAJIT_DIR}/src/luajit_relver.txt
+  WORKING_DIRECTORY ${LUAJIT_DIR}/src/
+)
+
 ## Source Lists
 SET(SRC_LJLIB
   ${LUAJIT_DIR}/src/lib_base.c
@@ -297,6 +308,7 @@ file (GLOB_RECURSE SRC_LJCORE   "${LUAJIT_DIR}/src/lj_*.c")
 list (APPEND SRC_LJCORE ${SRC_LJLIB} ${SRC_LIBAUX})
 file (GLOB_RECURSE SRC_BUILDVM  "${LUAJIT_DIR}/src/host/buildvm*.c")
 list (APPEND SRC_BUILDVM ${CMAKE_CURRENT_BINARY_DIR}/buildvm_arch.h)
+list (APPEND SRC_BUILDVM ${LUAJIT_DIR}/src/luajit.h)
 
 ## GENERATE
 ADD_EXECUTABLE(buildvm ${SRC_BUILDVM})
