@@ -15,6 +15,8 @@
 
 #include "lj_arch.h"
 
+#include <stdlib.h>
+
 static const luaL_Reg lj_lib_load[] = {
   { "",			luaopen_base },
   { LUA_LOADLIBNAME,	luaopen_package },
@@ -77,6 +79,22 @@ LUALIB_API void luaL_openlibs(lua_State *L)
   if (luaL_loadstring(L, dump_fix) == 0)
     lua_pcall(L, 0, 0, 0);
 #endif
+#ifdef DO_LUA_INIT
+  void handle_luainit(lua_State *L);
+  handle_luainit(L);
+#endif
 #endif
 }
+
+static void handle_luainit(lua_State *L)
+{
+  const char *init = getenv(LUA_INIT);
+  if (init == NULL)
+    return LUA_OK;
+  else if (init[0] == '@')
+    return luaL_dofile(L, init+1);
+  else
+    return luaL_dostring(L, init);
+}
+
 

@@ -358,6 +358,7 @@ ELSE()
 	PREFIX "lib" IMPORT_PREFIX "lib" OUTPUT_NAME "luajit")
 ENDIF()
 
+target_compile_definitions(luajit-5.1 PRIVATE DO_LUA_INIT)
 target_link_libraries (luajit-5.1 ${LIBS} )
 
 IF(WIN32)
