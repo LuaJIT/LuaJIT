@@ -1289,8 +1289,9 @@ static void asm_tbar(ASMState *as, IRIns *ir)
   Reg link = ra_scratch(as, rset_exclude(RSET_GPR, tab));
   Reg mark = RID_TMP;
   MCLabel l_end = emit_label(as);
-  emit_lso(as, A64I_STRx, link, tab, (int32_t)offsetof(GCtab, gclist));
   emit_lso(as, A64I_STRB, mark, tab, (int32_t)offsetof(GCtab, marked));
+  /* Keep STRx in the middle to avoid LDP/STP fusion with surrounding code. */
+  emit_lso(as, A64I_STRx, link, tab, (int32_t)offsetof(GCtab, gclist));
   emit_setgl(as, tab, gc.grayagain);
   emit_dn(as, A64I_ANDw^emit_isk13(~LJ_GC_BLACK, 0), mark, mark);
   emit_getgl(as, link, gc.grayagain);
