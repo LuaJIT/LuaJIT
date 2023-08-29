@@ -75,6 +75,9 @@ typedef union FPRArg {
 #define CCALL_NARG_FPR		8
 #define CCALL_NRET_FPR		4
 #define CCALL_SPS_FREE		0
+#if LJ_TARGET_OSX
+#define CCALL_PACK_STACKARG	1
+#endif
 
 typedef intptr_t GPRArg;
 typedef union FPRArg {
@@ -138,6 +141,9 @@ typedef union FPRArg {
 #endif
 #ifndef CCALL_ALIGN_STACKARG
 #define CCALL_ALIGN_STACKARG	1
+#endif
+#ifndef CCALL_PACK_STACKARG
+#define CCALL_PACK_STACKARG	0
 #endif
 #ifndef CCALL_ALIGN_CALLSTATE
 #define CCALL_ALIGN_CALLSTATE	8

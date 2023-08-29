@@ -348,7 +348,6 @@
       goto done; \
     } else { \
       nfpr = CCALL_NARG_FPR;  /* Prevent reordering. */ \
-      if (LJ_TARGET_OSX && d->size < 8) goto err_nyi; \
     } \
   } else {  /* Try to pass argument in GPRs. */ \
     if (!LJ_TARGET_OSX && (d->info & CTF_ALIGN) > CTALIGN_PTR) \
@@ -359,7 +358,6 @@
       goto done; \
     } else { \
       ngpr = maxgpr;  /* Prevent reordering. */ \
-      if (LJ_TARGET_OSX && d->size < 8) goto err_nyi; \
     } \
   }
 
@@ -1023,7 +1021,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       CCALL_HANDLE_STRUCTARG
     } else if (ctype_iscomplex(d->info)) {
       CCALL_HANDLE_COMPLEXARG
-    } else {
+    } else if (!(CCALL_PACK_STACKARG && ctype_isenum(d->info))) {
       sz = CTSIZE_PTR;
     }
     n = (sz + CTSIZE_PTR-1) / CTSIZE_PTR;  /* Number of GPRs or stack slots needed. */
@@ -1033,12 +1031,12 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     /* Otherwise pass argument on stack. */
     if (CCALL_ALIGN_STACKARG) {  /* Align argument on stack. */
       MSize align = (1u << ctype_align(d->info)) - 1;
-      if (rp)
+      if (rp || (CCALL_PACK_STACKARG && isva && align < CTSIZE_PTR-1))
 	align = CTSIZE_PTR-1;
       nsp = (nsp + align) & ~align;
     }
     dp = ((uint8_t *)cc->stack) + nsp;
-    nsp += n * CTSIZE_PTR;
+    nsp += CCALL_PACK_STACKARG ? sz : n * CTSIZE_PTR;
     if (nsp > CCALL_SIZE_STACK) {  /* Too many arguments. */
     err_nyi:
       lj_err_caller(L, LJ_ERR_FFI_NYICALL);
@@ -1053,7 +1051,8 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     }
     lj_cconv_ct_tv(cts, d, (uint8_t *)dp, o, CCF_ARG(narg));
     /* Extend passed integers to 32 bits at least. */
-    if (ctype_isinteger_or_bool(d->info) && d->size < 4) {
+    if (ctype_isinteger_or_bool(d->info) && d->size < 4 &&
+	(!CCALL_PACK_STACKARG || !((uintptr_t)dp & 3))) {  /* Assumes LJ_LE. */
       if (d->info & CTF_UNSIGNED)
 	*(uint32_t *)dp = d->size == 1 ? (uint32_t)*(uint8_t *)dp :
 					 (uint32_t)*(uint16_t *)dp;
