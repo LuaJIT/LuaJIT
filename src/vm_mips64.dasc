@@ -3065,7 +3065,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  move TMP2, sp
   |  dsubu sp, sp, TMP1
   |  sd ra, -8(TMP2)
-  |   sll CARG2, CARG2, 3
   |  sd r16, -16(TMP2)
   |  sd CCSTATE, -24(TMP2)
   |  move r16, TMP2

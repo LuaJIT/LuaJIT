@@ -2951,7 +2951,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  move TMP2, sp
   |  subu sp, sp, TMP1
   |  sw ra, -4(TMP2)
-  |   sll CARG2, CARG2, 2
   |  sw r16, -8(TMP2)
   |  sw CCSTATE, -12(TMP2)
   |  move r16, TMP2

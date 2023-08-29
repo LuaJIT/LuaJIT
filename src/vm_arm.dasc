@@ -2571,16 +2571,16 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |  mov r11, sp
   |  sub sp, sp, CARG1			// Readjust stack.
-  |   subs CARG2, CARG2, #1
+  |   subs CARG2, CARG2, #4
   |.if HFABI
   |  vldm RB, {d0-d7}
   |.endif
   |    ldr RB, CCSTATE->func
   |   bmi >2
   |1:  // Copy stack slots.
-  |  ldr CARG4, [CARG3, CARG2, lsl #2]
-  |  str CARG4, [sp, CARG2, lsl #2]
-  |  subs CARG2, CARG2, #1
+  |  ldr CARG4, [CARG3, CARG2]
+  |  str CARG4, [sp, CARG2]
+  |  subs CARG2, CARG2, #4
   |  bpl <1
   |2:
   |  ldrd CARG12, CCSTATE->gpr[0]

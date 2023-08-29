@@ -2755,12 +2755,12 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |  // Copy stack slots.
   |  movzx ecx, byte CCSTATE->nsp
-  |  sub ecx, 1
+  |  sub ecx, 8
   |  js >2
   |1:
-  |  mov rax, [CCSTATE+rcx*8+offsetof(CCallState, stack)]
-  |  mov [rsp+rcx*8+CCALL_SPS_EXTRA*8], rax
-  |  sub ecx, 1
+  |  mov rax, [CCSTATE+rcx+offsetof(CCallState, stack)]
+  |  mov [rsp+rcx+CCALL_SPS_EXTRA*8], rax
+  |  sub ecx, 8
   |  jns <1
   |2:
   |
