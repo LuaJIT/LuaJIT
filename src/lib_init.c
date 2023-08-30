@@ -76,7 +76,7 @@ LUALIB_API void luaL_openlibs(lua_State *L)
 "    end\n"
 "    return dump(f, strip)\n"
 "end\n";
-  luaL_dostring(L, dump_fix);
+  (luaL_loadstring(L, dump_fix) || lua_pcall(L, 0, 0, 0));
 #endif
 #ifdef DO_LUA_INIT
   void handle_luainit(lua_State *L);
@@ -91,9 +91,9 @@ static void handle_luainit(lua_State *L)
   if (init == NULL)
     return;
   if (init[0] == '@')
-    luaL_dofile(L, init+1);
+    (luaL_loadfile(L, init+1) || lua_pcall(L, 0, 0, 0));
   else
-    luaL_dostring(L, init);
+    (luaL_loadstring(L, init) || lua_pcall(L, 0, 0, 0));
 }
 
 
