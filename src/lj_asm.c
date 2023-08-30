@@ -29,6 +29,7 @@
 #include "lj_dispatch.h"
 #include "lj_vm.h"
 #include "lj_target.h"
+#include "lj_prng.h"
 
 #ifdef LUA_USE_ASSERT
 #include <stdio.h>
@@ -92,6 +93,12 @@ typedef struct ASMState {
   MCode *invmcp;	/* Points to invertible loop branch (or NULL). */
   MCode *flagmcp;	/* Pending opportunity to merge flag setting ins. */
   MCode *realign;	/* Realign loop if not NULL. */
+
+#ifdef LUAJIT_RANDOM_RA
+  /* Randomize register allocation. OK for fuzz testing, not for production. */
+  uint64_t prngbits;
+  PRNGState prngstate;
+#endif
 
 #ifdef RID_NUM_KREF
   intptr_t krefk[RID_NUM_KREF];
@@ -172,6 +179,41 @@ IRFLDEF(FLOFS)
 #undef FLOFS
   0
 };
+
+#ifdef LUAJIT_RANDOM_RA
+/* Return a fixed number of random bits from the local PRNG state. */
+static uint32_t ra_random_bits(ASMState *as, uint32_t nbits) {
+  uint64_t b = as->prngbits;
+  uint32_t res = (1u << nbits) - 1u;
+  if (b <= res) b = lj_prng_u64(&as->prngstate) | (1ull << 63);
+  res &= (uint32_t)b;
+  as->prngbits = b >> nbits;
+  return res;
+}
+
+/* Pick a random register from a register set. */
+static Reg rset_pickrandom(ASMState *as, RegSet rs)
+{
+  Reg r = rset_pickbot_(rs);
+  rs >>= r;
+  if (rs > 1) {  /* More than one bit set? */
+    while (1) {
+      /* We need to sample max. the GPR or FPR half of the set. */
+      uint32_t d = ra_random_bits(as, RSET_BITS-1);
+      if ((rs >> d) & 1) {
+	r += d;
+	break;
+      }
+    }
+  }
+  return r;
+}
+#define rset_picktop(rs)	rset_pickrandom(as, rs)
+#define rset_pickbot(rs)	rset_pickrandom(as, rs)
+#else
+#define rset_picktop(rs)	rset_picktop_(rs)
+#define rset_pickbot(rs)	rset_pickbot_(rs)
+#endif
 
 /* -- Target-specific instruction emitter --------------------------------- */
 
@@ -2442,6 +2484,9 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
   as->realign = NULL;
   as->loopinv = 0;
   as->parent = J->parent ? traceref(J, J->parent) : NULL;
+#ifdef LUAJIT_RANDOM_RA
+  (void)lj_prng_u64(&J2G(J)->prng);  /* Ensure PRNG step between traces. */
+#endif
 
   /* Reserve MCode memory. */
   as->mctop = as->mctoporig = lj_mcode_reserve(J, &as->mcbot);
@@ -2483,6 +2528,10 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
 #endif
     as->ir = J->curfinal->ir;  /* Use the copied IR. */
     as->curins = J->cur.nins = as->orignins;
+#ifdef LUAJIT_RANDOM_RA
+    as->prngstate = J2G(J)->prng;  /* Must (re)start from identical state. */
+    as->prngbits = 0;
+#endif
 
     RA_DBG_START();
     RA_DBGX((as, "===== STOP ====="));

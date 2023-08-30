@@ -5,9 +5,9 @@
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 
-local FILE_INPUT_H = "luajit_rolling.h"
-local FILE_INPUT_R = "luajit_relver.txt"
-local FILE_OUTPUT_H = "luajit.h"
+local FILE_ROLLING_H = "luajit_rolling.h"
+local FILE_RELVER_TXT = "luajit_relver.txt"
+local FILE_LUAJIT_H = "luajit.h"
 
 local function file_read(file)
   local fp = assert(io.open(file, "rb"), "run from the wrong directory")
@@ -28,8 +28,8 @@ local function file_write_mod(file, data)
   assert(fp:close())
 end
 
-local text = file_read(FILE_INPUT_H)
-local relver = file_read(FILE_INPUT_R):match("(%d+)")
+local text = file_read(FILE_ROLLING_H)
+local relver = file_read(FILE_RELVER_TXT):match("(%d+)")
 
 if relver then
   text = text:gsub("ROLLING", relver)
@@ -38,6 +38,7 @@ else
 **** WARNING Cannot determine rolling release version from git log.
 **** WARNING The 'git' command must be available during the build.
 ]])
+  file_write_mod(FILE_RELVER_TXT, "ROLLING\n") -- Fallback for install target.
 end
 
-file_write_mod(FILE_OUTPUT_H, text)
+file_write_mod(FILE_LUAJIT_H, text)

@@ -2222,14 +2222,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr TMP0w, CCSTATE:x0->spadj
   |   ldrb TMP1w, CCSTATE->nsp
   |    add TMP2, CCSTATE, #offsetof(CCallState, stack)
-  |   subs TMP1, TMP1, #1
+  |   subs TMP1, TMP1, #8
   |    ldr TMP3, CCSTATE->func
   |  sub sp, sp, TMP0
   |   bmi >2
   |1:  // Copy stack slots
-  |  ldr TMP0, [TMP2, TMP1, lsl #3]
-  |  str TMP0, [sp, TMP1, lsl #3]
-  |  subs TMP1, TMP1, #1
+  |  ldr TMP0, [TMP2, TMP1]
+  |  str TMP0, [sp, TMP1]
+  |  subs TMP1, TMP1, #8
   |  bpl <1
   |2:
   |  ldp x0, x1, CCSTATE->gpr[0]

@@ -3269,14 +3269,13 @@ static void build_subroutines(BuildCtx *ctx)
   |    stw TMP0, 4(sp)
   |   cmpwi cr1, CARG3, 0
   |  mr TMP2, sp
-  |   addic. CARG2, CARG2, -1
+  |   addic. CARG2, CARG2, -4
   |  stwux sp, sp, TMP1
   |   crnot 4*cr1+eq, 4*cr1+eq		// For vararg calls.
   |  stw r14, -4(TMP2)
   |  stw CCSTATE, -8(TMP2)
   |  mr r14, TMP2
   |  la TMP1, CCSTATE->stack
-  |   slwi CARG2, CARG2, 2
   |   blty >2
   |  la TMP2, 8(sp)
   |1:
