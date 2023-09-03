@@ -474,8 +474,13 @@ endif
 DASM_FLAGS= $(DASM_XFLAGS) $(DASM_AFLAGS)
 DASM_DASC= vm_$(DASM_ARCH).dasc
 
-GIT= git
-GIT_RELVER= [ -e ../.git ] && $(GIT) show -s --format=%ct >luajit_relver.txt 2>/dev/null || cat ../.relver >luajit_relver.txt 2>/dev/null || :
+GIT= 
+ifeq (,$(HOST_MSYS))
+    GIT_RELVER= if exist ..\.git ( git show -s --format=%%ct >luajit_relver.txt ) else ( type ..\.relver >luajit_relver.txt )
+else
+    GIT_RELVER= [ -e ../.git ] && $(GIT) show -s --format=%ct >luajit_relver.txt 2>/dev/null || cat ../.relver >luajit_relver.txt 2>/dev/null || :
+endif
+
 GIT_DEP= $(wildcard ../.git/HEAD ../.git/refs/heads/*)
 
 BUILDVM_O= host/buildvm.o host/buildvm_asm.o host/buildvm_peobj.o \
