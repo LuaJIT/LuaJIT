@@ -476,7 +476,7 @@ DASM_DASC= vm_$(DASM_ARCH).dasc
 
 GIT= 
 ifeq (,$(HOST_MSYS))
-    GIT_RELVER= if exist ..\.git ( git show -s --format=%%ct >luajit_relver.txt ) else ( type ..\.relver >luajit_relver.txt )
+    GIT_RELVER= if exist ..\.git\ ( git show -s --format=%%ct >luajit_relver.txt ) else ( type ..\.relver >luajit_relver.txt )
 else
     GIT_RELVER= [ -e ../.git ] && $(GIT) show -s --format=%ct >luajit_relver.txt 2>/dev/null || cat ../.relver >luajit_relver.txt 2>/dev/null || :
 endif
