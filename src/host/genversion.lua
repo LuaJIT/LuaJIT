@@ -29,7 +29,7 @@ local function file_write_mod(file, data)
 end
 
 local text = file_read(FILE_ROLLING_H)
-local relver = file_read(FILE_RELVER_TXT):match("(%d+)")
+local relver = file_read(FILE_RELVER_TXT):match("(%w+)")
 
 if relver then
   text = text:gsub("ROLLING", relver)
