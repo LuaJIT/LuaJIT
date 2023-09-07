@@ -133,10 +133,12 @@ static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs)
     int ofsm = ofs - (1<<sc), ofsp = ofs + (1<<sc);
     A64Ins aip;
     if (prev == (ai | A64F_N(rn) | A64F_U12(ofsm>>sc)) ||
-	prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsm&0x1ff))) {
+	(emit_checkofs(A64I_LS_U, ofsm) == -1 &&
+         prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsm&0x1ff)))) {
       aip = (A64F_A(rd) | A64F_D(*as->mcp & 31));
     } else if (prev == (ai | A64F_N(rn) | A64F_U12(ofsp>>sc)) ||
-	       prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsp&0x1ff))) {
+	       (emit_checkofs(A64I_LS_U, ofsp) == -1 &&
+                prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsp&0x1ff)))) {
       aip = (A64F_D(rd) | A64F_A(*as->mcp & 31));
       ofsm = ofs;
     } else {
