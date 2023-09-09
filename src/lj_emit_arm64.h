@@ -242,19 +242,20 @@ static Reg ra_allock(ASMState *as, intptr_t k, RegSet allow);
 /* Get/set from constant pointer. */
 static void emit_lsptr(ASMState *as, A64Ins ai, Reg r, void *p)
 {
-  /* First, check if ip + offset is in range. */
-  if ((ai & 0x00400000) && checkmcpofs(as, p)) {
+  Reg base = RID_GL;
+  int64_t ofs = glofs(as, p);
+  if (emit_checkofs(ai, ofs)) {
+    /* GL + offset, might subsequently fuse to LDP/STP. */
+  } else if (ai == A64I_LDRx && checkmcpofs(as, p)) {
+    /* IP + offset is cheaper than allock, but address must be in range. */
     emit_d(as, A64I_LDRLx | A64F_S19(mcpofs(as, p)>>2), r);
-  } else {
-    Reg base = RID_GL;  /* Next, try GL + offset. */
-    int64_t ofs = glofs(as, p);
-    if (!emit_checkofs(ai, ofs)) {  /* Else split up into base reg + offset. */
-      int64_t i64 = i64ptr(p);
-      base = ra_allock(as, (i64 & ~0x7fffull), rset_exclude(RSET_GPR, r));
-      ofs = i64 & 0x7fffull;
-    }
-    emit_lso(as, ai, r, base, ofs);
+    return;
+  } else {  /* Split up into base reg + offset. */
+    int64_t i64 = i64ptr(p);
+    base = ra_allock(as, (i64 & ~0x7fffull), rset_exclude(RSET_GPR, r));
+    ofs = i64 & 0x7fffull;
   }
+  emit_lso(as, ai, r, base, ofs);
 }
 
 /* Load 64 bit IR constant into register. */
