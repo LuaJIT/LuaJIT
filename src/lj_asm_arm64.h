@@ -1283,7 +1283,6 @@ static void asm_obar(ASMState *as, IRIns *ir)
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_gc_barrieruv];
   IRRef args[2];
   MCLabel l_end;
-  RegSet allow = RSET_GPR;
   Reg obj, val, tmp;
   /* No need for other object barriers (yet). */
   lj_assertA(IR(ir->op1)->o == IR_UREFC, "bad OBAR type");
@@ -1294,14 +1293,13 @@ static void asm_obar(ASMState *as, IRIns *ir)
   asm_gencall(as, ci, args);
   emit_dm(as, A64I_MOVx, ra_releasetmp(as, ASMREF_TMP1), RID_GL);
   obj = IR(ir->op1)->r;
-  tmp = ra_scratch(as, rset_exclude(allow, obj));
-  emit_cond_branch(as, CC_EQ, l_end);
-  emit_n(as, A64I_TSTw^emit_isk13(LJ_GC_BLACK, 0), tmp);
+  tmp = ra_scratch(as, rset_exclude(RSET_GPR, obj));
+  emit_tnb(as, A64I_TBZ, tmp, lj_ffs(LJ_GC_BLACK), l_end);
   emit_cond_branch(as, CC_EQ, l_end);
   emit_n(as, A64I_TSTw^emit_isk13(LJ_GC_WHITES, 0), RID_TMP);
   val = ra_alloc1(as, ir->op2, rset_exclude(RSET_GPR, obj));
   emit_lso(as, A64I_LDRB, tmp, obj,
-     (int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv));
+	   (int32_t)offsetof(GCupval, marked)-(int32_t)offsetof(GCupval, tv));
   emit_lso(as, A64I_LDRB, RID_TMP, val, (int32_t)offsetof(GChead, marked));
 }
 
