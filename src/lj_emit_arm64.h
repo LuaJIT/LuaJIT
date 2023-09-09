@@ -20,7 +20,7 @@ static uint64_t get_k64val(ASMState *as, IRRef ref)
   } else {
     lj_assertA(ir->o == IR_KINT || ir->o == IR_KNULL,
 	       "bad 64 bit const IR op %d", ir->o);
-    return ir->i;  /* Sign-extended. */
+    return (uint32_t)ir->i;  /* Zero-extended. */
   }
 }
 
@@ -152,11 +152,10 @@ nopair:
 /* Prefer rematerialization of BASE/L from global_State over spills. */
 #define emit_canremat(ref)	((ref) <= ASMREF_L)
 
-/* Try to find an N-step delta relative to other consts with N < lim. */
-static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
+/* Try to find a one-step delta relative to other consts. */
+static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int is64)
 {
   RegSet work = (~as->freeset & RSET_GPR) | RID2RSET(RID_GL);
-  if (lim <= 1) return 0;  /* Can't beat that. */
   while (work) {
     Reg r = rset_picktop(work);
     IRRef ref = regcost_ref(as->cost[r]);
@@ -165,13 +164,14 @@ static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
       uint64_t kx = ra_iskref(ref) ? (uint64_t)ra_krefk(as, ref) :
 				     get_k64val(as, ref);
       int64_t delta = (int64_t)(k - kx);
+      if (!is64) delta = (int64_t)(int32_t)delta;  /* Sign-extend. */
       if (delta == 0) {
-	emit_dm(as, A64I_MOVx, rd, r);
+	emit_dm(as, is64|A64I_MOVw, rd, r);
 	return 1;
       } else {
 	uint32_t k12 = emit_isk12(delta < 0 ? (int64_t)(~(uint64_t)delta+1u) : delta);
 	if (k12) {
-	  emit_dn(as, (delta < 0 ? A64I_SUBx : A64I_ADDx)^k12, rd, r);
+	  emit_dn(as, (delta < 0 ? A64I_SUBw : A64I_ADDw)^is64^k12, rd, r);
 	  return 1;
 	}
 	/* Do other ops or multi-step deltas pay off? Probably not.
@@ -184,51 +184,52 @@ static int emit_kdelta(ASMState *as, Reg rd, uint64_t k, int lim)
   return 0;  /* Failed. */
 }
 
-static void emit_loadk(ASMState *as, Reg rd, uint64_t u64, int is64)
+static void emit_loadk(ASMState *as, Reg rd, uint64_t u64)
 {
-  int i, zeros = 0, ones = 0, neg;
-  if (!is64) u64 = (int64_t)(int32_t)u64;  /* Sign-extend. */
-  /* Count homogeneous 16 bit fragments. */
-  for (i = 0; i < 4; i++) {
-    uint64_t frag = (u64 >> i*16) & 0xffff;
-    zeros += (frag == 0);
-    ones += (frag == 0xffff);
+  int zeros = 0, ones = 0, neg, lshift = 0;
+  int is64 = (u64 >> 32) ? A64I_X : 0, i = is64 ? 4 : 2;
+  /* Count non-homogeneous 16 bit fragments. */
+  while (--i >= 0) {
+    uint32_t frag = (u64 >> i*16) & 0xffff;
+    zeros += (frag != 0);
+    ones += (frag != 0xffff);
   }
-  neg = ones > zeros;  /* Use MOVN if it pays off. */
-  if ((neg ? ones : zeros) < 3) {  /* Need 2+ ins. Try shorter K13 encoding. */
+  neg = ones < zeros;  /* Use MOVN if it pays off. */
+  if ((neg ? ones : zeros) > 1) {  /* Need 2+ ins. Try 1 ins encodings. */
     uint32_t k13 = emit_isk13(u64, is64);
     if (k13) {
       emit_dn(as, (is64|A64I_ORRw)^k13, rd, RID_ZERO);
       return;
     }
-  }
-  if (!emit_kdelta(as, rd, u64, 4 - (neg ? ones : zeros))) {
-    int shift = 0, lshift = 0;
-    uint64_t n64 = neg ? ~u64 : u64;
-    if (n64 != 0) {
-      /* Find first/last fragment to be filled. */
-      shift = (63-emit_clz64(n64)) & ~15;
-      lshift = emit_ctz64(n64) & ~15;
+    if (emit_kdelta(as, rd, u64, is64)) {
+      return;
     }
-    /* MOVK requires the original value (u64). */
-    while (shift > lshift) {
-      uint32_t u16 = (u64 >> shift) & 0xffff;
-      /* Skip fragments that are correctly filled by MOVN/MOVZ. */
-      if (u16 != (neg ? 0xffff : 0))
-	emit_d(as, is64 | A64I_MOVKw | A64F_U16(u16) | A64F_LSL16(shift), rd);
-      shift -= 16;
-    }
-    /* But MOVN needs an inverted value (n64). */
-    emit_d(as, (neg ? A64I_MOVNx : A64I_MOVZx) |
-	       A64F_U16((n64 >> lshift) & 0xffff) | A64F_LSL16(lshift), rd);
   }
+  if (neg) {
+    u64 = ~u64;
+    if (!is64) u64 = (uint32_t)u64;
+  }
+  if (u64) {
+    /* Find first/last fragment to be filled. */
+    int shift = (63-emit_clz64(u64)) & ~15;
+    lshift = emit_ctz64(u64) & ~15;
+    for (; shift > lshift; shift -= 16) {
+      uint32_t frag = (u64 >> shift) & 0xffff;
+      if (frag == 0) continue; /* Will be correctly filled by MOVN/MOVZ. */
+      if (neg) frag ^= 0xffff; /* MOVK requires the original value. */
+      emit_d(as, is64 | A64I_MOVKw | A64F_U16(frag) | A64F_LSL16(shift), rd);
+    }
+  }
+  /* But MOVN needs an inverted value. */
+  emit_d(as, is64 | (neg ? A64I_MOVNw : A64I_MOVZw) |
+	     A64F_U16((u64 >> lshift) & 0xffff) | A64F_LSL16(lshift), rd);
 }
 
 /* Load a 32 bit constant into a GPR. */
-#define emit_loadi(as, rd, i)	emit_loadk(as, rd, i, 0)
+#define emit_loadi(as, rd, i)	emit_loadk(as, rd, (uint32_t)i)
 
 /* Load a 64 bit constant into a GPR. */
-#define emit_loadu64(as, rd, i)	emit_loadk(as, rd, i, A64I_X)
+#define emit_loadu64(as, rd, i)	emit_loadk(as, rd, i)
 
 #define glofs(as, k) \
   ((intptr_t)((uintptr_t)(k) - (uintptr_t)&J2GG(as->J)->g))
