@@ -84,18 +84,23 @@ static void asm_guardcc(ASMState *as, A64CC cc)
   emit_cond_branch(as, cc, target);
 }
 
-/* Emit test and branch instruction to exit for guard. */
-static void asm_guardtnb(ASMState *as, A64Ins ai, Reg r, uint32_t bit)
+/* Emit test and branch instruction to exit for guard, if in range. */
+static int asm_guardtnb(ASMState *as, A64Ins ai, Reg r, uint32_t bit)
 {
   MCode *target = asm_exitstub_addr(as, as->snapno);
   MCode *p = as->mcp;
+  ptrdiff_t delta = target - p;
   if (LJ_UNLIKELY(p == as->invmcp)) {
+    if (as->orignins > 1023) return 0;  /* Delta might end up too large. */
     as->loopinv = 1;
-    *p = A64I_B | A64F_S26(target-p);
-    emit_tnb(as, ai^0x01000000u, r, bit, p-1);
-    return;
+    *p = A64I_B | A64F_S26(delta);
+    ai ^= 0x01000000u;
+    target = p-1;
+  } else if (LJ_UNLIKELY(delta >= 0x1fff)) {
+    return 0;
   }
   emit_tnb(as, ai, r, bit, target);
+  return 1;
 }
 
 /* Emit compare and branch instruction to exit for guard. */
@@ -1651,16 +1656,15 @@ static void asm_intcomp(ASMState *as, IRIns *ir)
       if (asm_swapops(as, blref, brref)) {
 	Reg tmp = blref; blref = brref; brref = tmp;
       }
+      bleft = ra_alloc1(as, blref, RSET_GPR);
       if (irref_isk(brref)) {
 	uint64_t k = get_k64val(as, brref);
-	if (k && !(k & (k-1)) && (cc == CC_EQ || cc == CC_NE)) {
-	  asm_guardtnb(as, cc == CC_EQ ? A64I_TBZ : A64I_TBNZ,
-		       ra_alloc1(as, blref, RSET_GPR), emit_ctz64(k));
+	if (k && !(k & (k-1)) && (cc == CC_EQ || cc == CC_NE) &&
+	    asm_guardtnb(as, cc == CC_EQ ? A64I_TBZ : A64I_TBNZ, bleft,
+			 emit_ctz64(k)))
 	  return;
-	}
 	m2 = emit_isk13(k, irt_is64(irl->t));
       }
-      bleft = ra_alloc1(as, blref, RSET_GPR);
       ai = (irt_is64(irl->t) ? A64I_TSTx : A64I_TSTw);
       if (!m2)
 	m2 = asm_fuseopm(as, ai, brref, rset_exclude(RSET_GPR, bleft));
