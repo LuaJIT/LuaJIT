@@ -773,57 +773,36 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   int destused = ra_used(ir);
   Reg dest = ra_dest(as, ir, allow);
   Reg tab = ra_alloc1(as, ir->op1, rset_clear(allow, dest));
-  Reg key = 0, tmp = RID_TMP;
-  Reg ftmp = RID_NONE, type = RID_NONE, scr = RID_NONE, tisnum = RID_NONE;
+  Reg key = 0, tmp = RID_TMP, type = RID_NONE, tkey;
   IRRef refkey = ir->op2;
   IRIns *irkey = IR(refkey);
-  int isk = irref_isk(ir->op2);
+  int isk = irref_isk(refkey);
   IRType1 kt = irkey->t;
   uint32_t k = 0;
   uint32_t khash;
-  MCLabel l_end, l_loop, l_next;
+  MCLabel l_end, l_loop;
   rset_clear(allow, tab);
 
-  if (!isk) {
-    key = ra_alloc1(as, ir->op2, irt_isnum(kt) ? RSET_FPR : allow);
+  /* Allocate registers outside of the loop. */
+  if (irkey->o != IR_KNUM || !(k = emit_isk12((int64_t)ir_knum(irkey)->u64))) {
+    key = ra_alloc1(as, refkey, irt_isnum(kt) ? RSET_FPR : allow);
     rset_clear(allow, key);
-    if (!irt_isstr(kt)) {
-      tmp = ra_scratch(as, allow);
-      rset_clear(allow, tmp);
-    }
-  } else if (irt_isnum(kt)) {
-    int64_t val = (int64_t)ir_knum(irkey)->u64;
-    if (!(k = emit_isk12(val))) {
-      key = ra_allock(as, val, allow);
-      rset_clear(allow, key);
-    }
-  } else if (!irt_ispri(kt)) {
-    if (!(k = emit_isk12(irkey->i))) {
-      key = ra_alloc1(as, refkey, allow);
-      rset_clear(allow, key);
-    }
   }
-
-  /* Allocate constants early. */
-  if (irt_isnum(kt)) {
-    if (!isk) {
-      tisnum = ra_allock(as, LJ_TISNUM << 15, allow);
-      ftmp = ra_scratch(as, rset_exclude(RSET_FPR, key));
-      rset_clear(allow, tisnum);
-    }
-  } else if (irt_isaddr(kt)) {
-    if (isk) {
-      int64_t kk = ((int64_t)irt_toitype(kt) << 47) | irkey[1].tv.u64;
-      scr = ra_allock(as, kk, allow);
-    } else {
-      scr = ra_scratch(as, allow);
-    }
-    rset_clear(allow, scr);
+  if (!isk) {
+    tkey = ra_scratch(as, allow);
+    rset_clear(allow, tkey);
+  } else if (irt_isnum(kt)) {
+    tkey = key; /* Assumes -0.0 is already canonicalized to +0.0. */
   } else {
-    lj_assertA(irt_ispri(kt) && !irt_isnil(kt), "bad HREF key type");
-    type = ra_allock(as, ~((int64_t)~irt_toitype(kt) << 47), allow);
-    scr = ra_scratch(as, rset_clear(allow, type));
-    rset_clear(allow, scr);
+    int64_t kk;
+    if (irt_isaddr(kt)) {
+      kk = ((int64_t)irt_toitype(kt) << 47) | irkey[1].tv.u64;
+    } else {
+      lj_assertA(irt_ispri(kt) && !irt_isnil(kt), "bad HREF key type");
+      kk = ~((int64_t)~irt_toitype(kt) << 47);
+    }
+    tkey = ra_allock(as, kk, allow);
+    rset_clear(allow, tkey);
   }
 
   /* Key not found in chain: jump to exit (if merged) or load niltv. */
@@ -839,50 +818,31 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
 
   /* Follow hash chain until the end. */
   l_loop = --as->mcp;
-  emit_n(as, A64I_CMPx^A64I_K12^0, dest);
-  emit_lso(as, A64I_LDRx, dest, dest, offsetof(Node, next));
-  l_next = emit_label(as);
+  if (destused)
+    emit_lso(as, A64I_LDRx, dest, dest, offsetof(Node, next));
 
   /* Type and value comparison. */
   if (merge == IR_EQ)
     asm_guardcc(as, CC_EQ);
   else
     emit_cond_branch(as, CC_EQ, l_end);
+  emit_nm(as, A64I_CMPx^k, tmp, tkey);
+  if (!destused)
+    emit_lso(as, A64I_LDRx, dest, dest, offsetof(Node, next));
+  emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key));
+  *l_loop = A64I_X | A64I_CBNZ | A64F_S19(as->mcp - l_loop) | dest;
 
-  if (irt_isnum(kt)) {
-    if (isk) {
-      /* Assumes -0.0 is already canonicalized to +0.0. */
-      if (k)
-	emit_n(as, A64I_CMPx^k, tmp);
-      else
-	emit_nm(as, A64I_CMPx, key, tmp);
-      emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.u64));
+  /* Construct tkey as canonicalized or tagged key. */
+  if (!isk) {
+    if (irt_isnum(kt)) {
+      emit_dnm(as, A64I_CSELx | A64F_CC(CC_EQ), tkey, RID_ZERO, tkey);
     } else {
-      emit_nm(as, A64I_FCMPd, key, ftmp);
-      emit_dn(as, A64I_FMOV_D_R, (ftmp & 31), (tmp & 31));
-      emit_cond_branch(as, CC_LO, l_next);
-      emit_nm(as, A64I_CMPx | A64F_SH(A64SH_LSR, 32), tisnum, tmp);
-      emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.n));
+      lj_assertA(irt_isaddr(kt), "bad HREF key type");
+      type = ra_allock(as, irt_toitype(kt) << 15, allow);
+      emit_dnm(as, A64I_ADDx | A64F_SH(A64SH_LSL, 32), tkey, key, type);
     }
-  } else if (irt_isaddr(kt)) {
-    if (isk) {
-      emit_nm(as, A64I_CMPx, scr, tmp);
-      emit_lso(as, A64I_LDRx, tmp, dest, offsetof(Node, key.u64));
-    } else {
-      emit_nm(as, A64I_CMPx, tmp, scr);
-      emit_lso(as, A64I_LDRx, scr, dest, offsetof(Node, key.u64));
-    }
-  } else {
-    emit_nm(as, A64I_CMPx, scr, type);
-    emit_lso(as, A64I_LDRx, scr, dest, offsetof(Node, key));
   }
 
-  *l_loop = A64I_BCC | A64F_S19(as->mcp - l_loop) | CC_NE;
-  if (!isk && irt_isaddr(kt)) {
-    type = ra_allock(as, (int32_t)irt_toitype(kt), allow);
-    emit_dnm(as, A64I_ADDx | A64F_SH(A64SH_LSL, 47), tmp, key, type);
-    rset_clear(allow, type);
-  }
   /* Load main position relative to tab->node into dest. */
   khash = isk ? ir_khash(as, irkey) : 1;
   if (khash == 0) {
@@ -896,7 +856,6 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_dnm(as, A64I_ANDw, dest, dest, tmphash);
       emit_lso(as, A64I_LDRw, dest, tab, offsetof(GCtab, hmask));
     } else if (irt_isstr(kt)) {
-      /* Fetch of str->sid is cheaper than ra_allock. */
       emit_dnm(as, A64I_ANDw, dest, dest, tmp);
       emit_lso(as, A64I_LDRw, tmp, key, offsetof(GCstr, sid));
       emit_lso(as, A64I_LDRw, dest, tab, offsetof(GCtab, hmask));
@@ -905,23 +864,18 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
       emit_lso(as, A64I_LDRw, tmp, tab, offsetof(GCtab, hmask));
       emit_dnm(as, A64I_SUBw, dest, dest, tmp);
       emit_dnm(as, A64I_EXTRw | (A64F_IMMS(32-HASH_ROT3)), tmp, tmp, tmp);
-      emit_dnm(as, A64I_EORw, dest, dest, tmp);
-      emit_dnm(as, A64I_EXTRw | (A64F_IMMS(32-HASH_ROT2)), dest, dest, dest);
+      emit_dnm(as, A64I_EORw | A64F_SH(A64SH_ROR, 32-HASH_ROT2), dest, tmp, dest);
       emit_dnm(as, A64I_SUBw, tmp, tmp, dest);
       emit_dnm(as, A64I_EXTRw | (A64F_IMMS(32-HASH_ROT1)), dest, dest, dest);
-      emit_dnm(as, A64I_EORw, tmp, tmp, dest);
       if (irt_isnum(kt)) {
+	emit_dnm(as, A64I_EORw, tmp, tkey, dest);
 	emit_dnm(as, A64I_ADDw, dest, dest, dest);
-	emit_dn(as, A64I_LSRx | A64F_IMMR(32)|A64F_IMMS(32), dest, dest);
-	emit_dm(as, A64I_MOVw, tmp, dest);
-	emit_dn(as, A64I_FMOV_R_D, dest, (key & 31));
+	emit_dn(as, A64I_LSRx | A64F_IMMR(32)|A64F_IMMS(32), dest, tkey);
+	emit_nm(as, A64I_FCMPZd, (key & 31), 0);
+	emit_dn(as, A64I_FMOV_R_D, tkey, (key & 31));
       } else {
-	checkmclim(as);
-	emit_dm(as, A64I_MOVw, tmp, key);
-	emit_dnm(as, A64I_EORw, dest, dest,
-		 ra_allock(as, irt_toitype(kt) << 15, allow));
-	emit_dn(as, A64I_LSRx | A64F_IMMR(32)|A64F_IMMS(32), dest, dest);
-	emit_dm(as, A64I_MOVx, dest, key);
+	emit_dnm(as, A64I_EORw, tmp, key, dest);
+	emit_dnm(as, A64I_EORx | A64F_SH(A64SH_LSR, 32), dest, type, key);
       }
     }
   }
