@@ -890,7 +890,7 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   int bigofs = !emit_checkofs(A64I_LDRx, kofs);
   Reg dest = (ra_used(ir) || bigofs) ? ra_dest(as, ir, RSET_GPR) : RID_NONE;
   Reg node = ra_alloc1(as, ir->op1, RSET_GPR);
-  Reg key, idx = node;
+  Reg idx = node;
   RegSet allow = rset_exclude(RSET_GPR, node);
   uint64_t k;
   lj_assertA(ofs % sizeof(Node) == 0, "unaligned HREFK slot");
@@ -909,9 +909,8 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
   } else {
     k = ((uint64_t)irt_toitype(irkey->t) << 47) | (uint64_t)ir_kgc(irkey);
   }
-  key = ra_scratch(as, allow);
-  emit_nm(as, A64I_CMPx, key, ra_allock(as, k, rset_exclude(allow, key)));
-  emit_lso(as, A64I_LDRx, key, idx, kofs);
+  emit_nm(as, A64I_CMPx, RID_TMP, ra_allock(as, k, allow));
+  emit_lso(as, A64I_LDRx, RID_TMP, idx, kofs);
   if (bigofs)
     emit_opk(as, A64I_ADDx, dest, node, ofs, rset_exclude(RSET_GPR, node));
 }
@@ -1039,7 +1038,7 @@ static void asm_xstore(ASMState *as, IRIns *ir)
 
 static void asm_ahuvload(ASMState *as, IRIns *ir)
 {
-  Reg idx, tmp, type;
+  Reg idx, tmp;
   int32_t ofs = 0;
   RegSet gpr = RSET_GPR, allow = irt_isnum(ir->t) ? RSET_FPR : RSET_GPR;
   lj_assertA(irt_isnum(ir->t) || irt_ispri(ir->t) || irt_isaddr(ir->t) ||
@@ -1058,8 +1057,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   } else {
     tmp = ra_scratch(as, gpr);
   }
-  type = ra_scratch(as, rset_clear(gpr, tmp));
-  idx = asm_fuseahuref(as, ir->op1, &ofs, rset_clear(gpr, type), A64I_LDRx);
+  idx = asm_fuseahuref(as, ir->op1, &ofs, rset_clear(gpr, tmp), A64I_LDRx);
   rset_clear(gpr, idx);
   if (ofs & FUSE_REG) rset_clear(gpr, ofs & 31);
   if (ir->o == IR_VLOAD) ofs += 8 * ir->op2;
@@ -1071,8 +1069,8 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
     emit_nm(as, A64I_CMPx | A64F_SH(A64SH_LSR, 32),
 	    ra_allock(as, LJ_TISNUM << 15, gpr), tmp);
   } else if (irt_isaddr(ir->t)) {
-    emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(-irt_toitype(ir->t)), type);
-    emit_dn(as, A64I_ASRx | A64F_IMMR(47), type, tmp);
+    emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(-irt_toitype(ir->t)), RID_TMP);
+    emit_dn(as, A64I_ASRx | A64F_IMMR(47), RID_TMP, tmp);
   } else if (irt_isnil(ir->t)) {
     emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(1), tmp);
   } else {
@@ -1195,9 +1193,8 @@ dotypecheck:
       emit_nm(as, A64I_CMPx,
 	      ra_allock(as, ~((int64_t)~irt_toitype(t) << 47) , allow), tmp);
     } else {
-      Reg type = ra_scratch(as, allow);
-      emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(-irt_toitype(t)), type);
-      emit_dn(as, A64I_ASRx | A64F_IMMR(47), type, tmp);
+      emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(-irt_toitype(t)), RID_TMP);
+      emit_dn(as, A64I_ASRx | A64F_IMMR(47), RID_TMP, tmp);
     }
     emit_lso(as, A64I_LDRx, tmp, base, ofs);
     return;
@@ -1805,7 +1802,7 @@ static void asm_stack_restore(ASMState *as, SnapShot *snap)
 
 /* Marker to prevent patching the GC check exit. */
 #define ARM64_NOPATCH_GC_CHECK \
-  (A64I_ORRx|A64F_D(RID_TMP)|A64F_M(RID_TMP)|A64F_N(RID_TMP))
+  (A64I_ORRx|A64F_D(RID_ZERO)|A64F_M(RID_ZERO)|A64F_N(RID_ZERO))
 
 /* Check GC threshold and do one or more GC steps. */
 static void asm_gc_check(ASMState *as)
