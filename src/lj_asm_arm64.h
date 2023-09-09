@@ -1391,8 +1391,7 @@ static void asm_intmul(ASMState *as, IRIns *ir)
   if (irt_isguard(ir->t)) {  /* IR_MULOV */
     asm_guardcc(as, CC_NE);
     emit_dm(as, A64I_MOVw, dest, dest);  /* Zero-extend. */
-    emit_nm(as, A64I_CMPw | A64F_SH(A64SH_ASR, 31), RID_TMP, dest);
-    emit_dn(as, A64I_ASRx | A64F_IMMR(32), RID_TMP, dest);
+    emit_nm(as, A64I_CMPx | A64F_EX(A64EX_SXTW), dest, dest);
     emit_dnm(as, A64I_SMULL, dest, right, left);
   } else {
     emit_dnm(as, irt_is64(ir->t) ? A64I_MULx : A64I_MULw, dest, left, right);
