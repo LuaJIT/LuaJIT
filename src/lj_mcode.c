@@ -371,7 +371,7 @@ void lj_mcode_limiterr(jit_State *J, size_t need)
   sizemcode = (size_t)J->param[JIT_P_sizemcode] << 10;
   sizemcode = (sizemcode + LJ_PAGESIZE-1) & ~(size_t)(LJ_PAGESIZE - 1);
   maxmcode = (size_t)J->param[JIT_P_maxmcode] << 10;
-  if ((size_t)need > sizemcode)
+  if (need * sizeof(MCode) > sizemcode)
     lj_trace_err(J, LJ_TRERR_MCODEOV);  /* Too long for any area. */
   if (J->szallmcarea + sizemcode > maxmcode)
     lj_trace_err(J, LJ_TRERR_MCODEAL);
