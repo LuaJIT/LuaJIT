@@ -113,6 +113,17 @@ static int emit_checkofs(A64Ins ai, int64_t ofs)
   }
 }
 
+static LJ_AINLINE uint32_t emit_lso_pair_candidate(A64Ins ai, int ofs, int sc)
+{
+  if (ofs >= 0) {
+    return ai | A64F_U12(ofs>>sc);  /* Subsequent lj_ror checks ofs. */
+  } else if (ofs >= -256) {
+    return (ai^A64I_LS_U) | A64F_S9(ofs & 0x1ff);
+  } else {
+    return A64F_D(31);  /* Will mismatch prev. */
+  }
+}
+
 static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs)
 {
   int ot = emit_checkofs(ai, ofs), sc = (ai >> 30) & 3;
@@ -124,11 +135,9 @@ static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs)
     uint32_t prev = *as->mcp & ~A64F_D(31);
     int ofsm = ofs - (1<<sc), ofsp = ofs + (1<<sc);
     A64Ins aip;
-    if (prev == (ai | A64F_N(rn) | A64F_U12(ofsm>>sc)) ||
-	prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsm&0x1ff))) {
+    if (prev == emit_lso_pair_candidate(ai | A64F_N(rn), ofsm, sc)) {
       aip = (A64F_A(rd) | A64F_D(*as->mcp & 31));
-    } else if (prev == (ai | A64F_N(rn) | A64F_U12(ofsp>>sc)) ||
-	       prev == ((ai^A64I_LS_U) | A64F_N(rn) | A64F_S9(ofsp&0x1ff))) {
+    } else if (prev == emit_lso_pair_candidate(ai | A64F_N(rn), ofsp, sc)) {
       aip = (A64F_D(rd) | A64F_A(*as->mcp & 31));
       ofsm = ofs;
     } else {
