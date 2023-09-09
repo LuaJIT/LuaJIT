@@ -43,26 +43,18 @@ static uint32_t emit_isk12(int64_t n)
 /* Encode constant in K13 format for logical data processing instructions. */
 static uint32_t emit_isk13(uint64_t n, int is64)
 {
-  int inv = 0, w = 128, lz, tz;
-  if (n & 1) { n = ~n; w = 64; inv = 1; }  /* Avoid wrap-around of ones. */
-  if (!n) return 0;  /* Neither all-zero nor all-ones are allowed. */
-  do {  /* Find the repeat width. */
-    if (is64 && (uint32_t)(n^(n>>32))) break;
-    n = (uint32_t)n;
-    if (!n) return 0;  /* Ditto when passing n=0xffffffff and is64=0. */
-    w = 32; if ((n^(n>>16)) & 0xffff) break;
-    n = n & 0xffff; w = 16; if ((n^(n>>8)) & 0xff) break;
-    n = n & 0xff; w = 8; if ((n^(n>>4)) & 0xf) break;
-    n = n & 0xf; w = 4; if ((n^(n>>2)) & 0x3) break;
-    n = n & 0x3; w = 2;
-  } while (0);
-  lz = emit_clz64(n);
-  tz = emit_ctz64(n);
-  if ((int64_t)(n << lz) >> (lz+tz) != -1ll) return 0; /* Non-contiguous? */
-  if (inv)
-    return A64I_K13 | (((lz-w) & 127) << 16) | (((lz+tz-w-1) & 63) << 10);
-  else
-    return A64I_K13 | ((w-tz) << 16) | (((63-lz-tz-w-w) & 63) << 10);
+  /* Thanks to: https://dougallj.wordpress.com/2021/10/30/ */
+  int rot, ones, size, immr, imms;
+  if (!is64) n = ((uint64_t)n << 32) | (uint32_t)n;
+  if ((n+1u) <= 1u) return 0;  /* Neither all-zero nor all-ones are allowed. */
+  rot = (n & (n+1u)) ? emit_ctz64(n & (n+1u)) : 64;
+  n = lj_ror(n, rot & 63);
+  ones = emit_ctz64(~n);
+  size = emit_clz64(n) + ones;
+  if (lj_ror(n, size & 63) != n) return 0;  /* Non-repeating? */
+  immr = -rot & (size - 1);
+  imms = (-(size << 1) | (ones - 1)) & 63;
+  return A64I_K13 | A64F_IMMR(immr | (size & 64)) | A64F_IMMS(imms);
 }
 
 static uint32_t emit_isfpk64(uint64_t n)
