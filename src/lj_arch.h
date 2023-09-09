@@ -52,7 +52,7 @@
 #elif defined(__mips__) || defined(__mips) || defined(__MIPS__) || defined(__MIPS)
 #define LUAJIT_TARGET	LUAJIT_ARCH_MIPS
 #else
-#error "No support for this architecture (yet)"
+#error "Architecture not supported (in this version), see: https://luajit.org/status.html#architectures"
 #endif
 
 #endif
@@ -188,13 +188,13 @@
 #define LJ_TARGET_UNIFYROT	2	/* Want only IR_BROR. */
 #define LJ_ARCH_NUMMODE		LJ_NUMMODE_DUAL
 
-#if __ARM_ARCH____ARM_ARCH_8__ || __ARM_ARCH_8A__
+#if __ARM_ARCH >= 8 || __ARM_ARCH_8__ || __ARM_ARCH_8A__
 #define LJ_ARCH_VERSION		80
-#elif __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
+#elif __ARM_ARCH == 7 || __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH_7S__ || __ARM_ARCH_7VE__
 #define LJ_ARCH_VERSION		70
 #elif __ARM_ARCH_6T2__
 #define LJ_ARCH_VERSION		61
-#elif __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6K__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
+#elif __ARM_ARCH == 6 || __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6K__ || __ARM_ARCH_6Z__ || __ARM_ARCH_6ZK__
 #define LJ_ARCH_VERSION		60
 #else
 #define LJ_ARCH_VERSION		50
@@ -328,29 +328,37 @@
 #elif LJ_TARGET_ARM
 #if defined(__ARMEB__)
 #error "No support for big-endian ARM"
+#undef LJ_TARGET_ARM
 #endif
 #if __ARM_ARCH_6M__ || __ARM_ARCH_7M__ || __ARM_ARCH_7EM__
 #error "No support for Cortex-M CPUs"
+#undef LJ_TARGET_ARM
 #endif
 #if !(__ARM_EABI__ || LJ_TARGET_IOS)
 #error "Only ARM EABI or iOS 3.0+ ABI is supported"
+#undef LJ_TARGET_ARM
 #endif
 #elif LJ_TARGET_PPC || LJ_TARGET_PPCSPE
 #if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
-#error "No support for PowerPC CPUs without double-precision FPU"
+#error "No support for PowerPC CPUs without double-precision FPU, use LuaJIT v2.1"
+#undef LJ_TARGET_PPC
 #endif
 #if defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN))
 #error "No support for little-endian PowerPC"
+#undef LJ_TARGET_PPC
 #endif
 #if defined(_LP64)
 #error "No support for PowerPC 64 bit mode"
+#undef LJ_TARGET_PPC
 #endif
 #elif LJ_TARGET_MIPS
 #if defined(__mips_soft_float)
-#error "No support for MIPS CPUs without FPU"
+#error "No support for MIPS CPUs without FPU, use LuaJIT v2.1+"
+#undef LJ_TARGET_MIPS
 #endif
 #if defined(_LP64)
-#error "No support for MIPS64"
+#error "No support for MIPS64, use LuaJIT v2.1+"
+#undef LJ_TARGET_MIPS
 #endif
 #endif
 #endif
