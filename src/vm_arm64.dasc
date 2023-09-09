@@ -3816,9 +3816,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if JIT
     |  // RA = base (ignored), RC = traceno
     |  ldr CARG1, [GL, #GL_J(trace)]
-    |   mov CARG2w, #0  // Traces on ARM64 don't store the trace #, so use 0.
+    |   st_vmstate wzr  // Traces on ARM64 don't store the trace #, so use 0.
     |  ldr TRACE:RC, [CARG1, RC, lsl #3]
-    |   st_vmstate CARG2w
     |.if PAUTH
     |  ldr RA, TRACE:RC->mcauth
     |.else
