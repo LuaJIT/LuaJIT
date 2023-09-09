@@ -216,16 +216,13 @@ static Reg asm_fuseahuref(ASMState *as, IRRef ref, int32_t *ofsp, RegSet allow,
 static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 {
   IRIns *ir = IR(ref);
+  int logical = (ai & 0x1f000000) == 0x0a000000;
   if (ra_hasreg(ir->r)) {
     ra_noweak(as, ir->r);
     return A64F_M(ir->r);
   } else if (irref_isk(ref)) {
-    uint32_t m;
     int64_t k = get_k64val(as, ref);
-    if ((ai & 0x1f000000) == 0x0a000000)
-      m = emit_isk13(k, irt_is64(ir->t));
-    else
-      m = emit_isk12(k);
+    uint32_t m = logical ? emit_isk13(k, irt_is64(ir->t)) : emit_isk12(k);
     if (m)
       return m;
   } else if (mayfuse(as, ref)) {
@@ -237,7 +234,7 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 		    (IR(ir->op2)->i & (irt_is64(ir->t) ? 63 : 31));
       IRIns *irl = IR(ir->op1);
       if (sh == A64SH_LSL &&
-	  irl->o == IR_CONV &&
+	  irl->o == IR_CONV && !logical &&
 	  irl->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT) &&
 	  shift <= 4 &&
 	  canfuse(as, irl)) {
@@ -247,7 +244,7 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 	Reg m = ra_alloc1(as, ir->op1, allow);
 	return A64F_M(m) | A64F_SH(sh, shift);
       }
-    } else if (ir->o == IR_CONV &&
+    } else if (ir->o == IR_CONV && !logical &&
 	       ir->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT)) {
       Reg m = ra_alloc1(as, ir->op1, allow);
       return A64F_M(m) | A64F_EX(A64EX_SXTW);
