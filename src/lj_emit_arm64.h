@@ -230,8 +230,6 @@ static void emit_loadk(ASMState *as, Reg rd, uint64_t u64, int is64)
 /* Load a 64 bit constant into a GPR. */
 #define emit_loadu64(as, rd, i)	emit_loadk(as, rd, i, A64I_X)
 
-#define emit_loada(as, r, addr)	emit_loadu64(as, (r), (uintptr_t)(addr))
-
 #define glofs(as, k) \
   ((intptr_t)((uintptr_t)(k) - (uintptr_t)&J2GG(as->J)->g))
 #define mcpofs(as, k) \

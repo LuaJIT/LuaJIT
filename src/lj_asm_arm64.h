@@ -831,10 +831,13 @@ static void asm_href(ASMState *as, IRIns *ir, IROp merge)
   /* Key not found in chain: jump to exit (if merged) or load niltv. */
   l_end = emit_label(as);
   as->invmcp = NULL;
-  if (merge == IR_NE)
+  if (merge == IR_NE) {
     asm_guardcc(as, CC_AL);
-  else if (destused)
-    emit_loada(as, dest, niltvg(J2G(as->J)));
+  } else if (destused) {
+    uint32_t k12 = emit_isk12(offsetof(global_State, nilnode.val));
+    lj_assertA(k12 != 0, "Cannot k12 encode niltv(L)");
+    emit_dn(as, A64I_ADDx^k12, dest, RID_GL);
+  }
 
   /* Follow hash chain until the end. */
   l_loop = --as->mcp;
