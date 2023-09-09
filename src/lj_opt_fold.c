@@ -1972,7 +1972,10 @@ LJFOLD(NE any any)
 LJFOLDF(comm_equal)
 {
   /* For non-numbers only: x == x ==> drop; x ~= x ==> fail */
-  if (fins->op1 == fins->op2 && !irt_isnum(fins->t))
+  if (fins->op1 == fins->op2 &&
+      (!irt_isnum(fins->t) ||
+       (fleft->o == IR_CONV &&  /* Converted integers cannot be NaN. */
+	(uint32_t)(fleft->op2 & IRCONV_SRCMASK) - (uint32_t)IRT_I8 <= (uint32_t)(IRT_U64 - IRT_U8))))
     return CONDFOLD(fins->o == IR_EQ);
   return fold_comm_swap(J);
 }
