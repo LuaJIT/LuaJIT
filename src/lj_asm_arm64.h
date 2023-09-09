@@ -244,6 +244,10 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
 	Reg m = ra_alloc1(as, ir->op1, allow);
 	return A64F_M(m) | A64F_SH(sh, shift);
       }
+    } else if (ir->o == IR_BROR && logical && irref_isk(ir->op2)) {
+      Reg m = ra_alloc1(as, ir->op1, allow);
+      int shift = (IR(ir->op2)->i & (irt_is64(ir->t) ? 63 : 31));
+      return A64F_M(m) | A64F_SH(A64SH_ROR, shift);
     } else if (ir->o == IR_CONV && !logical &&
 	       ir->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT)) {
       Reg m = ra_alloc1(as, ir->op1, allow);
@@ -1337,12 +1341,12 @@ static int asm_swapops(ASMState *as, IRRef lref, IRRef rref)
   if (irref_isk(lref))
     return 1;  /* But swap constants to the right. */
   ir = IR(rref);
-  if ((ir->o >= IR_BSHL && ir->o <= IR_BSAR) ||
+  if ((ir->o >= IR_BSHL && ir->o <= IR_BROR) ||
       (ir->o == IR_ADD && ir->op1 == ir->op2) ||
       (ir->o == IR_CONV && ir->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT)))
     return 0;  /* Don't swap fusable operands to the left. */
   ir = IR(lref);
-  if ((ir->o >= IR_BSHL && ir->o <= IR_BSAR) ||
+  if ((ir->o >= IR_BSHL && ir->o <= IR_BROR) ||
       (ir->o == IR_ADD && ir->op1 == ir->op2) ||
       (ir->o == IR_CONV && ir->op2 == ((IRT_I64<<IRCONV_DSH)|IRT_INT|IRCONV_SEXT)))
     return 1;  /* But swap fusable operands to the right. */
