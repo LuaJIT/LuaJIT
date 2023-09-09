@@ -541,8 +541,6 @@ static void asm_retf(ASMState *as, IRIns *ir)
   as->topslot -= (BCReg)delta;
   if ((int32_t)as->topslot < 0) as->topslot = 0;
   irt_setmark(IR(REF_BASE)->t);  /* Children must not coalesce with BASE reg. */
-  /* Need to force a spill on REF_BASE now to update the stack slot. */
-  emit_lso(as, A64I_STRx, base, RID_SP, ra_spill(as, IR(REF_BASE)));
   emit_setgl(as, base, jit_base);
   emit_addptr(as, base, -8*delta);
   asm_guardcc(as, CC_NE);
@@ -1794,37 +1792,28 @@ static void asm_prof(ASMState *as, IRIns *ir)
 static void asm_stack_check(ASMState *as, BCReg topslot,
 			    IRIns *irp, RegSet allow, ExitNo exitno)
 {
-  Reg pbase;
   uint32_t k;
+  Reg pbase = RID_BASE;
   if (irp) {
-    if (!ra_hasspill(irp->s)) {
-      pbase = irp->r;
-      lj_assertA(ra_hasreg(pbase), "base reg lost");
-    } else if (allow) {
-      pbase = rset_pickbot(allow);
-    } else {
-      pbase = RID_RET;
-      emit_lso(as, A64I_LDRx, RID_RET, RID_SP, 0);  /* Restore temp register. */
-    }
-  } else {
-    pbase = RID_BASE;
+    pbase = irp->r;
+    if (!ra_hasreg(pbase))
+      pbase = allow ? (0x40 | rset_pickbot(allow)) : (0xC0 | RID_RET);
   }
   emit_cond_branch(as, CC_LS, asm_exitstub_addr(as, exitno));
+  if (pbase & 0x80)  /* Restore temp. register. */
+    emit_lso(as, A64I_LDRx, (pbase & 31), RID_SP, 0);
   k = emit_isk12((8*topslot));
   lj_assertA(k, "slot offset %d does not fit in K12", 8*topslot);
   emit_n(as, A64I_CMPx^k, RID_TMP);
-  emit_dnm(as, A64I_SUBx, RID_TMP, RID_TMP, pbase);
+  emit_dnm(as, A64I_SUBx, RID_TMP, RID_TMP, (pbase & 31));
   emit_lso(as, A64I_LDRx, RID_TMP, RID_TMP,
 	   (int32_t)offsetof(lua_State, maxstack));
-  if (irp) {  /* Must not spill arbitrary registers in head of side trace. */
-    if (ra_hasspill(irp->s))
-      emit_lso(as, A64I_LDRx, pbase, RID_SP, sps_scale(irp->s));
-    emit_lso(as, A64I_LDRx, RID_TMP, RID_GL, glofs(as, &J2G(as->J)->cur_L));
-    if (ra_hasspill(irp->s) && !allow)
-      emit_lso(as, A64I_STRx, RID_RET, RID_SP, 0);  /* Save temp register. */
-  } else {
-    emit_getgl(as, RID_TMP, cur_L);
+  if (pbase & 0x40) {
+    emit_getgl(as, (pbase & 31), jit_base);
+    if (pbase & 0x80)  /* Save temp register. */
+      emit_lso(as, A64I_STRx, (pbase & 31), RID_SP, 0);
   }
+  emit_getgl(as, RID_TMP, cur_L);
 }
 
 /* Restore Lua stack from on-trace state. */
@@ -1921,46 +1910,40 @@ static void asm_loop_tail_fixup(ASMState *as)
 
 /* -- Head of trace ------------------------------------------------------- */
 
-/* Reload L register from g->cur_L. */
-static void asm_head_lreg(ASMState *as)
-{
-  IRIns *ir = IR(ASMREF_L);
-  if (ra_used(ir)) {
-    Reg r = ra_dest(as, ir, RSET_GPR);
-    emit_getgl(as, r, cur_L);
-    ra_evictk(as);
-  }
-}
-
 /* Coalesce BASE register for a root trace. */
 static void asm_head_root_base(ASMState *as)
 {
-  IRIns *ir;
-  asm_head_lreg(as);
-  ir = IR(REF_BASE);
-  if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
-    ra_spill(as, ir);
-  ra_destreg(as, ir, RID_BASE);
+  IRIns *ir = IR(REF_BASE);
+  Reg r = ir->r;
+  if (ra_hasreg(r)) {
+    ra_free(as, r);
+    if (rset_test(as->modset, r) || irt_ismarked(ir->t))
+      ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
+    if (r != RID_BASE)
+      emit_movrr(as, ir, r, RID_BASE);
+  }
 }
 
 /* Coalesce BASE register for a side trace. */
 static Reg asm_head_side_base(ASMState *as, IRIns *irp)
 {
-  IRIns *ir;
-  asm_head_lreg(as);
-  ir = IR(REF_BASE);
-  if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
-    ra_spill(as, ir);
-  if (ra_hasspill(irp->s)) {
-    return ra_dest(as, ir, RSET_GPR);
-  } else {
-    Reg r = irp->r;
-    lj_assertA(ra_hasreg(r), "base reg lost");
-    if (r != ir->r && !rset_test(as->freeset, r))
-      ra_restore(as, regcost_ref(as->cost[r]));
-    ra_destreg(as, ir, r);
-    return r;
+  IRIns *ir = IR(REF_BASE);
+  Reg r = ir->r;
+  if (ra_hasreg(r)) {
+    ra_free(as, r);
+    if (rset_test(as->modset, r) || irt_ismarked(ir->t))
+      ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
+    if (irp->r == r) {
+      return r;  /* Same BASE register already coalesced. */
+    } else if (ra_hasreg(irp->r) && rset_test(as->freeset, irp->r)) {
+      /* Move from coalesced parent reg. */
+      emit_movrr(as, ir, r, irp->r);
+      return irp->r;
+    } else {
+      emit_getgl(as, r, jit_base);  /* Otherwise reload BASE. */
+    }
   }
+  return RID_NONE;
 }
 
 /* -- Tail of trace ------------------------------------------------------- */
