@@ -924,18 +924,16 @@ static void asm_uref(ASMState *as, IRIns *ir)
     MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
     emit_lsptr(as, A64I_LDRx, dest, v);
   } else {
-    Reg uv = ra_scratch(as, RSET_GPR);
-    Reg func = ra_alloc1(as, ir->op1, RSET_GPR);
     if (ir->o == IR_UREFC) {
-      asm_guardcc(as, CC_NE);
-      emit_n(as, (A64I_CMPx^A64I_K12) | A64F_U12(1), RID_TMP);
-      emit_opk(as, A64I_ADDx, dest, uv,
+      asm_guardcnb(as, A64I_CBZ, RID_TMP);
+      emit_opk(as, A64I_ADDx, dest, dest,
 	       (int32_t)offsetof(GCupval, tv), RSET_GPR);
-      emit_lso(as, A64I_LDRB, RID_TMP, uv, (int32_t)offsetof(GCupval, closed));
+      emit_lso(as, A64I_LDRB, RID_TMP, dest,
+	       (int32_t)offsetof(GCupval, closed));
     } else {
-      emit_lso(as, A64I_LDRx, dest, uv, (int32_t)offsetof(GCupval, v));
+      emit_lso(as, A64I_LDRx, dest, dest, (int32_t)offsetof(GCupval, v));
     }
-    emit_lso(as, A64I_LDRx, uv, func,
+    emit_lso(as, A64I_LDRx, dest, ra_alloc1(as, ir->op1, RSET_GPR),
 	     (int32_t)offsetof(GCfuncL, uvptr) + 8*(int32_t)(ir->op2 >> 8));
   }
 }
