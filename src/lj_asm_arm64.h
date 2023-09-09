@@ -664,25 +664,22 @@ static void asm_strto(ASMState *as, IRIns *ir)
 {
   const CCallInfo *ci = &lj_ir_callinfo[IRCALL_lj_strscan_num];
   IRRef args[2];
-  Reg dest = 0, tmp;
-  int destused = ra_used(ir);
+  Reg tmp;
   int32_t ofs = 0;
   ra_evictset(as, RSET_SCRATCH);
-  if (destused) {
+  if (ra_used(ir)) {
     if (ra_hasspill(ir->s)) {
       ofs = sps_scale(ir->s);
-      destused = 0;
       if (ra_hasreg(ir->r)) {
 	ra_free(as, ir->r);
 	ra_modified(as, ir->r);
 	emit_spload(as, ir, ir->r, ofs);
       }
     } else {
-      dest = ra_dest(as, ir, RSET_FPR);
+      Reg dest = ra_dest(as, ir, RSET_FPR);
+      emit_lso(as, A64I_LDRd, (dest & 31), RID_SP, 0);
     }
   }
-  if (destused)
-    emit_lso(as, A64I_LDRd, (dest & 31), RID_SP, 0);
   asm_guardcnb(as, A64I_CBZ, RID_RET);
   args[0] = ir->op1; /* GCstr *str */
   args[1] = ASMREF_TMP1; /* TValue *n  */
