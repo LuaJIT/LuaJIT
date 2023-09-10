@@ -34,20 +34,26 @@
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
 
-@set DASMFLAGS=-D WIN -D JIT -D FFI -D P64
+@set DASMFLAGS=-D WIN -D JIT -D FFI -D ENDIAN_LE -D FPU -D P64
 @set LJARCH=x64
 @minilua
-@if errorlevel 8 goto :X64
+@if errorlevel 8 goto :NO32
 @set DASC=vm_x86.dasc
-@set DASMFLAGS=-D WIN -D JIT -D FFI
+@set DASMFLAGS=-D WIN -D JIT -D FFI -D ENDIAN_LE -D FPU
 @set LJARCH=x86
 @set LJCOMPILE=%LJCOMPILE% /arch:SSE2
+@goto :DA
+:NO32
+@if "%VSCMD_ARG_TGT_ARCH%" neq "arm64" goto :X64
+@set DASC=vm_arm64.dasc
+@set LJARCH=arm64
+@goto :DA
 :X64
-@if "%1" neq "nogc64" goto :GC64
+@if "%1" neq "nogc64" goto :DA
 @shift
 @set DASC=vm_x86.dasc
 @set LJCOMPILE=%LJCOMPILE% /DLUAJIT_DISABLE_GC64
-:GC64
+:DA
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
