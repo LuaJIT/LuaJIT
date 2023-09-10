@@ -5,6 +5,7 @@
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 
+local arg = {...}
 local FILE_ROLLING_H = arg[1] or "luajit_rolling.h"
 local FILE_RELVER_TXT = arg[2] or "luajit_relver.txt"
 local FILE_LUAJIT_H = arg[3] or "luajit.h"
