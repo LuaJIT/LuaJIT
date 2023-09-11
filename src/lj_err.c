@@ -261,6 +261,8 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 {
 #if LJ_TARGET_X86
   void *cf = (char *)f - CFRAME_OFS_SEH;
+#elif LJ_TARGET_ARM64
+  void *cf = (char *)f - CFRAME_SIZE;
 #else
   void *cf = f;
 #endif
@@ -297,11 +299,11 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 #else
       /* Unwind the stack and call all handlers for all lower C frames
       ** (including ourselves) again with EH_UNWINDING set. Then set
-      ** stack pointer = cf, result = errcode and jump to the specified target.
+      ** stack pointer = f, result = errcode and jump to the specified target.
       */
-      RtlUnwindEx(cf, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
-			       lj_vm_unwind_ff_eh :
-			       lj_vm_unwind_c_eh),
+      RtlUnwindEx(f, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
+			      lj_vm_unwind_ff_eh :
+			      lj_vm_unwind_c_eh),
 		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
       /* RtlUnwindEx should never return. */
 #endif
