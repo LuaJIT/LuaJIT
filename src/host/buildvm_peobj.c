@@ -362,7 +362,7 @@ void emit_peobj(BuildCtx *ctx)
 #define CSAVE_FREGS(r1,r2,o1) do { \
   int r, o; for (r = r1, o = o1; r <= r2; r += 2, o -= 16) CSAVE_FREGP(r, o); \
 } while (0)
-#define CSAVE_REG(r,o)	CBE16(0xd000 | (((r) - 19) << 6) | (~(o) >> 3))
+#define CSAVE_REG(r,o)	CBE16(0xd000 | (((r) - 19) << 6) | ((o) >> 3))
 #define CSAVE_REGX(r,o)	CBE16(0xd400 | (((r) - 19) << 5) | (~(o) >> 3))
 #define CADD_FP(s)	CBE16(0xe200 | ((s) >> 3))  /* s < 8*256 */
 #define CODE_NOP	0xe3
