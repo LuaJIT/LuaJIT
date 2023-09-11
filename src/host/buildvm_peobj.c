@@ -9,7 +9,7 @@
 #include "buildvm.h"
 #include "lj_bc.h"
 
-#if LJ_TARGET_WINDOWS
+#if LJ_TARGET_WINDOWS || LJ_TARGET_CYGWIN
 
 /* Context for PE object emitter. */
 static char *strtab;
