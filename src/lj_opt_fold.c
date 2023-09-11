@@ -377,10 +377,10 @@ static uint64_t kfold_int64arith(jit_State *J, uint64_t k1, uint64_t k2,
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
   case IR_BSHL: k1 <<= (k2 & 63); break;
-  case IR_BSHR: k1 = (int32_t)((uint32_t)k1 >> (k2 & 63)); break;
-  case IR_BSAR: k1 >>= (k2 & 63); break;
-  case IR_BROL: k1 = (int32_t)lj_rol((uint32_t)k1, (k2 & 63)); break;
-  case IR_BROR: k1 = (int32_t)lj_ror((uint32_t)k1, (k2 & 63)); break;
+  case IR_BSHR: k1 >>= (k2 & 63); break;
+  case IR_BSAR: k1 = (uint64_t)((int64_t)k1 >> (k2 & 63)); break;
+  case IR_BROL: k1 = lj_rol(k1, (k2 & 63)); break;
+  case IR_BROR: k1 = lj_ror(k1, (k2 & 63)); break;
   default: lj_assertJ(0, "bad IR op %d", op); break;
   }
 #else
