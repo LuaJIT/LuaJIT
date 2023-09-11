@@ -432,6 +432,11 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
   for (gpr = REGARG_FIRSTGPR; gpr <= REGARG_LASTGPR; gpr++)
     as->cost[gpr] = REGCOST(~0u, ASMREF_L);
   gpr = REGARG_FIRSTGPR;
+#if LJ_HASFFI && LJ_ABI_WIN
+  if ((ci->flags & CCI_VARARG)) {
+    fpr = REGARG_LASTFPR+1;
+  }
+#endif
   for (n = 0; n < nargs; n++) { /* Setup args. */
     IRRef ref = args[n];
     IRIns *ir = IR(ref);
@@ -442,6 +447,11 @@ static void asm_gencall(ASMState *as, const CCallInfo *ci, IRRef *args)
 		     "reg %d not free", fpr);  /* Must have been evicted. */
 	  ra_leftov(as, fpr, ref);
 	  fpr++;
+#if LJ_HASFFI && LJ_ABI_WIN
+	} else if ((ci->flags & CCI_VARARG) && (gpr <= REGARG_LASTGPR)) {
+	  Reg rf = ra_alloc1(as, ref, RSET_FPR);
+	  emit_dn(as, A64I_FMOV_R_D, gpr++, rf & 31);
+#endif
 	} else {
 	  Reg r = ra_alloc1(as, ref, RSET_FPR);
 	  int32_t al = spalign;
@@ -1943,6 +1953,9 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
     int ngpr = REGARG_NUMGPR, nfpr = REGARG_NUMFPR;
     int spofs = 0, spalign = LJ_TARGET_OSX ? 0 : 7, nslots;
     asm_collectargs(as, ir, ci, args);
+#if LJ_ABI_WIN
+    if ((ci->flags & CCI_VARARG)) nfpr = 0;
+#endif
     for (i = 0; i < nargs; i++) {
       int al = spalign;
       if (!args[i]) {
@@ -1954,7 +1967,9 @@ static Reg asm_setup_call_slots(ASMState *as, IRIns *ir, const CCallInfo *ci)
 #endif
       } else if (irt_isfp(IR(args[i])->t)) {
 	if (nfpr > 0) { nfpr--; continue; }
-#if LJ_TARGET_OSX
+#if LJ_ABI_WIN
+	if ((ci->flags & CCI_VARARG) && ngpr > 0) { ngpr--; continue; }
+#elif LJ_TARGET_OSX
 	al |= irt_isnum(IR(args[i])->t) ? 7 : 3;
 #endif
       } else {

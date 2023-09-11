@@ -124,9 +124,9 @@ static LJ_AINLINE uint32_t emit_lso_pair_candidate(A64Ins ai, int ofs, int sc)
   }
 }
 
-static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs)
+static void emit_lso(ASMState *as, A64Ins ai, Reg rd, Reg rn, int64_t ofs64)
 {
-  int ot = emit_checkofs(ai, ofs), sc = (ai >> 30) & 3;
+  int ot = emit_checkofs(ai, ofs64), sc = (ai >> 30) & 3, ofs = (int)ofs64;
   lj_assertA(ot, "load/store offset %d out of range", ofs);
   /* Combine LDR/STR pairs to LDP/STP. */
   if ((sc == 2 || sc == 3) &&
