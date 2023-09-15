@@ -285,8 +285,8 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 	/* Don't catch access violations etc. */
 	return 1;  /* ExceptionContinueSearch */
       }
-#if LJ_TARGET_X86
       UNUSED(ctx);
+#if LJ_TARGET_X86
       UNUSED(dispatch);
       /* Call all handlers for all lower C frames (including ourselves) again
       ** with EH_UNWINDING set. Then call the specified function, passing cf
@@ -304,7 +304,8 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
       RtlUnwindEx(f, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
 			      lj_vm_unwind_ff_eh :
 			      lj_vm_unwind_c_eh),
-		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
+		  rec, (void *)(uintptr_t)errcode, dispatch->ContextRecord,
+		  dispatch->HistoryTable);
       /* RtlUnwindEx should never return. */
 #endif
     }
