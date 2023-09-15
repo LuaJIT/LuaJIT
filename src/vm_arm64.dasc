@@ -432,24 +432,24 @@ static void build_subroutines(BuildCtx *ctx)
   |  // (void *cframe, int errcode)
   |  mov sp, CARG1
   |  mov CRET1, CARG2
-  |->vm_unwind_c_eh:			// Landing pad for external unwinder.
   |  ldr L, SAVE_L
-  |   mv_vmstate TMP0w, C
   |  ldr GL, L->glref
+  |->vm_unwind_c_eh:			// Landing pad for external unwinder.
+  |   mv_vmstate TMP0w, C
   |   st_vmstate TMP0w
   |  b ->vm_leave_unw
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
   |  and sp, CARG1, #CFRAME_RAWMASK
-  |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |  ldr L, SAVE_L
   |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
   |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
   |    movn TISNIL, #0
+  |   ldr GL, L->glref			// Setup pointer to global state.
+  |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
   |    mov RC, #16			// 2 results: false + error message.
   |  ldr BASE, L->base
-  |   ldr GL, L->glref			// Setup pointer to global state.
   |    mov_false TMP0
   |  sub RA, BASE, #8			// Results start at BASE-8.
   |  ldr PC, [BASE, FRAME_PC]		// Fetch PC of previous frame.
