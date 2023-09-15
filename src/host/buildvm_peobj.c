@@ -358,12 +358,11 @@ void emit_peobj(BuildCtx *ctx)
 #define CSAVE_REGS(r1,r2,o1) do { \
   int r, o; for (r = r1, o = o1; r <= r2; r += 2, o -= 16) CSAVE_REGP(r, o); \
 } while (0)
+#define CSAVE_REGPX(r,o) CBE16(0xcc00 | (((r) - 19) << 6) | (~(o) >> 3))
 #define CSAVE_FREGP(r,o) CBE16(0xd800 | (((r) - 8) << 6) | ((o) >> 3))
 #define CSAVE_FREGS(r1,r2,o1) do { \
   int r, o; for (r = r1, o = o1; r <= r2; r += 2, o -= 16) CSAVE_FREGP(r, o); \
 } while (0)
-#define CSAVE_REG(r,o)	CBE16(0xd000 | (((r) - 19) << 6) | ((o) >> 3))
-#define CSAVE_REGX(r,o)	CBE16(0xd400 | (((r) - 19) << 5) | (~(o) >> 3))
 #define CADD_FP(s)	CBE16(0xe200 | ((s) >> 3))  /* s < 8*256 */
 #define CODE_NOP	0xe3
 #define CODE_END	0xe4
@@ -374,8 +373,8 @@ void emit_peobj(BuildCtx *ctx)
 
     /* Unwind codes for .text section with handler. */
     p = uwc;
-    CSAVE_REGS(19, 28, 184);	/* +5*2 */
-    CSAVE_FREGS(8, 15, 104);	/* +4*2 */
+    CSAVE_REGS(19, 28, 176);	/* +5*2 */
+    CSAVE_FREGS(8, 15, 96);	/* +4*2 */
     CSAVE_FPLR(192);		/* +1 */
     CALLOC_S(208);		/* +1 */
     CEND_ALIGN;			/* +1 +3 -> 24 */
@@ -391,9 +390,8 @@ void emit_peobj(BuildCtx *ctx)
     p = uwc;
     CADD_FP(16);		/* +2 */
     CSAVE_FPLR(16);		/* +1 */
-    CSAVE_REG(19, 8);		/* +2 */
-    CSAVE_REGX(20, -32);	/* +2 */
-    CEND_ALIGN;			/* +1 +0 -> 8 */
+    CSAVE_REGPX(19, -32);	/* +2 */
+    CEND_ALIGN;			/* +1 +2 -> 8 */
 
     u32 = ((8u >> 2) << 27) | (((uint32_t)ctx->codesz - fcofs) >> 2);
     owrite(ctx, &u32, 4);

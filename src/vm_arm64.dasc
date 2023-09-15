@@ -113,13 +113,37 @@
 |
 |.define TMPDofs,	#24
 |
+|.if WIN
+|// Windows unwind data is suited to r1 stored first.
+|.macro stp_unwind, r1, r2, where
+|  stp r1, r2, where
+|.endmacro
+|.macro ldp_unwind, r1, r2, where
+|  ldp r1, r2, where
+|.endmacro
+|.macro ldp_unwind, r1, r2, where, post_index
+|  ldp r1, r2, where, post_index
+|.endmacro
+|.else
+|// Otherwise store r2 first for compact unwind info (OSX).
+|.macro stp_unwind, r1, r2, where
+|  stp r2, r1, where
+|.endmacro
+|.macro ldp_unwind, r1, r2, where
+|  ldp r2, r1, where
+|.endmacro
+|.macro ldp_unwind, r1, r2, where, post_index
+|  ldp r2, r1, where, post_index
+|.endmacro
+|.endif
+|
 |.macro save_, gpr1, gpr2, fpr1, fpr2
-|  stp d..fpr2, d..fpr1, [sp, # SAVE_FPR_+(14-fpr1)*8]
-|  stp x..gpr2, x..gpr1, [sp, # SAVE_GPR_+(27-gpr1)*8]
+|  stp_unwind d..fpr1, d..fpr2, [sp, # SAVE_FPR_+(14-fpr1)*8]
+|  stp_unwind x..gpr1, x..gpr2, [sp, # SAVE_GPR_+(27-gpr1)*8]
 |.endmacro
 |.macro rest_, gpr1, gpr2, fpr1, fpr2
-|  ldp d..fpr2, d..fpr1, [sp, # SAVE_FPR_+(14-fpr1)*8]
-|  ldp x..gpr2, x..gpr1, [sp, # SAVE_GPR_+(27-gpr1)*8]
+|  ldp_unwind d..fpr1, d..fpr2, [sp, # SAVE_FPR_+(14-fpr1)*8]
+|  ldp_unwind x..gpr1, x..gpr2, [sp, # SAVE_GPR_+(27-gpr1)*8]
 |.endmacro
 |
 |.macro saveregs
@@ -127,14 +151,14 @@
 |  sub sp, sp, # CFRAME_SPACE
 |  stp fp, lr, [sp, # SAVE_FP_LR_]
 |  add fp, sp, # SAVE_FP_LR_
-|  stp x20, x19, [sp, # SAVE_GPR_+(27-19)*8]
+|  stp_unwind x19, x20, [sp, # SAVE_GPR_+(27-19)*8]
 |  save_ 21, 22, 8, 9
 |  save_ 23, 24, 10, 11
 |  save_ 25, 26, 12, 13
 |  save_ 27, 28, 14, 15
 |.endmacro
 |.macro restoreregs
-|  ldp x20, x19, [sp, # SAVE_GPR_+(27-19)*8]
+|  ldp_unwind x19, x20, [sp, # SAVE_GPR_+(27-19)*8]
 |  rest_ 21, 22, 8, 9
 |  rest_ 23, 24, 10, 11
 |  rest_ 25, 26, 12, 13
@@ -2162,7 +2186,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |// Handler for callback functions.
-  |// Saveregs already performed. Callback slot number in [sp], g in r12.
+  |// Saveregs already performed. Callback slot number in w9, g in x10.
   |->vm_ffi_callback:
   |.if FFI
   |.type CTSTATE, CTState, PC
@@ -2215,7 +2239,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.if FFI
   |  .type CCSTATE, CCallState, x19
   |  sp_auth
-  |  stp x20, CCSTATE, [sp, #-32]!
+  |  stp_unwind CCSTATE, x20, [sp, #-32]!
   |  stp fp, lr, [sp, #16]
   |  add fp, sp, #16
   |  mov CCSTATE, x0
@@ -2247,7 +2271,7 @@ static void build_subroutines(BuildCtx *ctx)
   |   stp d0, d1, CCSTATE->fpr[0]
   |   stp d2, d3, CCSTATE->fpr[2]
   |  ldp fp, lr, [sp, #16]
-  |  ldp x20, CCSTATE, [sp], #32
+  |  ldp_unwind CCSTATE, x20, [sp], #32
   |  ret_auth
   |.endif
   |// Note: vm_ffi_call must be the last function in this object file!
