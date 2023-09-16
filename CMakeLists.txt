@@ -5,7 +5,7 @@
 # Redistribution and use of this file is allowed according to the terms of the MIT license.
 # Debugged and (now seriously) modified by Ronan Collobert, for Torch7
 
-#project(LuaJIT C ASM)
+project(LuaJIT C ASM)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 SET(LUAJIT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -74,8 +74,10 @@ ENDIF()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   message(STATUS "luajit debug mode")
   add_definitions(-DLUA_USE_APICHECK -DLUA_USE_ASSERT -DLUAJIT_USE_SYSMALLOC)
-  add_link_options(-fsanitize=address)
-  add_compile_options(-fsanitize=address)
+  if (MSVC)
+    add_link_options(-fsanitize=address)
+    add_compile_options(-fsanitize=address)
+  endif()
 endif()
 
 CHECK_TYPE_SIZE("void*" SIZEOF_VOID_P)

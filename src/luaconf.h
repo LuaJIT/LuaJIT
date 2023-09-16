@@ -136,6 +136,12 @@
 
 #define LUALIB_API	LUA_API
 
+#ifdef _WIN32
+#define LUA_DATA_API LUA_API
+#else
+#define LUA_DATA_API
+#endif
+
 /* Compatibility support for assertions. */
 #if defined(LUA_USE_ASSERT) || defined(LUA_USE_APICHECK)
 #include <assert.h>

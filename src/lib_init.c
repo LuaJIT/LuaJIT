@@ -38,6 +38,19 @@ static const luaL_Reg lj_lib_preload[] = {
   { NULL,		NULL }
 };
 
+#ifdef DO_LUA_INIT
+static void handle_luainit(lua_State *L)
+{
+  const char *init = getenv(LUA_INIT);
+  if (init == NULL)
+    return;
+  if (init[0] == '@')
+    (luaL_loadfile(L, init+1) || lua_pcall(L, 0, 0, 0));
+  else
+    (luaL_loadstring(L, init) || lua_pcall(L, 0, 0, 0));
+}
+#endif
+
 LUALIB_API void luaL_openlibs(lua_State *L)
 {
   const luaL_Reg *lib;
@@ -79,21 +92,8 @@ LUALIB_API void luaL_openlibs(lua_State *L)
   (luaL_loadstring(L, dump_fix) || lua_pcall(L, 0, 0, 0));
 #endif
 #ifdef DO_LUA_INIT
-  void handle_luainit(lua_State *L);
   handle_luainit(L);
 #endif
 #endif
 }
-
-static void handle_luainit(lua_State *L)
-{
-  const char *init = getenv(LUA_INIT);
-  if (init == NULL)
-    return;
-  if (init[0] == '@')
-    (luaL_loadfile(L, init+1) || lua_pcall(L, 0, 0, 0));
-  else
-    (luaL_loadstring(L, init) || lua_pcall(L, 0, 0, 0));
-}
-
 

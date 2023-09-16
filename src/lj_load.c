@@ -209,7 +209,7 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
 }
 
 #if LJ_DS_LOADBUFFER_PATCH
-LUA_API const char* (*lj_path_map)(const char* k) = NULL;
+LUA_DATA_API const char* (*lj_path_map)(const char* k) = NULL;
 #endif
 
 LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,
