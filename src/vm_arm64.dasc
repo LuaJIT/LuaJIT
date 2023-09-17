@@ -2029,13 +2029,13 @@ static void build_subroutines(BuildCtx *ctx)
   |.if JIT
   |  ldr L, SAVE_L
   |1:
+  |   movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
+  |   movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
+  |   movn TISNIL, #0
   |  cmn CARG1w, #LUA_ERRERR
   |  bhs >9				// Check for error from exit.
-  |   lsl RC, CARG1, #3
   |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
-  |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
-  |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
-  |    movn TISNIL, #0
+  |   lsl RC, CARG1, #3
   |  and LFUNC:CARG2, CARG2, #LJ_GCVMASK
   |   str RCw, SAVE_MULTRES
   |   str BASE, L->base
