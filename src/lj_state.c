@@ -130,6 +130,18 @@ void LJ_FASTCALL lj_state_growstack1(lua_State *L)
   lj_state_growstack(L, 1);
 }
 
+static TValue *cpgrowstack(lua_State *co, lua_CFunction dummy, void *ud)
+{
+  UNUSED(dummy);
+  lj_state_growstack(co, *(MSize *)ud);
+  return NULL;
+}
+
+int LJ_FASTCALL lj_state_cpgrowstack(lua_State *L, MSize need)
+{
+  return lj_vm_cpcall(L, NULL, &need, cpgrowstack);
+}
+
 /* Allocate basic stack for new state. */
 static void stack_init(lua_State *L1, lua_State *L)
 {
