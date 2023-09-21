@@ -174,12 +174,15 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
     case FRAME_PCALL:  /* FF pcall() frame. */
     case FRAME_PCALLH:  /* FF pcall() frame inside hook. */
       if (errcode) {
+	global_State *g;
 	if (errcode == LUA_YIELD) {
 	  frame = frame_prevd(frame);
 	  break;
 	}
+	g = G(L);
+	setgcref(g->cur_L, obj2gco(L));
 	if (frame_typep(frame) == FRAME_PCALL)
-	  hook_leave(G(L));
+	  hook_leave(g);
 	L->base = frame_prevd(frame) + 1;
 	L->cframe = cf;
 	unwindstack(L, L->base);
