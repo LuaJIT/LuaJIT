@@ -102,7 +102,7 @@ void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)
     if (L->stacksize > LJ_STACK_MAXEX)
       lj_err_throw(L, LUA_ERRERR);  /* Does not invoke an error handler. */
     /* 1. We are _at_ the limit after the last growth. */
-    if (!L->status) {  /* 2. Throw 'stack overflow'. */
+    if (L->status < LUA_ERRRUN) {  /* 2. Throw 'stack overflow'. */
       L->status = LUA_ERRRUN;  /* Prevent ending here again for pushed msg. */
       lj_err_msg(L, LJ_ERR_STKOV);  /* May invoke an error handler. */
     }
