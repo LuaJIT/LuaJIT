@@ -222,7 +222,8 @@ static uint32_t asm_fuseopm(ASMState *as, A64Ins ai, IRRef ref, RegSet allow)
     return A64F_M(ir->r);
   } else if (irref_isk(ref)) {
     int64_t k = get_k64val(as, ref);
-    uint32_t m = logical ? emit_isk13(k, irt_is64(ir->t)) : emit_isk12(k);
+    uint32_t m = logical ? emit_isk13(k, irt_is64(ir->t)) :
+			   emit_isk12(irt_is64(ir->t) ? k : (int32_t)k);
     if (m)
       return m;
   } else if (mayfuse(as, ref)) {
