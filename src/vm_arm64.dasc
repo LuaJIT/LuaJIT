@@ -3916,6 +3916,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add TMP2, BASE, RC
     |   add LFUNC:CARG3, CARG3, TMP0, lsl #47
     |  add RA, RA, RC
+    |  sub CARG1, CARG1, #8
     |   add TMP0, RC, #16+FRAME_VARG
     |   str LFUNC:CARG3, [TMP2], #8	// Store (tagged) copy of LFUNC.
     |    ldr KBASE, [PC, #-4+PC2PROTO(k)]
