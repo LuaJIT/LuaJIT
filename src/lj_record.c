@@ -1570,8 +1570,11 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       TRef tr = TREF_NIL;
       ptrdiff_t idx = lj_ffrecord_select_mode(J, tridx, &J->L->base[dst-1]);
       if (idx < 0) goto nyivarg;
-      if (idx != 0 && !tref_isinteger(tridx))
+      if (idx != 0 && !tref_isinteger(tridx)) {
+	if (tref_isstr(tridx))
+	  tridx = emitir(IRTG(IR_STRTO, IRT_NUM), tridx, 0);
 	tridx = emitir(IRTGI(IR_CONV), tridx, IRCONV_INT_NUM|IRCONV_INDEX);
+      }
       if (idx != 0 && tref_isk(tridx)) {
 	emitir(IRTGI(idx <= nvararg ? IR_GE : IR_LT),
 	       fr, lj_ir_kint(J, frofs+8*(int32_t)idx));
