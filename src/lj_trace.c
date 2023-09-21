@@ -613,21 +613,27 @@ static int trace_abort(jit_State *J)
     J->cur.link = 0;
     J->cur.linktype = LJ_TRLINK_NONE;
     lj_vmevent_send(L, TRACE,
-      TValue *frame;
+      cTValue *bot = tvref(L->stack)+LJ_FR2;
+      cTValue *frame;
       const BCIns *pc;
-      GCfunc *fn;
+      BCPos pos = 0;
       setstrV(L, L->top++, lj_str_newlit(L, "abort"));
       setintV(L->top++, traceno);
       /* Find original Lua function call to generate a better error message. */
-      frame = J->L->base-1;
-      pc = J->pc;
-      while (!isluafunc(frame_func(frame))) {
-	pc = (frame_iscont(frame) ? frame_contpc(frame) : frame_pc(frame)) - 1;
-	frame = frame_prev(frame);
+      for (frame = J->L->base-1, pc = J->pc; ; frame = frame_prev(frame)) {
+	if (isluafunc(frame_func(frame))) {
+	  pos = proto_bcpos(funcproto(frame_func(frame)), pc);
+	  break;
+	} else if (frame_prev(frame) <= bot) {
+	  break;
+	} else if (frame_iscont(frame)) {
+	  pc = frame_contpc(frame) - 1;
+	} else {
+	  pc = frame_pc(frame) - 1;
+	}
       }
-      fn = frame_func(frame);
-      setfuncV(L, L->top++, fn);
-      setintV(L->top++, proto_bcpos(funcproto(fn), pc));
+      setfuncV(L, L->top++, frame_func(frame));
+      setintV(L->top++, pos);
       copyTV(L, L->top++, restorestack(L, errobj));
       copyTV(L, L->top++, &J->errinfo);
     );
