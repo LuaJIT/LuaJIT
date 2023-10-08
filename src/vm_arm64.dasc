@@ -430,6 +430,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
   |  // (void *cframe, int errcode)
+  |  add fp, CARG1, # SAVE_FP_LR_
   |  mov sp, CARG1
   |  mov CRET1, CARG2
   |  ldr L, SAVE_L
@@ -441,7 +442,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
   |  // (void *cframe)
-  |  and sp, CARG1, #CFRAME_RAWMASK
+  |  add fp, CARG1, # SAVE_FP_LR_
+  |  mov sp, CARG1
   |  ldr L, SAVE_L
   |    movz TISNUM, #(LJ_TISNUM>>1)&0xffff, lsl #48
   |    movz TISNUMhi, #(LJ_TISNUM>>1)&0xffff, lsl #16
