@@ -766,6 +766,7 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LUAJIT_SECURITY_STRID 0
 #endif
 
+#define LJ_DS_LOADBUFFER_PATCH 0
 #ifndef LJ_DS_LOADBUFFER_PATCH
 #define LJ_DS_LOADBUFFER_PATCH LJ_DS
 #endif
