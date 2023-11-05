@@ -1373,24 +1373,31 @@ static void asm_hrefk(ASMState *as, IRIns *ir)
 static void asm_uref(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  if (irref_isk(ir->op1)) {
+  int guarded = (irt_t(ir->t) & (IRT_GUARD|IRT_TYPE)) == (IRT_GUARD|IRT_PGC);
+  if (irref_isk(ir->op1) && !guarded) {
     GCfunc *fn = ir_kfunc(IR(ir->op1));
     MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
     emit_rma(as, XO_MOV, dest|REX_GC64, v);
   } else {
     Reg uv = ra_scratch(as, RSET_GPR);
-    Reg func = ra_alloc1(as, ir->op1, RSET_GPR);
-    if (ir->o == IR_UREFC) {
+    if (ir->o == IR_UREFC)
       emit_rmro(as, XO_LEA, dest|REX_GC64, uv, offsetof(GCupval, tv));
-      asm_guardcc(as, CC_NE);
-      emit_i8(as, 1);
-      emit_rmro(as, XO_ARITHib, XOg_CMP, uv, offsetof(GCupval, closed));
-    } else {
+    else
       emit_rmro(as, XO_MOV, dest|REX_GC64, uv, offsetof(GCupval, v));
+    if (guarded) {
+      asm_guardcc(as, ir->o == IR_UREFC ? CC_E : CC_NE);
+      emit_i8(as, 0);
+      emit_rmro(as, XO_ARITHib, XOg_CMP, uv, offsetof(GCupval, closed));
     }
-    emit_rmro(as, XO_MOV, uv|REX_GC64, func,
-	      (int32_t)offsetof(GCfuncL, uvptr) +
-	      (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
+    if (irref_isk(ir->op1)) {
+      GCfunc *fn = ir_kfunc(IR(ir->op1));
+      GCobj *o = gcref(fn->l.uvptr[(ir->op2 >> 8)]);
+      emit_loada(as, uv, o);
+    } else {
+      emit_rmro(as, XO_MOV, uv|REX_GC64, ra_alloc1(as, ir->op1, RSET_GPR),
+	        (int32_t)offsetof(GCfuncL, uvptr) +
+	        (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
+    }
   }
 }
 
