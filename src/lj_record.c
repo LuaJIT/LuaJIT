@@ -755,6 +755,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       emitir(IRTG(IR_RETF, IRT_P32), trpt, trpc);
       J->retdepth++;
       J->needsnap = 1;
+      J->scev.idx = REF_NIL;
       lua_assert(J->baseslot == 1);
       /* Shift result slots up and clear the slots of the new frame below. */
       memmove(J->base + cbase, J->base-1, sizeof(TRef)*nresults);
