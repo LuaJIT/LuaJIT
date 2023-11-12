@@ -473,6 +473,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       }
     } else if (ir->o == IR_ALOAD || ir->o == IR_HLOAD || ir->o == IR_ULOAD) {
       if (noconflict(as, ref, ir->o + IRDELTA_L2S, 0) &&
+	  noconflict(as, ref, IR_CALLS, 0) &&  /* Don't cross table.clear. */
 	  !(LJ_GC64 && irt_isaddr(ir->t))) {
 	asm_fuseahuref(as, ir->op1, xallow);
 	return RID_MRM;
