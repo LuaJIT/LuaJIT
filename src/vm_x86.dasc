@@ -1793,6 +1793,9 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: catch errors ----------------------------------------
   |
   |.ffunc_1 pcall
+  |  mov L:RB, SAVE_L
+  |  lea RA, [BASE+NARGS:RD*8]
+  |  cmp RA, L:RB->maxstack; ja ->fff_fallback
   |  lea RA, [BASE+8]
   |  sub NARGS:RD, 1
   |  mov PC, 8+FRAME_PCALL
@@ -1804,6 +1807,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp ->vm_call_dispatch
   |
   |.ffunc_2 xpcall
+  |  mov L:RB, SAVE_L
+  |  lea RA, [BASE+NARGS:RD*8]
+  |  cmp RA, L:RB->maxstack; ja ->fff_fallback
   |  cmp dword [BASE+12], LJ_TFUNC;  jne ->fff_fallback
   |  mov RB, [BASE+4]			// Swap function and traceback.
   |  mov [BASE+12], RB
