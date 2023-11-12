@@ -674,6 +674,7 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
   emit_rr(as, XO_CVTSI2SD, tmp, dest);
   if (!(as->flags & JIT_F_SPLIT_XMM))
     emit_rr(as, XO_XORPS, tmp, tmp);  /* Avoid partial register stall. */
+  checkmclim(as);
   emit_rr(as, XO_CVTTSD2SI, dest, left);
   /* Can't fuse since left is needed twice. */
 }
@@ -713,6 +714,7 @@ static void asm_conv(ASMState *as, IRIns *ir)
       emit_rr(as, XO_SUBSD, dest, bias);  /* Subtract 2^52+2^51 bias. */
       emit_rr(as, XO_XORPS, dest, bias);  /* Merge bias and integer. */
       emit_loadn(as, bias, k);
+      checkmclim(as);
       emit_mrm(as, XO_MOVD, dest, asm_fuseload(as, lref, RSET_GPR));
       return;
     } else {  /* Integer to FP conversion. */
@@ -1025,6 +1027,7 @@ static void asm_href(ASMState *as, IRIns *ir)
     emit_jcc(as, CC_E, nilexit);
   else
     emit_sjcc(as, CC_E, l_end);
+  checkmclim(as);
   if (irt_isnum(kt)) {
     if (isk) {
       /* Assumes -0.0 is already canonicalized to +0.0. */
@@ -1065,7 +1068,6 @@ static void asm_href(ASMState *as, IRIns *ir)
     emit_rmro(as, XO_ARITHi8, XOg_CMP, dest, offsetof(Node, key.it));
   }
   emit_sfixup(as, l_loop);
-  checkmclim(as);
 
   /* Load main position relative to tab->node into dest. */
   khash = isk ? ir_khash(irkey) : 1;
@@ -1091,6 +1093,7 @@ static void asm_href(ASMState *as, IRIns *ir)
       emit_rr(as, XO_ARITH(XOg_SUB), dest, tmp);
       emit_shifti(as, XOg_ROL, tmp, HASH_ROT3);
       emit_rr(as, XO_ARITH(XOg_XOR), dest, tmp);
+      checkmclim(as);
       emit_shifti(as, XOg_ROL, dest, HASH_ROT2);
       emit_rr(as, XO_ARITH(XOg_SUB), tmp, dest);
       emit_shifti(as, XOg_ROL, dest, HASH_ROT1);
@@ -1375,6 +1378,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   if (irt_islightud(ir->t)) {
     Reg dest = asm_load_lightud64(as, ir, 1);
     if (ra_hasreg(dest)) {
+      checkmclim(as);
       asm_fuseahuref(as, ir->op1, RSET_GPR);
       emit_mrm(as, XO_MOV, dest|REX_64, RID_MRM);
     }
@@ -1394,6 +1398,7 @@ static void asm_ahuvload(ASMState *as, IRIns *ir)
   asm_guardcc(as, irt_isnum(ir->t) ? CC_AE : CC_NE);
   if (LJ_64 && irt_type(ir->t) >= IRT_NUM) {
     lua_assert(irt_isinteger(ir->t) || irt_isnum(ir->t));
+    checkmclim(as);
     emit_u32(as, LJ_TISNUM);
     emit_mrm(as, XO_ARITHi, XOg_CMP, RID_MRM);
   } else {
