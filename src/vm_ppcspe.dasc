@@ -1184,8 +1184,12 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Base library: catch errors ----------------------------------------
   |
   |.ffunc pcall
+  |    lwz TMP1, L->maxstack
+  |    add TMP2, BASE, NARGS8:RC
   |  cmplwi NARGS8:RC, 8
   |   lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
+  |    cmplw cr1, TMP1, TMP2
+  |  cror 4*cr0+lt, 4*cr0+lt, 4*cr1+lt
   |  blt ->fff_fallback
   |   mr TMP2, BASE
   |   la BASE, 8(BASE)
@@ -1196,8 +1200,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_call_dispatch
   |
   |.ffunc_2 xpcall
+  |    lwz TMP1, L->maxstack
+  |    add TMP2, BASE, NARGS8:RC
   |  lbz TMP3, DISPATCH_GL(hookmask)(DISPATCH)
   |   mr TMP2, BASE
+  |    cmplw TMP1, TMP2
+  |    blt ->fff_fallback
   |  checkfunc CARG2			// Traceback must be a function.
   |  checkfail ->fff_fallback
   |   la BASE, 16(BASE)
