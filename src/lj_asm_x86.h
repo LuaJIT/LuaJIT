@@ -118,7 +118,7 @@ static int noconflict(ASMState *as, IRRef ref, IROp conflict, int check)
   while (--i > ref) {
     if (ir[i].o == conflict)
       return 0;  /* Conflict found. */
-    else if ((check & 1) && ir[i].o == IR_NEWREF)
+    else if ((check & 1) && (ir[i].o == IR_NEWREF || ir[i].o == IR_CALLS))
       return 0;
     else if ((check & 2) && (ir[i].op1 == ref || ir[i].op2 == ref))
       return 0;
