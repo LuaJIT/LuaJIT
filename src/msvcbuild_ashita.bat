@@ -125,7 +125,7 @@ if exist luajit.exe.manifest^
 @echo.
 @echo *******************************************************
 @echo *** Build FAILED -- Please check the error messages ***
-@echo *******************************************************
+@echo ******************************************************* 
 @goto :END
 :FAIL
 @echo You must open a "Visual Studio Command Prompt" to run this script
