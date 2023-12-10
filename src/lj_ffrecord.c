@@ -1444,6 +1444,15 @@ static void LJ_FASTCALL recff_table_new(jit_State *J, RecordFFData *rd)
 {
   TRef tra = lj_opt_narrow_toint(J, J->base[0]);
   TRef trh = lj_opt_narrow_toint(J, J->base[1]);
+  if (tref_isk(tra) && tref_isk(trh)) {
+    int32_t a = IR(tref_ref(tra))->i;
+    if (a < 0x7fff) {
+      uint32_t hbits = hsize2hbits(IR(tref_ref(trh))->i);
+      a = a > 0 ? a+1 : 0;
+      J->base[0] = emitir(IRTG(IR_TNEW, IRT_TAB), (uint32_t)a, hbits);
+      return;
+    }
+  }
   J->base[0] = lj_ir_call(J, IRCALL_lj_tab_new_ah, tra, trh);
   UNUSED(rd);
 }
