@@ -240,7 +240,10 @@ for any supported target, as long as both architectures have the same
 pointer size. If you want to cross-compile to any 32 bit target on an
 x64 OS, you need to install the multilib development package (e.g.
 <tt>libc6-dev-i386</tt> on Debian/Ubuntu) and build a 32 bit host part
-(<tt>HOST_CC="gcc -m32"</tt>).
+(<tt>HOST_CC="gcc -m32"</tt>). On some distro versions, multilib conflicts
+with cross-compilers. The workaround is to install the x86 cross-compiler
+package <tt>gcc-i686-linux-gnu</tt> and use it to build the host part
+(<tt>HOST_CC=i686-linux-gnu-gcc</tt>).
 </p>
 <p>
 You need to specify <tt>TARGET_SYS</tt> whenever the host OS and the
