@@ -624,9 +624,25 @@ void lj_snap_replay(jit_State *J, GCtrace *T)
 		if (irr->o == IR_HREFK || irr->o == IR_AREF) {
 		  IRIns *irf = &T->ir[irr->op1];
 		  tmp = emitir(irf->ot, tmp, irf->op2);
+		} else if (irr->o == IR_NEWREF) {
+		  IRRef allocref = tref_ref(tr);
+		  IRRef keyref = tref_ref(key);
+		  IRRef newref_ref = J->chain[IR_NEWREF];
+		  IRIns *newref = &J->cur.ir[newref_ref];
+		  lj_assertJ(irref_isk(keyref),
+			     "sunk store for parent IR %04d with bad key %04d",
+			     refp - REF_BIAS, keyref - REF_BIAS);
+		  if (newref_ref > allocref && newref->op2 == keyref) {
+		    lj_assertJ(newref->op1 == allocref,
+			       "sunk store for parent IR %04d with bad tab %04d",
+			       refp - REF_BIAS, allocref - REF_BIAS);
+		    tmp = newref_ref;
+		    goto skip_newref;
+		  }
 		}
 	      }
 	      tmp = emitir(irr->ot, tmp, key);
+	    skip_newref:
 	      val = snap_pref(J, T, map, nent, seen, irs->op2);
 	      if (val == 0) {
 		IRIns *irc = &T->ir[irs->op2];
