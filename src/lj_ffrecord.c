@@ -1204,6 +1204,15 @@ static void LJ_FASTCALL recff_buffer_method_set(jit_State *J, RecordFFData *rd)
   if (tref_isstr(tr)) {
     TRef trp = emitir(IRT(IR_STRREF, IRT_PGC), tr, lj_ir_kint(J, 0));
     TRef len = emitir(IRTI(IR_FLOAD), tr, IRFL_STR_LEN);
+    IRIns *irp = IR(tref_ref(trp));
+    /* Anchor (potentially different) obj into which trp points after fold. */
+    if (irp->o == IR_STRREF) {
+      tr = irp->op1;
+    } else if (irp->o == IR_KKPTR && !tref_isk(tr)) {
+      GCstr *str = strV(&rd->argv[1]);  /* Constify the argument. */
+      tr = lj_ir_kstr(J, str);
+      trp = lj_ir_kkptr(J, (char *)strdata(str));
+    }
     lj_ir_call(J, IRCALL_lj_bufx_set, trbuf, trp, len, tr);
 #if LJ_HASFFI
   } else if (tref_iscdata(tr)) {
