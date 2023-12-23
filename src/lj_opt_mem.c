@@ -217,25 +217,23 @@ static TRef fwd_ahload(jit_State *J, IRRef xref)
 	}
 	ref = store->prev;
       }
-      if (ir->o == IR_TNEW && !irt_isnil(fins->t))
-	return 0;  /* Type instability in loop-carried dependency. */
-      if (irt_ispri(fins->t)) {
-	return TREF_PRI(irt_type(fins->t));
-      } else if (irt_isnum(fins->t) || (LJ_DUALNUM && irt_isint(fins->t)) ||
-		 irt_isstr(fins->t)) {
+      /* Simplified here: let loop_unroll() figure out any type instability. */
+      if (ir->o == IR_TNEW) {
+	return TREF_NIL;
+      } else {
 	TValue keyv;
 	cTValue *tv;
 	IRIns *key = IR(xr->op2);
 	if (key->o == IR_KSLOT) key = IR(key->op1);
 	lj_ir_kvalue(J->L, &keyv, key);
 	tv = lj_tab_get(J->L, ir_ktab(IR(ir->op1)), &keyv);
-	if (itype2irt(tv) != irt_type(fins->t))
-	  return 0;  /* Type instability in loop-carried dependency. */
-	if (irt_isnum(fins->t))
+	if (tvispri(tv))
+	  return TREF_PRI(itype2irt(tv));
+	else if (tvisnum(tv))
 	  return lj_ir_knum_u64(J, tv->u64);
-	else if (LJ_DUALNUM && irt_isint(fins->t))
+	else if (tvisint(tv))
 	  return lj_ir_kint(J, intV(tv));
-	else
+	else if (tvisgcv(tv))
 	  return lj_ir_kstr(J, strV(tv));
       }
       /* Othwerwise: don't intern as a constant. */
