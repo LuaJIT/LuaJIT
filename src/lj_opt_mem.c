@@ -879,6 +879,8 @@ int lj_opt_fwd_wasnonnil(jit_State *J, IROpT loadop, IRRef xref)
 	if (skref == xkref || !irref_isk(skref) || !irref_isk(xkref))
 	  return 0;  /* A nil store with same const key or var key MAY alias. */
 	/* Different const keys CANNOT alias. */
+      } else if (irt_isp32(IR(skref)->t) != irt_isp32(IR(xkref)->t)) {
+	return 0;  /* HREF and HREFK MAY alias. */
       }  /* Different key types CANNOT alias. */
     }  /* Other non-nil stores MAY alias. */
     ref = store->prev;
