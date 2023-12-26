@@ -79,6 +79,9 @@ struct dasm_State {
 /* The size of the core structure depends on the max. number of sections. */
 #define DASM_PSZ(ms)	(sizeof(dasm_State)+(ms-1)*sizeof(dasm_Section))
 
+/* Perform potentially overflowing pointer operations in a way that avoids UB. */
+#define DASM_PTR_SUB(p1, off) ((void *) ((uintptr_t) (p1) - sizeof(*p1) * (uintptr_t) (off)))
+#define DASM_PTR_ADD(p1, off) ((void *) ((uintptr_t) (p1) + sizeof(*p1) * (uintptr_t) (off)))
 
 /* Initialize DynASM state. */
 void dasm_init(Dst_DECL, int maxsection)
@@ -140,7 +143,7 @@ void dasm_setup(Dst_DECL, const void *actionlist)
   if (D->pclabels) memset((void *)D->pclabels, 0, D->pcsize);
   for (i = 0; i < D->maxsection; i++) {
     D->sections[i].pos = DASM_SEC2POS(i);
-    D->sections[i].rbuf = D->sections[i].buf - D->sections[i].pos;
+    D->sections[i].rbuf = DASM_PTR_SUB(D->sections[i].buf, D->sections[i].pos);
     D->sections[i].ofs = 0;
   }
 }
@@ -190,12 +193,12 @@ void dasm_put(Dst_DECL, int start, ...)
       case DASM_DISP:
 	if (n == 0) { if (mrm < 0) mrm = p[-2]; if ((mrm&7) != 5) break; }
 	/* fallthrough */
-      case DASM_IMM_DB: if (((n+128)&-256) == 0) goto ob; /* fallthrough */
+      case DASM_IMM_DB: if ((((unsigned)n+128)&-256) == 0) goto ob; /* fallthrough */
       case DASM_REL_A: /* Assumes ptrdiff_t is int. !x64 */
       case DASM_IMM_D: ofs += 4; break;
-      case DASM_IMM_S: CK(((n+128)&-256) == 0, RANGE_I); goto ob;
+      case DASM_IMM_S: CK((((unsigned)n+128)&-256) == 0, RANGE_I); goto ob;
       case DASM_IMM_B: CK((n&-256) == 0, RANGE_I); ob: ofs++; break;
-      case DASM_IMM_WB: if (((n+128)&-256) == 0) goto ob; /* fallthrough */
+      case DASM_IMM_WB: if ((((unsigned)n+128)&-256) == 0) goto ob; /* fallthrough */
       case DASM_IMM_W: CK((n&-65536) == 0, RANGE_I); ofs += 2; break;
       case DASM_SPACE: p++; ofs += n; break;
       case DASM_SETLABEL: b[pos-2] = -0x40000000; break;  /* Neg. label ofs. */
@@ -359,12 +362,22 @@ int dasm_link(Dst_DECL, size_t *szp)
 
 #define dasmb(x)	*cp++ = (unsigned char)(x)
 #ifndef DASM_ALIGNED_WRITES
+# if defined(__has_attribute) && __has_attribute(__aligned__)
+#  define DASM_UNALIGNED(decl) decl __attribute__((__aligned__(1)))
+# elif defined(_WIN32)
+#  define DASM_UNALIGNED(decl) __declspec(align(1)) decl
+# else
+#  define DASM_UNALIGNED(decl) decl
+# endif
+typedef DASM_UNALIGNED(unsigned short unaligned_short);
+typedef DASM_UNALIGNED(unsigned int unaligned_int);
+typedef DASM_UNALIGNED(unsigned long long unaligned_long_long);
 #define dasmw(x) \
-  do { *((unsigned short *)cp) = (unsigned short)(x); cp+=2; } while (0)
+  do { *((unaligned_short *)cp) = (unsigned short)(x); cp+=2; } while (0)
 #define dasmd(x) \
-  do { *((unsigned int *)cp) = (unsigned int)(x); cp+=4; } while (0)
+  do { *((unaligned_int *)cp) = (unsigned int)(x); cp+=4; } while (0)
 #define dasmq(x) \
-  do { *((unsigned long long *)cp) = (unsigned long long)(x); cp+=8; } while (0)
+  do { *((unaligned_long_long *)cp) = (unsigned long long)(x); cp+=8; } while (0)
 #else
 #define dasmw(x)	do { dasmb(x); dasmb((x)>>8); } while (0)
 #define dasmd(x)	do { dasmw(x); dasmw((x)>>16); } while (0)
@@ -392,7 +405,7 @@ int dasm_encode(Dst_DECL, void *buffer)
   for (secnum = 0; secnum < D->maxsection; secnum++) {
     dasm_Section *sec = D->sections + secnum;
     int *b = sec->buf;
-    int *endb = sec->rbuf + sec->pos;
+    int *endb = DASM_PTR_ADD(sec->rbuf, sec->pos);
 
     while (b != endb) {
       dasm_ActList p = D->actionlist + *b++;
@@ -406,16 +419,16 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  if (*p != DASM_IMM_DB && *p != DASM_IMM_WB) mark = NULL;
 	  if (n == 0) { int mrm = mm[-1]&7; if (mrm == 4) mrm = mm[0]&7;
 	    if (mrm != 5) { mm[-1] -= 0x80; break; } }
-	  if (((n+128) & -256) != 0) goto wd; else mm[-1] -= 0x40;
+	  if ((((unsigned)n+128) & -256) != 0) goto wd; else mm[-1] -= 0x40;
 	}
 	  /* fallthrough */
 	case DASM_IMM_S: case DASM_IMM_B: wb: dasmb(n); break;
-	case DASM_IMM_DB: if (((n+128)&-256) == 0) {
+	case DASM_IMM_DB: if ((((unsigned)n+128)&-256) == 0) {
 	    db: if (!mark) mark = cp; mark[-2] += 2; mark = NULL; goto wb;
 	  } else mark = NULL;
 	  /* fallthrough */
 	case DASM_IMM_D: wd: dasmd(n); break;
-	case DASM_IMM_WB: if (((n+128)&-256) == 0) goto db; else mark = NULL;
+	case DASM_IMM_WB: if ((((unsigned)n+128)&-256) == 0) goto db; else mark = NULL;
 	  /* fallthrough */
 	case DASM_IMM_W: dasmw(n); break;
 	case DASM_VREG: {
