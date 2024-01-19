@@ -2101,7 +2101,7 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     topslot = J->maxslot--;
     *xbase = tr;
     top = xbase;
-    setstrV(J->L, &ix.keyv, &J2G(J)->strempty);  /* Simulate string result. */
+    setstrV(J->L, &ix.keyv, J2G(J)->strempty);  /* Simulate string result. */
   } else {
     J->maxslot = topslot-1;
     copyTV(J->L, &ix.keyv, &J->L->base[topslot]);

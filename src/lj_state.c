@@ -187,7 +187,6 @@ static void close_state(lua_State *L)
   lj_gc_freeall(g);
   lj_assertG(gcref(g->gc.root) == obj2gco(L),
 	     "main thread is not first GC object");
-  lj_assertG(g->str.num == 0, "leaked %d strings", g->str.num);
   lj_trace_freestate(g);
 #if LJ_HASFFI
   lj_ctype_freestate(g);
@@ -202,6 +201,8 @@ static void close_state(lua_State *L)
   }
 #endif
   lj_arena_cleanup(g);
+  lj_mem_freevec(g, g->str.secondary_list, g->str.secondary_list_capacity,
+                 MRef);
   lj_assertG(g->gc.ctx.mem_commit == 0, "memory leak of %u arenas",
              g->gc.ctx.mem_commit);
   lj_assertG(g->gc.ctx.mem_huge == 0, "memory leak of %llu huge arena bytes",
@@ -222,7 +223,7 @@ lua_State *lj_state_newstate(lua_Alloc allocf, void *allocd)
 #else
 LUA_API lua_State *lua_newstate(lua_Alloc allocf, void *allocd)
 {
-  return lj_newstate(allocf, allocd, NULL, NULL, NULL, NULL);
+  return lj_newstate(allocf, allocd, NULL, NULL, NULL, NULL, NULL);
 }
 #endif
 
@@ -230,6 +231,7 @@ lua_State *lj_newstate(lua_Alloc allocf, void *allocd,
                        luaJIT_allocpages allocp,
                        luaJIT_freepages freep,
                        luaJIT_reallochuge realloch,
+                       luaJIT_reallocraw rawalloc,
                        void *page_ud)
 {
   PRNGState prng;
@@ -257,19 +259,17 @@ lua_State *lj_newstate(lua_Alloc allocf, void *allocd,
   g->allocf = allocf;
   g->allocd = allocd;
   g->gc.currentsweep = LJ_GC_SWEEP0;
-  if (!lj_arena_init(g, allocp, freep, realloch, page_ud)) {
+  if (!lj_arena_init(g, allocp, freep, realloch, rawalloc, page_ud)) {
     close_state(L);
     return NULL;
   }
   L->gct = ~LJ_TTHREAD;
-  L->gcflags = LJ_GC_FIXED | LJ_GC_SFIXED;  /* Prevent free. */
+  L->gcflags = LJ_GC_SFIXED;  /* Prevent free. */
   L->dummy_ffid = FF_C;
   setmref(L->glref, g);
   g->gc.currentblack = LJ_GC_BLACK0;
   g->gc.currentblackgray = LJ_GC_BLACK0 | LJ_GC_GRAY;
   g->gc.safecolor = 0;
-  g->strempty.gcflags = 0;
-  g->strempty.gct = ~LJ_TSTR;
   g->prng = prng;
 #ifndef LUAJIT_USE_SYSMALLOC
   if (allocf == lj_alloc_f) {

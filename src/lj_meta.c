@@ -34,12 +34,19 @@ void lj_meta_init(lua_State *L)
   global_State *g = G(L);
   const char *p, *q;
   uint32_t mm;
+  GCstr *prev = NULL;
   for (mm = 0, p = metanames; *p; mm++, p = q) {
     GCstr *s;
     for (q = p+2; *q && *q != '_'; q++) ;
     s = lj_str_new(L, p, (size_t)(q-p));
-    /* NOBARRIER: g->gcroot[] is a GC root. */
-    setgcref(g->gcroot[GCROOT_MMNAME+mm], obj2gco(s));
+    lj_assertX(q-p <= 15, "metamethod %d not short string", mm);
+    lj_assertX(!prev || prev + 2 == s, "unexpected string ordering");
+    prev = s;
+    (void)prev;
+    fixstring(s);
+    if (mm == 0) {
+      setgcrefp(g->meta_root, s);
+    }
   }
 }
 

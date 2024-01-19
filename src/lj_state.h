@@ -39,6 +39,7 @@ LJ_FUNC lua_State *lj_newstate(lua_Alloc f, void *ud,
                                luaJIT_allocpages allocp,
                                luaJIT_freepages freep,
                                luaJIT_reallochuge realloch,
+                               luaJIT_reallocraw rawalloc,
                                void *page_ud);
 
 

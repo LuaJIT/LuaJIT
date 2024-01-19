@@ -11,6 +11,7 @@
 typedef unsigned (*luaJIT_allocpages)(void *ud, void **pages, unsigned n);
 typedef void (*luaJIT_freepages)(void *ud, void **pages, unsigned n);
 typedef void *(*luaJIT_reallochuge)(void *ud, void *p, size_t osz, size_t nsz);
+typedef void *(*luaJIT_reallocraw)(void *ud, void *p, size_t osz, size_t nsz);
 
 #define ARENA_SHIFT 16
 #define ARENA_SIZE (1u << ARENA_SHIFT)
@@ -65,12 +66,13 @@ typedef struct arena_context {
   luaJIT_allocpages allocpages;
   luaJIT_freepages freepages;
   luaJIT_reallochuge reallochuge;
+  luaJIT_reallocraw rawalloc;
   void *pageud;
 } arena_context;
 
 int lj_arena_init(struct global_State *g, luaJIT_allocpages allocp,
                   luaJIT_freepages freep, luaJIT_reallochuge realloch,
-                  void *page_ud);
+                  luaJIT_reallocraw rawalloc, void *page_ud);
 void lj_arena_cleanup(struct global_State *g);
 
 /* Add ARENA_FREELIST_CHUNK free arenas */

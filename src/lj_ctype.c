@@ -364,7 +364,7 @@ cTValue *lj_ctype_meta(CTState *cts, CTypeID id, MMS mm)
   }
   if (ctype_isptr(ct->info) &&
       ctype_isfunc(ctype_get(cts, ctype_cid(ct->info))->info))
-    tv = lj_tab_getstr(cts->miscmap, &cts->g->strempty);
+    tv = lj_tab_getstr(cts->miscmap, cts->g->strempty);
   else
     tv = lj_tab_getinth(cts->miscmap, -(int32_t)id);
   if (tv && tvistab(tv) &&

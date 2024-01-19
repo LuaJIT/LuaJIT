@@ -12,9 +12,12 @@
 
 /* Garbage collector states. Order matters. */
 enum {
-  GCSpause, GCSpropagate, GCSatomic, GCSsweepstring, GCSsweep,
-  GCSsweep_blob, GCSsweep_func, GCSsweep_tab, GCSsweep_fintab,
-  GCSsweep_uv, GCSsweep_udata, GCSfinalize_arena, GCSfinalize
+  GCSpause, GCSpropagate, GCSatomic, GCSsweep, GCSsweep_blob,
+  GCSsweep_smallstring, GCSsweep_string, GCSsweep_hugestring,
+  GCSsweep_func, GCSsweep_tab, GCSsweep_fintab,
+  GCSsweep_uv, GCSsweep_udata, GCSfinalize_arena, GCSfinalize,
+  /* These last states are optional */
+  GCSclean_smallstr, GCScompact_strchain, GCScompact_strtab,
 };
 
 /* Bitmasks for marked field of GCobj. */
@@ -25,7 +28,6 @@ enum {
 #define LJ_GC_WEAKKEY	0x10
 #define LJ_GC_WEAKVAL	0x08
 #define LJ_GC_CDATA_FIN	0x10
-#define LJ_GC_FIXED	0x20
 #define LJ_GC_SFIXED	0x40
 
 #define LJ_GC_MARK_MASK 0xE0
@@ -43,6 +45,12 @@ enum {
 #define LJ_GC_SWEEP0 0x01
 #define LJ_GC_SWEEP1 0x02
 #define LJ_GC_SWEEPS (LJ_GC_SWEEP0 | LJ_GC_SWEEP1)
+/* If set this arena has new free elements and must be rescanned */
+#define LJ_GC_ON_FREE_LIST 0x8
+/* If set lazy sweeping knows this arena is dirty. */
+#define LJ_GC_SWEEP_DIRTY 0x10
+
+#define LJ_STR_SECONDARY 0x10
 
 /* Macros to test and set GCobj colors. */
 #define iswhite(g, x)	(!((x)->gch.gcflags & (g)->gc.currentblackgray))
@@ -58,15 +66,29 @@ LJ_FUNC int checkdead(global_State *g, GCobj *o);
 #define makewhite(x) \
   ((x)->gch.gcflags = ((x)->gch.gcflags & (uint8_t)~LJ_GC_COLORS))
 #define black2gray(x)	((x)->gch.gcflags |= (uint8_t)LJ_GC_GRAY)
-#define fixstring(s)	((s)->gcflags |= LJ_GC_FIXED)
+
+#define fixstring(s) \
+  { \
+    GCstr *str = (s); \
+    uint32_t idx = aidx(str);                                                  \
+    str->gcflags = LJ_GC_GRAY; \
+    if (str->len > LJ_HUGE_STR_THRESHOLD) \
+        gcat(str, GCAstr)->free_start = 1; \
+    else \
+        gcat(str, GCAstr)->fixed[aidxh(idx)] |= abit(aidxl(idx)); \
+  }
 #define markfinalized(x)	((x)->gch.gcflags |= LJ_GC_FINALIZED)
 
-#define maybe_resurrect_str(g, s)                                              \
-  if (LJ_UNLIKELY(iswhite(g, obj2gco(s)) && (g)->gc.state == GCSsweepstring &&           \
-                  ((s)->hash & (g)->str.mask) >= (g)->gc.sweepstr))                    \
-    {                                                                          \
-      (s)->gcflags |= (g)->gc.currentblack;                                       \
-    }
+#define maybe_resurrect_str(g, s) \
+  { \
+    GCAstr *a = gcat(s, GCAstr); \
+    uint32_t idx = aidx(s); \
+    uint64_t bit = abit(aidxl(idx)); \
+    a->mark[aidxh(idx)] |= bit; \
+    /* If this is a small string then we may need to clear the free bit */ \
+    if ((s)->len <= 15) a->free[aidxh(idx)] &= ~bit; \
+  }
+
 
 #define isminor(g) (g->gc.gcmode & LJ_GCMODE_MINORSWEEP)
 
@@ -163,7 +185,22 @@ static LJ_AINLINE void lj_mem_free(global_State *g, void *p, size_t osize)
 #define lj_mem_newt(L, s, t)	((t *)lj_mem_new(L, (s)))
 #define lj_mem_freet(g, p)	lj_mem_free(g, (p), sizeof(*(p)))
 
+void *lj_mem_newpages(global_State *g, size_t sz);
+void lj_mem_freepages(global_State *g, void *ptr, size_t sz);
+
 /* New GC */
+
+#define st_ref(o) ((GCstr *)(gcrefu(o) & ~(uintptr_t)1))
+#define st_alg(o) ((gcrefu(o) & 1))
+
+typedef struct StrTab {
+  StrHash hashes[15];
+  uint32_t prev_len;
+  GCRef strs[15];
+  struct StrTab *next;
+} StrTab;
+
+LJ_STATIC_ASSERT(sizeof(StrTab) % 64 == 0);
 
 LJ_FUNC GCtab *lj_mem_alloctab(lua_State *L, uint32_t asize);
 LJ_FUNC GCtab *lj_mem_alloctabempty_gc(lua_State *L);
@@ -173,6 +210,9 @@ LJ_FUNC GCupval *lj_mem_allocuv(lua_State *L);
 LJ_FUNC GCudata *lj_mem_allocudata(lua_State *L, MSize bytes);
 LJ_FUNC GCfunc *lj_mem_allocfunc(lua_State *L, MSize bytes);
 
+LJ_FUNC StrTab* lj_mem_allocstrtab(lua_State *L, uint32_t *id);
+LJ_FUNC void lj_mem_freestrtab(global_State *g, StrTab *st);
+LJ_FUNC void lj_mem_freechainedstrtab(global_State *g, StrTab *st);
 
 LJ_FUNC void *lj_mem_newblob(lua_State *L, MSize sz);
 LJ_FUNC void *lj_mem_reallocblob(lua_State *L, void *p, MSize osz, MSize nsz);
@@ -211,7 +251,8 @@ typedef uint64_t bitmap_t;
 
 #define FREE_EXTRA_MASK(type) (~0ull >> (WORD_BITS - WORDS_FOR_TYPE(type)))
 #define FREE_MASK(type) (~0ull >> (WORD_BITS - WORDS_FOR_TYPE_UNROUNDED(type)))
-#define FREE_LOW(atype, type) ~0ull << ELEMENTS_OCCUPIED(atype, type)
+#define FREE_LOW(atype, type) (~0ull << ELEMENTS_OCCUPIED(atype, type))
+#define FREE_LOW2(atype, type) (~0ull << (ELEMENTS_OCCUPIED(atype, type) - 64))
 /* The else branch of the ternary is incorrect and must be guarded against,
  * but it eliminates UB an a warning. It should be resolved at compile time */
 #define FREE_HIGH(type)                                                        \
@@ -253,6 +294,24 @@ LJ_STATIC_ASSERT(MAX_BMARRAY_SIZE <= WORD_BITS);
   a->free[0] = FREE_LOW(atype, otype);                                         \
   if (HIGH_ELEMENTS_OCCUPIED(otype) != 0)                                      \
     a->free[FREE_HIGH_INDEX(otype)] = FREE_HIGH(otype)
+
+/* Small strings are 32-byte objects in 16-byte granularity so only every other
+ * object is valid.
+ */
+#define EVERY_OTHER_OBJECT 0x5555555555555555ull
+
+#define do_smallstr_arena_init(a, g, id, atype, otype)                         \
+  memset(a, 0, sizeof(atype));                                                 \
+  a->hdr.obj_type = id;                                                        \
+  a->hdr.flags = g->gc.currentsweep;                                           \
+  a->free_h = FREE_MASK(otype) ^ 1;                                            \
+  for (uint32_t i = 0; i < WORDS_FOR_TYPE_UNROUNDED(otype); i++) {             \
+    a->free[i] = EVERY_OTHER_OBJECT;                                           \
+  }                                                                            \
+  a->free[0] = 0;                                                              \
+  a->free[1] = FREE_LOW2(atype, otype) & EVERY_OTHER_OBJECT;                   \
+  if (HIGH_ELEMENTS_OCCUPIED(otype) != 0)                                      \
+    a->free[FREE_HIGH_INDEX(otype)] = FREE_HIGH(otype) & EVERY_OTHER_OBJECT
 
 typedef struct GCAcommon {
   GCArenaHdr hdr;
@@ -318,6 +377,40 @@ typedef struct GCAfunc {
   bitmap_t gray[WORDS_FOR_TYPE(GCfunc)];
 } GCAfunc;
 
+/* This is designed to overlay on sid & len which are not useful for freeing */
+typedef struct FreeBlock {
+  uint32_t gc_hdr;
+  uint32_t next;
+  uint32_t gcstr_hid;
+  uint32_t size; /* This is # of 16-byte chunks */
+} FreeBlock;
+
+/* Ensure the overlay does not clobber hid in the string */
+LJ_STATIC_ASSERT(offsetof(FreeBlock, gcstr_hid) == offsetof(GCstr, hid));
+LJ_STATIC_ASSERT(offsetof(FreeBlock, size) == offsetof(GCstr, len));
+
+/* For the general purpose allocator:
+ * (free mark)
+ *   0    0 - Extent
+ *   0    1 - Free block
+ *   1    0 - In use, white
+ *   1    1 - In use, black
+ *
+ * Allocation is a simple LL chained series of FreeBlock
+ */
+typedef struct GCAstr {
+  GCArenaHdr hdr;
+  bitmap_t free_h;
+  uint32_t in_use;
+  uint32_t free_start;
+  bitmap_t mark[64];
+  /* No gray bitmap, padding not required.
+   * fixed acts as the old GC_FIXED and acts as a permanent mark.
+   */
+  bitmap_t fixed[64];
+  bitmap_t free[64];
+} GCAstr;
+
 /* All offsets must match the common arena */
 LJ_STATIC_ASSERT(offsetof(GCAtab, gray) == offsetof(GCAcommon, gray));
 LJ_STATIC_ASSERT(offsetof(GCAtab, mark) == offsetof(GCAcommon, mark));
@@ -327,6 +420,7 @@ LJ_STATIC_ASSERT(offsetof(GCAupval, gray) == offsetof(GCAcommon, gray));
 LJ_STATIC_ASSERT(offsetof(GCAupval, mark) == offsetof(GCAcommon, mark));
 LJ_STATIC_ASSERT(offsetof(GCAfunc, gray) == offsetof(GCAcommon, gray));
 LJ_STATIC_ASSERT(offsetof(GCAfunc, mark) == offsetof(GCAcommon, mark));
+LJ_STATIC_ASSERT(offsetof(GCAstr, mark) == offsetof(GCAcommon, mark));
 
 #if LJ_HASJIT
 typedef struct GCAtrace {
@@ -341,5 +435,68 @@ typedef struct GCAtrace {
 LJ_STATIC_ASSERT(offsetof(GCAtrace, gray) == offsetof(GCAcommon, gray));
 LJ_STATIC_ASSERT(offsetof(GCAtrace, mark) == offsetof(GCAcommon, mark));
 #endif
+
+/* Strings & the String Table
+ *
+ * Strings are arena allocated like other objects. Strings are assumed to be
+ * 16-byte granularity in all cases, which is the smallest permitted size.
+ *
+ * Strings are classified into small, medium or huge.
+ * Small strings have a (NUL-inclusive) payload of <= 16 bytes and are bitmap
+ * allocated with every other entry being ignored by the sweep code.
+ * Huge strings have a payload > 3000 bytes and have a dedicated allocation
+ * Medium strings use a scanning allocator in custom arena.
+ *
+ * The string table consists of two areas, the primary and secondary areas.
+ * Each area consists of some number of StrTab objects, each containing up to
+ * 15 (hash, GCstr*) mappings.
+ * The primary area is an array of up to LJ_MAX_STRTAB entries.
+ * The secondary area is an array of arenas each split into
+ * STRTAB_ENTRIES_PER_ARENA entries.
+ *
+ * Each string holds an reference to where it lives in the string table
+ * For primary:
+ * 111111, (22-bit array index), (4-bit entry index)
+ * For secondary:
+ * (19-bit array index), (9-bit arena index), (4-bit entry index)
+ *
+ * This implies that the theoretical maximum number of strings allowed is
+ * 15 * LJ_MAX_STRTAB + 15 * STRTAB_ENTRIES_PER_ARENA * 0x7DFFF
+ * At present for 64-bit this is 62914560 + 2639825925 = 2702740485
+ *
+ * Lazy string collection
+ * Small strings are collected normally but are removed from the string
+ * table lazily. This allows string sweep to be extremely fast.
+ *
+ * Full collection is done when the new string is allocated - we are
+ * touching the memory anyway, or when the entire arena is being freed.
+ */
+ 
+#define STRTAB_ENTRIES_PER_ARENA ((ARENA_SIZE - 64) / sizeof(StrTab))
+#define STRTAB_UPPER_SHIFT ((ARENA_SIZE - 64) / sizeof(StrTab))
+
+#define STRING_SECONDARY_MAXIMUM_SIZE 0x7DFFF
+
+/*  */
+typedef struct GCAstrtab {
+  int32_t next;
+  int32_t prev;
+  int32_t index;
+  uint16_t count;
+  uint16_t free_h;
+  /* TODO: layout for 32-bit mode */
+  uint64_t free[6];
+  StrTab entries[STRTAB_ENTRIES_PER_ARENA];
+} GCAstrtab;
+
+LJ_STATIC_ASSERT(sizeof(GCAstrtab) == ARENA_SIZE);
+
+#define strtab_primary(g, id) \
+  &mref((g)->str.tab, StrTab)[((id) >> 4) & 0x3FFFFF]
+#define strtab_secondary(g, id) \
+  &mref((g)->str.secondary_list[(id) >> 13], GCAstrtab) \
+    ->entries[((id) >> 4) & 0x1FF]
+
+GCAstr *lj_arena_str_med(global_State *g);
 
 #endif

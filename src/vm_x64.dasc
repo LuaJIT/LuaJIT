@@ -1243,7 +1243,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  jz ->fff_res1
   |  settp TAB:RC, TAB:RB, LJ_TTAB
   |  mov [BASE-16], TAB:RC		// Store metatable as default result.
-  |  mov STR:RC, [DISPATCH+DISPATCH_GL(gcroot)+8*(GCROOT_MMNAME+MM_metatable)]
+  |  mov STR:RC, [DISPATCH+DISPATCH_GL(meta_root)]
+  |  add STR:RC, 32*MM_metatable
   |  mov RAd, TAB:RB->hmask
   |  and RAd, STR:RC->sid
   |  settp STR:RC, LJ_TSTR

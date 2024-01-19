@@ -849,7 +849,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), trptr, trslen);
     } else {  /* Range underflow: return empty string. */
       emitir(IRTGI(IR_LT), trend, trstart);
-      J->base[0] = lj_ir_kstr(J, &J2G(J)->strempty);
+      J->base[0] = lj_ir_kstr(J, J2G(J)->strempty);
     }
   } else {  /* Return string.byte result(s). */
     ptrdiff_t i, len = end - start;
@@ -886,7 +886,7 @@ static void LJ_FASTCALL recff_string_char(jit_State *J, RecordFFData *rd)
       tr = emitir(IRTG(IR_BUFPUT, IRT_PGC), tr, J->base[i]);
     J->base[0] = emitir(IRTG(IR_BUFSTR, IRT_STR), tr, hdr);
   } else if (i == 0) {
-    J->base[0] = lj_ir_kstr(J, &J2G(J)->strempty);
+    J->base[0] = lj_ir_kstr(J, J2G(J)->strempty);
   }
   UNUSED(rd);
 }

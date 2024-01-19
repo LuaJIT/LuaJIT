@@ -62,7 +62,7 @@ typedef struct GCRef {
 
 /* Common GC header for all collectable objects. */
 #define GCHeader	uint8_t gcflags; uint8_t gct
-/* This occupies 6 bytes, so use the next 2 bytes for non-32 bit fields. */
+/* This occupies 2 bytes, so use the next 2 bytes for non-32 bit fields. */
 
 #if LJ_GC64
 #define gcref(r)	((GCobj *)(r).gcptr64)
@@ -108,6 +108,7 @@ typedef struct GCRef {
 **   sure nothing invokes the GC inbetween.
 ** - The target and the source are the same object (self-reference).
 ** - The target already contains the object (e.g. moving elements around).
+** - The target is a fixed string (uncollectible).
 **
 ** The most common case is a store to a stack slot. All other cases where
 ** a barrier has been omitted are annotated with a NOBARRIER comment.
@@ -249,6 +250,7 @@ typedef const TValue cTValue;
 **                     ------MSW------.------LSW------
 ** primitive types    |1..1|itype|1..................1|
 ** GC objects         |1..1|itype|-------GCRef--------|
+** 32bit GC objects   |1..1|itype|ptyp|--GCRef ofs----|
 ** lightuserdata      |1..1|itype|seg|------ofs-------|
 ** int (LJ_DUALNUM)   |1..1|itype|0..0|-----int-------|
 ** number              ------------double-------------
@@ -307,12 +309,14 @@ typedef uint32_t StrID;		/* String ID. */
 typedef struct GCstr {
   GCHeader;
   uint8_t reserved;	/* Used by lexer for fast lookup of reserved words. */
-  uint8_t hashalg;	/* Hash algorithm. */
-  GCRef nextgc;
+  uint8_t unused;
   StrID sid;            /* Interned string ID. */
-  StrHash hash;		/* Hash of string. */
+  uint32_t hid;		/* Location of hash table entry. */
   MSize len;		/* Size of string. */
 } GCstr;
+
+/* String payloads can be assumed to be 16-byte aligned. */
+LJ_STATIC_ASSERT(sizeof(GCstr) == 16);
 
 #define strref(r)	(&gcref((r))->str)
 #define strdata(s)	((const char *)((s)+1))
@@ -584,8 +588,6 @@ MMDEF(MMENUM)
 
 /* GC root IDs. */
 typedef enum {
-  GCROOT_MMNAME,	/* Metamethod names. */
-  GCROOT_MMNAME_LAST = GCROOT_MMNAME + MM__MAX-1,
   GCROOT_BASEMT,	/* Metatables for base types. */
   GCROOT_BASEMT_NUM = GCROOT_BASEMT + ~LJ_TNUMX,
   GCROOT_IO_INPUT,	/* Userdata for default I/O input file. */
@@ -593,9 +595,9 @@ typedef enum {
   GCROOT_MAX
 } GCRootID;
 
-#define basemt_it(g, it)	((g)->gcroot[GCROOT_BASEMT+~(it)])
-#define basemt_obj(g, o)	((g)->gcroot[GCROOT_BASEMT+itypemap(o)])
-#define mmname_str(g, mm)	(strref((g)->gcroot[GCROOT_MMNAME+(mm)]))
+#define basemt_it(g, it)       ((g)->gcroot[GCROOT_BASEMT+~(it)])
+#define basemt_obj(g, o)       ((g)->gcroot[GCROOT_BASEMT+itypemap(o)])
+#define mmname_str(g, mm)      (strref((g)->meta_root) + 2*(mm))
 
 /* Garbage collector state. */
 typedef struct GCState {
@@ -613,7 +615,6 @@ typedef struct GCState {
 #else
   uint8_t unused1;
 #endif
-  MSize sweepstr;	/* Sweep position in string table. */
   GCRef root;		/* List of all collectable objects. */
   MRef sweep;		/* Sweep position in root list. */
   GCRef gray;		/* List of gray objects. */
@@ -627,6 +628,8 @@ typedef struct GCState {
   GCSize estimate;	/* Estimate of memory actually in use. */
   GCSize accum;     /* Accumulated memory marked. */
   GCSize malloc;    /* Malloced memory. */
+  GCSize strings; /* String memory */
+  GCSize old_strings;
   MSize stepmul;	/* Incremental GC step granularity. */
   MSize pause;		/* Pause between successive GC cycles. */
 #if LJ_64
@@ -641,6 +644,8 @@ typedef struct GCState {
   GCArenaHdr *uv;
   GCArenaHdr *func;
   GCArenaHdr *udata;
+  GCArenaHdr *str_small;
+  GCArenaHdr *str;
 
   /* This is the allocated-from blob arena. Never NULL */
   GCAblob *blob_generic;
@@ -663,18 +668,30 @@ typedef struct GCState {
   GCArenaHdr *free_uv;
   GCArenaHdr *free_func;
   GCArenaHdr *free_udata;
+  GCArenaHdr *free_str_small;
+  GCArenaHdr *free_str;
+
+  /* Huge string list. Chains with 'gray' */
+  GCArenaHdr *str_huge;
 } GCState;
 
 /* String interning state. */
 typedef struct StrInternState {
-  GCRef *tab;		/* String hash table anchors. */
+  MRef tab;		/* String hash table. */
   MSize mask;		/* String hash mask (size of hash table - 1). */
   MSize num;		/* Number of strings in hash table. */
-  StrID id;		/* Next string ID. */
+  MSize num_small;
+  MSize num_dead;
+  StrID id;             /* Next string ID. */
   uint8_t idreseed;	/* String ID reseed counter. */
   uint8_t second;	/* String interning table uses secondary hashing. */
   uint8_t unused1;
   uint8_t unused2;
+  uint32_t secondary_list_capacity;
+  int32_t secondary_slot_free_head;
+  int32_t secondary_arena_free_head;
+  /* Each entry is either a GCAstrtab* or a freelist chain entry */
+  MRef *secondary_list;
   LJ_ALIGN(8) uint64_t seed;	/* Random string seed. */
 } StrInternState;
 
@@ -683,8 +700,8 @@ typedef struct global_State {
   lua_Alloc allocf;	/* Memory allocator. */
   void *allocd;		/* Memory allocator data. */
   GCState gc;		/* Garbage collector. */
-  GCstr strempty;	/* Empty string. */
-  uint8_t stremptyz;	/* Zero terminator of empty string. */
+  GCstr *strempty;	/* Empty string. */
+  uint8_t unused;
   uint8_t hookmask;	/* Hook mask. */
   uint8_t dispatchmode;	/* Dispatch mode. */
   uint8_t vmevmask;	/* VM event mask. */
@@ -706,6 +723,7 @@ typedef struct global_State {
   MRef jit_base;	/* Current JIT code L->base or NULL. */
   MRef ctype_state;	/* Pointer to C type state. */
   PRNGState prng;	/* Global PRNG state. */
+  GCRef meta_root; /* Root of metatable strings */
   GCRef gcroot[GCROOT_MAX];  /* GC roots. */
 } global_State;
 
@@ -801,7 +819,6 @@ LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCproto, gclist));
 LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(lua_State, nextgc));
 LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCproto, nextgc));
 LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCcdata, nextgc));
-LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCstr, nextgc));
 
 typedef union GCobj {
   GChead gch;

@@ -185,7 +185,7 @@ static int io_file_readlen(lua_State *L, FILE *fp, MSize m)
   } else {
     int c = getc(fp);
     ungetc(c, fp);
-    setstrV(L, L->top++, &G(L)->strempty);
+    setstrV(L, L->top++, G(L)->strempty);
     return (c != EOF);
   }
 }

@@ -77,6 +77,9 @@ typedef unsigned (*luaJIT_allocpages)(void *ud, void **pages, unsigned n);
 /* Free is called one last time with NULL, 0 to indicate any state should be released */
 typedef void (*luaJIT_freepages)(void *ud, void **pages, unsigned n);
 typedef void* (*luaJIT_reallochuge)(void *ud, void *p, size_t osz, size_t nsz);
+/* Raw page allocation, similar to huge but no space is reserved and
+ * there are no extra alignment requirements. Resize behaviour is not required. */
+typedef void* (*luaJIT_reallocraw)(void *ud, void *p, size_t osz, size_t nsz);
 
 /* This many bytes are reserved at the start of each huge arena for the allocator's use */
 #define LUAJIT_HUGE_RESERVED_SPACE 20
@@ -100,6 +103,7 @@ LUA_API lua_State *luaJIT_newstate(lua_Alloc f, void *ud,
                                    luaJIT_allocpages allocp,
                                    luaJIT_freepages freep,
                                    luaJIT_reallochuge realloch,
+                                   luaJIT_reallocraw rawalloc,
                                    void *page_ud);
 
 /* As lua_createtable, but can be used with __gc */

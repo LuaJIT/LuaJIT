@@ -800,7 +800,7 @@ LUA_API void lua_concat(lua_State *L, int n)
       copyTV(L, L->top-1, L->top+LJ_FR2);
     } while (--n > 0);
   } else if (n == 0) {  /* Push empty string. */
-    setstrV(L, L->top, &G(L)->strempty);
+    setstrV(L, L->top, G(L)->strempty);
     incr_top(L);
   }
   /* else n == 1: nothing to do. */

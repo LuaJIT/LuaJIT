@@ -265,13 +265,22 @@ static void *lj_arena_api_reallochuge(void *ud, void *p, size_t osz, size_t nsz)
   return newp;
 }
 
-#define lj_arena_firstalloc(g, arena, id, atype, type)                         \
+static void *lj_arena_api_rawalloc(void *ud, void *p, size_t osz, size_t nsz)
+{
+  if (!p)
+    return RESERVE_AND_COMMIT_PAGES(nsz);
+  if (!nsz)
+    UNRESERVE_PAGES(p, osz);
+  return NULL;
+}
+
+#define lj_arena_firstalloc(g, arena, id, atype, type, init)                   \
   {                                                                            \
     atype *a = (atype *)lj_arena_alloc(&g->gc.ctx);                            \
     if (!a)                                                                    \
       return 0;                                                                \
     arena = &a->hdr;                                                           \
-    do_arena_init(a, g, id, atype, type);                                      \
+    init(a, g, id, atype, type);                                               \
   }
 
 static int lj_blob_firstalloc(global_State *g, GCAblob **h)
@@ -290,7 +299,7 @@ static int lj_blob_firstalloc(global_State *g, GCAblob **h)
 
 int lj_arena_init(struct global_State *g, luaJIT_allocpages allocp,
                   luaJIT_freepages freep, luaJIT_reallochuge realloch,
-                  void *page_ud)
+                  luaJIT_reallocraw rawalloc, void *page_ud)
 {
   g->gc.bloblist_alloc = 32;
   g->gc.bloblist =
@@ -306,10 +315,11 @@ int lj_arena_init(struct global_State *g, luaJIT_allocpages allocp,
   g->gc.bloblist_wr = 1;
 
   /* All must be provided to override */
-  if (allocp && freep && realloch) {
+  if (allocp && freep && realloch && rawalloc) {
     g->gc.ctx.allocpages = allocp;
     g->gc.ctx.freepages = freep;
     g->gc.ctx.reallochuge = realloch;
+    g->gc.ctx.rawalloc = rawalloc;
     g->gc.ctx.pageud = page_ud;
   } else {
     arena_alloc *arenas = (arena_alloc*)g->allocf(g->allocd, NULL, 0, sizeof(arena_alloc));
@@ -319,6 +329,7 @@ int lj_arena_init(struct global_State *g, luaJIT_allocpages allocp,
     g->gc.ctx.allocpages = &lj_arena_api_allocpages;
     g->gc.ctx.freepages = &lj_arena_api_freepages;
     g->gc.ctx.reallochuge = &lj_arena_api_reallochuge;
+    g->gc.ctx.rawalloc = &lj_arena_api_rawalloc;
     g->gc.ctx.pageud = arenas;
 
     arenas->g = g;
@@ -334,11 +345,13 @@ int lj_arena_init(struct global_State *g, luaJIT_allocpages allocp,
   }
 
   /* Allocate all arenas */
-  lj_arena_firstalloc(g, g->gc.tab, ~LJ_TTAB, GCAtab, GCtab);
-  lj_arena_firstalloc(g, g->gc.fintab, ~LJ_TTAB, GCAtab, GCtab);
-  lj_arena_firstalloc(g, g->gc.uv, ~LJ_TUPVAL, GCAupval, GCupval);
-  lj_arena_firstalloc(g, g->gc.func, ~LJ_TFUNC, GCAfunc, GCfunc);
-  lj_arena_firstalloc(g, g->gc.udata, ~LJ_TUDATA, GCAudata, GCudata);
+  lj_arena_firstalloc(g, g->gc.tab, ~LJ_TTAB, GCAtab, GCtab, do_arena_init);
+  lj_arena_firstalloc(g, g->gc.fintab, ~LJ_TTAB, GCAtab, GCtab, do_arena_init);
+  lj_arena_firstalloc(g, g->gc.uv, ~LJ_TUPVAL, GCAupval, GCupval, do_arena_init);
+  lj_arena_firstalloc(g, g->gc.func, ~LJ_TFUNC, GCAfunc, GCfunc, do_arena_init);
+  lj_arena_firstalloc(g, g->gc.udata, ~LJ_TUDATA, GCAudata, GCudata, do_arena_init);
+  lj_arena_firstalloc(g, g->gc.str_small, ~LJ_TSTR, GCAstr, GCstr, do_smallstr_arena_init);
+  g->gc.str = &lj_arena_str_med(g)->hdr;
 
   ((GCAudata *)g->gc.udata)->free4_h = ((GCAudata *)g->gc.udata)->free_h;
 
@@ -359,6 +372,36 @@ static void release_chain_arena(struct global_State *g, GCArenaHdr *a)
   }
 }
 
+static void release_string_table(struct global_State *g)
+{
+  /* The string table is more tricky. Entries are either valid pointers
+   * or on the freelist. Start by zeroing all freelist entries
+   */
+  int32_t at = g->str.secondary_slot_free_head;
+  while (at != -1) {
+    int32_t n = (int32_t)mrefu(g->str.secondary_list[at]);
+    setmrefu(g->str.secondary_list[at], 0);
+    at = n;
+  }
+
+  /* Remaining nonzero entries are valid pointers. */
+  for (uint32_t i = 0; i < g->str.secondary_list_capacity; i++) {
+    void *a = mref(g->str.secondary_list[i], void);
+    if (a)
+      release_one_arena(g, a);
+  }
+}
+
+static void release_huge_strings(struct global_State *g)
+{
+  GCArenaHdr *a = g->gc.str_huge;
+  while (a) {
+    GCAstr *s = (GCAstr *)a;
+    a = a->gray;
+    lj_arena_freehuge(&g->gc.ctx, s, s->free_h);
+  }
+}
+
 static void release_all_arenas(struct global_State *g)
 {
   release_chain_arena(g, g->gc.tab);
@@ -366,6 +409,10 @@ static void release_all_arenas(struct global_State *g)
   release_chain_arena(g, g->gc.uv);
   release_chain_arena(g, g->gc.func);
   release_chain_arena(g, g->gc.udata);
+  release_chain_arena(g, g->gc.str_small);
+  release_chain_arena(g, g->gc.str);
+  release_huge_strings(g);
+  release_string_table(g);
   for (uint32_t i = 0; i < g->gc.bloblist_wr; i++) {
     GCAblob *a = g->gc.bloblist[i];
     if (a->flags & GCA_BLOB_HUGE)

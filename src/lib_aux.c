@@ -403,6 +403,7 @@ LUA_API lua_State *luaJIT_newstate(lua_Alloc f, void *ud,
                                    luaJIT_allocpages allocp,
                                    luaJIT_freepages freep,
                                    luaJIT_reallochuge realloch,
+                                   luaJIT_reallocraw rawalloc,
                                    void *page_ud)
 {
   lua_State *L;
@@ -417,7 +418,7 @@ LUA_API lua_State *luaJIT_newstate(lua_Alloc f, void *ud,
     ud = NULL;
   }
 #endif
-  L = lj_newstate(f, ud, allocp, freep, realloch, page_ud);
+  L = lj_newstate(f, ud, allocp, freep, realloch, rawalloc, page_ud);
 
   if (L) {
     G(L)->panic = panic;

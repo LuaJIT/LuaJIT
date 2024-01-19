@@ -221,7 +221,7 @@ LJLIB_CF(os_date)
       sz += (sz|1);
     }
   } else {
-    setstrV(L, L->top++, &G(L)->strempty);
+    setstrV(L, L->top++, G(L)->strempty);
   }
   return 1;
 }
