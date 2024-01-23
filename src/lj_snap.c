@@ -453,6 +453,7 @@ static TRef snap_replay_const(jit_State *J, IRIns *ir)
   case IR_KNUM: case IR_KINT64:
     return lj_ir_k64(J, (IROp)ir->o, ir_k64(ir)->u64);
   case IR_KPTR: return lj_ir_kptr(J, ir_kptr(ir));  /* Continuation. */
+  case IR_KNULL: return lj_ir_knull(J, irt_type(ir->t));
   default: lj_assertJ(0, "bad IR constant op %d", ir->o); return TREF_NIL;
   }
 }
@@ -902,9 +903,13 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
 	if (irk->o == IR_FREF) {
 	  switch (irk->op2) {
 	  case IRFL_TAB_META:
-	    snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, &tmp);
-	    /* NOBARRIER: The table is new (marked white). */
-	    setgcref(t->metatable, obj2gco(tabV(&tmp)));
+	    if (T->ir[irs->op2].o == IR_KNULL) {
+	      setgcrefnull(t->metatable);
+	    } else {
+	      snap_restoreval(J, T, ex, snapno, rfilt, irs->op2, &tmp);
+	      /* NOBARRIER: The table is new (marked white). */
+	      setgcref(t->metatable, obj2gco(tabV(&tmp)));
+	    }
 	    break;
 	  case IRFL_TAB_NOMM:
 	    /* Negative metamethod cache invalidated by lj_tab_set() below. */
