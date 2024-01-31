@@ -67,4 +67,5 @@ LUA_API int luaJIT_setmode(lua_State *L, int idx, int mode);
 /* Enforce (dynamic) linker error for version mismatches. Call from main. */
 LUA_API void LUAJIT_VERSION_SYM(void);
 
+#error "DO NOT USE luajit_rolling.h -- only include build-generated luajit.h"
 #endif
