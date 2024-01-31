@@ -124,7 +124,7 @@ static void bcwrite_ktab(BCWriteCtx *ctx, const GCtab *t)
     MSize i, hmask = t->hmask;
     Node *node = noderef(t->node);
     for (i = 0; i <= hmask; i++)
-      nhash += !tvisnil(&node[i].val);
+      nhash += !tvisnil(&node[i].key);
   }
   /* Write number of array slots and hash slots. */
   bcwrite_uleb128(ctx, narray);
@@ -139,7 +139,7 @@ static void bcwrite_ktab(BCWriteCtx *ctx, const GCtab *t)
     MSize i = nhash;
     Node *node = noderef(t->node) + t->hmask;
     for (;; node--)
-      if (!tvisnil(&node->val)) {
+      if (!tvisnil(&node->key)) {
 	bcwrite_ktabk(ctx, &node->key, 0);
 	bcwrite_ktabk(ctx, &node->val, 1);
 	if (--i == 0) break;
