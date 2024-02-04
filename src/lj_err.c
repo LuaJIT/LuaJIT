@@ -488,7 +488,14 @@ LJ_NOINLINE void lj_err_mem(lua_State *L)
 {
   if (L->status == LUA_ERRERR+1)  /* Don't touch the stack during lua_open. */
     lj_vm_unwind_c(L->cframe, LUA_ERRMEM);
-  if (curr_funcisL(L)) L->top = curr_topL(L);
+  if (curr_funcisL(L)) {
+    L->top = curr_topL(L);
+    if (LJ_UNLIKELY(L->top > tvref(L->maxstack))) {
+      /* The current Lua frame violates the stack. Replace it with a dummy. */
+      L->top = L->base;
+      setframe_gc(L->base - 1, obj2gco(L));
+    }
+  }
   setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));
   lj_err_throw(L, LUA_ERRMEM);
 }
@@ -551,9 +558,11 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = finderrfunc(L);
   if (ef) {
-    TValue *errfunc = restorestack(L, ef);
-    TValue *top = L->top;
+    TValue *errfunc, *top;
+    lj_state_checkstack(L, LUA_MINSTACK * 2);  /* Might raise new error. */
     lj_trace_abort(G(L));
+    errfunc = restorestack(L, ef);
+    top = L->top;
     if (!tvisfunc(errfunc) || L->status == LUA_ERRERR) {
       setstrV(L, top-1, lj_err_str(L, LJ_ERR_ERRERR));
       lj_err_throw(L, LUA_ERRERR);
@@ -565,6 +574,13 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)
     lj_vm_call(L, top, 1+1);  /* Stack: |errfunc|msg| -> |msg| */
   }
   lj_err_throw(L, LUA_ERRRUN);
+}
+
+/* Stack overflow error. */
+void LJ_FASTCALL lj_err_stkov(lua_State *L)
+{
+  lj_debug_addloc(L, err2msg(LJ_ERR_STKOV), L->base-1, NULL);
+  lj_err_run(L);
 }
 
 /* Formatted runtime error message. */
