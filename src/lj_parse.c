@@ -1133,7 +1133,7 @@ static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
     if ((int32_t)reg >= 0) {  /* Local in this function? */
       expr_init(e, VLOCAL, reg);
 #if LUA_COMPAT_VARARG
-    if (!fs->need_vararg && fs->flags & PROTO_VARARG){
+    if (!fs->need_vararg && fs->flags & PROTO_VARARG && reg == 0){
       if (name->len == (sizeof("arg") - 1) && strncmp(strdata(name), "arg", name->len) == 0){
         fs->need_vararg = 1;
       }
@@ -2751,6 +2751,9 @@ static int parse_stmt(LexState *ls)
 
 static void add_argstmt(LexState* ls)
 {
+  //skip if/while/do-end body
+  if (ls->fs->bl->prev)
+    return;
   ExpDesc e;
 
   if (ls->fs->flags & PROTO_VARARG) {
