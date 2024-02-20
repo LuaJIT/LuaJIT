@@ -107,24 +107,20 @@ local map_logsr = { -- Logical, shifted register.
     [0] = {
       shift = 29, mask = 3,
       [0] = {
-	shift = 21, mask = 7,
-	[0] = "andDNMSg", "bicDNMSg", "andDNMSg", "bicDNMSg",
-	"andDNMSg", "bicDNMSg", "andDNMg", "bicDNMg"
+	shift = 21, mask = 1,
+	[0] = "andDNMSg", "bicDNMSg"
       },
       {
-	shift = 21, mask = 7,
-	[0] ="orr|movDN0MSg", "orn|mvnDN0MSg", "orr|movDN0MSg", "orn|mvnDN0MSg",
-	     "orr|movDN0MSg", "orn|mvnDN0MSg", "orr|movDN0Mg", "orn|mvnDN0Mg"
+	shift = 21, mask = 1,
+	[0] = "orr|movDN0MSg", "orn|mvnDN0MSg"
       },
       {
-	shift = 21, mask = 7,
-	[0] = "eorDNMSg", "eonDNMSg", "eorDNMSg", "eonDNMSg",
-	"eorDNMSg", "eonDNMSg", "eorDNMg", "eonDNMg"
+	shift = 21, mask = 1,
+	[0] = "eorDNMSg", "eonDNMSg"
       },
       {
-	shift = 21, mask = 7,
-	[0] = "ands|tstD0NMSg", "bicsDNMSg", "ands|tstD0NMSg", "bicsDNMSg",
-	"ands|tstD0NMSg", "bicsDNMSg", "ands|tstD0NMg", "bicsDNMg"
+	shift = 21, mask = 1,
+	[0] = "ands|tstD0NMSg", "bicsDNMSg"
       }
     },
     false -- unallocated
@@ -132,24 +128,20 @@ local map_logsr = { -- Logical, shifted register.
   {
     shift = 29, mask = 3,
     [0] = {
-      shift = 21, mask = 7,
-      [0] = "andDNMSg", "bicDNMSg", "andDNMSg", "bicDNMSg",
-      "andDNMSg", "bicDNMSg", "andDNMg", "bicDNMg"
+      shift = 21, mask = 1,
+      [0] = "andDNMSg", "bicDNMSg"
     },
     {
-      shift = 21, mask = 7,
-      [0] = "orr|movDN0MSg", "orn|mvnDN0MSg", "orr|movDN0MSg", "orn|mvnDN0MSg",
-      "orr|movDN0MSg", "orn|mvnDN0MSg", "orr|movDN0Mg", "orn|mvnDN0Mg"
+      shift = 21, mask = 1,
+      [0] = "orr|movDN0MSg", "orn|mvnDN0MSg"
     },
     {
-      shift = 21, mask = 7,
-      [0] = "eorDNMSg", "eonDNMSg", "eorDNMSg", "eonDNMSg",
-      "eorDNMSg", "eonDNMSg", "eorDNMg", "eonDNMg"
+      shift = 21, mask = 1,
+      [0] = "eorDNMSg", "eonDNMSg"
     },
     {
-      shift = 21, mask = 7,
-      [0] = "ands|tstD0NMSg", "bicsDNMSg", "ands|tstD0NMSg", "bicsDNMSg",
-      "ands|tstD0NMSg", "bicsDNMSg", "ands|tstD0NMg", "bicsDNMg"
+      shift = 21, mask = 1,
+      [0] = "ands|tstD0NMSg", "bicsDNMSg"
     }
   }
 }
@@ -735,7 +727,7 @@ local map_cond = {
   "hi", "ls", "ge", "lt", "gt", "le", "al",
 }
 
-local map_shift = { [0] = "lsl", "lsr", "asr", }
+local map_shift = { [0] = "lsl", "lsr", "asr", "ror"}
 
 local map_extend = {
   [0] = "uxtb", "uxth", "uxtw", "uxtx", "sxtb", "sxth", "sxtw", "sxtx",
@@ -956,7 +948,7 @@ local function disass_ins(ctx)
     elseif p == "U" then
       local rn = map_regs.x[band(rshift(op, 5), 31)]
       local sz = band(rshift(op, 30), 3)
-      local imm12 = lshift(arshift(lshift(op, 10), 20), sz)
+      local imm12 = lshift(rshift(lshift(op, 10), 20), sz)
       if imm12 ~= 0 then
 	x = "["..rn..", #"..imm12.."]"
       else
@@ -993,8 +985,7 @@ local function disass_ins(ctx)
 	x = x.."]"
       end
     elseif p == "P" then
-      local opcv, sh = rshift(op, 26), 2
-      if opcv >= 0x2a then sh = 4 elseif opcv >= 0x1b then sh = 3 end
+      local sh = 2 + rshift(op, 31 - band(rshift(op, 26), 1))
       local imm7 = lshift(arshift(lshift(op, 10), 25), sh)
       local rn = map_regs.x[band(rshift(op, 5), 31)]
       local ind = band(rshift(op, 23), 3)

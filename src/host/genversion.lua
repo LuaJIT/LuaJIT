@@ -5,9 +5,10 @@
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 
-local FILE_ROLLING_H = "luajit_rolling.h"
-local FILE_RELVER_TXT = "luajit_relver.txt"
-local FILE_LUAJIT_H = "luajit.h"
+local arg = {...}
+local FILE_ROLLING_H = arg[1] or "luajit_rolling.h"
+local FILE_RELVER_TXT = arg[2] or "luajit_relver.txt"
+local FILE_LUAJIT_H = arg[3] or "luajit.h"
 
 local function file_read(file)
   local fp = assert(io.open(file, "rb"), "run from the wrong directory")
@@ -28,7 +29,7 @@ local function file_write_mod(file, data)
   assert(fp:close())
 end
 
-local text = file_read(FILE_ROLLING_H)
+local text = file_read(FILE_ROLLING_H):gsub("#error.-\n", "")
 local relver = file_read(FILE_RELVER_TXT):match("(%d+)")
 
 if relver then

@@ -16,6 +16,7 @@
 @rem Add more debug flags here, e.g. DEBUGCFLAGS=/DLUA_USE_APICHECK
 @set DEBUGCFLAGS= /DLUA_USE_APICHECK /DLUA_USE_ASSERT /DLUAJIT_USE_SYSMALLOC /fsanitize=address
 @set LJCOMPILE=cl /nologo /c /O2 /W3 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_STDIO_INLINE=__declspec(dllexport)__inline /DLUAJIT_NUMMODE=2
+@set LJDYNBUILD=/MD /DLUA_BUILD_AS_DLL
 @set LJLINK=link /nologo
 @set LJMT=mt /nologo
 @set LJLIB=lib /nologo /nodefaultlib
@@ -27,39 +28,52 @@
 @set BUILDTYPE=release
 @set ALL_LIB=lib_base.c lib_math.c lib_bit.c lib_string.c lib_table.c lib_io.c lib_os.c lib_package.c lib_debug.c lib_jit.c lib_ffi.c lib_buffer.c
 
+@setlocal
+@call :SETHOSTVARS
 %LJCOMPILE% host\minilua.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:minilua.exe minilua.obj
 @if errorlevel 1 goto :BAD
 if exist minilua.exe.manifest^
   %LJMT% -manifest minilua.exe.manifest -outputresource:minilua.exe
+@endlocal
 
-@set DASMFLAGS=-D WIN -D JIT -D FFI -D P64
+@set DASMFLAGS=-D WIN -D JIT -D FFI -D ENDIAN_LE -D FPU -D P64
 @set LJARCH=x64
 @minilua
-@if errorlevel 8 goto :X64
+@if errorlevel 8 goto :NO32
 @set DASC=vm_x86.dasc
-@set DASMFLAGS=-D WIN -D JIT -D FFI
+@set DASMFLAGS=-D WIN -D JIT -D FFI -D ENDIAN_LE -D FPU
 @set LJARCH=x86
 @set LJCOMPILE=%LJCOMPILE% /arch:SSE2
+@goto :DA
+:NO32
+@if "%VSCMD_ARG_TGT_ARCH%" neq "arm64" goto :X64
+@set DASC=vm_arm64.dasc
+@set DASMTARGET=-D LUAJIT_TARGET=LUAJIT_ARCH_ARM64
+@set LJARCH=arm64
+@goto :DA
 :X64
-@if "%1" neq "nogc64" goto :GC64
+@if "%1" neq "nogc64" goto :DA
 @shift
 @set DASC=vm_x86.dasc
 @set LJCOMPILE=%LJCOMPILE% /DLUAJIT_DISABLE_GC64
-:GC64
+:DA
 minilua %DASM% -LN %DASMFLAGS% -o host\buildvm_arch.h %DASC%
 @if errorlevel 1 goto :BAD
 
 if exist ..\.git ( git show -s --format=%%ct >luajit_relver.txt ) else ( type ..\.relver >luajit_relver.txt )
 minilua host\genversion.lua
 
-%LJCOMPILE% /I "." /I %DASMDIR% host\buildvm*.c
+@setlocal
+@call :SETHOSTVARS
+%LJCOMPILE% /I "." /I %DASMDIR% %DASMTARGET% host\buildvm*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /out:buildvm.exe buildvm*.obj
 @if errorlevel 1 goto :BAD
 if exist buildvm.exe.manifest^
   %LJMT% -manifest buildvm.exe.manifest -outputresource:buildvm.exe
+@endlocal
 
 buildvm -m peobj -o lj_vm.obj
 @if errorlevel 1 goto :BAD
@@ -80,12 +94,13 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @shift
 @set BUILDTYPE=debug
 @set LJCOMPILE=%LJCOMPILE% /Od /Zi %DEBUGCFLAGS%
+@set LJDYNBUILD=/MDd /DLUA_BUILD_AS_DLL
 @set LJLINK=%LJLINK% /opt:ref /opt:icf /incremental:no
 :NODEBUG
 @set LJLINK=%LJLINK% /%BUILDTYPE%
 @if "%1"=="amalg" goto :AMALGDLL
 @if "%1"=="static" goto :STATIC
-%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
+%LJCOMPILE% %LJDYNBUILD% lj_*.c lib_*.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /DLL /out:%LJDLLNAME% lj_*.obj lib_*.obj
 @if errorlevel 1 goto :BAD
@@ -97,7 +112,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :AMALGDLL
-%LJCOMPILE% /MD /DLUA_BUILD_AS_DLL ljamalg.c
+%LJCOMPILE% %LJDYNBUILD% ljamalg.c
 @if errorlevel 1 goto :BAD
 %LJLINK% /DLL /out:%LJDLLNAME% ljamalg.obj lj_vm.obj
 @if errorlevel 1 goto :BAD
@@ -118,6 +133,12 @@ if exist luajit.exe.manifest^
 @echo.
 @echo === Successfully built LuaJIT for Windows/%LJARCH%[%BUILDTYPE%] ===
 
+@goto :END
+:SETHOSTVARS
+@if "%VSCMD_ARG_HOST_ARCH%_%VSCMD_ARG_TGT_ARCH%" equ "x64_arm64" (
+  call "%VSINSTALLDIR%Common7\Tools\VsDevCmd.bat" -arch=%VSCMD_ARG_HOST_ARCH% -no_logo
+  echo on
+)
 @goto :END
 :BAD
 @echo.

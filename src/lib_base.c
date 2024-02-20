@@ -360,7 +360,11 @@ LJLIB_ASM_(xpcall)		LJLIB_REC(.)
 static int load_aux(lua_State *L, int status, int envarg)
 {
   if (status == LUA_OK) {
-    if (tvistab(L->base+envarg-1)) {
+    /*
+    ** Set environment table for top-level function.
+    ** Don't do this for non-native bytecode, which returns a prototype.
+    */
+    if (tvistab(L->base+envarg-1) && tvisfunc(L->top-1)) {
       GCfunc *fn = funcV(L->top-1);
       GCtab *t = tabV(L->base+envarg-1);
       setgcref(fn->c.env, obj2gco(t));
@@ -697,7 +701,10 @@ static int ffh_resume(lua_State *L, lua_State *co, int wrap)
     setstrV(L, L->base-LJ_FR2, lj_err_str(L, em));
     return FFH_RES(2);
   }
-  lj_state_growstack(co, (MSize)(L->top - L->base));
+  if (lj_state_cpgrowstack(co, (MSize)(L->top - L->base)) != LUA_OK) {
+    cTValue *msg = --co->top;
+    lj_err_callermsg(L, strVdata(msg));
+  }
   return FFH_RETRY;
 }
 

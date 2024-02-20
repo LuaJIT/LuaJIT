@@ -377,10 +377,10 @@ static uint64_t kfold_int64arith(jit_State *J, uint64_t k1, uint64_t k2,
   case IR_BOR: k1 |= k2; break;
   case IR_BXOR: k1 ^= k2; break;
   case IR_BSHL: k1 <<= (k2 & 63); break;
-  case IR_BSHR: k1 = (int32_t)((uint32_t)k1 >> (k2 & 63)); break;
-  case IR_BSAR: k1 >>= (k2 & 63); break;
-  case IR_BROL: k1 = (int32_t)lj_rol((uint32_t)k1, (k2 & 63)); break;
-  case IR_BROR: k1 = (int32_t)lj_ror((uint32_t)k1, (k2 & 63)); break;
+  case IR_BSHR: k1 >>= (k2 & 63); break;
+  case IR_BSAR: k1 = (uint64_t)((int64_t)k1 >> (k2 & 63)); break;
+  case IR_BROL: k1 = lj_rol(k1, (k2 & 63)); break;
+  case IR_BROR: k1 = lj_ror(k1, (k2 & 63)); break;
   default: lj_assertJ(0, "bad IR op %d", op); break;
   }
 #else
@@ -1972,7 +1972,10 @@ LJFOLD(NE any any)
 LJFOLDF(comm_equal)
 {
   /* For non-numbers only: x == x ==> drop; x ~= x ==> fail */
-  if (fins->op1 == fins->op2 && !irt_isnum(fins->t))
+  if (fins->op1 == fins->op2 &&
+      (!irt_isnum(fins->t) ||
+       (fleft->o == IR_CONV &&  /* Converted integers cannot be NaN. */
+	(uint32_t)(fleft->op2 & IRCONV_SRCMASK) - (uint32_t)IRT_I8 <= (uint32_t)(IRT_U64 - IRT_U8))))
     return CONDFOLD(fins->o == IR_EQ);
   return fold_comm_swap(J);
 }
@@ -2131,8 +2134,26 @@ LJFOLDX(lj_opt_fwd_uload)
 LJFOLD(ALEN any any)
 LJFOLDX(lj_opt_fwd_alen)
 
+/* Try to merge UREFO/UREFC into referenced instruction. */
+static TRef merge_uref(jit_State *J, IRRef ref, IRIns* ir)
+{
+  if (ir->o == IR_UREFO && irt_isguard(ir->t)) {
+    /* Might be pointing to some other coroutine's stack.
+    ** And GC might shrink said stack, thereby repointing the upvalue.
+    ** GC might even collect said coroutine, thereby closing the upvalue.
+    */
+    if (gcstep_barrier(J, ref))
+      return EMITFOLD;  /* So cannot merge. */
+    /* Current fins wants a check, but ir doesn't have one. */
+    if ((irt_t(fins->t) & (IRT_GUARD|IRT_TYPE)) == (IRT_GUARD|IRT_PGC) &&
+	irt_type(ir->t) == IRT_IGC)
+      ir->t.irt += IRT_PGC-IRT_IGC;  /* So install a check. */
+  }
+  return ref;  /* Not a TRef, but the caller doesn't care. */
+}
+
 /* Upvalue refs are really loads, but there are no corresponding stores.
-** So CSE is ok for them, except for UREFO across a GC step (see below).
+** So CSE is ok for them, except for guarded UREFO across a GC step.
 ** If the referenced function is const, its upvalue addresses are const, too.
 ** This can be used to improve CSE by looking for the same address,
 ** even if the upvalues originate from a different function.
@@ -2150,11 +2171,27 @@ LJFOLDF(cse_uref)
       if (irref_isk(ir->op1)) {
 	GCfunc *fn2 = ir_kfunc(IR(ir->op1));
 	if (gco2uv(gcref(fn2->l.uvptr[(ir->op2 >> 8)])) == uv) {
-	  if (fins->o == IR_UREFO && gcstep_barrier(J, ref))
-	    break;
-	  return ref;
+	  return merge_uref(J, ref, ir);
 	}
       }
+      ref = ir->prev;
+    }
+  }
+  return EMITFOLD;
+}
+
+/* Custom CSE for UREFO. */
+LJFOLD(UREFO any any)
+LJFOLDF(cse_urefo)
+{
+  if (LJ_LIKELY(J->flags & JIT_F_OPT_CSE)) {
+    IRRef ref = J->chain[IR_UREFO];
+    IRRef lim = fins->op1;
+    IRRef2 op12 = (IRRef2)fins->op1 + ((IRRef2)fins->op2 << 16);
+    while (ref > lim) {
+      IRIns *ir = IR(ref);
+      if (ir->op12 == op12)
+	return merge_uref(J, ref, ir);
       ref = ir->prev;
     }
   }
@@ -2381,14 +2418,9 @@ LJFOLDF(fold_base)
 
 /* Write barriers are amenable to CSE, but not across any incremental
 ** GC steps.
-**
-** The same logic applies to open upvalue references, because a stack
-** may be resized during a GC step (not the current stack, but maybe that
-** of a coroutine).
 */
 LJFOLD(TBAR any)
 LJFOLD(OBAR any any)
-LJFOLD(UREFO any any)
 LJFOLDF(barrier_tab)
 {
   TRef tr = lj_opt_cse(J);

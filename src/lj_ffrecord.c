@@ -1130,7 +1130,7 @@ static TRef recff_sbufx_check(jit_State *J, RecordFFData *rd, ptrdiff_t arg)
 /* Emit BUFHDR for write to extended string buffer. */
 static TRef recff_sbufx_write(jit_State *J, TRef ud)
 {
-  TRef trbuf = emitir(IRT(IR_ADD, IRT_PGC), ud, lj_ir_kint(J, sizeof(GCudata)));
+  TRef trbuf = emitir(IRT(IR_ADD, IRT_PGC), ud, lj_ir_kintpgc(J, sizeof(GCudata)));
   return emitir(IRT(IR_BUFHDR, IRT_PGC), trbuf, IRBUFHDR_WRITE);
 }
 
@@ -1164,20 +1164,19 @@ static void LJ_FASTCALL recff_buffer_method_reset(jit_State *J, RecordFFData *rd
   SBufExt *sbx = bufV(&rd->argv[0]);
   int iscow = (int)sbufiscow(sbx);
   TRef trl = recff_sbufx_get_L(J, ud);
-  TRef trcow = emitir(IRT(IR_BAND, IRT_IGC), trl, lj_ir_kint(J, SBUF_FLAG_COW));
-  TRef zero = lj_ir_kint(J, 0);
-  emitir(IRTG(iscow ? IR_NE : IR_EQ, IRT_IGC), trcow, zero);
+  TRef trcow = emitir(IRT(IR_BAND, IRT_IGC), trl, lj_ir_kintpgc(J, SBUF_FLAG_COW));
+  TRef zeropgc = lj_ir_kintpgc(J, 0);
+  emitir(IRTG(iscow ? IR_NE : IR_EQ, IRT_IGC), trcow, zeropgc);
   if (iscow) {
-    trl = emitir(IRT(IR_BXOR, IRT_IGC), trl,
-		 LJ_GC64 ? lj_ir_kint64(J, SBUF_FLAG_COW) :
-			   lj_ir_kint(J, SBUF_FLAG_COW));
-    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_W, zero);
-    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_E, zero);
-    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_B, zero);
+    TRef zerop = lj_ir_kintp(J, 0);
+    trl = emitir(IRT(IR_BXOR, IRT_IGC), trl, lj_ir_kintpgc(J, SBUF_FLAG_COW));
+    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_W, zerop);
+    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_E, zerop);
+    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_B, zerop);
     recff_sbufx_set_L(J, ud, trl);
     emitir(IRT(IR_FSTORE, IRT_PGC),
-	   emitir(IRT(IR_FREF, IRT_PGC), ud, IRFL_SBUF_REF), zero);
-    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_R, zero);
+	   emitir(IRT(IR_FREF, IRT_PGC), ud, IRFL_SBUF_REF), zeropgc);
+    recff_sbufx_set_ptr(J, ud, IRFL_SBUF_R, zerop);
   } else {
     TRef trb = recff_sbufx_get_ptr(J, ud, IRFL_SBUF_B);
     recff_sbufx_set_ptr(J, ud, IRFL_SBUF_W, trb);
@@ -1205,6 +1204,12 @@ static void LJ_FASTCALL recff_buffer_method_set(jit_State *J, RecordFFData *rd)
   if (tref_isstr(tr)) {
     TRef trp = emitir(IRT(IR_STRREF, IRT_PGC), tr, lj_ir_kint(J, 0));
     TRef len = emitir(IRTI(IR_FLOAD), tr, IRFL_STR_LEN);
+    IRIns *irp = IR(tref_ref(trp));
+    /* trp must point into the anchored obj, even after folding. */
+    if (irp->o == IR_STRREF)
+      tr = irp->op1;
+    else if (!tref_isk(tr))
+      trp = emitir(IRT(IR_ADD, IRT_PGC), tr, lj_ir_kintpgc(J, sizeof(GCstr)));
     lj_ir_call(J, IRCALL_lj_bufx_set, trbuf, trp, len, tr);
 #if LJ_HASFFI
   } else if (tref_iscdata(tr)) {
@@ -1445,6 +1450,15 @@ static void LJ_FASTCALL recff_table_new(jit_State *J, RecordFFData *rd)
 {
   TRef tra = lj_opt_narrow_toint(J, J->base[0]);
   TRef trh = lj_opt_narrow_toint(J, J->base[1]);
+  if (tref_isk(tra) && tref_isk(trh)) {
+    int32_t a = IR(tref_ref(tra))->i;
+    if (a < 0x7fff) {
+      uint32_t hbits = hsize2hbits(IR(tref_ref(trh))->i);
+      a = a > 0 ? a+1 : 0;
+      J->base[0] = emitir(IRTG(IR_TNEW, IRT_TAB), (uint32_t)a, hbits);
+      return;
+    }
+  }
   J->base[0] = lj_ir_call(J, IRCALL_lj_tab_new_ah, tra, trh);
   UNUSED(rd);
 }

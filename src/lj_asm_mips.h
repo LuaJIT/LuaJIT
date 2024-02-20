@@ -653,11 +653,11 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		     rset_exclude(RSET_GPR, dest));
 	  emit_fg(as, MIPSI_TRUNC_L_D, tmp, left);  /* Delay slot. */
 #if !LJ_TARGET_MIPSR6
-	 emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
-	 emit_fgh(as, MIPSI_C_OLT_D, 0, left, tmp);
+	emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
+	emit_fgh(as, MIPSI_C_OLT_D, 0, left, tmp);
 #else
-	 emit_branch(as, MIPSI_BC1NEZ, 0, (left&31), l_end);
-	 emit_fgh(as, MIPSI_CMP_LT_D, left, left, tmp);
+	emit_branch(as, MIPSI_BC1NEZ, 0, (tmp&31), l_end);
+	emit_fgh(as, MIPSI_CMP_LT_D, tmp, left, tmp);
 #endif
 	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
 		     (void *)&as->J->k64[LJ_K64_2P63],
@@ -670,11 +670,11 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		     rset_exclude(RSET_GPR, dest));
 	  emit_fg(as, MIPSI_TRUNC_L_S, tmp, left);  /* Delay slot. */
 #if !LJ_TARGET_MIPSR6
-	 emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
-	 emit_fgh(as, MIPSI_C_OLT_S, 0, left, tmp);
+	emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
+	emit_fgh(as, MIPSI_C_OLT_S, 0, left, tmp);
 #else
-	 emit_branch(as, MIPSI_BC1NEZ, 0, (left&31), l_end);
-	 emit_fgh(as, MIPSI_CMP_LT_S, left, left, tmp);
+	emit_branch(as, MIPSI_BC1NEZ, 0, (tmp&31), l_end);
+	emit_fgh(as, MIPSI_CMP_LT_S, tmp, left, tmp);
 #endif
 	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
 		     (void *)&as->J->k32[LJ_K32_2P63],
@@ -690,8 +690,8 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	MIPSIns mi = irt_is64(ir->t) ?
 	  (st == IRT_NUM ? MIPSI_TRUNC_L_D : MIPSI_TRUNC_L_S) :
 	  (st == IRT_NUM ? MIPSI_TRUNC_W_D : MIPSI_TRUNC_W_S);
-	emit_tg(as, irt_is64(ir->t) ? MIPSI_DMFC1 : MIPSI_MFC1, dest, left);
-	emit_fg(as, mi, left, left);
+	emit_tg(as, irt_is64(ir->t) ? MIPSI_DMFC1 : MIPSI_MFC1, dest, tmp);
+	emit_fg(as, mi, tmp, left);
 #endif
       }
     }
@@ -1207,22 +1207,29 @@ nolo:
 static void asm_uref(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, RSET_GPR);
-  if (irref_isk(ir->op1)) {
+  int guarded = (irt_t(ir->t) & (IRT_GUARD|IRT_TYPE)) == (IRT_GUARD|IRT_PGC);
+  if (irref_isk(ir->op1) && !guarded) {
     GCfunc *fn = ir_kfunc(IR(ir->op1));
     MRef *v = &gcref(fn->l.uvptr[(ir->op2 >> 8)])->uv.v;
     emit_lsptr(as, MIPSI_AL, dest, v, RSET_GPR);
   } else {
-    Reg uv = ra_scratch(as, RSET_GPR);
-    Reg func = ra_alloc1(as, ir->op1, RSET_GPR);
-    if (ir->o == IR_UREFC) {
-      asm_guard(as, MIPSI_BEQ, RID_TMP, RID_ZERO);
-      emit_tsi(as, MIPSI_AADDIU, dest, uv, (int32_t)offsetof(GCupval, tv));
-      emit_tsi(as, MIPSI_LBU, RID_TMP, uv, (int32_t)offsetof(GCupval, closed));
+    if (guarded)
+      asm_guard(as, ir->o == IR_UREFC ? MIPSI_BEQ : MIPSI_BNE, RID_TMP, RID_ZERO);
+    if (ir->o == IR_UREFC)
+      emit_tsi(as, MIPSI_AADDIU, dest, dest, (int32_t)offsetof(GCupval, tv));
+    else
+      emit_tsi(as, MIPSI_AL, dest, dest, (int32_t)offsetof(GCupval, v));
+    if (guarded)
+      emit_tsi(as, MIPSI_LBU, RID_TMP, dest, (int32_t)offsetof(GCupval, closed));
+    if (irref_isk(ir->op1)) {
+      GCfunc *fn = ir_kfunc(IR(ir->op1));
+      GCobj *o = gcref(fn->l.uvptr[(ir->op2 >> 8)]);
+      emit_loada(as, dest, o);
     } else {
-      emit_tsi(as, MIPSI_AL, dest, uv, (int32_t)offsetof(GCupval, v));
+      emit_tsi(as, MIPSI_AL, dest, ra_alloc1(as, ir->op1, RSET_GPR),
+	       (int32_t)offsetof(GCfuncL, uvptr) +
+	       (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
     }
-    emit_tsi(as, MIPSI_AL, uv, func, (int32_t)offsetof(GCfuncL, uvptr) +
-	     (int32_t)sizeof(MRef) * (int32_t)(ir->op2 >> 8));
   }
 }
 

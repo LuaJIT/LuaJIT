@@ -174,12 +174,15 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
     case FRAME_PCALL:  /* FF pcall() frame. */
     case FRAME_PCALLH:  /* FF pcall() frame inside hook. */
       if (errcode) {
+	global_State *g;
 	if (errcode == LUA_YIELD) {
 	  frame = frame_prevd(frame);
 	  break;
 	}
+	g = G(L);
+	setgcref(g->cur_L, obj2gco(L));
 	if (frame_typep(frame) == FRAME_PCALL)
-	  hook_leave(G(L));
+	  hook_leave(g);
 	L->base = frame_prevd(frame) + 1;
 	L->cframe = cf;
 	unwindstack(L, L->base);
@@ -209,11 +212,6 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 ** from 3rd party docs or must be found by trial-and-error. They really
 ** don't want you to write your own language-specific exception handler
 ** or to interact gracefully with MSVC. :-(
-**
-** Apparently MSVC doesn't call C++ destructors for foreign exceptions
-** unless you compile your C++ code with /EHa. Unfortunately this means
-** catch (...) also catches things like access violations. The use of
-** _set_se_translator doesn't really help, because it requires /EHa, too.
 */
 
 #define WIN32_LEAN_AND_MEAN
@@ -261,6 +259,8 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 {
 #if LJ_TARGET_X86
   void *cf = (char *)f - CFRAME_OFS_SEH;
+#elif LJ_TARGET_ARM64
+  void *cf = (char *)f - CFRAME_SIZE;
 #else
   void *cf = f;
 #endif
@@ -268,11 +268,25 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
   int errcode = LJ_EXCODE_CHECK(rec->ExceptionCode) ?
 		LJ_EXCODE_ERRCODE(rec->ExceptionCode) : LUA_ERRRUN;
   if ((rec->ExceptionFlags & 6)) {  /* EH_UNWINDING|EH_EXIT_UNWIND */
+    if (rec->ExceptionCode == STATUS_LONGJUMP &&
+	rec->ExceptionRecord &&
+	LJ_EXCODE_CHECK(rec->ExceptionRecord->ExceptionCode)) {
+      errcode = LJ_EXCODE_ERRCODE(rec->ExceptionRecord->ExceptionCode);
+      if ((rec->ExceptionFlags & 0x20)) {  /* EH_TARGET_UNWIND */
+	/* Unwinding is about to finish; revert the ExceptionCode so that
+	** RtlRestoreContext does not try to restore from a _JUMP_BUFFER.
+	*/
+	rec->ExceptionCode = 0;
+      }
+    }
     /* Unwind internal frames. */
     err_unwind(L, cf, errcode);
   } else {
     void *cf2 = err_unwind(L, cf, 0);
     if (cf2) {  /* We catch it, so start unwinding the upper frames. */
+#if !LJ_TARGET_X86
+      EXCEPTION_RECORD rec2;
+#endif
       if (rec->ExceptionCode == LJ_MSVC_EXCODE ||
 	  rec->ExceptionCode == LJ_GCC_EXCODE) {
 #if !LJ_TARGET_CYGWIN
@@ -295,14 +309,29 @@ LJ_FUNCA int lj_err_unwind_win(EXCEPTION_RECORD *rec,
 	(void *)lj_vm_unwind_ff : (void *)lj_vm_unwind_c, errcode);
       /* lj_vm_rtlunwind does not return. */
 #else
+      if (LJ_EXCODE_CHECK(rec->ExceptionCode)) {
+	/* For unwind purposes, wrap the EXCEPTION_RECORD in something that
+	** looks like a longjmp, so that MSVC will execute C++ destructors in
+	** the frames we unwind over. ExceptionInformation[0] should really
+	** contain a _JUMP_BUFFER*, but hopefully nobody is looking too closely
+	** at this point.
+	*/
+	rec2.ExceptionCode = STATUS_LONGJUMP;
+	rec2.ExceptionRecord = rec;
+	rec2.ExceptionAddress = 0;
+	rec2.NumberParameters = 1;
+	rec2.ExceptionInformation[0] = (ULONG_PTR)ctx;
+	rec = &rec2;
+      }
       /* Unwind the stack and call all handlers for all lower C frames
       ** (including ourselves) again with EH_UNWINDING set. Then set
-      ** stack pointer = cf, result = errcode and jump to the specified target.
+      ** stack pointer = f, result = errcode and jump to the specified target.
       */
-      RtlUnwindEx(cf, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
-			       lj_vm_unwind_ff_eh :
-			       lj_vm_unwind_c_eh),
-		  rec, (void *)(uintptr_t)errcode, ctx, dispatch->HistoryTable);
+      RtlUnwindEx(f, (void *)((cframe_unwind_ff(cf2) && errcode != LUA_YIELD) ?
+			      lj_vm_unwind_ff_eh :
+			      lj_vm_unwind_c_eh),
+		  rec, (void *)(uintptr_t)errcode, dispatch->ContextRecord,
+		  dispatch->HistoryTable);
       /* RtlUnwindEx should never return. */
 #endif
     }
@@ -789,7 +818,14 @@ LJ_NOINLINE void lj_err_mem(lua_State *L)
     TValue *base = tvref(G(L)->jit_base);
     if (base) L->base = base;
   }
-  if (curr_funcisL(L)) L->top = curr_topL(L);
+  if (curr_funcisL(L)) {
+    L->top = curr_topL(L);
+    if (LJ_UNLIKELY(L->top > tvref(L->maxstack))) {
+      /* The current Lua frame violates the stack. Replace it with a dummy. */
+      L->top = L->base;
+      setframe_gc(L->base - 1 - LJ_FR2, obj2gco(L), LJ_TTHREAD);
+    }
+  }
   setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));
   lj_err_throw(L, LUA_ERRMEM);
 }
@@ -850,9 +886,11 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)
 {
   ptrdiff_t ef = (LJ_HASJIT && tvref(G(L)->jit_base)) ? 0 : finderrfunc(L);
   if (ef) {
-    TValue *errfunc = restorestack(L, ef);
-    TValue *top = L->top;
+    TValue *errfunc, *top;
+    lj_state_checkstack(L, LUA_MINSTACK * 2);  /* Might raise new error. */
     lj_trace_abort(G(L));
+    errfunc = restorestack(L, ef);
+    top = L->top;
     if (!tvisfunc(errfunc) || L->status == LUA_ERRERR) {
       setstrV(L, top-1, lj_err_str(L, LJ_ERR_ERRERR));
       lj_err_throw(L, LUA_ERRERR);
@@ -867,7 +905,15 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)
   lj_err_throw(L, LUA_ERRRUN);
 }
 
+/* Stack overflow error. */
+void LJ_FASTCALL lj_err_stkov(lua_State *L)
+{
+  lj_debug_addloc(L, err2msg(LJ_ERR_STKOV), L->base-1, NULL);
+  lj_err_run(L);
+}
+
 #if LJ_HASJIT
+/* Rethrow error after doing a trace exit. */
 LJ_NOINLINE void LJ_FASTCALL lj_err_trace(lua_State *L, int errcode)
 {
   if (errcode == LUA_ERRRUN)
