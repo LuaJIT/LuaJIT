@@ -479,7 +479,7 @@ static int lj_cf_package_require(lua_State *L)
 	for i = 1, size - 1 do \n\
 		newTable[i] = tab[size - i] \n\
     end \n\
-	newTable[size] = tab[size] \n\
+	newTable[size] = tab[1] \n\
     return newTable \n\
   end \n\
   _loadlua = kleiloadlua \n\
