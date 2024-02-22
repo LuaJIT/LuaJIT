@@ -224,13 +224,14 @@ LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
 
 #if LJ_DS_LOADBUFFER_PATCH
 LUA_DATA_API const char* (*lj_path_map)(const char* k) = NULL;
+LUA_DATA_API int (*lj_need_transform_path)() = NULL;
 #endif
 
 LUALIB_API int luaL_loadbuffer(lua_State *L, const char *buf, size_t size,
 			       const char *name)
 {
 #if LJ_DS_LOADBUFFER_PATCH
-  if (buf != name){
+  if (buf != name && lj_need_transform_path()){
     if (name[0] != '@'){
       if (lj_path_map){
         const char* real_path = lj_path_map(name);
