@@ -160,66 +160,13 @@ static const char *custom_strstr(const char *haystack, int haystack_length, cons
     return NULL;
 }
 
-static char* hack_gemcore(const char* base, size_t size)
-{
-		char* target;
-    const char* t = base;
-    const char* s = NULL, *p = NULL;
-    char *q = NULL;
-    if (custom_strstr(base, size, "return _debug_getinfo") == NULL) return NULL;
-
-    target = (char*)malloc(size * 2 + 32);
-    memset(target, 0, size * 2 + 32);
-    q = target;
-
-    while (
-      ((p = custom_strstr(t, size, "return _debug_")) != NULL) ||
-      ((p = custom_strstr(t, size, "return _getfenv")) != NULL) ||
-      ((p = custom_strstr(t, size, "return _setfenv")) != NULL)
-      ) {
-      memcpy(q, t, p - t);
-      q += p - t;
-      if (memcmp(p, "return _debug_getupvalue", 24) == 0) {
-        memcpy(q, p, 24);
-        t = p + 24;
-        q += 24;
-        continue;
-      }
-
-      s = custom_strstr(p, size - (p - base) - 1, "end");
-      if (s != NULL) {
-        memcpy(q, p, s - p); q += s - p;
-        memcpy(q, ", nil end", 9); q += 9;
-        t = s + 3;
-      } else {
-        break;
-      }
-    }
-
-    if (s != NULL)
-    {
-      // FILE* fp = fopen("hahaha.txt", "wb");
-      memcpy(q, t, base + size - t);
-      // fwrite(target, 1, (q - target) + (base - t) + size, fp);
-      // fclose(fp);
-      return target;
-    }
-    
-    free(target);
-    return NULL;
-}
-
 LUALIB_API int luaL_loadbufferx(lua_State *L, const char *buf, size_t size,
 				const char *name, const char *mode)
 {
   StringReaderCtx ctx;
-  int ret;
-  char* target = hack_gemcore(buf, size);
-  ctx.str = target == NULL ? buf : target;
-  ctx.size = target == NULL ? size : strlen(target);
-  ret = lua_loadx(L, reader_string, &ctx, name, mode);
-  if (target != NULL) free(target);
-  return ret;
+  ctx.str = buf;
+  ctx.size = size;
+  return lua_loadx(L, reader_string, &ctx, name, mode);
 }
 
 #if LJ_DS_LOADBUFFER_PATCH
