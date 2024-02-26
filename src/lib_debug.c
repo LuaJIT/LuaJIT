@@ -130,6 +130,9 @@ LJLIB_CF(debug_getinfo)
   for (; *options; options++) {
     switch (*options) {
     case 'S':
+#ifdef LJ_DS_DEBUG_GETINFO_PATCH
+      ar.source = ar.source[0] == '@'? ar.source+1: ar.source;
+#endif
       settabss(L, "source", ar.source);
       settabss(L, "short_src", ar.short_src);
       settabsi(L, "linedefined", ar.linedefined);
