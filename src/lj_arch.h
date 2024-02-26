@@ -797,4 +797,8 @@ extern void *LJ_WIN_LOADLIBA(const char *path);
 #define LJ_DS_STR_HASH_PATCH LJ_DS
 #endif
 
+#ifndef LJ_DS_DEBUG_GETINFO_PATCH
+#define LJ_DS_DEBUG_GETINFO_PATCH LJ_DS
+#endif
+
 #endif
