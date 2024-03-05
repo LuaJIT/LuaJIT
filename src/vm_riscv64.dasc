@@ -80,3 +80,86 @@
 |.define FTMP2,		f2
 |.define FTMP3,		f3
 |.define FTMP4,		f4
+|
+|// Stack layout while in interpreter. Must match with lj_frame.h.
+|// RISC-V 64 lp64d.
+|
+|.define CFRAME_SPACE,	256	// Delta for sp.
+|
+|//----- 16 byte aligned, <-- sp entering interpreter
+|.define SAVE_ERRF,	252	// 32 bit values.
+|.define SAVE_NRES,	248
+|.define SAVE_CFRAME,	240	// 64 bit values.
+|.define SAVE_L,	232
+|.define SAVE_PC,	224
+|//----- 16 byte aligned
+|// Padding		216
+|.define SAVE_GPR_,	112	// .. 112+13*8: 64 bit GPR saves.
+|.define SAVE_FPR_,	16	// .. 16+12*8: 64 bit FPR saves.
+|
+|
+|.define TMPD,		0
+|//----- 16 byte aligned
+|
+|.define TMPD_OFS,	0
+|
+|//-----------------------------------------------------------------------
+|
+|.macro saveregs
+|  addi sp, sp, -CFRAME_SPACE
+|  fsd f27, SAVE_FPR_+11*8(sp)
+|  fsd f26, SAVE_FPR_+10*8(sp)
+|  fsd f25, SAVE_FPR_+9*8(sp)
+|  fsd f24, SAVE_FPR_+8*8(sp)
+|  fsd f23, SAVE_FPR_+7*8(sp)
+|  fsd f22, SAVE_FPR_+6*8(sp)
+|  fsd f21, SAVE_FPR_+5*8(sp)
+|  fsd f20, SAVE_FPR_+4*8(sp)
+|  fsd f19, SAVE_FPR_+3*8(sp)
+|  fsd f18, SAVE_FPR_+2*8(sp)
+|  fsd f9,  SAVE_FPR_+1*8(sp)
+|  fsd f8,  SAVE_FPR_+0*8(sp)
+|  sd ra,  SAVE_GPR_+12*8(sp)
+|  sd x27, SAVE_GPR_+11*8(sp)
+|  sd x26, SAVE_GPR_+10*8(sp)
+|  sd x25, SAVE_GPR_+9*8(sp)
+|  sd x24, SAVE_GPR_+8*8(sp)
+|  sd x23, SAVE_GPR_+7*8(sp)
+|  sd x22, SAVE_GPR_+6*8(sp)
+|  sd x21, SAVE_GPR_+5*8(sp)
+|  sd x20, SAVE_GPR_+4*8(sp)
+|  sd x19, SAVE_GPR_+3*8(sp)
+|  sd x18, SAVE_GPR_+2*8(sp)
+|  sd x9,  SAVE_GPR_+1*8(sp)
+|  sd x8,  SAVE_GPR_+0*8(sp)
+|.endmacro
+|
+|.macro restoreregs_ret
+|  ld ra,  SAVE_GPR_+12*8(sp)
+|  ld x27, SAVE_GPR_+11*8(sp)
+|  ld x26, SAVE_GPR_+10*8(sp)
+|  ld x25, SAVE_GPR_+9*8(sp)
+|  ld x24, SAVE_GPR_+8*8(sp)
+|  ld x23, SAVE_GPR_+7*8(sp)
+|  ld x22, SAVE_GPR_+6*8(sp)
+|  ld x21, SAVE_GPR_+5*8(sp)
+|  ld x20, SAVE_GPR_+4*8(sp)
+|  ld x19, SAVE_GPR_+3*8(sp)
+|  ld x18, SAVE_GPR_+2*8(sp)
+|  ld x9,  SAVE_GPR_+1*8(sp)
+|  ld x8,  SAVE_GPR_+0*8(sp)
+|  fld f27, SAVE_FPR_+11*8(sp)
+|  fld f26, SAVE_FPR_+10*8(sp)
+|  fld f25, SAVE_FPR_+9*8(sp)
+|  fld f24, SAVE_FPR_+8*8(sp)
+|  fld f23, SAVE_FPR_+7*8(sp)
+|  fld f22, SAVE_FPR_+6*8(sp)
+|  fld f21, SAVE_FPR_+5*8(sp)
+|  fld f20, SAVE_FPR_+4*8(sp)
+|  fld f19, SAVE_FPR_+3*8(sp)
+|  fld f18, SAVE_FPR_+2*8(sp)
+|  fld f9,  SAVE_FPR_+1*8(sp)
+|  fld f8,  SAVE_FPR_+0*8(sp)
+|  addi sp, sp, CFRAME_SPACE
+|  ret
+|.endmacro
