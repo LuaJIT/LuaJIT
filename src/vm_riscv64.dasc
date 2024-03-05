@@ -1,0 +1,82 @@
+|// Low-level VM code for RISC-V 64 CPUs.
+|// Bytecode interpreter, fast functions and helper functions.
+|// Copyright (C) 2005-2022 Mike Pall. See Copyright Notice in luajit.h
+|//
+|// Contributed by gns from PLCT Lab, ISCAS.
+|// Sponsored by PLCT Lab, ISCAS.
+|
+|.arch riscv64
+|.section code_op, code_sub
+|
+|.actionlist build_actionlist
+|.globals GLOB_
+|.globalnames globnames
+|.externnames extnames
+|
+|// Note: The ragged indentation of the instructions is intentional.
+|//       The starting columns indicate data dependencies.
+|
+|//-----------------------------------------------------------------------
+|
+|// Fixed register assignments for the interpreter.
+|// Don't use: x0 = 0, x1 = ra, x2 = sp, x3 = gp, x4 = tp
+|
+|
+|// The following must be C callee-save (but BASE is often refetched).
+|.define BASE,		x18	// Base of current Lua stack frame.
+|.define KBASE,		x19	// Constants of current Lua function.
+|.define PC,		x20	// Next PC.
+|.define GLREG,		x21	// Global state.
+|.define DISPATCH,	x22	// Opcode dispatch table.
+|.define LREG,		x23	// Register holding lua_State (also in SAVE_L).
+|.define MULTRES,	x24	// Size of multi-result: (nresults+1)*8.
+|
+|// Constants for type-comparisons, stores and conversions. C callee-save.
+|.define TISNIL,	x8
+|.define TISNUM,	x25
+|.define TOBIT,		f27	// 2^52 + 2^51.
+|
+|// The following temporaries are not saved across C calls, except for RA.
+|.define RA,		x9	// Callee-save.
+|.define RB,		x14
+|.define RC,		x15
+|.define RD,		x16
+|.define INS,		x17
+|
+|.define TMP0,		x6
+|.define TMP1,		x7
+|.define TMP2,		x28
+|.define TMP3,		x29
+|.define TMP4,		x30
+|
+|// RISC-V lp64d calling convention.
+|.define CFUNCADDR,	x5
+|.define CARG1,		x10
+|.define CARG2,		x11
+|.define CARG3,		x12
+|.define CARG4,		x13
+|.define CARG5,		x14
+|.define CARG6,		x15
+|.define CARG7,		x16
+|.define CARG8,		x17
+|
+|.define CRET1,		x10
+|.define CRET2,		x11
+|
+|.define FARG1,		f10
+|.define FARG2,		f11
+|.define FARG3,		f12
+|.define FARG4,		f13
+|.define FARG5,		f14
+|.define FARG6,		f15
+|.define FARG7,		f16
+|.define FARG8,		f17
+|
+|.define FRET1,		f10
+|.define FRET2,		f11
+|
+|.define FTMP0,		f0
+|.define FTMP1,		f1
+|.define FTMP2,		f2
+|.define FTMP3,		f3
+|.define FTMP4,		f4
