@@ -4679,5 +4679,135 @@ static int build_backend(BuildCtx *ctx)
 /* Emit pseudo frame-info for all assembler functions. */
 static void emit_asm_debug(BuildCtx *ctx)
 {
-
+  int fcofs = (int)((uint8_t *)ctx->glob[GLOB_vm_ffi_call] - ctx->code);
+  int i;
+  switch (ctx->mode) {
+  case BUILD_elfasm:
+    fprintf(ctx->fp, "\t.section .debug_frame,\"\",@progbits\n");
+    fprintf(ctx->fp,
+	".Lframe0:\n"
+	"\t.4byte .LECIE0-.LSCIE0\n"
+	".LSCIE0:\n"
+	"\t.4byte 0xffffffff\n"
+	"\t.byte 0x1\n"
+	"\t.string \"\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -4\n"
+	"\t.byte 1\n"				/* Return address is in ra. */
+	"\t.byte 0xc\n\t.uleb128 2\n\t.uleb128 0\n"	/* def_cfa sp 0 */
+	"\t.align 3\n"
+	".LECIE0:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE0:\n"
+	"\t.4byte .LEFDE0-.LASFDE0\n"
+	".LASFDE0:\n"
+	"\t.4byte .Lframe0\n"
+	"\t.8byte .Lbegin\n"
+	"\t.8byte %d\n"
+	"\t.byte 0xe\n\t.uleb128 %d\n"
+	"\t.byte 0x81\n\t.uleb128 2*6\n"	/* offset ra */,
+	fcofs, CFRAME_SIZE);
+    for (i = 27; i >= 18; i--)	/* offset x27-x18 (s11-s2) */
+      fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+i, 2*(27-i+7));
+    fprintf(ctx->fp,
+	"\t.byte 0x89\n\t.uleb128 2*17\n"	/* offset x9 (s1) */
+	"\t.byte 0x88\n\t.uleb128 2*18\n"	/* offset x8 (s0/fp) */);
+    for (i = 27; i >= 18; i--)	/* offset f31-f18 */
+      fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+32+i, 2*(27-i+19));
+    fprintf(ctx->fp,
+	"\t.byte 0x89+32\n\t.uleb128 2*29\n"	/* offset f9 (fs1) */
+	"\t.byte 0x88+32\n\t.uleb128 2*30\n"	/* offset f8 (fs0) */
+	"\t.align 3\n"
+	".LEFDE0:\n\n");
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".LSFDE1:\n"
+	"\t.4byte .LEFDE1-.LASFDE1\n"
+	".LASFDE1:\n"
+	"\t.4byte .Lframe0\n"
+	"\t.4byte lj_vm_ffi_call\n"
+	"\t.4byte %d\n"
+	"\t.byte 0x81\n\t.uleb128 2*1\n"	/* offset ra */
+	"\t.byte 0x92\n\t.uleb128 2*2\n"	/* offset x18 */
+	"\t.byte 0xd\n\t.uleb128 0x12\n"
+	"\t.align 3\n"
+	".LEFDE1:\n\n", (int)ctx->codesz - fcofs);
+#endif
+#if !LJ_NO_UNWIND
+    fprintf(ctx->fp, "\t.section .eh_frame,\"a\",@progbits\n");
+    fprintf(ctx->fp,
+	".Lframe1:\n"
+	"\t.4byte .LECIE1-.LSCIE1\n"
+	".LSCIE1:\n"
+	"\t.4byte 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zPR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -4\n"
+	"\t.byte 1\n"				/* Return address is in ra. */
+	"\t.uleb128 6\n"			/* augmentation length */
+	"\t.byte 0x1b\n"
+	"\t.4byte lj_err_unwind_dwarf-.\n"
+	"\t.byte 0x1b\n"
+	"\t.byte 0xc\n\t.uleb128 2\n\t.uleb128 0\n"	/* def_cfa sp 0 */
+	"\t.align 2\n"
+	".LECIE1:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE2:\n"
+	"\t.4byte .LEFDE2-.LASFDE2\n"
+	".LASFDE2:\n"
+	"\t.4byte .LASFDE2-.Lframe1\n"
+	"\t.4byte .Lbegin-.\n"
+	"\t.4byte %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0xe\n\t.uleb128 %d\n"
+	"\t.byte 0x81\n\t.uleb128 2*6\n",	/* offset ra */
+	fcofs, CFRAME_SIZE);
+    for (i = 27; i >= 18; i--)	/* offset x27-x18 (s11-s2) */
+      fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+i, 2*(27-i+7));
+    fprintf(ctx->fp,
+	"\t.byte 0x89\n\t.uleb128 2*17\n"	/* offset x9 (s1) */
+	"\t.byte 0x88\n\t.uleb128 2*18\n"	/* offset x8 (s0/fp) */);
+    for (i = 27; i >= 18; i--)	/* offset f31-f18 */
+      fprintf(ctx->fp, "\t.byte %d\n\t.uleb128 %d\n", 0x80+32+i, 2*(27-i+19));
+    fprintf(ctx->fp,
+	"\t.byte 0x89+32\n\t.uleb128 2*29\n"	/* offset f9 (fs1) */
+	"\t.byte 0x88+32\n\t.uleb128 2*30\n"	/* offset f8 (fs0) */
+	"\t.align 2\n"
+	".LEFDE2:\n\n");
+#if LJ_HASFFI
+    fprintf(ctx->fp,
+	".Lframe2:\n"
+	"\t.4byte .LECIE2-.LSCIE2\n"
+	".LSCIE2:\n"
+	"\t.4byte 0\n"
+	"\t.byte 0x1\n"
+	"\t.string \"zR\"\n"
+	"\t.uleb128 0x1\n"
+	"\t.sleb128 -4\n"
+	"\t.byte 1\n"				/* Return address is in ra. */
+	"\t.uleb128 1\n"			/* augmentation length */
+	"\t.byte 0x1b\n"
+	"\t.byte 0xc\n\t.uleb128 2\n\t.uleb128 0\n"	/* def_cfa sp 0 */
+	"\t.align 2\n"
+	".LECIE2:\n\n");
+    fprintf(ctx->fp,
+	".LSFDE3:\n"
+	"\t.4byte .LEFDE3-.LASFDE3\n"
+	".LASFDE3:\n"
+	"\t.4byte .LASFDE3- .Lframe2\n"
+	"\t.4byte lj_vm_ffi_call-.\n"
+	"\t.4byte %d\n"
+	"\t.uleb128 0\n"			/* augmentation length */
+	"\t.byte 0x81\n\t.uleb128 2*1\n"	/* offset ra */
+	"\t.byte 0x92\n\t.uleb128 2*2\n"	/* offset x18 */
+	"\t.byte 0xd\n\t.uleb128 0x12\n"
+	"\t.align 2\n"
+	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
+#endif
+#endif
+    break;
+  default:
+    break;
+  }
 }
