@@ -810,13 +810,28 @@ static void build_subroutines(BuildCtx *ctx)
   |   mv BASE, TMP2			// Restore caller BASE.
   |    ld LFUNC:TMP1, FRAME_FUNC(TMP2)
   |     ld PC, -24(RB)			// Restore PC from [cont|PC].
+  |.if FFI
+  |  sltiu TMP3, TMP0, 2
+  |.endif
   |    cleartp LFUNC:TMP1
   |   add TMP2, RA, RD
   |  ld TMP1, LFUNC:TMP1->pc
   |  sd TISNIL, -8(TMP2)               // Ensure one valid arg.
+  |.if FFI
+  |  bnez TMP3, >1
+  |.endif
   |  // BASE = base, RA = resultptr, RB = meta base
   |  ld KBASE, PC2PROTO(k)(TMP1)
   |  jr TMP0				// Jump to continuation.
+  |
+  |.if FFI
+  |1:
+  |  addi TMP1, RB, -32
+  |  bxnez TMP0, ->cont_ffi_callback	// cont = 1: return from FFI callback.
+  |  // cont = 0: tailcall from C function.
+  |  sub RC, TMP1, BASE
+  |  j ->vm_call_tail
+  |.endif
   |
   |->cont_cat:				// RA = resultptr, RB = meta base
   |  lw INS, -4(PC)
@@ -1016,6 +1031,18 @@ static void build_subroutines(BuildCtx *ctx)
   |  call_intern vmeta_equal, lj_meta_equal
   |  // Returns 0/1 or TValue * (metamethod).
   |  j <3
+  |
+  |->vmeta_equal_cd:
+  |.if FFI
+  |  addi PC, PC, -4
+  |  mv CARG1, L
+  |  mv CARG2, INS
+  |  sd BASE, L->base
+  |  sd PC, SAVE_PC(sp)
+  |  call_intern vmeta_equal_cd, lj_meta_equal_cd	// (lua_State *L, BCIns op)
+  |  // Returns 0/1 or TValue * (metamethod).
+  |  j <3
+  |.endif
   |
   |->vmeta_istype:
   |  addi PC, PC, -4
@@ -2152,7 +2179,6 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |
   |->vm_callhook:			// Dispatch target for call hooks.
-  |  mv CARG2, PC
   |
   |->cont_stitch:			// Trace stitching.
   |
@@ -2258,6 +2284,133 @@ static void build_subroutines(BuildCtx *ctx)
   |  .long 0x0330000f
   |  ret
   |.endif
+  |
+  |//-----------------------------------------------------------------------
+  |//-- FFI helper functions -----------------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |// Handler for callback functions. Callback slot number in x5, g in x7.
+  |->vm_ffi_callback:
+  |.if FFI
+  |.type CTSTATE, CTState, PC
+  |  saveregs
+  |  ld CTSTATE, GL:x7->ctype_state
+  |  mv GL, x7
+  |  addxi DISPATCH, x7, GG_G2DISP
+  |  srli x5, x5, 12
+  |  sw x5, CTSTATE->cb.slot
+  |  sd CARG1, CTSTATE->cb.gpr[0]
+  |  fsd FARG1, CTSTATE->cb.fpr[0]
+  |  sd CARG2, CTSTATE->cb.gpr[1]
+  |  fsd FARG2, CTSTATE->cb.fpr[1]
+  |  sd CARG3, CTSTATE->cb.gpr[2]
+  |  fsd FARG3, CTSTATE->cb.fpr[2]
+  |  sd CARG4, CTSTATE->cb.gpr[3]
+  |  fsd FARG4, CTSTATE->cb.fpr[3]
+  |  sd CARG5, CTSTATE->cb.gpr[4]
+  |  fsd FARG5, CTSTATE->cb.fpr[4]
+  |  sd CARG6, CTSTATE->cb.gpr[5]
+  |  fsd FARG6, CTSTATE->cb.fpr[5]
+  |  sd CARG7, CTSTATE->cb.gpr[6]
+  |  fsd FARG7, CTSTATE->cb.fpr[6]
+  |  sd CARG8, CTSTATE->cb.gpr[7]
+  |  fsd FARG8, CTSTATE->cb.fpr[7]
+  |  addi TMP0, sp, CFRAME_SPACE
+  |  sd TMP0, CTSTATE->cb.stack
+  |  sd x0, SAVE_PC(sp)			// Any value outside of bytecode is ok.
+  |  mv CARG1, CTSTATE
+  |  mv CARG2, sp
+  |  call_intern vm_ffi_callback, lj_ccallback_enter	// (CTState *cts, void *cf)
+  |  // Returns lua_State *.
+  |  ld BASE, L:CRET1->base
+  |  ld RC, L:CRET1->top
+  |  mv L, CRET1
+  |  lui TMP3, 0x43380			// TOBIT = Hiword of 2^52 + 2^51 (double).
+  |  ld LFUNC:RB, FRAME_FUNC(BASE)
+  |  li TISNIL, LJ_TNIL
+  |  li TISNUM, LJ_TISNUM
+  |  slli TMP3, TMP3, 32
+  |  li_vmstate INTERP
+  |  subw RC, RC, BASE
+  |  cleartp LFUNC:RB
+  |  st_vmstate
+  |  fmv.d.x TOBIT, TMP3
+  |  ins_callt
+  |.endif
+  |
+  |->cont_ffi_callback:				// Return from FFI callback.
+  |.if FFI
+  |  ld CTSTATE, GL->ctype_state
+  |  sd BASE, L->base
+  |  sd RB, L->top
+  |  sd L, CTSTATE->L
+  |  mv CARG1, CTSTATE
+  |  mv CARG2, RA
+  |  // (CTState *cts, TValue *o)
+  |  call_intern cont_ffi_callback, lj_ccallback_leave
+  |  fld FRET1, CTSTATE->cb.fpr[0]
+  |  ld CRET1, CTSTATE->cb.gpr[0]
+  |  fld FRET2, CTSTATE->cb.fpr[1]
+  |  ld CRET2, CTSTATE->cb.gpr[1]
+  |  j ->vm_leave_unw
+  |.endif
+  |
+  |->vm_ffi_call:			// Call C function via FFI.
+  |  // Caveat: needs special frame unwinding, see below.
+  |.if FFI
+  |  .type CCSTATE, CCallState, CARG1
+  |  lw TMP1, CCSTATE->spadj
+  |  lbu CARG2, CCSTATE->nsp
+  |  lbu CARG3, CCSTATE->nfpr
+  |  mv TMP2, sp
+  |  sub sp, sp, TMP1
+  |  sd ra, -8(TMP2)
+  |  sd x18, -16(TMP2)
+  |  sd CCSTATE, -24(TMP2)
+  |  mv x18, TMP2
+  |  addi TMP1, CCSTATE, offsetof(CCallState, stack)
+  |  mv TMP2, sp
+  |  add TMP3, TMP1, CARG2
+  |  beqz CARG2, >2
+  |1:
+  |  ld TMP0, 0(TMP1)
+  |  addi TMP1, TMP1, 8
+  |  sd TMP0, 0(TMP2)
+  |  addi TMP2, TMP2, 8
+  |  bltu TMP1, TMP3, <1
+  |2:
+  |  beqz CARG3, >3
+  |  fld FARG1, CCSTATE->fpr[0]
+  |  fld FARG2, CCSTATE->fpr[1]
+  |  fld FARG3, CCSTATE->fpr[2]
+  |  fld FARG4, CCSTATE->fpr[3]
+  |  fld FARG5, CCSTATE->fpr[4]
+  |  fld FARG6, CCSTATE->fpr[5]
+  |  fld FARG7, CCSTATE->fpr[6]
+  |  fld FARG8, CCSTATE->fpr[7]
+  |3:
+  |  ld CFUNCADDR, CCSTATE->func
+  |  ld CARG2, CCSTATE->gpr[1]
+  |  ld CARG3, CCSTATE->gpr[2]
+  |  ld CARG4, CCSTATE->gpr[3]
+  |  ld CARG5, CCSTATE->gpr[4]
+  |  ld CARG6, CCSTATE->gpr[5]
+  |  ld CARG7, CCSTATE->gpr[6]
+  |  ld CARG8, CCSTATE->gpr[7]
+  |  ld CARG1, CCSTATE->gpr[0]		// Do this last, since CCSTATE is CARG1.
+  |  jalr CFUNCADDR
+  |  ld CCSTATE:TMP1, -24(x18)
+  |  ld TMP0, -16(x18)
+  |  ld ra, -8(x18)
+  |  sd CRET1, CCSTATE:TMP1->gpr[0]
+  |  sd CRET2, CCSTATE:TMP1->gpr[1]
+  |  fsd FRET1, CCSTATE:TMP1->fpr[0]
+  |  fsd FRET2, CCSTATE:TMP1->fpr[1]
+  |  mv sp, x18
+  |  mv x18, TMP0
+  |  ret
+  |.endif
+  |// Note: vm_ffi_call must be the last function in this object file!
   |
   |//-----------------------------------------------------------------------
 }
@@ -2384,6 +2537,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  beqz TMP0, ->BC_ISNEN_Z
     }
     |// Either or both types are not numbers.
+    |.if FFI
+    |  // Check if RA or RD is a cdata.
+    |  xori TMP0, CARG3, LJ_TCDATA
+    |  xori TMP1, CARG4, LJ_TCDATA
+    |  and TMP0, TMP0, TMP1
+    |  bxeqz TMP0, ->vmeta_equal_cd
+    |.endif
     |  lui TMP3, (-(BCBIAS_J*4 >> 12)) & 0xfffff		// -BCBIAS_J*4
     |  decode_BC4b TMP2
     |  addw TMP2, TMP2, TMP3		// (jump-0x8000)<<2
@@ -2436,10 +2596,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   sub RD, KBASE, RD
     |    lhu TMP2, -4+OFS_RD(PC)
     |   ld CARG2, -8(RD)		// KBASE-8-str_const*8
+    |.if FFI
+    |  gettp CARG3, CARG1
+    |  li TMP1, LJ_TCDATA
+    |.endif
     |  li TMP0, LJ_TSTR
     |   decode_BC4b TMP2
     |   settp CARG2, TMP0
     |   lui TMP3, (-(BCBIAS_J*4 >> 12)) & 0xfffff		// -BCBIAS_J*4
+    |.if FFI
+    |  bxeq CARG3, TMP1, ->vmeta_equal_cd
+    |.endif
     |  xor TMP0, CARG1, CARG2		// TMP2=0: A==D; TMP2!=0: A!=D
     |   addw TMP2, TMP2, TMP3
     if (vk) {
@@ -2494,7 +2661,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |4:  // RA is not an integer.
     |    addw TMP2, TMP2, TMP3
+    |.if FFI
+    |  bgeu CARG3, TISNUM, >7
+    |.else
     |  bgeu CARG3, TISNUM, <2
+    |.endif
     |  fmv.d.x FTMP0, CARG1
     |   fmv.d.x FTMP2, CARG2
     |  bne CARG4, TISNUM, >5
@@ -2507,11 +2678,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  j <1
     |
     |6: // RA is an integer, RD is a number.
+    |.if FFI
+    |  bgeu CARG4, TISNUM, >8
+    |.else
     |  bgeu CARG4, TISNUM, <2
+    |.endif
     |  fcvt.d.w FTMP0, CARG1
     |   fmv.d.x FTMP2, CARG2
     |  j <5
     |
+    |.if FFI
+    |7:	// RA not int, not number
+    |  li TMP0, LJ_TCDATA
+    |  bne CARG3, TMP0, <2
+    |  j ->vmeta_equal_cd
+    |
+    |8:	// RD not int, not number
+    |  li TMP0, LJ_TCDATA
+    |  bne CARG4, TMP0, <2
+    |  j ->vmeta_equal_cd
+    |.endif
     break;
 
   case BC_ISEQP: case BC_ISNEP:
@@ -2525,6 +2711,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  gettp TMP1, TMP1
     |    addi PC, PC, 4
     |   xor TMP0, TMP1, TMP0		// TMP0=0 A=D; TMP0!=0 A!=D
+    |.if FFI
+    |  li TMP3, LJ_TCDATA
+    |  bxeq TMP1, TMP3, ->vmeta_equal_cd
+    |.endif
     |  decode_BC4b TMP2
     |  lui TMP3, (-(BCBIAS_J*4 >> 12)) & 0xfffff		// -BCBIAS_J*4
     |  addw TMP2, TMP2, TMP3		// TMP2=(jump-0x8000)<<2
@@ -2865,6 +3055,16 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KCDATA:
+    |.if FFI
+    |  // RA = dst*8, RD = cdata_const*8 (~)
+    |  sub TMP1, KBASE, RD
+    |  ld TMP0, -8(TMP1)		// KBASE-8-cdata_const*8
+    |   li TMP2, LJ_TCDATA
+    |  add RA, BASE, RA
+    |   settp TMP0, TMP2
+    |  sd TMP0, 0(RA)
+    |  ins_next
+    |.endif
     break;
   case BC_KSHORT:
     |  // RA = dst*8, RD = int16_literal*8

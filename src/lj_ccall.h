@@ -129,6 +129,21 @@ typedef union FPRArg {
   struct { LJ_ENDIAN_LOHI(float f; , float g;) };
 } FPRArg;
 
+#elif LJ_TARGET_RISCV64
+
+#define CCALL_NARG_GPR		8
+#define CCALL_NARG_FPR		8
+#define CCALL_NRET_GPR		2
+#define CCALL_NRET_FPR		2
+#define CCALL_SPS_EXTRA		3
+#define CCALL_SPS_FREE		1
+
+typedef intptr_t GPRArg;
+typedef union FPRArg {
+  double d;
+  struct { LJ_ENDIAN_LOHI(float f; , float g;) };
+} FPRArg;
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
@@ -175,7 +190,7 @@ typedef LJ_ALIGN(CCALL_ALIGN_CALLSTATE) struct CCallState {
   uint8_t resx87;		/* Result on x87 stack: 1:float, 2:double. */
 #elif LJ_TARGET_ARM64
   void *retp;			/* Aggregate return pointer in x8. */
-#elif LJ_TARGET_PPC
+#elif LJ_TARGET_PPC || LJ_TARGET_RISCV64
   uint8_t nfpr;			/* Number of arguments in FPRs. */
 #endif
 #if LJ_32
