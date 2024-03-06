@@ -67,6 +67,16 @@
 #endif
 #endif
 
+#elif LJ_TARGET_RISCV64
+
+#define JIT_F_RVC		(JIT_F_CPU << 0)
+#define JIT_F_RVZba		(JIT_F_CPU << 1)
+#define JIT_F_RVZbb		(JIT_F_CPU << 2)
+#define JIT_F_RVZicond		(JIT_F_CPU << 3)
+#define JIT_F_RVXThead		(JIT_F_CPU << 4)
+
+#define JIT_F_CPUSTRING		"\003RVC\003Zba\003Zbb\006Zicond\006XThead"
+
 #else
 
 #define JIT_F_CPUSTRING		""
