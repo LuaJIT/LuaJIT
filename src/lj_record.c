@@ -2486,6 +2486,12 @@ void lj_record_ins(jit_State *J)
   case BC_GGET: case BC_GSET:
     settabV(J->L, &ix.tabv, tabref(J->fn->l.env));
     ix.tab = emitir(IRT(IR_FLOAD, IRT_TAB), getcurrf(J), IRFL_FUNC_ENV);
+    if (gcrefeq(J->fn->l.env, J->L->env)) {
+      /* Specialize to the global environment. */
+      TRef ktab = lj_ir_ktab(J, tabref(J->fn->l.env));
+      emitir(IRTG(IR_EQ, IRT_TAB), ix.tab, ktab);
+      ix.tab = ktab;
+    }
     ix.idxchain = LJ_MAX_IDXCHAIN;
     rc = lj_record_idx(J, &ix);
     break;
