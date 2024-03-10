@@ -903,6 +903,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 {
   TValue *frame = J->L->base - 1;
   ptrdiff_t i;
+  BCReg baseadj = 0;
   for (i = 0; i < gotresults; i++)
     (void)getslot(J, rbase+i);  /* Ensure all results have a reference. */
   while (frame_ispcall(frame)) {  /* Immediately resolve pcall() returns. */
@@ -911,6 +912,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lj_assertJ(J->baseslot > 1+LJ_FR2, "bad baseslot for return");
     gotresults++;
+    baseadj += cbase;
     rbase += cbase;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
@@ -935,6 +937,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     if (--J->framedepth < 0)  /* NYI: return of vararg func to lower frame. */
       lj_trace_err(J, LJ_TRERR_NYIRETL);
     lj_assertJ(J->baseslot > 1+LJ_FR2, "bad baseslot for return");
+    baseadj += cbase;
     rbase += cbase;
     J->baseslot -= (BCReg)cbase;
     J->base -= cbase;
@@ -1005,7 +1008,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
       BCReg bslot = bc_b(*(frame_contpc(frame)-1));
       TRef tr = gotresults ? J->base[cbase+rbase] : TREF_NIL;
       if (bslot != J->maxslot) {  /* Concatenate the remainder. */
-	TValue *b = J->L->base, save;  /* Simulate lower frame and result. */
+	/* Simulate lower frame and result. */
+	TValue *b = J->L->base - baseadj, save;
 	/* Can't handle MM_concat + CALLT + fast func side-effects. */
 	if (J->postproc != LJ_POST_NONE)
 	  lj_trace_err(J, LJ_TRERR_NYIRETL);
@@ -1018,7 +1022,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
 	J->L->base = b - cbase;
 	tr = rec_cat(J, bslot, cbase-(2<<LJ_FR2));
 	b = J->L->base + cbase;  /* Undo. */
-	J->L->base = b;
+	J->L->base = b + baseadj;
 	copyTV(J->L, b-(2<<LJ_FR2), &save);
       }
       if (tr) {  /* Store final result. */
