@@ -566,6 +566,44 @@ static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
 #endif
 }
 
+static void LJ_FASTCALL recff_unpack(jit_State *J, RecordFFData *rd)
+{
+  TRef tab = J->base[0], trstart = J->base[1], trend = J->base[2];
+  if (tref_istab(tab) && trstart && trend && tref_isk2(trstart, trend) &&
+			 !tref_isnil(trend)) {
+    if (!tref_isnil(trstart))
+      trstart = lj_opt_narrow_toint(J, trstart);
+    trend = lj_opt_narrow_toint(J, trend);
+    if (tref_isk2(trstart, trend)) {
+      uint32_t nu;
+      int32_t start = tref_isnil(trstart) ? 1 : IR(tref_ref(trstart))->i;
+      int32_t end = IR(tref_ref(trend))->i;
+      if (start > end) {
+	rd->nres = 0;
+	return;
+      }
+      nu = (uint32_t)end - (uint32_t)start;
+      /* Check for space for the return values. */
+      if (nu <= INT32_MAX - LJ_MAX_JSLOTS && J->baseslot + nu < LJ_MAX_JSLOTS) {
+	int32_t i, n = (int32_t)(nu+1);
+	RecordIndex ix;
+	ix.tab = tab;
+	settabV(J->L, &ix.tabv, tabV(&rd->argv[0]));
+	ix.val = 0;
+	ix.idxchain = 0;
+	for (i = 0; i < n; i++) {
+	  ix.key = lj_ir_kint(J, start + i);
+	  setintV(&ix.keyv, start + i);
+	  J->base[i] = lj_record_idx(J, &ix);
+	}
+	rd->nres = n;
+	return;
+      }
+    }
+  }
+  recff_nyiu(J, rd);
+}
+
 /* -- Math library fast functions ----------------------------------------- */
 
 static void LJ_FASTCALL recff_math_abs(jit_State *J, RecordFFData *rd)
