@@ -17,6 +17,7 @@
 #include "lj_cdata.h"
 #include "lj_clib.h"
 #include "lj_strfmt.h"
+#include "lj_meta.h"
 
 /* -- OS-specific functions ----------------------------------------------- */
 
@@ -405,6 +406,8 @@ static CLibrary *clib_new(lua_State *L, GCtab *mt)
   ud->udtype = UDTYPE_FFI_CLIB;
   /* NOBARRIER: The GCudata is new (marked white). */
   setgcref(ud->metatable, obj2gco(mt));
+  if (lj_meta_fastg(G(L), tabref(ud->metatable), MM_gc))
+    lj_mem_registergc_udata(L, ud);
   setudataV(L, L->top++, ud);
   return cl;
 }

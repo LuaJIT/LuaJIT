@@ -420,7 +420,7 @@ LJLIB_CF(load)
       SBufExt *sbx = bufV(L->base);
       s = sbx->r;
       len = sbufxlen(sbx);
-      if (!name) name = &G(L)->strempty;  /* Buffers are not NUL-terminated. */
+      if (!name) name = G(L)->strempty;  /* Buffers are not NUL-terminated. */
     } else {
       GCstr *str = lj_lib_checkstr(L, 1);
       s = strdata(str);

@@ -12,6 +12,7 @@
 #include "lj_str.h"
 #include "lj_char.h"
 #include "lj_prng.h"
+#include "lj_intrin.h"
 
 /* -- String helpers ------------------------------------------------------ */
 
@@ -123,95 +124,158 @@ static LJ_NOINLINE StrHash hash_dense(uint64_t seed, StrHash h,
 
 /* -- String interning ---------------------------------------------------- */
 
-#define LJ_STR_MAXCOLL		32
+#define LJ_STR_MAXCOLL         32
+#define LJ_STR_MAXCHAIN        32
+
+static uint32_t lj_str_get_free(StrTab *st)
+{
+#if LJ_64
+  I256 a, b, c, d, z;
+  uint32_t t1, t2;
+  I256_ZERO(z);
+  I256_LOADA(a, &st->strs[0]);
+  I256_LOADA(b, &st->strs[4]);
+  I256_LOADA(c, &st->strs[8]);
+  I256_LOADA(d, &st->strs[12]);
+  t1 = I256_EQ_64_MASK(a, z) | (I256_EQ_64_MASK(b, z) << 4);
+  t2 = (I256_EQ_64_MASK(c, z) << 8) | (I256_EQ_64_MASK(d, z) << 12);
+  return t1 | t2;
+#else
+  I256 x, z;
+  I256_LOADA(x, &st->strs[0]);
+  ret = I256_EQ_64_MASK(x, z);
+  I256_LOADA(x, &st->strs[8]);
+  return ret | I256_EQ_64_MASK(x, z) << 8;
+#endif
+}
+
+static void lj_str_insert(lua_State *L, GCstr *s, StrHash hash, int hashalg)
+{
+  global_State *g = G(L);
+  uint32_t index = hash & g->str.mask;
+  uint32_t hid = (index << 4) | 0xFC000000;
+  StrTab *st = &mref(g->str.tab, StrTab)[index];
+#if LUAJIT_SECURITY_STRHASH
+  /* Check for algorithm mismatch, sparse into dense list */
+  if ((st->prev_len & LJ_STR_SECONDARY) && !hashalg) {
+    hashalg = 1;
+    hash = hash_dense(g->str.seed, hash, strdata(s), s->len);
+    index = hash & g->str.mask;
+    hid = (index << 4) | 0xFC000000;
+    st = &mref(g->str.tab, StrTab)[index];
+  }
+#endif
+  while(1) {
+    if((st->prev_len & 0xF) < 15) {
+      uint32_t i = tzcount32(lj_str_get_free(st));
+      lj_assertG(!gcrefu(st->strs[i]), "bad stringtable index, occupied");
+      lj_assertG(i == 0 || gcrefu(st->strs[i-1]), "bad stringtable index, nonsequential");
+      st->hashes[i] = hash;
+      /* NOBARRIER: string table is cleared on demand */
+      setgcrefp(st->strs[i], (uintptr_t)s | hashalg);
+      st->prev_len++;
+      if (!hid) {
+        /* There are three options here
+         * 1. Directly compute it from the arena header
+         * 2. Find an existing string and reuse it's hid
+         * 3. Use the prev_len value of ->next
+         * But since next isn't guaranteed to be populated and
+         * while we *should* have a valid entry we'd have to find it,
+         * it's best to just compute it directly.
+         */
+        GCAstrtab *a = gcat(st, GCAstrtab);
+        hid =
+            ((uint32_t)a->index << 13) | ((uint32_t)(st - &a->entries[0]) << 4);
+      }
+      s->hid = hid | i;
+      return;
+    }
+    if(!st->next) {
+      StrTab *next = lj_mem_allocstrtab(L, &s->hid);
+      st->next = next;
+      next->hashes[0] = hash;
+      /* NOBARRIER: string table is cleared on demand */
+      setgcrefp(next->strs[0], (uintptr_t)s | hashalg);
+      /* We know all strings are valid but we don't easily know the ID going
+       * forwards, however every string will contain it in hid. String 1 is
+       * guaranteed to hold one with the correct value.
+       */
+      next->prev_len = st_ref(st->strs[1])->hid;
+      return;
+    }
+    st = st->next;
+    hid = 0;
+  }
+}
 
 /* Resize the string interning hash table (grow and shrink). */
 void lj_str_resize(lua_State *L, MSize newmask)
 {
   global_State *g = G(L);
-  GCRef *newtab, *oldtab = g->str.tab;
-  MSize i;
+  StrTab *newtab, *oldtab = mref(g->str.tab, StrTab);
+  MSize i, j;
+  MSize oldmask = g->str.mask;
+  StrTab *tab;
 
-  /* No resizing during GC traversal or if already too big. */
-  if (g->gc.state == GCSsweepstring || newmask >= LJ_MAX_STRTAB-1)
+  /* No resizing if already too big. */
+  if (newmask >= LJ_MAX_STRTAB-1)
     return;
 
-  newtab = lj_mem_newvec(L, newmask+1, GCRef);
-  memset(newtab, 0, (newmask+1)*sizeof(GCRef));
+  newtab = (StrTab *)lj_mem_newpages(g, (newmask + 1) * sizeof(StrTab));
+  /* Already zeroed */
 
 #if LUAJIT_SECURITY_STRHASH
   /* Check which chains need secondary hashes. */
   if (g->str.second) {
-    int newsecond = 0;
+    uint32_t newsecond = 0;
     /* Compute primary chain lengths. */
-    for (i = g->str.mask; i != ~(MSize)0; i--) {
-      GCobj *o = (GCobj *)(gcrefu(oldtab[i]) & ~(uintptr_t)1);
-      while (o) {
-	GCstr *s = gco2str(o);
-	MSize hash = s->hashalg ? hash_sparse(g->str.seed, strdata(s), s->len) :
-				  s->hash;
-	hash &= newmask;
-	setgcrefp(newtab[hash], gcrefu(newtab[hash]) + 1);
-	o = gcnext(o);
-      }
+    for (i = oldmask; i != ~(MSize)0; i--) {
+      StrTab *tab = (StrTab *)&oldtab[i];
+      do {
+        for (j = 0; j < 15; j++) {
+          GCstr *s = st_ref(tab->strs[j]);
+          MSize hash = st_alg(tab->strs[j])
+                           ? hash_sparse(g->str.seed, strdata(s), s->len)
+                           : tab->hashes[j];
+          newtab[hash & newmask].prev_len++;
+        }
+        tab = tab->next;
+      } while (tab);
     }
     /* Mark secondary chains. */
     for (i = newmask; i != ~(MSize)0; i--) {
-      int secondary = gcrefu(newtab[i]) > LJ_STR_MAXCOLL;
-      newsecond |= secondary;
-      setgcrefp(newtab[i], secondary);
+      StrTab *tab = (StrTab *)&newtab[i];
+      tab->prev_len =
+          (tab->prev_len > LJ_STR_MAXCOLL * 15) ? LJ_STR_SECONDARY : 0;
+      newsecond |= tab->prev_len;
     }
     g->str.second = newsecond;
   }
 #endif
 
+  /* Install new table */
+  setmref(g->str.tab, newtab);
+  g->str.mask = newmask;
+
   /* Reinsert all strings from the old table into the new table. */
-  for (i = g->str.mask; i != ~(MSize)0; i--) {
-    GCobj *o = (GCobj *)(gcrefu(oldtab[i]) & ~(uintptr_t)1);
-    while (o) {
-      GCobj *next = gcnext(o);
-      GCstr *s = gco2str(o);
-      MSize hash = s->hash;
-#if LUAJIT_SECURITY_STRHASH
-      uintptr_t u;
-      if (LJ_LIKELY(!s->hashalg)) {  /* String hashed with primary hash. */
-	hash &= newmask;
-	u = gcrefu(newtab[hash]);
-	if (LJ_UNLIKELY(u & 1)) {  /* Switch string to secondary hash. */
-	  s->hash = hash = hash_dense(g->str.seed, s->hash, strdata(s), s->len);
-	  s->hashalg = 1;
-	  hash &= newmask;
-	  u = gcrefu(newtab[hash]);
-	}
-      } else {  /* String hashed with secondary hash. */
-	MSize shash = hash_sparse(g->str.seed, strdata(s), s->len);
-	u = gcrefu(newtab[shash & newmask]);
-	if (u & 1) {
-	  hash &= newmask;
-	  u = gcrefu(newtab[hash]);
-	} else {  /* Revert string back to primary hash. */
-	  s->hash = shash;
-	  s->hashalg = 0;
-	  hash = (shash & newmask);
-	}
+  for (i = 0; i < oldmask+1; i++) {
+    tab = &oldtab[i];
+    do {
+      StrTab *old = tab;
+      for (j = 0; j < 15; j++) {
+        GCstr *s = st_ref(tab->strs[j]);
+        if (s) {
+          lj_str_insert(L, s, tab->hashes[j], st_alg(tab->strs[j]));
+        }
       }
-      /* NOBARRIER: The string table is a GC root. */
-      setgcrefp(o->gch.nextgc, (u & ~(uintptr_t)1));
-      setgcrefp(newtab[hash], ((uintptr_t)o | (u & 1)));
-#else
-      hash &= newmask;
-      /* NOBARRIER: The string table is a GC root. */
-      setgcrefr(o->gch.nextgc, newtab[hash]);
-      setgcref(newtab[hash], o);
-#endif
-      o = next;
-    }
+      tab = tab->next;
+      if (old != &oldtab[i])
+        lj_mem_freestrtab(g, old);
+    } while (tab);
   }
 
-  /* Free old table and replace with new table. */
-  lj_str_freetab(g);
-  g->str.tab = newtab;
-  g->str.mask = newmask;
+  /* Free old table. */
+  lj_mem_freepages(g, oldtab, (oldmask + 1) * sizeof(StrTab));
 }
 
 #if LUAJIT_SECURITY_STRHASH
@@ -220,43 +284,33 @@ static LJ_NOINLINE GCstr *lj_str_rehash_chain(lua_State *L, StrHash hashc,
 					      const char *str, MSize len)
 {
   global_State *g = G(L);
-  int ow = g->gc.state == GCSsweepstring ? otherwhite(g) : 0;  /* Sweeping? */
-  GCRef *strtab = g->str.tab;
   MSize strmask = g->str.mask;
-  GCobj *o = gcref(strtab[hashc & strmask]);
-  setgcrefp(strtab[hashc & strmask], (void *)((uintptr_t)1));
+  StrTab *tab = &mref(g->str.tab, StrTab)[hashc & strmask];
+  StrTab *base = tab;
+  uint32_t i;
+
   g->str.second = 1;
-  while (o) {
-    uintptr_t u;
-    GCobj *next = gcnext(o);
-    GCstr *s = gco2str(o);
-    StrHash hash;
-    if (ow) {  /* Must sweep while rechaining. */
-      if (((o->gch.marked ^ LJ_GC_WHITES) & ow)) {  /* String alive? */
-	lj_assertG(!isdead(g, o) || (o->gch.marked & LJ_GC_FIXED),
-		   "sweep of undead string");
-	makewhite(g, o);
-      } else {  /* Free dead string. */
-	lj_assertG(isdead(g, o) || ow == LJ_GC_SFIXED,
-		   "sweep of unlive string");
-	lj_str_free(g, s);
-	o = next;
-	continue;
+  tab->prev_len |= LJ_STR_SECONDARY;
+  do {
+    StrTab *old = tab;
+    for (i = 0; i < 15; i++) {
+      if (!st_alg(tab->strs[i])) {
+        GCstr *s = st_ref(tab->strs[i]);
+        if (s) {
+          setgcrefnull(tab->strs[i]);
+          tab->prev_len--;
+          lj_str_insert(
+              L, s, hash_dense(g->str.seed, tab->hashes[i], strdata(s), s->len),
+              1);
+        }
       }
     }
-    hash = s->hash;
-    if (!s->hashalg) {  /* Rehash with secondary hash. */
-      hash = hash_dense(g->str.seed, hash, strdata(s), s->len);
-      s->hash = hash;
-      s->hashalg = 1;
+    tab = tab->next;
+    if (old != base && !(old->prev_len & 0xF)) {
+      lj_mem_freechainedstrtab(g, old);
     }
-    /* Rechain. */
-    hash &= strmask;
-    u = gcrefu(strtab[hash]);
-    setgcrefp(o->gch.nextgc, (u & ~(uintptr_t)1));
-    setgcrefp(strtab[hash], ((uintptr_t)o | (u & 1)));
-    o = next;
-  }
+  } while (tab);
+
   /* Try to insert the pending string again. */
   return lj_str_new(L, str, len);
 }
@@ -275,13 +329,11 @@ static LJ_NOINLINE GCstr *lj_str_rehash_chain(lua_State *L, StrHash hashc,
 static GCstr *lj_str_alloc(lua_State *L, const char *str, MSize len,
 			   StrHash hash, int hashalg)
 {
-  GCstr *s = lj_mem_newt(L, lj_str_size(len), GCstr);
+  GCstr *s = lj_mem_allocstr(L, len);
   global_State *g = G(L);
-  uintptr_t u;
-  newwhite(g, s);
+  newwhite(s);
   s->gct = ~LJ_TSTR;
   s->len = len;
-  s->hash = hash;
 #ifndef STRID_RESEED_INTERVAL
   s->sid = g->str.id++;
 #elif STRID_RESEED_INTERVAL
@@ -295,19 +347,14 @@ static GCstr *lj_str_alloc(lua_State *L, const char *str, MSize len,
   s->sid = (StrID)lj_prng_u64(&g->prng);
 #endif
   s->reserved = 0;
-  s->hashalg = (uint8_t)hashalg;
   /* Clear last 4 bytes of allocated memory. Implies zero-termination, too. */
   *(uint32_t *)(strdatawr(s)+(len & ~(MSize)3)) = 0;
   memcpy(strdatawr(s), str, len);
   /* Add to string hash table. */
-  hash &= g->str.mask;
-  u = gcrefu(g->str.tab[hash]);
-  setgcrefp(s->nextgc, (u & ~(uintptr_t)1));
-  /* NOBARRIER: The string table is a GC root. */
-  setgcrefp(g->str.tab[hash], ((uintptr_t)s | (u & 1)));
-  if (g->str.num++ > g->str.mask)  /* Allow a 100% load factor. */
-    lj_str_resize(L, (g->str.mask<<1)+1);  /* Grow string table. */
-  return s;  /* Return newly interned string. */
+  lj_str_insert(L, s, hash, hashalg);
+  if (g->str.num++ > g->str.mask * 15)        /* Allow a 100% load factor. */
+    lj_str_resize(L, (g->str.mask << 1) + 1); /* Grow string table. */
+  return s; /* Return newly interned string. */
 }
 
 /* Intern a string and return string object. */
@@ -315,31 +362,46 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
 {
   global_State *g = G(L);
   if (lenx-1 < LJ_MAX_STR-1) {
+    I256 h0, h1, cmp;
     MSize len = (MSize)lenx;
     StrHash hash = hash_sparse(g->str.seed, str, len);
     MSize coll = 0;
+    uint32_t chain = 0;
     int hashalg = 0;
     /* Check if the string has already been interned. */
-    GCobj *o = gcref(g->str.tab[hash & g->str.mask]);
+    StrTab *st = &mref(g->str.tab, StrTab)[hash & g->str.mask];
+    StrTab *root;
 #if LUAJIT_SECURITY_STRHASH
-    if (LJ_UNLIKELY((uintptr_t)o & 1)) {  /* Secondary hash for this chain? */
+    if (LJ_UNLIKELY(st->prev_len & LJ_STR_SECONDARY)) {  /* Secondary hash for this chain? */
       hashalg = 1;
       hash = hash_dense(g->str.seed, hash, str, len);
-      o = (GCobj *)(gcrefu(g->str.tab[hash & g->str.mask]) & ~(uintptr_t)1);
+      st = &mref(g->str.tab, StrTab)[hash & g->str.mask];
     }
 #endif
-    while (o != NULL) {
-      GCstr *sx = gco2str(o);
-      if (sx->hash == hash && sx->len == len) {
-	if (memcmp(str, strdata(sx), len) == 0) {
-	  if (isdead(g, o)) flipwhite(o);  /* Resurrect if dead. */
-	  return sx;  /* Return existing string. */
-	}
-	coll++;
+    root = st;
+    I256_BCAST_32(cmp, hash);
+    do {
+      I256_LOADA(h0, &st->hashes[0]);
+      I256_LOADA(h1, &st->hashes[8]);
+      uint32_t eq = (I256_EQ_32_MASK(h0, cmp) | ((I256_EQ_32_MASK(h1, cmp) & 0x7F) << 8));
+
+      while (eq != 0) {
+        GCstr *sx = st_ref(st->strs[tzcount32(eq)]);
+        eq = reset_lowest32(eq);
+        if (LJ_UNLIKELY(!sx))
+          continue;
+        if (len == sx->len && memcmp(str, strdata(sx), len) == 0) {
+          maybe_resurrect_str(g, sx);
+          return sx;  /* Return existing string. */
+        }
+        coll++;
       }
-      coll++;
-      o = gcnext(o);
-    }
+      chain++;
+      st = st->next;
+    } while (st != NULL);
+    if(LJ_UNLIKELY(chain > 0x3FFFFFF))
+        chain = 0x3FFFFFF;
+    root->prev_len = (root->prev_len & 0x1F) | (chain << 5);
 #if LUAJIT_SECURITY_STRHASH
     /* Rehash chain if there are too many collisions. */
     if (LJ_UNLIKELY(coll > LJ_STR_MAXCOLL) && !hashalg) {
@@ -347,24 +409,37 @@ GCstr *lj_str_new(lua_State *L, const char *str, size_t lenx)
     }
 #endif
     /* Otherwise allocate a new string. */
+
     return lj_str_alloc(L, str, len, hash, hashalg);
   } else {
     if (lenx)
       lj_err_msg(L, LJ_ERR_STROV);
-    return &g->strempty;
+    return g->strempty;
   }
-}
-
-void LJ_FASTCALL lj_str_free(global_State *g, GCstr *s)
-{
-  g->str.num--;
-  lj_mem_free(g, s, lj_str_size(s->len));
 }
 
 void LJ_FASTCALL lj_str_init(lua_State *L)
 {
   global_State *g = G(L);
   g->str.seed = lj_prng_u64(&g->prng);
-  lj_str_resize(L, LJ_MIN_STRTAB-1);
+  g->str.secondary_arena_free_head = -1;
+  g->str.secondary_list_capacity = 8;
+  g->str.secondary_slot_free_head = g->str.secondary_list_capacity - 1;
+  g->str.secondary_list = lj_mem_newvec(L, g->str.secondary_list_capacity, MRef);
+  for(uint32_t i = 1; i < g->str.secondary_list_capacity; i++)
+    setmrefu(g->str.secondary_list[i], i-1);
+  setmrefu(g->str.secondary_list[0], ~0ull);
+
+  g->strempty = lj_mem_allocstr(L, 0);
+  memset(g->strempty, 0, 32);
+  g->strempty->gct = ~LJ_TSTR;
+  fixstring(g->strempty);
+
+  g->str.mask = LJ_MIN_STRTAB - 1;
+  setmref(g->str.tab, lj_mem_newpages(g, LJ_MIN_STRTAB * sizeof(StrTab)));
 }
 
+void lj_str_freetab(global_State *g)
+{
+  lj_mem_freepages(g, mref(g->str.tab, void), (g->str.mask + 1) * sizeof(StrTab));
+}

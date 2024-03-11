@@ -259,11 +259,12 @@ typedef struct GCtrace {
   GCHeader;
   uint16_t nsnap;	/* Number of snapshots. */
   IRRef nins;		/* Next IR instruction. Biased with REF_BIAS. */
+  GCRef nextgc;
 #if LJ_GC64
   uint32_t unused_gc64;
 #endif
-  GCRef gclist;
   IRIns *ir;		/* IR instructions/constants. Biased with REF_BIAS. */
+  GCRef gclist;
   IRRef nk;		/* Lowest IR constant. Biased with REF_BIAS. */
   uint32_t nsnapmap;	/* Number of snapshot map elements. */
   SnapShot *snap;	/* Snapshot array. */
@@ -298,6 +299,7 @@ typedef struct GCtrace {
   check_exp((n)>0 && (MSize)(n)<J->sizetrace, (GCtrace *)gcref(J->trace[(n)]))
 
 LJ_STATIC_ASSERT(offsetof(GChead, gclist) == offsetof(GCtrace, gclist));
+LJ_STATIC_ASSERT(offsetof(GChead, nextgc) == offsetof(GCtrace, nextgc));
 
 static LJ_AINLINE MSize snap_nextofs(GCtrace *T, SnapShot *snap)
 {

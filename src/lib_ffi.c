@@ -518,7 +518,7 @@ LJLIB_CF(ffi_new)	LJLIB_REC(.)
 	/* Add to finalizer table, if still enabled. */
 	copyTV(L, lj_tab_set(L, t, o-1), tv);
 	lj_gc_anybarriert(L, t);
-	cd->marked |= LJ_GC_CDATA_FIN;
+	cd->gcflags |= LJ_GC_CDATA_FIN;
       }
     }
   }
@@ -573,7 +573,7 @@ LJLIB_CF(ffi_typeinfo)
       setintV(lj_tab_setstr(L, t, lj_str_newlit(L, "sib")), (int32_t)ct->sib);
     if (gcref(ct->name)) {
       GCstr *s = gco2str(gcref(ct->name));
-      if (isdead(G(L), obj2gco(s))) flipwhite(obj2gco(s));
+      maybe_resurrect_str(G(L), s);
       setstrV(L, lj_tab_setstr(L, t, lj_str_newlit(L, "name")), s);
     }
     lj_gc_check(L);
@@ -860,7 +860,7 @@ LUALIB_API int luaopen_ffi(lua_State *L)
   LJ_LIB_REG(L, NULL, ffi_clib);
   LJ_LIB_REG(L, NULL, ffi_callback);
   /* NOBARRIER: the key is new and lj_tab_newkey() handles the barrier. */
-  settabV(L, lj_tab_setstr(L, cts->miscmap, &cts->g->strempty), tabV(L->top-1));
+  settabV(L, lj_tab_setstr(L, cts->miscmap, cts->g->strempty), tabV(L->top-1));
   L->top--;
   lj_clib_default(L, tabV(L->top-1));  /* Create ffi.C default namespace. */
   lua_pushliteral(L, LJ_OS_NAME);

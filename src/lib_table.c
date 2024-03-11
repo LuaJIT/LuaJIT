@@ -105,6 +105,14 @@ LJLIB_CF(table_insert)		LJLIB_REC(.)
   return 0;
 }
 
+LJLIB_CF(table_newgc)
+{
+  GCtab *t = lj_tab_newgc(L, 0, 0);
+  settabV(L, L->top++, t);
+
+  return 1;
+}
+
 LJLIB_LUA(table_remove) /*
   function(t, pos)
     CHECK_tab(t)

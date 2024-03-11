@@ -47,7 +47,7 @@ CCOPT= -O2 -fomit-frame-pointer
 # the binaries to a different machine you could also use: -march=native
 #
 CCOPT_x86= -march=i686 -msse -msse2 -mfpmath=sse
-CCOPT_x64=
+CCOPT_x64= -mbmi -mbmi2 -mavx -mavx2
 CCOPT_arm=
 CCOPT_arm64=
 CCOPT_ppc=
@@ -511,7 +511,7 @@ LJCORE_O= lj_assert.o lj_gc.o lj_err.o lj_char.o lj_bc.o lj_obj.o lj_buf.o \
 	  lj_mcode.o lj_snap.o lj_record.o lj_crecord.o lj_ffrecord.o \
 	  lj_asm.o lj_trace.o lj_gdbjit.o \
 	  lj_ctype.o lj_cdata.o lj_cconv.o lj_ccall.o lj_ccallback.o \
-	  lj_carith.o lj_clib.o lj_cparse.o \
+	  lj_carith.o lj_clib.o lj_cparse.o lj_arena.o \
 	  lj_lib.o lj_alloc.o lib_aux.o \
 	  $(LJLIB_O) lib_init.o
 

@@ -1733,7 +1733,7 @@ static int rec_upvalue_constify(jit_State *J, GCupval *uvp)
 #if LJ_HASFFI
     if (tviscdata(o)) {
       GCcdata *cd = cdataV(o);
-      if (!cdataisv(cd) && !(cd->marked & LJ_GC_CDATA_FIN)) {
+      if (!cdataisv(cd) && !(cd->gcflags & LJ_GC_CDATA_FIN)) {
 	CType *ct = ctype_raw(ctype_ctsG(J2G(J)), cd->ctypeid);
 	if (!ctype_hassize(ct->info) || ct->size <= 16)
 	  return 1;
@@ -2107,7 +2107,7 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
     topslot = J->maxslot--;
     *xbase = tr;
     top = xbase;
-    setstrV(J->L, &ix.keyv, &J2G(J)->strempty);  /* Simulate string result. */
+    setstrV(J->L, &ix.keyv, J2G(J)->strempty);  /* Simulate string result. */
   } else {
     J->maxslot = topslot-1;
     copyTV(J->L, &ix.keyv, &J->L->base[topslot]);
