@@ -152,6 +152,8 @@ static void recff_stitch(jit_State *J)
   if (errcode) {
     if (errcode == LUA_ERRRUN)
       copyTV(L, L->top-1, L->top + (1 + LJ_FR2));
+    else
+      setintV(L->top-1, (int32_t)LJ_TRERR_RECERR);
     lj_err_throw(L, errcode);  /* Propagate errors. */
   }
 }
