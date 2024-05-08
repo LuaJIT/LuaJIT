@@ -101,7 +101,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @rem ---- Cross compiler ----
 @set NXCOMPILER_ROOT="%NINTENDO_SDK_ROOT%\Compilers\NintendoClang"
 @if "%platform%" neq "x64" goto :NX32_CROSSBUILD
-@set LJCOMPILE="%NXCOMPILER_ROOT%\bin\clang" --target=aarch64-nintendo-nx-elf -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_USE_SYSMALLOC -c
+@set LJCOMPILE="%NXCOMPILER_ROOT%\bin\clang" --target=aarch64-nintendo-nx-elf -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -c
 @set LJLIB="%NXCOMPILER_ROOT%\bin\llvm-ar" rc
 @set TARGETLIB_SUFFIX=nx64
 
@@ -109,7 +109,7 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 goto :DEBUGCHECK
 
 :NX32_CROSSBUILD
-@set LJCOMPILE="%NXCOMPILER_ROOT%\bin\clang" --target=armv7l-nintendo-nx-eabihf -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_USE_SYSMALLOC -c
+@set LJCOMPILE="%NXCOMPILER_ROOT%\bin\clang" --target=armv7l-nintendo-nx-eabihf -Wall -I%NINTENDO_SDK_ROOT%\Include %DASMTARGET% -DLUAJIT_OS=LUAJIT_OS_OTHER -DLUAJIT_DISABLE_JIT -DLUAJIT_DISABLE_FFI -DLUAJIT_USE_SYSMALLOC -c
 @set LJLIB="%NXCOMPILER_ROOT%\bin\llvm-ar" rc
 @set TARGETLIB_SUFFIX=nx32
 
