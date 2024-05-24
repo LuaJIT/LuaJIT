@@ -98,6 +98,14 @@ static ptrdiff_t results_wanted(jit_State *J)
     return -1;
 }
 
+static TValue *rec_stop_stitch_cp(lua_State *L, lua_CFunction dummy, void *ud)
+{
+  jit_State *J = (jit_State *)ud;
+  lj_record_stop(J, LJ_TRLINK_STITCH, 0);
+  UNUSED(L); UNUSED(dummy);
+  return NULL;
+}
+
 /* Trace stitching: add continuation below frame to start a new trace. */
 static void recff_stitch(jit_State *J)
 {
@@ -108,10 +116,7 @@ static void recff_stitch(jit_State *J)
   TValue *nframe = base + 1 + LJ_FR2;
   const BCIns *pc = frame_pc(base-1);
   TValue *pframe = frame_prevl(base-1);
-
-  /* Check for this now. Throwing in lj_record_stop messes up the stack. */
-  if (J->cur.nsnap >= (MSize)J->param[JIT_P_maxsnap])
-    lj_trace_err(J, LJ_TRERR_SNAPOV);
+  int errcode;
 
   /* Move func + args up in Lua stack and insert continuation. */
   memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
@@ -136,13 +141,21 @@ static void recff_stitch(jit_State *J)
   J->baseslot += 2 + LJ_FR2;
   J->framedepth++;
 
-  lj_record_stop(J, LJ_TRLINK_STITCH, 0);
+  errcode = lj_vm_cpcall(L, NULL, J, rec_stop_stitch_cp);
 
   /* Undo Lua stack changes. */
   memmove(&base[-1-LJ_FR2], &base[1], sizeof(TValue)*nslot);
   setframe_pc(base-1, pc);
   L->base -= 2 + LJ_FR2;
   L->top -= 2 + LJ_FR2;
+
+  if (errcode) {
+    if (errcode == LUA_ERRRUN)
+      copyTV(L, L->top-1, L->top + (1 + LJ_FR2));
+    else
+      setintV(L->top-1, (int32_t)LJ_TRERR_RECERR);
+    lj_err_throw(L, errcode);  /* Propagate errors. */
+  }
 }
 
 /* Fallback handler for fast functions that are not recorded (yet). */
