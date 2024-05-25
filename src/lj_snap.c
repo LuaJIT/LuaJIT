@@ -731,7 +731,6 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
 	*(lua_Number *)dst = (lua_Number)*(int32_t *)dst;
 	return;
       }
-      src = (int32_t *)&ex->gpr[r-RID_MIN_GPR];
 #if !LJ_SOFTFP
       if (r >= RID_MAX_GPR) {
 	src = (int32_t *)&ex->fpr[r-RID_MIN_FPR];
@@ -743,8 +742,11 @@ static void snap_restoredata(GCtrace *T, ExitState *ex,
 #else
 	if (LJ_BE && sz == 4) src++;
 #endif
-      }
+      } else
 #endif
+      {
+	src = (int32_t *)&ex->gpr[r-RID_MIN_GPR];
+      }
     }
   }
   lua_assert(sz == 1 || sz == 2 || sz == 4 || sz == 8);
