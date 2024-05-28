@@ -886,32 +886,38 @@ static void asm_conv(ASMState *as, IRIns *ir)
       asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
     } else {
       Reg dest = ra_dest(as, ir, RSET_GPR);
+      Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
+					ra_scratch(as, RSET_FPR);
       x86Op op = st == IRT_NUM ? XO_CVTTSD2SI : XO_CVTTSS2SI;
-      if (LJ_64 ? irt_isu64(ir->t) : irt_isu32(ir->t)) {
-	/* LJ_64: For inputs >= 2^63 add -2^64, convert again. */
-	/* LJ_32: For inputs >= 2^31 add -2^31, convert again and add 2^31. */
-	Reg tmp = ra_noreg(IR(lref)->r) ? ra_alloc1(as, lref, RSET_FPR) :
-					  ra_scratch(as, RSET_FPR);
-	MCLabel l_end = emit_label(as);
-	if (LJ_32)
-	  emit_gri(as, XG_ARITHi(XOg_ADD), dest, (int32_t)0x80000000);
-	emit_rr(as, op, dest|REX_64, tmp);
-	if (st == IRT_NUM)
-	  emit_rma(as, XO_ADDSD, tmp, &as->J->k64[LJ_K64_M2P64_31]);
-	else
-	  emit_rma(as, XO_ADDSS, tmp, &as->J->k32[LJ_K32_M2P64_31]);
-	emit_sjcc(as, CC_NS, l_end);
-	emit_rr(as, XO_TEST, dest|REX_64, dest);  /* Check if dest negative. */
-	emit_rr(as, op, dest|REX_64, tmp);
-	ra_left(as, tmp, lref);
-      } else {
-	if (LJ_64 && irt_isu32(ir->t))
-	  emit_rr(as, XO_MOV, dest, dest);  /* Zero hiword. */
-	emit_mrm(as, op,
-		 dest|((LJ_64 &&
-			(irt_is64(ir->t) || irt_isu32(ir->t))) ? REX_64 : 0),
-		 asm_fuseload(as, lref, RSET_FPR));
+      Reg r64 = (LJ_64 && irt_is64 (ir->t)) ? REX_64 : 0;
+      if (LJ_64 && (irt_isu32(ir->t) || irt_isint(ir->t)))
+	emit_rr(as, XO_MOV, dest, dest);  /* Zero hiword. */
+      if (irt_isu64(ir->t) || irt_isu32(ir->t)) {
+        /* The cvtsd2si family of instructions operates on the signed integers,
+           producing INT_MIN on error.  However we're converting to an unsigned
+           integer, so we want to accept the whole unsigned integer range.
+           Convert both the number and the number minus INT_MIN, choosing the
+           first result if successful and the second otherwise.  */
+        Reg dest2 = ra_scratch(as, rset_exclude(RSET_GPR, dest));
+        Reg tmp2 = ra_scratch(as, rset_exclude(RSET_FPR, tmp));
+        x86Op sub_op;
+        void *krange;
+        if (st == IRT_NUM) {
+          sub_op = XO_SUBSD;
+          krange = &as->J->k64[irt_isu64(ir->t) ? LJ_K64_2P64 : LJ_K64_2P32];
+        } else {
+          sub_op = XO_SUBSS;
+          krange = &as->J->k32[irt_isu64(ir->t) ? LJ_K32_2P64 : LJ_K32_2P32];
+        }
+        emit_rr(as, XO_CMOV + (CC_O<<24), dest|r64, dest2|r64);
+        emit_i8(as, 1);
+        emit_rr(as, XO_ARITHi8, XOg_CMP|r64, dest);
+        emit_rr(as, op, dest2|r64, tmp2);
+        emit_rma(as, sub_op, tmp2, krange);
+        emit_rr(as, XO_MOVAPS, tmp2, tmp);
       }
+      emit_rr(as, op, dest|r64, tmp);
+      ra_left(as, tmp, lref);
     }
   } else if (st >= IRT_I8 && st <= IRT_U16) {  /* Extend to 32 bit integer. */
     Reg left, dest = ra_dest(as, ir, RSET_GPR);

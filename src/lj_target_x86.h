@@ -300,6 +300,7 @@ typedef enum {
   XO_CVTSS2SD =	XO_f30f(5a),
   XO_CVTSD2SS =	XO_f20f(5a),
   XO_ADDSS =	XO_f30f(58),
+  XO_SUBSS =	XO_f30f(5c),
   XO_MOVD =	XO_660f(6e),
   XO_MOVDto =	XO_660f(7e),
 
