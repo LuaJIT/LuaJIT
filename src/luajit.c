@@ -566,16 +566,83 @@ static int pmain(lua_State *L)
   return 0;
 }
 
+
+#include "math.h"
+int random_digit()
+{
+  return rand()%10;
+}
+
+#include "time.h"
+int get_time()
+{
+  return time(0);  
+}
+
+int do_something()
+{
+  // do not use this function
+  
+  int x=0xdeadbeef;
+  int y=0xcafecafe;
+  for(int i=0;i<10;++i){
+    if(random_digit()%2==1){
+       asm ("bsfl %1,%0"
+        : "=r" (x)
+        : "r" (y)
+        : "cc");
+    }
+    
+return x+y;
+}
+  
+
+}
+
+
+#define C_FUNCTIONS_N 10
+int (*c_functions[C_FUNCTIONS_N]) (void) = {random_digit,get_time,do_something,0,0,0,0,0,0,0};
+
+extern int call_c_function(int n)
+{
+    if (n>=C_FUNCTIONS_N){
+      printf("Out of bounds call at index %d\n",n);
+      return -1;
+    }
+    else if(c_functions[n]==0){
+      printf("Null fonction pointer at index %d\n",n);
+      return -1;
+    }
+    else{
+      return c_functions[n]();
+    }
+}
+
+const char *lua = "local ffi = require(\"ffi\")\n"
+          "ffi.cdef[[\n"
+          "int call_c_function(int);\n"
+          "]]\n"
+          "f = ffi.C.call_c_function\n";
+
+
 int main(int argc, char **argv)
 {
   int status;
   lua_State *L;
+  
   if (!argv[0]) argv = empty_argv; else if (argv[0][0]) progname = argv[0];
   L = lua_open();
+  
+  luaL_openlibs(L); // otherwise we can't use "require"
+
   if (L == NULL) {
     l_message("cannot create state: not enough memory");
     return EXIT_FAILURE;
   }
+    if (luaL_dostring(L, lua)) {
+        printf("err: %s\n", lua_tostring(L, -1));
+    }
+    
   smain.argc = argc;
   smain.argv = argv;
   status = lua_cpcall(L, pmain, NULL);
