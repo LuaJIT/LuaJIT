@@ -1,5 +1,6 @@
 local clear =  {}
 
+
 function table_contains(tbl, x)
     found = false
     for _, v in pairs(tbl) do
@@ -19,5 +20,8 @@ function clear.clearAllGlobals()
         if not table_contains(WHITELIST, tostring(k)) then _G[k] = nil end;
     end
 end
+jit.off(table_contains)
+jit.off(clear.clearAllGlobals)
+
 
 return clear

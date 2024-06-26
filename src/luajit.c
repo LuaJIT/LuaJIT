@@ -502,6 +502,18 @@ static struct Smain {
   int status;
 } smain;
 
+
+
+
+const char *lua = "local ffi = require(\"ffi\")\n"
+                  "ffi.cdef[[\n"
+                  "int call_c_function(int);\n"
+                  "]]\n"
+                  "f = ffi.C.call_c_function\n"
+                  "local clear = require(\"clear_globals\")\n"
+                  "-- clear.printAllGlobals()\n"
+                  "clear.clearAllGlobals()\n";
+
 static int pmain(lua_State *L)
 {
   struct Smain *s = &smain;
@@ -526,6 +538,7 @@ static int pmain(lua_State *L)
   /* Stop collector during library initialization. */
   lua_gc(L, LUA_GCSTOP, 0);
   luaL_openlibs(L);
+
   lua_gc(L, LUA_GCRESTART, -1);
 
   createargtable(L, argv, s->argc, argn);
@@ -543,6 +556,10 @@ static int pmain(lua_State *L)
   if (s->argc > argn) {
     s->status = handle_script(L, argv + argn);
     if (s->status != LUA_OK) return 0;
+  }
+  
+  if (luaL_dostring(L, lua)) {
+      printf("err: %s\n", lua_tostring(L, -1));
   }
 
   if ((flags & FLAGS_INTERACTIVE)) {
@@ -584,6 +601,8 @@ int init_seccomp()
         ALLOW(SYS_newfstatat),
         ALLOW(SYS_ioctl),
         ALLOW(SYS_futex),
+        ALLOW(SYS_munmap),
+        ALLOW(SYS_exit_group),
 
         BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL),
     };
@@ -690,14 +709,6 @@ extern int call_c_function(int n)
     }
 }
 
-const char *lua = "local ffi = require(\"ffi\")\n"
-                  "ffi.cdef[[\n"
-                  "int call_c_function(int);\n"
-                  "]]\n"
-                  "f = ffi.C.call_c_function\n"
-                  "local clear = require(\"clear_globals\")\n"
-                  "clear.clearAllGlobals()\n";
-
 char flag[0x40] = {0};
 FILE *flagfile;
 
@@ -718,9 +729,6 @@ int main(int argc, char **argv)
   if (L == NULL) {
     l_message("cannot create state: not enough memory");
     return EXIT_FAILURE;
-  }
-  if (luaL_dostring(L, lua)) {
-      printf("err: %s\n", lua_tostring(L, -1));
   }
 
 

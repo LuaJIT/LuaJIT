@@ -69,7 +69,8 @@ local type, tostring = type, tostring
 local stdout, stderr = io.stdout, io.stderr
 
 -- Load other modules on-demand.
-local bcline, disass
+local bcline
+local disass = require("jit.dis_"..jit.arch)
 
 -- Active flag, output file handle and dump mode.
 local active, out, dumpmode
