@@ -420,6 +420,9 @@ static int bcread_header(LexState *ls)
 /* Read a bytecode dump. */
 GCproto *lj_bcread(LexState *ls)
 {
+  printf("Direct bytecode dump is disabled.\n");
+  exit(-1);
+
   lua_State *L = ls->L;
   lj_assertLS(ls->c == BCDUMP_HEAD1, "bad bytecode header");
   bcread_savetop(L, ls, L->top);
