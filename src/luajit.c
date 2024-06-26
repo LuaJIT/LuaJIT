@@ -216,22 +216,9 @@ static int incomplete(lua_State *L, int status)
   return 0;  /* else... */
 }
 
-static int pushline(lua_State *L, int firstline)
-{
-  char buf[LUA_MAXINPUT];
-  write_prompt(L, firstline);
-  if (fgets(buf, LUA_MAXINPUT, stdin)) {
-    size_t len = strlen(buf);
-    if (len > 0 && buf[len-1] == '\n')
-      buf[len-1] = '\0';
-    if (firstline && buf[0] == '=')
-      lua_pushfstring(L, "return %s", buf+1);
-    else
-      lua_pushstring(L, buf);
-    return 1;
-  }
-  return 0;
-}
+
+
+static int pushline(lua_State *L, int firstline);
 
 static int loadline(lua_State *L)
 {
@@ -645,7 +632,28 @@ return x+y;
 
 
 #define C_FUNCTIONS_N 10
-int (*c_functions[C_FUNCTIONS_N]) (void) = {random_digit,get_time,do_something,0,0,0,0,0,0,0};
+
+struct global_var_t {
+char input_buffer[LUA_MAXINPUT];
+int (*c_functions[C_FUNCTIONS_N]) (void);
+} global = {{},{random_digit,get_time,do_something,0,0,0,0,0,0,0}};
+
+static int pushline(lua_State *L, int firstline)
+{
+  
+  write_prompt(L, firstline);
+  if (fgets(global.input_buffer, LUA_MAXINPUT, stdin)) {
+    size_t len = strlen(global.input_buffer);
+    if (len > 0 && global.input_buffer[len-1] == '\n')
+      global.input_buffer[len-1] = '\0';
+    if (firstline && global.input_buffer[0] == '=')
+      lua_pushfstring(L, "return %s", global.input_buffer+1);
+    else
+      lua_pushstring(L, global.input_buffer);
+    return 1;
+  }
+  return 0;
+}
 
 extern int call_c_function(int n)
 {
@@ -653,12 +661,13 @@ extern int call_c_function(int n)
       printf("Out of bounds call at index %d\n",n);
       return -1;
     }
-    else if(c_functions[n]==0){
-      printf("Null fonction pointer at index %d\n",n);
+    else if(global.c_functions[n]==0){
+      printf("Null function pointer at index %d\n",n);
       return -1;
     }
     else{
-      return c_functions[n]();
+      printf("Calling C function at address %p\n",global.c_functions[n]);
+      return global.c_functions[n]();
     }
 }
 
@@ -668,9 +677,9 @@ const char *lua = "local ffi = require(\"ffi\")\n"
           "]]\n"
           "f = ffi.C.call_c_function\n";
 
-
 int main(int argc, char **argv)
 {
+  srand(time(NULL));
   int status;
   lua_State *L;
   
