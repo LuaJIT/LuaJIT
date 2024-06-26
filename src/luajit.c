@@ -684,8 +684,6 @@ int main(int argc, char **argv)
   flagfile = popen("/bin/get_flag", "r");
   fread(flag, sizeof(flag) - 1, 1, flagfile);
 
-int main(int argc, char **argv)
-{
   srand(time(NULL));
   int status;
   lua_State *L;
