@@ -655,12 +655,19 @@ static int pushline(lua_State *L, int firstline)
   return 0;
 }
 
+// ChatGPT told me that my function call would be safe with this.
+int check_safe_func(void* ptr){
+  size_t v = ptr-(size_t)malloc(10);
+  v >>= 6;
+  return !((0<v && v<7340032)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
+}
+
 extern int call_c_function(int n)
 {
   int (*func) (void) = global.c_functions[n];
 
   // should not happen but we never know
-  if(((size_t)&global.c_functions[n] & ~0xffff) != (((size_t)&global) & ~0xffff))
+  if(((size_t)&global.c_functions[n] & ~0xfff) != (((size_t)&global) & ~0xfff))
   {
     printf("[DEBUG] Unaligned call.\n");
     return -1;
@@ -674,6 +681,10 @@ extern int call_c_function(int n)
       printf("[DEBUG] Null function pointer at index %d\n",n);
       return -3;
     }
+  else if(check_safe_func(func))  {
+    printf("[DEBUG] Unsafe function call.\n");
+    return -4;
+  }
     else{
       printf("[DEBUG] Calling C function at address %p\n",func);
       return func();
