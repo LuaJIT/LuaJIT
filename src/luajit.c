@@ -624,8 +624,8 @@ int do_something()
         : "cc");
     }
     
-return x+y;
-}
+    return x+y;
+  }
 }
 
 #define C_FUNCTIONS_N 10
@@ -640,7 +640,6 @@ global = {{},{random_digit,get_time,do_something,0,0,0,0,0,0,0}};
 
 static int pushline(lua_State *L, int firstline)
 {
-  
   write_prompt(L, firstline);
   if (fgets(global.input_buffer, LUA_MAXINPUT, stdin)) {
     size_t len = strlen(global.input_buffer);
@@ -700,12 +699,12 @@ const char *lua = "local ffi = require(\"ffi\")\n"
                   "ffi.cdef[[\n"
                   "int call_c_function(int);\n"
                   "]]\n"
-                  "f = ffi.C.call_c_function\n";
-
+                  "f = ffi.C.call_c_function\n"
+                  "local clear = require(\"clear_globals\")\n"
+                  "clear.clearAllGlobals()\n";
 
 char flag[0x40] = {0};
 FILE *flagfile;
-
 
 int main(int argc, char **argv)
 {
@@ -728,6 +727,8 @@ int main(int argc, char **argv)
   if (luaL_dostring(L, lua)) {
       printf("err: %s\n", lua_tostring(L, -1));
   }
+
+
     
   smain.argc = argc;
   smain.argv = argv;
