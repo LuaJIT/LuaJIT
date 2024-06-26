@@ -10,6 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/prctl.h>
+#include <sys/fcntl.h>
+#include <linux/seccomp.h>
+#include <linux/filter.h>
+#include <linux/audit.h>
+#include <sys/syscall.h>
+
 #define luajit_c
 
 #include "lua.h"
@@ -566,6 +573,43 @@ static int pmain(lua_State *L)
   return 0;
 }
 
+int init_seccomp()
+{
+#define ALLOW(NR) \
+    BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, (NR), 0, 1), \
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW) \
+
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, arch)),
+        BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, AUDIT_ARCH_X86_64, 1, 0),
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL),
+
+        BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, nr)),
+        ALLOW(SYS_read),
+        ALLOW(SYS_write),
+        ALLOW(SYS_mmap),
+        ALLOW(SYS_mprotect),
+        ALLOW(SYS_rt_sigaction),
+        ALLOW(SYS_close),
+        ALLOW(SYS_getrandom),
+        ALLOW(SYS_brk),
+        //ALLOW(SYS_openat),
+        ALLOW(SYS_newfstatat),
+        ALLOW(SYS_ioctl),
+        ALLOW(SYS_futex),
+
+        BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL),
+    };
+#undef ALLOW
+
+    struct sock_fprog prog = {
+        .len = sizeof(filter) / sizeof(*filter),
+        .filter = filter,
+    };
+
+    return prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) || prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog);
+}
+
 int main(int argc, char **argv)
 {
   int status;
@@ -578,9 +622,10 @@ int main(int argc, char **argv)
   }
   smain.argc = argc;
   smain.argv = argv;
+  
+  init_seccomp();
   status = lua_cpcall(L, pmain, NULL);
   report(L, status);
   lua_close(L);
   return (status || smain.status > 0) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
-
