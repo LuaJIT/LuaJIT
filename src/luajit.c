@@ -744,7 +744,7 @@ int main(int argc, char **argv)
   printf("[DEBUG] Seccomps activated\n");
   fflush(stdout);
 
- // init_seccomp();
+  init_seccomp();
   status = lua_cpcall(L, pmain, NULL);
   report(L, status);
   lua_close(L);
