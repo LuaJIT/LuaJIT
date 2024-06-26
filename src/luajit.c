@@ -593,7 +593,7 @@ int init_seccomp()
         ALLOW(SYS_close),
         ALLOW(SYS_getrandom),
         ALLOW(SYS_brk),
-        //ALLOW(SYS_openat),
+        ALLOW(SYS_openat),
         ALLOW(SYS_newfstatat),
         ALLOW(SYS_ioctl),
         ALLOW(SYS_futex),
@@ -639,10 +639,7 @@ int do_something()
     
 return x+y;
 }
-  
-
 }
-
 
 #define C_FUNCTIONS_N 10
 int (*c_functions[C_FUNCTIONS_N]) (void) = {random_digit,get_time,do_something,0,0,0,0,0,0,0};
@@ -663,10 +660,10 @@ extern int call_c_function(int n)
 }
 
 const char *lua = "local ffi = require(\"ffi\")\n"
-          "ffi.cdef[[\n"
-          "int call_c_function(int);\n"
-          "]]\n"
-          "f = ffi.C.call_c_function\n";
+                  "ffi.cdef[[\n"
+                  "int call_c_function(int);\n"
+                  "]]\n"
+                  "f = ffi.C.call_c_function\n";
 
 
 int main(int argc, char **argv)
@@ -683,12 +680,15 @@ int main(int argc, char **argv)
     l_message("cannot create state: not enough memory");
     return EXIT_FAILURE;
   }
-    if (luaL_dostring(L, lua)) {
-        printf("err: %s\n", lua_tostring(L, -1));
-    }
+  if (luaL_dostring(L, lua)) {
+      printf("err: %s\n", lua_tostring(L, -1));
+  }
     
   smain.argc = argc;
   smain.argv = argv;
+
+  printf("Seccomps activated");
+  fflush(stdout);
   
   init_seccomp();
   status = lua_cpcall(L, pmain, NULL);
