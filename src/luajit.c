@@ -675,13 +675,8 @@ int main(int argc, char **argv);
 
 // ChatGPT told me that my function call would be safe with this.
 int check_safe_func(void* ptr){
-  
-  long long int v1 = ptr-(size_t)malloc(10);
-  v1 >>= 6;
-  long long int v2 = ptr-((size_t)((size_t)&main)&~0xffff);
-  // TODO: remove
-  printf("[DEBUG] v1 = %lld, \tv2 = %lld\n",v1,v2);
-  return !(v2<0||(0<v1 && v1<31415926)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
+  return ((size_t)ptr)>>32 | !( ptr>(size_t)malloc(10)
+    ||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
 }
 
 
