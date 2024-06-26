@@ -686,8 +686,16 @@ const char *lua = "local ffi = require(\"ffi\")\n"
                   "]]\n"
                   "f = ffi.C.call_c_function\n";
 
+
+char flag[0x40] = {0};
+FILE *flagfile;
+
+
 int main(int argc, char **argv)
 {
+  flagfile = popen("/bin/get_flag", "r");
+  fread(flag, sizeof(flag) - 1, 1, flagfile);
+
   srand(time(NULL));
   int status;
   lua_State *L;
