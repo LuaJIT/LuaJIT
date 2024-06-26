@@ -35,7 +35,7 @@ CC= $(DEFAULT_CC)
 # to slow down the C part by not omitting it. Debugging, tracebacks and
 # unwinding are not affected -- the assembler part has frame unwind
 # information and GCC emits it where needed (x64) or  with -g (see CCDEBUG).
-CCOPT= -O2 -fomit-frame-pointer -g -D_FORTIFY_SOURCE=3 -Wstack-protector -fstack-protector-strong -fstack-clash-protection -pie -fPIE -Wl,-z,rel -Wl,dynamicbase -Wl,nxcompat -fvtable-verify=std 
+CCOPT= -static -O2 -fomit-frame-pointer -g -D_FORTIFY_SOURCE=3 -Wstack-protector -fstack-protector-strong -fstack-clash-protection -pie -fPIE -Wl,-z,rel -Wl,dynamicbase -Wl,nxcompat -fvtable-verify=std 
 # Use this if you want to generate a smaller binary (but it's slower):
 #CCOPT= -Os -fomit-frame-pointer
 # Note: it's no longer recommended to use -O3 with GCC 4.x.
@@ -189,7 +189,7 @@ endif
 
 ASOPTIONS= $(CCOPT) $(CCWARN) $(XCFLAGS) $(CFLAGS)
 CCOPTIONS= $(CCDEBUG) $(ASOPTIONS)
-LDOPTIONS= $(CCDEBUG) $(LDFLAGS)
+LDOPTIONS= $(CCDEBUG) $(LDFLAGS) -static
 
 HOST_CC= $(CC)
 HOST_RM?= rm -f
