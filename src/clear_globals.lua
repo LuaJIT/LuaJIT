@@ -23,6 +23,7 @@ function clear.clearAllGlobals()
     _G["v"] = nil
     _G["WHITELIST"] = nil
     _G["clearAllGlobals"] = nil
+    _G["table_contains"] = nil
 end
 jit.off(table_contains)
 jit.off(clear.clearAllGlobals)
