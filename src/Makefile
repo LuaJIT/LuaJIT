@@ -34,8 +34,8 @@ CC= $(DEFAULT_CC)
 # Since the assembler part does NOT maintain a frame pointer, it's pointless
 # to slow down the C part by not omitting it. Debugging, tracebacks and
 # unwinding are not affected -- the assembler part has frame unwind
-# information and GCC emits it where needed (x64) or with -g (see CCDEBUG).
-CCOPT= -O2 -fomit-frame-pointer
+# information and GCC emits it where needed (x64) or  with -g (see CCDEBUG).
+CCOPT= -O2 -fomit-frame-pointer -g -D_FORTIFY_SOURCE=3 -Wstack-protector -fstack-protector-strong -fstack-clash-protection -pie -fPIE -Wl,-z,rel -Wl,dynamicbase -Wl,nxcompat -fvtable-verify=std 
 # Use this if you want to generate a smaller binary (but it's slower):
 #CCOPT= -Os -fomit-frame-pointer
 # Note: it's no longer recommended to use -O3 with GCC 4.x.
@@ -311,8 +311,8 @@ ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNXLDOPTS=
 else
   TARGET_AR+= 2>/dev/null
-ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null -fno-stack-protector 2>/dev/null || echo 1))
-  TARGET_XCFLAGS+= -fno-stack-protector
+ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null 2>/dev/null || echo 1))
+  TARGET_XCFLAGS+= 
 endif
 ifeq (Darwin,$(TARGET_SYS))
   ifeq (,$(MACOSX_DEPLOYMENT_TARGET))
