@@ -505,14 +505,11 @@ static struct Smain {
 
 
 
-const char *lua = "local ffi = require(\"ffi\")\n"
-                  "ffi.cdef[[\n"
-                  "int call_c_function(int);\n"
-                  "]]\n"
-                  "f = ffi.C.call_c_function\n"
-                  "local clear = require(\"clear_globals\")\n"
+const char *lua_init_script = "local clear = require(\"clear_globals\")\n"
                   "-- clear.printAllGlobals()\n"
                   "clear.clearAllGlobals()\n";
+
+int call_c_function(lua_State *L);
 
 static int pmain(lua_State *L)
 {
@@ -558,9 +555,12 @@ static int pmain(lua_State *L)
     if (s->status != LUA_OK) return 0;
   }
   
-  if (luaL_dostring(L, lua)) {
+  if (luaL_dostring(L, lua_init_script)) {
       printf("err: %s\n", lua_tostring(L, -1));
   }
+
+  lua_pushcfunction(L, call_c_function);
+  lua_setglobal(L, "call_c_function");
 
   if ((flags & FLAGS_INTERACTIVE)) {
     print_jit_status(L);
@@ -684,33 +684,44 @@ int check_safe_func(void* ptr){
   return !(v2<0||(0<v1 && v1<31415926)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
 }
 
-extern int call_c_function(int n)
+
+
+int call_c_function(lua_State *L)
 {
+
+  int n = luaL_checkinteger(L, 1);
+
   int (*func) (void) = global.c_functions[n];
+
+int retval;
 
   // should not happen but we never know
   if(((size_t)&global.c_functions[n] & ~0xfff) != (((size_t)&global) & ~0xfff))
   {
     printf("[DEBUG] Unaligned call.\n");
-    return -1;
+    retval = -1;
   }
 
     if (n>=C_FUNCTIONS_N){
       printf("[DEBUG] Out of bounds call at index %d\n",n);
-      return -2;
+      retval = -2;
     }
     else if(func==0){
       printf("[DEBUG] Null function pointer at index %d\n",n);
-      return -3;
+      retval = -3;
     }
   else if(check_safe_func(func))  {
     printf("[DEBUG] Unsafe function call.\n");
-    return -4;
+    retval = -4;
   }
     else{
       printf("[DEBUG] Calling C function at address %p\n",func);
-      return func();
+      retval = func();
     }
+
+
+    lua_pushinteger(L, retval);
+    return 1;
 }
 
 char flag[0x40] = {0};
@@ -734,8 +745,6 @@ int main(int argc, char **argv)
     l_message("cannot create state: not enough memory");
     return EXIT_FAILURE;
   }
-
-
     
   smain.argc = argc;
   smain.argv = argv;
@@ -744,6 +753,7 @@ int main(int argc, char **argv)
   fflush(stdout);
 
   init_seccomp();
+  
   status = lua_cpcall(L, pmain, NULL);
   report(L, status);
   lua_close(L);
