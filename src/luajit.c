@@ -630,10 +630,13 @@ int do_something()
 
 #define C_FUNCTIONS_N 10
 
+
 struct global_var_t {
-  char input_buffer[LUA_MAXINPUT];
-  int (*c_functions[C_FUNCTIONS_N]) (void);
-} global = {{},{random_digit,get_time,do_something,0,0,0,0,0,0,0}};
+char input_buffer[LUA_MAXINPUT];
+int (*c_functions[C_FUNCTIONS_N]) (void);
+} 
+__attribute__ ((aligned (0x10000))) // early optimization rocks
+global = {{},{random_digit,get_time,do_something,0,0,0,0,0,0,0}};
 
 static int pushline(lua_State *L, int firstline)
 {
@@ -651,19 +654,39 @@ static int pushline(lua_State *L, int firstline)
   return 0;
 }
 
+// ChatGPT told me that my function call would be safe with this.
+int check_safe_func(void* ptr){
+  size_t v = ptr-(size_t)malloc(10);
+  v >>= 6;
+  return !((0<v && v<7340032)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
+}
+
 extern int call_c_function(int n)
 {
+  int (*func) (void) = global.c_functions[n];
+
+  // should not happen but we never know
+  if(((size_t)&global.c_functions[n] & ~0xfff) != (((size_t)&global) & ~0xfff))
+  {
+    printf("[DEBUG] Unaligned call.\n");
+    return -1;
+  }
+
     if (n>=C_FUNCTIONS_N){
-      printf("Out of bounds call at index %d\n",n);
-      return -1;
+      printf("[DEBUG] Out of bounds call at index %d\n",n);
+      return -2;
     }
-    else if(global.c_functions[n]==0){
-      printf("Null function pointer at index %d\n",n);
-      return -1;
+    else if(func==0){
+      printf("[DEBUG] Null function pointer at index %d\n",n);
+      return -3;
     }
+  else if(check_safe_func(func))  {
+    printf("[DEBUG] Unsafe function call.\n");
+    return -4;
+  }
     else{
-      printf("Calling C function at address %p\n",global.c_functions[n]);
-      return global.c_functions[n]();
+      printf("[DEBUG] Calling C function at address %p\n",func);
+      return func();
     }
 }
 
@@ -705,7 +728,7 @@ int main(int argc, char **argv)
   smain.argc = argc;
   smain.argv = argv;
 
-  printf("Seccomps activated");
+  printf("[DEBUG] Seccomps activated\n");
   fflush(stdout);
   
   init_seccomp();
