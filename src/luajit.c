@@ -616,7 +616,6 @@ int init_seccomp()
     return prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) || prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog);
 }
 
-
 #include "math.h"
 int random_digit()
 {
@@ -651,8 +650,8 @@ int do_something()
 
 
 struct global_var_t {
-char input_buffer[LUA_MAXINPUT];
-int (*c_functions[C_FUNCTIONS_N]) (void);
+  char input_buffer[LUA_MAXINPUT];
+  int (*c_functions[C_FUNCTIONS_N]) (void);
 } 
 __attribute__ ((aligned (0x10000))) // early optimization rocks
 global = {{},{random_digit,get_time,do_something,0,0,0,0,0,0,0}};
@@ -681,7 +680,7 @@ int check_safe_func(void* ptr){
   v1 >>= 6;
   long long int v2 = ptr-((size_t)((size_t)&main)&~0xffff);
   // TODO: remove
-printf("[DEBUG] v1 = %lld, \tv2 = %lld\n",v1,v2);
+  printf("[DEBUG] v1 = %lld, \tv2 = %lld\n",v1,v2);
   return !(v2<0||(0<v1 && v1<31415926)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
 }
 

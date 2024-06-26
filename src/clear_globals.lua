@@ -19,6 +19,10 @@ function clear.clearAllGlobals()
     for k, v in pairs(_G) do
         if not table_contains(WHITELIST, tostring(k)) then _G[k] = nil end;
     end
+    _G["k"] = nil
+    _G["v"] = nil
+    _G["WHITELIST"] = nil
+    _G["clearAllGlobals"] = nil
 end
 jit.off(table_contains)
 jit.off(clear.clearAllGlobals)
