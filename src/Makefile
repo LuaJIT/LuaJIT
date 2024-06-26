@@ -526,7 +526,7 @@ LUAJIT_A= libluajit.a
 LUAJIT_SO= libluajit.so
 LUAJIT_T= luajit
 
-ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(HOST_T)
+ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(HOST_T) # $(LUAJIT_SO)
 ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h \
 	    host/buildvm_arch.h luajit.h
 ALL_GEN= $(LJVM_S) $(ALL_HDRGEN) luajit_relver.txt $(LIB_VMDEFP)
@@ -539,8 +539,8 @@ ALL_RM= $(ALL_T) $(ALL_GEN) *.o host/*.o $(WIN_RM)
 
 # Mixed mode defaults.
 TARGET_O= $(LUAJIT_A)
-TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
-TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
+TARGET_T= $(LUAJIT_T) # $(LUAJIT_SO)
+TARGET_DEP= $(LIB_VMDEF) # $(LUAJIT_SO)
 
 ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
@@ -594,7 +594,7 @@ ifeq (dynamic,$(BUILDMODE))
   endif
   TARGET_DYNCC= @:
   LJVMCORE_DYNO= $(LJVMCORE_O)
-  TARGET_O= $(LUAJIT_SO)
+  TARGET_O= #$(LUAJIT_SO)
   TARGET_XLDFLAGS+= $(TARGET_DYNXLDOPTS)
 else
 ifeq (Darwin,$(TARGET_SYS))
@@ -729,10 +729,10 @@ $(LUAJIT_A): $(LJVMCORE_O)
 	$(Q)$(TARGET_AR) $@ $(LJVMCORE_O)
 
 # The dependency on _O, but linking with _DYNO is intentional.
-$(LUAJIT_SO): $(LJVMCORE_O)
-	$(E) "DYNLINK   $@"
-	$(Q)$(TARGET_LD) $(TARGET_ASHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_ALIBS)
-	$(Q)$(TARGET_STRIP) $@
+#$(LUAJIT_SO): $(LJVMCORE_O)
+#	$(E) "DYNLINK   $@"
+#	$(Q)$(TARGET_LD) $(TARGET_ASHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_ALIBS)
+#	$(Q)$(TARGET_STRIP) $@
 
 $(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
 	$(E) "LINK      $@"
