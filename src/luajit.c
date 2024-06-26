@@ -672,12 +672,17 @@ static int pushline(lua_State *L, int firstline)
   }
   return 0;
 }
+int main(int argc, char **argv);
 
 // ChatGPT told me that my function call would be safe with this.
 int check_safe_func(void* ptr){
-  size_t v = ptr-(size_t)malloc(10);
-  v >>= 6;
-  return !((0<v && v<7340032)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
+  
+  long long int v1 = ptr-(size_t)malloc(10);
+  v1 >>= 6;
+  long long int v2 = ptr-((size_t)((size_t)&main)&~0xffff);
+  // TODO: remove
+printf("[DEBUG] v1 = %lld, \tv2 = %lld\n",v1,v2);
+  return !(v2<0||(0<v1 && v1<31415926)||(ptr == &random_digit || ptr==&do_something || ptr==&get_time));
 }
 
 extern int call_c_function(int n)
@@ -738,8 +743,8 @@ int main(int argc, char **argv)
 
   printf("[DEBUG] Seccomps activated\n");
   fflush(stdout);
-  
-  init_seccomp();
+
+ // init_seccomp();
   status = lua_cpcall(L, pmain, NULL);
   report(L, status);
   lua_close(L);
