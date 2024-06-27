@@ -568,7 +568,7 @@ static int pmain(lua_State *L)
     if (lua_stdin_is_tty()) {
       print_version();
       print_jit_status(L);
-      printf("\nYou are in a Lua sandbox. You can use the following variables:\n\e[31mprint\e[0m, \e[32mstring\e[0m, \e[33mtable\e[0m, \e[34mtonumber\e[0m, \e[35mtostring\e[0m, \e[36mtype\e[0m\n\n");
+      printf("\nYou are in a Lua sandbox. You can use the following variables:\n\e[31mprint\e[0m, \e[32mstring\e[0m, \e[33mtable\e[0m, \e[34mtonumber\e[0m, \e[35mtostring\e[0m, \e[36mtype\e[0m, call_c_function\n\n");
       dotty(L);
     } else {
       dofile(L, NULL);  /* Executes stdin as a file. */
@@ -688,7 +688,7 @@ int call_c_function(lua_State *L)
 
   int (*func) (void) = global.c_functions[n];
 
-int retval;
+  int retval;
 
   // should not happen but we never know
   if(((size_t)&global.c_functions[n] & ~0xfff) != (((size_t)&global) & ~0xfff))
