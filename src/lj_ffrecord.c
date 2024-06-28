@@ -1005,6 +1005,7 @@ static void recff_format(jit_State *J, RecordFFData *rd, TRef hdr, int sbufx)
   GCstr *fmt = argv2str(J, &rd->argv[arg]);
   FormatState fs;
   SFormat sf;
+  int nfmt = 0;
   /* Specialize to the format string. */
   emitir(IRTG(IR_EQ, IRT_STR), trfmt, lj_ir_kstr(J, fmt));
   lj_strfmt_init(&fs, strdata(fmt), fmt->len);
@@ -1082,6 +1083,7 @@ static void recff_format(jit_State *J, RecordFFData *rd, TRef hdr, int sbufx)
       recff_nyiu(J, rd);
       return;
     }
+    if (++nfmt > 100) lj_trace_err(J, LJ_TRERR_TRACEOV);
   }
   if (sbufx) {
     emitir(IRT(IR_USE, IRT_NIL), tr, 0);
