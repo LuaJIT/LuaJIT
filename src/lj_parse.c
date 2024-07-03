@@ -2517,11 +2517,9 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)
 */
 static int predict_next(LexState *ls, FuncState *fs, BCPos pc)
 {
-  BCIns ins;
+  BCIns ins = fs->bcbase[pc].ins;
   GCstr *name;
   cTValue *o;
-  if (pc >= fs->bclim) return 0;
-  ins = fs->bcbase[pc].ins;
   switch (bc_op(ins)) {
   case BC_MOV:
     if (bc_d(ins) >= fs->nactvar) return 0;
@@ -2570,7 +2568,7 @@ static void parse_for_iter(LexState *ls, GCstr *indexname)
   assign_adjust(ls, 3, expr_list(ls, &e), &e);
   /* The iterator needs another 3 [4] slots (func [pc] | state ctl). */
   bcreg_bump(fs, 3+ls->fr2);
-  isnext = (nvars <= 5 && predict_next(ls, fs, exprpc));
+  isnext = (nvars <= 5 && fs->pc > exprpc && predict_next(ls, fs, exprpc));
   var_add(ls, 3);  /* Hidden control variables. */
   lex_check(ls, TK_do);
   loop = bcemit_AJ(fs, isnext ? BC_ISNEXT : BC_JMP, base, NO_JMP);
