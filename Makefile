@@ -114,6 +114,7 @@ ifeq (Darwin,$(TARGET_SYS))
   INSTALL_SOSHORT1= $(INSTALL_DYLIBSHORT1)
   INSTALL_SOSHORT2= $(INSTALL_DYLIBSHORT2)
   LDCONFIG= :
+  SED_PC+= -e "s| -Wl,-E||"
 endif
 
 ##############################################################################
