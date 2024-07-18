@@ -73,7 +73,6 @@ ENDIF()
 ######
 
 if (LUAJIT_ENABLE_FSANITIZE)
-    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
       message(STATUS "luajit debug mode")
       add_definitions(-DLUA_USE_APICHECK -DLUA_USE_ASSERT -DLUAJIT_USE_SYSMALLOC)
       if (NOT MSVC)
