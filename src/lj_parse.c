@@ -1761,6 +1761,8 @@ static void expr_table(LexState *ls, ExpDesc *e)
   lex_check(ls, '{');
 #if LJ_DS_PARSER_TABLE_PATCH
   GCtab* tmp_t = lj_tab_new(fs->L, 0, 0);
+  settabV(fs->L, fs->L->top, tmp_t);
+  incr_top(fs->L);
   int tmp_indx = 0;
 #endif
   while (ls->tok != '}') {
@@ -1871,6 +1873,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
     }
     lj_gc_check(fs->L);
   }
+  fs->L->top--;
 }
 
 /* Parse function parameters. */
