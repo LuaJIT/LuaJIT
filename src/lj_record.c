@@ -1395,12 +1395,13 @@ static void rec_idx_abc(jit_State *J, TRef asizeref, TRef ikey, uint32_t asize)
       /* Runtime value for stop of loop is within bounds? */
       if ((uint64_t)stop + ofs < (uint64_t)asize) {
 	/* Emit invariant bounds check for stop. */
-	emitir(IRTG(IR_ABC, IRT_P32), asizeref, ofs == 0 ? J->scev.stop :
+	uint32_t abc = IRTG(IR_ABC, tref_isk(asizeref) ? IRT_U32 : IRT_P32);
+	emitir(abc, asizeref, ofs == 0 ? J->scev.stop :
 	       emitir(IRTI(IR_ADD), J->scev.stop, ofsref));
 	/* Emit invariant bounds check for start, if not const or negative. */
 	if (!(J->scev.dir && J->scev.start &&
 	      (int64_t)IR(J->scev.start)->i + ofs >= 0))
-	  emitir(IRTG(IR_ABC, IRT_P32), asizeref, ikey);
+	  emitir(abc, asizeref, ikey);
 	return;
       }
     }

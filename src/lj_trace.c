@@ -905,10 +905,8 @@ int LJ_FASTCALL lj_trace_exit(jit_State *J, void *exptr)
   exd.J = J;
   exd.exptr = exptr;
   errcode = lj_vm_cpcall(L, NULL, &exd, trace_exit_cp);
-  if (errcode) {
-    setcframe_pc(cframe_raw(L->cframe), L);  /* Point to any valid memory. */
+  if (errcode)
     return -errcode;  /* Return negated error code. */
-  }
 
   if (exitcode) copyTV(L, L->top++, &exiterr);  /* Anchor the error object. */
 
