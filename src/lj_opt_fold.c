@@ -1702,9 +1702,10 @@ LJFOLDF(abc_k)
 LJFOLD(ABC any any)
 LJFOLDF(abc_invar)
 {
-  /* Invariant ABC marked as PTR. Drop if op1 is invariant, too. */
+  /* Invariant ABC marked as P32 or U32. Drop if op1 is invariant too. */
   if (!irt_isint(fins->t) && fins->op1 < J->chain[IR_LOOP] &&
-      !irt_isphi(IR(fins->op1)->t))
+      (irt_isu32(fins->t) ||
+       (!irref_isk(fins->op1) && !irt_isphi(IR(fins->op1)->t))))
     return DROPFOLD;
   return NEXTFOLD;
 }
