@@ -1135,7 +1135,7 @@ LJFOLDF(shortcut_conv_num_int)
 }
 
 LJFOLD(CONV CONV IRCONV_INT_NUM)  /* _INT */
-LJFOLD(CONV CONV IRCONV_U32_NUM)  /* _U32*/
+LJFOLD(CONV CONV IRCONV_U32_NUM)  /* _U32 */
 LJFOLDF(simplify_conv_int_num)
 {
   /* Fold even across PHI to avoid expensive num->int conversions in loop. */
@@ -1170,8 +1170,10 @@ LJFOLDF(simplify_conv_i64_num)
 
 LJFOLD(CONV CONV IRCONV_INT_I64)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_INT_U64)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_INT_U32)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_U32_I64)  /* _INT or _U32 */
 LJFOLD(CONV CONV IRCONV_U32_U64)  /* _INT or _U32 */
+LJFOLD(CONV CONV IRCONV_U32_INT)  /* _INT or _U32 */
 LJFOLDF(simplify_conv_int_i64)
 {
   int src;
@@ -1216,14 +1218,13 @@ LJFOLDF(simplify_tobit_conv)
   return NEXTFOLD;
 }
 
-/* Shortcut floor/ceil/round + IRT_NUM <- IRT_INT/IRT_U32 conversion. */
+/* Shortcut floor/ceil/trunc + IRT_NUM <- integer conversion. */
 LJFOLD(FPMATH CONV IRFPM_FLOOR)
 LJFOLD(FPMATH CONV IRFPM_CEIL)
 LJFOLD(FPMATH CONV IRFPM_TRUNC)
 LJFOLDF(simplify_floor_conv)
 {
-  if ((fleft->op2 & IRCONV_SRCMASK) == IRT_INT ||
-      (fleft->op2 & IRCONV_SRCMASK) == IRT_U32)
+  if ((uint32_t)(fleft->op2 & IRCONV_SRCMASK) - (uint32_t)IRT_I8 <= (uint32_t)(IRT_U64 - IRT_U8))
     return LEFTFOLD;
   return NEXTFOLD;
 }
