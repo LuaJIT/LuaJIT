@@ -88,12 +88,13 @@ LUALIB_API int luaL_loadfilex(lua_State *L, const char *filename,
   int status;
   const char *chunkname;
   if (filename) {
+    chunkname = lua_pushfstring(L, "@%s", filename);
     ctx.fp = fopen(filename, "rb");
     if (ctx.fp == NULL) {
+      L->top--;
       lua_pushfstring(L, "cannot open %s: %s", filename, strerror(errno));
       return LUA_ERRFILE;
     }
-    chunkname = lua_pushfstring(L, "@%s", filename);
   } else {
     ctx.fp = stdin;
     chunkname = "=stdin";
