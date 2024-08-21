@@ -77,6 +77,34 @@
 
 #define JIT_F_CPUSTRING		"\003RVC\003Zba\003Zbb\006Zicond\006XThead"
 
+#if LJ_TARGET_LINUX
+#include <sys/syscall.h>
+
+#ifndef __NR_riscv_hwprobe
+#ifndef __NR_arch_specific_syscall
+#define __NR_arch_specific_syscall 244
+#endif
+#define __NR_riscv_hwprobe (__NR_arch_specific_syscall + 14)
+#endif
+
+struct riscv_hwprobe {
+    int64_t key;
+    uint64_t value;
+};
+
+#define RISCV_HWPROBE_KEY_MVENDORID     0
+#define RISCV_HWPROBE_KEY_MARCHID       1
+#define RISCV_HWPROBE_KEY_MIMPID        2
+#define RISCV_HWPROBE_KEY_BASE_BEHAVIOR 3
+#define RISCV_HWPROBE_KEY_IMA_EXT_0     4
+
+#define RISCV_HWPROBE_IMA_C      (1 << 1)
+#define RISCV_HWPROBE_EXT_ZBA    (1 << 3)
+#define RISCV_HWPROBE_EXT_ZBB    (1 << 4)
+#define RISCV_HWPROBE_EXT_ZICOND (1ULL << 35)
+
+#endif
+
 #else
 
 #define JIT_F_CPUSTRING		""
