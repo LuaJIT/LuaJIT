@@ -861,6 +861,10 @@ local function doline(line)
   -- Strip assembler comments.
   aline = gsub(aline, "//.*$", "")
 
+  -- Process and remove labels.
+  for stmt in gmatch(aline, "[^:]+:") do dostmt(stmt) end
+  aline = gsub(aline, "[^:]+:", "")
+
   -- Split line into statements at semicolons.
   if match(aline, ";") then
     for stmt in gmatch(aline, "[^;]+") do dostmt(stmt) end
