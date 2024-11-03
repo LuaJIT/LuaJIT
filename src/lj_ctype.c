@@ -41,6 +41,8 @@
   _("uintptr_t",		UINT_PSZ) \
   /* From POSIX. */ \
   _("ssize_t",			INT_PSZ) \
+  /* For anchoring Lua tables to C structs */ \
+  _("gctab_t",			GCTAB) \
   /* End of typedef list. */
 
 /* Keywords (only the ones we actually care for). */
@@ -509,6 +511,10 @@ static void ctype_repr(CTRepr *ctr, CTypeID id)
       if (ctype_attrib(info) == CTA_QUAL) qual |= size;
       break;
     case CT_PTR:
+      if (LJ_UNLIKELY(ctype_cid(info) == CTID_GCTAB)) {
+	ctype_preplit(ctr, "gctab_t");
+	return;
+      }
       if ((info & CTF_REF)) {
 	ctype_prepc(ctr, '&');
       } else {

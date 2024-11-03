@@ -75,12 +75,25 @@ static void gc_mark(global_State *g, GCobj *o)
       if (gcref(sbx->dict_mt))
 	gc_markobj(g, gcref(sbx->dict_mt));
     }
+  } else if (gct == ~LJ_TCDATA) {
+    GCcdata *cd = gco2cd(o);
+    CType *ct = ctype_get(ctype_ctsG(g), cd->ctypeid);
+    if (LJ_UNLIKELY(ctype_isstruct(ct->info))) {
+      while (ct->sib) {
+	ct = ctype_get(ctype_ctsG(g), ct->sib);
+	if (ctype_cid(ct->info) == CTID_GCTAB) {
+	  GCobj *t = *(GCobj **)((uintptr_t)cdataptr(cd) + ct->size);
+	  if (t && t->gch.gct == ~LJ_TTAB && iswhite(t))
+	    gc_mark(g, t);
+	}
+      }
+    }
   } else if (LJ_UNLIKELY(gct == ~LJ_TUPVAL)) {
     GCupval *uv = gco2uv(o);
     gc_marktv(g, uvval(uv));
     if (uv->closed)
       gray2black(o);  /* Closed upvalues are never gray. */
-  } else if (gct != ~LJ_TSTR && gct != ~LJ_TCDATA) {
+  } else if (gct != ~LJ_TSTR) {
     lj_assertG(gct == ~LJ_TFUNC || gct == ~LJ_TTAB ||
 	       gct == ~LJ_TTHREAD || gct == ~LJ_TPROTO || gct == ~LJ_TTRACE,
 	       "bad GC type %d", gct);

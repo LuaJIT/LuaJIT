@@ -572,6 +572,10 @@ static TRef crec_tv_ct(jit_State *J, CType *s, CTypeID sid, TRef sp)
     }
   } else if (ctype_isptr(sinfo) || ctype_isenum(sinfo)) {
     sp = emitir(IRT(IR_XLOAD, t), sp, 0);  /* Box pointers and enums. */
+    if (LJ_UNLIKELY(ctype_cid(sinfo) == CTID_GCTAB)) {
+      emitir(IRTG(IR_NE, t), sp, lj_ir_kptr(J, NULL));
+      return emitconv(sp, IRT_TAB, t, 0);
+    }
   } else if (ctype_isrefarray(sinfo) || ctype_isstruct(sinfo)) {
     cts->L = J->L;
     sid = lj_ctype_intern(cts, CTINFO_REF(sid), CTSIZE_PTR);  /* Create ref. */

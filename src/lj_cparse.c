@@ -923,8 +923,9 @@ static CTypeID cp_decl_intern(CPState *cp, CPDecl *decl)
 	  }
 	}
       } else if (ctype_isptr(info)) {
-	/* Reject pointer/ref to ref. */
-	if (id && ctype_isref(ctype_raw(cp->cts, id)->info))
+	/* Reject pointer/ref to ref/gctab_t. */
+	if (id && (ctype_isref(ctype_raw(cp->cts, id)->info) ||
+	    id == CTID_GCTAB))
 	  cp_err(cp, LJ_ERR_FFI_INVTYPE);
 	if (ctype_isref(info)) {
 	  info &= ~CTF_VOLATILE;  /* Refs are always const, never volatile. */

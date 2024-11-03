@@ -408,6 +408,13 @@ int lj_cconv_tv_ct(CTState *cts, CType *s, CTypeID sid,
     /* Create reference. */
     setcdataV(cts->L, o, lj_cdata_newref(cts, sp, sid));
     return 1;  /* Need GC step. */
+  } else if (ctype_isptr(sinfo) && ctype_cid(sinfo) == CTID_GCTAB) {
+    GCtab *tab = *(GCtab **)sp;
+    if (tab && tab->gct == ~LJ_TTAB)
+      settabV(cts->L, o, tab);
+    else
+      setnilV(o);
+    return 0;
   } else {
     GCcdata *cd;
     CTSize sz;
@@ -606,6 +613,9 @@ void lj_cconv_ct_tv(CTState *cts, CType *d,
       return;
     } else if (ctype_isstruct(d->info)) {
       cconv_struct_tab(cts, d, dp, tabV(o), flags);
+      return;
+    } else if (ctype_isptr(d->info) && ctype_cid(d->info) == CTID_GCTAB) {
+      *(GCtab **)dp = tabV(o);
       return;
     } else {
       goto err_conv;
