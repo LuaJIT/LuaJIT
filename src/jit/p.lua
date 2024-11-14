@@ -227,6 +227,7 @@ local function prof_finish()
     local samples = prof_samples
     if samples == 0 then
       if prof_raw ~= true then out:write("[No samples collected]\n") end
+      if out ~= stdout then out:close() end
       return
     end
     if prof_ann then
