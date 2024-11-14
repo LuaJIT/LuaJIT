@@ -227,9 +227,7 @@ local function prof_finish()
     local samples = prof_samples
     if samples == 0 then
       if prof_raw ~= true then out:write("[No samples collected]\n") end
-      return
-    end
-    if prof_ann then
+    elseif prof_ann then
       prof_annotate(prof_count1, samples)
     else
       prof_top(prof_count1, prof_count2, samples, "")
