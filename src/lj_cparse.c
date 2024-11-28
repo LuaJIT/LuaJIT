@@ -182,6 +182,7 @@ static CPToken cp_number(CPState *cp)
   else if (!(cp->mode & CPARSE_MODE_SKIP))
     cp_errmsg(cp, CTOK_INTEGER, LJ_ERR_XNUMBER);
   cp->val.u32 = (uint32_t)o.i;
+  cp->val.imm = 1;
   return CTOK_INTEGER;
 }
 
@@ -191,6 +192,7 @@ static CPToken cp_ident(CPState *cp)
   do { cp_save(cp, cp->c); } while (lj_char_isident(cp_get(cp)));
   cp->str = lj_buf_str(cp->L, &cp->sb);
   cp->val.id = lj_ctype_getname(cp->cts, &cp->ct, cp->str, cp->tmask);
+  cp->val.imm = 0;
   if (ctype_type(cp->ct->info) == CT_KW)
     return ctype_cid(cp->ct->info);
   return CTOK_IDENT;
@@ -209,11 +211,13 @@ static CPToken cp_param(CPState *cp)
   if (tvisstr(o)) {
     cp->str = strV(o);
     cp->val.id = 0;
+    cp->val.imm = 0;
     cp->ct = &cp->cts->tab[0];
     return CTOK_IDENT;
   } else if (tvisnumber(o)) {
     cp->val.i32 = numberVint(o);
     cp->val.id = CTID_INT32;
+    cp->val.imm = 1;
     return CTOK_INTEGER;
   } else {
     GCcdata *cd;
@@ -224,6 +228,7 @@ static CPToken cp_param(CPState *cp)
       cp->val.id = *(CTypeID *)cdataptr(cd);
     else
       cp->val.id = cd->ctypeid;
+    cp->val.imm = 0;
     return '$';
   }
 }
@@ -281,6 +286,7 @@ static CPToken cp_string(CPState *cp)
     if (sbuflen(&cp->sb) != 1) cp_err_token(cp, '\'');
     cp->val.i32 = (int32_t)(char)*cp->sb.b;
     cp->val.id = CTID_INT32;
+    cp->val.imm = 1;
     return CTOK_INTEGER;
   }
 }
@@ -478,6 +484,7 @@ static void cp_expr_sizeof(CPState *cp, CPValue *k, int wantsz)
     k->u32 = 1u << ctype_align(info);
   }
   k->id = CTID_UINT32;  /* Really size_t. */
+  k->imm = 1;
 }
 
 /* Parse prefix operators. */
@@ -509,22 +516,25 @@ static void cp_expr_prefix(CPState *cp, CPValue *k)
     ct = lj_ctype_rawref(cp->cts, k->id);
     if (!ctype_ispointer(ct->info))
       cp_err_badidx(cp, ct);
-    k->u32 = 0; k->id = ctype_cid(ct->info);
+    k->u32 = 0; k->id = ctype_cid(ct->info); k->imm = 0;
   } else if (cp_opt(cp, '&')) {  /* Address operator. */
     cp_expr_unary(cp, k);
     k->id = lj_ctype_intern(cp->cts, CTINFO(CT_PTR, CTALIGN_PTR+k->id),
 			    CTSIZE_PTR);
+    k->imm = 0;
   } else if (cp_opt(cp, CTOK_SIZEOF)) {
     cp_expr_sizeof(cp, k, 1);
   } else if (cp_opt(cp, CTOK_ALIGNOF)) {
     cp_expr_sizeof(cp, k, 0);
   } else if (cp->tok == CTOK_IDENT) {
     if (ctype_type(cp->ct->info) == CT_CONSTVAL) {
-      k->u32 = cp->ct->size; k->id = ctype_cid(cp->ct->info);
+      k->u32 = cp->ct->size; k->id = ctype_cid(cp->ct->info); k->imm = 1;
     } else if (ctype_type(cp->ct->info) == CT_EXTERN) {
-      k->u32 = cp->val.id; k->id = ctype_cid(cp->ct->info);
+      k->u32 = cp->val.id; k->id = ctype_cid(cp->ct->info); k->imm = 0;
     } else if (ctype_type(cp->ct->info) == CT_FUNC) {
-      k->u32 = cp->val.id; k->id = cp->val.id;
+      k->u32 = cp->val.id; k->id = cp->val.id; k->imm = 0;
+    } else if (ctype_type(cp->ct->info) == CT_FIELD) {
+      k->u32 = cp->ct->size; k->id = ctype_cid(cp->ct->info); k->imm = 0;
     } else {
       goto err_expr;
     }
@@ -535,6 +545,7 @@ static void cp_expr_prefix(CPState *cp, CPValue *k)
       sz += cp->str->len;
     k->u32 = sz + 1;
     k->id = CTID_A_CCHAR;
+    k->imm = 0;
   } else {
   err_expr:
     cp_errmsg(cp, cp->tok, LJ_ERR_XSYMBOL);
@@ -557,6 +568,7 @@ static void cp_expr_postfix(CPState *cp, CPValue *k)
       }
       cp_check(cp, ']');
       k->u32 = 0;
+      k->imm = 0;
     } else if (cp->tok == '.' || cp->tok == CTOK_DEREF) {  /* Struct deref. */
       CTSize ofs;
       CType *fct;
@@ -575,7 +587,8 @@ static void cp_expr_postfix(CPState *cp, CPValue *k)
 	cp_errmsg(cp, 0, LJ_ERR_FFI_BADMEMBER, strdata(s), strdata(cp->str));
       }
       ct = fct;
-      k->u32 = ctype_isconstval(ct->info) ? ct->size : 0;
+      k->imm = ctype_isconstval(ct->info);
+      k->u32 = k->imm ? ct->size : 0;
       cp_next(cp);
     } else {
       return;
@@ -599,19 +612,20 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	cp_expr_sub(cp, &k3, 0);
 	k->u32 = k->u32 ? k2.u32 : k3.u32;
 	k->id = k2.id > k3.id ? k2.id : k3.id;
+	k->imm = k->imm && (k->u32 ? k2.imm : k3.imm);
 	continue;
       }
       /* fallthrough */
     case 1:
       if (cp_opt(cp, CTOK_OROR)) {
 	cp_expr_sub(cp, &k2, 2); k->i32 = k->u32 || k2.u32; k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       }
       /* fallthrough */
     case 2:
       if (cp_opt(cp, CTOK_ANDAND)) {
 	cp_expr_sub(cp, &k2, 3); k->i32 = k->u32 && k2.u32; k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       }
       /* fallthrough */
     case 3:
@@ -632,10 +646,10 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
     case 6:
       if (cp_opt(cp, CTOK_EQ)) {
 	cp_expr_sub(cp, &k2, 7); k->i32 = k->u32 == k2.u32; k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       } else if (cp_opt(cp, CTOK_NE)) {
 	cp_expr_sub(cp, &k2, 7); k->i32 = k->u32 != k2.u32; k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       }
       /* fallthrough */
     case 7:
@@ -646,7 +660,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	else
 	  k->i32 = k->u32 < k2.u32;
 	k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       } else if (cp_opt(cp, '>')) {
 	cp_expr_sub(cp, &k2, 8);
 	if (k->id == CTID_INT32 && k2.id == CTID_INT32)
@@ -654,7 +668,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	else
 	  k->i32 = k->u32 > k2.u32;
 	k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       } else if (cp_opt(cp, CTOK_LE)) {
 	cp_expr_sub(cp, &k2, 8);
 	if (k->id == CTID_INT32 && k2.id == CTID_INT32)
@@ -662,7 +676,7 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	else
 	  k->i32 = k->u32 <= k2.u32;
 	k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       } else if (cp_opt(cp, CTOK_GE)) {
 	cp_expr_sub(cp, &k2, 8);
 	if (k->id == CTID_INT32 && k2.id == CTID_INT32)
@@ -670,20 +684,20 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	else
 	  k->i32 = k->u32 >= k2.u32;
 	k->id = CTID_INT32;
-	continue;
+	goto arith_imm;
       }
       /* fallthrough */
     case 8:
       if (cp_opt(cp, CTOK_SHL)) {
 	cp_expr_sub(cp, &k2, 9); k->u32 = k->u32 << k2.u32;
-	continue;
+	goto arith_imm;
       } else if (cp_opt(cp, CTOK_SHR)) {
 	cp_expr_sub(cp, &k2, 9);
 	if (k->id == CTID_INT32)
 	  k->i32 = k->i32 >> k2.i32;
 	else
 	  k->u32 = k->u32 >> k2.u32;
-	continue;
+	goto arith_imm;
       }
       /* fallthrough */
     case 9:
@@ -691,6 +705,8 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
 	cp_expr_sub(cp, &k2, 10); k->u32 = k->u32 + k2.u32;
       arith_result:
 	if (k2.id > k->id) k->id = k2.id;  /* Trivial promotion to unsigned. */
+      arith_imm:
+	k->imm = k->imm && k2.imm;
 	continue;
       } else if (cp_opt(cp, '-')) {
 	cp_expr_sub(cp, &k2, 10); k->u32 = k->u32 - k2.u32; goto arith_result;
@@ -702,25 +718,29 @@ static void cp_expr_infix(CPState *cp, CPValue *k, int pri)
       } else if (cp_opt(cp, '/')) {
 	cp_expr_unary(cp, &k2);
 	if (k2.id > k->id) k->id = k2.id;  /* Trivial promotion to unsigned. */
-	if (k2.u32 == 0 ||
-	    (k->id == CTID_INT32 && k->u32 == 0x80000000u && k2.i32 == -1))
-	  cp_err(cp, LJ_ERR_BADVAL);
-	if (k->id == CTID_INT32)
-	  k->i32 = k->i32 / k2.i32;
-	else
-	  k->u32 = k->u32 / k2.u32;
-	continue;
+	if (k->imm && k2.imm) {
+	  if (k2.u32 == 0 ||
+	      (k->id == CTID_INT32 && k->u32 == 0x80000000u && k2.i32 == -1))
+	    cp_err(cp, LJ_ERR_BADVAL);
+	  if (k->id == CTID_INT32)
+	    k->i32 = k->i32 / k2.i32;
+	  else
+	    k->u32 = k->u32 / k2.u32;
+	}
+	goto arith_imm;
       } else if (cp_opt(cp, '%')) {
 	cp_expr_unary(cp, &k2);
 	if (k2.id > k->id) k->id = k2.id;  /* Trivial promotion to unsigned. */
-	if (k2.u32 == 0 ||
-	    (k->id == CTID_INT32 && k->u32 == 0x80000000u && k2.i32 == -1))
-	  cp_err(cp, LJ_ERR_BADVAL);
-	if (k->id == CTID_INT32)
-	  k->i32 = k->i32 % k2.i32;
-	else
-	  k->u32 = k->u32 % k2.u32;
-	continue;
+	if (k->imm && k2.imm) {
+	  if (k2.u32 == 0 ||
+	      (k->id == CTID_INT32 && k->u32 == 0x80000000u && k2.i32 == -1))
+	    cp_err(cp, LJ_ERR_BADVAL);
+	  if (k->id == CTID_INT32)
+	    k->i32 = k->i32 % k2.i32;
+	  else
+	    k->u32 = k->u32 % k2.u32;
+	}
+	goto arith_imm;
       }
     default:
       return;
@@ -750,7 +770,7 @@ static void cp_expr_kint(CPState *cp, CPValue *k)
   CType *ct;
   cp_expr_sub(cp, k, 0);
   ct = ctype_raw(cp->cts, k->id);
-  if (!ctype_isinteger(ct->info)) cp_err(cp, LJ_ERR_BADVAL);
+  if (!ctype_isinteger(ct->info) || !k->imm) cp_err(cp, LJ_ERR_BADVAL);
 }
 
 /* Parse (non-negative) size expression. */
@@ -1447,6 +1467,7 @@ static CTypeID cp_decl_enum(CPState *cp, CPDecl *sdecl)
     CTypeID lastid = eid;
     k.u32 = 0;
     k.id = CTID_INT32;
+    k.imm = 1;
     do {
       GCstr *name = cp->str;
       if (cp->tok != CTOK_IDENT) cp_err_token(cp, CTOK_IDENT);
@@ -1610,10 +1631,26 @@ static void cp_decl_array(CPState *cp, CPDecl *decl)
   CTInfo info = CTINFO(CT_ARRAY, 0);
   CTSize nelem = CTSIZE_INVALID;  /* Default size for a[] or a[?]. */
   cp_decl_attributes(cp, decl);
-  if (cp_opt(cp, '?'))
+  if (cp_opt(cp, '?')) {
     info |= CTF_VLA;  /* Create variable-length array a[?]. */
-  else if (cp->tok != ']')
-    nelem = cp_expr_ksize(cp);
+  } else if (cp->tok != ']') {
+    CPValue k;
+    CType *ct;
+    cp_expr_sub(cp, &k, 0);
+    ct = ctype_raw(cp->cts, k.id);
+    if (ctype_isinteger(ct->info)) {
+      if (k.imm) {
+	if (k.u32 < 0x80000000u)
+	  nelem = k.u32;
+	else
+	  cp_err(cp, LJ_ERR_FFI_INVSIZE);
+      } else {
+	info |= CTF_VLA;
+      }
+    } else {
+      cp_err(cp, LJ_ERR_BADVAL);
+    }
+  }
   cp_check(cp, ']');
   cp_add(decl, info, nelem);
 }
@@ -1623,11 +1660,13 @@ static void cp_decl_func(CPState *cp, CPDecl *fdecl)
 {
   CTSize nargs = 0;
   CTInfo info = CTINFO(CT_FUNC, 0);
-  CTypeID lastid = 0, anchor = 0;
+  CTypeID lastid = 0, anchor = 0, fieldid;
+  uint32_t oldtmask = cp->tmask;
+  cp->tmask |= (1 << CT_FIELD);  /* Allow referencing parameters. */
   if (cp->tok != ')') {
     do {
       CPDecl decl;
-      CTypeID ctypeid, fieldid;
+      CTypeID ctypeid;
       CType *ct;
       if (cp_opt(cp, '.')) {  /* Vararg function. */
 	cp_check(cp, '.');  /* Workaround for the minimalistic lexer. */
@@ -1658,7 +1697,13 @@ static void cp_decl_func(CPState *cp, CPDecl *fdecl)
       if (decl.name) ctype_setname(ct, decl.name);
       ct->info = CTINFO(CT_FIELD, ctypeid);
       ct->size = nargs++;
+      lj_ctype_addname(cp->cts, ct, fieldid);
     } while (cp_opt(cp, ','));
+  }
+  /* Parameters went out of scope. */
+  cp->tmask = oldtmask;
+  for (fieldid = anchor; fieldid; fieldid = ctype_get(cp->cts, fieldid)->sib) {
+    lj_ctype_deltype(cp->cts, fieldid);
   }
   cp_check(cp, ')');
   if (cp_opt(cp, '{')) {  /* Skip function definition. */
@@ -1893,6 +1938,7 @@ static void cp_decl_single(CPState *cp)
   cp_decl_spec(cp, &decl, 0);
   cp_declarator(cp, &decl);
   cp->val.id = cp_decl_intern(cp, &decl);
+  cp->val.imm = 0;
   if (cp->tok != CTOK_EOF) cp_err_token(cp, CTOK_EOF);
 }
 
