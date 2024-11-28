@@ -227,6 +227,8 @@ static Reg rset_pickrandom(ASMState *as, RegSet rs)
 #include "lj_emit_ppc.h"
 #elif LJ_TARGET_MIPS
 #include "lj_emit_mips.h"
+#elif LJ_TARGET_RISCV64
+#include "lj_emit_riscv.h"
 #else
 #error "Missing instruction emitter for target CPU"
 #endif
@@ -1708,6 +1710,8 @@ static void asm_loop(ASMState *as)
 #include "lj_asm_ppc.h"
 #elif LJ_TARGET_MIPS
 #include "lj_asm_mips.h"
+#elif LJ_TARGET_RISCV64
+#include "lj_asm_riscv64.h"
 #else
 #error "Missing assembler for target CPU"
 #endif
