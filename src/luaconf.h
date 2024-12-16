@@ -9,7 +9,6 @@
 #ifndef WINVER
 #define WINVER 0x0501
 #endif
-#include <limits.h>
 #include <stddef.h>
 
 /* Default path for loading Lua and C modules with require(). */

@@ -635,7 +635,7 @@ LJ_NOINLINE static MSize tab_len_slow(GCtab *t, size_t hi)
   while ((tv = lj_tab_getint(t, (int32_t)hi)) && !tvisnil(tv)) {
     lo = hi;
     hi += hi;
-    if (hi > (size_t)(INT_MAX-2)) {  /* Punt and do a linear search. */
+    if (hi > (size_t)(0x7fffffff - 2)) {  /* Punt and do a linear search. */
       lo = 1;
       while ((tv = lj_tab_getint(t, (int32_t)lo)) && !tvisnil(tv)) lo++;
       return (MSize)(lo - 1);
