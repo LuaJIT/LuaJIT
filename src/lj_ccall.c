@@ -575,6 +575,97 @@
     goto done; \
   }
 
+#elif LJ_TARGET_RISCV64
+/* -- RISC-V lp64d calling conventions ------------------------------------ */
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return structs of size > 16 by reference. */ \
+  cc->retref = !(sz <= 16); \
+  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_STRUCTRET2 \
+  unsigned int cl = ccall_classify_struct(cts, ctr); \
+  if ((cl & 4) && (cl >> 8) <= 2) { \
+    CTSize i = (cl >> 8) - 1; \
+    do { ((float *)dp)[i] = cc->fpr[i].f; } while (i--); \
+  } else { \
+    if (cl > 1) { \
+      sp = (uint8_t *)&cc->fpr[0]; \
+      if ((cl >> 8) > 2) \
+        sp = (uint8_t *)&cc->gpr[0]; \
+    } \
+      memcpy(dp, sp, ctr->size); \
+  } \
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in 1 or 2 FPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPRs. */ \
+    ((float *)dp)[0] = cc->fpr[0].f; \
+    ((float *)dp)[1] = cc->fpr[1].f; \
+  } else {  /* Copy complex double from FPRs. */ \
+    ((double *)dp)[0] = cc->fpr[0].d; \
+    ((double *)dp)[1] = cc->fpr[1].d; \
+  }
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass long double complex by reference. */ \
+  if (sz == 2*sizeof(long double)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  } \
+  /* Pass complex in two FPRs or on stack. */ \
+  else if (sz == 2*sizeof(float)) { \
+    isfp = 2; \
+    sz = 2*CTSIZE_PTR; \
+  } else { \
+    isfp = 1; \
+    sz = 2*CTSIZE_PTR; \
+  }
+
+#define CCALL_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    sp = (uint8_t *)&cc->fpr[0].f;
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass structs of size >16 by reference. */ \
+  unsigned int cl = ccall_classify_struct(cts, d); \
+  nff = cl >> 8; \
+  if (sz > 16) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  } \
+  /* Pass struct in FPRs. */ \
+  if (cl > 1) { \
+    isfp = (cl & 4) ? 2 : 1; \
+  }
+
+
+#define CCALL_HANDLE_REGARG \
+  if (isfp && (!isva)) {  /* Try to pass argument in FPRs. */ \
+    int n2 = ctype_isvector(d->info) ? 1 : \
+            isfp == 1 ? n : 2; \
+    if (nfpr + n2 <= CCALL_NARG_FPR && nff <= 2) { \
+      dp = &cc->fpr[nfpr]; \
+      nfpr += n2; \
+      goto done; \
+    } else { \
+      if (ngpr + n2 <= maxgpr) { \
+       dp = &cc->gpr[ngpr]; \
+       ngpr += n2; \
+       goto done; \
+      } \
+    } \
+  } else {  /* Try to pass argument in GPRs. */ \
+      if (ngpr + n <= maxgpr) { \
+        dp = &cc->gpr[ngpr]; \
+        ngpr += n; \
+        goto done; \
+    } \
+  }
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
@@ -891,6 +982,51 @@ static void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp,
 
 #endif
 
+/* -- RISC-V ABI struct classification ---------------------------- */
+
+#if LJ_TARGET_RISCV64
+
+static unsigned int ccall_classify_struct(CTState *cts, CType *ct)
+{
+  CTSize sz = ct->size;
+  unsigned int r = 0, n = 0, isu = (ct->info & CTF_UNION);
+  while (ct->sib) {
+    CType *sct;
+    ct = ctype_get(cts, ct->sib);
+    if (ctype_isfield(ct->info)) {
+      sct = ctype_rawchild(cts, ct);
+      if (ctype_isfp(sct->info)) {
+	r |= sct->size;
+	if (!isu) n++; else if (n == 0) n = 1;
+      } else if (ctype_iscomplex(sct->info)) {
+	r |= (sct->size >> 1);
+	if (!isu) n += 2; else if (n < 2) n = 2;
+      } else if (ctype_isstruct(sct->info)) {
+	goto substruct;
+      } else {
+	goto noth;
+      }
+    } else if (ctype_isbitfield(ct->info)) {
+      goto noth;
+    } else if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
+      sct = ctype_rawchild(cts, ct);
+    substruct:
+      if (sct->size > 0) {
+	unsigned int s = ccall_classify_struct(cts, sct);
+	if (s <= 1) goto noth;
+	r |= (s & 255);
+	if (!isu) n += (s >> 8); else if (n < (s >>8)) n = (s >> 8);
+      }
+    }
+  }
+  if ((r == 4 || r == 8) && n <= 4)
+    return r + (n << 8);
+noth:  /* Not a homogeneous float/double aggregate. */
+  return (sz <= 16);  /* Return structs of size <= 16 in GPRs. */
+}
+
+#endif
+
 /* -- Common C call handling ---------------------------------------------- */
 
 /* Infer the destination CTypeID for a vararg argument. */
@@ -935,6 +1071,10 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 #if LJ_TARGET_ARM
   MSize fprodd = 0;
 #endif
+#endif
+
+#if LJ_TARGET_RISCV64
+  int nff = 0;
 #endif
 
   /* Clear unused regs to get some determinism in case of misdeclaration. */
@@ -1077,7 +1217,11 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     if (isfp && d->size == sizeof(float))
       ((float *)dp)[1] = ((float *)dp)[0];  /* Floats occupy high slot. */
 #endif
-#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE)
+#if LJ_TARGET_RISCV64
+    if (isfp && d->size == sizeof(float))
+      ((uint32_t *)dp)[1] = 0xffffffffu;  /* Float NaN boxing */
+#endif
+#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE) || LJ_TARGET_RISCV64
     if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info)
 #if LJ_TARGET_MIPS64
 	 || (isfp && nsp == 0)
@@ -1107,6 +1251,14 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       CTSize i = (sz >> 2) - 1;
       do { ((uint64_t *)dp)[i] = ((uint32_t *)dp)[i]; } while (i--);
     }
+#elif LJ_TARGET_RISCV64
+    if (isfp == 2 && nff <= 2) {
+      /* Split complex float into separate registers. */
+      CTSize i = (sz >> 2) - 1;
+      do {
+        ((uint64_t *)dp)[i] = 0xffffffff00000000ul | ((uint32_t *)dp)[i];
+      } while (i--);
+    }
 #else
     UNUSED(isfp);
 #endif
@@ -1116,7 +1268,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   if ((int32_t)nsp < 0) nsp = 0;
 #endif
 
-#if LJ_TARGET_X64 || (LJ_TARGET_PPC && !LJ_ABI_SOFTFP)
+#if LJ_TARGET_X64 || (LJ_TARGET_PPC && !LJ_ABI_SOFTFP) || LJ_TARGET_RISCV64
   cc->nfpr = nfpr;  /* Required for vararg functions. */
 #endif
   cc->nsp = (nsp + CTSIZE_PTR-1) & ~(CTSIZE_PTR-1);
