@@ -459,6 +459,7 @@ static LJ_AINLINE void ctype_setname(CType *ct, GCstr *s)
 LJ_FUNC CTypeID lj_ctype_new(CTState *cts, CType **ctp);
 LJ_FUNC CTypeID lj_ctype_intern(CTState *cts, CTInfo info, CTSize size);
 LJ_FUNC void lj_ctype_addname(CTState *cts, CType *ct, CTypeID id);
+LJ_FUNC void lj_ctype_deltype(CTState *cts, CTypeID id);
 LJ_FUNC CTypeID lj_ctype_getname(CTState *cts, CType **ctp, GCstr *name,
 				 uint32_t tmask);
 LJ_FUNC CType *lj_ctype_getfieldq(CTState *cts, CType *ct, GCstr *name,
