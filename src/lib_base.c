@@ -141,6 +141,8 @@ LJLIB_CF(getfenv)
   cTValue *o = L->base;
   if (!(o < L->top && tvisfunc(o))) {
     int level = lj_lib_optint(L, 1, 1);
+    if (level < 0)
+      lj_err_arg(L, 1, LJ_ERR_INVLVL);
     o = lj_debug_frame(L, level, &level);
     if (o == NULL)
       lj_err_arg(L, 1, LJ_ERR_INVLVL);
@@ -162,6 +164,8 @@ LJLIB_CF(setfenv)
       setgcref(L->env, obj2gco(t));
       return 0;
     }
+    if (level < 0)
+      lj_err_arg(L, 1, LJ_ERR_INVLVL);
     o = lj_debug_frame(L, level, &level);
     if (o == NULL)
       lj_err_arg(L, 1, LJ_ERR_INVLVL);
