@@ -329,14 +329,8 @@ LJLIB_CF(io_method_seek)
   else if (opt == 1) opt = SEEK_CUR;
   else if (opt == 2) opt = SEEK_END;
   o = L->base+2;
-  if (o < L->top) {
-    if (tvisint(o))
-      ofs = (int64_t)intV(o);
-    else if (tvisnum(o))
-      ofs = (int64_t)numV(o);
-    else if (!tvisnil(o))
-      lj_err_argt(L, 3, LUA_TNUMBER);
-  }
+  if (o < L->top && !tvisnil(o))
+    ofs = (int64_t)lj_lib_checknum(L, 3);
 #if LJ_TARGET_POSIX
   res = fseeko(fp, ofs, opt);
 #elif _MSC_VER >= 1400
