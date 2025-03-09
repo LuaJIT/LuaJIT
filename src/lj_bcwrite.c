@@ -186,7 +186,7 @@ static void bcwrite_ktab(BCWriteCtx *ctx, char *p, const GCtab *t)
     } else {
       MSize i = nhash;
       for (;; node--)
-	if (!tvisnil(&node->key)) {
+	if (!tvisnil(&node->val)) {
 	  bcwrite_ktabk(ctx, &node->key, 0);
 	  bcwrite_ktabk(ctx, &node->val, 1);
 	  if (--i == 0) break;
