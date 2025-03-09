@@ -138,7 +138,7 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 static int mcode_setprot(void *p, size_t sz, int prot)
 {
 #if MCMAP_CREATE
-  pthread_jit_write_protect_np((prot & PROC_EXEC));
+  pthread_jit_write_protect_np((prot & PROT_EXEC));
   return 0;
 #else
   return mprotect(p, sz, prot);
