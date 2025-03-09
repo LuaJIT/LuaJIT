@@ -2079,6 +2079,7 @@ static TRef rec_tnew(jit_State *J, uint32_t ah)
 /* -- Concatenation ------------------------------------------------------- */
 
 typedef struct RecCatDataCP {
+  TValue savetv[5+LJ_FR2];
   jit_State *J;
   BCReg baseslot, topslot;
   TRef tr;
@@ -2119,7 +2120,9 @@ static TValue *rec_mm_concat_cp(lua_State *L, lua_CFunction dummy, void *ud)
       return NULL;
     }
     /* Pass partial result. */
-    topslot = J->maxslot--;
+    rcd->topslot = topslot = J->maxslot--;
+    /* Save updated range of slots. */
+    memcpy(rcd->savetv, &L->base[topslot-1], sizeof(rcd->savetv));
     *xbase = tr;
     top = xbase;
     setstrV(J->L, &ix.keyv, &J2G(J)->strempty);  /* Simulate string result. */
@@ -2139,16 +2142,18 @@ static TRef rec_cat(jit_State *J, BCReg baseslot, BCReg topslot)
 {
   lua_State *L = J->L;
   ptrdiff_t delta = L->top - L->base;
-  TValue savetv[5+LJ_FR2], errobj;
+  TValue errobj;
   RecCatDataCP rcd;
   int errcode;
   rcd.J = J;
   rcd.baseslot = baseslot;
   rcd.topslot = topslot;
-  memcpy(savetv, &L->base[topslot-1], sizeof(savetv));  /* Save slots. */
+  /* Save slots. */
+  memcpy(rcd.savetv, &L->base[topslot-1], sizeof(rcd.savetv));
   errcode = lj_vm_cpcall(L, NULL, &rcd, rec_mm_concat_cp);
   if (errcode) copyTV(L, &errobj, L->top-1);
-  memcpy(&L->base[topslot-1], savetv, sizeof(savetv));  /* Restore slots. */
+  /* Restore slots. */
+  memcpy(&L->base[rcd.topslot-1], rcd.savetv, sizeof(rcd.savetv));
   if (errcode) {
     L->top = L->base + delta;
     copyTV(L, L->top++, &errobj);
