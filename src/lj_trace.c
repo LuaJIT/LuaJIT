@@ -205,14 +205,6 @@ static void trace_unpatch(jit_State *J, GCtrace *T)
     lua_assert(op == BC_ITERL || op == BC_LOOP || bc_isret(op));
     *pc = T->startins;
     break;
-  case BC_JMP:
-    lua_assert(op == BC_ITERL);
-    pc += bc_j(*pc)+2;
-    if (bc_op(*pc) == BC_JITERL) {
-      lua_assert(traceref(J, bc_d(*pc)) == T);
-      *pc = T->startins;
-    }
-    break;
   case BC_JFUNCF:
     lua_assert(op == BC_FUNCF);
     *pc = T->startins;
@@ -227,18 +219,19 @@ static void trace_flushroot(jit_State *J, GCtrace *T)
 {
   GCproto *pt = &gcref(T->startpt)->pt;
   lua_assert(T->root == 0 && pt != NULL);
-  /* First unpatch any modified bytecode. */
-  trace_unpatch(J, T);
   /* Unlink root trace from chain anchored in prototype. */
   if (pt->trace == T->traceno) {  /* Trace is first in chain. Easy. */
     pt->trace = T->nextroot;
+unpatch:
+    /* Unpatch modified bytecode only if the trace has not been flushed. */
+    trace_unpatch(J, T);
   } else if (pt->trace) {  /* Otherwise search in chain of root traces. */
     GCtrace *T2 = traceref(J, pt->trace);
     if (T2) {
       for (; T2->nextroot; T2 = traceref(J, T2->nextroot))
 	if (T2->nextroot == T->traceno) {
 	  T2->nextroot = T->nextroot;  /* Unlink from chain. */
-	  break;
+	  goto unpatch;
 	}
     }
   }
