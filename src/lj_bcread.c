@@ -179,7 +179,7 @@ static const void *bcread_varinfo(GCproto *pt)
 }
 
 /* Read a single constant key/value of a template table. */
-static void bcread_ktabk(LexState *ls, TValue *o, GCtab *t)
+static void bcread_ktabk(LexState *ls, TValue *o)
 {
   MSize tp = bcread_uleb128(ls);
   if (tp >= BCDUMP_KTAB_STR) {
@@ -191,8 +191,6 @@ static void bcread_ktabk(LexState *ls, TValue *o, GCtab *t)
   } else if (tp == BCDUMP_KTAB_NUM) {
     o->u32.lo = bcread_uleb128(ls);
     o->u32.hi = bcread_uleb128(ls);
-  } else if (tp == BCDUMP_KTAB_NIL) { /* Restore nil value marker. */
-    settabV(ls->L, o, t);
   } else {
     lj_assertLS(tp <= BCDUMP_KTAB_TRUE, "bad constant type %d", tp);
     setpriV(o, ~tp);
@@ -209,15 +207,15 @@ static GCtab *bcread_ktab(LexState *ls)
     MSize i;
     TValue *o = tvref(t->array);
     for (i = 0; i < narray; i++, o++)
-      bcread_ktabk(ls, o, t);
+      bcread_ktabk(ls, o);
   }
   if (nhash) {  /* Read hash entries. */
     MSize i;
     for (i = 0; i < nhash; i++) {
       TValue key;
-      bcread_ktabk(ls, &key, t);
+      bcread_ktabk(ls, &key);
       lj_assertLS(!tvisnil(&key), "nil key");
-      bcread_ktabk(ls, lj_tab_set(ls->L, t, &key), t);
+      bcread_ktabk(ls, lj_tab_set(ls->L, t, &key));
     }
   }
   return t;

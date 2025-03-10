@@ -71,8 +71,6 @@ static void bcwrite_ktabk(BCWriteCtx *ctx, cTValue *o, int narrow)
     *p++ = BCDUMP_KTAB_NUM;
     p = lj_strfmt_wuleb128(p, o->u32.lo);
     p = lj_strfmt_wuleb128(p, o->u32.hi);
-  } else if (tvistab(o)) { /* Write the nil value marker as a nil. */
-    *p++ = BCDUMP_KTAB_NIL;
   } else {
     lj_assertBCW(tvispri(o), "unhandled type %d", itype(o));
     *p++ = BCDUMP_KTAB_NIL+~itype(o);
@@ -135,7 +133,7 @@ static void bcwrite_ktab_sorted_hash(BCWriteCtx *ctx, Node *node, MSize nhash)
   TValue **heap = ctx->heap;
   MSize i = nhash;
   for (;; node--) {  /* Build heap. */
-    if (!tvisnil(&node->val)) {
+    if (!tvisnil(&node->key)) {
       bcwrite_ktabk_heap_insert(heap, --i, nhash, &node->key);
       if (i == 0) break;
     }
@@ -165,7 +163,7 @@ static void bcwrite_ktab(BCWriteCtx *ctx, char *p, const GCtab *t)
     MSize i, hmask = t->hmask;
     Node *node = noderef(t->node);
     for (i = 0; i <= hmask; i++)
-      nhash += !tvisnil(&node[i].val);
+      nhash += !tvisnil(&node[i].key);
   }
   /* Write number of array slots and hash slots. */
   p = lj_strfmt_wuleb128(p, narray);
@@ -186,7 +184,7 @@ static void bcwrite_ktab(BCWriteCtx *ctx, char *p, const GCtab *t)
     } else {
       MSize i = nhash;
       for (;; node--)
-	if (!tvisnil(&node->val)) {
+	if (!tvisnil(&node->key)) {
 	  bcwrite_ktabk(ctx, &node->key, 0);
 	  bcwrite_ktabk(ctx, &node->val, 1);
 	  if (--i == 0) break;
