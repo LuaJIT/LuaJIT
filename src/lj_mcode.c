@@ -99,7 +99,7 @@ static int mcode_setprot(void *p, size_t sz, DWORD prot)
 #endif
 
 /* Check for macOS hardened runtime. */
-#if LUAJIT_SECURITY_MCODE != 0 && defined(MAP_JIT) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 110000
+#if defined(LUAJIT_ENABLE_OSX_HRT) && LUAJIT_SECURITY_MCODE != 0 && defined(MAP_JIT) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 110000
 #include <pthread.h>
 #define MCMAP_CREATE	MAP_JIT
 #else
@@ -111,6 +111,8 @@ static int mcode_setprot(void *p, size_t sz, DWORD prot)
 #define MCPROT_RWX	(PROT_READ|PROT_WRITE|PROT_EXEC)
 #ifdef PROT_MPROTECT
 #define MCPROT_CREATE	(PROT_MPROTECT(MCPROT_RWX))
+#elif MCMAP_CREATE
+#define MCPROT_CREATE	PROT_EXEC
 #else
 #define MCPROT_CREATE	0
 #endif

@@ -263,7 +263,7 @@ static void *callback_mcode_init(global_State *g, uint32_t *page)
 #endif
 
 /* Check for macOS hardened runtime. */
-#if LUAJIT_SECURITY_MCODE != 0 && defined(MAP_JIT) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 110000
+#if defined(LUAJIT_ENABLE_OSX_HRT) && LUAJIT_SECURITY_MCODE != 0 && defined(MAP_JIT) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 110000
 #include <pthread.h>
 #define CCMAP_CREATE	MAP_JIT
 #else
