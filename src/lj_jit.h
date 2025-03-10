@@ -359,14 +359,10 @@ enum {
 
 enum {
 #if LJ_TARGET_X86ORX64
+  LJ_K64_2P32,		/* 2^32 */
   LJ_K64_TOBIT,		/* 2^52 + 2^51 */
   LJ_K64_2P64,		/* 2^64 */
   LJ_K64_M2P64,		/* -2^64 */
-#if LJ_32
-  LJ_K64_M2P64_31,	/* -2^64 or -2^31 */
-#else
-  LJ_K64_M2P64_31 = LJ_K64_M2P64,
-#endif
 #endif
 #if LJ_TARGET_MIPS
   LJ_K64_2P31,		/* 2^31 */
@@ -381,7 +377,8 @@ enum {
 
 enum {
 #if LJ_TARGET_X86ORX64
-  LJ_K32_M2P64_31,	/* -2^64 or -2^31 */
+  LJ_K32_2P32,		/* 2^32 */
+  LJ_K32_2P64,		/* 2^64 */
 #endif
 #if LJ_TARGET_PPC
   LJ_K32_2P52_2P31,	/* 2^52 + 2^31 */
