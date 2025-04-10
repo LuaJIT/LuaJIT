@@ -781,17 +781,24 @@ static unsigned int ccall_classify_struct(CTState *cts, CType *ct)
 {
   CTSize sz = ct->size;
   unsigned int r = 0, n = 0, isu = (ct->info & CTF_UNION);
-  while (ct->sib) {
+  while (ct->sib && n <= 4) {
+    unsigned int m = 1;
     CType *sct;
     ct = ctype_get(cts, ct->sib);
     if (ctype_isfield(ct->info)) {
       sct = ctype_rawchild(cts, ct);
+      if (ctype_isarray(sct->info)) {
+	CType *cct = ctype_rawchild(cts, sct);
+	if (!cct->size) continue;
+	m = sct->size / cct->size;
+	sct = cct;
+      }
       if (ctype_isfp(sct->info)) {
 	r |= sct->size;
-	if (!isu) n++; else if (n == 0) n = 1;
+	if (!isu) n += m; else if (n < m) n = m;
       } else if (ctype_iscomplex(sct->info)) {
 	r |= (sct->size >> 1);
-	if (!isu) n += 2; else if (n < 2) n = 2;
+	if (!isu) n += 2*m; else if (n < 2*m) n = 2*m;
       } else if (ctype_isstruct(sct->info)) {
 	goto substruct;
       } else {
@@ -803,10 +810,11 @@ static unsigned int ccall_classify_struct(CTState *cts, CType *ct)
       sct = ctype_rawchild(cts, ct);
     substruct:
       if (sct->size > 0) {
-	unsigned int s = ccall_classify_struct(cts, sct);
+	unsigned int s = ccall_classify_struct(cts, sct), sn;
 	if (s <= 1) goto noth;
 	r |= (s & 255);
-	if (!isu) n += (s >> 8); else if (n < (s >>8)) n = (s >> 8);
+	sn = (s >> 8) * m;
+	if (!isu) n += sn; else if (n < sn) n = sn;
       }
     }
   }
