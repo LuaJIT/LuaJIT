@@ -901,7 +901,9 @@ static void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp,
 
 /* -- Common C call handling ---------------------------------------------- */
 
-/* Infer the destination CTypeID for a vararg argument. */
+/* Infer the destination CTypeID for a vararg argument.
+** Note: may reallocate cts->tab and invalidate CType pointers.
+*/
 CTypeID lj_ccall_ctid_vararg(CTState *cts, cTValue *o)
 {
   if (tvisnumber(o)) {
@@ -929,13 +931,16 @@ CTypeID lj_ccall_ctid_vararg(CTState *cts, cTValue *o)
   }
 }
 
-/* Setup arguments for C call. */
+/* Setup arguments for C call.
+** Note: may reallocate cts->tab and invalidate CType pointers.
+*/
 static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 			  CCallState *cc)
 {
   int gcsteps = 0;
   TValue *o, *top = L->top;
   CTypeID fid;
+  CTInfo info = ct->info;  /* lj_ccall_ctid_vararg may invalidate ct pointer. */
   CType *ctr;
   MSize maxgpr, ngpr = 0, nsp = 0, narg;
 #if CCALL_NARG_FPR
@@ -954,7 +959,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
 #if LJ_TARGET_X86
   /* x86 has several different calling conventions. */
   cc->resx87 = 0;
-  switch (ctype_cconv(ct->info)) {
+  switch (ctype_cconv(info)) {
   case CTCC_FASTCALL: maxgpr = 2; break;
   case CTCC_THISCALL: maxgpr = 1; break;
   default: maxgpr = 0; break;
@@ -971,7 +976,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   } else if (ctype_iscomplex(ctr->info) || ctype_isstruct(ctr->info)) {
     /* Preallocate cdata object and anchor it after arguments. */
     CTSize sz = ctr->size;
-    GCcdata *cd = lj_cdata_new(cts, ctype_cid(ct->info), sz);
+    GCcdata *cd = lj_cdata_new(cts, ctype_cid(info), sz);
     void *dp = cdataptr(cd);
     setcdataV(L, L->top++, cd);
     if (ctype_isstruct(ctr->info)) {
@@ -994,7 +999,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   }
 
 #if LJ_TARGET_ARM64 && LJ_ABI_WIN
-  if ((ct->info & CTF_VARARG)) {
+  if ((info & CTF_VARARG)) {
     nsp -= maxgpr * CTSIZE_PTR;  /* May end up with negative nsp. */
     ngpr = maxgpr;
     nfpr = CCALL_NARG_FPR;
@@ -1015,7 +1020,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
       lj_assertL(ctype_isfield(ctf->info), "field expected");
       did = ctype_cid(ctf->info);
     } else {
-      if (!(ct->info & CTF_VARARG))
+      if (!(info & CTF_VARARG))
 	lj_err_caller(L, LJ_ERR_FFI_NUMARG);  /* Too many arguments. */
       did = lj_ccall_ctid_vararg(cts, o);  /* Infer vararg type. */
       isva = 1;
@@ -1186,11 +1191,11 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
     ct = ctype_rawchild(cts, ct);
   }
   if (ctype_isfunc(ct->info)) {
+    CTypeID id = ctype_typeid(cts, ct);
     CCallState cc;
     int gcsteps, ret;
     cc.func = (void (*)(void))cdata_getptr(cdataptr(cd), sz);
     gcsteps = ccall_set_args(L, cts, ct, &cc);
-    ct = (CType *)((intptr_t)ct-(intptr_t)cts->tab);
     cts->cb.slot = ~0u;
     lj_vm_ffi_call(&cc);
     if (cts->cb.slot != ~0u) {  /* Blacklist function that called a callback. */
@@ -1198,7 +1203,7 @@ int lj_ccall_func(lua_State *L, GCcdata *cd)
       tv.u64 = ((uintptr_t)(void *)cc.func >> 2) | U64x(800000000, 00000000);
       setboolV(lj_tab_set(L, cts->miscmap, &tv), 1);
     }
-    ct = (CType *)((intptr_t)ct+(intptr_t)cts->tab);  /* May be reallocated. */
+    ct = ctype_get(cts, id);  /* Table may have been reallocated. */
     gcsteps += ccall_get_results(L, cts, ct, &cc, &ret);
 #if LJ_TARGET_X86 && LJ_ABI_WIN
     /* Automatically detect __stdcall and fix up C function declaration. */
