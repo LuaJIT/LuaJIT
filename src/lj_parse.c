@@ -1517,23 +1517,11 @@ static void fs_fixup_var(LexState *ls, GCproto *pt, uint8_t *p, size_t ofsvar)
 
 #endif
 
-/* Check if bytecode op returns. */
-static int bcopisret(BCOp op)
-{
-  switch (op) {
-  case BC_CALLMT: case BC_CALLT:
-  case BC_RETM: case BC_RET: case BC_RET0: case BC_RET1:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
 /* Fixup return instruction for prototype. */
 static void fs_fixup_ret(FuncState *fs)
 {
   BCPos lastpc = fs->pc;
-  if (lastpc <= fs->lasttarget || !bcopisret(bc_op(fs->bcbase[lastpc-1].ins))) {
+  if (lastpc <= fs->lasttarget || !bc_isret_or_tail(bc_op(fs->bcbase[lastpc-1].ins))) {
     if ((fs->bl->flags & FSCOPE_UPVAL))
       bcemit_AJ(fs, BC_UCLO, 0, 0);
     bcemit_AD(fs, BC_RET0, 0, 1);  /* Need final return. */
