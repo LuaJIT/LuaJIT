@@ -593,6 +593,7 @@ ifeq (static,$(BUILDMODE))
   TARGET_DYNCC= @:
   TARGET_T= $(LUAJIT_T)
   TARGET_DEP= $(LIB_VMDEF)
+  TARGET_ALDFLAGS+= -static
 else
 ifeq (dynamic,$(BUILDMODE))
   ifneq (Windows,$(TARGET_SYS))
