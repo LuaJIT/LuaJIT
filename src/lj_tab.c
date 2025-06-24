@@ -379,12 +379,20 @@ cTValue * LJ_FASTCALL lj_tab_getinth(GCtab *t, int32_t key)
 {
   TValue k;
   Node *n;
+  if (!t)
+    return NULL;
   k.n = (lua_Number)key;
   n = hashnum(t, &k);
   do {
-    if (tvisnum(&n->key) && n->key.n == k.n)
-      return &n->val;
-  } while ((n = nextnode(n)));
+    if (!n || (uintptr_t)n < 0x1000 || (uintptr_t)n > 0xFFFFFFFF) 
+      break;
+    if ((uintptr_t)&n->key < 0x1000 || (uintptr_t)&n->key > 0xFFFFFFFF)
+      break;
+    if (tvisnum(&n->key)) {
+      if (n->key.n == k.n) 
+        return &n->val;
+    }
+  } while ((n = nextnode(n)) != NULL);
   return NULL;
 }
 
