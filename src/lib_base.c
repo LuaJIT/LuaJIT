@@ -241,6 +241,7 @@ LJLIB_CF(unpack)
     if (tv) {
       copyTV(L, L->top++, tv);
     } else {
+      if (L->top >= mref(L->maxstack, TValue)) lj_err_caller(L, LJ_ERR_UNPACK);
       setnilV(L->top++);
     }
   } while (i++ < e);
