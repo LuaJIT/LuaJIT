@@ -21,9 +21,25 @@
 /* -- OS-specific functions ----------------------------------------------- */
 
 #if LJ_TARGET_DLOPEN
-
+#include <android/dlext.h> // для android_namespace_t
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <link.h>
+#include <sys/sendfile.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <android/dlext.h>
+#include <errno.h>
+#include <sys/syscall.h>
+#include <link.h>
+#define MFD_CLOEXEC 0x0001
+#define SYS_memfd_create 279
+static int my_memfd_create(const char *name, unsigned int flags) {
+  return syscall(SYS_memfd_create, name, flags);
+}
 
 #if defined(RTLD_DEFAULT) && !defined(NO_RTLD_DEFAULT)
 #define CLIB_DEFHANDLE	RTLD_DEFAULT
@@ -53,7 +69,6 @@ LJ_NORET LJ_NOINLINE static void clib_error_(lua_State *L)
 #else
 #define CLIB_SOEXT	"%s.so"
 #endif
-
 static const char *clib_extname(lua_State *L, const char *name)
 {
   if (!strchr(name, '/')
@@ -78,7 +93,15 @@ static const char *clib_extname(lua_State *L, const char *name)
   return name;
 }
 
-/* Check for a recognized ld script line. */
+struct android_dlextinfo {
+    uint64_t flags;
+    void* reserved_addr;
+    size_t reserved_size;
+    int relro_fd;
+    struct android_namespace_t *library_namespace;
+    int extinfo_flags;
+};
+
 static const char *clib_check_lds(lua_State *L, const char *buf)
 {
   char *p, *e;
@@ -115,21 +138,74 @@ static const char *clib_resolve_lds(lua_State *L, const char *name)
 
 static void *clib_loadlib(lua_State *L, const char *name, int global)
 {
-  void *h = dlopen(clib_extname(L, name),
-		   RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
-  if (!h) {
-    const char *e, *err = dlerror();
-    if (err && *err == '/' && (e = strchr(err, ':')) &&
-	(name = clib_resolve_lds(L, strdata(lj_str_new(L, err, e-err))))) {
-      h = dlopen(name, RTLD_LAZY | (global?RTLD_GLOBAL:RTLD_LOCAL));
-      if (h) return h;
-      err = dlerror();
-    }
-    if (!err) err = "dlopen failed";
-    lj_err_callermsg(L, err);
-  }
-  return h;
+  const char *fullname = clib_extname(L, name);
+
+  int fd_src = open(fullname, O_RDONLY | O_CLOEXEC);
+  if (fd_src < 0) {
+    lj_err_callermsg(L, "Failed to open shared library file");
+    return NULL;
+  }
+
+  int fd_memfd = my_memfd_create("libmemfd", MFD_CLOEXEC);
+  if (fd_memfd < 0) {
+    close(fd_src);
+    lj_err_callermsg(L, "memfd_create not supported");
+    return NULL;
+  }
+
+  off_t offset = 0;
+  ssize_t n;
+  while ((n = sendfile(fd_memfd, fd_src, &offset, 65536)) > 0);
+  if (n < 0) {
+    close(fd_src);
+    close(fd_memfd);
+    lj_err_callermsg(L, "sendfile failed copying library");
+    return NULL;
+  }
+  close(fd_src);
+
+  char fd_path[64];
+  snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd_memfd);
+
+  void *handle = NULL;
+
+  // Получаем android_dlopen_ext
+  void *libdl = dlopen("libdl_android.so", RTLD_NOW);
+  void *libc = dlopen("libc.so", RTLD_NOW);
+  void *(*android_dlopen_ext)(const char *, int, const struct android_dlextinfo *) =
+    dlsym(libc, "android_dlopen_ext");
+
+  void *(*android_create_namespace)(
+    const char *, const char *, const char *, uint64_t,
+    const char *, void *) = dlsym(libdl, "android_create_namespace");
+
+  if (android_dlopen_ext && android_create_namespace) {
+    // создаём namespace
+    void *ns = android_create_namespace("my_lua_ns", NULL, NULL, 0, NULL, NULL);
+
+    struct android_dlextinfo extinfo;
+    memset(&extinfo, 0, sizeof(extinfo));
+    extinfo.flags = ANDROID_DLEXT_USE_NAMESPACE;
+    extinfo.library_namespace = ns;
+
+    handle = android_dlopen_ext(fd_path, RTLD_NOW | (global ? RTLD_GLOBAL : RTLD_LOCAL), &extinfo);
+  }
+
+  if (!handle) {
+    // fallback на обычный dlopen (например, если android_dlopen_ext не доступен)
+    handle = dlopen(fd_path, RTLD_NOW | (global ? RTLD_GLOBAL : RTLD_LOCAL));
+  }
+
+  if (!handle) {
+    const char *err = dlerror();
+    close(fd_memfd);
+    lj_err_callermsg(L, err ? err : "dlopen_ext and fallback failed");
+    return NULL;
+  }
+
+  return handle;
 }
+
 
 static void clib_unloadlib(CLibrary *cl)
 {
@@ -139,8 +215,7 @@ static void clib_unloadlib(CLibrary *cl)
 
 static void *clib_getsym(CLibrary *cl, const char *name)
 {
-  void *p = dlsym(cl->handle, name);
-  return p;
+  return dlsym(cl->handle, name);
 }
 
 #elif LJ_TARGET_WINDOWS
