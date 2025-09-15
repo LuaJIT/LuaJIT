@@ -16,27 +16,27 @@
 #include "lj_arch.h"
 
 // Ashita: Third-party library additions..
+#include "../../luaex/lsqlite3/lsqlite3.h"
 #include "../../luaex/lstruct/struct.h"
 #include "../../luaex/luasocket/luasocket.h"
 #include "../../luaex/luasocket/mime.h"
 
 static const luaL_Reg lj_lib_load[] = {
-  { "",			luaopen_base },
-  { LUA_LOADLIBNAME,	luaopen_package },
-  { LUA_TABLIBNAME,	luaopen_table },
-  { LUA_IOLIBNAME,	luaopen_io },
-  { LUA_OSLIBNAME,	luaopen_os },
-  { LUA_STRLIBNAME,	luaopen_string },
-  { LUA_MATHLIBNAME,	luaopen_math },
-  { LUA_DBLIBNAME,	luaopen_debug },
-  { LUA_BITLIBNAME,	luaopen_bit },
-  { LUA_JITLIBNAME,	luaopen_jit },
-  { LUA_UTF8LIBNAME,	luaopen_utf8 }, /* require base, string, debug, bit */
-
+  { "",                 luaopen_base },
+  { LUA_LOADLIBNAME,    luaopen_package },
+  { LUA_TABLIBNAME,     luaopen_table },
+  { LUA_IOLIBNAME,      luaopen_io },
+  { LUA_OSLIBNAME,      luaopen_os },
+  { LUA_STRLIBNAME,     luaopen_string },
+  { LUA_MATHLIBNAME,    luaopen_math },
+  { LUA_DBLIBNAME,      luaopen_debug },
+  { LUA_BITLIBNAME,     luaopen_bit },
+  { LUA_JITLIBNAME,     luaopen_jit },
+  { LUA_UTF8LIBNAME,    luaopen_utf8 }, /* require base, string, debug, bit */
   // Ashita: Third-party library additions..
-  { "struct", luaopen_struct },
-
-  { NULL,		NULL }
+  { "struct",           luaopen_struct },
+  { "",                 luaopen_lsqlite3 },
+  { NULL,               NULL }
 };
 
 static const luaL_Reg lj_lib_preload[] = {

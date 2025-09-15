@@ -88,14 +88,14 @@ buildvm -m folddef -o lj_folddef.h lj_opt_fold.c
 @if "%1"=="static" goto :STATIC
 %LJCOMPILE% /MD /DLUA_BUILD_AS_DLL lj_*.c lib_*.c
 @if errorlevel 1 goto :BAD
-%LJLINK% /DLL /out:build/%BUILDTYPE%/%LJDLLNAME% lj_*.obj lib_*.obj luasocket.obj wsocket.obj
+%LJLINK% /DLL /out:build/%BUILDTYPE%/%LJDLLNAME% lj_*.obj lib_*.obj luasocket.obj wsocket.obj lsqlite3.obj sqlite3.obj
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :STATIC
-%LJCOMPILE% lj_*.c lib_*.c %ASHITAEXDIR%/luasocket/*.c
+%LJCOMPILE% lj_*.c lib_*.c %ASHITAEXDIR%/luasocket/*.c %ASHITAEXDIR%/lsqlite3/*.c
 @if errorlevel 1 goto :BAD
 %LJLIB% /OUT:build/%BUILDTYPE%/%LJLIBNAME% lj_*.obj lib_*.obj^
-  auxiliar.obj buffer.obj compat.obj except.obj inet.obj io.obj luasocket.obj mime.obj options.obj select.obj tcp.obj timeout.obj udp.obj wsocket.obj
+  auxiliar.obj buffer.obj compat.obj except.obj inet.obj io.obj luasocket.obj mime.obj options.obj select.obj tcp.obj timeout.obj udp.obj wsocket.obj lsqlite3.obj sqlite3.obj
 @if errorlevel 1 goto :BAD
 @goto :MTDLL
 :AMALGDLL
