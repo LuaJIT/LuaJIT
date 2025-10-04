@@ -367,6 +367,9 @@ static LexToken lex_scan(LexState *ls, TValue *tv)
     case '\'':
       lex_string(ls, tv);
       return TK_string;
+    case '@':
+      lex_next(ls);
+      return '@';
     case '.':
       if (lex_savenext(ls) == '.') {
 	lex_next(ls);

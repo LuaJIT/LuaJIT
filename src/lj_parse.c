@@ -2290,6 +2290,68 @@ static void parse_func(LexState *ls, BCLine line)
   fs->bcbase[fs->pc - 1].line = line;  /* Set line for the store. */
 }
 
+static void parse_decorated_func(LexState *lex_state, BCLine line) {
+    FuncState *func_state = lex_state->fs;
+    ExpDesc *decorators = NULL;
+    size_t decorator_count = 0;
+    size_t decorator_capacity = 4;
+    ExpDesc function_body, global_var_desc;
+    GCstr *function_name;
+    BCReg decorator_register, function_register;
+
+    decorators = (ExpDesc *)malloc(decorator_capacity * sizeof(ExpDesc));
+    if (!decorators) lj_err_mem(lex_state->L);
+
+    while (lex_state->tok == '@') {
+        lj_lex_next(lex_state);
+        expr(lex_state, &decorators[decorator_count++]);
+
+        if (decorator_count >= decorator_capacity) {
+            decorator_capacity *= 2;
+            decorators = (ExpDesc *)realloc(decorators, decorator_capacity * sizeof(ExpDesc));
+            if (!decorators) lj_err_mem(lex_state->L);
+        }
+    }
+
+    if (lex_state->tok != TK_function) err_token(lex_state, TK_function);
+    lj_lex_next(lex_state);
+
+    function_name = lex_str(lex_state);
+
+    expr_init(&global_var_desc, VGLOBAL, 0);
+    global_var_desc.u.sval = function_name;
+
+    decorator_register = func_state->freereg;
+    func_state->freereg = decorator_register + 2;
+
+    parse_body(lex_state, &function_body, 0, line);
+    function_register = expr_toanyreg(func_state, &function_body);
+
+    if (function_register != decorator_register + 1) {
+        bcemit_AD(func_state, BC_MOV, decorator_register + 1, function_register);
+        function_register = decorator_register + 1;
+    }
+
+    expr_init(&function_body, VNONRELOC, decorator_register + 1);
+    func_state->freereg = decorator_register + 2;
+
+    for (int i = (int)decorator_count - 1; i >= 0; i--) {
+        expr_discharge(func_state, &decorators[i]);
+        expr_toreg(func_state, &decorators[i], decorator_register);
+        bcemit_ABC(func_state, BC_CALL, decorator_register, 2, 2);
+        func_state->bcbase[func_state->pc - 1].line = line;
+
+        bcemit_AD(func_state, BC_MOV, decorator_register + 1, decorator_register);
+    }
+
+    expr_init(&function_body, VNONRELOC, decorator_register + 1);
+    bcemit_store(func_state, &global_var_desc, &function_body);
+    func_state->bcbase[func_state->pc - 1].line = line;
+
+    func_state->freereg = decorator_register + 2;
+
+    free(decorators);
+}
 /* -- Control transfer statements ----------------------------------------- */
 
 /* Check for end of block. */
@@ -2646,6 +2708,9 @@ static int parse_stmt(LexState *ls)
   case TK_repeat:
     parse_repeat(ls, line);
     break;
+  case '@':
+    parse_decorated_func(ls, line);
+  break;
   case TK_function:
     parse_func(ls, line);
     break;
