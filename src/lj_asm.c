@@ -1917,6 +1917,9 @@ static void asm_head_root(ASMState *as)
   spadj = asm_stack_adjust(as);
   as->T->spadjust = (uint16_t)spadj;
   emit_spsub(as, spadj);
+#if LJ_TARGET_X86ORX64
+  emit_endbr(as);
+#endif
   /* Root traces assume a checked stack for the starting proto. */
   as->T->topslot = gcref(as->T->startpt)->pt.framesize;
 }
@@ -2085,7 +2088,9 @@ static void asm_head_side(ASMState *as)
     checkmclim(as);
     /* Continue with coalescing to fix up the broken cycle(s). */
   }
-
+#if LJ_TARGET_X86ORX64
+  emit_endbr(as);
+#endif
   /* Inherit top stack slot already checked by parent trace. */
   as->T->topslot = as->parent->topslot;
   if (as->topslot > as->T->topslot) {  /* Need to check for higher slot? */

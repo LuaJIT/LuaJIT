@@ -70,6 +70,15 @@ static LJ_AINLINE MCode *emit_op(x86Op xo, Reg rr, Reg rb, Reg rx,
   return p;
 }
 
+static void emit_endbr(ASMState *as)
+{
+#if LJ_64
+  emit_u32(as, 0xfa1e0ff3);      // endbr64
+#else
+  emit_u32(as, 0xfb1e0ff3);      // endbr32
+#endif
+}
+
 /* op + modrm */
 #define emit_opm(xo, mode, rr, rb, p, delta) \
   (p[(delta)-1] = MODRM((mode), (rr), (rb)), \
