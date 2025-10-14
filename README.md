@@ -1,9 +1,3 @@
-<strong>This code base does not have an active maintainer anymore, please read
-this [Twitter thread](https://twitter.com/siddhesh_p/status/1308594269502885889?s=20)
-to know more. If you are an existing contributor (or otherwise have an interest in
-maintaining this project actively) then please email me using the email address in
-my Twitter profile.</strong>
-
 # moonjit
 
 [Moonjit](https://github.com/moonjit/moonjit) is a Just-In-Time Compiler (JIT)
@@ -11,9 +5,7 @@ for the [Lua](http://www.lua.org/) programming language.  Lua is a powerful,
 dynamic and light-weight programming language. It may be embedded or used as a
 general-purpose, stand-alone language.
 
-Moonjit is a fork of the inactive [LuaJIT](https://luajit.org) project and aims
-to provide a way forward for existing users of LuaJIT looking for continuity in
-development and maintenance.
+Moonjit is a fork of the ~~inactive~~ VERY MUCH ACTIVE [LuaJIT](https://luajit.org).
 
 ## Documentation
 
