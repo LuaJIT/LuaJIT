@@ -357,6 +357,9 @@ else
   ifeq (GNU/kFreeBSD,$(TARGET_SYS))
     TARGET_XLIBS+= -ldl
   endif
+  ifeq (GNU,$(TARGET_SYS))
+    TARGET_XLIBS+= -ldl
+  endif
 endif
 endif
 endif

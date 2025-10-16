@@ -96,6 +96,9 @@
 #elif defined(__QNX__)
 #define LJ_TARGET_QNX		1
 #define LUAJIT_OS	LUAJIT_OS_POSIX
+#elif defined(__GNU__)
+#define LJ_TARGET_HURD		1
+#define LUAJIT_OS	LUAJIT_OS_POSIX
 #else
 #define LUAJIT_OS	LUAJIT_OS_OTHER
 #endif
