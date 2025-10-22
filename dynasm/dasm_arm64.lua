@@ -621,6 +621,12 @@ local function branch_type(op)
   end
 end
 
+local function parse_bti_target(op)
+  local t = {j=1, c=2, jc=3}
+  local c = t[op] or assert(false, "unknown bti target")
+  return shl(c, 6)
+end
+
 ------------------------------------------------------------------------------
 
 local map_op, op_template
@@ -823,6 +829,9 @@ map_op = {
   tbz_3  = "36000000DTBw|36000000DTBx",
   tbnz_3 = "37000000DTBw|37000000DTBx",
 
+  -- Branch Target Identification
+  bti_1  = "d503241ft",
+
   -- ARM64e: Pointer authentication codes (PAC).
   blraaz_1  = "d63f081fNx",
   braa_2    = "d71f0800NDx",
@@ -996,6 +1005,8 @@ local function parse_template(params, template, nparams, pos)
       op = op + parse_cond(q, 0); n = n + 1
     elseif p == "c" then
       op = op + parse_cond(q, 1); n = n + 1
+    elseif p == "t" then
+      op = op + parse_bti_target(q); n = n + 1
 
     else
       assert(false)

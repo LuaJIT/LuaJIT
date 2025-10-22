@@ -471,3 +471,9 @@ static void emit_addptr(ASMState *as, Reg r, int32_t ofs)
 
 #define emit_spsub(as, ofs)	emit_addptr(as, RID_SP, -(ofs))
 
+#if LJ_CET_BR
+static void emit_endbr(ASMState *as)
+{
+  *--as->mcp = A64I_BTI_J;
+}
+#endif

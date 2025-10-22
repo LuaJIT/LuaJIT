@@ -702,6 +702,10 @@ local map_br = { -- Branches, exception generating and system instructions.
       [0x1f0000] = "brNx", [0x3f0000] = "blrNx",
       [0x5f0000] = "retNx"
     },
+  },
+  [6] = { -- Branch Target Identification
+    shift = 8, mask = 0xffffff,
+    [0xd50324] = "btiJ"
   }
 }
 
@@ -736,6 +740,8 @@ local map_shift = { [0] = "lsl", "lsr", "asr", "ror"}
 local map_extend = {
   [0] = "uxtb", "uxth", "uxtw", "uxtx", "sxtb", "sxth", "sxtw", "sxtx",
 }
+
+local map_bti = { [0] = "", "c", "j", "jc"}
 
 ------------------------------------------------------------------------------
 
@@ -1171,6 +1177,9 @@ local function disass_ins(ctx)
 	end
       end
       second0 = true
+    elseif p == "J" then
+      local n = #operands
+      operands[n + 1] = map_bti[band(rshift(op,6), 3)]
     else
       assert(false)
     end

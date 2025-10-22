@@ -265,6 +265,10 @@
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM64
 
+#if defined(LUAJIT_ENABLE_CET_BR)
+#define LJ_CET_BR		1
+#endif
+
 #define LJ_ARCH_BITS		64
 #if defined(__AARCH64EB__)
 #define LJ_ARCH_NAME		"arm64be"

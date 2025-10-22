@@ -183,6 +183,14 @@
 |.type TRACE,		GCtrace
 |.type SBUF,		SBuf
 |
+|//-- Control Flow Integrity (CTI) ---------------------------
+|
+|.if CET_BR
+|.macro ins_bti, t; bti t; .endmacro
+|.else
+|.macro ins_bti, t; .endmacro
+|.endif
+|
 |//-----------------------------------------------------------------------
 |
 |// Trap for not-yet-implemented parts.
@@ -438,6 +446,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
+  |  ins_bti c
   |  // (void *cframe, int errcode)
   |  add fp, CARG1, # SAVE_FP_LR_
   |  mov sp, CARG1
@@ -445,11 +454,13 @@ static void build_subroutines(BuildCtx *ctx)
   |  ldr L, SAVE_L
   |  ldr GL, L->glref
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
+  |  ins_bti c
   |   mv_vmstate TMP0w, C
   |   st_vmstate TMP0w
   |  b ->vm_leave_unw
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
+  |  ins_bti c
   |  // (void *cframe)
   |  add fp, CARG1, # SAVE_FP_LR_
   |  mov sp, CARG1
@@ -457,6 +468,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    init_constants
   |   ldr GL, L->glref			// Setup pointer to global state.
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
+  |  ins_bti c
   |    mov RC, #16			// 2 results: false + error message.
   |  ldr BASE, L->base
   |    mov_false TMP0
@@ -531,6 +543,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->vm_return
   |
   |->vm_pcall:				// Setup protected C frame and enter VM.
+  |  ins_bti c
   |  // (lua_State *L, TValue *base, int nres1, ptrdiff_t ef)
   |  saveregs
   |  mov PC, #FRAME_CP
@@ -602,6 +615,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
+  |  ins_bti c
   |  // BASE = meta base, RA = resultptr, RC = (nresults+1)*8
   |  ldr LFUNC:CARG3, [RB, FRAME_FUNC]
   |    ldr CARG1, [BASE, #-32]		// Get continuation.
@@ -632,6 +646,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->cont_cat:				// RA = resultptr, CARG4 = meta base
+  |  ins_bti c
   |  ldr INSw, [PC, #-4]
   |   sub CARG2, CARG4, #32
   |   ldr TMP0, [RA]
@@ -789,9 +804,11 @@ static void build_subroutines(BuildCtx *ctx)
   |   sub RB, RB, #0x20000
   |  csel PC, PC, RB, lo
   |->cont_nop:
+  |  ins_bti c
   |  ins_next
   |
   |->cont_ra:				// RA = resultptr
+  |  ins_bti c
   |  ldr INSw, [PC, #-4]
   |   ldr TMP0, [RA]
   |  decode_RA TMP1, INS
@@ -799,12 +816,14 @@ static void build_subroutines(BuildCtx *ctx)
   |  b ->cont_nop
   |
   |->cont_condt:			// RA = resultptr
+  |  ins_bti c
   |  ldr TMP0, [RA]
   |   mov_true TMP1
   |  cmp TMP1, TMP0			// Branch if result is true.
   |  b <4
   |
   |->cont_condf:			// RA = resultptr
+  |  ins_bti c
   |  ldr TMP0, [RA]
   |   mov_false TMP1
   |  cmp TMP0, TMP1			// Branch if result is false.
@@ -956,10 +975,12 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc, name
   |->ff_ .. name:
+  |  ins_bti c
   |.endmacro
   |
   |.macro .ffunc_1, name
   |->ff_ .. name:
+  |  ins_bti c
   |  ldr CARG1, [BASE]
   |   cmp NARGS8:RC, #8
   |   blo ->fff_fallback
@@ -967,6 +988,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_2, name
   |->ff_ .. name:
+  |  ins_bti c
   |  ldp CARG1, CARG2, [BASE]
   |   cmp NARGS8:RC, #16
   |   blo ->fff_fallback
@@ -1660,6 +1682,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// FP number to bit conversion. Clobbers CARG1-CARG2, FARG1-FARG2.
   |->vm_tobit_fb:
+  |  ins_bti c
   |  bls ->fff_fallback
   |  fmov FARG1, CARG1
   |  movz CARG2, #0x4338, lsl #48
@@ -1677,16 +1700,19 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit_op, name, ins
   |  .ffunc_bit name
+  |  ins_bti c
   |  mov RA, #8
   |  mov TMP0w, CARG1w
   |  adr lr, >2
   |1:
+  |  ins_bti c
   |  ldr CARG1, [BASE, RA]
   |   cmp RA, NARGS8:RC
   |    add RA, RA, #8
   |   bge >9
   |  checkint CARG1, ->vm_tobit_fb
   |2:
+  |  ins_bti c
   |  ins TMP0w, TMP0w, CARG1w
   |  b <1
   |.endmacro
@@ -1696,17 +1722,20 @@ static void build_subroutines(BuildCtx *ctx)
   |.ffunc_bit_op bxor, eor
   |
   |.ffunc_bit tobit
+  |  ins_bti c
   |  mov TMP0w, CARG1w
   |9:  // Label reused by .ffunc_bit_op users.
   |  add_TISNUM CARG1, TMP0
   |  b ->fff_restv
   |
   |.ffunc_bit bswap
+  |  ins_bti c
   |  rev TMP0w, CARG1w
   |  add_TISNUM CARG1, TMP0
   |  b ->fff_restv
   |
   |.ffunc_bit bnot
+  |  ins_bti c
   |  mvn TMP0w, CARG1w
   |  add_TISNUM CARG1, TMP0
   |  b ->fff_restv
@@ -1719,6 +1748,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  adr lr, >1
   |  checkint CARG1, ->vm_tobit_fb
   |1:
+  |  ins_bti c
   |.if shmod == 0
   |  mov TMP1, CARG1
   |.else
@@ -1728,6 +1758,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  adr lr, >2
   |  checkint CARG1, ->vm_tobit_fb
   |2:
+  |  ins_bti c
   |  ins TMP0w, CARG1w, TMP1w
   |  add_TISNUM CARG1, TMP0
   |  b ->fff_restv
@@ -1742,6 +1773,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-----------------------------------------------------------------------
   |
   |->fff_fallback:			// Call fast function fallback handler.
+  |  ins_bti c
   |  // BASE = new base, RC = nargs*8
   |   ldp CFUNC:CARG3, PC, [BASE, FRAME_FUNC]	// Fallback may overwrite PC.
   |  ldr TMP2, L->maxstack
@@ -1771,6 +1803,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |// Reconstruct previous base for vmeta_call during tailcall.
   |->vm_call_tail:
+  |  ins_bti c
   |  ands TMP0, PC, #FRAME_TYPE
   |   and TMP1, PC, #~FRAME_TYPEP
   |  bne >3
@@ -1789,6 +1822,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  b <1
   |
   |->fff_gcstep:			// Call GC step function.
+  |  ins_bti c
   |  // BASE = new base, RC = nargs*8
   |  sp_auth
   |   add CARG2, BASE, NARGS8:RC	// Calculate L->top.
@@ -1810,6 +1844,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_record:				// Dispatch target for recording phase.
   |.if JIT
+  |  ins_bti c
   |  ldrb CARG1w, GL->hookmask
   |  tst CARG1, #HOOK_VMEVENT		// No recording while in vmevent.
   |  bne >5
@@ -1825,6 +1860,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->vm_rethook:			// Dispatch target for return hooks.
+  |  ins_bti c
   |  ldrb TMP2w, GL->hookmask
   |  tbz TMP2w, #HOOK_ACTIVE_SHIFT, >1	// Hook already active?
   |5:  // Re-dispatch to static ins.
@@ -1832,6 +1868,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  br_auth TMP0
   |
   |->vm_inshook:			// Dispatch target for instr/line hooks.
+  |  ins_bti c
   |  ldrb TMP2w, GL->hookmask
   |   ldr TMP3w, GL->hookcount
   |  tbnz TMP2w, #HOOK_ACTIVE_SHIFT, <5	// Hook already active?
@@ -1858,6 +1895,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  br_auth TMP0
   |
   |->cont_hook:				// Continue from hook yield.
+  |  ins_bti c
   |  ldr CARG1, [CARG4, #-40]
   |   add PC, PC, #4
   |  str CARG1w, SAVE_MULTRES		// Restore MULTRES for *M ins.
@@ -1881,6 +1919,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->vm_callhook:			// Dispatch target for call hooks.
+  |  ins_bti c
   |  mov CARG2, PC
   |.if JIT
   |  b >1
@@ -1909,6 +1948,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_stitch:			// Trace stitching.
   |.if JIT
+  |  ins_bti c
   |  // RA = resultptr, CARG4 = meta base
   |   ldr RBw, SAVE_MULTRES
   |  ldr INSw, [PC, #-4]
@@ -1958,6 +1998,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_profhook:			// Dispatch target for profiler hook.
 #if LJ_HASPROFILE
+  |  ins_bti c
   |  mov CARG1, L
   |   str BASE, L->base
   |  mov CARG2, PC
@@ -1979,6 +2020,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_exit_handler:
   |.if JIT
+  |  ins_bti c
   |  sub     sp, sp, #(64*8)
   |  savex_, 0, 1
   |  savex_, 2, 3
@@ -2031,6 +2073,7 @@ static void build_subroutines(BuildCtx *ctx)
   |->vm_exit_interp:
   |  // CARG1 = MULTRES or negated error code, BASE, PC and GL set.
   |.if JIT
+  |  ins_bti c
   |  ldr L, SAVE_L
   |1:
   |   init_constants
@@ -2142,6 +2185,7 @@ static void build_subroutines(BuildCtx *ctx)
   |// Next idx returned in CRET2w.
   |->vm_next:
   |.if JIT
+  |  ins_bti c
   |  ldr NEXT_LIM, NEXT_TAB->asize
   |   ldr NEXT_TMP1, NEXT_TAB->array
   |1:  // Traverse array part.
@@ -2292,6 +2336,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* Remember: all ops branch for a true comparison, fall through otherwise. */
 
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
+    |  ins_bti c
     |  // RA = src1, RC = src2, JMP with RC = target
     |  ldr CARG1, [BASE, RA, lsl #3]
     |    ldrh RBw, [PC, # OFS_RD]
@@ -2348,6 +2393,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISEQV: case BC_ISNEV:
     vk = op == BC_ISEQV;
+    |  ins_bti c
     |  // RA = src1, RC = src2, JMP with RC = target
     |  ldr CARG1, [BASE, RA, lsl #3]
     |   add RC, BASE, RC, lsl #3
@@ -2409,6 +2455,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
+    |  ins_bti c
     |  // RA = src, RC = str_const (~), JMP with RC = target
     |  ldr CARG1, [BASE, RA, lsl #3]
     |   mvn RC, RC
@@ -2437,6 +2484,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISEQN: case BC_ISNEN:
     vk = op == BC_ISEQN;
+    |  ins_bti c
     |  // RA = src, RC = num_const (~), JMP with RC = target
     |  ldr CARG1, [BASE, RA, lsl #3]
     |   add RC, KBASE, RC, lsl #3
@@ -2498,6 +2546,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ISEQP: case BC_ISNEP:
     vk = op == BC_ISEQP;
+    |  ins_bti c
     |  // RA = src, RC = primitive_type (~), JMP with RC = target
     |  ldr TMP0, [BASE, RA, lsl #3]
     |   ldrh RBw, [PC, # OFS_RD]
@@ -2524,6 +2573,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Unary test and copy ops ------------------------------------------- */
 
   case BC_ISTC: case BC_ISFC: case BC_IST: case BC_ISF:
+    |  ins_bti c
     |  // RA = dst or unused, RC = src, JMP with RC = target
     |   ldrh RBw, [PC, # OFS_RD]
     |  ldr TMP0, [BASE, RC, lsl #3]
@@ -2550,6 +2600,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ISTYPE:
+    |  ins_bti c
     |  // RA = src, RC = -type
     |  ldr TMP0, [BASE, RA, lsl #3]
     |  cmn RC, TMP0, asr #47
@@ -2557,6 +2608,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_ISNUM:
+    |  ins_bti c
     |  // RA = src, RC = -(TISNUM-1)
     |  ldr TMP0, [BASE, RA]
     |  checknum TMP0, ->vmeta_istype
@@ -2566,12 +2618,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Unary ops --------------------------------------------------------- */
 
   case BC_MOV:
+    |  ins_bti c
     |  // RA = dst, RC = src
     |  ldr TMP0, [BASE, RC, lsl #3]
     |  str TMP0, [BASE, RA, lsl #3]
     |  ins_next
     break;
   case BC_NOT:
+    |  ins_bti c
     |  // RA = dst, RC = src
     |  ldr TMP0, [BASE, RC, lsl #3]
     |   mov_false TMP1
@@ -2582,6 +2636,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_UNM:
+    |  ins_bti c
     |  // RA = dst, RC = src
     |  ldr TMP0, [BASE, RC, lsl #3]
     |  asr ITYPE, TMP0, #47
@@ -2598,6 +2653,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_LEN:
+    |  ins_bti c
     |  // RA = dst, RC = src
     |  ldr CARG1, [BASE, RC, lsl #3]
     |  asr ITYPE, CARG1, #47
@@ -2619,6 +2675,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |3:
 #endif
     |->BC_LEN_Z:
+    |  ins_bti c
     |  bl extern lj_tab_len		// (GCtab *t)
     |  // Returns uint32_t (but less than 2^31).
     |  b <1
@@ -2648,6 +2705,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endmacro
     |
     |.macro ins_arithhead
+    | ins_bti c
     ||vk = ((int)op - BC_ADDVN) / (BC_ADDNV-BC_ADDVN);
     ||if (vk == 1) {
     |   and RC, RC, #255
@@ -2762,6 +2820,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_CAT:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = src_start, RC = src_end
@@ -2785,6 +2844,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Constant ops ------------------------------------------------------ */
 
   case BC_KSTR:
+    |  ins_bti c
     |  // RA = dst, RC = str_const (~)
     |  mvn RC, RC
     |  ldr TMP0, [KBASE, RC, lsl #3]
@@ -2795,6 +2855,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_KCDATA:
     |.if FFI
+    |  ins_bti c
     |  // RA = dst, RC = cdata_const (~)
     |  mvn RC, RC
     |  ldr TMP0, [KBASE, RC, lsl #3]
@@ -2805,6 +2866,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endif
     break;
   case BC_KSHORT:
+    |  ins_bti c
     |  // RA = dst, RC = int16_literal
     |  sxth RCw, RCw
     |  add_TISNUM TMP0, RC
@@ -2812,18 +2874,21 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_KNUM:
+    |  ins_bti c
     |  // RA = dst, RC = num_const
     |  ldr TMP0, [KBASE, RC, lsl #3]
     |  str TMP0, [BASE, RA, lsl #3]
     |  ins_next
     break;
   case BC_KPRI:
+    |  ins_bti c
     |  // RA = dst, RC = primitive_type (~)
     |  mvn TMP0, RC, lsl #47
     |  str TMP0, [BASE, RA, lsl #3]
     |  ins_next
     break;
   case BC_KNIL:
+    |  ins_bti c
     |  // RA = base, RC = end
     |  add RA, BASE, RA, lsl #3
     |   add RC, BASE, RC, lsl #3
@@ -2838,6 +2903,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Upvalue and function ops ------------------------------------------ */
 
   case BC_UGET:
+    |  ins_bti c
     |  // RA = dst, RC = uvnum
     |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
     |   add RC, RC, #offsetof(GCfuncL, uvptr)/8
@@ -2849,6 +2915,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_USETV:
+    |  ins_bti c
     |  // RA = uvnum, RC = src
     |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
     |   add RA, RA, #offsetof(GCfuncL, uvptr)/8
@@ -2879,6 +2946,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <1
     break;
   case BC_USETS:
+    |  ins_bti c
     |  // RA = uvnum, RC = str_const (~)
     |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
     |   add RA, RA, #offsetof(GCfuncL, uvptr)/8
@@ -2907,6 +2975,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <1
     break;
   case BC_USETN:
+    |  ins_bti c
     |  // RA = uvnum, RC = num_const
     |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
     |   add RA, RA, #offsetof(GCfuncL, uvptr)/8
@@ -2918,6 +2987,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next
     break;
   case BC_USETP:
+    |  ins_bti c
     |  // RA = uvnum, RC = primitive_type (~)
     |  ldr LFUNC:CARG2, [BASE, FRAME_FUNC]
     |   add RA, RA, #offsetof(GCfuncL, uvptr)/8
@@ -2930,6 +3000,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_UCLO:
+    |  ins_bti c
     |  // RA = level, RC = target
     |  ldr CARG3, L->openupval
     |   add RC, PC, RC, lsl #2
@@ -2945,6 +3016,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_FNEW:
+    |  ins_bti c
     |  // RA = dst, RC = proto_const (~) (holding function prototype)
     |  mvn RC, RC
     |   str BASE, L->base
@@ -2967,6 +3039,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TNEW:
   case BC_TDUP:
+    |  ins_bti c
     |  // RA = dst, RC = (hbits|asize) | tab_const (~)
     |  ldp CARG3, CARG4, GL->gc.total	// Assumes threshold follows total.
     |   str BASE, L->base
@@ -3003,6 +3076,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_GGET:
     |  // RA = dst, RC = str_const (~)
   case BC_GSET:
+    |  ins_bti c
     |  // RA = src, RC = str_const (~)
     |  ldr LFUNC:CARG1, [BASE, FRAME_FUNC]
     |   mvn RC, RC
@@ -3017,6 +3091,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TGETV:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = table, RC = key
@@ -3051,6 +3126,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->BC_TGETS_Z
     break;
   case BC_TGETS:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = table, RC = str_const (~)
@@ -3092,6 +3168,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->vmeta_tgets
     break;
   case BC_TGETB:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = table, RC = index
@@ -3117,6 +3194,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->vmeta_tgetb
     break;
   case BC_TGETR:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = table, RC = key
@@ -3135,6 +3213,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TSETV:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = src, RB = table, RC = key
@@ -3177,6 +3256,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->BC_TSETS_Z
     break;
   case BC_TSETS:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = dst, RB = table, RC = str_const (~)
@@ -3248,6 +3328,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <3
     break;
   case BC_TSETB:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = src, RB = table, RC = index
@@ -3281,6 +3362,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <2
     break;
   case BC_TSETR:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = src, RB = table, RC = key
@@ -3306,6 +3388,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_TSETM:
+    |  ins_bti c
     |  // RA = base (table at base-1), RC = num_const (start index)
     |  add RA, BASE, RA, lsl #3
     |1:
@@ -3348,6 +3431,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Calls and vararg handling ----------------------------------------- */
 
   case BC_CALLM:
+    |  ins_bti c
     |  // RA = base, (RB = nresults+1,) RC = extra_nargs
     |  ldr TMP0w, SAVE_MULTRES
     |  decode_RC8RD NARGS8:RC, RC
@@ -3355,6 +3439,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b ->BC_CALL_Z
     break;
   case BC_CALL:
+    |  ins_bti c
     |  decode_RC8RD NARGS8:RC, RC
     |  // RA = base, (RB = nresults+1,) RC = (nargs+1)*8
     |->BC_CALL_Z:
@@ -3367,12 +3452,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_CALLMT:
+    |  ins_bti c
     |  // RA = base, (RB = 0,) RC = extra_nargs
     |  ldr TMP0w, SAVE_MULTRES
     |  add NARGS8:RC, TMP0, RC, lsl #3
     |  b ->BC_CALLT1_Z
     break;
   case BC_CALLT:
+    |  ins_bti c
     |  lsl NARGS8:RC, RC, #3
     |  // RA = base, (RB = 0,) RC = (nargs+1)*8
     |->BC_CALLT1_Z:
@@ -3424,6 +3511,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ITERC:
+    |  ins_bti c
     |  // RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |  add RA, BASE, RA, lsl #3
     |  ldr CARG3, [RA, #-24]
@@ -3439,9 +3527,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERN:
     |.if JIT
+    |  ins_bti c
     |  hotloop
     |.endif
     |->vm_IITERN:
+    |  ins_bti c
     |  // RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
     |  add RA, BASE, RA, lsl #3
     |  ldr TAB:RB, [RA, #-16]
@@ -3488,6 +3578,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ISNEXT:
+    |  ins_bti c
     |  // RA = base, RC = target (points to ITERN)
     |  add RA, BASE, RA, lsl #3
     |  ldr CFUNC:CARG1, [RA, #-24]
@@ -3534,6 +3625,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_VARG:
+    |  ins_bti c
     |  decode_RB RB, INS
     |   and RC, RC, #255
     |  // RA = base, RB = (nresults+1), RC = numparams
@@ -3590,6 +3682,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   /* -- Returns ----------------------------------------------------------- */
 
   case BC_RETM:
+    |  ins_bti c
     |  // RA = results, RC = extra results
     |  ldr TMP0w, SAVE_MULTRES
     |   ldr PC, [BASE, FRAME_PC]
@@ -3599,6 +3692,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_RET:
+    |  ins_bti c
     |  // RA = results, RC = nresults+1
     |  ldr PC, [BASE, FRAME_PC]
     |   lsl RC, RC, #3
@@ -3654,6 +3748,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_RET0: case BC_RET1:
+    |  ins_bti c
     |  // RA = results, RC = nresults+1
     |  ldr PC, [BASE, FRAME_PC]
     |   lsl RC, RC, #3
@@ -3696,6 +3791,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FORL:
     |.if JIT
+    |  ins_bti c
     |  hotloop
     |.endif
     |  // Fall through. Assumes BC_IFORL follows.
@@ -3704,10 +3800,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_JFORI:
   case BC_JFORL:
 #if !LJ_HASJIT
+    |  ins_bti c
     break;
 #endif
   case BC_FORI:
   case BC_IFORL:
+    |  ins_bti c
     |  // RA = base, RC = target (after end of loop or start of loop)
     vk = (op == BC_IFORL || op == BC_JFORL);
     |  add RA, BASE, RA, lsl #3
@@ -3792,6 +3890,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERL:
     |.if JIT
+    |  ins_bti c
     |  hotloop
     |.endif
     |  // Fall through. Assumes BC_IITERL follows.
@@ -3799,9 +3898,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_JITERL:
 #if !LJ_HASJIT
+    |  ins_bti c
     break;
 #endif
   case BC_IITERL:
+    |  ins_bti c
     |  // RA = base, RC = target
     |  ldr CARG1, [BASE, RA, lsl #3]
     |   add TMP1, BASE, RA, lsl #3
@@ -3820,6 +3921,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_LOOP:
+    |  ins_bti c
     |  // RA = base, RC = target (loop extent)
     |  // Note: RA/RC is only used by trace recorder to determine scope/extent
     |  // This opcode does NOT jump, it's only purpose is to detect a hot loop.
@@ -3830,12 +3932,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_ILOOP:
+    |  ins_bti c
     |  // RA = base, RC = target (loop extent)
     |  ins_next
     break;
 
   case BC_JLOOP:
     |.if JIT
+    |  ins_bti c
     |  // RA = base (ignored), RC = traceno
     |  ldr CARG1, [GL, #GL_J(trace)]
     |   st_vmstate wzr  // Traces on ARM64 don't store the trace #, so use 0.
@@ -3857,6 +3961,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JMP:
+    |  ins_bti c
     |  // RA = base (only used by trace recorder), RC = target
     |  add RC, PC, RC, lsl #2
     |  sub PC, RC, #0x20000
@@ -3867,6 +3972,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCF:
     |.if JIT
+    |  ins_bti c
     |  hotcall
     |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
@@ -3878,6 +3984,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 #endif
   case BC_IFUNCF:
+    |  ins_bti c
     |  // BASE = new base, RA = BASE+framesize*8, CARG3 = LFUNC, RC = nargs*8
     |  ldr CARG1, L->maxstack
     |   ldrb TMP1w, [PC, #-4+PC2PROTO(numparams)]
@@ -3901,6 +4008,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
 
   case BC_JFUNCV:
+    |  ins_bti c
 #if !LJ_HASJIT
     break;
 #endif
@@ -3908,6 +4016,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;  /* NYI: compiled vararg functions. */
 
   case BC_IFUNCV:
+    |  ins_bti c
     |  // BASE = new base, RA = BASE+framesize*8, CARG3 = LFUNC, RC = nargs*8
     |  ldr CARG1, L->maxstack
     |   movn TMP0, #~LJ_TFUNC
@@ -3946,6 +4055,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCC:
   case BC_FUNCCW:
+    |  ins_bti c
     |  // BASE = new base, RA = BASE+framesize*8, CARG3 = CFUNC, RC = nargs*8
     if (op == BC_FUNCC) {
       |  ldr CARG4, CFUNC:CARG3->f
