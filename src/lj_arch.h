@@ -219,15 +219,27 @@
 #error "macOS requires GC64 -- don't disable it"
 #endif
 
-#if (__CET__ & 1) && defined(LUAJIT_ENABLE_CET_BR)
+#if !defined(LJ_ABI_BRANCH_TRACK) && (__CET__ & 1) && \
+    LJ_TARGET_GC64 && defined(LUAJIT_ENABLE_CET_BR)
 /*
 ** Control-Flow Enforcement Technique (CET) indirect branch tracking (IBT).
 ** This is not enabled by default because it causes a notable slowdown of
 ** the interpreter on all x64 CPUs, whether they have CET enabled or not.
 ** If your toolchain enables -fcf-protection=branch by default, you need
-** to build with: make XCFLAGS=-DLUAJIT_ENABLE_CET_BR
+** to build with: make amalg XCFLAGS=-DLUAJIT_ENABLE_CET_BR
 */
-#define LJ_CET_BR		1
+#define LJ_ABI_BRANCH_TRACK	1
+#endif
+
+#if !defined(LJ_ABI_SHADOW_STACK) && (__CET__ & 2)
+/*
+** Control-Flow Enforcement Technique (CET) shadow stack (CET-SS).
+** It has no code overhead and doesn't cause any slowdowns when unused.
+** It can also be unconditionally enabled since all code already follows
+** a strict CALL to RET correspondence for performance reasons (all modern
+** CPUs use a (non-enforcing) shadow stack for return branch prediction).
+*/
+#define LJ_ABI_SHADOW_STACK	1
 #endif
 
 #elif LUAJIT_TARGET == LUAJIT_ARCH_ARM

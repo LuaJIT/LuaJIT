@@ -2586,8 +2586,8 @@ void lj_asm_trace(jit_State *J, GCtrace *T)
       asm_head_side(as);
     else
       asm_head_root(as);
-#if LJ_CET_BR
-    emit_endbr(as);
+#if LJ_ABI_BRANCH_TRACK
+    emit_branch_track(as);
 #endif
     asm_phi_fixup(as);
 

@@ -191,7 +191,7 @@
 |
 |//-- Control-Flow Enforcement Technique (CET) ---------------------------
 |
-|.if CET_BR
+|.if BRANCH_TRACK
 |.macro endbr; endbr64; .endmacro
 |.else
 |.macro endbr; .endmacro
@@ -200,13 +200,13 @@
 |//-----------------------------------------------------------------------
 |
 |// Instruction headers.
-|.macro ins_A; endbr; .endmacro
-|.macro ins_AD; endbr; .endmacro
-|.macro ins_AJ; endbr; .endmacro
-|.macro ins_ABC; endbr; movzx RBd, RCH; movzx RCd, RCL; .endmacro
-|.macro ins_AB_; endbr; movzx RBd, RCH; .endmacro
-|.macro ins_A_C; endbr; movzx RCd, RCL; .endmacro
-|.macro ins_AND; endbr; not RD; .endmacro
+|.macro ins_A; .endmacro
+|.macro ins_AD; .endmacro
+|.macro ins_AJ; .endmacro
+|.macro ins_ABC; movzx RBd, RCH; movzx RCd, RCL; .endmacro
+|.macro ins_AB_; movzx RBd, RCH; .endmacro
+|.macro ins_A_C; movzx RCd, RCL; .endmacro
+|.macro ins_AND; not RD; .endmacro
 |
 |// Instruction decode+dispatch. Carefully tuned (nope, lodsd is not faster).
 |.macro ins_NEXT
@@ -487,13 +487,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp <3
   |
   |->vm_unwind_yield:
-  |  endbr
   |  mov al, LUA_YIELD
   |  jmp ->vm_unwind_c_eh
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
-  |  endbr
   |  // (void *cframe, int errcode)
+  |  endbr
   |  mov eax, CARG2d			// Error return status for vm_pcall.
   |  mov rsp, CARG1
   |->vm_unwind_c_eh:			// Landing pad for external unwinder.
@@ -513,8 +512,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->vm_unwind_ff:			// Unwind C stack, return from ff pcall.
-  |  endbr
   |  // (void *cframe)
+  |  endbr
   |  and CARG1, CFRAME_RAWMASK
   |  mov rsp, CARG1
   |->vm_unwind_ff_eh:			// Landing pad for external unwinder.
@@ -689,7 +688,6 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Continuation dispatch ----------------------------------------------
   |
   |->cont_dispatch:
-  |  endbr
   |  // BASE = meta base, RA = resultofs, RD = nresults+1 (also in MULTRES)
   |  add RA, BASE
   |  and PC, -8
@@ -1152,7 +1150,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc, name
   |->ff_ .. name:
-  | endbr
+  |  endbr
   |.endmacro
   |
   |.macro .ffunc_1, name
@@ -2338,8 +2336,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_stitch:			// Trace stitching.
   |.if JIT
-  |  endbr
   |  // BASE = base, RC = result, RB = mbase
+  |  endbr
   |  mov TRACE:ITYPE, [RB-40]		// Save previous trace.
   |  cleartp TRACE:ITYPE
   |  mov TMPRd, MULTRES
@@ -2460,8 +2458,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  jmp >1
   |.endif
   |->vm_exit_interp:
-  |  endbr
   |  // RD = MULTRES or negated error code, BASE, PC and DISPATCH set.
+  |  endbr
   |.if JIT
   |  // Restore additional callee-save registers only used in compiled code.
   |.if X64WIN
@@ -2847,6 +2845,26 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   int vk = 0;
   |// Note: aligning all instructions does not pay off.
   |=>defop:
+
+  switch (op) {
+#if !LJ_HASJIT
+  case BC_FORL:
+  case BC_JFORI:
+  case BC_JFORL:
+  case BC_ITERL:
+  case BC_JITERL:
+  case BC_LOOP:
+  case BC_JLOOP:
+  case BC_FUNCF:
+  case BC_JFUNCF:
+  case BC_JFUNCV:
+#endif
+  case BC_FUNCV:  /* NYI: compiled vararg functions. */
+    break;  /* Avoid redundant endbr instructions. */
+  default:
+    |  endbr
+    break;
+  }
 
   switch (op) {
 
@@ -4119,7 +4137,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERN:
     |.if JIT
-    |  endbr
     |  hotloop RBd
     |.endif
     |->vm_IITERN:
@@ -4299,7 +4316,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jnz >7				// Not returning to a fixarg Lua func?
     switch (op) {
     case BC_RET:
-      |  endbr
       |->BC_RET_Z:
       |  mov KBASE, BASE		// Use KBASE for result move.
       |  sub RDd, 1
@@ -4318,12 +4334,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  ja >6
       break;
     case BC_RET1:
-      |  endbr
       |  mov RB, [BASE+RA]
       |  mov [BASE-16], RB
       /* fallthrough */
     case BC_RET0:
-      |  endbr
       |5:
       |  cmp PC_RB, RDL			// More results expected?
       |  ja >6
@@ -4370,7 +4384,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FORL:
     |.if JIT
-    |  endbr
     |  hotloop RBd
     |.endif
     | // Fall through. Assumes BC_IFORL follows and ins_AJ is a no-op.
@@ -4522,7 +4535,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_ITERL:
     |.if JIT
-    |  endbr
     |  hotloop RBd
     |.endif
     | // Fall through. Assumes BC_IITERL follows and ins_AJ is a no-op.
@@ -4616,7 +4628,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_FUNCF:
     |.if JIT
-    |  endbr
     |  hotcall RBd
     |.endif
   case BC_FUNCV:  /* NYI: compiled vararg functions. */
@@ -4886,6 +4897,30 @@ static void emit_asm_debug(BuildCtx *ctx)
 	"\t.align 8\n"
 	".LEFDE3:\n\n", (int)ctx->codesz - fcofs);
 #endif
+#endif
+#if LJ_TARGET_LINUX && (LJ_ABI_BRANCH_TRACK || LJ_ABI_SHADOW_STACK)
+    fprintf(ctx->fp,
+	"\t.section .note.gnu.property,\"a\"\n"
+	"\t.align 8\n"
+	"\t.long 4\n"
+	"\t.long 16\n"
+	"\t.long 5\n"
+	"\t.long 0x00554e47\n"
+	"\t.long 0xc0000002\n"
+	"\t.long 4\n"
+	"\t.long %d\n"
+	"\t.long 0\n",
+#if LJ_ABI_BRANCH_TRACK
+	1|
+#else
+	0|
+#endif
+#if LJ_ABI_SHADOW_STACK
+	2
+#else
+	0
+#endif
+	);
 #endif
     break;
 #if !LJ_NO_UNWIND
