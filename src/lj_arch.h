@@ -288,6 +288,11 @@
 #if !defined(LJ_ABI_PAUTH) && defined(__arm64e__)
 #define LJ_ABI_PAUTH		1
 #endif
+#if !defined(LJ_ABI_BRANCH_TRACK) && (__ARM_FEATURE_BTI_DEFAULT & 1) && \
+    defined(LUAJIT_ENABLE_CET_BR)
+/* See comments about LUAJIT_ENABLE_CET_BR above. */
+#define LJ_ABI_BRANCH_TRACK	1
+#endif
 #define LJ_TARGET_ARM64		1
 #define LJ_TARGET_EHRETREG	0
 #define LJ_TARGET_EHRAREG	30

@@ -64,6 +64,10 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 
 #elif LJ_TARGET_ARM64
 
+#if LJ_ABI_BRANCH_TRACK
+#define CALLBACK_MCODE_SLOTSZ		12
+#endif
+
 #define CALLBACK_MCODE_HEAD		32
 
 #elif LJ_TARGET_PPC
@@ -88,8 +92,11 @@ static MSize CALLBACK_OFS2SLOT(MSize ofs)
 #endif
 
 #ifndef CALLBACK_SLOT2OFS
-#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + 8*(slot))
-#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/8)
+#ifndef CALLBACK_MCODE_SLOTSZ
+#define CALLBACK_MCODE_SLOTSZ		8
+#endif
+#define CALLBACK_SLOT2OFS(slot)		(CALLBACK_MCODE_HEAD + CALLBACK_MCODE_SLOTSZ*(slot))
+#define CALLBACK_OFS2SLOT(ofs)		(((ofs)-CALLBACK_MCODE_HEAD)/CALLBACK_MCODE_SLOTSZ)
 #define CALLBACK_MAX_SLOT		(CALLBACK_OFS2SLOT(CALLBACK_MCODE_SIZE))
 #endif
 
@@ -193,6 +200,9 @@ static void *callback_mcode_init(global_State *g, uint32_t *page)
   ((void **)p)[1] = g;
   p += 4;
   for (slot = 0; slot < CALLBACK_MAX_SLOT; slot++) {
+#if LJ_ABI_BRANCH_TRACK
+    *p++ = A64I_BTI_C;
+#endif
     *p++ = A64I_LE(A64I_MOVZw | A64F_D(RID_X9) | A64F_U16(slot));
     *p = A64I_LE(A64I_B | A64F_S26((page-p) & 0x03ffffffu));
     p++;
