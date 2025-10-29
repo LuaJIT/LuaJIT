@@ -3497,6 +3497,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endif
     |->vm_IITERN:
     |  // RA = base, (RB = nresults+1, RC = nargs+1 (2+1))
+    |.if JIT
+    |  bti_jump
+    |.endif
     |  add RA, BASE, RA, lsl #3
     |  ldr TAB:RB, [RA, #-16]
     |    ldrh TMP3w, [PC, # OFS_RD]
