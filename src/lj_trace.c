@@ -343,6 +343,14 @@ void lj_trace_initstate(global_State *g)
   J->k32[LJ_K32_M2P64] = 0xdf800000;
 #endif
 #endif
+#if LJ_TARGET_PPC || LJ_TARGET_MIPS32
+  J->k32[LJ_K32_VM_EXIT_HANDLER] = (uintptr_t)(void *)lj_vm_exit_handler;
+  J->k32[LJ_K32_VM_EXIT_INTERP] = (uintptr_t)(void *)lj_vm_exit_interp;
+#endif
+#if LJ_TARGET_ARM64 || LJ_TARGET_MIPS64
+  J->k64[LJ_K64_VM_EXIT_HANDLER].u64 = (uintptr_t)lj_ptr_sign((void *)lj_vm_exit_handler, 0);
+  J->k64[LJ_K64_VM_EXIT_INTERP].u64 = (uintptr_t)lj_ptr_sign((void *)lj_vm_exit_interp, 0);
+#endif
 }
 
 /* Free everything associated with the JIT compiler state. */
@@ -637,10 +645,15 @@ static int trace_abort(jit_State *J)
     J->cur.traceno = 0;
   }
   L->top--;  /* Remove error object */
-  if (e == LJ_TRERR_DOWNREC)
+  if (e == LJ_TRERR_DOWNREC) {
     return trace_downrec(J);
-  else if (e == LJ_TRERR_MCODEAL)
+  } else if (e == LJ_TRERR_MCODEAL) {
+    if (!J->mcarea) {  /* Disable JIT compiler if first mcode alloc fails. */
+      J->flags &= ~JIT_F_ON;
+      lj_dispatch_update(J2G(J));
+    }
     lj_trace_flushall(L);
+  }
   return 0;
 }
 

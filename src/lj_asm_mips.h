@@ -92,13 +92,23 @@ static MCode *asm_sparejump_use(MCode *mcarea, MCode tjump)
 /* Setup exit stub after the end of each trace. */
 static void asm_exitstub_setup(ASMState *as)
 {
+  uintptr_t target = (uintptr_t)(void *)lj_vm_exit_handler;
   MCode *mxp = as->mctop;
-  /* sw TMP, 0(sp); j ->vm_exit_handler; li TMP, traceno */
-  *--mxp = MIPSI_LI|MIPSF_T(RID_TMP)|as->T->traceno;
-  *--mxp = MIPSI_J|((((uintptr_t)(void *)lj_vm_exit_handler)>>2)&0x03ffffffu);
-  lj_assertA(((uintptr_t)mxp ^ (uintptr_t)(void *)lj_vm_exit_handler)>>28 == 0,
-	     "branch target out of range");
-  *--mxp = MIPSI_SW|MIPSF_T(RID_TMP)|MIPSF_S(RID_SP)|0;
+  *--mxp = MIPSI_LI | MIPSF_T(RID_TMP) | as->T->traceno;
+  if (((uintptr_t)(mxp-1) ^ target) >> 28 == 0) {
+    /* sw TMP, 0(sp); j ->vm_exit_handler; li TMP, traceno */
+    *--mxp = MIPSI_J | ((target >> 2) & 0x03ffffffu);
+  } else {
+    /* sw TMP, 0(sp); li TMP, K*_VXH(jgl); jr TMP ; li TMP, traceno */
+    *--mxp = MIPSI_JR | MIPSF_S(RID_TMP);
+    *--mxp = MIPSI_AL | MIPSF_T(RID_TMP) | MIPSF_S(RID_JGL) |
+#if LJ_64
+	     jglofs(as, &as->J->k64[LJ_K64_VM_EXIT_HANDLER]);
+#else
+	     jglofs(as, &as->J->k32[LJ_K32_VM_EXIT_HANDLER]);
+#endif
+  }
+  *--mxp = MIPSI_SW | MIPSF_T(RID_TMP) | MIPSF_S(RID_SP) | 0;
   as->mctop = mxp;
 }
 
@@ -428,7 +438,8 @@ static void asm_callround(ASMState *as, IRIns *ir, IRCallID id)
 {
   /* The modified regs must match with the *.dasc implementation. */
   RegSet drop = RID2RSET(RID_R1)|RID2RSET(RID_R12)|RID2RSET(RID_FPRET)|
-		RID2RSET(RID_F2)|RID2RSET(RID_F4)|RID2RSET(REGARG_FIRSTFPR)
+		RID2RSET(RID_F2)|RID2RSET(RID_F4)|RID2RSET(REGARG_FIRSTFPR)|
+		RID2RSET(RID_CFUNCADDR)
 #if LJ_TARGET_MIPSR6
 		|RID2RSET(RID_F21)
 #endif
@@ -514,7 +525,7 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg r)
 {
   /* The modified regs must match with the *.dasc implementation. */
   RegSet drop = RID2RSET(REGARG_FIRSTGPR)|RID2RSET(RID_RET)|RID2RSET(RID_RET+1)|
-		RID2RSET(RID_R1)|RID2RSET(RID_R12);
+		RID2RSET(RID_R1)|RID2RSET(RID_R12)|RID2RSET(RID_CFUNCADDR);
   if (ra_hasreg(ir->r)) rset_clear(drop, ir->r);
   ra_evictset(as, drop);
   /* Return values are in RID_RET (converted value) and RID_RET+1 (status). */
@@ -2699,18 +2710,37 @@ static Reg asm_head_side_base(ASMState *as, IRIns *irp)
 /* Fixup the tail code. */
 static void asm_tail_fixup(ASMState *as, TraceNo lnk)
 {
-  MCode *target = lnk ? traceref(as->J,lnk)->mcode : (MCode *)lj_vm_exit_interp;
+  uintptr_t target = lnk ? (uintptr_t)traceref(as->J, lnk)->mcode : (uintptr_t)(void *)lj_vm_exit_interp;
+  MCode *mcp = as->mctail;
   int32_t spadj = as->T->spadjust;
-  MCode *p = as->mctop-1;
-  *p = spadj ? (MIPSI_AADDIU|MIPSF_T(RID_SP)|MIPSF_S(RID_SP)|spadj) : MIPSI_NOP;
-  p[-1] = MIPSI_J|(((uintptr_t)target>>2)&0x03ffffffu);
+  if (((uintptr_t)mcp ^ target) >> 28 == 0) {
+    *mcp++ = MIPSI_J | ((target >> 2) & 0x03ffffffu);
+  } else {
+    *mcp++ = MIPSI_AL | MIPSF_T(RID_TMP) | MIPSF_S(RID_JGL) |
+#if LJ_64
+	     jglofs(as, &as->J->k64[LJ_K64_VM_EXIT_INTERP]);
+#else
+	     jglofs(as, &as->J->k32[LJ_K32_VM_EXIT_INTERP]);
+#endif
+    *mcp++ = MIPSI_JR | MIPSF_S(RID_TMP);
+  }
+  *mcp++ = spadj ? (MIPSI_AADDIU|MIPSF_T(RID_SP)|MIPSF_S(RID_SP)|spadj) : MIPSI_NOP;
 }
 
 /* Prepare tail of code. */
-static void asm_tail_prep(ASMState *as)
+static void asm_tail_prep(ASMState *as, TraceNo lnk)
 {
-  as->mcp = as->mctop-2;  /* Leave room for branch plus nop or stack adj. */
-  as->invmcp = as->loopref ? as->mcp : NULL;
+  as->mcp = as->mctop - 2;  /* Leave room for branch plus nop or stack adj. */
+  if (as->loopref) {
+    as->invmcp = as->mcp;
+  } else {
+    if (!lnk) {
+      uintptr_t target = (uintptr_t)(void *)lj_vm_exit_interp;
+      if (((uintptr_t)as->mcp ^ target) >> 28 != 0) as->mcp--;
+    }
+    as->invmcp = NULL;
+  }
+  as->mctail = as->mcp;
 }
 
 /* -- Trace setup --------------------------------------------------------- */

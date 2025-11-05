@@ -9,9 +9,12 @@
 static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
 {
   ExitNo i, groupofs = (group*EXITSTUBS_PER_GROUP) & 0xff;
+  MCode *target = (MCode *)(void *)lj_vm_exit_handler;
   MCode *mxp = as->mcbot;
   MCode *mxpstart = mxp;
-  if (mxp + (2+2)*EXITSTUBS_PER_GROUP+8+5 >= as->mctop)
+  if (mxp + ((2+2)*EXITSTUBS_PER_GROUP +
+	     (LJ_GC64 ? 0 : 8) +
+	     (LJ_64 ? 6 : 5)) >= as->mctop)
     asm_mclimit(as);
   /* Push low byte of exitno for each exit stub. */
   *mxp++ = XI_PUSHi8; *mxp++ = (MCode)groupofs;
@@ -30,8 +33,13 @@ static MCode *asm_exitstub_gen(ASMState *as, ExitNo group)
   *(int32_t *)mxp = ptr2addr(J2GG(as->J)->dispatch); mxp += 4;
 #endif
   /* Jump to exit handler which fills in the ExitState. */
-  *mxp++ = XI_JMP; mxp += 4;
-  *((int32_t *)(mxp-4)) = jmprel(as->J, mxp, (MCode *)(void *)lj_vm_exit_handler);
+  if (jmprel_ok(mxp + 5, target)) {  /* Direct jump. */
+    *mxp++ = XI_JMP; mxp += 4;
+    *((int32_t *)(mxp-4)) = jmprel(as->J, mxp, target);
+  } else { /* RIP-relative indirect jump. */
+    *mxp++ = XI_GROUP5; *mxp++ = XM_OFS0 + (XOg_JMP<<3) + RID_EBP; mxp += 4;
+    *((int32_t *)(mxp-4)) = (int32_t)((group ? as->J->exitstubgroup[0] : mxpstart) - 8 - mxp);
+  }
   /* Commit the code for this group (even if assembly fails later on). */
   lj_mcode_commitbot(as->J, mxp);
   as->mcbot = mxp;
@@ -45,6 +53,16 @@ static void asm_exitstub_setup(ASMState *as, ExitNo nexits)
   ExitNo i;
   if (nexits >= EXITSTUBS_PER_GROUP*LJ_MAX_EXITSTUBGR)
     lj_trace_err(as->J, LJ_TRERR_SNAPOV);
+#if LJ_64
+  if (as->J->exitstubgroup[0] == NULL) {
+    /* Store the two potentially out-of-range targets below group 0. */
+    MCode *mxp = as->mcbot;
+    while ((uintptr_t)mxp & 7) *mxp++ = XI_INT3;
+    *((void **)mxp) = (void *)lj_vm_exit_interp; mxp += 8;
+    *((void **)mxp) = (void *)lj_vm_exit_handler; mxp += 8;
+    as->mcbot = mxp;  /* Don't bother to commit, done in asm_exitstub_gen. */
+  }
+#endif
   for (i = 0; i < (nexits+EXITSTUBS_PER_GROUP-1)/EXITSTUBS_PER_GROUP; i++)
     if (as->J->exitstubgroup[i] == NULL)
       as->J->exitstubgroup[i] = asm_exitstub_gen(as, i);
@@ -396,7 +414,7 @@ static Reg asm_fuseloadk64(ASMState *as, IRIns *ir)
 		 "bad interned 64 bit constant");
     } else {
       while ((uintptr_t)as->mcbot & 7) *as->mcbot++ = XI_INT3;
-      *(uint64_t*)as->mcbot = *k;
+      *(uint64_t *)as->mcbot = *k;
       ir->i = (int32_t)(as->mctop - as->mcbot);
       as->mcbot += 8;
       as->mclim = as->mcbot + MCLIM_REDZONE;
@@ -728,7 +746,7 @@ static void *asm_callx_func(ASMState *as, IRIns *irf, IRRef func)
       p = (MCode *)(void *)ir_k64(irf)->u64;
     else
       p = (MCode *)(void *)(uintptr_t)(uint32_t)irf->i;
-    if (p - as->mcp == (int32_t)(p - as->mcp))
+    if (jmprel_ok(p, as->mcp))
       return p;  /* Call target is still in +-2GB range. */
     /* Avoid the indirect case of emit_call(). Try to hoist func addr. */
   }
@@ -2806,6 +2824,8 @@ static void asm_gc_check(ASMState *as)
   emit_rr(as, XO_TEST, RID_RET, RID_RET);
   args[0] = ASMREF_TMP1;  /* global_State *g */
   args[1] = ASMREF_TMP2;  /* MSize steps     */
+  /* Insert nop to simplify GC exit recognition in lj_asm_patchexit. */
+  if (!jmprel_ok(as->mcp, (MCode *)(void *)ci->func)) *--as->mcp = XI_NOP;
   asm_gencall(as, ci, args);
   tmp = ra_releasetmp(as, ASMREF_TMP1);
 #if LJ_GC64
@@ -2919,40 +2939,36 @@ static Reg asm_head_side_base(ASMState *as, IRIns *irp)
 static void asm_tail_fixup(ASMState *as, TraceNo lnk)
 {
   /* Note: don't use as->mcp swap + emit_*: emit_op overwrites more bytes. */
-  MCode *p = as->mctop;
-  MCode *target, *q;
+  MCode *mcp = as->mctail;
+  MCode *target;
   int32_t spadj = as->T->spadjust;
-  if (spadj == 0) {
-    p -= LJ_64 ? 7 : 6;
-  } else {
-    MCode *p1;
-    /* Patch stack adjustment. */
+  if (spadj) {  /* Emit stack adjustment. */
+    if (LJ_64) *mcp++ = 0x48;
     if (checki8(spadj)) {
-      p -= 3;
-      p1 = p-6;
-      *p1 = (MCode)spadj;
+      *mcp++ = XI_ARITHi8;
+      *mcp++ = MODRM(XM_REG, XOg_ADD, RID_ESP);
+      *mcp++ = (MCode)spadj;
     } else {
-      p1 = p-9;
-      *(int32_t *)p1 = spadj;
+      *mcp++ = XI_ARITHi;
+      *mcp++ = MODRM(XM_REG, XOg_ADD, RID_ESP);
+      *(int32_t *)mcp = spadj; mcp += 4;
     }
-#if LJ_64
-    p1[-3] = 0x48;
-#endif
-    p1[-2] = (MCode)(checki8(spadj) ? XI_ARITHi8 : XI_ARITHi);
-    p1[-1] = MODRM(XM_REG, XOg_ADD, RID_ESP);
   }
-  /* Patch exit branch. */
-  target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)lj_vm_exit_interp;
-  *(int32_t *)(p-4) = jmprel(as->J, p, target);
-  p[-5] = XI_JMP;
+  /* Emit exit branch. */
+  target = lnk ? traceref(as->J, lnk)->mcode : (MCode *)(void *)lj_vm_exit_interp;
+  if (lnk || jmprel_ok(mcp + 5, target)) {  /* Direct jump. */
+    *mcp++ = XI_JMP; mcp += 4;
+    *(int32_t *)(mcp-4) = jmprel(as->J, mcp, target);
+  } else {  /* RIP-relative indirect jump. */
+    *mcp++ = XI_GROUP5; *mcp++ = XM_OFS0 + (XOg_JMP<<3) + RID_EBP; mcp += 4;
+    *((int32_t *)(mcp-4)) = (int32_t)(as->J->exitstubgroup[0] - 16 - mcp);
+  }
   /* Drop unused mcode tail. Fill with NOPs to make the prefetcher happy. */
-  for (q = as->mctop-1; q >= p; q--)
-    *q = XI_NOP;
-  as->mctop = p;
+  while (as->mctop > mcp) *--as->mctop = XI_NOP;
 }
 
 /* Prepare tail of code. */
-static void asm_tail_prep(ASMState *as)
+static void asm_tail_prep(ASMState *as, TraceNo lnk)
 {
   MCode *p = as->mctop;
   /* Realign and leave room for backwards loop branch or exit branch. */
@@ -2964,15 +2980,17 @@ static void asm_tail_prep(ASMState *as)
     as->mctop = p;
     p -= (as->loopinv ? 5 : 2);  /* Space for short/near jmp. */
   } else {
-    p -= 5;  /* Space for exit branch (near jmp). */
+    p -= (LJ_64 && !lnk) ? 6 : 5;  /* Space for exit branch. */
   }
   if (as->loopref) {
     as->invmcp = as->mcp = p;
   } else {
-    /* Leave room for ESP adjustment: add esp, imm or lea esp, [esp+imm] */
-    as->mcp = p - (LJ_64 ? 7 : 6);
+    /* Leave room for ESP adjustment: add esp, imm */
+    p -= LJ_64 ? 7 : 6;
+    as->mcp = p;
     as->invmcp = NULL;
   }
+  as->mctail = p;
 }
 
 /* -- Trace setup --------------------------------------------------------- */
@@ -3132,6 +3150,10 @@ void lj_asm_patchexit(jit_State *J, GCtrace *T, ExitNo exitno, MCode *target)
     } else if (*p == XI_CALL &&
 	      (void *)(p+5+*(int32_t *)(p+1)) == (void *)lj_gc_step_jit) {
       pgc = p+7;  /* Do not patch GC check exit. */
+    } else if (LJ_64 && *p == 0xff &&
+			 p[1] == MODRM(XM_REG, XOg_CALL, RID_RET) &&
+			 p[2] == XI_NOP) {
+      pgc = p+5;  /* Do not patch GC check exit. */
     }
   }
   lj_mcode_sync(T->mcode, T->mcode + T->szmcode);
