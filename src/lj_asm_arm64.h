@@ -1056,7 +1056,8 @@ static void asm_fstore(ASMState *as, IRIns *ir)
 static void asm_xload(ASMState *as, IRIns *ir)
 {
   Reg dest = ra_dest(as, ir, irt_isfp(ir->t) ? RSET_FPR : RSET_GPR);
-  lj_assertA(!(ir->op2 & IRXLOAD_UNALIGNED), "unaligned XLOAD");
+  lj_assertA(LJ_TARGET_UNALIGNED || !(ir->op2 & IRXLOAD_UNALIGNED),
+	     "unaligned XLOAD");
   asm_fusexref(as, asm_fxloadins(ir), dest, ir->op1, RSET_GPR);
 }
 
