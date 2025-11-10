@@ -202,6 +202,7 @@ static TValue *cpluaopen(lua_State *L, lua_CFunction dummy, void *ud)
 #endif
   lj_trace_initstate(g);
   lj_err_verify();
+  setgcref(g->vmthref, obj2gco(lj_state_new(L)));
   return NULL;
 }
 

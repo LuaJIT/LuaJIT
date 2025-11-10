@@ -647,6 +647,7 @@ typedef struct global_State {
   TValue tmptv, tmptv2;	/* Temporary TValues. */
   Node nilnode;		/* Fallback 1-element hash part (nil key and value). */
   TValue registrytv;	/* Anchor for registry. */
+  GCRef vmthref;	/* Link to VM thread. */
   GCupval uvhead;	/* Head of double-linked list of all open upvalues. */
   int32_t hookcount;	/* Instruction hook countdown. */
   int32_t hookcstart;	/* Start count for instruction hook counter. */
@@ -663,6 +664,7 @@ typedef struct global_State {
 } global_State;
 
 #define mainthread(g)	(&gcref(g->mainthref)->th)
+#define vmthread(g)	(&gcref(g->vmthref)->th)
 #define niltv(L) \
   check_exp(tvisnil(&G(L)->nilnode.val), &G(L)->nilnode.val)
 #define niltvg(g) \

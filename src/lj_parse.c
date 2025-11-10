@@ -1593,8 +1593,8 @@ static GCproto *fs_finish(LexState *ls, BCLine line)
   fs_fixup_line(fs, pt, (void *)((char *)pt + ofsli), numline);
   fs_fixup_var(ls, pt, (uint8_t *)((char *)pt + ofsdbg), ofsvar);
 
-  lj_vmevent_send(L, BC,
-    setprotoV(L, L->top++, pt);
+  lj_vmevent_send(G(L), BC,
+    setprotoV(V, V->top++, pt);
   );
 
   L->top--;  /* Pop table of constants. */
