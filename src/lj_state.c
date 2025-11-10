@@ -377,6 +377,10 @@ void LJ_FASTCALL lj_state_free(global_State *g, lua_State *L)
   lj_assertG(L != mainthread(g), "free of main thread");
   if (obj2gco(L) == gcref(g->cur_L))
     setgcrefnull(g->cur_L);
+#if LJ_HASFFI
+  if (ctype_ctsG(g) && ctype_ctsG(g)->L == L)  /* Avoid dangling cts->L. */
+    ctype_ctsG(g)->L = mainthread(g);
+#endif
   if (gcref(L->openupval) != NULL) {
     lj_func_closeuv(L, tvref(L->stack));
     lj_trace_abort(g);  /* For aa_uref soundness. */
