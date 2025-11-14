@@ -796,7 +796,7 @@ static TRef recff_string_start(jit_State *J, GCstr *s, int32_t *st, TRef tr,
     emitir(IRTGI(IR_EQ), tr, tr0);
     tr = tr0;
   } else {
-    tr = emitir(IRTI(IR_ADD), tr, lj_ir_kint(J, -1));
+    tr = emitir(IRTGI(IR_ADDOV), tr, lj_ir_kint(J, -1));
     emitir(IRTGI(IR_GE), tr, tr0);
     start--;
   }
@@ -848,7 +848,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
   } else if ((MSize)end <= str->len) {
     emitir(IRTGI(IR_ULE), trend, trlen);
   } else {
-    emitir(IRTGI(IR_UGT), trend, trlen);
+    emitir(IRTGI(IR_GT), trend, trlen);
     end = (int32_t)str->len;
     trend = trlen;
   }
@@ -856,7 +856,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
   if (rd->data) {  /* Return string.sub result. */
     if (end - start >= 0) {
       /* Also handle empty range here, to avoid extra traces. */
-      TRef trptr, trslen = emitir(IRTI(IR_SUB), trend, trstart);
+      TRef trptr, trslen = emitir(IRTGI(IR_SUBOV), trend, trstart);
       emitir(IRTGI(IR_GE), trslen, tr0);
       trptr = emitir(IRT(IR_STRREF, IRT_PGC), trstr, trstart);
       J->base[0] = emitir(IRT(IR_SNEW, IRT_STR), trptr, trslen);
@@ -867,7 +867,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
   } else {  /* Return string.byte result(s). */
     ptrdiff_t i, len = end - start;
     if (len > 0) {
-      TRef trslen = emitir(IRTI(IR_SUB), trend, trstart);
+      TRef trslen = emitir(IRTGI(IR_SUBOV), trend, trstart);
       emitir(IRTGI(IR_EQ), trslen, lj_ir_kint(J, (int32_t)len));
       if (J->baseslot + len > LJ_MAX_JSLOTS)
 	lj_trace_err_info(J, LJ_TRERR_STACKOV);
