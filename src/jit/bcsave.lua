@@ -165,6 +165,10 @@ extern "C"
 #endif
 #ifdef _WIN32
 __declspec(dllexport)
+#elif defined(__ELF__) || defined(__MACH__) || defined(__psp2__)
+#if !((defined(__sun__) && defined(__svr4__)) || defined(__CELLOS_LV2__))
+__attribute__((visibility("default")))
+#endif
 #endif
 const unsigned char %s%s[] = {
 ]], LJBC_PREFIX, ctx.modname))

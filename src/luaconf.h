@@ -132,6 +132,10 @@
 #else
 #define LUA_API		__declspec(dllimport)
 #endif
+#elif defined(__ELF__) || defined(__MACH__) || defined(__psp2__)
+#if !((defined(__sun__) && defined(__svr4__)) || defined(__CELLOS_LV2__))
+#define LUA_API         extern __attribute__((visibility("default")))
+#endif
 #else
 #define LUA_API		extern
 #endif
