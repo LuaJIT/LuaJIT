@@ -35,6 +35,7 @@ typedef struct CPValue {
     uint32_t u32;	/* Value for CTID_UINT32. */
   };
   CTypeID id;		/* C Type ID of the value. */
+  unsigned imm : 1;	/* Value is a compile-time constant. */
 } CPValue;
 
 /* C parser state. */
