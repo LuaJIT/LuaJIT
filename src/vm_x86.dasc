@@ -2232,7 +2232,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |.macro math_minmax, name, cmovop, fcmovop, sseop
-  |  .ffunc name
+  |  .ffunc_1 name
   |  mov RA, 2
   |  cmp dword [BASE+4], LJ_TISNUM
   |.if DUALNUM
