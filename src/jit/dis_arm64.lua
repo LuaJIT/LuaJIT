@@ -485,15 +485,15 @@ local map_ls = { -- Loads and stores.
       shift = 30, mask = 3,
       [0] = {
 	shift = 22, mask = 3,
-	[0] = "strbDwzU", "ldrbDwzU"
+	[0] = "strbDwzU", "ldrbDwzU", "ldrsbDwzU", "ldrsbDxzU"
       },
       {
 	shift = 22, mask = 3,
-	[0] = "strhDwzU", "ldrhDwzU"
+	[0] = "strhDwzU", "ldrhDwzU", "ldrshDwzU", "ldrshDxzU"
       },
       {
 	shift = 22, mask = 3,
-	[0] = "strDwzU", "ldrDwzU"
+	[0] = "strDwzU", "ldrDwzU", "ldrswDxzU"
       },
       {
 	shift = 22, mask = 3,
