@@ -512,29 +512,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
       Reg dest = ra_dest(as, ir, RSET_GPR);
       Reg left = ra_alloc1(as, lref, RSET_FPR);
       Reg tmp = ra_scratch(as, rset_exclude(RSET_FPR, left));
-      if (irt_isu32(ir->t)) {
-	/* Convert both x and x-2^31 to int and merge results. */
-	Reg tmpi = ra_scratch(as, rset_exclude(RSET_GPR, dest));
-	emit_asb(as, PPCI_OR, dest, dest, tmpi);  /* Select with mask idiom. */
-	emit_asb(as, PPCI_AND, tmpi, tmpi, RID_TMP);
-	emit_asb(as, PPCI_ANDC, dest, dest, RID_TMP);
-	emit_tai(as, PPCI_LWZ, tmpi, RID_SP, SPOFS_TMPLO);  /* tmp = (int)(x) */
-	emit_tai(as, PPCI_ADDIS, dest, dest, 0x8000);  /* dest += 2^31 */
-	emit_asb(as, PPCI_SRAWI, RID_TMP, dest, 31);  /* mask = -(dest < 0) */
-	emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
-	emit_tai(as, PPCI_LWZ, dest,
-		 RID_SP, SPOFS_TMPLO);  /* dest = (int)(x-2^31) */
-	emit_fb(as, PPCI_FCTIWZ, tmp, left);
-	emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
-	emit_fb(as, PPCI_FCTIWZ, tmp, tmp);
-	emit_fab(as, PPCI_FSUB, tmp, left, tmp);
-	emit_lsptr(as, PPCI_LFS, (tmp & 31),
-		   (void *)&as->J->k32[LJ_K32_2P31], RSET_GPR);
-      } else {
-	emit_tai(as, PPCI_LWZ, dest, RID_SP, SPOFS_TMPLO);
-	emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
-	emit_fb(as, PPCI_FCTIWZ, tmp, left);
-      }
+      lj_assertA(!irt_isu32(ir->t), "bad CONV u32.fp emitted");
+      emit_tai(as, PPCI_LWZ, dest, RID_SP, SPOFS_TMPLO);
+      emit_fai(as, PPCI_STFD, tmp, RID_SP, SPOFS_TMP);
+      emit_fb(as, PPCI_FCTIWZ, tmp, left);
     }
   } else
 #endif

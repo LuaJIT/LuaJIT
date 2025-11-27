@@ -635,64 +635,38 @@ static void asm_conv(ASMState *as, IRIns *ir)
       Reg dest = ra_dest(as, ir, RSET_GPR);
       Reg left = ra_alloc1(as, lref, RSET_FPR);
       Reg tmp = ra_scratch(as, rset_exclude(RSET_FPR, left));
-      if (irt_isu32(ir->t)) {  /* FP to U32 conversion. */
-	/* y = (int)floor(x - 2147483648.0) ^ 0x80000000 */
-	emit_dst(as, MIPSI_XOR, dest, dest, RID_TMP);
-	emit_ti(as, MIPSI_LUI, RID_TMP, 0x8000);
-	emit_tg(as, MIPSI_MFC1, dest, tmp);
-	emit_fg(as, st == IRT_FLOAT ? MIPSI_FLOOR_W_S : MIPSI_FLOOR_W_D,
-		tmp, tmp);
-	emit_fgh(as, st == IRT_FLOAT ? MIPSI_SUB_S : MIPSI_SUB_D,
-		 tmp, left, tmp);
-	if (st == IRT_FLOAT)
-	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		     (void *)&as->J->k32[LJ_K32_2P31], RSET_GPR);
-	else
-	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		     (void *)&as->J->k64[LJ_K64_2P31], RSET_GPR);
+      lj_assertA(!irt_isu32(ir->t), "bad CONV u32.fp emitted");
 #if LJ_64
-      } else if (irt_isu64(ir->t)) {  /* FP to U64 conversion. */
-	MCLabel l_end;
+      if (irt_isu64(ir->t)) {  /* FP to U64 conversion. */
+	MCLabel l_end = emit_label(as);
 	emit_tg(as, MIPSI_DMFC1, dest, tmp);
-	l_end = emit_label(as);
-	/* For inputs >= 2^63 add -2^64 and convert again. */
+	/* For result == INT64_MAX add -2^64 and convert again. */
 	if (st == IRT_NUM) {
 	  emit_fg(as, MIPSI_TRUNC_L_D, tmp, tmp);
 	  emit_fgh(as, MIPSI_ADD_D, tmp, left, tmp);
 	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
 		     (void *)&as->J->k64[LJ_K64_M2P64],
-		     rset_exclude(RSET_GPR, dest));
-	  emit_fg(as, MIPSI_TRUNC_L_D, tmp, left);  /* Delay slot. */
-#if !LJ_TARGET_MIPSR6
-	emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
-	emit_fgh(as, MIPSI_C_OLT_D, 0, left, tmp);
-#else
-	emit_branch(as, MIPSI_BC1NEZ, 0, (tmp&31), l_end);
-	emit_fgh(as, MIPSI_CMP_LT_D, tmp, left, tmp);
-#endif
-	  emit_lsptr(as, MIPSI_LDC1, (tmp & 31),
-		     (void *)&as->J->k64[LJ_K64_2P63],
-		     rset_exclude(RSET_GPR, dest));
+		     rset_exclude(RSET_GPR, dest));  /* Delay slot. */
+	  emit_branch(as, MIPSI_BNE, RID_TMP, dest, l_end);  /* != INT64_MAX? */
+	  emit_dta(as, MIPSI_DSRL, RID_TMP, RID_TMP, 1);
+	  emit_ti(as, MIPSI_LI, RID_TMP, -1);
+	  emit_tg(as, MIPSI_DMFC1, dest, tmp);
+	  emit_fg(as, MIPSI_TRUNC_L_D, tmp, left);
 	} else {
 	  emit_fg(as, MIPSI_TRUNC_L_S, tmp, tmp);
 	  emit_fgh(as, MIPSI_ADD_S, tmp, left, tmp);
 	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
 		     (void *)&as->J->k32[LJ_K32_M2P64],
-		     rset_exclude(RSET_GPR, dest));
-	  emit_fg(as, MIPSI_TRUNC_L_S, tmp, left);  /* Delay slot. */
-#if !LJ_TARGET_MIPSR6
-	emit_branch(as, MIPSI_BC1T, 0, 0, l_end);
-	emit_fgh(as, MIPSI_C_OLT_S, 0, left, tmp);
-#else
-	emit_branch(as, MIPSI_BC1NEZ, 0, (tmp&31), l_end);
-	emit_fgh(as, MIPSI_CMP_LT_S, tmp, left, tmp);
-#endif
-	  emit_lsptr(as, MIPSI_LWC1, (tmp & 31),
-		     (void *)&as->J->k32[LJ_K32_2P63],
-		     rset_exclude(RSET_GPR, dest));
+		     rset_exclude(RSET_GPR, dest));  /* Delay slot. */
+	  emit_branch(as, MIPSI_BNE, RID_TMP, dest, l_end);  /* != INT64_MAX? */
+	  emit_dta(as, MIPSI_DSRL, RID_TMP, RID_TMP, 1);
+	  emit_ti(as, MIPSI_LI, RID_TMP, -1);
+	  emit_tg(as, MIPSI_DMFC1, dest, tmp);
+	  emit_fg(as, MIPSI_TRUNC_L_S, tmp, left);
 	}
+      } else
 #endif
-      } else {
+      {
 #if LJ_32
 	emit_tg(as, MIPSI_MFC1, dest, tmp);
 	emit_fg(as, st == IRT_FLOAT ? MIPSI_TRUNC_W_S : MIPSI_TRUNC_W_D,
@@ -733,13 +707,11 @@ static void asm_conv(ASMState *as, IRIns *ir)
 		 "bad type for checked CONV");
       asm_tointg(as, ir, RID_NONE);
     } else {
-      IRCallID cid = irt_is64(ir->t) ?
-	((st == IRT_NUM) ?
-	 (irt_isi64(ir->t) ? IRCALL_fp64_d2l : IRCALL_fp64_d2ul) :
-	 (irt_isi64(ir->t) ? IRCALL_fp64_f2l : IRCALL_fp64_f2ul)) :
-	((st == IRT_NUM) ?
-	 (irt_isint(ir->t) ? IRCALL_softfp_d2i : IRCALL_softfp_d2ui) :
-	 (irt_isint(ir->t) ? IRCALL_softfp_f2i : IRCALL_softfp_f2ui));
+      IRCallID cid;
+      lj_assertA(!irt_isu32(ir->t), "bad CONV u32.fp emitted");
+      lj_assertA(!(irt_is64(ir->t) && st != IRT_NUM), "bad CONV *64.float emitted");
+      cid = irt_is64(ir->t) ? IRCALL_lj_vm_num2u64 :
+	    (st == IRT_NUM ? IRCALL_softfp_d2i : IRCALL_softfp_f2i);
       asm_callid(as, ir, cid);
     }
   } else
@@ -780,7 +752,10 @@ static void asm_conv(ASMState *as, IRIns *ir)
 	  }
 	}
       } else {
-	if (st64 && !(ir->op2 & IRCONV_NONE)) {
+	if (!irt_isu32(ir->t)) {  /* Implicit sign extension. */
+	  Reg left = ra_alloc1(as, lref, RSET_GPR);
+	  emit_dta(as, MIPSI_SLL, dest, left, 0);
+	} else if (st64 && !(ir->op2 & IRCONV_NONE)) {
 	  /* This is either a 32 bit reg/reg mov which zeroes the hiword
 	  ** or a load of the loword from a 64 bit address.
 	  */

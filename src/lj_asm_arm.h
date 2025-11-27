@@ -624,10 +624,9 @@ static void asm_conv(ASMState *as, IRIns *ir)
       Reg tmp = ra_scratch(as, rset_exclude(RSET_FPR, left));
       Reg dest = ra_dest(as, ir, RSET_GPR);
       ARMIns ai;
+      lj_assertA(!irt_isu32(ir->t), "bad CONV u32.fp emitted");
       emit_dn(as, ARMI_VMOV_R_S, dest, (tmp & 15));
-      ai = irt_isint(ir->t) ?
-	(st == IRT_NUM ? ARMI_VCVT_S32_F64 : ARMI_VCVT_S32_F32) :
-	(st == IRT_NUM ? ARMI_VCVT_U32_F64 : ARMI_VCVT_U32_F32);
+      ai = st == IRT_NUM ? ARMI_VCVT_S32_F64 : ARMI_VCVT_S32_F32;
       emit_dm(as, ai, (tmp & 15), (left & 15));
     }
   } else

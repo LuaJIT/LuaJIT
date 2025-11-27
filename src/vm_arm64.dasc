@@ -2156,6 +2156,42 @@ static void build_subroutines(BuildCtx *ctx)
   |  ret
   |
   |//-----------------------------------------------------------------------
+  |//-- Number conversion functions ----------------------------------------
+  |//-----------------------------------------------------------------------
+  |
+  |// int64_t lj_vm_num2int_check(double x)
+  |->vm_num2int_check:
+  |  fcvtzs CRET1w, FARG1
+  |  scvtf FARG2, CRET1w
+  |  fcmp FARG2, FARG1
+  |  bne >1
+  |  ret
+  |1:
+  |  mov CRET1, #0x8000000080000000
+  |  ret
+  |
+  |// int64_t lj_vm_num2i64(double x)
+  |->vm_num2i64:
+  |  fcvtzs CRET1, FARG1
+  |  ret
+  |
+  |// uint64_t lj_vm_num2u64(double x)
+  |->vm_num2u64:
+  |  fcvtzs CRET1, FARG1
+  |  fcvtzu CARG2, FARG1
+  |  cmn CRET1, #1			// Set overflow if CRET1 == INT64_MAX.
+  |  csel CRET1, CRET1, CARG2, vc	// No overflow ? i64 : u64.
+  |  ret
+  |
+  |// int32_t lj_vm_tobit(double x)
+  |->vm_tobit:
+  |  movz CRET1, #0x4338, lsl #48	// 2^52 + 2^51.
+  |  fmov FARG2, CRET1
+  |  fadd FARG1, FARG1, FARG2
+  |  fmov CRET1w, s0
+  |  ret
+  |
+  |//-----------------------------------------------------------------------
   |//-- Miscellaneous functions --------------------------------------------
   |//-----------------------------------------------------------------------
   |

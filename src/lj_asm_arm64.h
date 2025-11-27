@@ -648,14 +648,18 @@ static void asm_conv(ASMState *as, IRIns *ir)
     } else {
       Reg left = ra_alloc1(as, lref, RSET_FPR);
       Reg dest = ra_dest(as, ir, RSET_GPR);
-      A64Ins ai = irt_is64(ir->t) ?
-	(st == IRT_NUM ?
-	 (irt_isi64(ir->t) ? A64I_FCVT_S64_F64 : A64I_FCVT_U64_F64) :
-	 (irt_isi64(ir->t) ? A64I_FCVT_S64_F32 : A64I_FCVT_U64_F32)) :
-	(st == IRT_NUM ?
-	 (irt_isint(ir->t) ? A64I_FCVT_S32_F64 : A64I_FCVT_U32_F64) :
-	 (irt_isint(ir->t) ? A64I_FCVT_S32_F32 : A64I_FCVT_U32_F32));
-      emit_dn(as, ai, dest, (left & 31));
+      lj_assertA(!irt_isu32(ir->t), "bad CONV u32.fp emitted");
+      if (irt_isu64(ir->t)) {
+	emit_dnm(as, A64I_CSELx | A64F_CC(CC_VC), dest, dest, RID_TMP);
+	emit_n(as, (A64I_CMNx^A64I_K12) | A64F_U12(1), dest);
+	emit_dn(as, st == IRT_NUM ? A64I_FCVT_U64_F64 : A64I_FCVT_U64_F32, RID_TMP, (left & 31));
+	emit_dn(as, st == IRT_NUM ? A64I_FCVT_S64_F64 : A64I_FCVT_S64_F32, dest, (left & 31));
+      } else {
+	A64Ins ai = irt_is64(ir->t) ?
+	  (st == IRT_NUM ? A64I_FCVT_S64_F64 : A64I_FCVT_S64_F32) :
+	  (st == IRT_NUM ? A64I_FCVT_S32_F64 : A64I_FCVT_S32_F32);
+	emit_dn(as, ai, dest, (left & 31));
+      }
     }
   } else if (st >= IRT_I8 && st <= IRT_U16) { /* Extend to 32 bit integer. */
     Reg dest = ra_dest(as, ir, RSET_GPR);

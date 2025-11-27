@@ -317,32 +317,34 @@ void lj_trace_initstate(global_State *g)
   tv[1].u64 = U64x(80000000,00000000);
 
   /* Initialize 32/64 bit constants. */
+#if LJ_TARGET_X64 || LJ_TARGET_MIPS64
+  J->k64[LJ_K64_M2P64].u64 = U64x(c3f00000,00000000);
+#endif
 #if LJ_TARGET_X86ORX64
   J->k64[LJ_K64_TOBIT].u64 = U64x(43380000,00000000);
-#if LJ_32
-  J->k64[LJ_K64_M2P64_31].u64 = U64x(c1e00000,00000000);
-#endif
   J->k64[LJ_K64_2P64].u64 = U64x(43f00000,00000000);
-  J->k32[LJ_K32_M2P64_31] = LJ_64 ? 0xdf800000 : 0xcf000000;
 #endif
+#if LJ_TARGET_MIPS64
+  J->k64[LJ_K64_2P63].u64 = U64x(43e00000,00000000);
+#endif
+#if LJ_TARGET_MIPS
+  J->k64[LJ_K64_2P31].u64 = U64x(41e00000,00000000);
+#endif
+
 #if LJ_TARGET_X86ORX64 || LJ_TARGET_MIPS64
-  J->k64[LJ_K64_M2P64].u64 = U64x(c3f00000,00000000);
+  J->k32[LJ_K32_M2P64] = 0xdf800000;
+#endif
+#if LJ_TARGET_MIPS64
+  J->k32[LJ_K32_2P63] = 0x5f000000;
 #endif
 #if LJ_TARGET_PPC
   J->k32[LJ_K32_2P52_2P31] = 0x59800004;
   J->k32[LJ_K32_2P52] = 0x59800000;
 #endif
-#if LJ_TARGET_PPC || LJ_TARGET_MIPS
+#if LJ_TARGET_PPC
   J->k32[LJ_K32_2P31] = 0x4f000000;
 #endif
-#if LJ_TARGET_MIPS
-  J->k64[LJ_K64_2P31].u64 = U64x(41e00000,00000000);
-#if LJ_64
-  J->k64[LJ_K64_2P63].u64 = U64x(43e00000,00000000);
-  J->k32[LJ_K32_2P63] = 0x5f000000;
-  J->k32[LJ_K32_M2P64] = 0xdf800000;
-#endif
-#endif
+
 #if LJ_TARGET_PPC || LJ_TARGET_MIPS32
   J->k32[LJ_K32_VM_EXIT_HANDLER] = (uintptr_t)(void *)lj_vm_exit_handler;
   J->k32[LJ_K32_VM_EXIT_INTERP] = (uintptr_t)(void *)lj_vm_exit_interp;
