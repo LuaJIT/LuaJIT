@@ -246,7 +246,12 @@ static LJ_AINLINE uint32_t lj_getu32(const void *p)
 #define LJ_INLINE	__inline
 #define LJ_AINLINE	__forceinline
 #define LJ_NOINLINE	__declspec(noinline)
+#if MSVC_BROKEN
+/* Unclear why this doesn't work, see #1412. */
 #define LJ_CONSTF	__declspec(nothrow noalias)
+#else
+#define LJ_CONSTF
+#endif
 #if defined(_M_IX86)
 #define LJ_FASTCALL	__fastcall
 #endif
