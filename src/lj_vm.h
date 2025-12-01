@@ -42,7 +42,7 @@ LJ_ASMF LJ_CONSTF double lj_vm_foldarith(double x, double y, int op);
 LJ_ASMF LJ_CONSTF double lj_vm_foldfpm(double x, int op);
 #endif
 #if LJ_SOFTFP && LJ_TARGET_MIPS64
-LJ_ASMF LJ_CONSTF int32_t lj_vm_tointg(double x);
+LJ_ASMF int32_t lj_vm_tointg(double x);
 #endif
 /* Declared in lj_obj.h:
 ** LJ_ASMF LJ_CONSTF int64_t lj_vm_num2int_check(double x);
@@ -71,8 +71,8 @@ LJ_ASMF char lj_vm_exit_interp[];
 LJ_ASMF LJ_CONSTF double lj_vm_floor(double);
 LJ_ASMF LJ_CONSTF double lj_vm_ceil(double);
 #if LJ_TARGET_ARM
-LJ_ASMF LJ_CONSTF double lj_vm_floor_sf(double);
-LJ_ASMF LJ_CONSTF double lj_vm_ceil_sf(double);
+LJ_ASMF double lj_vm_floor_sf(double);
+LJ_ASMF double lj_vm_ceil_sf(double);
 #endif
 #endif
 #ifdef LUAJIT_NO_LOG2
@@ -86,16 +86,16 @@ LJ_ASMF int32_t LJ_FASTCALL lj_vm_modi(int32_t, int32_t);
 
 #if LJ_HASJIT
 #if LJ_TARGET_X86ORX64
-LJ_ASMF LJ_CONSTF void lj_vm_floor_sse(void);
-LJ_ASMF LJ_CONSTF void lj_vm_ceil_sse(void);
-LJ_ASMF LJ_CONSTF void lj_vm_trunc_sse(void);
+LJ_ASMF void lj_vm_floor_sse(void);
+LJ_ASMF void lj_vm_ceil_sse(void);
+LJ_ASMF void lj_vm_trunc_sse(void);
 #endif
 #if LJ_TARGET_PPC || LJ_TARGET_ARM64
 #define lj_vm_trunc	trunc
 #else
 LJ_ASMF LJ_CONSTF double lj_vm_trunc(double);
 #if LJ_TARGET_ARM
-LJ_ASMF LJ_CONSTF double lj_vm_trunc_sf(double);
+LJ_ASMF double lj_vm_trunc_sf(double);
 #endif
 #endif
 #if LJ_HASFFI
