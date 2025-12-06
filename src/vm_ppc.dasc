@@ -3268,7 +3268,9 @@ static void build_subroutines(BuildCtx *ctx)
   |  rldimi CRET2, CRET1, 0, 32
   |  mr CRET1, CRET2
   |.endif
+  |.if FPU
   |  addi sp, sp, 16
+  |.endif
   |  blr
   |2:
   |  subfic TMP1, RB, 0			// 64 bit left shift.
