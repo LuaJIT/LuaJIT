@@ -9,3 +9,4 @@
 *.dmp
 *.swp
 .tags
+*.pdb
