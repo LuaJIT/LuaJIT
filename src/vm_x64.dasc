@@ -3266,11 +3266,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.if DUALNUM
     |  checkint RB, >5
     |  neg RBd
+    |  jz >3
     |  jo >4
     |  setint RB
     |9:
     |  mov [BASE+RA*8], RB
     |  ins_next
+    |3:
+    |  mov64 RB, U64x(80000000,00000000)  // -0.
+    |  jmp <9
     |4:
     |  mov64 RB, U64x(41e00000,00000000)  // 2^31.
     |  jmp <9
