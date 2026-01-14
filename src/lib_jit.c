@@ -640,6 +640,104 @@ JIT_PARAMDEF(JIT_PARAMINIT)
 #include <sys/utsname.h>
 #endif
 
+#if LJ_TARGET_RISCV64 && LJ_TARGET_POSIX
+
+#if LJ_TARGET_LINUX
+#include <unistd.h>
+
+struct riscv_hwprobe hwprobe_requests[] = {
+	{RISCV_HWPROBE_KEY_IMA_EXT_0}
+};
+
+const uint64_t *hwprobe_ext = &hwprobe_requests[0].value;
+
+int hwprobe_ret = 0;
+#endif
+
+static int riscv_compressed()
+{
+#if defined(__riscv_c) || defined(__riscv_compressed)
+  /* Don't bother checking for RVC -- would crash before getting here. */
+  return 1;
+#elif LJ_TARGET_LINUX
+  return (hwprobe_ret == 0 && ((*hwprobe_ext) & RISCV_HWPROBE_IMA_C)) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+static int riscv_zba()
+{
+#if defined(__riscv_b) || defined(__riscv_zba)
+  /* Don't bother checking for Zba -- would crash before getting here. */
+  return 1;
+#elif LJ_TARGET_LINUX
+  return (hwprobe_ret == 0 && ((*hwprobe_ext) & RISCV_HWPROBE_EXT_ZBA)) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+static int riscv_zbb()
+{
+#if defined(__riscv_b) || defined(__riscv_zbb)
+  /* Don't bother checking for Zbb -- would crash before getting here. */
+  return 1;
+#elif LJ_TARGET_LINUX
+  return (hwprobe_ret == 0 && ((*hwprobe_ext) & RISCV_HWPROBE_EXT_ZBB)) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+static int riscv_zicond()
+{
+#if defined(__riscv_zicond)
+  /* Don't bother checking for Zicond -- would crash before getting here. */
+  return 1;
+#elif LJ_TARGET_LINUX
+  return (hwprobe_ret == 0 && ((*hwprobe_ext) & RISCV_HWPROBE_EXT_ZICOND)) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+static int riscv_zfa()
+{
+#if defined(__riscv_zfa)
+  /* Don't bother checking for Zfa -- would crash before getting here. */
+  return 1;
+#elif LJ_TARGET_LINUX
+  return (hwprobe_ret == 0 && ((*hwprobe_ext) & RISCV_HWPROBE_EXT_ZFA)) ? 1 : 0;
+#else
+  return 0;
+#endif
+}
+
+static int riscv_xthead()
+{
+#if (defined(__riscv_xtheadba) \
+  && defined(__riscv_xtheadbb) \
+  && defined(__riscv_xtheadcondmov) \
+  && defined(__riscv_xtheadmac))
+  /* Don't bother checking for XThead -- would crash before getting here. */
+  return 1;
+#else
+/*
+** Hardcoded as there's no easy way of detection:
+** - SIGILL have some trouble with libluajit as we speak
+** - Checking mvendorid looks good, but might not be reliable.
+*/
+  return 0;
+#endif
+}
+
+static uint32_t riscv_probe(int (*func)(void), uint32_t flag)
+{
+    return func() ? flag : 0;
+}
+#endif
+
 /* Arch-dependent CPU feature detection. */
 static uint32_t jit_cpudetect(void)
 {
@@ -709,6 +807,28 @@ static uint32_t jit_cpudetect(void)
 #endif
     if (x) flags |= JIT_F_MIPSXXR2;  /* Either 0x80000000 (R2) or 0 (R1). */
   }
+#endif
+
+#elif LJ_TARGET_RISCV64
+#if LJ_HASJIT
+
+#if LJ_TARGET_LINUX
+  /* HWPROBE-based detection of RVC, Zba, Zbb and Zicond. */
+  hwprobe_ret = syscall(__NR_riscv_hwprobe, &hwprobe_requests,
+                sizeof(hwprobe_requests) / sizeof(struct riscv_hwprobe), 0,
+			          NULL, 0);
+
+  flags |= riscv_probe(riscv_compressed, JIT_F_RVC);
+  flags |= riscv_probe(riscv_zba, JIT_F_RVZba);
+  flags |= riscv_probe(riscv_zbb, JIT_F_RVZbb);
+  flags |= riscv_probe(riscv_zicond, JIT_F_RVZicond);
+  flags |= riscv_probe(riscv_zfa, JIT_F_RVZfa);
+  flags |= riscv_probe(riscv_xthead, JIT_F_RVXThead);
+
+#endif
+
+  /* Detect V/P? */
+  /* V have no hardware available, P not ratified yet. */
 #endif
 
 #else
