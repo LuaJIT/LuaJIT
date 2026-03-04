@@ -703,7 +703,7 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
     }
   }
   if (rd->data) {  /* Return string.sub result. */
-    if (end - start >= 0) {
+    if (start <= end) {
       /* Also handle empty range here, to avoid extra traces. */
       TRef trptr, trslen = emitir(IRTGI(IR_SUBOV), trend, trstart);
       emitir(IRTGI(IR_GE), trslen, tr0);
@@ -714,8 +714,8 @@ static void LJ_FASTCALL recff_string_range(jit_State *J, RecordFFData *rd)
       J->base[0] = lj_ir_kstr(J, lj_str_new(J->L, strdata(str), 0));
     }
   } else {  /* Return string.byte result(s). */
-    ptrdiff_t i, len = end - start;
-    if (len > 0) {
+    if (start < end) {
+      ptrdiff_t i, len = end - start;
       TRef trslen = emitir(IRTGI(IR_SUBOV), trend, trstart);
       emitir(IRTGI(IR_EQ), trslen, lj_ir_kint(J, (int32_t)len));
       if (J->baseslot + len > LJ_MAX_JSLOTS)
