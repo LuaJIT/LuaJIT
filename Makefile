@@ -101,6 +101,7 @@ FILES_JITLIB= bc.lua bcsave.lua dump.lua p.lua v.lua zone.lua \
 	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
 	      dis_mips64.lua dis_mips64el.lua \
 	      dis_mips64r6.lua dis_mips64r6el.lua \
+	      dis_riscv.lua dis_riscv64.lua \
 	      vmdef.lua
 
 ifeq (,$(findstring Windows,$(OS)))
