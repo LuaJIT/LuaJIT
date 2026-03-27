@@ -249,6 +249,9 @@ ifneq (,$(findstring LJ_TARGET_ARM64 ,$(TARGET_TESTARCH)))
   endif
   TARGET_LJARCH= arm64
 else
+ifneq (,$(findstring LJ_TARGET_S390X ,$(TARGET_TESTARCH)))
+   TARGET_LJARCH= s390x
+else
 ifneq (,$(findstring LJ_TARGET_PPC ,$(TARGET_TESTARCH)))
   ifneq (,$(findstring LJ_LE 1,$(TARGET_TESTARCH)))
     TARGET_ARCH= -DLJ_ARCH_ENDIAN=LUAJIT_LE
@@ -268,6 +271,7 @@ ifneq (,$(findstring LJ_TARGET_MIPS ,$(TARGET_TESTARCH)))
   endif
 else
   $(error Unsupported target architecture)
+endif
 endif
 endif
 endif
