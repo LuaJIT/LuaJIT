@@ -67,6 +67,46 @@
 #endif
 #endif
 
+#elif LJ_TARGET_RISCV64
+
+#define JIT_F_RVC		(JIT_F_CPU << 0)
+#define JIT_F_RVZba		(JIT_F_CPU << 1)
+#define JIT_F_RVZbb		(JIT_F_CPU << 2)
+#define JIT_F_RVZicond		(JIT_F_CPU << 3)
+#define JIT_F_RVZfa		(JIT_F_CPU << 4)
+#define JIT_F_RVXThead		(JIT_F_CPU << 5)
+
+#define JIT_F_CPUSTRING		"\003RVC\003Zba\003Zbb\006Zicond\003Zfa\006XThead"
+
+#if LJ_TARGET_LINUX
+#include <sys/syscall.h>
+
+#ifndef __NR_riscv_hwprobe
+#ifndef __NR_arch_specific_syscall
+#define __NR_arch_specific_syscall 244
+#endif
+#define __NR_riscv_hwprobe (__NR_arch_specific_syscall + 14)
+#endif
+
+struct riscv_hwprobe {
+    int64_t key;
+    uint64_t value;
+};
+
+#define RISCV_HWPROBE_KEY_MVENDORID     0
+#define RISCV_HWPROBE_KEY_MARCHID       1
+#define RISCV_HWPROBE_KEY_MIMPID        2
+#define RISCV_HWPROBE_KEY_BASE_BEHAVIOR 3
+#define RISCV_HWPROBE_KEY_IMA_EXT_0     4
+
+#define RISCV_HWPROBE_IMA_C      (1 << 1)
+#define RISCV_HWPROBE_EXT_ZBA    (1 << 3)
+#define RISCV_HWPROBE_EXT_ZBB    (1 << 4)
+#define RISCV_HWPROBE_EXT_ZFA    (1ULL << 32)
+#define RISCV_HWPROBE_EXT_ZICOND (1ULL << 35)
+
+#endif
+
 #else
 
 #define JIT_F_CPUSTRING		""
@@ -363,13 +403,13 @@ enum {
 #if LJ_TARGET_MIPS
   LJ_K64_2P31,		/* 2^31 */
 #endif
-#if LJ_TARGET_ARM64 || LJ_TARGET_MIPS64
+#if LJ_TARGET_ARM64 || LJ_TARGET_MIPS64 || LJ_TARGET_RISCV64
   LJ_K64_VM_EXIT_HANDLER,
   LJ_K64_VM_EXIT_INTERP,
 #endif
   LJ_K64__MAX,
 };
-#define LJ_K64__USED	(LJ_TARGET_X86ORX64 || LJ_TARGET_ARM64 || LJ_TARGET_MIPS)
+#define LJ_K64__USED	(LJ_TARGET_X86ORX64 || LJ_TARGET_ARM64 || LJ_TARGET_MIPS || LJ_TARGET_RISCV64)
 
 enum {
 #if LJ_TARGET_X86ORX64 || LJ_TARGET_MIPS64
