@@ -577,6 +577,197 @@
     goto done; \
   }
 
+#elif LJ_TARGET_RISCV64
+/* -- RISC-V lp64d calling conventions ------------------------------------ */
+
+/* Forward declarations for functions used by macros below. */
+#define CCALL_MIX_MAXFIELDS  2   /* MIX state machine has exactly 2 slots. */
+typedef struct {
+  CTSize offset;
+  uint8_t esz;
+  uint8_t isfp;
+} CCallMixField;
+
+typedef struct {
+  uint8_t nfields;
+  CCallMixField fields[CCALL_MIX_MAXFIELDS];
+} CCallMixFieldList;
+
+static CTSize ccall_place_mix_fields(CCallState *cc, CCallMixFieldList *list,
+				     CTSize sz, uint8_t *src,
+				     MSize *pnfpr, MSize *pngpr, int isva);
+static void ccall_unplace_mix_fields(CCallState *cc, CCallMixFieldList *list,
+				     uint8_t *dp);
+
+#define CCALL_HANDLE_STRUCTRET \
+  /* Return by reference only if >16 bytes and not classifiable as MIX. */ \
+  cc->retref = !ccall_classify_struct(cts, ctr, NULL, 0).ispod && sz > 16; \
+  if (cc->retref) cc->gpr[ngpr++] = (GPRArg)dp;
+
+#define CCALL_HANDLE_STRUCTRET2 \
+{ \
+  CCallMixFieldList mixlist = {0}; \
+  CCallStructClass cl = ccall_classify_struct(cts, ctr, &mixlist, 0); \
+  CCallStructMix mix = cl.mix; \
+  switch (mix.val) { \
+    case MIX_IX: case MIX_FX: \
+    case MIX_FF: case MIX_IF: case MIX_FI: { \
+      ccall_unplace_mix_fields(cc, &mixlist, (uint8_t *)dp); \
+      break; \
+    } \
+    case MIX_UNINIT: \
+    case MIX_FAILED: { \
+      memcpy(dp, sp, ctr->size); \
+      break; \
+    } \
+    default: lj_assertL(0, "Invalid ret mix %d", mix.val); \
+  } \
+}
+
+#define CCALL_HANDLE_COMPLEXRET \
+  /* Complex values are returned in 1 or 2 FPRs. */ \
+  cc->retref = 0;
+
+#define CCALL_HANDLE_COMPLEXRET2 \
+  if (ctr->size == 2*sizeof(float)) {  /* Copy complex float from FPRs. */ \
+    ((float *)dp)[0] = cc->fpr[0].f; \
+    ((float *)dp)[1] = cc->fpr[1].f; \
+  } else {  /* Copy complex double from FPRs. */ \
+    ((double *)dp)[0] = cc->fpr[0].d; \
+    ((double *)dp)[1] = cc->fpr[1].d; \
+  }
+
+#define CCALL_HANDLE_COMPLEXARG \
+  /* Pass long double complex by reference. */ \
+  if (sz == 2*sizeof(long double)) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  } \
+  /* Pass complex in two FPRs or two GPRs or on stack. */ \
+  else if (sz == 2*sizeof(float)) { \
+    mix = (CCallStructMix){ .val = MIX_FF }; \
+    sz = CTSIZE_PTR; \
+  } else /*if (sz == 2*sizeof(double))*/ { \
+    mix = (CCallStructMix){ .val = MIX_FF }; \
+    sz = 2*CTSIZE_PTR; \
+  }
+
+#define CCALL_HANDLE_RET \
+  if (ctype_isfp(ctr->info) && ctr->size == sizeof(float)) \
+    sp = (uint8_t *)&cc->fpr[0].f;
+
+#define CCALL_HANDLE_STRUCTARG \
+  /* Pass structs of size >16 by reference if not classifiable as MIX. */ \
+  CCallMixFieldList mixlist = {0}; \
+  CCallStructClass cl = ccall_classify_struct(cts, d, &mixlist, 0); \
+  uint8_t ispod = cl.ispod; \
+  mix = cl.mix; \
+  /* Check if MIX registers available; fall back to integer conv if not */ \
+  if (ispod && mix.val != MIX_FAILED && mix.val != MIX_UNINIT) { \
+    int need_fpr = 0, need_gpr = 0; \
+    switch (mix.val) { \
+    case MIX_FX: need_fpr = 1; break; \
+    case MIX_FF: need_fpr = 2; break; \
+    case MIX_FI: case MIX_IF: need_fpr = 1; need_gpr = 1; break; \
+    default: lj_assertCTS(0, "Invalid MIX %d", mix.val); \
+    } \
+    if ((need_fpr && nfpr + need_fpr > CCALL_NARG_FPR) || \
+	      (need_gpr && ngpr + need_gpr > CCALL_NARG_GPR)) \
+      mix.val = MIX_FAILED;  /* Fall back to integer convention */ \
+  } \
+  /* Integer convention >2xXLEN: pass by reference */ \
+  if (ispod && (mix.val == MIX_FAILED || mix.val == MIX_UNINIT) && sz > 16) \
+    ispod = 0;  /* Route to by-reference path below. */ \
+  if (!ispod && sz > 16) { \
+    rp = cdataptr(lj_cdata_new(cts, did, sz)); \
+    sz = CTSIZE_PTR; \
+  } else if (ispod) { \
+    /* POD struct: convert to stack, then place fields in registers. */ \
+    MSize al = (1u << ctype_align(ccall_struct_align(cts, d))) - 1; \
+    MSize ns = (nsp + al) & ~al; \
+    if (ns + sz > CCALL_SIZE_STACK) goto err_nyi; \
+    uint8_t *src = (uint8_t *)cc->stack + ns; \
+    lj_cconv_ct_tv(cts, d, src, o, CCF_ARG(narg)); \
+    if (mix.val == MIX_FAILED || mix.val == MIX_UNINIT) { \
+      /* Integer convention: place 8-byte chunks in GPRs, rest on stack. */ \
+      int nchunks = (sz + 7) >> 3; \
+      int chunks_avail = CCALL_NARG_GPR - (int)ngpr; \
+      int i; \
+      for (i = 0; i < chunks_avail && i < nchunks; i++) \
+	cc->gpr[ngpr++] = ((GPRArg *)src)[i]; \
+      if (i < nchunks) { \
+	memmove(src, src + i * 8, sz - i * 8); \
+	nsp = ns + (nchunks - i) * 8; \
+      } \
+    } else { \
+      /* MIX convention: place fields from flat descriptor list. */ \
+      CTSize tail = ccall_place_mix_fields(cc, &mixlist, sz, \
+				   src, &nfpr, &ngpr, isva); \
+      if (tail < sz) { \
+	memmove(src, src + tail, sz - tail); \
+	nsp = ns + (sz - tail); \
+      } \
+    } \
+    continue; \
+  }
+
+#define CCALL_HANDLE_REGARG \
+  if (!isva) { \
+    if (isfp && nfpr + 1 <= CCALL_NARG_FPR) { \
+      dp = &cc->fpr[nfpr]; \
+      nfpr += 1; \
+      goto done; \
+    } \
+  } \
+  if (ngpr + n <= maxgpr) { \
+    dp = &cc->gpr[ngpr]; \
+    ngpr += n; \
+    goto done; \
+  }
+
+/* Place MIX struct fields from a flat descriptor list into registers.
+** Returns byte offset of first unplaced field (sz if all placed). */
+static CTSize ccall_place_mix_fields(CCallState *cc, CCallMixFieldList *list,
+				     CTSize sz, uint8_t *src,
+				     MSize *pnfpr, MSize *pngpr,
+				     int isva)
+{
+  for (int i = 0; i < list->nfields; i++) {
+    CCallMixField *f = &list->fields[i];
+    uint64_t val;
+    if (f->isfp) {
+      val = (f->esz == 4) ? (*(uint32_t *)(src + f->offset) | U64x(ffffffff,00000000))
+	                        :  *(uint64_t *)(src + f->offset);
+      if (!isva && *pnfpr < CCALL_NARG_FPR) cc->fpr[(*pnfpr)++].u = val;
+      else if (*pngpr < CCALL_NARG_GPR) cc->gpr[(*pngpr)++] = val;
+      else return f->offset;
+    } else {
+      val = (f->esz < 8) ? (uint64_t)(int64_t)*(int32_t *)(src + f->offset)
+	                       : *(uint64_t *)(src + f->offset);
+      if (*pngpr < CCALL_NARG_GPR) cc->gpr[(*pngpr)++] = val;
+      else return f->offset;
+    }
+  }
+  return sz;  /* all placed */
+}
+
+/* Reconstruct MIX struct fields from registers using flat descriptor list. */
+static void ccall_unplace_mix_fields(CCallState *cc, CCallMixFieldList *list,
+				     uint8_t *dp)
+{
+  int gpi = 0, fpi = 0;
+  for (int i = 0; i < list->nfields; i++) {
+    CCallMixField *f = &list->fields[i];
+    if (f->isfp) {
+      if (f->esz == 4) *(float *)(dp + f->offset)  = cc->fpr[fpi++].f;
+      else            *(double *)(dp + f->offset)  = cc->fpr[fpi++].d;
+    } else {
+      if (f->esz < 8) *(int32_t *)(dp + f->offset) = (int32_t)cc->gpr[gpi++];
+      else            *(int64_t *)(dp + f->offset) = cc->gpr[gpi++];
+    }
+  }
+}
+
 #else
 #error "Missing calling convention definitions for this architecture"
 #endif
@@ -929,6 +1120,206 @@ static void ccall_copy_struct(CCallState *cc, CType *ctr, void *dp, void *sp,
 
 #endif
 
+/* -- RISC-V ABI struct classification ---------------------------- */
+
+#if LJ_TARGET_RISCV64
+
+/* RISC-V 64 LP64D fp reg struct classification. */
+/* X: unknown/uninit, F: float, D: double, I: integer */
+
+/* Flat descriptor for a single field element produced by classification.
+** Place/unplace iterate this list instead of re-walking the ctype tree. */
+#define CCALL_MIX_MAXFIELDS  2   /* MIX state machine has exactly 2 slots. */
+
+/* Add a field descriptor to the flat list (if space remains). */
+static LJ_AINLINE void ccall_add_mix_field(CCallMixFieldList *list,
+    CTSize offset, CTSize esz, int isfp)
+{
+  if (list && list->nfields < CCALL_MIX_MAXFIELDS) {
+    CCallMixField *f = &list->fields[list->nfields++];
+    f->offset = offset;
+    f->esz = (uint8_t)esz;
+    f->isfp = (uint8_t)isfp;
+  }
+}
+
+typedef enum eCCallStructMixElem {
+  MIX_ELEM_UNINIT = 0,
+  MIX_ELEM_FLOAT = 1,
+  MIX_ELEM_INT = 2,
+} eCCallStructMixElem;
+typedef enum eCCallStructMix {
+  MIX_UNINIT = 0, /* XX */
+  MIX_FX = 1,     /* F X  — single float/double */
+  MIX_IX = 2,     /* I X  — single int */
+  MIX_FF = 5,     /* F F  — two floats/doubles */
+  MIX_IF = 6,     /* I F  — int then float/double */
+  MIX_FI = 9,     /* F I  — float/double then int */
+  MIX_FAILED = 10 /* anything else */
+} eCCallStructMix;
+
+typedef union CCallStructMix {
+  eCCallStructMix val : 4;
+  struct {
+    eCCallStructMixElem e1 : 2;
+    eCCallStructMixElem e2 : 2;
+  };
+} CCallStructMix;
+
+typedef union CCallStructClass {
+  uint32_t val;
+  struct {
+    uint8_t ispod;
+    CCallStructMix mix;
+  };
+} CCallStructClass;
+
+static CCallStructClass ccall_classify_struct(CTState *cts, CType *ct,
+					       CCallMixFieldList *list, CTSize base_ofs)
+{
+  CTSize sz = ct->size;
+  CCallStructMix mix = { .val = MIX_UNINIT };
+  if (ct->info & CTF_UNION) mix.val = MIX_FAILED;
+  while (ct->sib && mix.val != MIX_FAILED) {
+    unsigned int m = 1;
+    CType *sct;
+    ct = ctype_get(cts, ct->sib);
+    {
+      CTSize fofs = ct->size;  /* Field offset within this struct. */
+      if (ctype_isfield(ct->info)) {
+	sct = ctype_rawchild(cts, ct);
+	if (ctype_isarray(sct->info) && !sct->size) continue;
+	while (ctype_isarray(sct->info)) {
+	  CType *cct = ctype_rawchild(cts, sct);
+	  m *= sct->size / cct->size;
+	  sct = cct;
+	}
+	{
+	  CTSize esz = sct->size;
+	  if (ctype_isfp(sct->info)) {
+	    unsigned int mi;
+	    for (mi = 0; mi < m; mi++) {
+	      /* Mix state trans: fp (float or double)
+	       * mix XX  -> mix = FX
+	       * mix X[IF] -> mix = FAILED
+	       * mix [IF]X -> mix = [IF]F
+	       * mix [IF][IF] -> mix = FAILED
+	       */
+	      eCCallStructMixElem ne = MIX_ELEM_FLOAT;
+	      if (mix.val == MIX_UNINIT) {
+		mix = (CCallStructMix){ .e1 = ne, .e2 = MIX_ELEM_UNINIT };
+	      } else {
+		eCCallStructMixElem o1 = mix.e1, o2 = mix.e2, n2 = ne;
+		mix = (o2 != MIX_ELEM_UNINIT ? (CCallStructMix){ .val = MIX_FAILED }
+					     : (CCallStructMix){ .e1 = o1, .e2 = n2 });
+	      }
+	      ccall_add_mix_field(list, base_ofs + fofs + mi*esz, esz, 1);
+	    }
+	  } else if (ctype_iscomplex(sct->info)) {
+	    unsigned int mi;
+	    CType *esct = ctype_rawchild(cts, sct);
+	    CTSize cesz = esct->size;
+	    for (mi = 0; mi < m; mi++) {
+	      /* Mix state trans: complex
+	       * mix XX    -> mix = FF
+	       * mix other -> mix = FAILED
+	       */
+	      eCCallStructMixElem ne = MIX_ELEM_FLOAT;
+	      mix = (mix.val == MIX_UNINIT) ? (CCallStructMix){ .e1 = ne, .e2 = ne }
+					    : (CCallStructMix){ .val = MIX_FAILED };
+	      ccall_add_mix_field(list, base_ofs + fofs + mi*cesz*2, cesz, 1);
+	      ccall_add_mix_field(list, base_ofs + fofs + mi*cesz*2 + cesz, cesz, 1);
+	    }
+	  } else if (ctype_isinteger_or_bool(sct->info) || ctype_isenum(sct->info)) {
+	    unsigned int mi;
+	    for (mi = 0; mi < m; mi++) {
+	      /* Mix state trans: int
+	       * mix XX  -> mix = IX
+	       * mix X[IF] -> mix = FAILED
+	       * mix [IF]X -> mix = [IF]I; this auto fails II
+	       * mix [IF][IF] -> mix = FAILED
+	       */
+	      if (mix.val == MIX_UNINIT) {
+		mix = (CCallStructMix){ .e1 = MIX_ELEM_INT, .e2 = MIX_ELEM_UNINIT };
+	      } else {
+		eCCallStructMixElem o1 = mix.e1, o2 = mix.e2, n2 = MIX_ELEM_INT;
+		mix = (o2 != MIX_ELEM_UNINIT ? (CCallStructMix){ .val = MIX_FAILED }
+					     : (CCallStructMix){ .e1 = o1, .e2 = n2 });
+	      }
+	      ccall_add_mix_field(list, base_ofs + fofs + mi*esz, esz, 0);
+	    }
+	  } else if (ctype_isstruct(sct->info)) {
+	    goto substruct;
+	  } else {
+	    goto not_ag;
+	  }
+	}
+      } else if (ctype_isbitfield(ct->info) && ctype_bitbsz(ct->info)) {
+	/* Non-zero bitfield: treat as integer element for MIX classification. */
+	CTSize fofs = ct->size;
+	sct = ctype_rawchild(cts, ct);
+	{
+	  /* Mix state trans: bitfield
+	   * mix XX      -> mix = IX
+	   * mix X[IF]   -> mix = FAILED
+	   * mix [IF]X   -> mix = [IF]I
+	   * mix [IF][IF] -> mix = FAILED
+	   */
+	  if (mix.val == MIX_UNINIT) {
+	    mix = (CCallStructMix){ .e1 = MIX_ELEM_INT, .e2 = MIX_ELEM_UNINIT };
+	  } else {
+	    eCCallStructMixElem o1 = mix.e1, o2 = mix.e2, n2 = MIX_ELEM_INT;
+	    mix = (o2 != MIX_ELEM_UNINIT ? (CCallStructMix){ .val = MIX_FAILED }
+					                         : (CCallStructMix){ .e1 = o1, .e2 = n2 });
+	  }
+	  ccall_add_mix_field(list, base_ofs + fofs, sct->size, 0);
+	}
+      } else if (ctype_isxattrib(ct->info, CTA_SUBTYPE)) {
+	sct = ctype_rawchild(cts, ct);
+      substruct:
+	if (sct->size > 0) {
+	  CCallStructClass s = ccall_classify_struct(cts, sct, list,
+						     base_ofs + fofs);
+	  CCallStructMix smix = s.mix;
+	  uint8_t spod = s.ispod;
+	  if (smix.val == MIX_FAILED) mix.val = MIX_FAILED;
+	  if (!spod) goto not_ag;
+	  while (m--) {
+	    /* Mix state transfer: substruct
+	     * mix XX, smix any  -> mix = smix
+	     * mix X[IF], smix any -> mix = FAILED
+	     * mix [IF]X, smix [XIF]X -> mix = [IF][XIF]
+	     *            smix other -> mix = FAILED
+	     * mix [IF][IF], smix XX -> mix = mix
+	     *               smix other -> mix = FAILED; this keeps II fail
+	     */
+	    if (mix.val == MIX_UNINIT) {
+	      mix = smix;
+	    } else {
+	      eCCallStructMixElem o1 = mix.e1, o2 = mix.e2;
+	      eCCallStructMixElem n1 = smix.e1, n2 = smix.e2;
+	      if (o2 != MIX_ELEM_UNINIT) {
+		mix = (smix.val != MIX_UNINIT) ? (CCallStructMix){ .val = MIX_FAILED }
+		                               : mix;
+	      } else {
+		mix = (n2 != MIX_ELEM_UNINIT) ? (CCallStructMix){ .val = MIX_FAILED }
+		                              : (CCallStructMix){ .e1 = o1, .e2 = n1 };
+	      }
+	    }
+	  }
+	}
+      }
+    }
+  }
+  if (MIX_UNINIT < mix.val && mix.val < MIX_FAILED && mix.e1 != MIX_ELEM_UNINIT)  /* Mixed passing */
+    return (CCallStructClass){ .ispod = 1, .mix = mix };
+not_ag:  /* Not a float/double aggregate or int/fp mix pair aggregate */
+  if (list) list->nfields = 0;  /* Invalidate flat list on classification failure. */
+  return (CCallStructClass){ .ispod = (sz <= 16), .mix = mix };
+}
+
+#endif
+
 #ifndef ccall_struct_align
 /* Alignment of pass-by-value structs. */
 #define ccall_struct_align(cts, ct)	((ct)->info & CTF_ALIGN)
@@ -984,6 +1375,7 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
   MSize fprodd = 0;
 #endif
 #endif
+
 
   /* Clear unused regs to get some determinism in case of misdeclaration. */
   memset(cc->gpr, 0, sizeof(cc->gpr));
@@ -1047,6 +1439,9 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     CType *d;
     CTSize sz;
     MSize n, isfp = 0, isva = 0;
+#if LJ_TARGET_RISCV64
+    CCallStructMix mix = { .val = MIX_UNINIT };
+#endif
     void *dp, *rp = NULL;
 #if LJ_TARGET_X64 && !LJ_ABI_WIN
     int onstack = 0;
@@ -1131,7 +1526,11 @@ static int ccall_set_args(lua_State *L, CTState *cts, CType *ct,
     if (isfp && d->size == sizeof(float))
       ((float *)dp)[1] = ((float *)dp)[0];  /* Floats occupy high slot. */
 #endif
-#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE)
+#if LJ_TARGET_RISCV64
+    if (isfp && d->size == sizeof(float))
+      ((uint32_t *)dp)[1] = 0xffffffffu;  /* Float NaN boxing */
+#endif
+#if LJ_TARGET_MIPS64 || (LJ_TARGET_ARM64 && LJ_BE) || LJ_TARGET_RISCV64
     if ((ctype_isinteger_or_bool(d->info) || ctype_isenum(d->info)
 #if LJ_TARGET_MIPS64
 	 || (isfp && nsp == 0)
