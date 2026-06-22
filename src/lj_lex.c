@@ -353,16 +353,41 @@ static LexToken lex_scan(LexState *ls, TValue *tv)
       if (ls->c != '=') return '='; else { lex_next(ls); return TK_eq; }
     case '<':
       lex_next(ls);
-      if (ls->c != '=') return '<'; else { lex_next(ls); return TK_le; }
+      if (ls->c == '=') { lex_next(ls); return TK_le; }
+      if (ls->c == '<') { lex_next(ls); return TK_shl; }
+      return '<';
     case '>':
       lex_next(ls);
-      if (ls->c != '=') return '>'; else { lex_next(ls); return TK_ge; }
+      if (ls->c == '=') { lex_next(ls); return TK_ge; }
+      if (ls->c == '>') { lex_next(ls); return TK_shr; }
+      return '>';
     case '~':
       lex_next(ls);
-      if (ls->c != '=') return '~'; else { lex_next(ls); return TK_ne; }
+      if (ls->c == '=') { lex_next(ls); return TK_ne; }
+      if (ls->c == '>') {
+	lex_next(ls);
+	if (ls->c != '>') lj_lex_error(ls, '~', LJ_ERR_XSYMBOL);
+	lex_next(ls);
+	return TK_sar;
+      }
+      return '~';
+    case '!':
+      lex_next(ls);
+      if (ls->c != '=') return TK_not; else { lex_next(ls); return TK_ne; }
     case ':':
       lex_next(ls);
       if (ls->c != ':') return ':'; else { lex_next(ls); return TK_label; }
+    case '?':
+      lex_next(ls);
+      if (ls->c == '.') { lex_next(ls); return TK_nav; }
+      if (ls->c == '?') { lex_next(ls); return TK_coal; }
+      return '?';
+    case '&':
+      lex_next(ls);
+      if (ls->c != '&') return '&'; else { lex_next(ls); return TK_and; }
+    case '|':
+      lex_next(ls);
+      if (ls->c != '|') return '|'; else { lex_next(ls); return TK_or; }
     case '"':
     case '\'':
       lex_string(ls, tv);

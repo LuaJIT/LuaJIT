@@ -79,6 +79,12 @@ typedef struct ExpDesc {
 #define expr_numtv(e)		check_exp(expr_isnumk((e)), &(e)->u.nval)
 #define expr_numberV(e)		numberVnum(expr_numtv((e)))
 
+static LJ_AINLINE int32_t expr_bitV(ExpDesc *e)
+{
+  TValue *o = expr_numtv(e);
+  return tvisint(o) ? intV(o) : lj_num2bit(numV(o));
+}
+
 /* Initialize expression. */
 static LJ_AINLINE void expr_init(ExpDesc *e, ExpKind k, uint32_t info)
 {
@@ -148,10 +154,11 @@ typedef struct FuncState {
 /* Binary and unary operators. ORDER OPR */
 typedef enum BinOpr {
   OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, OPR_POW,  /* ORDER ARITH */
+  OPR_BAND, OPR_BOR, OPR_BXOR, OPR_BSHL, OPR_BSHR, OPR_BSAR, /* ORDER BIT */
   OPR_CONCAT,
   OPR_NE, OPR_EQ,
   OPR_LT, OPR_GE, OPR_LE, OPR_GT,
-  OPR_AND, OPR_OR,
+  OPR_AND, OPR_OR, OPR_COAL,
   OPR_NOBINOPR
 } BinOpr;
 
@@ -793,15 +800,37 @@ static int foldarith(BinOpr opr, ExpDesc *e1, ExpDesc *e2)
   return 1;
 }
 
+/* Try constant-folding of bit operators. */
+static int foldbitop(BinOpr opr, ExpDesc *e1, ExpDesc *e2)
+{
+  if (expr_isnumk_nojump(e1) && expr_isnumk_nojump(e2)) {
+    int32_t k1 = expr_bitV(e1), k2 = expr_bitV(e2);
+    switch (opr) {
+    case OPR_BAND: k1 &= k2; break;
+    case OPR_BOR: k1 |= k2; break;
+    case OPR_BXOR: k1 ^= k2; break;
+    case OPR_BSHL: k1 <<= (k2 & 31); break;
+    case OPR_BSHR: k1 = (int32_t)((uint32_t)k1 >> (k2 & 31)); break;
+    case OPR_BSAR: k1 >>= (k2 & 31); break;
+    default: lj_assertX(0, "bad OPR %d", opr); break;
+    }
+    setintV(&e1->u.nval, k1);
+    return 1;
+  }
+  return 0;
+}
+
 /* Emit arithmetic operator. */
 static void bcemit_arith(FuncState *fs, BinOpr opr, ExpDesc *e1, ExpDesc *e2)
 {
   BCReg rb, rc, t;
   uint32_t op;
-  if (foldarith(opr, e1, e2))
-    return;
   if (opr == OPR_POW) {
     op = BC_POW;
+    rc = expr_toanyreg(fs, e2);
+    rb = expr_toanyreg(fs, e1);
+  } else if (opr >= OPR_BAND) {
+    op = opr-OPR_BAND+BC_BAND;
     rc = expr_toanyreg(fs, e2);
     rb = expr_toanyreg(fs, e1);
   } else {
@@ -887,6 +916,13 @@ static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
     bcemit_branch_t(fs, e);
   } else if (op == OPR_OR) {
     bcemit_branch_f(fs, e);
+  } else if (op == OPR_COAL) {
+    BCReg reg;
+    expr_tonextreg(fs, e);
+    reg = e->u.s.info;
+    bcemit_INS(fs, BCINS_AD(BC_ISNEP, reg, VKNIL));
+    e->u.s.aux = bcemit_jmp(fs);
+    bcreg_free(fs, reg);
   } else if (op == OPR_CONCAT) {
     expr_tonextreg(fs, e);
   } else if (op == OPR_EQ || op == OPR_NE) {
@@ -900,7 +936,12 @@ static void bcemit_binop_left(FuncState *fs, BinOpr op, ExpDesc *e)
 static void bcemit_binop(FuncState *fs, BinOpr op, ExpDesc *e1, ExpDesc *e2)
 {
   if (op <= OPR_POW) {
-    bcemit_arith(fs, op, e1, e2);
+    if (!foldarith(op, e1, e2)) bcemit_arith(fs, op, e1, e2);
+  } else if (op <= OPR_BSAR) {
+    if (!foldbitop(op, e1, e2)) {
+      fs->flags |= PROTO_BITOP;
+      bcemit_arith(fs, op, e1, e2);
+    }
   } else if (op == OPR_AND) {
     lj_assertFS(e1->t == NO_JMP, "jump list not closed");
     expr_discharge(fs, e2);
@@ -911,6 +952,11 @@ static void bcemit_binop(FuncState *fs, BinOpr op, ExpDesc *e1, ExpDesc *e2)
     expr_discharge(fs, e2);
     jmp_append(fs, &e2->t, e1->t);
     *e1 = *e2;
+  } else if (op == OPR_COAL) {
+    BCReg reg = e1->u.s.info;
+    expr_toreg(fs, e2, reg);
+    jmp_tohere(fs, e1->u.s.aux);
+    fs->freereg = reg+1;
   } else if (op == OPR_CONCAT) {
     expr_toval(fs, e2);
     if (e2->k == VRELOCABLE && bc_op(*bcptr(fs, e2)) == BC_CAT) {
@@ -961,34 +1007,41 @@ static void bcemit_unop(FuncState *fs, BCOp op, ExpDesc *e)
       lj_assertFS(e->k == VNONRELOC, "bad expr type %d", e->k);
     }
   } else {
-    lj_assertFS(op == BC_UNM || op == BC_LEN, "bad unop %d", op);
-    if (op == BC_UNM && !expr_hasjump(e)) {  /* Constant-fold negations. */
+    lj_assertFS(op == BC_UNM || op == BC_LEN || op == BC_BNOT, "bad unop %d", op);
+    if (!expr_hasjump(e)) {
+      if (op == BC_UNM) {  /* Constant-fold negations. */
 #if LJ_HASFFI
-      if (e->k == VKCDATA) {  /* Fold in-place since cdata is not interned. */
-	GCcdata *cd = cdataV(&e->u.nval);
-	uint64_t *p = (uint64_t *)cdataptr(cd);
-	if (cd->ctypeid == CTID_COMPLEX_DOUBLE)
-	  p[1] ^= U64x(80000000,00000000);
-	else
-	  *p = ~*p+1u;
-	return;
-      } else
-#endif
-      if (expr_isnumk(e) && !expr_numiszero(e)) {  /* Avoid folding to -0. */
-	TValue *o = expr_numtv(e);
-	if (tvisint(o)) {
-	  int32_t k = intV(o), negk = (int32_t)(~(uint32_t)k+1u);
-	  if (k == negk)
-	    setnumV(o, -(lua_Number)k);
+	if (e->k == VKCDATA) {  /* Fold in-place since cdata is not interned. */
+	  GCcdata *cd = cdataV(&e->u.nval);
+	  uint64_t *p = (uint64_t *)cdataptr(cd);
+	  if (cd->ctypeid == CTID_COMPLEX_DOUBLE)
+	    p[1] ^= U64x(80000000,00000000);
 	  else
-	    setintV(o, negk);
+	    *p = ~*p+1u;
 	  return;
-	} else {
-	  o->u64 ^= U64x(80000000,00000000);
-	  return;
+	} else
+#endif
+	if (expr_isnumk(e) && !expr_numiszero(e)) {  /* Avoid folding to -0. */
+	  TValue *o = expr_numtv(e);
+	  if (tvisint(o)) {
+	    int32_t k = intV(o), negk = (int32_t)(~(uint32_t)k+1u);
+	    if (k == negk)
+	      setnumV(o, -(lua_Number)k);
+	    else
+	      setintV(o, negk);
+	    return;
+	  } else {
+	    o->u64 ^= U64x(80000000,00000000);
+	    return;
+	  }
 	}
+      } else if (op == BC_BNOT && expr_isnumk(e)) {
+	/* Constant-fold bitwise not. */
+	setintV(&e->u.nval, (int32_t)~(uint32_t)expr_bitV(e));
+	return;
       }
     }
+    if (op == BC_BNOT) fs->flags |= PROTO_BITOP;
     expr_toanyreg(fs, e);
   }
   expr_free(fs, e);
@@ -1633,7 +1686,7 @@ static void fs_init(LexState *ls, FuncState *fs)
 /* -- Expressions --------------------------------------------------------- */
 
 /* Forward declaration. */
-static void expr(LexState *ls, ExpDesc *v);
+static void expr(LexState *ls, ExpDesc *v, int nocolon);
 
 /* Return string expression. */
 static void expr_str(LexState *ls, ExpDesc *e)
@@ -1680,7 +1733,6 @@ static void expr_field(LexState *ls, ExpDesc *v)
   FuncState *fs = ls->fs;
   ExpDesc key;
   expr_toanyreg(fs, v);
-  lj_lex_next(ls);  /* Skip dot or colon. */
   expr_str(ls, &key);
   expr_index(fs, v, &key);
 }
@@ -1689,7 +1741,7 @@ static void expr_field(LexState *ls, ExpDesc *v)
 static void expr_bracket(LexState *ls, ExpDesc *v)
 {
   lj_lex_next(ls);  /* Skip '['. */
-  expr(ls, v);
+  expr(ls, v, 0);
   expr_toval(ls->fs, v);
   lex_check(ls, ']');
 }
@@ -1742,7 +1794,7 @@ static void expr_table(LexState *ls, ExpDesc *e)
       narr++;
       needarr = vcall = 1;
     }
-    expr(ls, &val);
+    expr(ls, &val, 0);
     if (expr_isk(&key) && key.k != VKNIL &&
 	(key.k == VKSTR || expr_isk_nojump(&val))) {
       TValue k, *v;
@@ -1860,9 +1912,7 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
   /* Store new prototype in the constant array of the parent. */
   expr_init(e, VRELOCABLE,
 	    bcemit_AD(pfs, BC_FNEW, 0, const_gc(pfs, obj2gco(pt), LJ_TPROTO)));
-#if LJ_HASFFI
-  pfs->flags |= (fs.flags & PROTO_FFI);
-#endif
+  pfs->flags |= (fs.flags & (PROTO_FFI|PROTO_BITOP));
   if (!(pfs->flags & PROTO_CHILD)) {
     if (pfs->flags & PROTO_HAS_RETURN)
       pfs->flags |= PROTO_FIXUP_RETURN;
@@ -1875,10 +1925,10 @@ static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
 static BCReg expr_list(LexState *ls, ExpDesc *v)
 {
   BCReg n = 1;
-  expr(ls, v);
+  expr(ls, v, 0);
   while (lex_opt(ls, ',')) {
     expr_tonextreg(ls->fs, v);
-    expr(ls, v);
+    expr(ls, v, 0);
     n++;
   }
   return n;
@@ -1931,48 +1981,85 @@ static void parse_args(LexState *ls, ExpDesc *e)
   fs->freereg = base+1;  /* Leave one result by default. */
 }
 
-/* Parse primary expression. */
-static void expr_primary(LexState *ls, ExpDesc *v)
+/* Parse primary expression with safe navigation. */
+static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres)
 {
   FuncState *fs = ls->fs;
+  BCPos xpc = NO_JMP;
   /* Parse prefix expression. */
   if (ls->tok == '(') {
     BCLine line = ls->linenumber;
     lj_lex_next(ls);
-    expr(ls, v);
+    expr(ls, v, 0);
     lex_match(ls, ')', '(', line);
     expr_discharge(ls->fs, v);
   } else if (ls->tok == TK_name || (!LJ_52 && ls->tok == TK_goto)) {
     var_lookup(ls, v);
   } else {
+  err:
     err_syntax(ls, LJ_ERR_XSYMBOL);
   }
   for (;;) {  /* Parse multiple expression suffixes. */
-    if (ls->tok == '.') {
-      expr_field(ls, v);
-    } else if (ls->tok == '[') {
+    int nav = 0;
+    if (lex_opt(ls, TK_nav)) {
+      nav = 1;
+      expr_toanyreg(fs, v);
+      bcemit_INS(fs, BCINS_AD(BC_ISEQP, v->u.s.info, VKNIL));
+      jmp_append(fs, &xpc, bcemit_jmp(fs));
+    }
+    if (ls->tok == '[') {
       ExpDesc key;
       expr_toanyreg(fs, v);
       expr_bracket(ls, &key);
       expr_index(fs, v, &key);
     } else if (ls->tok == ':') {
       ExpDesc key;
-      lj_lex_next(ls);
+      if (nocolon) {
+	if (nav) goto err;
+	break;
+      }
+      lj_lex_next(ls);  /* Skip ':'. */
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
+      if (lex_opt(ls, TK_nav)) {
+	nav = 1;
+	bcemit_INS(fs, BCINS_AD(BC_ISEQP, v->u.s.info, VKNIL));
+	jmp_append(fs, &xpc, bcemit_jmp(fs));
+      }
       parse_args(ls, v);
     } else if (ls->tok == '(' || ls->tok == TK_string || ls->tok == '{') {
       expr_tonextreg(fs, v);
       if (ls->fr2) bcreg_reserve(fs, 1);
       parse_args(ls, v);
+    } else if (nav || lex_opt(ls, '.')) {
+      expr_field(ls, v);
     } else {
       break;
     }
+    if (needres && nav) {
+      expr_tonextreg(fs, v);
+    }
+  }
+  return xpc;
+}
+
+/* Parse primary expression. */
+static void expr_primary(LexState *ls, ExpDesc *v, int nocolon)
+{
+  BCPos xpc = expr_primary_nav(ls, v, nocolon, 1);
+  if (xpc != NO_JMP) {
+    FuncState *fs = ls->fs;
+    BCPos around;
+    expr_tonextreg(fs, v);
+    around = bcemit_jmp(fs);
+    jmp_tohere(fs, xpc);
+    bcemit_AD(fs, BC_KPRI, v->u.s.info, VKNIL);  /* Required, could be NULL. */
+    jmp_tohere(fs, around);
   }
 }
 
 /* Parse simple expression. */
-static void expr_simple(LexState *ls, ExpDesc *v)
+static void expr_simple(LexState *ls, ExpDesc *v, int nocolon)
 {
   switch (ls->tok) {
   case TK_number:
@@ -2010,7 +2097,7 @@ static void expr_simple(LexState *ls, ExpDesc *v)
     parse_body(ls, v, 0, ls->linenumber);
     return;
   default:
-    expr_primary(ls, v);
+    expr_primary(ls, v, nocolon);
     return;
   }
   lj_lex_next(ls);
@@ -2035,6 +2122,12 @@ static BinOpr token2binop(LexToken tok)
   case '/':	return OPR_DIV;
   case '%':	return OPR_MOD;
   case '^':	return OPR_POW;
+  case '&':	return OPR_BAND;
+  case '|':	return OPR_BOR;
+  case '~':	return OPR_BXOR;
+  case TK_shl:	return OPR_BSHL;
+  case TK_shr:	return OPR_BSHR;
+  case TK_sar:	return OPR_BSAR;
   case TK_concat: return OPR_CONCAT;
   case TK_ne:	return OPR_NE;
   case TK_eq:	return OPR_EQ;
@@ -2044,6 +2137,7 @@ static BinOpr token2binop(LexToken tok)
   case TK_ge:	return OPR_GE;
   case TK_and:	return OPR_AND;
   case TK_or:	return OPR_OR;
+  case TK_coal:	return OPR_COAL;
   default:	return OPR_NOBINOPR;
   }
 }
@@ -2053,20 +2147,23 @@ static const struct {
   uint8_t left;		/* Left priority. */
   uint8_t right;	/* Right priority. */
 } priority[] = {
-  {6,6}, {6,6}, {7,7}, {7,7}, {7,7},	/* ADD SUB MUL DIV MOD */
-  {10,9}, {5,4},			/* POW CONCAT (right associative) */
+  {10,10}, {10,10}, {11,11}, {11,11}, {11,11},	/* ADD SUB MUL DIV MOD */
+  {14,13},				/* POW (right associative) */
+  {6,6}, {4,4}, {5,5},			/* BAND BOR BXOR */
+  {7,7}, {7,7}, {7,7},			/* BSHL BSHR BSAR */
+  {9,8},				/* CONCAT (right associative) */
   {3,3}, {3,3},				/* EQ NE */
   {3,3}, {3,3}, {3,3}, {3,3},		/* LT GE GT LE */
-  {2,2}, {1,1}				/* AND OR */
+  {2,2}, {1,1}, {1,1}			/* AND OR COAL */
 };
 
-#define UNARY_PRIORITY		8  /* Priority for unary operators. */
+#define UNARY_PRIORITY		12  /* Priority for unary operators. */
 
 /* Forward declaration. */
-static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit);
+static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon);
 
 /* Parse unary expression. */
-static void expr_unop(LexState *ls, ExpDesc *v)
+static void expr_unop(LexState *ls, ExpDesc *v, int nocolon)
 {
   BCOp op;
   if (ls->tok == TK_not) {
@@ -2075,47 +2172,67 @@ static void expr_unop(LexState *ls, ExpDesc *v)
     op = BC_UNM;
   } else if (ls->tok == '#') {
     op = BC_LEN;
+  } else if (ls->tok == '~') {
+    op = BC_BNOT;
   } else {
-    expr_simple(ls, v);
+    expr_simple(ls, v, nocolon);
     return;
   }
   lj_lex_next(ls);
-  expr_binop(ls, v, UNARY_PRIORITY);
+  expr_binop(ls, v, UNARY_PRIORITY, nocolon);
   bcemit_unop(ls->fs, op, v);
 }
 
 /* Parse binary expressions with priority higher than the limit. */
-static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit)
+static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon)
 {
-  BinOpr op;
+  BinOpr opr;
   synlevel_begin(ls);
-  expr_unop(ls, v);
-  op = token2binop(ls->tok);
-  while (op != OPR_NOBINOPR && priority[op].left > limit) {
+  expr_unop(ls, v, nocolon);
+  opr = token2binop(ls->tok);
+  while (opr != OPR_NOBINOPR && priority[opr].left > limit) {
     ExpDesc v2;
     BinOpr nextop;
     lj_lex_next(ls);
-    bcemit_binop_left(ls->fs, op, v);
+    bcemit_binop_left(ls->fs, opr, v);
     /* Parse binary expression with higher priority. */
-    nextop = expr_binop(ls, &v2, priority[op].right);
-    bcemit_binop(ls->fs, op, v, &v2);
-    op = nextop;
+    nextop = expr_binop(ls, &v2, priority[opr].right, nocolon);
+    bcemit_binop(ls->fs, opr, v, &v2);
+    opr = nextop;
   }
   synlevel_end(ls);
-  return op;  /* Return unconsumed binary operator (if any). */
+  return opr;  /* Return unconsumed binary operator (if any). */
 }
 
 /* Parse expression. */
-static void expr(LexState *ls, ExpDesc *v)
+static void expr(LexState *ls, ExpDesc *v, int nocolon)
 {
-  expr_binop(ls, v, 0);  /* Priority 0: parse whole expression. */
+  expr_binop(ls, v, 0, nocolon);  /* Priority 0: parse whole expression. */
+  if (lex_opt(ls, '?')) {  /* Ternary ?: conditional operator. Right-assoc. */
+    FuncState *fs = ls->fs;
+    BCPos escapelist = NO_JMP, cond;
+    BCReg reg;
+    bcemit_branch_t(fs, v);
+    cond = v->f;
+    expr(ls, v, 1);  /* Prevent method parsing. Must use parentheses. */
+    expr_tonextreg(fs, v);
+    reg = v->u.s.info;
+    bcreg_free(fs, reg);
+    jmp_append(fs, &escapelist, bcemit_jmp(fs));
+    jmp_tohere(fs, cond);
+    lex_check(ls, ':');
+    expr(ls, v, 0);
+    expr_toreg(fs, v, reg);
+    fs->freereg = reg+1;
+    jmp_tohere(fs, escapelist);
+  }
 }
 
 /* Assign expression to the next register. */
 static void expr_next(LexState *ls)
 {
   ExpDesc e;
-  expr(ls, &e);
+  expr(ls, &e, 0);
   expr_tonextreg(ls->fs, &e);
 }
 
@@ -2123,7 +2240,7 @@ static void expr_next(LexState *ls)
 static BCPos expr_cond(LexState *ls)
 {
   ExpDesc v;
-  expr(ls, &v);
+  expr(ls, &v, 0);
   if (v.k == VKNIL) v.k = VKFALSE;
   bcemit_branch_t(ls->fs, &v);
   return v.f;
@@ -2136,6 +2253,36 @@ typedef struct LHSVarList {
   ExpDesc v;			/* LHS variable. */
   struct LHSVarList *prev;	/* Link to previous LHS variable. */
 } LHSVarList;
+
+/* Parse compound assignment. */
+static int parse_compound(LexState *ls, ExpDesc *e)
+{
+  FuncState *fs;
+  ExpDesc estore, v;
+  BinOpr opr;
+  if (!(e->k >= VLOCAL && e->k <= VINDEXED)) return 0;
+  opr = token2binop(ls->tok);
+  /* '^=' aka exponentiation assignment is deliberately omitted to avoid
+  ** confusion with xor assignment in other computer languages.
+  ** Use 'a ~= b' for xor assignment. The unequal operator is only valid
+  ** in expression contexts and assignments are statements.
+  */
+  if (opr > OPR_NE || opr == OPR_POW) return 0;  /* ORDER OPR */
+  if (opr == OPR_NE) {
+    opr = OPR_BXOR;
+  } else {  /* Can't use lex_check() here. Only allow '+=', not '+ ='. */
+    if (ls->c != '=') err_token(ls, '=');
+    lj_lex_next(ls);  /* Skip operator. */
+  }
+  lj_lex_next(ls);  /* Skip '=' or '~=' aka TOK_ne. */
+  fs = ls->fs;
+  estore = *e;
+  if (opr == OPR_CONCAT) expr_tonextreg(fs, e); else expr_toanyreg(fs, e);
+  expr(ls, &v, 0);
+  bcemit_binop(fs, opr, e, &v);
+  bcemit_store(fs, &estore, e);
+  return 1;
+}
 
 /* Eliminate write-after-read hazards for local variable assignment. */
 static void assign_hazard(LexState *ls, LHSVarList *lh, const ExpDesc *v)
@@ -2193,7 +2340,7 @@ static void parse_assignment(LexState *ls, LHSVarList *lh, BCReg nvars)
   if (lex_opt(ls, ',')) {  /* Collect LHS list and recurse upwards. */
     LHSVarList vl;
     vl.prev = lh;
-    expr_primary(ls, &vl.v);
+    expr_primary(ls, &vl.v, 0);
     if (vl.v.k == VLOCAL)
       assign_hazard(ls, lh, &vl.v);
     checklimit(ls->fs, ls->level + nvars, LJ_MAX_XLEVEL, "variable names");
@@ -2227,13 +2374,18 @@ static void parse_call_assign(LexState *ls)
 {
   FuncState *fs = ls->fs;
   LHSVarList vl;
-  expr_primary(ls, &vl.v);
+  BCReg xpc = expr_primary_nav(ls, &vl.v, 0, 0);
   if (vl.v.k == VCALL) {  /* Function call statement. */
     setbc_b(bcptr(fs, &vl.v), 1);  /* No results. */
   } else {  /* Start of an assignment. */
-    vl.prev = NULL;
-    parse_assignment(ls, &vl, 1);
+    /* Safe navigation is incompatible with parallel assignment. */
+    checkcond(ls, xpc == NO_JMP || ls->tok != ',', LJ_ERR_XSYNTAX);
+    if (!parse_compound(ls, &vl.v)) {
+      vl.prev = NULL;
+      parse_assignment(ls, &vl, 1);
+    }
   }
+  if (xpc != NO_JMP) jmp_tohere(fs, xpc);
 }
 
 /* Parse 'local' statement. */
@@ -2279,9 +2431,9 @@ static void parse_func(LexState *ls, BCLine line)
   lj_lex_next(ls);  /* Skip 'function'. */
   /* Parse function name. */
   var_lookup(ls, &v);
-  while (ls->tok == '.')  /* Multiple dot-separated fields. */
+  while (lex_opt(ls, '.'))  /* Multiple dot-separated fields. */
     expr_field(ls, &v);
-  if (ls->tok == ':') {  /* Optional colon to signify method call. */
+  if (lex_opt(ls, ':')) {  /* Optional colon to signify method call. */
     needself = 1;
     expr_field(ls, &v);
   }

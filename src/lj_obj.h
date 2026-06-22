@@ -401,6 +401,7 @@ typedef struct GCproto {
 #define PROTO_FFI		0x04	/* Uses BC_KCDATA for FFI datatypes. */
 #define PROTO_NOJIT		0x08	/* JIT disabled for this function. */
 #define PROTO_ILOOP		0x10	/* Patched bytecode with ILOOP etc. */
+#define PROTO_BITOP		0x80	/* Uses bit operator bytecodes. */
 /* Only used during parsing. */
 #define PROTO_HAS_RETURN	0x20	/* Already emitted a return. */
 #define PROTO_FIXUP_RETURN	0x40	/* Need to fixup emitted returns. */
