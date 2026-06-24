@@ -2277,10 +2277,16 @@ static int parse_compound(LexState *ls, ExpDesc *e)
   lj_lex_next(ls);  /* Skip '=' or '~=' aka TOK_ne. */
   fs = ls->fs;
   estore = *e;
+  if (e->k == VINDEXED) {  /* Preserve the base and key for the store. */
+    BCReg freg = fs->freereg;
+    expr_discharge(fs, e);
+    fs->freereg = freg;  /* Undo bcreg_free of info and/or aux. */
+  }
   if (opr == OPR_CONCAT) expr_tonextreg(fs, e); else expr_toanyreg(fs, e);
   expr(ls, &v, 0);
   bcemit_binop(fs, opr, e, &v);
   bcemit_store(fs, &estore, e);
+  /* Don't bother to free VINDEXED info+aux. Done by parse_chunk(). */
   return 1;
 }
 
