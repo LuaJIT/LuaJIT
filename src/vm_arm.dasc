@@ -852,7 +852,7 @@ static void build_subroutines(BuildCtx *ctx)
   |//-- Bit operator metamethods -------------------------------------------
   |
   |->vmeta_bnot:
-  |  add CARG3, BASE, RB
+  |  add CARG3, BASE, RC
   |  mov CARG4, CARG3
   |  b >1
   |

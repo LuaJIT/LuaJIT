@@ -2911,6 +2911,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
     |.macro ins_bitop, ins
     |  decode_RB RB, INS
+    |   and RC, RC, #255
     |  // RA = dst, RB = src1, RC = src2
     |  ldr CARG1, [BASE, RB, lsl #3]
     |   ldr CARG2, [BASE, RC, lsl #3]
