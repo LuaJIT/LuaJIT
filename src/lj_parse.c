@@ -2129,14 +2129,14 @@ static BinOpr token2binop(LexToken tok)
   case TK_shr:	return OPR_BSHR;
   case TK_sar:	return OPR_BSAR;
   case TK_concat: return OPR_CONCAT;
-  case TK_ne:	return OPR_NE;
+  case TK_ne:	case TK_ne_: return OPR_NE;
   case TK_eq:	return OPR_EQ;
   case '<':	return OPR_LT;
   case TK_le:	return OPR_LE;
   case '>':	return OPR_GT;
   case TK_ge:	return OPR_GE;
-  case TK_and:	return OPR_AND;
-  case TK_or:	return OPR_OR;
+  case TK_and:	case TK_and_: return OPR_AND;
+  case TK_or:	case TK_or_: return OPR_OR;
   case TK_coal:	return OPR_COAL;
   default:	return OPR_NOBINOPR;
   }
@@ -2166,7 +2166,7 @@ static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon);
 static void expr_unop(LexState *ls, ExpDesc *v, int nocolon)
 {
   BCOp op;
-  if (ls->tok == TK_not) {
+  if (ls->tok == TK_not || ls->tok == '!') {
     op = BC_NOT;
   } else if (ls->tok == '-') {
     op = BC_UNM;
@@ -2269,6 +2269,7 @@ static int parse_compound(LexState *ls, ExpDesc *e)
   */
   if (opr > OPR_NE || opr == OPR_POW) return 0;  /* ORDER OPR */
   if (opr == OPR_NE) {
+    if (ls->tok != TK_ne) lj_lex_error(ls, '!', LJ_ERR_XTOKEN, "=");
     opr = OPR_BXOR;
   } else {  /* Can't use lex_check() here. Only allow '+=', not '+ ='. */
     if (ls->c != '=') err_token(ls, '=');
