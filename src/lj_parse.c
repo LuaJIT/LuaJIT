@@ -2210,15 +2210,16 @@ static void expr(LexState *ls, ExpDesc *v, int nocolon)
   expr_binop(ls, v, 0, nocolon);  /* Priority 0: parse whole expression. */
   if (lex_opt(ls, '?')) {  /* Ternary ?: conditional operator. Right-assoc. */
     FuncState *fs = ls->fs;
-    BCPos escapelist = NO_JMP, cond;
+    BCPos escapelist = NO_JMP, cond, epos;
     BCReg reg;
     bcemit_branch_t(fs, v);
     cond = v->f;
     expr(ls, v, 1);  /* Prevent method parsing. Must use parentheses. */
     expr_tonextreg(fs, v);
     reg = v->u.s.info;
+    epos = bcemit_jmp(fs);  /* Jump before freeing register. */
     bcreg_free(fs, reg);
-    jmp_append(fs, &escapelist, bcemit_jmp(fs));
+    jmp_append(fs, &escapelist, epos);
     jmp_tohere(fs, cond);
     lex_check(ls, ':');
     expr(ls, v, 0);
