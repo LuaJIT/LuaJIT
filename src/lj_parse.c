@@ -1818,7 +1818,10 @@ static void expr_table(LexState *ls, ExpDesc *e)
       }
     } else {
     nonconst:
-      if (val.k != VCALL) { expr_toanyreg(fs, &val); vcall = 0; }
+      if (val.k != VCALL || bc_op(*bcptr(fs, &val)) == BC_KPRI) {
+	expr_toanyreg(fs, &val);
+	vcall = 0;
+      }
       if (expr_isk(&key)) expr_index(fs, e, &key);
       bcemit_store(fs, e, &val);
     }
@@ -1952,8 +1955,14 @@ static void parse_args(LexState *ls, ExpDesc *e)
       args.k = VVOID;
     } else {
       expr_list(ls, &args);
-      if (args.k == VCALL)  /* f(a, b, g()) or f(a, b, ...). */
-	setbc_b(bcptr(fs, &args), 0);  /* Pass on multiple results. */
+      if (args.k == VCALL) {  /* f(a, b, g()) or f(a, b, ...). */
+	BCIns *ip = bcptr(fs, &args);
+	if (bc_op(*ip) == BC_KPRI) {  /* f(g?.()). */
+	  expr_tonextreg(fs, &args);  /* Force single result. */
+	} else {
+	  setbc_b(ip, 0);  /* Pass on multiple results. */
+	}
+      }
     }
     lex_match(ls, ')', '(', line);
   } else if (ls->tok == '{') {
@@ -2021,16 +2030,23 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
       lj_lex_next(ls);  /* Skip ':'. */
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
+      nav = 0;
       if (lex_opt(ls, TK_nav)) {
 	nav = 1;
 	bcemit_INS(fs, BCINS_AD(BC_ISEQP, v->u.s.info, VKNIL));
 	jmp_append(fs, &xpc, bcemit_jmp(fs));
       }
-      parse_args(ls, v);
+      goto call;
     } else if (ls->tok == '(' || ls->tok == TK_string || ls->tok == '{') {
       expr_tonextreg(fs, v);
       if (ls->fr2) bcreg_reserve(fs, 1);
+    call:
       parse_args(ls, v);
+      /* Keep nav VCALL if no suffix follows. */
+      if (needres && nav &&
+	  !(ls->tok == TK_nav || ls->tok == '[' || ls->tok == ':' ||
+	    ls->tok == '(' || ls->tok == TK_string || ls->tok == '{' ||
+	    ls->tok == '.')) break;
     } else if (nav || lex_opt(ls, '.')) {
       expr_field(ls, v);
     } else {
@@ -2050,10 +2066,13 @@ static void expr_primary(LexState *ls, ExpDesc *v, int nocolon)
   if (xpc != NO_JMP) {
     FuncState *fs = ls->fs;
     BCPos around;
-    expr_tonextreg(fs, v);
     around = bcemit_jmp(fs);
     jmp_tohere(fs, xpc);
-    bcemit_AD(fs, BC_KPRI, v->u.s.info, VKNIL);  /* Required, could be NULL. */
+    if (v->k == VCALL) {  /* Point VCALL to BC_KPRI. */
+      v->u.s.info = bcemit_AD(fs, BC_KPRI, v->u.s.aux, VKNIL);
+    } else {
+      bcemit_AD(fs, BC_KPRI, v->u.s.info, VKNIL);
+    }
     jmp_tohere(fs, around);
   }
 }
@@ -2321,9 +2340,23 @@ static void assign_adjust(LexState *ls, BCReg nvars, BCReg nexps, ExpDesc *e)
   FuncState *fs = ls->fs;
   int32_t extra = (int32_t)nvars - (int32_t)nexps;
   if (e->k == VCALL) {
+    BCInsLine *ilp = &fs->bcbase[e->u.s.info];
     extra++;  /* Compensate for the VCALL itself. */
     if (extra < 0) extra = 0;
-    setbc_b(bcptr(fs, e), extra+1);  /* Fixup call results. */
+    if (bc_op(ilp->ins) == BC_KPRI) {  /* Safe navigation result. */
+      BCPos base = e->u.s.aux;
+      lj_assertFS(bc_op(ilp[-1].ins) == BC_JMP &&
+		  (bc_op(ilp[-2].ins) == BC_CALL ||
+		   bc_op(ilp[-2].ins) == BC_CALLM),
+		  "expected CALL|CALLM, JMP, KPRI inside safe navigation");
+      if (extra > 1) {
+	ilp->ins = BCINS_AD(BC_KNIL, base, base + extra-1);  /* Replace KPRI. */
+      }
+      ilp--;  /* Point to JMP. */
+      setbc_a(&ilp->ins, base + extra);  /* Fix JMP nactvar. */
+      ilp--;  /* Point to CALL. */
+    }
+    setbc_b(&ilp->ins, extra+1);  /* Fixup call results. */
     if (extra > 1) bcreg_reserve(fs, (BCReg)extra-1);
   } else {
     if (e->k != VVOID)
@@ -2361,6 +2394,11 @@ static void parse_assignment(LexState *ls, LHSVarList *lh, BCReg nvars)
 	  ls->fs->freereg--;
 	  e.k = VRELOCABLE;
 	} else {  /* Multiple call results. */
+	  lj_assertLS(bc_op(*bcptr(ls->fs, &e)) == BC_CALL ||
+		      bc_op(*bcptr(ls->fs, &e)) == BC_CALLM ||
+		      bc_op(*bcptr(ls->fs, &e)) == BC_KPRI,
+		      "unexpected call expression bytecode %d in assignment",
+		      bc_op(*bcptr(ls->fs, &e)));
 	  e.u.s.info = e.u.s.aux;  /* Base of call is not relocatable. */
 	  e.k = VNONRELOC;
 	}
@@ -2382,6 +2420,10 @@ static void parse_call_assign(LexState *ls)
   LHSVarList vl;
   BCReg xpc = expr_primary_nav(ls, &vl.v, 0, 0);
   if (vl.v.k == VCALL) {  /* Function call statement. */
+    lj_assertFS(bc_op(*bcptr(fs, &vl.v)) == BC_CALL ||
+		bc_op(*bcptr(fs, &vl.v)) == BC_CALLM,
+		"unexpected bytecode %d in call statement",
+		bc_op(*bcptr(fs, &vl.v)));
     setbc_b(bcptr(fs, &vl.v), 1);  /* No results. */
   } else {  /* Start of an assignment. */
     /* Safe navigation is incompatible with parallel assignment. */
@@ -2475,7 +2517,8 @@ static void parse_return(LexState *ls)
     ExpDesc e;  /* Receives the _last_ expression in the list. */
     BCReg nret = expr_list(ls, &e);
     if (nret == 1) {  /* Return one result. */
-      if (e.k == VCALL) {  /* Check for tail call. */
+      /* Check for tail call. */
+      if (e.k == VCALL && bc_op(*bcptr(fs, &e)) != BC_KPRI) {
 #ifdef LUAJIT_DISABLE_TAILCALL
 	goto notailcall;
 #else
@@ -2489,7 +2532,8 @@ static void parse_return(LexState *ls)
 	ins = BCINS_AD(BC_RET1, expr_toanyreg(fs, &e), 2);
       }
     } else {
-      if (e.k == VCALL) {  /* Append all results from a call. */
+      if (e.k == VCALL && bc_op(*bcptr(fs, &e)) != BC_KPRI) {
+	/* Append all results from a call. */
       notailcall:
 	setbc_b(bcptr(fs, &e), 0);
 	ins = BCINS_AD(BC_RETM, fs->nactvar, e.u.s.aux - fs->nactvar);
