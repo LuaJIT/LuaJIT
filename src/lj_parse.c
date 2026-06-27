@@ -955,10 +955,8 @@ static void bcemit_binop(FuncState *fs, BinOpr op, ExpDesc *e1, ExpDesc *e2)
     jmp_append(fs, &e2->t, e1->t);
     *e1 = *e2;
   } else if (op == OPR_COAL) {
-    BCReg reg = e1->u.s.info;
-    expr_toreg(fs, e2, reg);
+    expr_tonextreg(fs, e2);
     jmp_tohere(fs, e1->u.s.aux);
-    fs->freereg = reg+1;
   } else if (op == OPR_CONCAT) {
     expr_toval(fs, e2);
     if (e2->k == VRELOCABLE && bc_op(*bcptr(fs, e2)) == BC_CAT) {
