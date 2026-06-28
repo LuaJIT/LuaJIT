@@ -2907,7 +2907,7 @@ static int parse_stmt(LexState *ls)
     parse_label(ls);
     break;
   case TK_goto:
-    if (LJ_52 || lj_lex_lookahead(ls) == TK_name) {  /* 5.1 soft keyword. */
+    if (LJ_52 || lex_isname(lj_lex_lookahead(ls))) {  /* 5.1 soft keyword. */
       lj_lex_next(ls);
       parse_goto(ls);
       break;
