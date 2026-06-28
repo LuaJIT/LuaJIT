@@ -80,6 +80,11 @@ typedef struct ExpDesc {
 #define expr_numtv(e)		check_exp(expr_isnumk((e)), &(e)->u.nval)
 #define expr_numberV(e)		numberVnum(expr_numtv((e)))
 
+/* Expression flags. */
+#define EXPR_F_NORES		0x01	/* Result will not be used. */
+#define EXPR_F_NOCOLON		0x02	/* Disallow colon for method call.*/
+#define EXPR_F_NONAV		0x04	/* Disallow safe navigation. */
+
 static LJ_AINLINE int32_t expr_bitV(ExpDesc *e)
 {
   TValue *o = expr_numtv(e);
@@ -2014,7 +2019,7 @@ static void parse_args(LexState *ls, ExpDesc *e)
 }
 
 /* Parse primary expression with safe navigation. */
-static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres)
+static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int eflags)
 {
   FuncState *fs = ls->fs;
   BCPos xpc = NO_JMP;
@@ -2022,7 +2027,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
   if (ls->tok == '(') {
     BCLine line = ls->linenumber;
     lj_lex_next(ls);
-    expr(ls, v, 0);
+    expr(ls, v, 0);  /* Don't propagate eflags. */
     lex_match(ls, ')', '(', line);
     expr_discharge(ls->fs, v);
   } else if (lex_isname(ls->tok)) {
@@ -2033,7 +2038,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
   }
   for (;;) {  /* Parse multiple expression suffixes. */
     int nav = 0;
-    if (lex_opt(ls, TK_nav)) {
+    if (!(eflags & EXPR_F_NONAV) && lex_opt(ls, TK_nav)) {
       nav = 1;
       expr_toanyreg(fs, v);
       bcemit_INS(fs, BCINS_AD(BC_ISEQP, v->u.s.info, VKNIL));
@@ -2046,7 +2051,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
       expr_index(fs, v, &key);
     } else if (ls->tok == ':') {
       ExpDesc key;
-      if (nocolon) {
+      if ((eflags & EXPR_F_NOCOLON)) {
 	if (nav) goto err;
 	break;
       }
@@ -2066,7 +2071,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
     call:
       parse_args(ls, v);
       /* Keep nav VCALL if no suffix follows. */
-      if (needres && nav &&
+      if (nav && !(eflags & EXPR_F_NORES) &&
 	  !(ls->tok == TK_nav || ls->tok == '[' || ls->tok == ':' ||
 	    ls->tok == '(' || ls->tok == TK_string || ls->tok == '{' ||
 	    ls->tok == '.')) break;
@@ -2075,7 +2080,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
     } else {
       break;
     }
-    if (needres && nav) {
+    if (nav && !(eflags & EXPR_F_NORES)) {
       expr_tonextreg(fs, v);
     }
   }
@@ -2083,9 +2088,9 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int nocolon, int needres
 }
 
 /* Parse primary expression. */
-static void expr_primary(LexState *ls, ExpDesc *v, int nocolon)
+static void expr_primary(LexState *ls, ExpDesc *v, int eflags)
 {
-  BCPos xpc = expr_primary_nav(ls, v, nocolon, 1);
+  BCPos xpc = expr_primary_nav(ls, v, eflags);
   if (xpc != NO_JMP) {
     FuncState *fs = ls->fs;
     BCPos around;
@@ -2102,7 +2107,7 @@ static void expr_primary(LexState *ls, ExpDesc *v, int nocolon)
 }
 
 /* Parse simple expression. */
-static void expr_simple(LexState *ls, ExpDesc *v, int nocolon)
+static void expr_simple(LexState *ls, ExpDesc *v, int eflags)
 {
   switch (ls->tok) {
   case TK_number:
@@ -2140,7 +2145,7 @@ static void expr_simple(LexState *ls, ExpDesc *v, int nocolon)
     parse_body(ls, v, 0, ls->linenumber);
     return;
   default:
-    expr_primary(ls, v, nocolon);
+    expr_primary(ls, v, eflags);
     return;
   }
   lj_lex_next(ls);
@@ -2203,10 +2208,10 @@ static const struct {
 #define UNARY_PRIORITY		12  /* Priority for unary operators. */
 
 /* Forward declaration. */
-static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon);
+static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int eflags);
 
 /* Parse unary expression. */
-static void expr_unop(LexState *ls, ExpDesc *v, int nocolon)
+static void expr_unop(LexState *ls, ExpDesc *v, int eflags)
 {
   BCOp op;
   if (ls->tok == TK_not || ls->tok == '!') {
@@ -2218,20 +2223,20 @@ static void expr_unop(LexState *ls, ExpDesc *v, int nocolon)
   } else if (ls->tok == '~') {
     op = BC_BNOT;
   } else {
-    expr_simple(ls, v, nocolon);
+    expr_simple(ls, v, eflags);
     return;
   }
   lj_lex_next(ls);
-  expr_binop(ls, v, UNARY_PRIORITY, nocolon);
+  expr_binop(ls, v, UNARY_PRIORITY, eflags);
   bcemit_unop(ls->fs, op, v);
 }
 
 /* Parse binary expressions with priority higher than the limit. */
-static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon)
+static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int eflags)
 {
   BinOpr opr;
   synlevel_begin(ls);
-  expr_unop(ls, v, nocolon);
+  expr_unop(ls, v, eflags);
   opr = token2binop(ls->tok);
   while (opr != OPR_NOBINOPR && priority[opr].left > limit) {
     ExpDesc v2;
@@ -2239,7 +2244,7 @@ static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon)
     lj_lex_next(ls);
     bcemit_binop_left(ls->fs, opr, v);
     /* Parse binary expression with higher priority. */
-    nextop = expr_binop(ls, &v2, priority[opr].right, nocolon);
+    nextop = expr_binop(ls, &v2, priority[opr].right, eflags);
     bcemit_binop(ls->fs, opr, v, &v2);
     opr = nextop;
   }
@@ -2248,16 +2253,16 @@ static BinOpr expr_binop(LexState *ls, ExpDesc *v, uint32_t limit, int nocolon)
 }
 
 /* Parse expression. */
-static void expr(LexState *ls, ExpDesc *v, int nocolon)
+static void expr(LexState *ls, ExpDesc *v, int eflags)
 {
-  expr_binop(ls, v, 0, nocolon);  /* Priority 0: parse whole expression. */
+  expr_binop(ls, v, 0, eflags);  /* Priority 0: parse whole expression. */
   if (lex_opt(ls, '?')) {  /* Ternary ?: conditional operator. Right-assoc. */
     FuncState *fs = ls->fs;
     BCPos escapelist = NO_JMP, cond;
     BCReg reg;
     bcemit_branch_t(fs, v);
     cond = v->f;
-    expr(ls, v, 1);  /* Prevent method parsing. Must use parentheses. */
+    expr(ls, v, EXPR_F_NOCOLON);  /* Prevent method parsing. Use parentheses. */
     expr_tonextreg(fs, v);
     reg = v->u.s.info;
     jmp_append(fs, &escapelist, bcemit_jmp(fs));
@@ -2401,7 +2406,7 @@ static void parse_assignment(LexState *ls, LHSVarList *lh, BCReg nvars)
   if (lex_opt(ls, ',')) {  /* Collect LHS list and recurse upwards. */
     LHSVarList vl;
     vl.prev = lh;
-    expr_primary(ls, &vl.v, 0);
+    expr_primary(ls, &vl.v, EXPR_F_NONAV);
     if (vl.v.k == VLOCAL)
       assign_hazard(ls, lh, &vl.v);
     checklimit(ls->fs, ls->level + nvars, LJ_MAX_XLEVEL, "variable names");
@@ -2440,7 +2445,7 @@ static void parse_call_assign(LexState *ls)
 {
   FuncState *fs = ls->fs;
   LHSVarList vl;
-  BCReg xpc = expr_primary_nav(ls, &vl.v, 0, 0);
+  BCReg xpc = expr_primary_nav(ls, &vl.v, EXPR_F_NORES);
   if (vl.v.k == VCALL) {  /* Function call statement. */
     setbc_b(bcptr(fs, &vl.v), 1);  /* No results. */
   } else {  /* Start of an assignment. */
