@@ -41,6 +41,12 @@ typedef struct BCInsLine {
   BCLine line;		/* Line number for this bytecode. */
 } BCInsLine;
 
+/* Index into variable stack. */
+typedef uint16_t VarIndex;
+
+#define LJ_VINDEX_HSIZE	32	/* Hash table size. Must be a power of 2. */
+#define LJ_VINDEX_MASK	(LJ_VINDEX_HSIZE-1)
+
 /* Info for local variables. Only used during bytecode generation. */
 typedef struct VarInfo {
   GCRef name;		/* Local variable name or goto/label name. */
@@ -48,6 +54,7 @@ typedef struct VarInfo {
   BCPos endpc;		/* First point where the local variable is dead. */
   uint8_t slot;		/* Variable slot. */
   uint8_t info;		/* Variable/goto/label info. */
+  VarIndex prev;	/* Previous entry in variable hash chain. */
 } VarInfo;
 
 /* Lua lexer state. */
@@ -77,6 +84,7 @@ typedef struct LexState {
   uint32_t level;	/* Syntactical nesting level. */
   int endmark;		/* Trust bytecode end marker, even if not at EOF. */
   int fr2;		/* Generate bytecode for LJ_FR2 mode. */
+  VarIndex vhash[LJ_VINDEX_HSIZE];	/* Variable hash chain anchors. */
 } LexState;
 
 LJ_FUNC int lj_lex_setup(lua_State *L, LexState *ls);

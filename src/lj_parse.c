@@ -124,9 +124,11 @@ typedef struct FuncScope {
 #define NAME_BREAK		((GCstr *)(uintptr_t)1)
 #define NAME_CONT		((GCstr *)(uintptr_t)2)
 
-/* Index into variable stack. */
-typedef uint16_t VarIndex;
+/* Index into variable stack. See VarIndex in lj_lex.h. */
+#define VINDEX_NONE		0xffff
 #define LJ_MAX_VSTACK		(65536 - LJ_MAX_UPVAL)
+
+#define LJ_HASH_VSTACK		0x20	/* Must be a power of 2. */
 
 /* Variable/goto/label info. */
 #define VSTACK_VAR_RW		0x01	/* R/W variable. */
@@ -1112,6 +1114,17 @@ static GCstr *lex_str(LexState *ls)
 
 #define var_get(ls, fs, i)	((ls)->vstack[(fs)->varmap[(i)]])
 
+typedef intptr_t VarHash;	/* For performance reasons. */
+
+/* Hash of a variable name. */
+static LJ_AINLINE VarHash var_hash(GCstr *name)
+{
+  if ((uintptr_t)name < VARNAME__MAX)
+    return -1;
+  else
+    return (name->sid & LJ_VINDEX_MASK);  /* Immutable id, not name->hash! */
+}
+
 /* Define a new local variable. */
 static void var_new(LexState *ls, BCReg n, GCstr *name)
 {
@@ -1128,6 +1141,8 @@ static void var_new(LexState *ls, BCReg n, GCstr *name)
 	      "unanchored variable name");
   /* NOBARRIER: name is anchored in fs->kt and ls->vstack is not a GCobj. */
   setgcref(ls->vstack[vtop].name, obj2gco(name));
+  ls->vstack[vtop].info = 0;
+  /* The other VarInfo fields are filled in by var_add and var_remove. */
   fs->varmap[fs->nactvar+n] = (uint16_t)vtop;
   ls->vtop = vtop+1;
 }
@@ -1144,10 +1159,15 @@ static void var_add(LexState *ls, BCReg nvars)
   FuncState *fs = ls->fs;
   BCReg nactvar = fs->nactvar;
   while (nvars--) {
-    VarInfo *v = &var_get(ls, fs, nactvar);
+    intptr_t vidx = fs->varmap[nactvar];
+    VarInfo *v = &ls->vstack[vidx];
+    VarHash hash = var_hash(strref(v->name));
     v->startpc = fs->pc;
     v->slot = nactvar++;
-    v->info = 0;
+    if (hash != -1) {
+      v->prev = ls->vhash[hash];
+      ls->vhash[hash] = vidx;
+    }
   }
   fs->nactvar = nactvar;
 }
@@ -1156,68 +1176,75 @@ static void var_add(LexState *ls, BCReg nvars)
 static void var_remove(LexState *ls, BCReg tolevel)
 {
   FuncState *fs = ls->fs;
-  while (fs->nactvar > tolevel)
-    var_get(ls, fs, --fs->nactvar).endpc = fs->pc;
-}
-
-/* Lookup local variable name. */
-static BCReg var_lookup_local(FuncState *fs, GCstr *n)
-{
-  int i;
-  for (i = fs->nactvar-1; i >= 0; i--) {
-    if (n == strref(var_get(fs->ls, fs, i).name))
-      return (BCReg)i;
+  while (fs->nactvar > tolevel) {
+    VarInfo *v = &var_get(ls, fs, --fs->nactvar);
+    VarHash hash = var_hash(strref(v->name));
+    v->endpc = fs->pc;
+    if (hash != -1) {
+      ls->vhash[hash] = v->prev;
+    }
   }
-  return (BCReg)-1;  /* Not found. */
-}
-
-/* Lookup or add upvalue index. */
-static MSize var_lookup_uv(FuncState *fs, MSize vidx, ExpDesc *e)
-{
-  MSize i, n = fs->nuv;
-  for (i = 0; i < n; i++)
-    if (fs->uvmap[i] == vidx)
-      return i;  /* Already exists. */
-  /* Otherwise create a new one. */
-  checklimit(fs, fs->nuv, LJ_MAX_UPVAL, "upvalues");
-  lj_assertFS(e->k == VLOCAL || e->k == VUPVAL, "bad expr type %d", e->k);
-  fs->uvmap[n] = (uint16_t)vidx;
-  fs->uvtmp[n] = (uint16_t)(e->k == VLOCAL ? vidx : LJ_MAX_VSTACK+e->u.s.info);
-  fs->nuv = n+1;
-  return n;
 }
 
 /* Forward declaration. */
 static void fscope_uvmark(FuncState *fs, BCReg level);
 
-/* Recursively lookup variables in enclosing functions. */
-static MSize var_lookup_(FuncState *fs, GCstr *name, ExpDesc *e, int first)
-{
-  if (fs) {
-    BCReg reg = var_lookup_local(fs, name);
-    if ((int32_t)reg >= 0) {  /* Local in this function? */
-      expr_init(e, VLOCAL, reg);
-      if (!first)
-	fscope_uvmark(fs, reg);  /* Scope now has an upvalue. */
-      return (MSize)(e->u.s.aux = (uint32_t)fs->varmap[reg]);
-    } else {
-      MSize vidx = var_lookup_(fs->prev, name, e, 0);  /* Var in outer func? */
-      if ((int32_t)vidx >= 0) {  /* Yes, make it an upvalue here. */
-	e->u.s.info = (uint8_t)var_lookup_uv(fs, vidx, e);
-	e->k = VUPVAL;
-	return vidx;
-      }
-    }
-  } else {  /* Not found in any function, must be a global. */
-    expr_init(e, VGLOBAL, 0);
-    e->u.sval = name;
-  }
-  return (MSize)-1;  /* Global. */
-}
-
 /* Lookup variable name. */
-#define var_lookup(ls, e) \
-  var_lookup_((ls)->fs, lex_str(ls), (e), 1)
+static MSize var_lookup(LexState *ls, ExpDesc *e)
+{
+  GCstr *name = lex_str(ls);
+  MSize vidx = ls->vhash[var_hash(name)];
+  while (vidx != VINDEX_NONE) {
+    VarInfo *v = &ls->vstack[vidx];
+    if (strref(v->name) == name) {
+      FuncState *fs = ls->fs;
+      if (vidx >= fs->vbase) {
+	expr_init(e, VLOCAL, v->slot);
+	e->u.s.aux = vidx;
+      } else {
+	MSize uvidx, nuv = fs->nuv;
+	e->u.s.aux = vidx;
+	for (uvidx = 0; uvidx < nuv; uvidx++) {
+	  if (fs->uvmap[uvidx] == vidx) {  /* Upvalue already exists. */
+	    expr_init(e, VUPVAL, uvidx);
+	    return vidx;
+	  }
+	}
+	expr_init(e, VUPVAL, nuv);
+	for (;;) {
+	  /* Create a new upvalue. */
+	  VarIndex *puvtmp;
+	  checklimit(fs, nuv, LJ_MAX_UPVAL, "upvalues");
+	  fs->uvmap[nuv] = (uint16_t)vidx;
+	  fs->nuv = nuv + 1;
+	  puvtmp = &fs->uvtmp[nuv];  /* Set below. */
+	  fs = fs->prev;  /* Continue in parent. */
+	  lj_assertLS(fs != NULL, "variable hash chain broken");
+	  if (vidx >= fs->vbase) {  /* Local in that function. */
+	    *puvtmp = vidx;
+	    fscope_uvmark(fs, v->slot);
+	    return vidx;
+	  }
+	  /* Not a local in that function. Find or create upvalue. */
+	  nuv = fs->nuv;
+	  for (uvidx = 0; uvidx < nuv; uvidx++) {
+	    if (fs->uvmap[uvidx] == vidx) {  /* Upvalue already exists. */
+	      *puvtmp = LJ_MAX_VSTACK + uvidx;
+	      return vidx;
+	    }
+	  }
+	  /* Not yet an upvalue. Create it and continue. */
+	  *puvtmp = LJ_MAX_VSTACK + nuv;
+	}
+      }
+      return vidx;
+    }
+    vidx = v->prev;
+  }
+  expr_init(e, VGLOBAL, 0);
+  e->u.sval = name;
+  return vidx;
+}
 
 /* -- Goto and label handling --------------------------------------------- */
 
@@ -1548,7 +1575,7 @@ static void fs_fixup_line(FuncState *fs, GCproto *pt,
 /* Prepare variable info for prototype. */
 static size_t fs_prep_var(LexState *ls, FuncState *fs, size_t *ofsvar)
 {
-  VarInfo *vs =ls->vstack, *ve;
+  VarInfo *vs = ls->vstack, *ve;
   MSize i, n;
   BCPos lastpc;
   lj_buf_reset(&ls->sb);  /* Copy to temp. string buffer. */
@@ -2957,6 +2984,7 @@ GCproto *lj_parse(LexState *ls)
   setstrV(L, L->top, ls->chunkname);  /* Anchor chunkname string. */
   incr_top(L);
   ls->level = 0;
+  memset(ls->vhash, 0xff, sizeof(ls->vhash));
   fs_init(ls, &fs);
   fs.linedefined = 0;
   fs.numparams = 0;
