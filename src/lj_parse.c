@@ -134,6 +134,7 @@ typedef struct FuncScope {
 #define VSTACK_VAR_RW		0x01	/* R/W variable. */
 #define VSTACK_GOTO		0x02	/* Pending goto. */
 #define VSTACK_LABEL		0x04	/* Label. */
+#define VSTACK_CONST		0x08	/* Constant variable. */
 
 /* Per-function state. */
 typedef struct FuncState {
@@ -640,12 +641,18 @@ static void bcemit_store(FuncState *fs, ExpDesc *var, ExpDesc *e)
 {
   BCIns ins;
   if (var->k == VLOCAL) {
-    fs->ls->vstack[var->u.s.aux].info |= VSTACK_VAR_RW;
+    VarInfo *v = &fs->ls->vstack[var->u.s.aux];
+    if ((v->info & VSTACK_CONST))
+      lj_lex_error(fs->ls, 0, LJ_ERR_XCONSTA, strdata(strref(v->name)));
+    v->info |= VSTACK_VAR_RW;
     expr_free(fs, e);
     expr_toreg(fs, e, var->u.s.info);
     return;
   } else if (var->k == VUPVAL) {
-    fs->ls->vstack[var->u.s.aux].info |= VSTACK_VAR_RW;
+    VarInfo *v = &fs->ls->vstack[var->u.s.aux];
+    if ((v->info & VSTACK_CONST))
+      lj_lex_error(fs->ls, 0, LJ_ERR_XCONSTA, strdata(strref(v->name)));
+    v->info |= VSTACK_VAR_RW;
     expr_toval(fs, e);
     if (e->k <= VKTRUE)
       ins = BCINS_AD(BC_USETP, var->u.s.info, const_pri(e));
@@ -1096,7 +1103,8 @@ static LJ_AINLINE int lex_isname(LexToken tok)
 {
   return (tok == TK_name ||
 	  (!LJ_52 && tok == TK_goto) ||
-	  tok == TK_continue);
+	  tok == TK_continue ||
+	  tok == TK_const);
 }
 
 /* Check for string token. */
@@ -1126,10 +1134,19 @@ static LJ_AINLINE VarHash var_hash(GCstr *name)
 }
 
 /* Define a new local variable. */
-static void var_new(LexState *ls, BCReg n, GCstr *name)
+static MSize var_new(LexState *ls, BCReg n, GCstr *name)
 {
   FuncState *fs = ls->fs;
   MSize vtop = ls->vtop;
+  if ((uintptr_t)name >= VARNAME__MAX) {  /* Check for const re-declaration. */
+    MSize vidx = ls->vhash[var_hash(name)];
+    while (vidx != VINDEX_NONE) {
+      VarInfo *v = &ls->vstack[vidx];
+      if (strref(v->name) == name && (v->info & VSTACK_CONST))
+       lj_lex_error(ls, 0, LJ_ERR_XCONSTR, strdata(name));
+      vidx = v->prev;
+    }
+  }
   checklimit(fs, fs->nactvar+n, LJ_MAX_LOCVAR, "local variables");
   if (LJ_UNLIKELY(vtop >= ls->sizevstack)) {
     if (ls->sizevstack >= LJ_MAX_VSTACK)
@@ -1145,6 +1162,7 @@ static void var_new(LexState *ls, BCReg n, GCstr *name)
   /* The other VarInfo fields are filled in by var_add and var_remove. */
   fs->varmap[fs->nactvar+n] = (uint16_t)vtop;
   ls->vtop = vtop+1;
+  return vtop;
 }
 
 #define var_new_lit(ls, n, v) \
@@ -2487,13 +2505,15 @@ static void parse_call_assign(LexState *ls)
   if (xpc != NO_JMP) jmp_tohere(fs, xpc);
 }
 
-/* Parse 'local' statement. */
-static void parse_local(LexState *ls)
+/* Parse 'local' or 'const' statement. */
+static void parse_local(LexState *ls, int vinfo)
 {
+  lj_lex_next(ls);  /* Skip local or const. */
   if (lex_opt(ls, TK_function)) {  /* Local function declaration. */
     ExpDesc v, b;
     FuncState *fs = ls->fs;
-    var_new(ls, 0, lex_str(ls));
+    MSize vidx = var_new(ls, 0, lex_str(ls));
+    ls->vstack[vidx].info = (uint8_t)vinfo;
     expr_init(&v, VLOCAL, fs->freereg);
     v.u.s.aux = fs->varmap[fs->freereg];
     bcreg_reserve(fs, 1);
@@ -2507,9 +2527,23 @@ static void parse_local(LexState *ls)
   } else {  /* Local variable declaration. */
     ExpDesc e;
     BCReg nexps, nvars = 0;
-    do {  /* Collect LHS. */
-      var_new(ls, nvars++, lex_str(ls));
-    } while (lex_opt(ls, ','));
+    if (vinfo) {  /* Multiple consts need to be checked against each other. */
+      VarIndex vhsave[LJ_VINDEX_HSIZE];
+      memcpy(vhsave, ls->vhash, sizeof(vhsave));
+      do {  /* Collect LHS. */
+	MSize vidx = var_new(ls, nvars++, lex_str(ls));
+	VarInfo *v = &ls->vstack[vidx];
+	VarHash hash = var_hash(strref(v->name));
+	v->prev = ls->vhash[hash];  /* Temporarily add to hash. */
+	ls->vhash[hash] = vidx;
+	v->info = (uint8_t)vinfo;
+      } while (lex_opt(ls, ','));
+      memcpy(ls->vhash, vhsave, sizeof(vhsave));  /* Restore hash anchors. */
+    } else {
+      do {  /* Collect LHS. */
+	var_new(ls, nvars++, lex_str(ls));
+      } while (lex_opt(ls, ','));
+    }
     if (lex_opt(ls, '=')) {  /* Optional RHS. */
       nexps = expr_list(ls, &e);
     } else {  /* Or implicitly set to nil. */
@@ -2915,9 +2949,15 @@ static int parse_stmt(LexState *ls)
     parse_func(ls, line);
     break;
   case TK_local:
-    lj_lex_next(ls);
-    parse_local(ls);
+    parse_local(ls, 0);
     break;
+  case TK_const: {
+    LexToken tokx = lj_lex_lookahead(ls);
+    if (!(lex_isname(tokx) || tokx == TK_function))
+      goto assign;  /* Soft keyword. */
+    parse_local(ls, VSTACK_CONST);
+    break;
+  }
   case TK_return:
     parse_return(ls);
     return 1;  /* Must be last. */
