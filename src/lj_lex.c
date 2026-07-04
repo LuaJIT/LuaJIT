@@ -97,12 +97,18 @@ static void lex_number(LexState *ls, TValue *tv)
   StrScanFmt fmt;
   LexChar c, xp = 'e';
   lj_assertLS(lj_char_isdigit(ls->c), "bad usage");
-  if ((c = ls->c) == '0' && (lex_savenext(ls) | 0x20) == 'x')
-    xp = 'p';
+  if ((c = ls->c) == '0') {
+    lex_save(ls, c);
+    do { c = lex_next(ls); } while (c == '_');
+    if ((c | 0x20) == 'x') xp = 'p';
+  }
   while (lj_char_isident(ls->c) || ls->c == '.' ||
 	 ((ls->c == '-' || ls->c == '+') && (c | 0x20) == xp)) {
-    c = ls->c;
-    lex_savenext(ls);
+    if (LJ_LIKELY(ls->c != '_')) {
+      c = ls->c;
+      lex_save(ls, ls->c);
+    }
+    lex_next(ls);
   }
   lex_save(ls, '\0');
   fmt = lj_strscan_scan((const uint8_t *)ls->sb.b, sbuflen(&ls->sb)-1, tv,
