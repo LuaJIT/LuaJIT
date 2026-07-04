@@ -642,18 +642,14 @@ static void bcemit_store(FuncState *fs, ExpDesc *var, ExpDesc *e)
 {
   BCIns ins;
   if (var->k == VLOCAL) {
-    VarInfo *v = &fs->ls->vstack[var->u.s.aux];
-    if ((v->info & VSTACK_CONST))
-      lj_lex_error(fs->ls, 0, LJ_ERR_XCONSTA, strdata(strref(v->name)));
-    v->info |= VSTACK_VAR_RW;
+    lj_assertFS(!(fs->ls->vstack[var->u.s.aux].info & VSTACK_CONST), "unchecked const assignment");
+    fs->ls->vstack[var->u.s.aux].info |= VSTACK_VAR_RW;
     expr_free(fs, e);
     expr_toreg(fs, e, var->u.s.info);
     return;
   } else if (var->k == VUPVAL) {
-    VarInfo *v = &fs->ls->vstack[var->u.s.aux];
-    if ((v->info & VSTACK_CONST))
-      lj_lex_error(fs->ls, 0, LJ_ERR_XCONSTA, strdata(strref(v->name)));
-    v->info |= VSTACK_VAR_RW;
+    lj_assertFS(!(fs->ls->vstack[var->u.s.aux].info & VSTACK_CONST), "unchecked const assignment");
+    fs->ls->vstack[var->u.s.aux].info |= VSTACK_VAR_RW;
     expr_toval(fs, e);
     if (e->k <= VKTRUE)
       ins = BCINS_AD(BC_USETP, var->u.s.info, const_pri(e));
@@ -1262,6 +1258,16 @@ static MSize var_lookup(LexState *ls, ExpDesc *e, GCstr *name)
   expr_init(e, VGLOBAL, 0);
   e->u.sval = name;
   return vidx;
+}
+
+/* Check for const variable assignment. */
+static void var_assign(LexState *ls, ExpDesc *e)
+{
+  if (e->k == VLOCAL || e->k == VUPVAL) {
+    VarInfo *v = &ls->vstack[e->u.s.aux];
+    if ((v->info & VSTACK_CONST))
+      lj_lex_error(ls, 0, LJ_ERR_XCONSTA, strdata(strref(v->name)));
+  }
 }
 
 /* -- Goto and label handling --------------------------------------------- */
@@ -2414,6 +2420,7 @@ static int parse_compound(LexState *ls, ExpDesc *e)
   ** in expression contexts and assignments are statements.
   */
   if (opr > OPR_NE || opr == OPR_POW) return 0;  /* ORDER OPR */
+  var_assign(ls, e);
   if (opr == OPR_NE) {
     if (ls->tok != TK_ne) lj_lex_error(ls, '!', LJ_ERR_XTOKEN, "=");
     opr = OPR_BXOR;
@@ -2502,6 +2509,7 @@ static void parse_assignment(LexState *ls, LHSVarList *lh, BCReg nvars)
 {
   ExpDesc e;
   checkcond(ls, VLOCAL <= lh->v.k && lh->v.k <= VINDEXED, LJ_ERR_XSYNTAX);
+  var_assign(ls, &lh->v);
   if (lex_opt(ls, ',')) {  /* Collect LHS list and recurse upwards. */
     LHSVarList vl;
     vl.prev = lh;
@@ -2623,6 +2631,7 @@ static void parse_func(LexState *ls, BCLine line)
     needself = 1;
     expr_field(ls, &v);
   }
+  var_assign(ls, &v);
   parse_body(ls, &b, needself, line);
   fs = ls->fs;
   bcemit_store(fs, &v, &b);
