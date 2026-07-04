@@ -3412,7 +3412,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   ins_next3
     break;
 
-    |.macro ins_bitop, ins
+    |.macro ins_bitop, ins, shop
     |  decode_RB8 RB, INS
     |   decode_RC8 RC, INS
     |  // RA = dst*8, RB = src1*8, RC = src2*8
@@ -3421,6 +3421,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  checktp CARG2, LJ_TISNUM
     |   checktpeq CARG4, LJ_TISNUM
     |  bne ->vmeta_bitop
+    |.if shop == 1
+    |  and CARG3, CARG3, #31
+    |.endif
     |  ins CARG1, CARG1, CARG3
     |  mvn CARG2, #~LJ_TISNUM
     |   ins_next1
@@ -3430,22 +3433,22 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endmacro
 
   case BC_BAND:
-    |  ins_bitop and
+    |  ins_bitop and, 0
     break;
   case BC_BOR:
-    |  ins_bitop orr
+    |  ins_bitop orr, 0
     break;
   case BC_BXOR:
-    |  ins_bitop eor
+    |  ins_bitop eor, 0
     break;
   case BC_BSHL:
-    |  ins_bitop lsl
+    |  ins_bitop lsl, 1
     break;
   case BC_BSHR:
-    |  ins_bitop lsr
+    |  ins_bitop lsr, 1
     break;
   case BC_BSAR:
-    |  ins_bitop asr
+    |  ins_bitop asr, 1
     break;
 
   /* -- Constant ops ------------------------------------------------------ */
