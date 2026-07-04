@@ -84,6 +84,7 @@ typedef struct ExpDesc {
 #define EXPR_F_NORES		0x01	/* Result will not be used. */
 #define EXPR_F_NOCOLON		0x02	/* Disallow colon for method call.*/
 #define EXPR_F_NONAV		0x04	/* Disallow safe navigation. */
+#define EXPR_F_RET1		0x08	/* Return a single expr. */
 
 static LJ_AINLINE int32_t expr_bitV(ExpDesc *e)
 {
@@ -1208,9 +1209,8 @@ static void var_remove(LexState *ls, BCReg tolevel)
 static void fscope_uvmark(FuncState *fs, BCReg level);
 
 /* Lookup variable name. */
-static MSize var_lookup(LexState *ls, ExpDesc *e)
+static MSize var_lookup(LexState *ls, ExpDesc *e, GCstr *name)
 {
-  GCstr *name = lex_str(ls);
   MSize vidx = ls->vhash[var_hash(name)];
   while (vidx != VINDEX_NONE) {
     VarInfo *v = &ls->vstack[vidx];
@@ -1942,14 +1942,15 @@ static void expr_table(LexState *ls, ExpDesc *e)
 }
 
 /* Parse function parameters. */
-static BCReg parse_params(LexState *ls, int needself)
+static BCReg parse_params(LexState *ls, int needself,
+			  LexToken before, LexToken after)
 {
   FuncState *fs = ls->fs;
   BCReg nparams = 0;
-  lex_check(ls, '(');
+  lex_check(ls, before);
   if (needself)
     var_new_lit(ls, nparams++, "self");
-  if (ls->tok != ')') {
+  if (ls->tok != after) {
     do {
       if (lex_isname(ls->tok)) {
 	var_new(ls, nparams++, lex_str(ls));
@@ -1965,42 +1966,86 @@ static BCReg parse_params(LexState *ls, int needself)
   var_add(ls, nparams);
   lj_assertFS(fs->nactvar == nparams, "bad regalloc");
   bcreg_reserve(fs, nparams);
-  lex_check(ls, ')');
+  lex_check(ls, after);
   return nparams;
 }
 
-/* Forward declaration. */
+/* Forward declarations. */
 static void parse_chunk(LexState *ls);
+static void parse_return(LexState *ls, int eflags);
 
-/* Parse body of a function. */
-static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
+/* Begin a new function prototype. */
+static void proto_begin(FuncState *fs, BCLine line, BCReg nparams)
 {
-  FuncState fs, *pfs = ls->fs;
-  FuncScope bl;
-  GCproto *pt;
-  ptrdiff_t oldbase = pfs->bcbase - ls->bcstack;
-  fs_init(ls, &fs);
-  fscope_begin(&fs, &bl, 0);
-  fs.linedefined = line;
-  fs.numparams = (uint8_t)parse_params(ls, needself);
-  fs.bcbase = pfs->bcbase + pfs->pc;
-  fs.bclim = pfs->bclim - pfs->pc;
-  bcemit_AD(&fs, BC_FUNCF, 0, 0);  /* Placeholder. */
-  parse_chunk(ls);
-  if (ls->tok != TK_end) lex_match(ls, TK_end, TK_function, line);
-  pt = fs_finish(ls, (ls->lastline = ls->linenumber));
+  FuncState *pfs = fs->prev;
+  fs->linedefined = line;
+  fs->numparams = (uint8_t)nparams;
+  fs->bcbase = pfs->bcbase + pfs->pc;
+  fs->bclim = pfs->bclim - pfs->pc;
+  bcemit_AD(fs, BC_FUNCF, 0, 0);  /* Placeholder. */
+}
+
+/* Finish a function prototype. */
+static void proto_finish(LexState *ls, ExpDesc *e, ptrdiff_t oldbase)
+{
+  MSize flags = (ls->fs->flags & (PROTO_FFI|PROTO_BITOP));
+  GCproto *pt = fs_finish(ls, (ls->lastline = ls->linenumber));
+  FuncState *pfs = ls->fs;
   pfs->bcbase = ls->bcstack + oldbase;  /* May have been reallocated. */
   pfs->bclim = (BCPos)(ls->sizebcstack - oldbase);
   /* Store new prototype in the constant array of the parent. */
   expr_init(e, VRELOCABLE,
 	    bcemit_AD(pfs, BC_FNEW, 0, const_gc(pfs, obj2gco(pt), LJ_TPROTO)));
-  pfs->flags |= (fs.flags & (PROTO_FFI|PROTO_BITOP));
+  pfs->flags |= (uint8_t)flags;  /* Inherited flags. */
   if (!(pfs->flags & PROTO_CHILD)) {
     if (pfs->flags & PROTO_HAS_RETURN)
       pfs->flags |= PROTO_FIXUP_RETURN;
     pfs->flags |= PROTO_CHILD;
   }
+}
+
+/* Parse body of a function. */
+static void parse_body(LexState *ls, ExpDesc *e, int needself, BCLine line)
+{
+  ptrdiff_t oldbase = ls->fs->bcbase - ls->bcstack;
+  FuncState fs;
+  FuncScope bl;
+  fs_init(ls, &fs);
+  fscope_begin(&fs, &bl, 0);
+  proto_begin(&fs, line, parse_params(ls, needself, '(', ')'));
+  parse_chunk(ls);
+  if (ls->tok != TK_end) lex_match(ls, TK_end, TK_function, line);
+  proto_finish(ls, e, oldbase);
   lj_lex_next(ls);
+}
+
+/* Parse short function. */
+static void parse_shortfunc(LexState *ls, ExpDesc *e, GCstr *name,
+			    int eflags, BCLine line)
+{
+  ptrdiff_t oldbase = ls->fs->bcbase - ls->bcstack;
+  FuncState fs;
+  FuncScope bl;
+  BCReg nparams = 0;
+  fs_init(ls, &fs);
+  fscope_begin(&fs, &bl, 0);
+  if (name != NULL) {
+    setboolV(lj_tab_setstr(ls->L, fs.kt, name), 1);  /* Anchor in new proto. */
+    var_new(ls, nparams++, name);
+    var_add(ls, nparams);
+    bcreg_reserve(&fs, 1);
+  } else if (!lex_opt(ls, TK_or_)) {
+    nparams = parse_params(ls, 0, '|', '|');
+  }
+  lex_check(ls, TK_arrow);
+  proto_begin(&fs, line, nparams);
+  if (lex_opt(ls, TK_do)) {
+    parse_chunk(ls);
+    if (!lex_opt(ls, TK_end)) lex_match(ls, TK_end, TK_do, line);
+  } else {
+    parse_return(ls, (eflags | EXPR_F_RET1));
+  }
+  proto_finish(ls, e, oldbase);
 }
 
 /* Parse expression list. Last expression is left open. */
@@ -2076,7 +2121,13 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int eflags)
     lex_match(ls, ')', '(', line);
     expr_discharge(ls->fs, v);
   } else if (lex_isname(ls->tok)) {
-    var_lookup(ls, v);
+    BCLine line = ls->linenumber;
+    GCstr *name = lex_str(ls);
+    if (!(eflags & EXPR_F_NORES) && ls->tok == TK_arrow) {
+      parse_shortfunc(ls, v, name, eflags, line);
+      return xpc;
+    }
+    var_lookup(ls, v, name);
   } else {
   err:
     err_syntax(ls, LJ_ERR_XSYMBOL);
@@ -2188,6 +2239,9 @@ static void expr_simple(LexState *ls, ExpDesc *v, int eflags)
   case TK_function:
     lj_lex_next(ls);
     parse_body(ls, v, 0, ls->linenumber);
+    return;
+  case '|': case TK_or_:
+    parse_shortfunc(ls, v, NULL, eflags, ls->linenumber);
     return;
   default:
     expr_primary(ls, v, eflags);
@@ -2562,8 +2616,7 @@ static void parse_func(LexState *ls, BCLine line)
   ExpDesc v, b;
   int needself = 0;
   lj_lex_next(ls);  /* Skip 'function'. */
-  /* Parse function name. */
-  var_lookup(ls, &v);
+  var_lookup(ls, &v, lex_str(ls));  /* Parse function name. */
   while (lex_opt(ls, '.'))  /* Multiple dot-separated fields. */
     expr_field(ls, &v);
   if (lex_opt(ls, ':')) {  /* Optional colon to signify method call. */
@@ -2590,17 +2643,22 @@ static int parse_isend(LexToken tok)
 }
 
 /* Parse 'return' statement. */
-static void parse_return(LexState *ls)
+static void parse_return(LexState *ls, int eflags)
 {
   BCIns ins;
   FuncState *fs = ls->fs;
-  lj_lex_next(ls);  /* Skip 'return'. */
   fs->flags |= PROTO_HAS_RETURN;
-  if (parse_isend(ls->tok) || ls->tok == ';') {  /* Bare return. */
-    ins = BCINS_AD(BC_RET0, 0, 1);
+  if (!(eflags & EXPR_F_RET1) && (parse_isend(ls->tok) || ls->tok == ';')) {
+    ins = BCINS_AD(BC_RET0, 0, 1);  /* Bare return. */
   } else {  /* Return with one or more values. */
     ExpDesc e;  /* Receives the _last_ expression in the list. */
-    BCReg nret = expr_list(ls, &e);
+    BCReg nret;
+    if ((eflags & EXPR_F_RET1)) {
+      expr(ls, &e, eflags);
+      nret = 1;
+    } else {
+      nret = expr_list(ls, &e);
+    }
     if (nret == 1) {  /* Return one result. */
       /* Check for tail call. */
       if (e.k == VCALL) {
@@ -2959,7 +3017,8 @@ static int parse_stmt(LexState *ls)
     break;
   }
   case TK_return:
-    parse_return(ls);
+    lj_lex_next(ls);
+    parse_return(ls, 0);
     return 1;  /* Must be last. */
   case TK_break:
     lj_lex_next(ls);

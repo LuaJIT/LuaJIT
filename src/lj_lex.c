@@ -327,7 +327,9 @@ static LexToken lex_scan(LexState *ls, TValue *tv)
       continue;
     case '-':
       lex_next(ls);
-      if (ls->c != '-') return '-';
+      if (ls->c != '-') {
+	if (ls->c != '>') return '-'; else { lex_next(ls); return TK_arrow; }
+      }
       lex_next(ls);
       if (ls->c == '[') {  /* Long comment "--[=*[...]=*]". */
 	int sep = lex_skipeq(ls);
