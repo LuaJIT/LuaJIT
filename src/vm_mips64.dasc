@@ -4161,7 +4161,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  daddu RA, BASE, RA
     |  bne TMP0, TISNUM, ->vmeta_bitop
     |.  gettp TMP1, CRET2
-    |  zextw CRET1, CRET1
+    |  sextw CRET1, CRET1
     |   bne TMP1, TISNUM, ->vmeta_bitop
     |.   ins CRET1, CRET1, CRET2
     |  zextw CRET1, CRET1
