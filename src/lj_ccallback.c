@@ -519,6 +519,10 @@ static void callback_conv_result(CTState *cts, lua_State *L, TValue *o)
 #if LJ_TARGET_X86
     if (ctype_isfp(ctr->info))
       cts->cb.gpr[2] = ctr->size == sizeof(float) ? 1 : 2;
+#elif LJ_TARGET_X64
+    /* Always zero-extend results to 64 bits. */
+    if (ctr->size <= 4 && ctype_isinteger_or_bool(ctr->info))
+      *(uint64_t *)dp = (uint64_t)*(uint32_t *)dp;
 #endif
   }
 }
