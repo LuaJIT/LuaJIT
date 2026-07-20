@@ -377,6 +377,7 @@ are allowed.</li>
 <li><tt>pairs()</tt> and <tt>ipairs()</tt> check for <tt>__pairs</tt> and
 <tt>__ipairs</tt>.</li>
 <li><tt>coroutine.running()</tt> returns two results.</li>
+<li><tt>string.find()</tt> returns <tt>nil</tt> for out-of-range position.</li>
 <li><tt>table.pack()</tt> and <tt>table.unpack()</tt>
 (same as <tt>unpack()</tt>).</li>
 <li><tt>io.write()</tt> and <tt>file:write()</tt> return file handle
@@ -385,7 +386,6 @@ instead of <tt>true</tt>.</li>
 exit status.</li>
 <li><tt>debug.setmetatable()</tt> returns object.</li>
 <li><tt>debug.getuservalue()</tt> and <tt>debug.setuservalue()</tt>.</li>
-<li>Remove <tt>math.mod()</tt>, <tt>string.gfind()</tt>.</li>
 <li><tt>package.searchers</tt>.</li>
 <li><tt>module()</tt> returns the module table.</li>
 </ul>
