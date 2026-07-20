@@ -745,7 +745,7 @@ static void LJ_FASTCALL recff_bit_nary(jit_State *J, RecordFFData *rd)
 static void LJ_FASTCALL recff_bit_shift(jit_State *J, RecordFFData *rd)
 {
 #if LJ_HASFFI
-  if (recff_bit64_shift(J, rd))
+  if (recff_bit64_shift(J, &J->base[0], &J->base[1], &rd->argv[0], &rd->argv[1], rd->data))
     return;
 #endif
   {

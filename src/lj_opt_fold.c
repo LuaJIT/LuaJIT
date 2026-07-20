@@ -382,8 +382,8 @@ static uint64_t kfold_int64arith(jit_State *J, uint64_t k1, uint64_t k2,
   case IR_BSAR: k1 = (uint64_t)((int64_t)k1 >> (k2 & 63)); break;
   case IR_BROL: k1 = lj_rol(k1, (k2 & 63)); break;
   case IR_BROR: k1 = lj_ror(k1, (k2 & 63)); break;
-  default: lj_assertJ(0, "bad IR op %d", op); break;
 #endif
+  default: lj_assertJ(0, "bad IR op %d", op); break;
   }
   return k1;
 }

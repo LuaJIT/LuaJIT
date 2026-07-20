@@ -411,6 +411,31 @@ LuaJIT supports some extensions from Lua&nbsp;5.3:
 </li>
 </ul>
 
+<h2 id="lj30_bp_syntax">Backported Syntax Extensions from LuaJIT 3.0</h2>
+<p>
+LuaJIT 2.1 supports some
+<a href="https://github.com/LuaJIT/LuaJIT/issues/1475#issuecomment-4769582883"><span class="ext">&raquo;</span>&nbsp;syntax extensions backported from LuaJIT&nbsp;3.0</a>:
+</p>
+<ul>
+  <li>Bit Operators: unary <tt>~</tt>, binary <tt>&amp; | ~ &lt;&lt; &gt;&gt; ~&gt;&gt;</tt></li>
+  <li>Customary Operators: <tt>! && || !=</tt></li>
+  <li>Ternary <tt>?:</tt> conditional operator</li>
+  <li>Safe Navigation Operator <tt>?.</tt></li>
+  <li>nil-Coalescing Operator <tt>??</tt></li>
+  <li>Compound Assignment Operators: <tt>+= -= *= /= %= &amp;= |= ~= &lt;&lt;= &gt;&gt;= ~&gt;&gt;= ..=</tt></li>
+  <li><tt>continue</tt> Statement</li>
+  <li><tt>const</tt> Declaration</li>
+  <li>Short Function Expression</li>
+  <li>Underscores in Number Literals</li>
+</ul>
+<p>
+Not backported are:
+bit operator metamethods,
+floor division operator <tt>//</tt>,
+compound assignment metamethods,
+named vararg parameter <tt>...name</tt>.
+</p>
+
 <h2 id="exceptions">C++ Exception Interoperability</h2>
 <p>
 LuaJIT has built-in support for interoperating with C++&nbsp;exceptions.
