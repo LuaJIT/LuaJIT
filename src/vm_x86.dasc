@@ -3140,6 +3140,21 @@ static void build_subroutines(BuildCtx *ctx)
   |.else
   |  sub esp, 12
   |  fld qword [esp+16]
+  |   fnstcw word [esp+8]
+  |   mov eax, 0x0c00
+  |   or ax, word [esp+8]
+  |   mov word [esp+10], ax
+  |   fldcw word [esp+10]
+  |  fistp qword [esp]
+  |   fldcw word [esp+8]
+  |  mov eax, dword [esp]
+  |  mov edx, dword [esp+4]
+  |  add esp, 12
+  |  ret
+  |
+  |->vm_num2i64_sse3:
+  |  sub esp, 12
+  |  fld qword [esp+16]
   |  fisttp qword [esp]
   |  mov eax, dword [esp]
   |  mov edx, dword [esp+4]
@@ -3162,6 +3177,37 @@ static void build_subroutines(BuildCtx *ctx)
   |  // Note that -0x1p63 converts to -0x8000000000000000LL either way.
   |  ret
   |.else
+  |  sub esp, 12
+  |  fld qword [esp+16]
+  |   fnstcw word [esp+8]
+  |   mov eax, 0x0c00
+  |   or ax, word [esp+8]
+  |   mov word [esp+10], ax
+  |   fldcw word [esp+10]
+  |  fld st0
+  |  fistp qword [esp]
+  |  mov edx, dword [esp+4]
+  |  mov eax, dword [esp]
+  |  cmp edx, 1
+  |  jo >2
+  |1:
+  |  fpop
+  |   fldcw word [esp+8]
+  |  add esp, 12
+  |  ret
+  |2:
+  |  cmp eax, 0
+  |  jne <1
+  |  mov dword [esp], 0xdf800000	// -0x1p64 (float).
+  |  fadd dword [esp]
+  |  fistp qword [esp]
+  |   fldcw word [esp+8]
+  |  mov eax, dword [esp]
+  |  mov edx, dword [esp+4]
+  |  add esp, 12
+  |  ret
+  |
+  |->vm_num2u64_sse3:
   |  sub esp, 12
   |  fld qword [esp+16]
   |  fld st0

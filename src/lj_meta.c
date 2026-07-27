@@ -248,10 +248,10 @@ void lj_meta_bitop(lua_State *L, TValue *ra, cTValue *rb, cTValue *rc, BCReg op)
   uint64_t c = lj_carith_checkbit64(L, rc, op >= BC_BSHL ? &id_ignore : &id);
   if (id) {
     if (tvisnum(rb)) {
-      b = id == CTID_UINT64 ? lj_num2u64(numV(rb)) : lj_num2i64(numV(rb));
+      b = id == CTID_UINT64 ? lj_num2u64(numV(rb)) : (uint64_t)lj_num2i64(numV(rb));
     }
     if (tvisnum(rc)) {
-      c = id == CTID_UINT64 ? lj_num2u64(numV(rc)) : lj_num2i64(numV(rc));
+      c = id == CTID_UINT64 ? lj_num2u64(numV(rc)) : (uint64_t)lj_num2i64(numV(rc));
     }
   }
   switch (op) {
