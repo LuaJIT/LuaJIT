@@ -867,6 +867,8 @@ LJFOLD(MUL NEG NEG)
 LJFOLD(DIV NEG NEG)
 LJFOLDF(simplify_nummuldiv_negneg)
 {
+  if (fins->o == IR_DIV && (irt_isu32(fins->t) || irt_isu64(fins->t)))
+    return NEXTFOLD;
   PHIBARRIER(fleft);
   PHIBARRIER(fright);
   fins->op1 = fleft->op1;  /* (-a) o (-b) ==> a o b */
