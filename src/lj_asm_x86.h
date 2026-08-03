@@ -347,8 +347,10 @@ static void asm_fusexref(ASMState *as, IRRef ref, RegSet allow)
 #else
     as->mrm.ofs = ir->i;
     as->mrm.base = RID_NONE;
+    return;
 #endif
-  } else if (ir->o == IR_STRREF) {
+  }
+  if (ir->o == IR_STRREF) {
     asm_fusestrref(as, ir, allow);
   } else {
     as->mrm.ofs = 0;
