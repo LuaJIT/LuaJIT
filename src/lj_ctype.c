@@ -235,6 +235,20 @@ void lj_ctype_addname(CTState *cts, CType *ct, CTypeID id)
   cts->hash[h] = (CTypeID1)id;
 }
 
+/* Remove type element from hash table. */
+void lj_ctype_deltype(CTState *cts, CTypeID id)
+{
+  CType *ct = ctype_get(cts, id);
+  uint32_t h = ct_hashname(gcref(ct->name));
+  CTypeID1 *next = &cts->hash[h];
+  while (1) {
+    lj_assertCTS(*next, "ctype not in hash");
+    if (*next == id) break;
+    next = &ctype_get(cts, *next)->next;
+  }
+  *next = ct->next;
+}
+
 /* Get a C type by name, matching the type mask. */
 CTypeID lj_ctype_getname(CTState *cts, CType **ctp, GCstr *name, uint32_t tmask)
 {
