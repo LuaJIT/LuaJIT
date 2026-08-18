@@ -314,6 +314,57 @@ static void LJ_FASTCALL recff_rawlen(jit_State *J, RecordFFData *rd)
 }
 #endif
 
+static void LJ_FASTCALL recff_unpack(jit_State *J, RecordFFData *rd)
+{
+  TRef trtab, trstart, trend;
+  int32_t start, end;
+  GCtab *t;
+  /* Check for table. */
+  trtab = J->base[0];
+  if (!tref_istab(trtab)) return;  /* Interpreter will throw. */
+  t = tabV(&rd->argv[0]);
+  /* Starting index. */
+  trstart = J->base[1];
+  if (tref_isnil(trstart)) {  /* Default start = 1. */
+    start = 1;
+    trstart = lj_ir_kint(J, 1);
+  } else {
+    start = argv2int(J, &rd->argv[1]);
+    trstart = lj_opt_narrow_toint(J, trstart);
+    if (!tref_isk(trstart))
+      emitir(IRTGI(IR_EQ), trstart, lj_ir_kint(J, start));
+  }
+  /* Ending index. */
+  trend = J->base[2];
+  if (tref_isnil(trend)) {  /* Default end = #t. */
+    end = (int32_t)lj_tab_len(t);
+    trend = emitir(IRTI(IR_ALEN), trtab, TREF_NIL);
+  } else {
+    end = argv2int(J, &rd->argv[2]);
+    trend = lj_opt_narrow_toint(J, trend);
+  }
+  if (!tref_isk(trend))
+    emitir(IRTGI(IR_EQ), trend, lj_ir_kint(J, end));
+  if (start <= end) {
+    RecordIndex ix;
+    int32_t i;
+    uint32_t len = (uint32_t)end - (uint32_t)start;
+    if (len > LJ_MAX_JSLOTS || (uint32_t)J->baseslot + len > LJ_MAX_JSLOTS)
+      lj_trace_err_info(J, LJ_TRERR_STACKOV);
+    rd->nres = (ptrdiff_t)(len + 1);
+    ix.tab = trtab; ix.val = 0; ix.idxchain = 0;
+    settabV(J->L, &ix.tabv, t);
+    for (i = start; i <= end; i++) {
+      ix.key = lj_ir_kint(J, i);
+      setintV(&ix.keyv, i);
+      J->base[i - start] = lj_record_idx(J, &ix);
+    }
+  } else {  /* Empty result. */
+    emitir(IRTGI(IR_LT), trend, trstart);
+    rd->nres = 0;
+  }
+}
+
 /* Determine mode of select() call. */
 int32_t lj_ffrecord_select_mode(jit_State *J, TRef tr, TValue *tv)
 {
