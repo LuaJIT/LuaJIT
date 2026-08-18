@@ -118,16 +118,7 @@ static void recff_stitch(jit_State *J)
   TValue *pframe = frame_prevl(base-1);
   int errcode;
 
-  /* Move func + args up in Lua stack and insert continuation. */
-  memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
-  setframe_ftsz(nframe, ((char *)nframe - (char *)pframe) + FRAME_CONT);
-  setcont(base-LJ_FR2, cont);
-  setframe_pc(base, pc);
-  setnilV(base-1-LJ_FR2);  /* Incorrect, but rec_check_slots() won't run anymore. */
-  L->base += 2 + LJ_FR2;
-  L->top += 2 + LJ_FR2;
-
-  /* Ditto for the IR. */
+  /* Move func + args up in IR slots and insert continuation. */
   memmove(&J->base[1], &J->base[-1-LJ_FR2], sizeof(TRef)*nslot);
 #if LJ_FR2
   J->base[2] = TREF_FRAME;
@@ -140,6 +131,15 @@ static void recff_stitch(jit_State *J)
   J->base += 2 + LJ_FR2;
   J->baseslot += 2 + LJ_FR2;
   J->framedepth++;
+
+  /* Ditto for the Lua stack. */
+  memmove(&base[1], &base[-1-LJ_FR2], sizeof(TValue)*nslot);
+  setframe_ftsz(nframe, ((char *)nframe - (char *)pframe) + FRAME_CONT);
+  setcont(base-LJ_FR2, cont);
+  setframe_pc(base, pc);
+  setnilV(base-1-LJ_FR2);  /* Incorrect, but rec_check_slots() won't run anymore. */
+  L->base += 2 + LJ_FR2;
+  L->top += 2 + LJ_FR2;
 
   errcode = lj_vm_cpcall(L, NULL, J, rec_stop_stitch_cp);
 
