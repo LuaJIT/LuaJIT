@@ -533,6 +533,7 @@ lua_State * LJ_FASTCALL lj_ccallback_enter(CTState *cts, void *cf)
   lua_State *L = cts->L;
   global_State *g = cts->g;
   lua_assert(L != NULL);
+  lua_assert(!isdead(g, obj2gco(L)));
   if (gcref(g->jit_L)) {
     setstrV(L, L->top++, lj_err_str(L, LJ_ERR_FFI_BADCBACK));
     if (g->panic) g->panic(L);
