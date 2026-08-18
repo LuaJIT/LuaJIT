@@ -601,6 +601,9 @@ static void LJ_FASTCALL recff_next(jit_State *J, RecordFFData *rd)
     if (tref_isnil(J->base[1])) {  /* Shortcut for start of traversal. */
       ix.key = lj_ir_kint(J, 0);
       keyv = niltvg(J2G(J));
+    } else if ((J->base[1] & TREF_KEYINDEX)) {
+      ix.key = J->base[1] & ~TREF_KEYINDEX;
+      keyv = &rd->argv[1];
     } else {
       TRef tmp = recff_tmpref(J, J->base[1], IRTMPREF_IN1);
       ix.key = lj_ir_call(J, IRCALL_lj_tab_keyindex, tab, tmp);
