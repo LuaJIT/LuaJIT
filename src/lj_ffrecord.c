@@ -336,7 +336,7 @@ static void LJ_FASTCALL recff_unpack(jit_State *J, RecordFFData *rd)
   }
   /* Ending index. */
   trend = J->base[2];
-  if (tref_isnil(trend)) {  /* Default end = #t. */
+  if (J->maxslot < 3 || tref_isnil(trend)) {  /* Default end = #t. */
     end = (int32_t)lj_tab_len(t);
     trend = emitir(IRTI(IR_ALEN), trtab, TREF_NIL);
   } else {
