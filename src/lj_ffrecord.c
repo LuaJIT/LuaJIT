@@ -354,10 +354,11 @@ static void LJ_FASTCALL recff_unpack(jit_State *J, RecordFFData *rd)
     rd->nres = (ptrdiff_t)(len + 1);
     ix.tab = trtab; ix.val = 0; ix.idxchain = 0;
     settabV(J->L, &ix.tabv, t);
-    for (i = start; i <= end; i++) {
+    for (i = start; ; i++) {
       ix.key = lj_ir_kint(J, i);
       setintV(&ix.keyv, i);
       J->base[i - start] = lj_record_idx(J, &ix);
+      if (i == end) break;
     }
   } else {  /* Empty result. */
     emitir(IRTGI(IR_LT), trend, trstart);
