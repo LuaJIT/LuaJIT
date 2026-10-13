@@ -1103,7 +1103,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  movk CARG1, #(LJ_TTAB>>1)&0xffff, lsl #48
   |  b ->fff_restv
   |5:
-  |  cmp_nil TMP0
+  |  cmp_nil CARG1
   |  bne ->fff_restv
   |  b <4
   |
