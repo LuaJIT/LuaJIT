@@ -3939,6 +3939,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     if (op == BC_FORI) {
       |  csel PC, RC, PC, hi
     } else if (op == BC_JFORI) {
+      |  mov PC, RC
       |  ldrh RCw, [RC, #-4+OFS_RD]
       |  bls =>BC_JLOOP
     } else if (op == BC_IFORL) {
