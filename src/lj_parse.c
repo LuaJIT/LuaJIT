@@ -2161,7 +2161,7 @@ static BCPos expr_primary_nav(LexState *ls, ExpDesc *v, int eflags)
       expr_str(ls, &key);
       bcemit_method(fs, v, &key);
       nav = 0;
-      if (lex_opt(ls, TK_nav)) {
+      if (!(eflags & EXPR_F_NONAV) && lex_opt(ls, TK_nav)) {
 	nav = 1;
 	bcemit_INS(fs, BCINS_AD(BC_ISEQP, v->u.s.info, VKNIL));
 	jmp_append(fs, &xpc, bcemit_jmp(fs));
@@ -2196,6 +2196,7 @@ static void expr_primary(LexState *ls, ExpDesc *v, int eflags)
   if (xpc != NO_JMP) {
     FuncState *fs = ls->fs;
     BCPos around;
+    if (v->k == VINDEXED) expr_tonextreg(fs, v);
     around = bcemit_jmp(fs);
     jmp_tohere(fs, xpc);
     if (v->k == VCALL) {  /* Change to VCALLNAV. Still points to CALL/CALLM. */
