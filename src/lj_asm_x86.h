@@ -1671,12 +1671,13 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
   } else if (irref_isk(ir->op2)) {
     TValue k;
     lj_ir_kvalue(as->J->L, &k, IR(ir->op2));
-    asm_fuseahuref(as, ir->op1, RSET_GPR);
     if (tvisnil(&k)) {
+      asm_fuseahuref(as, ir->op1, RSET_GPR);
       emit_i32(as, -1);
       emit_mrm(as, XO_MOVmi, REX_64, RID_MRM);
     } else {
       Reg tmp = ra_scratch(as, RSET_GPR);
+      asm_fuseahuref(as, ir->op1, rset_exclude(RSET_GPR, tmp));
       emit_mrm(as, XO_MOVto, tmp|REX_64, RID_MRM);
       emit_loadu64(as, tmp, k.u64);
     }
@@ -1689,17 +1690,21 @@ static void asm_ahustore(ASMState *as, IRIns *ir)
       src = ra_alloc1(as, ir->op2, allow);
       rset_clear(allow, src);
     }
+#if LJ_GC64
+    if (ra_hasreg(src) && !(LJ_DUALNUM && irt_isinteger(ir->t))) {
+      Reg tmp;
+      rset_clear(allow, src);
+      tmp = ra_scratch(as, allow);
+      rset_clear(allow, tmp);
+      asm_fuseahuref(as, ir->op1, allow);
+      emit_mrm(as, XO_MOVto, tmp|REX_64, RID_MRM);
+      emit_rr(as, XO_OR, tmp|REX_64, src|REX_64);
+      emit_loadu64(as, tmp, (uint64_t)irt_toitype(ir->t) << 47);
+      return;
+    }
+#endif
     asm_fuseahuref(as, ir->op1, allow);
     if (ra_hasreg(src)) {
-#if LJ_GC64
-      if (!(LJ_DUALNUM && irt_isinteger(ir->t))) {
-	Reg tmp = ra_scratch(as, rset_exclude(allow, src));
-	emit_mrm(as, XO_MOVto, tmp|REX_64, RID_MRM);
-	emit_rr(as, XO_OR, tmp|REX_64, src|REX_64);
-	emit_loadu64(as, tmp, (uint64_t)irt_toitype(ir->t) << 47);
-	return;
-      }
-#endif
       emit_mrm(as, XO_MOVto, src, RID_MRM);
     } else if (!irt_ispri(irr->t)) {
       lj_assertA(irt_isaddr(ir->t) || (LJ_DUALNUM && irt_isinteger(ir->t)),
