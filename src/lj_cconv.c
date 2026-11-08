@@ -672,7 +672,7 @@ static void cconv_array_init(CTState *cts, CType *d, CTSize sz, uint8_t *dp,
   CType *dc = ctype_rawchild(cts, d);  /* Array element type. */
   CTSize ofs, esize = dc->size;
   MSize i;
-  if (len*esize > sz)
+  if (len * (uint64_t)esize > sz)
     cconv_err_initov(cts, d);
   for (i = 0, ofs = 0; i < len; i++, ofs += esize)
     lj_cconv_ct_tv(cts, dc, dp + ofs, o + i, 0);
