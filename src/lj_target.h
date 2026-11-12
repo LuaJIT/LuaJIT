@@ -55,7 +55,7 @@ typedef uint32_t RegSP;
 /* Bitset for registers. 32 registers suffice for most architectures.
 ** Note that one set holds bits for both GPRs and FPRs.
 */
-#if LJ_TARGET_PPC || LJ_TARGET_MIPS || LJ_TARGET_ARM64
+#if LJ_TARGET_PPC || LJ_TARGET_MIPS || LJ_TARGET_ARM64 || LJ_TARGET_RISCV64
 typedef uint64_t RegSet;
 #define RSET_BITS		6
 #define rset_picktop_(rs)	((Reg)lj_fls64(rs))
@@ -143,6 +143,8 @@ typedef uint32_t RegCost;
 #include "lj_target_ppc.h"
 #elif LJ_TARGET_MIPS
 #include "lj_target_mips.h"
+#elif LJ_TARGET_RISCV64
+#include "lj_target_riscv.h"
 #else
 #error "Missing include for target CPU"
 #endif
