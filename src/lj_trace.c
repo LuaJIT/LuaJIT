@@ -380,8 +380,13 @@ void lj_trace_freestate(global_State *g)
 static void blacklist_pc(GCproto *pt, BCIns *pc)
 {
   if (bc_op(*pc) == BC_ITERN) {
-    setbc_op(pc, BC_ITERC);
-    setbc_op(pc+1+bc_j(pc[1]), BC_JMP);
+    BCIns *isnext = pc+1+bc_j(pc[1]);
+    if (bc_op(*isnext) == BC_ISNEXT) {
+      setbc_op(isnext, BC_JMP);
+      setbc_op(pc, BC_ITERC);
+    } else {  /* Cannot despecialize table.foreach() loop. */
+      pt->flags |= PROTO_NOJIT;  /* Disable JIT for the builtin. */
+    }
   } else {
     setbc_op(pc, (int)bc_op(*pc)+(int)BC_ILOOP-(int)BC_LOOP);
     pt->flags |= PROTO_ILOOP;
