@@ -211,7 +211,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       } while (--dig > STRSCAN_MAXDIG);
       dig = STRSCAN_MAXDIG;
     } else {  /* Simplify exponent. */
-      while (ex10 > 0 && dig <= 18) *xip++ = 0, ex10 -= 2, dig += 2;
+      while (ex10 > 0 && dig < 36) *xip++ = 0, ex10 -= 2, dig += 2;
     }
   } else {  /* Only got zeros. */
     ex10 = 0;
