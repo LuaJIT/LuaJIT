@@ -38,6 +38,12 @@
 void sys_icache_invalidate(void *start, size_t len);
 #endif
 
+#if LJ_TARGET_RISCV64 && LJ_TARGET_LINUX
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/cachectl.h>
+#endif
+
 /* Synchronize data/instruction cache. */
 void lj_mcode_sync(void *start, void *end)
 {
@@ -52,6 +58,17 @@ void lj_mcode_sync(void *start, void *end)
   sys_icache_invalidate(start, (char *)end-(char *)start);
 #elif LJ_TARGET_PPC
   lj_vm_cachesync(start, end);
+#elif LJ_TARGET_RISCV64 && LJ_TARGET_LINUX
+#if (defined(__GNUC__) || defined(__clang__))
+  __asm__ volatile("fence rw, rw");
+#else
+  lj_vm_fence_rw_rw();
+#endif
+#ifdef __GLIBC__
+  __riscv_flush_icache(start, end, 0);
+#else
+  syscall(__NR_riscv_flush_icache, start, end, 0UL);
+#endif
 #elif defined(__GNUC__) || defined(__clang__)
   __clear_cache(start, end);
 #else
