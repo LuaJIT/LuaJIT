@@ -101,6 +101,12 @@ static void sink_mark_ins(jit_State *J)
       break;
       }
 #if LJ_HASFFI
+    case IR_CNEW:
+      if (ir->op2 >= REF_FIRST) {  /* Don't sink non-constant-sized VLA/VLS. */
+	irt_setmark(IR(ir->op2)->t);
+	irt_setmark(ir->t);
+      }
+      break;
     case IR_CNEWI:
       if (irt_isphi(ir->t) &&
 	  (!sink_checkphi(J, ir, ir->op2) ||

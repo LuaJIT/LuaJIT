@@ -843,7 +843,12 @@ static void snap_unsink(jit_State *J, GCtrace *T, ExitState *ex,
     CTypeID id = (CTypeID)T->ir[ir->op1].i;
     CTSize sz;
     CTInfo info = lj_ctype_info(cts, id, &sz);
-    GCcdata *cd = lj_cdata_newx(cts, id, sz, info);
+    GCcdata *cd;
+    if (ir->o == IR_CNEW && ir->op2 != REF_NIL) {
+      lj_assertJ(T->ir[ir->op2].o == IR_KINT, "sunk variable-sized VLA/VLS");
+      sz = (CTSize)T->ir[ir->op2].i;
+    }
+    cd = lj_cdata_newx(cts, id, sz, info);
     setcdataV(J->L, o, cd);
     if (ir->o == IR_CNEWI) {
       uint8_t *p = (uint8_t *)cdataptr(cd);
