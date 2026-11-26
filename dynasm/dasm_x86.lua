@@ -1128,10 +1128,13 @@ local map_op = {
   -- D6: *salc
   -- D7: *xlat
   -- D8-DF: floating point ops
-  -- E0: *loopne
-  -- E1: *loope
-  -- E2: *loop
-  -- E3: *jcxz, *jecxz
+  loopne_1 = "J.:E0nJ",
+  loopnz_1 = "J.:E0nJ",
+  loope_1 = "J.:E1nJ",
+  loopz_1 = "J.:E1nJ",
+  loop_1 = "J.:E2nJ",
+  jecxz_1 = not x64 and "J.:E3nJ" or nil,
+  jrcxz_1 = x64 and "J.:E3nJ" or nil,
   -- E4: *in Rb,ib
   -- E5: *in Rdw,ib
   -- E6: *out ib,Rb

@@ -310,7 +310,8 @@ int dasm_link(Dst_DECL, size_t *szp)
 	case DASM_REL_LG: p++;
 	  /* fallthrough */
 	case DASM_REL_PC: {
-	  int shrink = op == 0xe9 ? 3 : ((op&0xf0) == 0x80 ? 4 : 0);
+	  int shrink = (op&0xf0) == 0x80 ? 4 :
+		       (op == 0xe9 || (op&0xfc) == 0xe0) ? 3 : 0;
 	  if (shrink) {  /* Shrinkable branch opcode? */
 	    int lofs, lpos = b[pos];
 	    if (lpos < 0) goto noshrink;  /* Ext global? */
@@ -324,7 +325,12 @@ int dasm_link(Dst_DECL, size_t *szp)
 	    }
 	    lofs -= b[pos+1];  /* Short branch ok? */
 	    if (lofs >= -128-shrink && lofs <= 127) ofs -= shrink;  /* Yes. */
-	    else { noshrink: shrink = 0; }  /* No, cannot shrink op. */
+	    else {  /* No, cannot shrink op. */
+	    noshrink:
+	      if ((op&0xfc) == 0xe0)
+		return DASM_S_RANGE_LG|(int)(p-D->actionlist-1);
+	      shrink = 0;
+	    }
 	  }
 	  b[pos+1] = shrink;
 	  pos += 2;
@@ -449,7 +455,8 @@ int dasm_encode(Dst_DECL, void *buffer)
 	  int *pb = DASM_POS2PTR(D, n); if (*pb < 0) { n = pb[1]; goto rel_a; }
 	  n = *pb - ((int)(cp-base) + 4-shrink);
 	  if (shrink == 0) goto wd;
-	  if (shrink == 4) { cp--; cp[-1] = *cp-0x10; } else cp[-1] = 0xeb;
+	  if (shrink == 4) { cp--; cp[-1] = *cp-0x10; }
+	  else if (cp[-1] == 0xe9) cp[-1] = 0xeb;
 	  goto wb;
 	}
 	case DASM_IMM_LG:
