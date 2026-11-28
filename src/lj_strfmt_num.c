@@ -172,6 +172,10 @@ static uint32_t nd_div2k(uint32_t* nd, uint32_t ndhi, uint32_t k, SFormat sf)
       /* Must not limit precision here or nd_round cannot round to even.
       ** stop1 = 63 - (int32_t)STRFMT_PREC(sf) / 9;
       */
+      if (k >= 512) {  /* Too small for %.99f, anyway. */
+	nd[0] = nd[1] = 0;
+	return 0;
+      }
     } else {
       int32_t floorlog2 = ndhi * 29 + lj_fls(nd[ndhi]) - k;
       int32_t floorlog10 = (int32_t)(floorlog2 * 0.30102999566398114);
