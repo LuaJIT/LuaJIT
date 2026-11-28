@@ -432,6 +432,7 @@ int lj_strfmt_putarg(lua_State *L, SBuf *sb, int arg, int retry)
 	  copyTV(L, L->top++, mo);
 	  copyTV(L, L->top++, o);
 	  lua_call(L, 1, 1);
+	  setsbufXL_(sb, L);  /* May now point to unrelated or dead L. */
 	  o = &L->base[arg-1];  /* Stack may have been reallocated. */
 	  copyTV(L, o, --L->top);  /* Replace inline for retry. */
 	  if (retry < 2) {  /* Global buffer may have been overwritten. */

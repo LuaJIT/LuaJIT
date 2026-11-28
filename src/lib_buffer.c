@@ -135,6 +135,7 @@ LJLIB_CF(buffer_method_put)		LJLIB_REC(.)
       copyTV(L, L->top++, mo);
       copyTV(L, L->top++, o);
       lua_call(L, 1, 1);
+      setsbufXL_(sbx, L);  /* May now point to unrelated or dead L. */
       o = &L->base[arg];  /* The stack may have been reallocated. */
       copyTV(L, &L->base[arg], L->top-1);
       L->top = L->base + narg;
